@@ -21,17 +21,20 @@ log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument("--basis", default="cc-pVDZ")
-parser.add_argument("--solver", default="CCSD")
+parser.add_argument("--solver", default="CCSD(T)")
 parser.add_argument("--benchmarks", nargs="*")
 #parser.add_argument("--c-list", nargs="*", default=list(range(2, 31, 2)))
-parser.add_argument("--c-list", nargs="*", default=list(range(3, 31, 3)))
+parser.add_argument("--c-list", nargs="*", default=list(range(2, 31, 2)))
+parser.add_argument("--ncarbon", type=int, default=4)
 #parser.add_argument("--c-list", type=int, nargs="*", default=list(range(1, 2)))
+#parser.add_argument("--c-list", type=int, nargs="*")
 parser.add_argument("--local-type", default="IAO")
 parser.add_argument("--bath-type", default="mp2-natorb")
-parser.add_argument("--bath-energy-tol", type=float, default=1e-10)
+parser.add_argument("--bath-tol", type=float, default=1e-6)
+parser.add_argument("--bath-energy-tol", type=float, default=1e-6)
 parser.add_argument("--density-fit", action="store_true")
 parser.add_argument("--max-memory", type=int)
-parser.add_argument("--fragment-size", type=int, default=0, choices=[0, 1, 2, 3])
+parser.add_argument("--fragment-size", type=int, default=1, choices=[0, 1, 2, 3])
 #parser.add_argument("--bath-energy-tol", type=float, default=-1)
 
 parser.add_argument("-o", "--output", default="energies.txt")
@@ -44,6 +47,8 @@ if MPI_rank == 0:
     for name, value in sorted(vars(args).items()):
         log.info("%10s: %r", name, value)
 
+if args.c_list is None:
+    args.c_list = [args.ncarbon]
 for i, n in enumerate(args.c_list):
 
     if MPI_rank == 0:
@@ -80,7 +85,8 @@ for i, n in enumerate(args.c_list):
     cc = embcc.EmbCC(mf,
             local_type=args.local_type,
             bath_type=args.bath_type,
-            bath_energy_tol=args.bath_energy_tol,
+            bath_tol=args.bath_tol,
+            #bath_energy_tol=args.bath_energy_tol,
             solver=args.solver,
             )
 
@@ -113,9 +119,17 @@ for i, n in enumerate(args.c_list):
 
     if MPI_rank == 0:
         if (i == 0):
-            with open(args.output, "a") as f:
-                f.write("#IRC  N  M  HF  EmbCC  dMP2  EmbCC+dMP2\n")
-        with open(args.output, "a") as f:
+            with open("ccsd.txt", "a") as f:
+                f.write("#IRC  N  M  HF  CCSD  CCSD+dMP2\n")
+            with open("ccsdt.txt", "a") as f:
+                f.write("#IRC  N  M  HF  CCSD(T)  CCSD(T)+dMP2\n")
+        with open("ccsd.txt", "a") as f:
             #f.write(("%2d" + 5*"  %12.8e" + "\n") % (n, mf.e_tot, cc.e_tot, cc.e_delta_mp2, cc.e_tot+cc.e_delta_mp2, mf.e_tot+cc.e_corr_full))
             #f.write(("%2d  " + 5*"  %16.12e" + "\n") % (nelec, factor*mf.e_tot, factor*cc.e_tot, factor*cc.e_delta_mp2, factor*(cc.e_tot+cc.e_delta_mp2), factor*(mf.e_tot+cc.e_corr_full)))
-            f.write((4*"  %3d" + 4*"  %16.12e" + "\n") % (n, nelec, nactive, norb, factor*mf.e_tot, factor*cc.e_corr, factor*cc.e_delta_mp2, factor*(cc.e_corr+cc.e_delta_mp2)))
+            #f.write((4*"  %3d" + 4*"  %16.12e" + "\n") % (n, nelec, nactive, norb, factor*mf.e_tot, factor*cc.e_corr, factor*cc.e_delta_mp2, factor*(cc.e_corr+cc.e_delta_mp2)))
+            f.write((4*"  %3d" + 3*"  %16.12e" + "\n") % (n, nelec, nactive, norb, factor*mf.e_tot, factor*cc.e_corr, factor*(cc.e_corr+cc.e_delta_mp2)))
+        with open("ccsdt.txt", "a") as f:
+            #f.write(("%2d" + 5*"  %12.8e" + "\n") % (n, mf.e_tot, cc.e_tot, cc.e_delta_mp2, cc.e_tot+cc.e_delta_mp2, mf.e_tot+cc.e_corr_full))
+            #f.write(("%2d  " + 5*"  %16.12e" + "\n") % (nelec, factor*mf.e_tot, factor*cc.e_tot, factor*cc.e_delta_mp2, factor*(cc.e_tot+cc.e_delta_mp2), factor*(mf.e_tot+cc.e_corr_full)))
+            #f.write((4*"  %3d" + 4*"  %16.12e" + "\n") % (n, nelec, nactive, norb, factor*mf.e_tot, factor*cc.e_corr, factor*cc.e_delta_mp2, factor*(cc.e_corr+cc.e_delta_mp2)))
+            f.write((4*"  %3d" + 3*"  %16.12e" + "\n") % (n, nelec, nactive, norb, factor*mf.e_tot, factor*(cc.e_corr+cc.e_pert_t), factor*(cc.e_corr+cc.e_pert_t+cc.e_delta_mp2)))

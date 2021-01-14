@@ -25,14 +25,15 @@ MPI_size = MPI_comm.Get_size()
 
 log = logging.getLogger(__name__)
 
-
 class EmbCC:
     """What should this be named?"""
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
     VALID_BATH_TYPES = [
-            None, "power", "matsubara",
+            None,
+            "local",
+            "power", "matsubara",
             "mp2-natorb",
             #"mp2-natorb-2", "mp2-natorb-3",
             #"mp2-natorb-4",
@@ -417,6 +418,8 @@ class EmbCC:
 
         return C_local, C_env
 
+    # -------------------------------------------------------------------------------------------- #
+
     #def make_cluster(self, name, indices, C_local, C_env, **kwargs):
     def make_cluster(self, name, C_local, C_env, **kwargs):
         """Create cluster object and add to list.
@@ -501,6 +504,7 @@ class EmbCC:
             Name of cluster.
         """
         # atoms may be a single atom label
+        #if isinstance(atoms, str) or isinstance(atoms, int):
         if isinstance(atoms, str):
             atoms = [atoms]
         # Check if atoms are valid labels of molecule
@@ -582,6 +586,12 @@ class EmbCC:
         #indices = list(range(C_local.shape[-1]))
         #cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
         cluster = self.make_cluster(name, C_local, C_env, **kwargs)
+
+        # TEMP
+        #ao_indices = get_ao_indices_at_atoms(self.mol, atomids)
+        ao_indices = atom_labels_to_ao_indices(self.mol, atoms)
+        cluster.ao_indices = ao_indices
+
         return cluster
 
     def make_all_atom_clusters(self, **kwargs):
@@ -656,7 +666,7 @@ class EmbCC:
         norb = mo_coeff.shape[-1]
         S = self.get_ovlp()
         nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
-        log.debug("max(abs(CSC-1)) = %.2e" % nonorthmax)
+        log.debug("Max orthogonality error in canonical basis = %.1e" % nonorthmax)
 
         C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
         C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
@@ -701,7 +711,10 @@ class EmbCC:
         # Test orthogonality
         C = np.hstack((C_iao, C_env))
         #assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0, 1e-5)
-        assert (abs(C.T.dot(S).dot(C) - np.eye(norb)).max() < max(2*nonorthmax, 1e-9))
+        ortherr = abs(C.T.dot(S).dot(C) - np.eye(norb)).max()
+        log.debug("Max orthogonality error in rotated basis = %.1e" % ortherr)
+        assert (ortherr < max(2*nonorthmax, 1e-7))
+        assert (ortherr < 1e-4)
 
         return C_iao, C_env, iao_labels
 

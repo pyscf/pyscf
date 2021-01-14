@@ -20,9 +20,7 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
-parser.add_argument("--system", choides=["diamond", "perovskite"], default="diamond")
-# For Perovskite only:
-parser.add_argument("--AB-atoms", nargs=2, default=["Mg", "Si"])
+parser.add_argument("--metal-atoms", nargs=2, default=["Sr", "Mn"])
 parser.add_argument("--basis", default="gth-dzv")
 parser.add_argument("--solver", default="CCSD(T)")
 parser.add_argument("--benchmarks", nargs="*", default=[])
@@ -43,14 +41,12 @@ parser.add_argument("--supercell", type=int, nargs=3)
 parser.add_argument("--k-points", type=int, nargs=3)
 parser.add_argument("--pyscf-verbose", type=int, default=4)
 #parser.add_argument("--steps", type=int, nargs="*", default=[-3, -1, 1, 3])
-#parser.add_argument("--steps", type=int, nargs="*")
-#parser.add_argument("--nsteps", type=int, nargs=2, default=[3, 3])
-#parser.add_argument("--stepsize", type=int, default=1)
-
-parser.add_argument("--lattice-consts", type=float, nargs="*", default=[3.45, 3.50, 3.55, 3.60, 3.65, 3.70])
+parser.add_argument("--lattice-const", type=float, default=3.5)
+parser.add_argument("--steps", type=int, nargs="*")
+parser.add_argument("--nsteps", type=int, nargs=2, default=[3, 3])
+parser.add_argument("--stepsize", type=int, default=1)
 parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF")
-parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1)
-parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
+parser.add_argument("--mp2-correction", type=int, default=1)
 #parser.add_argument("--use-pbc")
 #parser.add_argument("--bath-energy-tol", type=float, default=-1)
 
@@ -68,9 +64,9 @@ if MPI_rank == 0:
     log.info("Parameters")
     log.info("----------")
     for name, value in sorted(vars(args).items()):
-        log.info("%32s: %r", name, value)
+        log.info("%10s: %r", name, value)
 
-def make_diamond(a, supercell=None):
+def make_diamond(supercell=None):
     # Primitive cell
     if args.unit_cell == "primitive":
         amat = a * np.asarray([
@@ -110,21 +106,33 @@ def make_diamond(a, supercell=None):
     #1/0
     return amat, atom
 
+def make_perovskite(metal_a, metal_b, a):
+    amat = a * np.eye(3)
+    atom = [
+        ("%s %f %f %f" % (metal_a, a/2, a/2, a/2)),
+        ("%s %f %f %f" % (metal_b, 0, 0, 0)),
+        ("%s %f %f %f" % ("O1", a/2, 0, 0)),
+        ("%s %f %f %f" % ("O2", 0, a/2, 0)),
+        ("%s %f %f %f" % ("O2", 0, 0, a/2)),
+        ]
+    return amat, atom
 
-#a_eq = 3.5668
-#a_step = args.stepsize*a_eq/100.0
-#if args.steps is not None:
-#    a_list = a_eq + a_step*np.asarray(args.steps)
-#else:
-#    a_list = a_eq + a_step*np.arange(-args.nsteps[0], args.nsteps[1]+1)
 
-for i, a in enumerate(args.lattice_consts):
+a_eq = args.lattice_const
+a_step = args.stepsize*a_eq/100.0
+if args.steps is not None:
+    a_list = a_eq + a_step*np.asarray(args.steps)
+else:
+    a_list = a_eq + a_step*np.arange(-args.nsteps[0], args.nsteps[1]+1)
+
+for i, a in enumerate(a_list):
 
     if MPI_rank == 0:
         log.info("Lattice constant= %.3f", a)
         log.info("=======================")
 
-    amat, atom = make_diamond(a, args.supercell0)
+    #amat, atom = make_diamond(args.supercell0)
+    amat, atom = make_perovskite(*args.metal_atoms, a)
     cell = pyscf.pbc.gto.M(atom=atom, a=amat, basis=args.basis, pseudo=args.pseudopot,
             precision=args.precision, verbose=args.pyscf_verbose)
     if args.supercell:
@@ -150,12 +158,11 @@ for i, a in enumerate(args.lattice_consts):
     t0 = MPI.Wtime()
     mf.kernel()
     log.info("Time for HF [s]: %.3f", (MPI.Wtime()-t0))
-    if args.hf_stability_check:
-        t0 = MPI.Wtime()
-        mo_stab = mf.stability()[0]
-        stable = np.allclose(mo_stab, mf.mo_coeff)
-        log.info("Time for HF stability check [s]: %.3f", (MPI.Wtime()-t0))
-        assert stable
+    t0 = MPI.Wtime()
+    mo_stab = mf.stability()[0]
+    log.info("Time for stability check [s]: %.3f", (MPI.Wtime()-t0))
+    stable = np.allclose(mo_stab, mf.mo_coeff)
+    assert stable
     assert mf.converged
 
     if False:
@@ -261,22 +268,26 @@ for i, a in enumerate(args.lattice_consts):
     #log.info("Exact CCSD = %16.8g , (T) = %16.8g , CCSD(T) = %16.8g", e_ccsd, et2, e_ccsdt)
     #1/0
 
-    implabel = "C000"
-    if isinstance(mf_sc.mol.atom, list):
-        if isinstance(mf_sc.mol.atom[0], str):
-            _, pos = mf_sc.mol.atom[0].split(" ", 1)
-            mf_sc.mol.atom[0] = " ".join([implabel, pos])
-        elif isinstance(mf_sc.mol.atom[0], tuple):
-            pos = mf_sc.mol.atom[0][1]
-            mf_sc.mol.atom[0] = (implabel, pos)
+
+    if True:
+        implabel = "C000"
+        implabels = [args.metal_atoms[0] + "000", args.metal_atoms[1] + "000", "O000"]
+        if isinstance(mf_sc.mol.atom, list):
+            for i in range(3):
+                if isinstance(mf_sc.mol.atom[i], str):
+                    _, pos = mf_sc.mol.atom[i].split(" ", 1)
+                    mf_sc.mol.atom[i] = " ".join([implabels[i], pos])
+                elif isinstance(mf_sc.mol.atom[i], tuple):
+                    pos = mf_sc.mol.atom[i][1]
+                    mf_sc.mol.atom[i] = (implabels[i], pos)
+                else:
+                    raise NotImplementedError()
         else:
+            print(mf_sc.mol.atom)
+            print(mf_sc.mol.atom[0])
             raise NotImplementedError()
-    else:
-        print(mf_sc.mol.atom)
-        print(mf_sc.mol.atom[0])
-        raise NotImplementedError()
-    #mf_sc.mol.atom[0] = (implabel, mf_sc.mol.atom[0][1])
-    mf_sc.mol.build(False, False)
+        #mf_sc.mol.atom[0] = (implabel, mf_sc.mol.atom[0][1])
+        mf_sc.mol.build(False, False)
 
     #print("ADAD")
     #print(mf.kpt)
@@ -325,16 +336,17 @@ for i, a in enumerate(args.lattice_consts):
                 )
 
         solver_opts = {}
-        symfac = natom
-        cc.make_atom_cluster(implabel, symmetry_factor=symfac, solver_options=solver_opts,
-                bath_tol_per_electron=False)
+        assert natom % 5 == 0
+        ncells = natom//5
+        cc.make_atom_cluster(implabels[0], symmetry_factor=ncells, solver_options=solver_opts)
+        cc.make_atom_cluster(implabels[1], symmetry_factor=ncells, solver_options=solver_opts)
+        cc.make_atom_cluster(implabels[2], symmetry_factor=3*ncells, solver_options=solver_opts)
         cc.run()
 
-
-        enrgs_ccsd.append(cc.e_tot / natom)
-        enrgs_ccsd_dmp2.append((cc.e_tot + cc.e_delta_mp2) / natom)
-        enrgs_ccsdt.append((cc.e_tot + cc.e_pert_t) / natom)
-        enrgs_ccsdt_dmp2.append((cc.e_tot + cc.e_delta_mp2 + cc.e_pert_t) / natom)
+        enrgs_ccsd.append(cc.e_tot / ncells)
+        enrgs_ccsd_dmp2.append((cc.e_tot + cc.e_delta_mp2) / ncells)
+        enrgs_ccsdt.append((cc.e_tot + cc.e_pert_t) / ncells)
+        enrgs_ccsdt_dmp2.append((cc.e_tot + cc.e_delta_mp2 + cc.e_pert_t) / ncells)
         #enrgs_mp2.append((cc.e_tot + cc.e_delta_mp2)/natom)
 
         if cc.clusters[0].nfrozen == 0:
@@ -360,7 +372,7 @@ for i, a in enumerate(args.lattice_consts):
         fmtstr = ((len(enrgs_ccsd)+2) * "  %+16.12e") + "\n"
         for idx, file in enumerate(files):
             with open(file, "a") as f:
-                f.write(fmtstr % (a, mf_sc.e_tot/natom, *(data[idx])))
+                f.write(fmtstr % (a, mf_sc.e_tot/ncells, *(data[idx])))
 
     #if MPI_rank == 0:
     #    if (i == 0):

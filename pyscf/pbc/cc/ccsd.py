@@ -40,29 +40,8 @@ class RCCSD(rccsd.RCCSD):
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
 
-        #nmo = self.nmo
-        #nao = self.mo_coeff.shape[0]
-        #nmo_pair = nmo * (nmo+1) // 2
-        #nao_pair = nao * (nao+1) // 2
-        #mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
-        #mem_now = lib.current_memory()[0]
-
         with lib.temporary_env(self._scf, exxdiv=None):
             eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-            #if mem_incore+mem_now < self.max_memory or self.incore_complete:
-            #    eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-            #else:
-            #    from pyscf.cc import ccsd
-            #    eris = ccsd._make_df_eris_outcore(self, mo_coeff)
-            #    #eris_test = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-            #    #print("DIFFERENCE = %.e" % np.linalg.norm(eris.oooo[:] - eris_test.oooo))
-            #    #assert np.allclose(eris.oooo[:], eris_test.oooo)
-            #    #assert np.allclose(eris.ovoo[:], eris_test.ovoo)
-            #    #assert np.allclose(eris.ovov[:], eris_test.ovov)
-            #    #assert np.allclose(eris.oovv[:], eris_test.oovv)
-            #    #assert np.allclose(eris.ovvo[:], eris_test.ovvo)
-            #    #assert np.allclose(eris.ovvv[:], eris_test.ovvv)
-            #    #assert np.allclose(eris.vvvv[:], eris_test.vvvv)
 
         # eris.mo_energy so far is just the diagonal part of the Fock matrix
         # without the exxdiv treatment. Here to add the exchange correction to
@@ -80,6 +59,22 @@ class RCCSD(rccsd.RCCSD):
         madelung = tools.madelung(self._scf.cell, self._scf.kpt)
         eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
+
+    def ao2mo_direct(self, fock, mo_coeff=None, e_hf=None):
+        """Takes Fock matrix WITH exxdiv correction."""
+        from pyscf.pbc import tools
+        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
+
+        eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn,
+                direct_init=True, fock=fock, e_hf=e_hf)
+
+        # Remove exxdiv correction from Fock matrix (mo_energy are correct)
+        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+        for i in range(eris.nocc):
+            eris.fock[i,i] += madelung
+
+        return eris
+
 
 class UCCSD(uccsd.UCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):

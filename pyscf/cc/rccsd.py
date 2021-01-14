@@ -245,10 +245,14 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         else:
             return self.ovvv
 
-def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
+def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None,
+        direct_init=False, **kwargs):
     cput0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
-    eris._common_init_(mycc, mo_coeff)
+    if direct_init:
+        eris._direct_init_(mycc, mo_coeff, **kwargs)
+    else:
+        eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
 

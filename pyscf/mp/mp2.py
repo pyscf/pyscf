@@ -29,6 +29,8 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf import __config__
 
+from timeit import default_timer
+
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 einsum = functools.partial(numpy.einsum, optimize=True)
@@ -533,7 +535,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return (self.e_hf or self._scf.e_tot) + self.e_corr
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, hf_reference="auto"):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, hf_reference="legacy"):
         '''
         Args:
             with_t2 : bool
@@ -648,19 +650,43 @@ class _ChemistsERIs:
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
+            #t0 = default_timer()
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
+            #print("Time for _common_init: %f" % (default_timer() - t0))
+
         return self
 
-def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
+    def _direct_init_(self, mp, mo_coeff, mo_energy, fock, e_hf):
+        if mo_coeff is None:
+            mo_coeff = mp.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
+
+        self.mo_coeff = _mo_without_core(mp, mo_coeff)
+        self.mol = mp.mol
+
+        self.mo_energy = mo_energy.copy()
+        self.fock = fock.copy()
+        self.e_hf = e_hf
+
+        return self
+
+
+def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None,
+        direct_init=False, mo_energy=None, fock=None, e_hf=None):
     log = logger.new_logger(mp, verbose)
     time0 = (time.clock(), time.time())
     eris = _ChemistsERIs()
-    eris._common_init_(mp, mo_coeff)
+    if direct_init:
+        eris._direct_init_(mp, mo_coeff, mo_energy, fock, e_hf)
+    else:
+        eris._common_init_(mp, mo_coeff)
     mo_coeff = eris.mo_coeff
 
     nocc = mp.nocc

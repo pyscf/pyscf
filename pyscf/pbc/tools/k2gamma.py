@@ -61,7 +61,7 @@ def get_phase(cell, kpts, kmesh=None):
     scell = tools.super_cell(cell, kmesh)
     return scell, phase
 
-def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
+def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5):
     scell, phase = get_phase(cell, kpts, kmesh)
 
     E_g = np.hstack(mo_energy)
@@ -77,8 +77,10 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     E_g = E_g[E_sort_idx]
     C_gamma = C_gamma[:,E_sort_idx]
     s = scell.pbc_intor('int1e_ovlp')
-    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-               - np.eye(Nmo*Nk)).max() < 1e-5)
+    orth_err = abs(np.linalg.multi_dot((C_gamma.conj().T, s, C_gamma)) - np.eye(Nmo*Nk)).max()
+    #assert(orth_err < tol_orth)
+    if orth_err < tol_orth:
+        print("Warning: insufficient orthogonality of Gamma point orbitals: %e" % orth_err)
 
     # Transform MO indices
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
@@ -106,7 +108,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
 
     return scell, E_g, C_gamma, mo_phase
 
-def k2gamma(kmf, kmesh=None):
+def k2gamma(kmf, kmesh=None, **kwargs):
     r'''
     convert the k-sampled mean-field object to the corresponding supercell
     gamma-point mean-field object.
@@ -118,7 +120,7 @@ def k2gamma(kmf, kmesh=None):
 
     def transform(mo_energy, mo_coeff, mo_occ):
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
-                                         kmf.kpts, kmesh)[:3]
+                                         kmf.kpts, kmesh, **kwargs)[:3]
         E_sort_idx = np.argsort(np.hstack(mo_energy))
         mo_occ = np.hstack(mo_occ)[E_sort_idx]
         return scell, E_g, C_gamma, mo_occ

@@ -43,11 +43,13 @@ class Cluster:
     TOL_CLUSTER_OCC = 1e-3
     TOL_OCC = 1e-3
 
+
     def __init__(self, base, cluster_id, name,
             #indices, C_local, C_env,
             C_local, C_env,
             ao_indices=None,
             solver="CCSD",
+            # Bath
             bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4, bath_energy_tol=None,
             **kwargs):
         """
@@ -106,7 +108,7 @@ class Cluster:
             bath_energy_tol = (bath_energy_tol, bath_energy_tol)
 
         # Relative tolerances?
-        if True:
+        if kwargs.get("bath_tol_per_electron", True):
             if bath_tol[0] is not None:
                 bath_tol = (self.nelec_frag*bath_tol[0], bath_tol[1])
             if bath_tol[1] is not None:
@@ -137,11 +139,20 @@ class Cluster:
         if not hasattr(self.mp2_correction, "__getitem__"):
             self.mp2_correction = (self.mp2_correction, self.mp2_correction)
 
+        # Bath parameters
+
         # Currently not in use (always on!)
         self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
-        #self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", True)
         self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", False)
 
+        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
+        self.coupled_bath = kwargs.get("coupled_bath", False)
+
+        # Add local orbitals to cluster before adding additional bath orbitals:
+        self.local_occ_bath_tol = kwargs.get("local_occ_bath_tol", False)
+        self.local_vir_bath_tol = kwargs.get("local_vir_bath_tol", False)
+
+        # Other
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
 
         # Restart solver from previous solution [True/False]
@@ -154,9 +165,6 @@ class Cluster:
         #self.use_pbc = kwargs.get("use_pbc", False)
         self.use_pbc = kwargs.get("use_pbc", self.has_pbc)
 
-        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
-
-        self.coupled_bath = kwargs.get("coupled_bath", False)
 
         self.nelectron_target = kwargs.get("nelectron_target", None)
 
@@ -175,9 +183,10 @@ class Cluster:
         #self.virbath_eigref = kwargs.get("virbath-eigref", None)
         self.refdata_in = kwargs.get("refdata", {})
 
-
         # Maximum number of iterations for consistency of amplitudes between clusters
         self.maxiter = kwargs.get("maxiter", 1)
+
+        self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 120)
 
         self.set_default_attributes()
 
@@ -365,6 +374,7 @@ class Cluster:
     project_ref_orbitals = project_ref_orbitals
     make_dmet_bath = make_dmet_bath
     make_bath = make_bath
+    make_local_bath = make_local_bath
     make_mf_bath = make_mf_bath
     make_mp2_bath = make_mp2_bath
     get_mp2_correction = get_mp2_correction
@@ -429,7 +439,7 @@ class Cluster:
         Parameters
         ----------
         C_bath : ndarray
-            DMET bath orbitals.
+            Bath orbitals.
 
         Returns
         -------
@@ -449,7 +459,7 @@ class Cluster:
         C_clst = np.dot(C_clst, R)
         nocc_clst = sum(e > 0.5)
         nvir_clst = sum(e < 0.5)
-        log.info("Number of fragment + DMET-bath orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
+        log.info("Number of cluster orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
 
         C_occclst, C_virclst = np.hsplit(C_clst, [nocc_clst])
 
@@ -647,7 +657,11 @@ class Cluster:
 
             if eris is None:
                 t0 = MPI.Wtime()
-                if hasattr(mp2, "with_df"):
+                if self.use_pbc:
+                    c_act = mo_coeff[:,active]
+                    fock = np.linalg.multi_dot((c_act.T, self.base.get_fock(), c_act))
+                    eris = mp2.ao2mo(direct_init=True, mo_energy=np.diag(fock), fock=fock)
+                elif hasattr(mp2, "with_df"):
                     eris = mp2.ao2mo(store_eris=True)
                 else:
                     eris = mp2.ao2mo()
@@ -715,30 +729,17 @@ class Cluster:
 
             # Calculate (T) contribution
             if solver == "CCSD(T)":
-                t0 = MPI.Wtime()
-                pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
-                #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, symmetrize=True)
-                self.e_pert_t = self.energy_factor*ccsd_t.kernel_new(cc.t1, cc.t2, pT2, eris)
-
-                #t00 = MPI.Wtime()
-                #self.e_pert_t = self.energy_factor*ccsd_t.ccsd_t(cc.t1, cc.t2, pT1, pT2, eris)
-                #t01 = MPI.Wtime()
-                #self.e_pert_t = self.energy_factor*ccsd_t.kernel_new(cc.t1, cc.t2, pT2, eris)
-                #t02 = MPI.Wtime()
-                #self.e_pert_t2 = self.energy_factor*ccsd_t.kernel(cc, cc.t1, cc.t2, pT2, eris)
-                #t03 = MPI.Wtime()
-                ##log.debug("Time for (T): %.6f", (t01-t00))
-                #log.debug("Time for (T): %.6f", (t02-t01))
-                #log.debug("Time for (T): %.6f", (t03-t02))
-
-                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t)
-                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t2)
-                #log.debug("Perturbative (T) energy = %.8g", self.e_pert_t3)
-                #assert np.allclose(self.e_pert_t, e_pert_t2)
-                #log.debug("Perturbative (T) energy = %.8g", e_pert_t_test)
-                #log.debug("Perturbative (T) energy = %.8g", e_pt_slow)
-                t = (MPI.Wtime()-t0)
-                log.debug("Time for (T) [s]: %.3f (%s)", t, get_time_string(t))
+                # Skip (T) if too expensive
+                if len(active) > self.ccsd_t_max_orbitals:
+                    log.warning("Number of orbitals = %d. Skipping calculation of (T)." % len(active))
+                else:
+                    t0 = MPI.Wtime()
+                    pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2)
+                    # Symmetrized T2 gives slightly different (T) energy!
+                    #pT1, pT2 = self.get_local_amplitudes(cc, cc.t1, cc.t2, symmetrize=True)
+                    self.e_pert_t = self.energy_factor*ccsd_t.kernel_new(cc.t1, cc.t2, pT2, eris)
+                    t = (MPI.Wtime()-t0)
+                    log.debug("Time for (T) [s]: %.3f (%s)", t, get_time_string(t))
 
             # Other energy variants
             if False:
@@ -1074,6 +1075,22 @@ class Cluster:
         t0 = MPI.Wtime()
         #C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
         C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
+
+        # Add additional local orbitals [optional]
+        if self.local_occ_bath_tol is not False:
+            log.info("Adding local occupied bath orbitals to cluster.")
+            C_occlocbath, C_occenv = make_local_bath(self, C_occenv, tol=self.local_occ_bath_tol)
+            #C_occlocbath, C_occenv, _ = make_mf_bath(self, C_occenv, "occ", bathtype="power",
+            #        tol=self.local_occ_bath_tol)
+            C_bath = np.hstack((C_occlocbath, C_bath))
+        if self.local_vir_bath_tol is not False:
+            log.info("Adding local virtual bath orbitals to cluster.")
+            C_virlocbath, C_virenv = make_local_bath(self, C_virenv, tol=self.local_vir_bath_tol)
+            #C_virlocbath, C_virenv, _ = make_mf_bath(self, C_virenv, "vir", bathtype="power",
+            #        tol=self.local_vir_bath_tol)
+            C_bath = np.hstack((C_bath, C_virlocbath))
+
+        # Diagonalize cluster DM to separate cluster occupied and virtual
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
         log.debug("Time for DMET bath: %s", get_time_string(MPI.Wtime()-t0))
 

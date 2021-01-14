@@ -19,6 +19,10 @@ __all__ = [
         "eigreorder_logging",
         #"make_cubegen_file",
         "create_orbital_file",
+        # PySCF
+        "atom_labels_to_ao_indices",
+        "atom_label_to_ids",
+        "get_ao_indices_at_atoms",
         ]
 
 log = logging.getLogger(__name__)
@@ -102,7 +106,21 @@ def atom_labels_to_ao_indices(mol, atom_labels):
 #def ao_labels_to_ao_indices(mol, ao_labels):
 #    ao_labels_mol = mol.ao_labels(None):
 
+def atom_label_to_ids(mol, atom_label):
+    """Get all atom IDs corresponding to an atom label."""
+    atom_labels = np.asarray([mol.atom_symbol(atomid) for atomid in range(mol.natm)])
+    atom_ids = np.where(np.in1d(atom_labels, atom_label))[0]
+    return atom_ids
 
+def get_ao_indices_at_atoms(mol, atomids):
+    """Return indices of AOs centered at a given atom ID."""
+    ao_indices = []
+    if not hasattr(atomids, "__len__"):
+        atomids = [atomids]
+    for atomid in atomids:
+        ao_slice = mol.aoslice_by_atom()[atomid]
+        ao_indices += list(range(ao_slice[2], ao_slice[3]))
+    return ao_indices
 
 def eigassign(e1, v1, e2, v2, b=None, cost_matrix="e^2/v"):
     """

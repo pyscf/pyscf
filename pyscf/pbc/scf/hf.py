@@ -42,6 +42,7 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc import df
 from pyscf import __config__
 
+from timeit import default_timer as timer
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
@@ -503,8 +504,6 @@ class SCF(mol_hf.SCF):
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
-        self._cache = {}
-
     @property
     def kpt(self):
         if 'kpt' in self.__dict__:
@@ -563,15 +562,6 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
 
-        # Memoized hcore
-        #kptastuple = tuple(map(tuple, kpt))
-        if "get_hcore" in self._cache:
-            #if kptastuple in self.get_hcore.values:
-                #return self.get_hcore.values[kptastuple]
-            return self._cache["get_hcore"]
-        #else:
-        #    self.get_hcore.__dict__["values
-
         if cell.pseudo:
             nuc = self.with_df.get_pp(kpt)
         else:
@@ -579,8 +569,6 @@ class SCF(mol_hf.SCF):
         if len(cell._ecpbas) > 0:
             nuc += ecp.ecp_int(cell, kpt)
         h = nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
-        # Memoize
-        self._cache["get_hcore"] = h
         return h
 
     def get_ovlp(self, cell=None, kpt=None):
@@ -613,20 +601,28 @@ class SCF(mol_hf.SCF):
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
+            #t0 = timer()
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
+            #self._timings["with_df.get_ao_eri"] += (timer()-t0)
+            #t0 = timer()
             vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
+            #self._timings["dot_eri_dm"] += (timer()-t0)
 
             if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
+                #t0 = timer()
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
+                #self._timings["_ewald_exxdiv_for_G0"] += (timer()-t0)
         else:
+            #t0 = timer()
             vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
                                          kpt, kpts_band, with_j, with_k, omega,
                                          exxdiv=self.exxdiv)
+            #self._timings["with_df.get_jk"] += (timer()-t0)
 
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)

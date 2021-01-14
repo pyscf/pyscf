@@ -41,6 +41,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     nocc, nvir = t1.shape
     mo_e = eris.fock.diagonal()
+    #mo_e = eris.mo_energy
     e_occ, e_vir = mo_e[:nocc], mo_e[nocc:]
     eijk = lib.direct_sum('i,j,k->ijk', e_occ, e_occ, e_occ)
 

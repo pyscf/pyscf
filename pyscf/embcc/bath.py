@@ -17,6 +17,7 @@ __all__ = [
         "project_ref_orbitals",
         "make_dmet_bath",
         "make_bath",
+        "make_local_bath",
         "make_mf_bath",
         "transform_mp2_eris",
         "run_mp2",
@@ -84,22 +85,24 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     C_virenv : ndarray
         Virtual environment orbitals.
     """
+    log.info("Making DMET bath")
+    log.info("+--------------+")
     C_local = self.C_local
     C_env = self.C_env
     S = self.mf.get_ovlp()
     # Divide by 2 to get eigenvalues in [0,1]
     D_env = np.linalg.multi_dot((C_env.T, S, self.mf.make_rdm1(), S, C_env)) / 2
-    e, R = np.linalg.eigh(D_env)
-    e, R = e[::-1], R[:,::-1]
+    eig, R = np.linalg.eigh(D_env)
+    eig, R = eig[::-1], R[:,::-1]
 
-    if (e.min() < -1e-9):
-        log.warning("Min eigenvalue of env. DM = %.8e", e.min())
-    if ((e.max()-1) > 1e-9):
-        log.warning("Max eigenvalue of env. DM = %.8e", e.max())
+    if (eig.min() < -1e-9):
+        log.warning("Min eigenvalue of env. DM = %.8e", eig.min())
+    if ((eig.max()-1) > 1e-9):
+        log.warning("Max eigenvalue of env. DM = %.8e", eig.max())
 
     # Entanglement spectrum
     if False:
-        np.savetxt("dmet-spectrum.txt", e)
+        np.savetxt("dmet-spectrum.txt", eig)
         raise SystemExit()
 
     C_env = np.dot(C_env, R)
@@ -112,31 +115,41 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
         raise NotImplementedError()
 
     else:
-        mask_bath = np.logical_and(e >= tol, e <= 1-tol)
-        mask_occenv = e > 1-tol
-        mask_virenv = e < tol
+        mask_bath = np.logical_and(eig >= tol, eig <= 1-tol)
+        mask_occenv = eig > 1-tol
+        mask_virenv = eig < tol
         nbath = sum(mask_bath)
 
     noccenv = sum(mask_occenv)
     nvirenv = sum(mask_virenv)
+    log.info("Number of DMET bath orbitals:        %d", nbath)
+    log.info("Number of occ. environment orbitals: %d", noccenv)
+    log.info("Number of vir. environment orbitals: %d", nvirenv)
     assert (nbath + noccenv + nvirenv == C_env.shape[-1])
     C_bath = C_env[:,mask_bath].copy()
     C_occenv = C_env[:,mask_occenv].copy()
     C_virenv = C_env[:,mask_virenv].copy()
 
-    log.debug("Found %d DMET bath orbitals. Eigenvalues:\n%s", nbath, e[mask_bath])
-    if noccenv > 0:
-        log.debug("Found %3d occupied environment orbitals. Smallest eigenvalue: %.6g", noccenv, min(e[mask_occenv]))
-    else:
-        log.debug("No occupied environment orbitals found.")
-    if nvirenv > 0:
-        log.debug("Found %3d virtual environment orbitals. Largest eigenvalue: %.6g", nvirenv, max(e[mask_virenv]))
-    else:
-        log.debug("No virtual environment orbitals found.")
+    # FANCY NEW PRINTING
+    ttol = 1e-12
+    mask_ttol = np.logical_and(eig >= ttol, eig <= 1-ttol)
+    log.info("Eigenvalues of environment DM in (0, 1):")
+    for e in eig[mask_ttol]:
+        if e < tol:
+            s = "virtual environment"
+        elif e > 1-tol:
+            s = "occupied environment"
+        else:
+            s = "DMET bath"
+
+        log.info("%11.6e (%s orbital)", e, s)
+
     # Calculate entanglement entropy
-    entropy = np.sum(e * (1-e))
-    entropy_bath = np.sum(e[mask_bath] * (1-e[mask_bath]))
-    log.info("Entanglement entropy full=%.6e, bath=%.6e", entropy, entropy_bath)
+    entropy = np.sum(eig * (1-eig))
+    entropy_bath = np.sum(eig[mask_bath] * (1-eig[mask_bath]))
+    log.info("Full entanglement entropy: %.6e", entropy)
+    log.info("Bath entanglement entropy: %.6e", entropy_bath)
+    log.info("Captured %% of entanglement entropy: %.2f %%", 100*entropy_bath/entropy)
 
     # TEST
     #p = np.linalg.multi_dot((C_local.T, S, self.mf.make_rdm1(), S, C_local)) / 2
@@ -248,7 +261,10 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None,
     # Make new bath orbitals
     else:
         #if bathtype.startswith("mp2"):
-        if bathtype == "mp2-natorb":
+        if bathtype == "local":
+            C_bath, C_env = self.make_local_bath(C_env, nbath=nbath, tol=tol)
+
+        elif bathtype == "mp2-natorb":
             C_bath, C_env, e_delta_mp2, eigref_out = self.make_mp2_bath(
                     self.C_occclst, self.C_virclst,
                     kind,
@@ -863,7 +879,8 @@ def make_mp2_bath(self,
         #C_env,
         kind,
         # For new MP2 bath:
-        c_occenv=None, c_virenv=None,
+        #c_occenv=None, c_virenv=None,
+        c_occenv, c_virenv,
         eigref=None,
         nbath=None, tol=None, energy_tol=None):
     """Select occupied or virtual bath space from MP2 natural orbitals.
@@ -1087,3 +1104,37 @@ def make_mp2_bath(self,
         e_delta_mp2 = 0.0
 
     return c_bath, c_env, e_delta_mp2, eigref_out
+
+# ====
+
+def make_local_bath(self, c_env, ao_indices=None, nbath=None, tol=1e-9):
+
+    if ao_indices is None:
+        ao_indices = self.ao_indices
+    assert ao_indices is not None
+    p = self.base.make_ao_projector(ao_indices)
+    s = np.linalg.multi_dot((c_env.T, p, c_env))
+    e, v = np.linalg.eigh(s)
+    e, v = e[::-1], v[:,::-1]
+    log.debug("Eigenvalues of local orbitals:\n%r", e)
+    assert np.all(e > -1e-8), ("Negative eigenvalues found: %r" % e[e <= -1e-8])
+    if nbath is not None:
+        nbath = min(nbath, len(e))
+    elif tol is not None:
+        nbath = sum(e >= tol)
+
+    c_env = np.dot(c_env, v)
+    c_bath, c_env = np.hsplit(c_env, [nbath])
+
+    if nbath > 0:
+        log.debug("%3d bath orbitals: largest=%6.3g, smallest=%6.3g.",
+                nbath, max(e[:nbath]), min(e[:nbath]))
+    else:
+        log.debug("No bath orbitals.")
+    if nbath < len(e):
+        log.debug("%3d environment orbitals: largest=%6.3g, smallest=%6.3g.",
+                (len(e)-nbath), max(e[nbath:]), min(e[nbath:]))
+    else:
+        log.debug("No environment orbitals.")
+
+    return c_bath, c_env

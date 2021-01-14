@@ -20,7 +20,7 @@ MPI_size = MPI_comm.Get_size()
 log = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(allow_abbrev=False)
-parser.add_argument("--basis", default="cc-pVDZ")
+parser.add_argument("--basis", default="cc-pVTZ")
 parser.add_argument("--solver", default="CCSD(T)")
 parser.add_argument("--ncarbon", type=int, default=3)
 #parser.add_argument("--c-list", type=int, nargs="*", default=list(range(1, 2)))
@@ -30,7 +30,10 @@ parser.add_argument("--bath-energy-tols", nargs="*", type=float, default=[1, 1e-
 parser.add_argument("--bath-tols", nargs="*", type=float, default=[1, 1e-1, 3e-2, 1e-2, 3e-3, 1e-3, 3e-4, 1e-4, 3e-5, 1e-5, 3e-6, 1e-6, 3e-7, 1e-7, -1])
 parser.add_argument("--density-fit", action="store_true")
 parser.add_argument("--max-memory", type=int)
-parser.add_argument("--fragment-size", type=int, default=1, choices=[0, 1, 2, 3])
+parser.add_argument("--fragment-size", type=int, default=0, choices=[0, 1, 2, 3])
+parser.add_argument("--local-occ-bath-tol", type=float, default=False)
+parser.add_argument("--local-vir-bath-tol", type=float, default=False)
+parser.add_argument("--mp2-correction", type=int, default=1)
 #parser.add_argument("--bath-energy-tol", type=float, default=-1)
 
 parser.add_argument("-o", "--output", default="energies.txt")
@@ -78,6 +81,7 @@ for i, tol in enumerate(tols):
             bath_type=args.bath_type,
             bath_energy_tol=tol,
             solver=args.solver,
+            mp2_correction=args.mp2_correction,
             **kwargs,
             )
 
@@ -85,7 +89,10 @@ for i, tol in enumerate(tols):
     #n = (args.ncarbon//2)
     n = 3*(args.ncarbon//2) + 1
     #cc.make_atom_cluster(["C%d" % n, "H%d" % n], solver_options=solver_opts)
-    cc.make_atom_cluster(["C%d" % n], solver_options=solver_opts)
+    cc.make_atom_cluster(["C%d" % n], solver_options=solver_opts,
+            local_occ_bath_tol=args.local_occ_bath_tol,
+            local_vir_bath_tol=args.local_vir_bath_tol
+            )
     #if args.fragment_size == 0:
     #    cc.make_all_atom_clusters(solver_options=solver_opts)
     #elif args.fragment_size == 1:
