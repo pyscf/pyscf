@@ -83,7 +83,7 @@ mol = gto.Mole()
 mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
 mol.verbose = 5
 mol.output = '/dev/null'
-mol.symmetry = False 
+mol.symmetry = False
 mol.build()
 mf = scf.RHF(mol).run(conv_tol=1e-12)
 

@@ -186,7 +186,7 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
 
     if orbsym is None:
         orbsym = getattr(mo_coeff, 'orbsym', None)
-        if molpro_orbsym:
+        if molpro_orbsym and orbsym is not None:
             orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
     t = mol.intor_symmetric('int1e_kin')
     v = mol.intor_symmetric('int1e_nuc')
@@ -196,9 +196,15 @@ def from_mo(mol, filename, mo_coeff, orbsym=None,
     from_integrals(filename, h1e, eri, h1e.shape[0], mol.nelec, nuc, 0, orbsym,
                    tol, float_format)
 
-def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
+             molpro_orbsym=MOLPRO_ORBSYM):
     '''Use the given SCF object to transfrom the 1-electron and 2-electron
     integrals then dump them to FCIDUMP.
+
+    Kwargs:
+        molpro_orbsym (bool): Whether to dump the orbsym in Molpro orbsym
+            convention as documented in
+            https://www.molpro.net/info/current/doc/manual/node36.html
     '''
     mo_coeff = mf.mo_coeff
     assert mo_coeff.dtype == numpy.double
@@ -212,6 +218,8 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     else:  # Handle cached integrals or customized systems
         eri = ao2mo.full(mf._eri, mo_coeff)
     orbsym = getattr(mo_coeff, 'orbsym', None)
+    if molpro_orbsym and orbsym is not None:
+        orbsym = [ORBSYM_MAP[mol.groupname][i] for i in orbsym]
     nuc = mf.energy_nuc()
     from_integrals(filename, h1e, eri, h1e.shape[0], mf.mol.nelec, nuc, 0, orbsym,
                    tol, float_format)

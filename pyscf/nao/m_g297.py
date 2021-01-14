@@ -2755,7 +2755,7 @@ def pos_latex ():
             for i in range(len(n0)):
                 name = name.replace(n0[i], "$_"+n0[i]+"$")
             file.write(str(p)+'- '+name+r'.xyz\\')
-            file.write(' \# '+str(len(a))+r'\\')            #number of atoms
+            file.write(r' \# '+str(len(a))+r'\\')            #number of atoms
             file.write(r' \begin{tabular}{llll}')
             for i in range(len(data[k]['positions'])):
                 file.write('\t'+str(a[i])+'&')
@@ -2763,21 +2763,21 @@ def pos_latex ():
                     file.write('\t'+str(data[k]['positions'][i][j]))
                     if (j!=2): file.write('&')
                 file.write(r'\\')
-            file.write(r' \vspace{0.5 cm}')        
+            file.write(r' \vspace{0.5 cm}')
             file.write(r' \end{tabular} \\')
             file.write('\n')
     file.close()
-        
+
 
 
 def pos_pyscf ():
     '''converts ase position lists to a long string which is readable for Pyscf'''
-    import re        
+    import re
     import pprint
     for k in sorted (data.keys()):
             nn=sum(1 for c in data[k]['symbols'] if c.isupper()) #number of atoms
             a=re.findall('[A-Z][^A-Z]*', data[k]['symbols']) #atom index e.g. a=['H','Al','Cl']
-            num=[]        
+            num=[]
             for i in range(len(data[k]['positions'])):
                 pos= (str(data[k]['positions'][i]).strip('[]'))
                 pos = a[i]+' '+pos
@@ -2794,7 +2794,7 @@ def pyscf_input (dirname=None):
     '''writes the PySCF inputs in the given address'''
     import json
     import os
-    if dirname is None: dirname=os.getcwd() 
+    if dirname is None: dirname=os.getcwd()
     for k in sorted(data.keys()):
         d=data[k]
         if (d['magmoms']!=None): # writes output for openshell molecules
@@ -2806,7 +2806,7 @@ from pyscf.nao import gw as gw_c
 mol = gto.M( verbose = 0, atom = '{}',basis = 'cc-pvqz', spin={}, charge=0)
 gto_mf = scf.UHF(mol)
 gto_mf.kernel()
-gw = gw_c(mf=gto_mf, gto=mol, verbosity=3, niter_max_ev=50, kmat_algo='sm0_sum')   
+gw = gw_c(mf=gto_mf, gto=mol, verbosity=3, niter_max_ev=50, kmat_algo='sm0_sum')
 gw.kernel_gw()
 gw.report()
 '''.format(pos,int(m))
@@ -2817,7 +2817,7 @@ gw.report()
                 except OSError as exc: # Guard against race condition
                     if exc.errno != errno.EEXIST:
                         raise
-       
+
             with open((dirname+"/{}/{}.py".format(k,k)),'w') as f:
                 f.writelines(output)
                 f.close()
@@ -2829,8 +2829,8 @@ def molgw_input (dirname=None):
     import json
     import os
 
-    if dirname is None: dirname=os.getcwd() 
-    for k in sorted(data.keys()):  
+    if dirname is None: dirname=os.getcwd()
+    for k in sorted(data.keys()):
         d=data[k]
         if (d['magmoms']!=None): # writes output for openshell molecules
             fname = ("{}.in".format(k))
@@ -2859,7 +2859,7 @@ def molgw_input (dirname=None):
  print_w='yes'
  print_pdos='yes'
  print_sigma='yes'
- magnetization ={} 
+ magnetization ={}
  natom={}
 /
 {}
@@ -2889,7 +2889,7 @@ def mol_name (in_name):
         return name
     else:
         return print('Unknown species!')
-        
+
 
 def mol_cas(casno):
     for k in data.keys():
@@ -2905,7 +2905,7 @@ def xyz2siesta (filename):
     Input file must be like this (reads position from 2nd line):
     Total umber of atoms
     BULK
-    Atom x y z 
+    Atom x y z
     """
     import sys, re
     from pyscf.data.elements import ELEMENTS
@@ -2921,7 +2921,7 @@ def xyz2siesta (filename):
         name_prev = 'initial'
         for i in range (2,len(data)):
             name = re.findall(r'\w+', str(data[i]))[0]
-            if (name != name_prev): sp=1      
+            if (name != name_prev): sp=1
             x,y,z= re.findall(r"[-+]?\d*\.\d+|\d+", str(data[i]))
             if name in nosp:
                 txt= ' %15s  %15s  %15s %4d %4d %14s.gga'%(x,y,z,nosp.index(name)+1,sp,name)

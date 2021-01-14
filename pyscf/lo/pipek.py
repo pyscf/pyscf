@@ -19,7 +19,7 @@
 '''
 Pipek-Mezey localization
 
-ref. JCTC, 10, 642 (2014); DOI:10.1021/ct401016x
+ref. JCTC 10, 642 (2014); DOI:10.1021/ct401016x
 '''
 
 import numpy
@@ -84,9 +84,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
             proj[i] = (csc + csc.conj().T) * .5
 
     elif method in ('lowdin', 'meta-lowdin'):
-        c = orth.restore_ao_character(mol, 'ANO')
-        #csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth_local_ao_coeff))
-        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, c, s=s)))
+        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, 'ANO', s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].conj().T)
 
@@ -119,8 +117,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
 
 
 class PipekMezey(boys.Boys):
-    '''
-    The Pipek-Mezey localization optimizer that maximizes the orbital
+    '''The Pipek-Mezey localization optimizer that maximizes the orbital
     population
 
     Args:
@@ -164,9 +161,16 @@ class PipekMezey(boys.Boys):
             to 'atomic', atomic orbitals will be used as initial guess.
             Default 'atomic'
         pop_method : str
-            How the orbital population is calculated. By default, meta-lowdin
-            population (JCTC, 10, 3784) is used. It can be set to 'mulliken',
-            or 'lowdin' for other population definition
+            How the orbital population is calculated, see JCTC 10, 642
+            (2014) for discussion. Options are:
+            - 'meta-lowdin' (default) as defined in JCTC 10, 3784 (2014)
+            - 'mulliken' original Pipek-Mezey scheme, JCP 90, 4916 (1989)
+            - 'lowdin' Lowdin charges, JCTC 10, 642 (2014)
+            - 'iao' or 'ibo' intrinsic atomic orbitals, JCTC 9, 4384 (2013)
+            - 'becke' Becke charges, JCTC 10, 642 (2014)
+            The IAO and Becke charges do not depend explicitly on the
+            basis set, and have a complete basis set limit [JCTC 10,
+            642 (2014)].
         exponent : int
             The power to define norm. It can be 2 or 4. Default 2.
 

@@ -27,7 +27,7 @@ b = 1.4
 mol = gto.Mole()
 mol.build(
 verbose = 7,
-#output = '/dev/null',
+output = '/dev/null',
 atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],

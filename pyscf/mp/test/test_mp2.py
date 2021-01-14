@@ -148,6 +148,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
     def test_mp2_with_df(self):
+        nocc = mol.nelectron//2
+        nmo = mf.mo_energy.size
+        nvir = nmo - nocc
+
+        mf_df = mf.density_fit('weigend')
+        pt = mp.dfmp2.DFMP2(mf_df)
+        e, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
+        eris = mp.mp2._make_eris(pt, mo_coeff=mf.mo_coeff, ao2mofn=mf_df.with_df.ao2mo)
+        g = eris.ovov.ravel()
+        eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
+        t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
+        t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+        e, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
+        self.assertAlmostEqual(e, -0.20425449198334983, 9)
+        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 9)
+
         pt = mp.MP2(mf.density_fit('weigend'))
         pt.frozen = [1]
         e = pt.kernel(with_t2=False)[0]

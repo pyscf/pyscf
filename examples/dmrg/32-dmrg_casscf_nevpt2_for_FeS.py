@@ -464,6 +464,12 @@ mc.max_memory = 30000
 mc.fcisolver.maxM = 1000
 mc.fcisolver.tol = 1e-6
 orbs = mc.sort_mo(caslst, coeff, base=0)
+
+# Setting natorb to generate natural orbitals in active space.  It's only
+# needed for the DMRG-CASSCF calculations with subsequent DMRG-NEVPT2
+# calculations.
+mc.natorb = True
+
 mc.mc1step(orbs)
 
 

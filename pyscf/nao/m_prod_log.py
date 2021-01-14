@@ -212,11 +212,11 @@ class prod_log_c(ao_log_c):
     File = h5py.File(fname, "r")
     for isp, atm_nb in enumerate(sp2charge):
         val = File["specie_{0}".format(atm_nb)]
-        mu2j = val["sp_local2functs/mu2j"].value
+        mu2j = val["sp_local2functs/mu2j"][:]
         nmult = mu2j.shape[0]
         mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
 
-        mu2rcut = np.array([val["sp_local2functs/rcut"].value[0]]*nmult, dtype=np.float64)
+        mu2rcut = np.array([val["sp_local2functs/rcut"][0]]*nmult, dtype=np.float64)
 
         self.sp2nmult[isp]=nmult
         self.sp_mu2j.append(mu2j)
@@ -224,9 +224,9 @@ class prod_log_c(ao_log_c):
         self.sp_mu2s.append(mu2s)
         self.sp2norbs[isp] = mu2s[-1]
       
-        self.psi_log.append(val["sp_local2functs/ir_mu2v"].value)
+        self.psi_log.append(val["sp_local2functs/ir_mu2v"][:])
       
-        mu2ww = val["vertex"].value
+        mu2ww = val["vertex"][:]
         no = mu2ww.shape[1]
         npf= sum(2*mu2j+1)  # count number of product functions
         if npf != mu2ww.shape[0]:

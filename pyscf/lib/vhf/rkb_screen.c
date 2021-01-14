@@ -215,12 +215,6 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 
         assert(intor == &int2e_spsp1spsp2_spinor);
         set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
-        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        double *qcond = opt->q_cond;
-        int i;
-        for (i = 0; i < nbas*nbas; i++) {
-                qcond[i] *= c1;
-        }
 }
 
 
@@ -236,12 +230,6 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         set_qcond(&int2e_spinor, NULL, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
         set_qcond(&int2e_spsp1spsp2_spinor, NULL, opt->q_cond+nbas*nbas, ao_loc,
                   atm, natm, bas, nbas, env);
-        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        double *qcond = opt->q_cond + nbas*nbas;
-        int i;
-        for (i = 0; i < nbas*nbas; i++) {
-                qcond[i] *= c1;
-        }
 }
 
 static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,

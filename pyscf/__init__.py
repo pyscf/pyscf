@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '1.7.4'
+__version__ = '1.7.5'
 
 import os
 # Avoid too many threads being created in OMP loops.
@@ -74,7 +74,7 @@ from pyscf import scf
 from pyscf import ao2mo
 
 #__path__.append(os.path.join(os.path.dirname(__file__), 'future'))
-__path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
+#__path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = __config__.DEBUG
 

@@ -584,7 +584,7 @@ def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return lib.make_diag_precond(hdiag, level_shift)
 
 
-class FCISolver(lib.StreamObject):
+class FCIBase(lib.StreamObject):
     '''Full CI solver
 
     Attributes:
@@ -850,10 +850,6 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
-    def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
-        nelec = _unpack_nelec(nelec, self.spin)
-        return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
-
     def contract_ss(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
         nelec = _unpack_nelec(nelec, self.spin)
@@ -870,6 +866,14 @@ class FCISolver(lib.StreamObject):
             link_indexa = cistring.gen_linkstr_index(range(norb), neleca)
             link_indexb = cistring.gen_linkstr_index(range(norb), nelecb)
         return link_indexa, link_indexb
+
+
+class FCISolver(FCIBase):
+    # transform_ci_for_orbital_rotation only available for FCI wavefunctions.
+    # Some approx FCI solver does not have this functionality.
+    def transform_ci_for_orbital_rotation(self, fcivec, norb, nelec, u):
+        nelec = _unpack_nelec(nelec, self.spin)
+        return addons.transform_ci_for_orbital_rotation(fcivec, norb, nelec, u)
 
 FCI = FCISolver
 

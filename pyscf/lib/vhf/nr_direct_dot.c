@@ -223,14 +223,17 @@ static void nrs1_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
         DECLARE(v, i, l);
         DEF_DM(j, k);
         int i, j, k, l, ijkl, icomp;
+        double s;
 
         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                 for (l = 0; l < dl; l++) {
                 for (k = 0; k < dk; k++) {
                 for (j = 0; j < dj; j++) {
-                for (i = 0; i < di; i++, ijkl++) {
-                        v[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                } } } }
+                        s = dmjk[j*dk+k];
+                        for (i = 0; i < di; i++, ijkl++) {
+                                v[i*dl+l] += eri[ijkl] * s;
+                        }
+                } } }
                 v += dil;
         }
 }
@@ -398,15 +401,20 @@ static void nrs2ij_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, k);
                 LOCATE(vjl, j, l);
                 int i, j, k, l, ijkl, icomp;
+                double s, tmp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl]*dmjk[j*dk+k];
-                                vjl[j*dl+l] += eri[ijkl]*dmik[i*dk+k];
-                        } } } }
+                                s = dmjk[j*dk+k];
+                                tmp = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s;
+                                        tmp += eri[ijkl] * dmik[i*dk+k];
+                                }
+                                vjl[j*dl+l] = tmp;
+                        } } }
                         vil += dil;
                         vjl += djl;
                 }
@@ -439,15 +447,20 @@ static void nrs2ij_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(l, j);
                 LOCATE(vki, k, i);
                 int i, j, k, l, ijkl, icomp;
+                double s, tmp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                        } } } }
+                                s = dmlj[l*dj+j];
+                                tmp = vkj[k*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmli[l*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                }
+                                vkj[k*dj+j] = tmp;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                 }
@@ -568,15 +581,19 @@ static void nrs2kl_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, l);
                 LOCATE(vik, i, k);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                        } } } }
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                        } } }
                         vil += dil;
                         vik += dik;
                 }
@@ -609,15 +626,21 @@ static void nrs2kl_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(l, i);
                 LOCATE(vlj, l, j);
                 int i, j, k, l, ijkl, icomp;
+                double tmp0, tmp1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                        } } } }
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vlj += dlj;
                 }
@@ -758,17 +781,25 @@ static void nrs4_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, l);
                 DEF_DM(j, k);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
-                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                        } } } }
+                                s0 = dmjl[j*dl+l];
+                                s1 = dmjk[j*dk+k];
+                                tmp0 = vjk[j*dk+k];
+                                tmp1 = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmil[i*dl+l];
+                                        tmp1 += eri[ijkl] * dmik[i*dk+k];
+                                        vik[i*dk+k] += eri[ijkl] * s0;
+                                        vil[i*dl+l] += eri[ijkl] * s1;
+                                }
+                                vjk[j*dk+k] = tmp0;
+                                vjl[j*dl+l] = tmp1;
+                        } } }
                         vjk += djk;
                         vjl += djl;
                         vik += dik;
@@ -792,13 +823,16 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                         DECLARE(v, i, l);
                         DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
+                        double s;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = 0; i < di; i++, ijkl++) {
-                                        v[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                } } } }
+                                        s = dmjk[j*dk+k];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                v[i*dl+l] += eri[ijkl] * s;
+                                        }
+                                } } }
                                 v += dil;
                         }
                 } else { // l <= j < i < k
@@ -807,14 +841,19 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                         DEF_DM(i, k);
                         DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
+                        double s, tmp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = 0; i < di; i++, ijkl++) {
-                                        vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
-                                        vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                } } } }
+                                        s = dmjk[j*dk+k];
+                                        tmp = vjl[j*dl+l];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp += eri[ijkl] * dmik[i*dk+k];
+                                                vil[i*dl+l] += eri[ijkl] * s;
+                                        }
+                                        vjl[j*dl+l] = tmp;
+                                } } }
                                 vjl += djl;
                                 vil += dil;
                         }
@@ -825,14 +864,18 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, k);
                 DEF_DM(j, l);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                        } } } }
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                        } } }
                         vil += dil;
                         vik += dik;
                 }
@@ -844,15 +887,21 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, k);
                 DEF_DM(j, l);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                        } } } }
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                tmp = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmik[i*dk+k];
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                                vjl[j*dl+l] = tmp;
+                        } } }
                         vjl += djl;
                         vil += dil;
                         vik += dik;
@@ -867,16 +916,24 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, l);
                 DEF_DM(j, k);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
-                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                        } } } }
+                                s0 = dmjl[j*dl+l];
+                                s1 = dmjk[j*dk+k];
+                                tmp0 = vjk[j*dk+k];
+                                tmp1 = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmil[i*dl+l];
+                                        tmp1 += eri[ijkl] * dmik[i*dk+k];
+                                        vik[i*dk+k] += eri[ijkl] * s0;
+                                        vil[i*dl+l] += eri[ijkl] * s1;
+                                }
+                                vjk[j*dk+k] = tmp0;
+                                vjl[j*dl+l] = tmp1;
+                        } } }
                         vjk += djk;
                         vjl += djl;
                         vik += dik;
@@ -905,16 +962,24 @@ static void nrs4_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, i);
                 DEF_DM(k, j);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                                vli[l*di+i] += eri[ijkl] * dmkj[k*dj+j];
-                        } } } }
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s0;
+                                        vli[l*di+i] += eri[ijkl] * s1;
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -938,13 +1003,17 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         DECLARE(v, k, j);
                         DEF_DM(l, i);
                         int i, j, k, l, ijkl, icomp;
+                        double tmp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = 0; i < di; i++, ijkl++) {
-                                        v[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                } } } }
+                                        tmp = v[k*dj+j];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp += eri[ijkl] * dmli[l*di+i];
+                                        }
+                                        v[k*dj+j] = tmp;
+                                } } }
                                 v += dkj;
                         }
                 } else { // j <= l < k < i
@@ -953,14 +1022,20 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         DEF_DM(l, i);
                         DEF_DM(k, i);
                         int i, j, k, l, ijkl, icomp;
+                        double tmp0, tmp1;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = 0; i < di; i++, ijkl++) {
-                                        vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                        vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                                } } } }
+                                        tmp0 = vkj[k*dj+j];
+                                        tmp1 = vlj[l*dj+j];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp0 += eri[ijkl] * dmli[l*di+i];
+                                                tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        }
+                                        vkj[k*dj+j] = tmp0;
+                                        vlj[l*dj+j] = tmp1;
+                                } } }
                                 vkj += dkj;
                                 vlj += dlj;
                         }
@@ -971,14 +1046,19 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(l, i);
                 DEF_DM(l, j);
                 int i, j, k, l, ijkl, icomp;
+                double s, tmp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                        } } } }
+                                s = dmlj[l*dj+j];
+                                tmp = vkj[k*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmli[l*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                }
+                                vkj[k*dj+j] = tmp;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                 }
@@ -990,15 +1070,22 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(l, j);
                 DEF_DM(k, i);
                 int i, j, k, l, ijkl, icomp;
+                double s, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                        } } } }
+                                s = dmlj[l*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -1013,16 +1100,24 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, i);
                 DEF_DM(k, j);
                 int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                                vli[l*di+i] += eri[ijkl] * dmkj[k*dj+j];
-                        } } } }
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s0;
+                                        vli[l*di+i] += eri[ijkl] * s1;
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -1188,20 +1283,35 @@ static void nrs8_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(i, l);
                 DEF_DM(i, k);
                 int i, j, k, l, ijkl, icomp;
+                double s, s0, s1, s2, s3, tmp0, tmp1, tmp2, tmp3;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
-                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
-                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
-                                vli[l*di+i] += eri[ijkl] * dmkj[k*dj+j];
-                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
-                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
-                                vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
-                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
-                        } } } }
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                s2 = dmjl[j*dl+l];
+                                s3 = dmjk[j*dk+k];
+                                tmp0 = 0;
+                                tmp1 = 0;
+                                tmp2 = 0;
+                                tmp3 = 0;
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        s = eri[ijkl];
+                                        vki[k*di+i] += s * s0;
+                                        vli[l*di+i] += s * s1;
+                                        vik[i*dk+k] += s * s2;
+                                        vil[i*dl+l] += s * s3;
+                                        tmp0 += s * dmli[l*di+i];
+                                        tmp1 += s * dmki[k*di+i];
+                                        tmp2 += s * dmil[i*dl+l];
+                                        tmp3 += s * dmik[i*dk+k];
+                                }
+                                vkj[k*dj+j] += tmp0;
+                                vlj[l*dj+j] += tmp1;
+                                vjk[j*dk+k] += tmp2; // vkj, vjk may share memory
+                                vjl[j*dl+l] += tmp3; // vlj, vjl may share memory
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -1245,8 +1355,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                 for (j = 0; j < dj; j++) {
                                         tjl = dmjl[j*dl+l];
                                         tjk = dmjk[j*dk+k];
-                                        skj = vkj[k*dj+j];
-                                        slj = vlj[l*dj+j];
+                                        skj = 0;
+                                        slj = 0;
                                         for (i = 0; i < di; i++, ijkl++) {
                                                 //vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
                                                 //vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
@@ -1258,8 +1368,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                                 vik[i*dk+k] += s * tjl;
                                                 vil[i*dl+l] += s * tjk;
                                         }
-                                        vkj[k*dj+j] = skj;
-                                        vlj[l*dj+j] = slj;
+                                        vkj[k*dj+j] += skj;
+                                        vlj[l*dj+j] += slj;
                                 } } }
                                 vkj += dkj;
                                 vlj += dlj;
@@ -1283,8 +1393,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                 for (j = 0; j < dj; j++) {
                                         tjl = dmjl[j*dl+l];
                                         tjk = dmjk[j*dk+k];
-                                        skj = vkj[k*dj+j];
-                                        slj = vlj[l*dj+j];
+                                        skj = 0;
+                                        slj = 0;
                                         sjl = 0;
                                         for (i = 0; i < di; i++, ijkl++) {
                                                 //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
@@ -1299,9 +1409,9 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                                 slj += s * dmki[k*di+i];
                                                 sjl += s * dmik[i*dk+k];
                                         }
-                                        vlj[l*dj+j] = slj;
-                                        vkj[k*dj+j] = skj;
-                                        vjl[j*dl+l] += sjl;
+                                        vlj[l*dj+j] += slj;
+                                        vkj[k*dj+j] += skj;
+                                        vjl[j*dl+l] += sjl; // vjl, vlj may share memory
                                 } } }
                                 vkj += dkj;
                                 vlj += dlj;
@@ -1324,8 +1434,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                 for (j = 0; j < dj; j++) {
                                         tjl = dmjl[j*dl+l];
                                         tjk = dmjk[j*dk+k];
-                                        skj = vkj[k*dj+j];
-                                        sjl = vjl[j*dl+l];
+                                        skj = 0;
+                                        sjl = 0;
                                         for (i = 0; i < di; i++, ijkl++) {
                                                 //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
                                                 //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
@@ -1337,8 +1447,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                                 skj += s * dmli[l*di+i];
                                                 sjl += s * dmik[i*dk+k];
                                         }
-                                        vkj[k*dj+j] = skj;
-                                        vjl[j*dl+l] = sjl;
+                                        vkj[k*dj+j] += skj;
+                                        vjl[j*dl+l] += sjl;
                                 } } }
                                 vkj += dkj;
                                 vik += dik;
@@ -1362,8 +1472,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                 for (j = 0; j < dj; j++) {
                                         tjl = dmjl[j*dl+l];
                                         tjk = dmjk[j*dk+k];
-                                        sjk = vjk[j*dk+k];
-                                        sjl = vjl[j*dl+l];
+                                        sjk = 0;
+                                        sjl = 0;
                                         skj = 0;
                                         for (i = 0; i < di; i++, ijkl++) {
                                                 //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
@@ -1378,9 +1488,9 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                                 sjk += s * dmil[i*dl+l];
                                                 sjl += s * dmik[i*dk+k];
                                         }
-                                        vjk[j*dk+k] = sjk;
-                                        vjl[j*dl+l] = sjl;
-                                        vkj[k*dj+j] += skj;
+                                        vjk[j*dk+k] += sjk;
+                                        vjl[j*dl+l] += sjl;
+                                        vkj[k*dj+j] += skj; // vjk, vkj may share memory
                                 } } }
                                 vkj += dkj;
                                 vjk += djk;
@@ -1403,8 +1513,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                 for (j = 0; j < dj; j++) {
                                         tjl = dmjl[j*dl+l];
                                         tjk = dmjk[j*dk+k];
-                                        sjk = vjk[j*dk+k];
-                                        sjl = vjl[j*dl+l];
+                                        sjk = 0;
+                                        sjl = 0;
                                         for (i = 0; i < di; i++, ijkl++) {
                                                 //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
                                                 //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
@@ -1416,8 +1526,8 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                                                 sjk += s * dmil[i*dl+l];
                                                 sjl += s * dmik[i*dk+k];
                                         }
-                                        vjk[j*dk+k] = sjk;
-                                        vjl[j*dl+l] = sjl;
+                                        vjk[j*dk+k] += sjk;
+                                        vjl[j*dl+l] += sjl;
                                 } } }
                                 vik += dik;
                                 vil += dil;

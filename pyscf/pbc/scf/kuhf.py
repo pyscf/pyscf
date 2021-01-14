@@ -80,7 +80,18 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
+    if isinstance(damp_factor, (tuple, list, np.ndarray)):
+        dampa, dampb = damp_factor
+    else:
+        dampa = dampb = damp_factor
 
+    if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
+        f_a = []
+        f_b = []
+        for k, s1e in enumerate(s_kpts):
+            f_a.append(mol_hf.damping(s1e, dm_kpts[0][k], f_kpts[0][k], dampa))
+            f_b.append(mol_hf.damping(s1e, dm_kpts[1][k], f_kpts[1][k], dampb))
+        f_kpts = [f_a, f_b]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -149,21 +160,34 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
             logger.info(mf, 'beta HOMO = %.12g  LUMO = %.12g', fermi_b, mo_energy[nocc_b])
         else:
             logger.info(mf, 'beta HOMO = %.12g  (no LUMO because of small basis) ', fermi_b)
+    else:
+        for mo_e in mo_energy_kpts[1]:
+            mo_occ_kpts[1].append(np.zeros_like(mo_e))
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
         logger.debug(mf, '     k-point                  alpha mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
-                         k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
-                         mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+            if (np.count_nonzero(mo_occ_kpts[0][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[0][k] == 0) > 0):
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                             k, kpt[0], kpt[1], kpt[2],
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]> 0],
+                             mo_energy_kpts[0][k][mo_occ_kpts[0][k]==0])
+            else:
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[0][k])
         logger.debug(mf, '     k-point                  beta  mo_energy')
         for k,kpt in enumerate(mf.cell.get_scaled_kpts(mf.kpts)):
-            logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
-                         k, kpt[0], kpt[1], kpt[2],
-                         mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
-                         mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+            if (np.count_nonzero(mo_occ_kpts[1][k]) > 0 and
+                np.count_nonzero(mo_occ_kpts[1][k] == 0) > 0):
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s %s',
+                             k, kpt[0], kpt[1], kpt[2],
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]> 0],
+                             mo_energy_kpts[1][k][mo_occ_kpts[1][k]==0])
+            else:
+                logger.debug(mf, '  %2d (%6.3f %6.3f %6.3f)   %s',
+                             k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
         np.set_printoptions(threshold=1000)
 
     return mo_occ_kpts
@@ -210,8 +234,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     log.note("KUHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
-    c = orth.restore_ao_character(cell, pre_orth_method)
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm_a = reduce(np.dot, (c_inv, dm_ao_gamma[0], c_inv.T.conj()))
     dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
@@ -355,7 +378,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -426,11 +449,11 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
@@ -443,8 +466,16 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            if dm_kpts is None:
+                dm_kpts = self.make_rdm1()
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
 

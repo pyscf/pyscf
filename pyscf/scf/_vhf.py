@@ -26,16 +26,24 @@ def _fpointer(name):
     return ctypes.c_void_p(_ctypes.dlsym(libcvhf._handle, name))
 
 class VHFOpt(object):
-    def __init__(self, mol, intor,
+    def __init__(self, mol, intor=None,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         '''If function "qcondname" is presented, the qcond (sqrt(integrals))
         and will be initialized in __init__.
+
+        prescreen, qcondname, dmcondname can be either function pointers or
+        names of C functions defined in libcvhf module
         '''
-        intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = intor
-        self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
+
+        if intor is None:
+            self._intor = intor
+            self._cintopt = lib.c_null_ptr()
+        else:
+            self._intor = mol._add_suffix(intor)
+            self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
+
         self._dmcondname = dmcondname
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
@@ -44,17 +52,23 @@ class VHFOpt(object):
                                    mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
                                    mol._env.ctypes.data_as(ctypes.c_void_p))
         self.prescreen = prescreen
-        if qcondname is not None:
+        if qcondname is not None and intor is not None:
             self.init_cvhf_direct(mol, intor, qcondname)
 
     def init_cvhf_direct(self, mol, intor, qcondname):
+        '''qcondname can be the function pointer or the name of a C function
+        defined in libcvhf module
+        '''
         intor = mol._add_suffix(intor)
         if intor == self._intor:
             cintopt = self._cintopt
         else:
             cintopt = lib.c_null_ptr()
         ao_loc = make_loc(mol._bas, intor)
-        fsetqcond = getattr(libcvhf, qcondname)
+        if isinstance(qcondname, ctypes._CFuncPtr):
+            fsetqcond = qcondname
+        else:
+            fsetqcond = getattr(libcvhf, qcondname)
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
         fsetqcond(self._this, getattr(libcvhf, intor), cintopt,
@@ -75,10 +89,9 @@ class VHFOpt(object):
         return self._this.contents.fprescreen
     @prescreen.setter
     def prescreen(self, v):
-        if isinstance(v, int):
-            self._this.contents.fprescreen = v
-        else:
-            self._this.contents.fprescreen = _fpointer(v)
+        if isinstance(v, str):
+            v = _fpointer(v)
+        self._this.contents.fprescreen = v
 
     def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
@@ -93,7 +106,10 @@ class VHFOpt(object):
                 n_dm = len(dm)
             dm = numpy.asarray(dm, order='C')
             ao_loc = make_loc(c_bas, self._intor)
-            fsetdm = getattr(libcvhf, self._dmcondname)
+            if isinstance(self._dmcondname, ctypes._CFuncPtr):
+                fsetdm = self._dmcondname
+            else:
+                fsetdm = getattr(libcvhf, self._dmcondname)
             fsetdm(self._this,
                    dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
                    ao_loc.ctypes.data_as(ctypes.c_void_p),
@@ -106,6 +122,30 @@ class VHFOpt(object):
             libcvhf.CVHFdel_optimizer(ctypes.byref(self._this))
         except AttributeError:
             pass
+
+    def get_q_cond(self, shape=None):
+        '''Return an array associated to q_cond. Contents of q_cond can be
+        modified through this array
+        '''
+        if shape is None:
+            nbas = self._this.contents.nbas
+            shape = (nbas, nbas)
+        data = ctypes.cast(self._this.contents.q_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    q_cond = property(get_q_cond)
+
+    def get_dm_cond(self, shape=None):
+        '''Return an array associated to dm_cond. Contents of dm_cond can be
+        modified through this array
+        '''
+        if shape is None:
+            nbas = self._this.contents.nbas
+            shape = (nbas, nbas)
+        data = ctypes.cast(self._this.contents.dm_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    dm_cond = property(get_dm_cond)
 
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),

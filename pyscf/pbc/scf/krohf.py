@@ -72,6 +72,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     dm_sf = dm_kpts[0] + dm_kpts[1]
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+        raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -166,12 +168,14 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
             vir_idx = mo_occ_kpts[k] == 0
             logger.debug(mf, '  kpt %2d (%6.3f %6.3f %6.3f)',
                          k, kpt[0], kpt[1], kpt[2])
-            logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
-                         max(mo_energy_kpts[k][core_idx]),
-                         max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
-            logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
-                         min(mo_energy_kpts[k][vir_idx]),
-                         min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
+            if np.count_nonzero(core_idx) > 0:
+                logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
+                             max(mo_energy_kpts[k][core_idx]),
+                             max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
+            if np.count_nonzero(vir_idx) > 0:
+                logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
+                             min(mo_energy_kpts[k][vir_idx]),
+                             min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
             for i in np.where(open_idx)[0]:
                 logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
                              mo_energy_kpts[k][i], mo_ea_kpts[k][i], mo_eb_kpts[k][i])
@@ -258,7 +262,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -331,11 +335,11 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
         nelec = float(sum(self.nelec))
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %g', ne/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 

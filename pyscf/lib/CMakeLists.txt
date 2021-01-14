@@ -15,7 +15,9 @@
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
-set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+endif()
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
@@ -87,10 +89,12 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.20
+    GIT_TAG v4.0.7
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
+    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
+            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
+            -DKEEP_GOING=1
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
             -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -118,7 +122,7 @@ elseif (APPLE)
 else ()
   set(CMAKE_SKIP_BUILD_RPATH  True)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
-  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib")
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
 
 add_subdirectory(np_helper)
@@ -135,6 +139,7 @@ add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
 add_subdirectory(semiempirical)
+add_subdirectory(agf2)
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
@@ -195,17 +200,17 @@ endif() # ENABLE_LIBXC
 #    ENABLE_XCFUN AND BUILD_XCFUN)
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
+    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    # copy of v2.1.0, downgrade to cmake 3.5
+    GIT_TAG cmake-3.5
     # Range seperated parameters can be set in the python code. This patch to
     # RSH omega is not needed anymore.
     #PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DXC_MAX_ORDER=3 -DENABLE_TESTALL=0
+            -DXCFUN_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DENABLE_FORTRAN_INTERFACE=OFF
   )
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
@@ -231,7 +236,7 @@ set_target_properties(tblis_einsum PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS "-std=c++11")
 target_link_libraries(tblis_einsum tblis)
-add_dependencies(tblis_einsum libtblis)
+# add_dependencies(tblis_einsum libtblis)
 endif() # ENABLE_TBLIS
 
 

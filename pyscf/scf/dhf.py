@@ -31,10 +31,15 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-try:
-    import zquatev
-except ImportError:
-    zquatev = None
+
+zquatev = None
+if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
+    try:
+        # Install zquatev with
+        # pip install git+https://github.com/sunqm/zquatev
+        import zquatev
+    except ImportError:
+        pass
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -468,25 +473,34 @@ class DHF(hf.SCF):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
             opt._this.contents.r_vkscreen = _vhf._fpointer(name)
-        opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
-                               'CVHFrkbllll_direct_scf',
-                               'CVHFrkbllll_direct_scf_dm')
-        opt_llll.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
-        opt_ssss = _vhf.VHFOpt(mol, 'int2e_spsp1spsp2_spinor',
-                               'CVHFrkbllll_prescreen',
-                               'CVHFrkbssss_direct_scf',
-                               'CVHFrkbssss_direct_scf_dm')
-        opt_ssss.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
-        opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
-                               'CVHFrkbssll_prescreen',
-                               'CVHFrkbssll_direct_scf',
-                               'CVHFrkbssll_direct_scf_dm')
-        opt_ssll.direct_scf_tol = self.direct_scf_tol
-        set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
+
+        with mol.with_integral_screen(self.direct_scf_tol**2):
+            opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor', 'CVHFrkbllll_prescreen',
+                                   'CVHFrkbllll_direct_scf',
+                                   'CVHFrkbllll_direct_scf_dm')
+            opt_llll.direct_scf_tol = self.direct_scf_tol
+            set_vkscreen(opt_llll, 'CVHFrkbllll_vkscreen')
+            opt_ssss = _vhf.VHFOpt(mol, 'int2e_spsp1spsp2_spinor',
+                                   'CVHFrkbllll_prescreen',
+                                   'CVHFrkbssss_direct_scf',
+                                   'CVHFrkbssss_direct_scf_dm')
+            c1 = .5 / lib.param.LIGHT_SPEED
+            q_cond = opt_ssss.get_q_cond()
+            q_cond *= c1**2
+            opt_ssss.direct_scf_tol = self.direct_scf_tol
+            set_vkscreen(opt_ssss, 'CVHFrkbllll_vkscreen')
+            opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
+                                   'CVHFrkbssll_prescreen',
+                                   'CVHFrkbssll_direct_scf',
+                                   'CVHFrkbssll_direct_scf_dm')
+            opt_ssll.direct_scf_tol = self.direct_scf_tol
+            set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
+            nbas = mol.nbas
+            q_cond = opt_ssll.get_q_cond(shape=(2, nbas, nbas))
+            q_cond[1] *= c1**2
+
 #TODO: prescreen for gaunt
-        opt_gaunt = None
+            opt_gaunt = None
         return opt_llll, opt_ssll, opt_ssss, opt_gaunt
 
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,

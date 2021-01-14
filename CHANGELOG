@@ -4,13 +4,40 @@ PySCF 1.7.? (2020-?-?)
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
   - Support SO3 symmetry
+
+
+PySCF 1.7.6 (2020-11-??)
+------------------------
+* Added
+  - KMP2 2-particle density matrix
+  - PBC J, K matrices module rsjk (RangeSeparationJKBuilder)
+* Improved
+  - Threading safety in Mole temporary context
+  - Basis parser to support arithmetic expressions in basis data
+* Fixed
+  - stack overflow in ecp integral code
+  - SCAN functional crashing problem
+
+
+PySCF 1.7.5 (2020-9-27)
+-----------------------
+* Added
+  - Upgrade cint library to v4
+  - Upgrade xcfun library to v2.1.0
   - Kramers' restricted Dirac-Hartree-Fock, X2C, DHF-SOSCF
+  - Heavy elements basis in MINAO
+  - Coulomb integrals of short range part for attenuated Coulomb
+  - Polarizability and hyperpolarizability under PBC
 * Improved
   - Support pseudo potential Atomic HF
   - Atomic HF for 1-electron system
+  - Check basis angular momentum in mol.intor (l < 7)
+  - FCIDUMP wrapper fcidump.py
 * Fixed
-  - Bug in Mole.fromstring
+  - Bugs in Mole.fromstring
   - Buffer size bug in DHF JK builder for very small systems
+  - Fix pbc-eom-eaccsd_star bug
+  - Bugs in integral screening for very tight direct_scf_tol
 
 
 PySCF 1.7.4 (2020-8-2)
@@ -47,7 +74,7 @@ PySCF 1.7.3 (2020-6-10)
 PySCF 1.7.2 (2020-5-13)
 -----------------------
 * Added
-  - pbc.eph
+  - Electron-phonon Hamiltonian under PBC (pbc.eph)
   - State-average CASSCF example
   - Spin density analysis to uhf.analyze()
   - Passing point group and wfnsym to Dice

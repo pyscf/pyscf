@@ -389,6 +389,11 @@ class KnownValues(unittest.TestCase):
         e_td = mf.TDDFT().kernel()[0]
         self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - [16.14837289, 28.01968627, 49.00854076]).max(), 0, 4)
 
+    def test_symmetry_init_guess(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        td = mol.RHF.run().TDA().run(nstates=1)
+        self.assertAlmostEqual(td.e[0], 0.22349707455528, 7)
+        # TODO: verify symmetry of td.x == A1u
 
 if __name__ == "__main__":
     print("Full Tests for TD-RKS")

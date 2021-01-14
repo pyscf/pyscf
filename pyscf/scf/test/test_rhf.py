@@ -210,12 +210,12 @@ class KnownValues(unittest.TestCase):
         dm = scf.ROHF(mol).init_guess_by_huckel()
         self.assertAlmostEqual(lib.fp(dm[0]), 3.348165771345748/2, 9)
 
-        mol1 = gto.M(atom='Mo', basis='lanl2dz', ecp='lanl2dz',
+        # Initial guess Huckel is not able to handle open-shell system
+        mol1 = gto.M(atom='Mo 0 0 0; C 0 0 1', basis='lanl2dz', ecp='lanl2dz',
                      verbose=7, output='/dev/null')
         dm = scf.hf.get_init_guess(mol1, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), 2.1268388150553035, 9)
-        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 14, 9)
-
+        self.assertAlmostEqual(lib.fp(dm), 2.01095497354225, 9)
+        self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, mol1.intor('int1e_ovlp')), 20, 9)
 
     def test_1e(self):
         mf = scf.rohf.HF1e(mol)
@@ -861,6 +861,37 @@ H     0    0.757    0.587'''
         self.assertTrue(mf.with_x2c.mol is n2sym)
         self.assertTrue(mf._scf.with_df.mol is n2sym)
         self.assertTrue(mf._scf.with_x2c.mol is n2sym)
+
+    def test_schwarz_condition(self):
+        mol = gto.M(atom='''
+                    H    0   0   0
+                    H    0   0   4.
+                    ''', unit='B',
+                    basis = [[0, (2.7, 1)], [0, (1e2, 1)]])
+        mf = scf.RHF(mol)
+        mf.direct_scf_tol = 1e-18
+        opt = mf.init_direct_scf()
+        shls = i, j, k, l = 0, 2, 3, 3
+        q = opt.q_cond
+        self.assertTrue(mol.intor_by_shell('int2e', shls).ravel()[0] < q[i,j] * q[k,l])
+
+        mol = gto.M(atom='''
+                    H    0   0   0
+                    H    0   0   6
+                    ''', unit='B',
+                    basis = [[0, (.6, 1)], [0, (1e3, 1)]])
+        omega = 5.
+        with mol.with_short_range_coulomb(5.):
+            mf = scf.RHF(mol)
+            mf.direct_scf_tol = 1e-18
+            opt = mf.init_direct_scf()
+            shls = i, j, k, l = 2, 0, 1, 1
+            q = opt.q_cond
+            eri = mol.intor('int2e')
+            self.assertTrue(eri[shls] < q[i,j] * q[k,l])
+            self.assertTrue(eri[shls] < eri[i,i,k,k]**.5 * eri[j,j,l,l]**.5)
+            self.assertTrue(eri[shls] < eri[i,i,l,l]**.5 * eri[j,j,k,k]**.5)
+
 
 if __name__ == "__main__":
     print("Full Tests for rhf")

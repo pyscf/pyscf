@@ -57,6 +57,7 @@ from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
@@ -291,9 +292,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 shls_slice = (bstart, bend, 0, cell.nbas)
 
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                            b, gxyz[p0:p1], Gvbase, kpt,
-                                            adapted_kptjs, out=buf)
+                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                           b, gxyz[p0:p1], Gvbase, kpt,
+                                           adapted_kptjs, out=buf)
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -427,6 +428,7 @@ class GDF(aft.AFTDF):
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
             eta_guess = estimate_eta(cell, cell.precision)
+            logger.debug3(self, 'eta_guess = %g', eta_guess)
             if eta_cell < eta_guess:
                 self.eta = eta_cell
                 self.mesh = cell.mesh
@@ -532,6 +534,10 @@ class GDF(aft.AFTDF):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
+        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
+        # located in incore.wrap_int3c larger than necessary. Integral code
+        # only fills necessary part of the buffer, leaving some space in the
+        # buffer unfilled.
         uniq_idx = unique(self.kpts)[1]
         kpts = numpy.asarray(self.kpts)[uniq_idx]
         if self.kpts_band is None:
@@ -698,7 +704,14 @@ class GDF(aft.AFTDF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            if omega < LONGRANGE_AFT_TURNOVER_THRESHOLD:
+                mydf = aft.AFTDF(self.cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(self.cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(self.cell.lattice_vectors(),
+                                                 mydf.ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:
@@ -878,7 +891,7 @@ class _load3c(object):
                 raise KeyError('Key "%s" not found' % self.label)
 
         kpti_kptj = numpy.asarray(self.kpti_kptj)
-        kptij_lst = self.feri[self.kptij_label].value
+        kptij_lst = self.feri[self.kptij_label][()]
         return _getitem(self.feri, self.label, kpti_kptj, kptij_lst,
                         self.ignore_key_error)
 
