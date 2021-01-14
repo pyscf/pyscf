@@ -63,12 +63,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     logger.info(adc, "*************************************************************")
 
     if nfalse >= 1:
-        logger.info(adc, "*************************************************************")
-        logger.info(adc, " WARNING : ", "Davidson iterations for ", nfalse, "root(s) not converged")
-        logger.info(adc, "*************************************************************")
+        logger.info(adc, "\n WARNING : Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
 
     for n in range(nroots):
-        print_string = ('%s root %d  |  Energy (Eh) = %10.10f  |  Energy (eV) = %10.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
+        print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
         if adc.compute_properties:
             print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
         print_string += ("|  conv = %s" % conv[n])
@@ -4102,14 +4100,14 @@ def analyze_spec_factor(adc):
             if np.sum(spec_Contribution) == 0.0:
                 continue
 
-            logger.info(adc, '\n%s |Root %d %s\n', adc.method, i, spin)
+            logger.info(adc, '%s | root %d %s\n', adc.method, i, spin)
             logger.info(adc, "     HF MO     Spec. Contribution     Orbital symmetry")
             logger.info(adc, "-----------------------------------------------------------")
 
             for c in range(index_mo.shape[0]):
                 logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
 
-            logger.info(adc, '\nPartial spec. Factor sum = %10.8f', np.sum(spec_Contribution))
+            logger.info(adc, '\nPartial spec. factor sum = %10.8f', np.sum(spec_Contribution))
             logger.info(adc, "\n*************************************************************\n")
 
 
@@ -4311,6 +4309,7 @@ def analyze_eigenvector_ea(adc):
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bbb_idx):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[0], print_doubles[1], print_doubles[2], doubles_bbb_val[idx])
+                
         logger.info(adc, "\n*************************************************************\n")
 
 
@@ -4513,6 +4512,8 @@ def analyze_eigenvector_ip(adc):
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bbb_idx):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
+
+        logger.info(adc, "\n*************************************************************\n")
 
 
 def get_properties(adc, nroots=1):
