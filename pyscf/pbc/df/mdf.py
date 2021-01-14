@@ -395,11 +395,15 @@ class MDF(df.DF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            if omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD:
-                mydf = aft.AFTDF(self.cell, self.kpts)
-                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(self.cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(self.cell.lattice_vectors(),
-                                                 mydf.ke_cutoff)
+            cell = self.cell
+            if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
+                # The sparse mesh is not appropriate for low dimensional
+                # systems with infinity vacuum since the ERI may require large
+                # mesh to sample density in vacuum.
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+                mydf = aft.AFTDF(cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
             else:
                 mydf = self
             return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
