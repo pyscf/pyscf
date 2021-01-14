@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.398759554845552, 7)
 
 
 if __name__ == '__main__':
