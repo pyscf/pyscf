@@ -398,7 +398,8 @@ class MDF(df.DF):
             if omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD:
                 mydf = aft.AFTDF(self.cell, self.kpts)
                 mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(self.cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                mydf.mesh = tools.cutoff_to_mesh(self.cell.lattice_vectors(),
+                                                 mydf.ke_cutoff)
             else:
                 mydf = self
             return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
