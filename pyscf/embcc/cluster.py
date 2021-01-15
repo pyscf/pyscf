@@ -1,6 +1,7 @@
 # Standard libaries
 import logging
 from collections import OrderedDict
+import functools
 
 # External libaries
 import numpy as np
@@ -148,7 +149,11 @@ class Cluster:
         self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
         self.coupled_bath = kwargs.get("coupled_bath", False)
 
-        # Add local orbitals to cluster before adding additional bath orbitals:
+        # Add additional orbitals to 0-cluster
+        # Add first-order power orbitals
+        self.power1_occ_bath_tol = kwargs.get("power1_occ_bath_tol", False)
+        self.power1_vir_bath_tol = kwargs.get("power1_vir_bath_tol", False)
+        # Add local orbitals:
         self.local_occ_bath_tol = kwargs.get("local_occ_bath_tol", False)
         self.local_vir_bath_tol = kwargs.get("local_vir_bath_tol", False)
 
@@ -1041,6 +1046,30 @@ class Cluster:
 
         return converged, e_corr
 
+    def additional_bath_for_cluster(self, c_bath, c_occenv, c_virenv):
+        """Add additional bath orbitals to cluster (fragment+DMET bath)."""
+        if self.power1_occ_bath_tol is not False:
+            c_add, c_occenv, _ = make_mf_bath(self, c_occenv, "occ", bathtype="power",
+                    tol=self.power1_occ_bath_tol)
+            log.info("Adding %d first-order occupied power bath orbitals to cluster.", c_add.shape[-1])
+            c_bath = np.hstack((c_add, c_bath))
+        if self.power1_vir_bath_tol is not False:
+            c_add, c_virenv, _ = make_mf_bath(self, c_virenv, "vir", bathtype="power",
+                    tol=self.power1_vir_bath_tol)
+            log.info("Adding %d first-order virtual power bath orbitals to cluster.", c_add.shape[-1])
+            c_bath = np.hstack((c_bath, c_add))
+        # Local orbitals:
+        if self.local_occ_bath_tol is not False:
+            c_add, c_occenv = make_local_bath(self, c_occenv, tol=self.local_occ_bath_tol)
+            log.info("Adding %d local occupied bath orbitals to cluster.", c_add.shape[-1])
+            c_bath = np.hstack((c_add, c_bath))
+        if self.local_vir_bath_tol is not False:
+            c_add, c_virenv = make_local_bath(self, c_virenv, tol=self.local_vir_bath_tol)
+            log.info("Adding %d local virtual bath orbitals to cluster.", c_add.shape[-1])
+            c_bath = np.hstack((c_bath, c_add))
+        return c_bath, c_occenv, c_virenv
+
+
     def run(self, solver=None,
             #ref_orbitals=None
             refdata=None,
@@ -1075,24 +1104,33 @@ class Cluster:
         t0 = MPI.Wtime()
         #C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
         C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
+        log.debug("Time for DMET bath: %s", get_time_string(MPI.Wtime()-t0))
 
-        # Add additional local orbitals [optional]
-        if self.local_occ_bath_tol is not False:
-            log.info("Adding local occupied bath orbitals to cluster.")
-            C_occlocbath, C_occenv = make_local_bath(self, C_occenv, tol=self.local_occ_bath_tol)
-            #C_occlocbath, C_occenv, _ = make_mf_bath(self, C_occenv, "occ", bathtype="power",
-            #        tol=self.local_occ_bath_tol)
-            C_bath = np.hstack((C_occlocbath, C_bath))
-        if self.local_vir_bath_tol is not False:
-            log.info("Adding local virtual bath orbitals to cluster.")
-            C_virlocbath, C_virenv = make_local_bath(self, C_virenv, tol=self.local_vir_bath_tol)
-            #C_virlocbath, C_virenv, _ = make_mf_bath(self, C_virenv, "vir", bathtype="power",
-            #        tol=self.local_vir_bath_tol)
-            C_bath = np.hstack((C_bath, C_virlocbath))
+        # Add additional orbitals to cluster [optional]
+        # First-order power orbitals:
+        #if self.power1_occ_bath_tol is not False:
+        #    C_add, C_occenv, _ = make_mf_bath(self, C_occenv, "occ", bathtype="power",
+        #            tol=self.power1_occ_bath_tol)
+        #    log.info("Adding %d first-order occupied power bath orbitals to cluster.", C_add.shape[-1])
+        #    C_bath = np.hstack((C_add, C_bath))
+        #if self.power1_vir_bath_tol is not False:
+        #    C_add, C_virenv, _ = make_mf_bath(self, C_virenv, "vir", bathtype="power",
+        #            tol=self.power1_vir_bath_tol)
+        #    log.info("Adding %d first-order virtual power bath orbitals to cluster.", C_add.shape[-1])
+        #    C_bath = np.hstack((C_bath, C_add))
+        ## Local orbitals:
+        #if self.local_occ_bath_tol is not False:
+        #    C_add, C_occenv = make_local_bath(self, C_occenv, tol=self.local_occ_bath_tol)
+        #    log.info("Adding %d local occupied bath orbitals to cluster.", C_add.shape[-1])
+        #    C_bath = np.hstack((C_add, C_bath))
+        #if self.local_vir_bath_tol is not False:
+        #    C_add, C_virenv = make_local_bath(self, C_virenv, tol=self.local_vir_bath_tol)
+        #    log.info("Adding %d local virtual bath orbitals to cluster.", C_add.shape[-1])
+        #    C_bath = np.hstack((C_bath, C_add))
+        C_bath, C_occenv, C_virenv = self.additional_bath_for_cluster(C_bath, C_occenv, C_virenv)
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
-        log.debug("Time for DMET bath: %s", get_time_string(MPI.Wtime()-t0))
 
         self.C_bath = C_bath
 
