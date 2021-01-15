@@ -46,6 +46,10 @@ parser.add_argument("--lattice-consts", type=float, nargs="*", default=[3.45, 3.
 parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF")
 parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1)
 parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
+parser.add_argument("--power1-occ-bath-tol", type=float, default=False)
+parser.add_argument("--power1-vir-bath-tol", type=float, default=False)
+parser.add_argument("--local-occ-bath-tol", type=float, default=False)
+parser.add_argument("--local-vir-bath-tol", type=float, default=False)
 #parser.add_argument("--hf-stability-check", type=int)
 #parser.add_argument("--use-pbc")
 #parser.add_argument("--bath-energy-tol", type=float, default=-1)
@@ -218,6 +222,7 @@ for i, a in enumerate(args.lattice_consts):
                 solver=args.solver,
                 #bath_tol_per_electron=False,
                 mp2_correction=args.mp2_correction,
+                power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
                 **kwargs
                 )
 

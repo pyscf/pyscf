@@ -42,15 +42,20 @@ class EmbCC:
     # These optionals are automatically transferred to any created cluster object
     default_options = [
             "solver",
-            "bath_type",
-            "bath_size",
-            "bath_tol",
-            "bath_energy_tol",
             "use_ref_orbitals_dmet",
             "use_ref_orbitals_bath",
             "mp2_correction",
             "maxiter",
+            # BATH
+            "bath_type",
+            "bath_size",
+            "bath_tol",
+            "bath_energy_tol",
             "dmet_bath_tol",
+            "power1_occ_bath_tol",
+            "power1_vir_bath_tol",
+            "local_occ_bath_tol",
+            "local_vir_bath_tol",
             ]
 
     def __init__(self, mf,
@@ -69,6 +74,8 @@ class EmbCC:
             energy_part="first-occ",
             # Perform numerical localization on fragment orbitals
             localize_fragment=False,
+            # Additional bath orbitals
+            power1_occ_bath_tol=False, power1_vir_bath_tol=False, local_occ_bath_tol=False, local_vir_bath_tol=False,
             ):
         """
         Parameters
@@ -118,6 +125,11 @@ class EmbCC:
         self.mp2_correction = mp2_correction
         self.dmet_bath_tol = dmet_bath_tol
         self.localize_fragment = localize_fragment
+        # Additional bath orbitals
+        self.power1_occ_bath_tol = power1_occ_bath_tol
+        self.power1_vir_bath_tol = power1_vir_bath_tol
+        self.local_occ_bath_tol = local_occ_bath_tol
+        self.local_vir_bath_tol = local_vir_bath_tol
 
         self.clusters = []
 
