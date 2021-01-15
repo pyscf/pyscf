@@ -350,7 +350,8 @@ void CCsd_t_contract_emb(double *e_tot,
 
 void get_paddings(int n, int order[], int pad[])
 {
-    for (int i = 0 ; i < 3 ; i++) {
+    int i;
+    for (i = 0 ; i < 3 ; i++) {
         pad[i] = 1;
         if (order[i] == 0) {
             pad[i] = n*n;
@@ -375,18 +376,19 @@ void _get_w(
     //
     //
     int wpad[3];
+    int i, j, k, d, l;
     get_paddings(no, worder, wpad);
-    for (int i = 0; i < no ; i++) {
-    for (int j = 0; j < no ; j++) {
-    for (int k = 0; k < no ; k++) {
+    for (i = 0; i < no ; i++) {
+    for (j = 0; j < no ; j++) {
+    for (k = 0; k < no ; k++) {
         //w[i*no*no + j*no + k] = 0.0;
         int widx = i*wpad[0] + j*wpad[1] + k*wpad[2];
-        for (int d = 0; d < nv ; d++) {
+        for (d = 0; d < nv ; d++) {
             //w[i*no*no + j*no + k] +=
             w[widx] +=
                 gvvov[a*nv*no*nv + b*no*nv + i*nv + d] * t2T[c*nv*no*no + d*no*no + k*no + j];
         }
-        for (int l = 0; l < no ; l++) {
+        for (l = 0; l < no ; l++) {
             //w[i*no*no + j*no + k] -=
             w[widx] -=
                 gvooo[a*no*no*no + i*no*no + j*no + l] * t2T[b*nv*no*no + c*no*no + l*no + k];
@@ -400,9 +402,10 @@ void _add_ws(int no,
         double *w)
 {
     const int noo = no*no;
-    for (int n = 0, i = 0; i < no ; i++) {
-    for (int j = 0; j < no ; j++) {
-    for (int k = 0; k < no ; k++, n++) {
+    int n, i, j, k;
+    for (n = 0, i = 0; i < no ; i++) {
+    for (j = 0; j < no ; j++) {
+    for (k = 0; k < no ; k++, n++) {
         w[n] = wabc[n]
                 + wacb[i*noo + k*no + j]
                 + wbac[j*noo + i*no + k]
@@ -421,9 +424,10 @@ void _get_v(
         /* Out */
         double *v)
 {
-    for (int i = 0; i < no ; i++) {
-    for (int j = 0; j < no ; j++) {
-    for (int k = 0; k < no ; k++) {
+    int i, j, k;
+    for (i = 0; i < no ; i++) {
+    for (j = 0; j < no ; j++) {
+    for (k = 0; k < no ; k++) {
         v[i*no*no + j*no + k] =
             gvvoo[a*nv*no*no + b*no*no + i*no + j] * t1T[c*no + k];
         v[i*no*no + j*no + k] +=
@@ -435,9 +439,10 @@ void _get_v(
 static void _permute(int no, double *in, double *out)
 {
     const int noo = no*no;
-    for (int i = 0; i < no; i++) {
-    for (int j = 0; j < no; j++) {
-    for (int k = 0; k < no; k++) {
+    int i, j, k;
+    for (i = 0; i < no; i++) {
+    for (j = 0; j < no; j++) {
+    for (k = 0; k < no; k++) {
         out[i*noo+j*no+k] = 4*in[i*noo + j*no + k]
                           +   in[j*noo + k*no + i]
                           +   in[k*noo + i*no + j]
@@ -465,7 +470,8 @@ void _get_z(
     _get_v(a, b, c, no, nv, t1T, t2T, fvo, gvvoo, cache);
 
     /* Add w to cache */
-    for (int ijk = 0; ijk < nooo; ijk++) {
+    int ijk;
+    for (ijk = 0; ijk < nooo; ijk++) {
         cache[ijk] = (w[ijk] + 0.5*cache[ijk]);
     }
 
@@ -491,10 +497,10 @@ void _add_energy(
         fac = 1.0/2.0;
     }
     const double eabc = ev[a] + ev[b] + ev[c];
-
-    for (int n = 0, i = 0; i < no; i++) {
-    for (int j = 0; j < no; j++) {
-    for (int k = 0; k < no; k++, n++) {
+    int n, i, j, k;
+    for (n = 0, i = 0; i < no; i++) {
+    for (j = 0; j < no; j++) {
+    for (k = 0; k < no; k++, n++) {
         *et += (fac * w[i*wpad[0] + j*wpad[1] + k*wpad[2]] * z[n]) / (eo[i] + eo[j] + eo[k] - eabc);
 
     }}}
@@ -531,10 +537,11 @@ void ccsd_t_simple_emb(
     double *z = malloc((nooo) * sizeof(double));
     double *cache = malloc(nooo * sizeof(double));
 
+    int a, b, c;
 #pragma omp for
-    for (int a = 0; a < nv ; a++) {
-        for (int b = 0; b <= a ; b++) {
-            for (int c = 0; c <= b ; c++) {
+    for (a = 0; a < nv ; a++) {
+        for (b = 0; b <= a ; b++) {
+            for (c = 0; c <= b ; c++) {
 
                 /* Get ws */
                 //memset(wabc, 0, nooo * sizeof(double));
