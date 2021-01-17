@@ -34,11 +34,11 @@ cell.basis = { 'He': [[0, (0.8, 1.0)],
 cell.verbose = 0
 cell.build(0, 0)
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(w, a.ravel())
+def tearDownModule():
+    global cell
+    del cell
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_aux_e1(self):
         tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)
