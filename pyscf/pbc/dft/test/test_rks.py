@@ -143,7 +143,7 @@ class KnownValues(unittest.TestCase):
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.3987595548455523, 7)
 
     def test_custom_rsh_df(self):
         mf = pbcdft.RKS(cell).density_fit()
@@ -153,7 +153,7 @@ class KnownValues(unittest.TestCase):
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.398759554845552, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
 
     def test_rsh_mdf(self):
         mf = pbcdft.RKS(cell).mix_density_fit()
@@ -163,7 +163,7 @@ class KnownValues(unittest.TestCase):
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.399574981863054, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.398759319488945, 7)
 
     def test_rsh_aft_high_cost(self):
         from pyscf.pbc.df.aft import AFTDF

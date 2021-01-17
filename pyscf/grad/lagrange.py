@@ -31,7 +31,7 @@ default_conv_rtol = getattr (__config__, 'grad_lagrange_Gradients_conv_rtol', 1e
 default_max_cycle = getattr (__config__, 'grad_lagrange_Gradients_max_cycle', 50) 
 
 class Gradients (rhf_grad.GradientsMixin):
-    ''' Dummy parent class for calculating analytical nuclear gradients using the technique of Lagrange multipliers:
+    r''' Dummy parent class for calculating analytical nuclear gradients using the technique of Lagrange multipliers:
     L = E + \sum_i z_i L_i
     dE/dx = \partial L/\partial x iff all L_i = 0 for the given wave function
     I.E., the Lagrange multipliers L_i cancel the direct dependence of the wave function on the nuclear coordinates
