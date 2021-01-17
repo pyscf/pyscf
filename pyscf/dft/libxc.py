@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
 _itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 _itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 
-# Runtime detection of available functionals?
+# Runtime detection of available functionals
 dynamic_func = getattr(__config__, 'dft_libxc_dynamic', False)
 
 if dynamic_func:
@@ -74,10 +74,10 @@ else:
     #    print(f"{key:<31s}: {f_id:<3d}, # {ref[0]}")
     XC = XC_CODES = {
         'LDA_X'                        : 1  , # P. A. M. Dirac, Math. Proc. Cambridge Philos. Soc. 26, 376 (1930)
-        # F. Bloch, Z. Phys. 57, 545 (1929)
-'LDA_C_WIGNER'                 : 2  , # E. Wigner, Trans. Faraday Soc. 34, 678 (1938)
-        # P. A. Stewart and P. M. W. Gill, J. Chem. Soc.{, Faraday Trans. 91, 4337 (1995)}
-'LDA_C_RPA'                    : 3  , # M. Gell-Mann and K. A. Brueckner, Phys. Rev. 106, 364 (1957)
+                                              # F. Bloch, Z. Phys. 57, 545 (1929)
+        'LDA_C_WIGNER'                 : 2  , # E. Wigner, Trans. Faraday Soc. 34, 678 (1938)
+                                              # P. A. Stewart and P. M. W. Gill, J. Chem. Soc.{, Faraday Trans. 91, 4337 (1995)}
+        'LDA_C_RPA'                    : 3  , # M. Gell-Mann and K. A. Brueckner, Phys. Rev. 106, 364 (1957)
         'LDA_C_HL'                     : 4  , # L. Hedin and B. I. Lundqvist, J. Phys. C: Solid State Phys. 4, 2064 (1971)
         'LDA_C_GL'                     : 5  , # O. Gunnarsson and B. I. Lundqvist, Phys. Rev. B 13, 4274 (1976)
         'LDA_C_XALPHA'                 : 6  , # J. C. Slater, Phys. Rev. 81, 385 (1951)
@@ -86,19 +86,19 @@ else:
         'LDA_C_PZ'                     : 9  , # J. P. Perdew and A. Zunger, Phys. Rev. B 23, 5048 (1981)
         'LDA_C_PZ_MOD'                 : 10 , # J. P. Perdew and A. Zunger, Phys. Rev. B 23, 5048 (1981), modified to improve the matching between the low- and high-rs parts
         'LDA_C_OB_PZ'                  : 11 , # G. Ortiz and P. Ballone, Phys. Rev. B 50, 1391 (1994)
-        # G. Ortiz and P. Ballone, Phys. Rev. B 56, 9970 (1997)
-'LDA_C_PW'                     : 12 , # J. P. Perdew and Y. Wang, Phys. Rev. B 45, 13244 (1992)
+                                              # G. Ortiz and P. Ballone, Phys. Rev. B 56, 9970 (1997)
+        'LDA_C_PW'                     : 12 , # J. P. Perdew and Y. Wang, Phys. Rev. B 45, 13244 (1992)
         'LDA_C_PW_MOD'                 : 13 , # J. P. Perdew and Y. Wang, Phys. Rev. B 45, 13244 (1992), added extra digits to some constants as in the PBE routine (http://dft.rutgers.edu/pubs/PBE.asc)
         'LDA_C_OB_PW'                  : 14 , # G. Ortiz and P. Ballone, Phys. Rev. B 50, 1391 (1994)
-        # G. Ortiz and P. Ballone, Phys. Rev. B 56, 9970 (1997)
-        # J. P. Perdew and Y. Wang, Phys. Rev. B 45, 13244 (1992), added extra digits to some constants as in the PBE routine (http://dft.rutgers.edu/pubs/PBE.asc)
-'LDA_C_2D_AMGB'                : 15 , # C. Attaccalite, S. Moroni, P. Gori-Giorgi, and G. B. Bachelet, Phys. Rev. Lett. 88, 256601 (2002)
+                                              # G. Ortiz and P. Ballone, Phys. Rev. B 56, 9970 (1997)
+                                              # J. P. Perdew and Y. Wang, Phys. Rev. B 45, 13244 (1992), added extra digits to some constants as in the PBE routine (http://dft.rutgers.edu/pubs/PBE.asc)
+        'LDA_C_2D_AMGB'                : 15 , # C. Attaccalite, S. Moroni, P. Gori-Giorgi, and G. B. Bachelet, Phys. Rev. Lett. 88, 256601 (2002)
         'LDA_C_2D_PRM'                 : 16 , # S. Pittalis, E. Rasanen, and M. A. L. Marques, Phys. Rev. B 78, 195322 (2008)
         'LDA_C_VBH'                    : 17 , # U. von Barth and L. Hedin, J. Phys. C: Solid State Phys. 5, 1629 (1972)
         'LDA_C_1D_CSC'                 : 18 , # M. Casula, S. Sorella, and G. Senatore, Phys. Rev. B 74, 245427 (2006)
         'LDA_X_2D'                     : 19 , # P. A. M. Dirac, Math. Proc. Cambridge Philos. Soc. 26, 376 (1930)
-        # F. Bloch, Z. Phys. 57, 545 (1929)
-'LDA_XC_TETER93'               : 20 , # S. Goedecker, M. Teter, and J. Hutter, Phys. Rev. B 54, 1703 (1996)
+                                              # F. Bloch, Z. Phys. 57, 545 (1929)
+        'LDA_XC_TETER93'               : 20 , # S. Goedecker, M. Teter, and J. Hutter, Phys. Rev. B 54, 1703 (1996)
         'LDA_X_1D'                     : 21 , # N. Helbig, J. I. Fuks, M. Casula, M. J. Verstraete, M. A. L. Marques, I. V. Tokatly, and A. Rubio, Phys. Rev. A 83, 032503 (2011)
         'LDA_C_ML1'                    : 22 , # E. I. Proynov and D. R. Salahub, Phys. Rev. B 49, 7874 (1994)
         'LDA_C_ML2'                    : 23 , # E. I. Proynov and D. R. Salahub, Phys. Rev. B 49, 7874 (1994)
@@ -112,38 +112,38 @@ else:
         'LDA_C_VWN_4'                  : 31 , # S. H. Vosko, L. Wilk, and M. Nusair, Can. J. Phys. 58, 1200 (1980)
         'LDA_XC_ZLP'                   : 43 , # Q. Zhao, M. Levy, and R. G. Parr, Phys. Rev. A 47, 918 (1993)
         'LDA_K_TF'                     : 50 , # L. H. Thomas, Math. Proc. Cambridge Philos. Soc. 23, 542 (1927)
-        # E. Fermi, Rend. Accad. Naz. Lincei  6, 602 (1927)
-'LDA_K_LP'                     : 51 , # C. Lee and R. G. Parr, Phys. Rev. A 35, 2377 (1987)
+                                              # E. Fermi, Rend. Accad. Naz. Lincei  6, 602 (1927)
+        'LDA_K_LP'                     : 51 , # C. Lee and R. G. Parr, Phys. Rev. A 35, 2377 (1987)
         'LDA_XC_KSDT'                  : 259, # V. V. Karasiev, T. Sjostrom, J. Dufty, and S. B. Trickey, Phys. Rev. Lett. 112, 076403 (2014)
         'LDA_C_CHACHIYO'               : 287, # T. Chachiyo, J. Chem. Phys. 145, 021101 (2016)
         'LDA_C_LP96'                   : 289, # S. Liu and R. G. Parr, Phys. Rev. A 53, 2211 (1996)
-        # S. Liu and R. Parr, Journal of Molecular Structure: \{THEOCHEM\ 501--502, 29 (2000)}
-'LDA_X_REL'                    : 532, # A. K. Rajagopal, J. Phys. C: Solid State Phys. 11, L943 (1978)
-        # A. H. MacDonald and S. H. Vosko, J. Phys. C: Solid State Phys. 12, 2977 (1979)
-        # E. Engel, S. Keller, A. F. Bonetti, H. Muller, and R. M. Dreizler, Phys. Rev. A 52, 2750 (1995)
-'LDA_XC_1D_EHWLRG_1'           : 536, # M. T. Entwistle, M. J. P. Hodgson, J. Wetherell, B. Longstaff, J. D. Ramsden, and R. W. Godby, Phys. Rev. B 94, 205134 (2016)
+                                              # S. Liu and R. Parr, Journal of Molecular Structure: \{THEOCHEM\ 501--502, 29 (2000)}
+        'LDA_X_REL'                    : 532, # A. K. Rajagopal, J. Phys. C: Solid State Phys. 11, L943 (1978)
+                                              # A. H. MacDonald and S. H. Vosko, J. Phys. C: Solid State Phys. 12, 2977 (1979)
+                                              # E. Engel, S. Keller, A. F. Bonetti, H. Muller, and R. M. Dreizler, Phys. Rev. A 52, 2750 (1995)
+        'LDA_XC_1D_EHWLRG_1'           : 536, # M. T. Entwistle, M. J. P. Hodgson, J. Wetherell, B. Longstaff, J. D. Ramsden, and R. W. Godby, Phys. Rev. B 94, 205134 (2016)
         'LDA_XC_1D_EHWLRG_2'           : 537, # M. T. Entwistle, M. J. P. Hodgson, J. Wetherell, B. Longstaff, J. D. Ramsden, and R. W. Godby, Phys. Rev. B 94, 205134 (2016)
         'LDA_XC_1D_EHWLRG_3'           : 538, # M. T. Entwistle, M. J. P. Hodgson, J. Wetherell, B. Longstaff, J. D. Ramsden, and R. W. Godby, Phys. Rev. B 94, 205134 (2016)
         'LDA_X_ERF'                    : 546, # J. Toulouse, A. Savin, and H.-J. Flad, Int. J. Quantum Chem. 100, 1047 (2004)
-        # Y. Tawada, T. Tsuneda, S. Yanagisawa, T. Yanai, and K. Hirao, J. Chem. Phys. 120, 8425 (2004)
-'LDA_XC_LP_A'                  : 547, # C. Lee and R. G. Parr, Phys. Rev. A 42, 193 (1990)
+                                              # Y. Tawada, T. Tsuneda, S. Yanagisawa, T. Yanai, and K. Hirao, J. Chem. Phys. 120, 8425 (2004)
+        'LDA_XC_LP_A'                  : 547, # C. Lee and R. G. Parr, Phys. Rev. A 42, 193 (1990)
         'LDA_XC_LP_B'                  : 548, # C. Lee and R. G. Parr, Phys. Rev. A 42, 193 (1990)
         'LDA_X_RAE'                    : 549, # A. Rae, Chem. Phys. Lett. 18, 574 (1973)
         'LDA_K_ZLP'                    : 550, # P. Fuentealba and O. Reyes, Chem. Phys. Lett. 232, 31 (1995)
-        # Q. Zhao, M. Levy, and R. G. Parr, Phys. Rev. A 47, 918 (1993)
-'LDA_C_MCWEENY'                : 551, # R. McWeeny, in The New World of Quantum Chemistry, edited by \bibinfo {editor {B. Pullman} and R. Parr} (Reidel, Boston, 1976) pp. 3--31
-        # G. B. Jr. and S. M. Rothstein, J. Chem. Phys. 69, 1177 (1978)
-'LDA_C_BR78'                   : 552, # G. B. Jr. and S. M. Rothstein, J. Chem. Phys. 69, 1177 (1978)
+                                              # Q. Zhao, M. Levy, and R. G. Parr, Phys. Rev. A 47, 918 (1993)
+        'LDA_C_MCWEENY'                : 551, # R. McWeeny, in The New World of Quantum Chemistry, edited by \bibinfo {editor {B. Pullman} and R. Parr} (Reidel, Boston, 1976) pp. 3--31
+                                              # G. B. Jr. and S. M. Rothstein, J. Chem. Phys. 69, 1177 (1978)
+        'LDA_C_BR78'                   : 552, # G. B. Jr. and S. M. Rothstein, J. Chem. Phys. 69, 1177 (1978)
         'LDA_C_PK09'                   : 554, # E. Proynov and J. Kong, Phys. Rev. A 79, 014103 (2009)
-        # E. Proynov and J. Kong, Phys. Rev. A 95, 059904 (2017)
-'LDA_C_OW_LYP'                 : 573, # P. A. Stewart and P. M. W. Gill, J. Chem. Soc.{, Faraday Trans. 91, 4337 (1995)}
+                                              # E. Proynov and J. Kong, Phys. Rev. A 95, 059904 (2017)
+        'LDA_C_OW_LYP'                 : 573, # P. A. Stewart and P. M. W. Gill, J. Chem. Soc.{, Faraday Trans. 91, 4337 (1995)}
         'LDA_C_OW'                     : 574, # P. A. Stewart and P. M. W. Gill, J. Chem. Soc.{, Faraday Trans. 91, 4337 (1995)}
         'LDA_XC_GDSMFB'                : 577, # S. {Groth, T. {Dornheim}, T. {Sjostrom}, F. D. {Malone}, W. M. C. {Foulkes}, and M. {Bonitz}, }ArXiv e-prints (2017), arXiv:1703.08074 [physics.plasm-ph]
         'LDA_C_GK72'                   : 578, # R. G. Gordon and Y. S. Kim, J. Chem. Phys. 56, 3122 (1972), https://doi.org/10.1063/1.1677649
         'LDA_C_KARASIEV'               : 579, # V. V. Karasiev, J. Chem. Phys. 145, 157101 (2016), https://doi.org/10.1063/1.4964758
         'LDA_K_LP96'                   : 580, # S. Liu and R. G. Parr, Phys. Rev. A 53, 2211 (1996)
-        # S. Liu and R. Parr, Journal of Molecular Structure: \{THEOCHEM\ 501--502, 29 (2000)}
-'GGA_X_GAM'                    : 32 , # H. S. Yu, W. Zhang, P. Verma, X. He, and D. G. Truhlar, Phys. Chem. Chem. Phys. 17, 12146 (2015)
+                                              # S. Liu and R. Parr, Journal of Molecular Structure: \{THEOCHEM\ 501--502, 29 (2000)}
+        'GGA_X_GAM'                    : 32 , # H. S. Yu, W. Zhang, P. Verma, X. He, and D. G. Truhlar, Phys. Chem. Chem. Phys. 17, 12146 (2015)
         'GGA_C_GAM'                    : 33 , # H. S. Yu, W. Zhang, P. Verma, X. He, and D. G. Truhlar, Phys. Chem. Chem. Phys. 17, 12146 (2015)
         'GGA_X_HCTH_A'                 : 34 , # F. A. Hamprecht, A. J. Cohen, D. J. Tozer, and N. C. Handy, J. Chem. Phys. 109, 6264 (1998)
         'GGA_X_EV93'                   : 35 , # E. Engel and S. H. Vosko, Phys. Rev. B 47, 13164 (1993)
@@ -151,9 +151,9 @@ else:
         'GGA_C_BCGP'                   : 39 , # K. Burke, A. Cancio, T. Gould, and S. Pittalis, ArXiv e-prints (2014), arXiv:1409.4834 [cond-mat.mtrl-sci]
         'GGA_X_LAMBDA_OC2_N'           : 40 , # M. M. Odashima, K. Capelle, and S. B. Trickey, J. Chem. Theory Comput. 5, 798 (2009)
         'GGA_X_B86_R'                  : 41 , # I. Hamada, Phys. Rev. B 89, 121103 (2014)
-        # A. D. Becke, J. Chem. Phys. 84, 4524 (1986)
-        # A. D. Becke, J. Chem. Phys. 85, 7184 (1986)
-'GGA_X_LAMBDA_CH_N'            : 44 , # M. M. Odashima, K. Capelle, and S. B. Trickey, J. Chem. Theory Comput. 5, 798 (2009)
+                                              # A. D. Becke, J. Chem. Phys. 84, 4524 (1986)
+                                              # A. D. Becke, J. Chem. Phys. 85, 7184 (1986)
+        'GGA_X_LAMBDA_CH_N'            : 44 , # M. M. Odashima, K. Capelle, and S. B. Trickey, J. Chem. Theory Comput. 5, 798 (2009)
         'GGA_X_LAMBDA_LO_N'            : 45 , # M. M. Odashima, K. Capelle, and S. B. Trickey, J. Chem. Theory Comput. 5, 798 (2009)
         'GGA_X_HJS_B88_V2'             : 46 , # E. Weintraub, T. M. Henderson, and G. E. Scuseria, J. Chem. Theory Comput. 5, 754 (2009)
         'GGA_C_Q2D'                    : 47 , # L. Chiodo, L. A. Constantin, E. Fabiano, and F. Della Sala, Phys. Rev. Lett. 108, 126402 (2012)
@@ -183,15 +183,15 @@ else:
         'GGA_X_N12'                    : 82 , # R. Peverati and D. G. Truhlar, J. Chem. Theory Comput. 8, 2310 (2012)
         'GGA_C_REGTPSS'                : 83 , # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 103, 026403 (2009)
         'GGA_C_OP_XALPHA'              : 84 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
-        # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
-'GGA_C_OP_G96'                 : 85 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
-        # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
-'GGA_C_OP_PBE'                 : 86 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
-        # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
-'GGA_C_OP_B88'                 : 87 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
+                                              # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
+        'GGA_C_OP_G96'                 : 85 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
+                                              # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
+        'GGA_C_OP_PBE'                 : 86 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
+                                              # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
+        'GGA_C_OP_B88'                 : 87 , # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
         'GGA_C_FT97'                   : 88 , # M. Filatov and W. Thiel, Int. J. Quantum Chem. 62, 603 (1997)
-        # M. Filatov and W. Thiel, Mol. Phys. 91, 847 (1997)
-'GGA_C_SPBE'                   : 89 , # M. Swart, M. Sol\'a, and F. M. Bickelhaupt, J. Chem. Phys. 131, 094103 (2009)
+                                              # M. Filatov and W. Thiel, Mol. Phys. 91, 847 (1997)
+        'GGA_C_SPBE'                   : 89 , # M. Swart, M. Sol\'a, and F. M. Bickelhaupt, J. Chem. Phys. 131, 094103 (2009)
         'GGA_X_SSB_SW'                 : 90 , # M. Swart, M. Sol\'a, and F. M. Bickelhaupt, J. Comput. Methods Sci. Eng. 9, 69 (2009)
         'GGA_X_SSB'                    : 91 , # M. Swart, M. Sol\'a, and F. M. Bickelhaupt, J. Chem. Phys. 131, 094103 (2009)
         'GGA_X_SSB_D'                  : 92 , # M. Swart, M. Sol\'a, and F. M. Bickelhaupt, J. Chem. Phys. 131, 094103 (2009)
@@ -204,20 +204,20 @@ else:
         'GGA_C_REVTCA'                 : 99 , # V. Tognetti, P. Cortona, and C. Adamo, Chem. Phys. Lett. 460, 536 (2008)
         'GGA_C_TCA'                    : 100, # V. Tognetti, P. Cortona, and C. Adamo, J. Chem. Phys. 128, 034101 (2008)
         'GGA_X_PBE'                    : 101, # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 77, 3865 (1996)
-        # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 78, 1396 (1997)
-'GGA_X_PBE_R'                  : 102, # Y. Zhang and W. Yang, Phys. Rev. Lett. 80, 890 (1998)
+                                              # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 78, 1396 (1997)
+        'GGA_X_PBE_R'                  : 102, # Y. Zhang and W. Yang, Phys. Rev. Lett. 80, 890 (1998)
         'GGA_X_B86'                    : 103, # A. D. Becke, J. Chem. Phys. 84, 4524 (1986)
         'GGA_X_HERMAN'                 : 104, # F. Herman, J. P. V. Dyke, and I. B. Ortenburger, Phys. Rev. Lett. 22, 807 (1969)
-        # F. Herman, I. B. Ortenburger, and J. P. V. Dyke, Int. J. Quantum Chem. 4, 827 (1969)
-'GGA_X_B86_MGC'                : 105, # A. D. Becke, J. Chem. Phys. 84, 4524 (1986)
-        # A. D. Becke, J. Chem. Phys. 85, 7184 (1986)
-'GGA_X_B88'                    : 106, # A. D. Becke, Phys. Rev. A 38, 3098 (1988)
+                                              # F. Herman, I. B. Ortenburger, and J. P. V. Dyke, Int. J. Quantum Chem. 4, 827 (1969)
+        'GGA_X_B86_MGC'                : 105, # A. D. Becke, J. Chem. Phys. 84, 4524 (1986)
+                                              # A. D. Becke, J. Chem. Phys. 85, 7184 (1986)
+        'GGA_X_B88'                    : 106, # A. D. Becke, Phys. Rev. A 38, 3098 (1988)
         'GGA_X_G96'                    : 107, # P. M. W. Gill, Mol. Phys. 89, 433 (1996)
         'GGA_X_PW86'                   : 108, # J. P. Perdew and W. Yue, Phys. Rev. B 33, 8800 (1986)
         'GGA_X_PW91'                   : 109, # J. P. Perdew, in Proceedings of the 75. WE-Heraeus-Seminar and 21st Annual International Symposium on Electronic Structure of Solids, edited by P. Ziesche and H. Eschrig (Akademie Verlag, Berlin, 1991) p. 11
-        # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 46, 6671 (1992)
-        # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 48, 4978 (1993)
-'GGA_X_OPTX'                   : 110, # N. C. Handy and A. J. Cohen, Mol. Phys. 99, 403 (2001)
+                                              # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 46, 6671 (1992)
+                                              # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 48, 4978 (1993)
+        'GGA_X_OPTX'                   : 110, # N. C. Handy and A. J. Cohen, Mol. Phys. 99, 403 (2001)
         'GGA_X_DK87_R1'                : 111, # A. E. DePristo and J. D. Kress, J. Chem. Phys. 86, 1425 (1987)
         'GGA_X_DK87_R2'                : 112, # A. E. DePristo and J. D. Kress, J. Chem. Phys. 86, 1425 (1987)
         'GGA_X_LG93'                   : 113, # D. J. Lacks and R. G. Gordon, Phys. Rev. A 47, 4681 (1993)
@@ -228,8 +228,8 @@ else:
         'GGA_X_WC'                     : 118, # Z. Wu and R. E. Cohen, Phys. Rev. B 73, 235116 (2006)
         'GGA_X_MPW91'                  : 119, # C. Adamo and V. Barone, J. Chem. Phys. 108, 664 (1998)
         'GGA_X_AM05'                   : 120, # R. Armiento and A. E. Mattsson, Phys. Rev. B 72, 085108 (2005)
-        # A. E. Mattsson, R. Armiento, J. Paier, G. Kresse, J. M. Wills, and T. R. Mattsson, J. Chem. Phys. 128, 084714 (2008)
-'GGA_X_PBEA'                   : 121, # G. K. H. Madsen, Phys. Rev. B 75, 195108 (2007)
+                                              # A. E. Mattsson, R. Armiento, J. Paier, G. Kresse, J. M. Wills, and T. R. Mattsson, J. Chem. Phys. 128, 084714 (2008)
+        'GGA_X_PBEA'                   : 121, # G. K. H. Madsen, Phys. Rev. B 75, 195108 (2007)
         'GGA_X_MPBE'                   : 122, # C. Adamo and V. Barone, J. Chem. Phys. 116, 5933 (2002)
         'GGA_X_XPBE'                   : 123, # X. Xu and W. A. Goddard, J. Chem. Phys. 121, 4068 (2004)
         'GGA_X_2D_B86_MGC'             : 124, # S. Pittalis, E. Rasanen, J. G. Vilhena, and M. A. L. Marques, Phys. Rev. A 79, 012503 (2009)
@@ -239,20 +239,20 @@ else:
         'GGA_X_2D_B86'                 : 128, # J. G. Vilhena and M. A. L. Marques, unpublished (2014)
         'GGA_X_2D_PBE'                 : 129, # J. G. Vilhena and M. A. L. Marques, unpublished (2014)
         'GGA_C_PBE'                    : 130, # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 77, 3865 (1996)
-        # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 78, 1396 (1997)
-'GGA_C_LYP'                    : 131, # C. Lee, W. Yang, and R. G. Parr, Phys. Rev. B 37, 785 (1988)
-        # B. Miehlich, A. Savin, H. Stoll, and H. Preuss, Chem. Phys. Lett. 157, 200 (1989)
-'GGA_C_P86'                    : 132, # J. P. Perdew, Phys. Rev. B 33, 8822 (1986)
+                                              # J. P. Perdew, K. Burke, and M. Ernzerhof, Phys. Rev. Lett. 78, 1396 (1997)
+        'GGA_C_LYP'                    : 131, # C. Lee, W. Yang, and R. G. Parr, Phys. Rev. B 37, 785 (1988)
+                                              # B. Miehlich, A. Savin, H. Stoll, and H. Preuss, Chem. Phys. Lett. 157, 200 (1989)
+        'GGA_C_P86'                    : 132, # J. P. Perdew, Phys. Rev. B 33, 8822 (1986)
         'GGA_C_PBE_SOL'                : 133, # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, O. A. Vydrov, G. E. Scuseria, L. A. Constantin, X. Zhou, and K. Burke, Phys. Rev. Lett. 100, 136406 (2008)
         'GGA_C_PW91'                   : 134, # J. P. Perdew, in Proceedings of the 75. WE-Heraeus-Seminar and 21st Annual International Symposium on Electronic Structure of Solids, edited by P. Ziesche and H. Eschrig (Akademie Verlag, Berlin, 1991) p. 11
-        # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 46, 6671 (1992)
-        # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 48, 4978 (1993)
-'GGA_C_AM05'                   : 135, # R. Armiento and A. E. Mattsson, Phys. Rev. B 72, 085108 (2005)
-        # A. E. Mattsson, R. Armiento, J. Paier, G. Kresse, J. M. Wills, and T. R. Mattsson, J. Chem. Phys. 128, 084714 (2008)
-'GGA_C_XPBE'                   : 136, # X. Xu and W. A. Goddard, J. Chem. Phys. 121, 4068 (2004)
+                                              # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 46, 6671 (1992)
+                                              # J. P. Perdew, J. A. Chevary, S. H. Vosko, K. A. Jackson, M. R. Pederson, D. J. Singh, and C. Fiolhais, Phys. Rev. B 48, 4978 (1993)
+        'GGA_C_AM05'                   : 135, # R. Armiento and A. E. Mattsson, Phys. Rev. B 72, 085108 (2005)
+                                              # A. E. Mattsson, R. Armiento, J. Paier, G. Kresse, J. M. Wills, and T. R. Mattsson, J. Chem. Phys. 128, 084714 (2008)
+        'GGA_C_XPBE'                   : 136, # X. Xu and W. A. Goddard, J. Chem. Phys. 121, 4068 (2004)
         'GGA_C_LM'                     : 137, # D. C. Langreth and M. J. Mehl, Phys. Rev. Lett. 47, 446 (1981)
-        # C. D. Hu and D. C. Langreth, Phys. Scr. 32, 391 (1985)
-'GGA_C_PBE_JRGX'               : 138, # L. S. Pedroza, A. J. R. da Silva, and K. Capelle, Phys. Rev. B 79, 201106 (2009)
+                                              # C. D. Hu and D. C. Langreth, Phys. Scr. 32, 391 (1985)
+        'GGA_C_PBE_JRGX'               : 138, # L. S. Pedroza, A. J. R. da Silva, and K. Capelle, Phys. Rev. B 79, 201106 (2009)
         'GGA_X_OPTB88_VDW'             : 139, # J. Klime\v{s}, D. R. Bowler, and A. Michaelides, J. Phys.: Condens. Matter 22, 022201 (2010)
         'GGA_X_PBEK1_VDW'              : 140, # J. Klime\v{s}, D. R. Bowler, and A. Michaelides, J. Phys.: Condens. Matter 22, 022201 (2010)
         'GGA_X_OPTPBE_VDW'             : 141, # J. Klime\v{s}, D. R. Bowler, and A. Michaelides, J. Phys.: Condens. Matter 22, 022201 (2010)
@@ -288,8 +288,8 @@ else:
         'GGA_XC_PBELYP1W'              : 175, # E. E. Dahlke and D. G. Truhlar, J. Phys. Chem. B 109, 15677 (2005)
         'GGA_X_LBM'                    : 182, # P. R. T. Schipper, O. V. Gritsenko, S. J. A. van Gisbergen, and E. J. Baerends, J. Chem. Phys. 112, 1344 (2000)
         'GGA_X_OL2'                    : 183, # P. Fuentealba and O. Reyes, Chem. Phys. Lett. 232, 31 (1995)
-        # H. Ou-Yang and M. Levy, Int. J. Quantum Chem. 40, 379 (1991)
-'GGA_X_APBE'                   : 184, # L. A. Constantin, E. Fabiano, S. Laricchia, and F. Della Sala, Phys. Rev. Lett. 106, 186406 (2011)
+                                              # H. Ou-Yang and M. Levy, Int. J. Quantum Chem. 40, 379 (1991)
+        'GGA_X_APBE'                   : 184, # L. A. Constantin, E. Fabiano, S. Laricchia, and F. Della Sala, Phys. Rev. Lett. 106, 186406 (2011)
         'GGA_K_APBE'                   : 185, # L. A. Constantin, E. Fabiano, S. Laricchia, and F. Della Sala, Phys. Rev. Lett. 106, 186406 (2011)
         'GGA_C_APBE'                   : 186, # L. A. Constantin, E. Fabiano, S. Laricchia, and F. Della Sala, Phys. Rev. Lett. 106, 186406 (2011)
         'GGA_K_TW1'                    : 187, # F. Tran and T. A. Wesolowski, Int. J. Quantum Chem. 89, 441 (2002)
@@ -310,8 +310,8 @@ else:
         'GGA_XC_VV10'                  : 255, # O. A. Vydrov and T. Van Voorhis, J. Chem. Phys. 133, 244103 (2010)
         'GGA_C_PBEFE'                  : 258, # R. Sarmiento-P\'erez, S. Botti, and M. A. L. Marques, J. Chem. Theory Comput. 11, 3844 (2015)
         'GGA_C_OP_PW91'                : 262, # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 110, 10664 (1999)
-        # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
-'GGA_X_PBEFE'                  : 265, # R. Sarmiento-P\'erez, S. Botti, and M. A. L. Marques, J. Chem. Theory Comput. 11, 3844 (2015)
+                                              # T. Tsuneda, T. Suzumura, and K. Hirao, J. Chem. Phys. 111, 5656 (1999)
+        'GGA_X_PBEFE'                  : 265, # R. Sarmiento-P\'erez, S. Botti, and M. A. L. Marques, J. Chem. Theory Comput. 11, 3844 (2015)
         'GGA_X_CAP'                    : 270, # J. Carmona-Esp\'indola, J. L. G\'azquez, A. Vela, and S. B. Trickey, J. Chem. Phys. 142, 054105 (2015), 10.1063/1.4906606
         'GGA_X_EB88'                   : 271, # P. Elliott and K. Burke, Can. J. Chem. 87, 1485 (2009)
         'GGA_C_PBE_MOL'                : 272, # J. M. del Campo, J. L. G\'azquez, S. B. Trickey, and A. Vela, J. Chem. Phys. 136, 104108 (2012)
@@ -326,8 +326,8 @@ else:
         'GGA_X_CHACHIYO'               : 298, # T. {Chachiyo and H. {Chachiyo}, }ArXiv e-prints (2017), arXiv:1706.01343 [cond-mat.mtrl-sci]
         'GGA_K_VW'                     : 500, # C. F. von Weizsacker, Z. Phys. 96, 431 (1935)
         'GGA_K_GE2'                    : 501, # A. S. Kompaneets and E. S. Pavlovskii, Zh. Eksp. Teor. Fiz. 31, 427 (1956), [J. Exp. Theor. Phys. 4, 328 (1957)]
-        # D. A. Kirznits, Zh. Eksp. Teor. Fiz. 32, 115 (1957), [J. Exp. Theor. Phys. 5, 64 (1957)]
-'GGA_K_GOLDEN'                 : 502, # S. Golden, Phys. Rev. 105, 604 (1957)
+                                              # D. A. Kirznits, Zh. Eksp. Teor. Fiz. 32, 115 (1957), [J. Exp. Theor. Phys. 5, 64 (1957)]
+        'GGA_K_GOLDEN'                 : 502, # S. Golden, Phys. Rev. 105, 604 (1957)
         'GGA_K_YT65'                   : 503, # K. Yonei and Y. Tomishima, J. Phys. Soc. Jpn. 20, 1051 (1965)
         'GGA_K_BALTIN'                 : 504, # R. Baltin, Z. Naturforsch. A 27, 1176 (1972)
         'GGA_K_LIEB'                   : 505, # E. H. Lieb, Rev. Mod. Phys. 53, 603 (1981)
@@ -337,9 +337,9 @@ else:
         'GGA_K_LUDENA'                 : 509, # E. V. Ludena, in Cond. Matt. Theor., Vol. 1, edited by F. B. Malik (Plenum, New York, 1986) p. 183
         'GGA_K_GP85'                   : 510, # S. K. Ghosh and R. G. Parr, J. Chem. Phys. 82, 3307 (1985)
         'GGA_K_PEARSON'                : 511, # D. J. Lacks and R. G. Gordon, J. Chem. Phys. 100, 4446 (1994)
-        # E. W. Pearson and R. G. Gordon, J. Chem. Phys. 82, 881 (1985)
-        # E. W. Pearson, Theory and application of the electron gas model, Ph.D. thesis, Harvard University (1983)
-'GGA_K_OL1'                    : 512, # H. Ou-Yang and M. Levy, Int. J. Quantum Chem. 40, 379 (1991)
+                                              # E. W. Pearson and R. G. Gordon, J. Chem. Phys. 82, 881 (1985)
+                                              # E. W. Pearson, Theory and application of the electron gas model, Ph.D. thesis, Harvard University (1983)
+        'GGA_K_OL1'                    : 512, # H. Ou-Yang and M. Levy, Int. J. Quantum Chem. 40, 379 (1991)
         'GGA_K_OL2'                    : 513, # H. Ou-Yang and M. Levy, Int. J. Quantum Chem. 40, 379 (1991)
         'GGA_K_FR_B88'                 : 514, # P. Fuentealba and O. Reyes, Chem. Phys. Lett. 232, 31 (1995)
         'GGA_K_FR_PW86'                : 515, # P. Fuentealba and O. Reyes, Chem. Phys. Lett. 232, 31 (1995)
@@ -352,18 +352,18 @@ else:
         'GGA_K_LLP'                    : 522, # H. Lee, C. Lee, and R. G. Parr, Phys. Rev. A 44, 768 (1991)
         'GGA_K_THAKKAR'                : 523, # A. J. Thakkar, Phys. Rev. A 46, 6920 (1992)
         'GGA_X_WPBEH'                  : 524, # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 118, 8207 (2003)
-        # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
-        # M. Ernzerhof and J. P. Perdew, J. Chem. Phys. 109, 3313 (1998)
-        # J. Heyd and G. E. Scuseria, J. Chem. Phys. 120, 7274 (2004)
-        # T. M. Henderson, A. F. Izmaylov, G. Scalmani, and G. E. Scuseria, J. Chem. Phys. 131, 044108 (2009)
-'GGA_X_HJS_PBE'                : 525, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
+                                              # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
+                                              # M. Ernzerhof and J. P. Perdew, J. Chem. Phys. 109, 3313 (1998)
+                                              # J. Heyd and G. E. Scuseria, J. Chem. Phys. 120, 7274 (2004)
+                                              # T. M. Henderson, A. F. Izmaylov, G. Scalmani, and G. E. Scuseria, J. Chem. Phys. 131, 044108 (2009)
+        'GGA_X_HJS_PBE'                : 525, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'GGA_X_HJS_PBE_SOL'            : 526, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'GGA_X_HJS_B88'                : 527, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'GGA_X_HJS_B97X'               : 528, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'GGA_X_ITYH'                   : 529, # H. Iikura, T. Tsuneda, T. Yanai, and K. Hirao, J. Chem. Phys. 115, 3540 (2001)
         'GGA_X_SFAT'                   : 530, # A. Savin and H.-J. Flad, Int. J. Quantum Chem. 56, 327 (1995)
-        # Y. Akinaga and S. Ten-no, Chem. Phys. Lett. 462, 348 (2008)
-'GGA_X_SG4'                    : 533, # L. A. Constantin, A. Terentjevs, F. Della Sala, P. Cortona, and E. Fabiano, Phys. Rev. B 93, 045126 (2016)
+                                              # Y. Akinaga and S. Ten-no, Chem. Phys. Lett. 462, 348 (2008)
+        'GGA_X_SG4'                    : 533, # L. A. Constantin, A. Terentjevs, F. Della Sala, P. Cortona, and E. Fabiano, Phys. Rev. B 93, 045126 (2016)
         'GGA_C_SG4'                    : 534, # L. A. Constantin, A. Terentjevs, F. Della Sala, P. Cortona, and E. Fabiano, Phys. Rev. B 93, 045126 (2016)
         'GGA_X_GG99'                   : 535, # A. T. Gilbert and P. M. Gill, Chem. Phys. Lett. 312, 511 (1999)
         'GGA_X_PBEPOW'                 : 539, # Eric Bremond, J. Chem. Phys. 145, 244102 (2016)
@@ -378,8 +378,8 @@ else:
         'GGA_C_TM_PBE'                 : 560, # A. J. Thakkar and S. P. McCarthy, J. Chem. Phys. 131, 134109 (2009)
         'GGA_C_W94'                    : 561, # L. C. Wilson, Chemical Physics 181, 337 (1994)
         'GGA_C_CS1'                    : 565, # N. C. Handy and A. J. Cohen, J. Chem. Phys. 116, 5411 (2002)
-        # E. I. Proynov and A. J. Thakkar, Int. J. Quantum Chem. 106, 436 (2006)
-'GGA_X_B88M'                   : 570, # E. Proynov, H. Chermette, and D. R. Salahub, J. Chem. Phys. 113, 10013 (2000)
+                                              # E. I. Proynov and A. J. Thakkar, Int. J. Quantum Chem. 106, 436 (2006)
+        'GGA_X_B88M'                   : 570, # E. Proynov, H. Chermette, and D. R. Salahub, J. Chem. Phys. 113, 10013 (2000)
         'GGA_K_PBE3'                   : 595, # V. V. Karasiev, S. B. Trickey, and F. E. Harris, Journal of Computer-Aided Materials Design 13, 111 (2006)
         'GGA_K_PBE4'                   : 596, # V. V. Karasiev, S. B. Trickey, and F. E. Harris, Journal of Computer-Aided Materials Design 13, 111 (2006)
         'GGA_K_EXP4'                   : 597, # V. V. Karasiev, S. B. Trickey, and F. E. Harris, Journal of Computer-Aided Materials Design 13, 111 (2006)
@@ -396,8 +396,8 @@ else:
         'HYB_GGA_XC_O3LYP'             : 404, # A. J. Cohen and N. C. Handy, Mol. Phys. 99, 607 (2001)
         'HYB_GGA_XC_MPW1K'             : 405, # B. J. Lynch, P. L. Fast, M. Harris, and D. G. Truhlar, J. Phys. Chem. A 104, 4811 (2000)
         'HYB_GGA_XC_PBEH'              : 406, # C. Adamo and V. Barone, J. Chem. Phys. 110, 6158 (1999)
-        # M. Ernzerhof and G. E. Scuseria, J. Chem. Phys. 110, 5029 (1999)
-'HYB_GGA_XC_B97'               : 407, # A. D. Becke, J. Chem. Phys. 107, 8554 (1997)
+                                              # M. Ernzerhof and G. E. Scuseria, J. Chem. Phys. 110, 5029 (1999)
+        'HYB_GGA_XC_B97'               : 407, # A. D. Becke, J. Chem. Phys. 107, 8554 (1997)
         'HYB_GGA_XC_B97_1'             : 408, # F. A. Hamprecht, A. J. Cohen, D. J. Tozer, and N. C. Handy, J. Chem. Phys. 109, 6264 (1998)
         'HYB_GGA_XC_B97_2'             : 410, # P. J. Wilson, T. J. Bradley, and D. J. Tozer, J. Chem. Phys. 115, 9233 (2001)
         'HYB_GGA_XC_X3LYP'             : 411, # X. Xu and W. A. Goddard, Proc. Natl. Acad. Sci. U. S. A. 101, 2673 (2004)
@@ -417,21 +417,21 @@ else:
         'HYB_GGA_XC_SB98_2C'           : 425, # H. L. Schmider and A. D. Becke, J. Chem. Phys. 108, 9624 (1998)
         'HYB_GGA_X_SOGGA11_X'          : 426, # R. Peverati and D. G. Truhlar, J. Chem. Phys. 135, 191102 (2011)
         'HYB_GGA_XC_HSE03'             : 427, # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 118, 8207 (2003)
-        # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
-'HYB_GGA_XC_HSE06'             : 428, # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 118, 8207 (2003)
-        # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
-        # A. V. Krukau, O. A. Vydrov, A. F. Izmaylov, and G. E. Scuseria, J. Chem. Phys. 125, 224106 (2006)
-'HYB_GGA_XC_HJS_PBE'           : 429, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
+                                              # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
+        'HYB_GGA_XC_HSE06'             : 428, # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 118, 8207 (2003)
+                                              # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 124, 219906 (2006)
+                                              # A. V. Krukau, O. A. Vydrov, A. F. Izmaylov, and G. E. Scuseria, J. Chem. Phys. 125, 224106 (2006)
+        'HYB_GGA_XC_HJS_PBE'           : 429, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_HJS_PBE_SOL'       : 430, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_HJS_B88'           : 431, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_HJS_B97X'          : 432, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_CAM_B3LYP'         : 433, # T. Yanai, D. P. Tew, and N. C. Handy, Chem. Phys. Lett. 393, 51 (2004)
         'HYB_GGA_XC_TUNED_CAM_B3LYP'   : 434, # K. Okuno, Y. Shigeta, R. Kishi, H. Miyasaka, and M. Nakano, J. Photochem. Photobiol., A 235, 29 (2012)
         'HYB_GGA_XC_BHANDH'            : 435, # A. D. Becke, J. Chem. Phys. 98, 1372 (1993)
-        # Defined through Gaussian implementation
-'HYB_GGA_XC_BHANDHLYP'         : 436, # A. D. Becke, J. Chem. Phys. 98, 1372 (1993)
-        # Defined through Gaussian implementation
-'HYB_GGA_XC_MB3LYP_RC04'       : 437, # V. Tognetti, P. Cortona, and C. Adamo, Chem. Phys. Lett. 439, 381 (2007)
+                                              # Defined through Gaussian implementation
+        'HYB_GGA_XC_BHANDHLYP'         : 436, # A. D. Becke, J. Chem. Phys. 98, 1372 (1993)
+                                              # Defined through Gaussian implementation
+        'HYB_GGA_XC_MB3LYP_RC04'       : 437, # V. Tognetti, P. Cortona, and C. Adamo, Chem. Phys. Lett. 439, 381 (2007)
         'HYB_GGA_XC_MPWLYP1M'          : 453, # N. E. Schultz, Y. Zhao, and D. G. Truhlar, J. Phys. Chem. A 109, 11127 (2005)
         'HYB_GGA_XC_REVB3LYP'          : 454, # L. Lu, H. Hu, H. Hou, and B. Wang, Comput. Theor. Chem. 1015, 64 (2013)
         'HYB_GGA_XC_CAMY_BLYP'         : 455, # Y. Akinaga and S. Ten-no, Chem. Phys. Lett. 462, 348 (2008)
@@ -442,10 +442,10 @@ else:
         'HYB_GGA_XC_LRC_WPBEH'         : 465, # M. A. Rohrdanz, K. M. Martins, and J. M. Herbert, J. Chem. Phys. 130, 054112 (2009)
         'HYB_GGA_XC_WB97X_V'           : 466, # N. Mardirossian and M. Head-Gordon, Phys. Chem. Chem. Phys. 16, 9904 (2014)
         'HYB_GGA_XC_LCY_PBE'           : 467, # M. Seth and T. Ziegler, J. Chem. Theory Comput. 8, 901 (2012)
-        # M. Seth, T. Ziegler, M. Steinmetz, and S. Grimme, J. Chem. Theory Comput. 9, 2286 (2013)
-'HYB_GGA_XC_LCY_BLYP'          : 468, # Y. Akinaga and S. Ten-no, Chem. Phys. Lett. 462, 348 (2008)
-        # M. Seth, T. Ziegler, M. Steinmetz, and S. Grimme, J. Chem. Theory Comput. 9, 2286 (2013)
-'HYB_GGA_XC_LC_VV10'           : 469, # O. A. Vydrov and T. Van Voorhis, J. Chem. Phys. 133, 244103 (2010)
+                                              # M. Seth, T. Ziegler, M. Steinmetz, and S. Grimme, J. Chem. Theory Comput. 9, 2286 (2013)
+        'HYB_GGA_XC_LCY_BLYP'          : 468, # Y. Akinaga and S. Ten-no, Chem. Phys. Lett. 462, 348 (2008)
+                                              # M. Seth, T. Ziegler, M. Steinmetz, and S. Grimme, J. Chem. Theory Comput. 9, 2286 (2013)
+        'HYB_GGA_XC_LC_VV10'           : 469, # O. A. Vydrov and T. Van Voorhis, J. Chem. Phys. 133, 244103 (2010)
         'HYB_GGA_XC_CAMY_B3LYP'        : 470, # M. Seth and T. Ziegler, J. Chem. Theory Comput. 8, 901 (2012)
         'HYB_GGA_XC_WB97X_D'           : 471, # J.-D. Chai and M. Head-Gordon, Phys. Chem. Chem. Phys. 10, 6615 (2008)
         'HYB_GGA_XC_HPBEINT'           : 472, # E. Fabiano, L. A. Constantin, and F. Della Sala, Int. J. Quantum Chem. 113, 673 (2013)
@@ -466,8 +466,8 @@ else:
         'MGGA_XC_ZLP'                  : 42 , # Q. Zhao, M. Levy, and R. G. Parr, Phys. Rev. A 47, 918 (1993)
         'MGGA_XC_OTPSS_D'              : 64 , # L. Goerigk and S. Grimme, J. Chem. Theory Comput. 6, 107 (2010)
         'MGGA_C_CS'                    : 72 , # R. Colle and O. Salvetti, Theor. Chim. Acta 37, 329 (1975)
-        # C. Lee, W. Yang, and R. G. Parr, Phys. Rev. B 37, 785 (1988)
-'MGGA_C_MN12_SX'               : 73 , # R. Peverati and D. G. Truhlar, Phys. Chem. Chem. Phys. 14, 16187 (2012)
+                                              # C. Lee, W. Yang, and R. G. Parr, Phys. Rev. B 37, 785 (1988)
+        'MGGA_C_MN12_SX'               : 73 , # R. Peverati and D. G. Truhlar, Phys. Chem. Chem. Phys. 14, 16187 (2012)
         'MGGA_C_MN12_L'                : 74 , # R. Peverati and D. G. Truhlar, Phys. Chem. Chem. Phys. 14, 13171 (2012)
         'MGGA_C_M11_L'                 : 75 , # R. Peverati and D. G. Truhlar, J. Phys. Chem. Lett. 3, 117 (2012)
         'MGGA_C_M11'                   : 76 , # R. Peverati and D. G. Truhlar, J. Phys. Chem. Lett. 2, 2810 (2011)
@@ -475,10 +475,10 @@ else:
         'MGGA_C_M08_HX'                : 78 , # Y. Zhao and D. G. Truhlar, J. Chem. Theory Comput. 4, 1849 (2008)
         'MGGA_X_LTA'                   : 201, # M. Ernzerhof and G. E. Scuseria, J. Chem. Phys. 111, 911 (1999)
         'MGGA_X_TPSS'                  : 202, # J. Tao, J. P. Perdew, V. N. Staroverov, and G. E. Scuseria, Phys. Rev. Lett. 91, 146401 (2003)
-        # J. P. Perdew, J. Tao, V. N. Staroverov, and G. E. Scuseria, J. Chem. Phys. 120, 6898 (2004)
-'MGGA_X_M06_L'                 : 203, # Y. Zhao and D. G. Truhlar, J. Chem. Phys. 125, 194101 (2006)
-        # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
-'MGGA_X_GVT4'                  : 204, # T. V. Voorhis and G. E. Scuseria, J. Chem. Phys. 109, 400 (1998)
+                                              # J. P. Perdew, J. Tao, V. N. Staroverov, and G. E. Scuseria, J. Chem. Phys. 120, 6898 (2004)
+        'MGGA_X_M06_L'                 : 203, # Y. Zhao and D. G. Truhlar, J. Chem. Phys. 125, 194101 (2006)
+                                              # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
+        'MGGA_X_GVT4'                  : 204, # T. V. Voorhis and G. E. Scuseria, J. Chem. Phys. 109, 400 (1998)
         'MGGA_X_TAU_HCTH'              : 205, # A. D. Boese and N. C. Handy, J. Chem. Phys. 116, 9559 (2002)
         'MGGA_X_BR89'                  : 206, # A. D. Becke and M. R. Roussel, Phys. Rev. A 39, 3761 (1989)
         'MGGA_X_BJ06'                  : 207, # A. D. Becke and E. R. Johnson, J. Chem. Phys. 124, 221101 (2006)
@@ -486,10 +486,10 @@ else:
         'MGGA_X_RPP09'                 : 209, # E. Rasanen, S. Pittalis, and C. R. Proetto, J. Chem. Phys. 132, 044112 (2010)
         'MGGA_X_2D_PRHG07'             : 210, # S. Pittalis, E. Rasanen, N. Helbig, and E. K. U. Gross, Phys. Rev. B 76, 235314 (2007)
         'MGGA_X_2D_PRHG07_PRP10'       : 211, # S. Pittalis, E. Rasanen, N. Helbig, and E. K. U. Gross, Phys. Rev. B 76, 235314 (2007)
-        # S. Pittalis, E. Rasanen, and C. R. Proetto, Phys. Rev. B 81, 115108 (2010)
-'MGGA_X_REVTPSS'               : 212, # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 103, 026403 (2009)
-        # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 106, 179902 (2011)
-'MGGA_X_PKZB'                  : 213, # J. P. Perdew, S. Kurth, A. Zupan, and P. Blaha, Phys. Rev. Lett. 82, 2544 (1999)
+                                              # S. Pittalis, E. Rasanen, and C. R. Proetto, Phys. Rev. B 81, 115108 (2010)
+        'MGGA_X_REVTPSS'               : 212, # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 103, 026403 (2009)
+                                              # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 106, 179902 (2011)
+        'MGGA_X_PKZB'                  : 213, # J. P. Perdew, S. Kurth, A. Zupan, and P. Blaha, Phys. Rev. Lett. 82, 2544 (1999)
         'MGGA_X_MS0'                   : 221, # J. Sun, B. Xiao, and A. Ruzsinszky, J. Chem. Phys. 137, 051101 (2012)
         'MGGA_X_MS1'                   : 222, # J. Sun, R. Haunschild, B. Xiao, I. W. Bulik, G. E. Scuseria, and J. P. Perdew, J. Chem. Phys. 138, 044113 (2013)
         'MGGA_X_MS2'                   : 223, # J. Sun, R. Haunschild, B. Xiao, I. W. Bulik, G. E. Scuseria, and J. P. Perdew, J. Chem. Phys. 138, 044113 (2013)
@@ -498,11 +498,11 @@ else:
         'MGGA_XC_CC06'                 : 229, # A. C. Cancio and M. Y. Chou, Phys. Rev. B 74, 081202 (2006)
         'MGGA_X_MK00'                  : 230, # F. R. Manby and P. J. Knowles, J. Chem. Phys. 112, 7002 (2000)
         'MGGA_C_TPSS'                  : 231, # J. Tao, J. P. Perdew, V. N. Staroverov, and G. E. Scuseria, Phys. Rev. Lett. 91, 146401 (2003)
-        # J. P. Perdew, J. Tao, V. N. Staroverov, and G. E. Scuseria, J. Chem. Phys. 120, 6898 (2004)
-'MGGA_C_VSXC'                  : 232, # T. V. Voorhis and G. E. Scuseria, J. Chem. Phys. 109, 400 (1998)
+                                              # J. P. Perdew, J. Tao, V. N. Staroverov, and G. E. Scuseria, J. Chem. Phys. 120, 6898 (2004)
+        'MGGA_C_VSXC'                  : 232, # T. V. Voorhis and G. E. Scuseria, J. Chem. Phys. 109, 400 (1998)
         'MGGA_C_M06_L'                 : 233, # Y. Zhao and D. G. Truhlar, J. Chem. Phys. 125, 194101 (2006)
-        # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
-'MGGA_C_M06_HF'                : 234, # Y. Zhao and D. G. Truhlar, J. Phys. Chem. A 110, 13126 (2006)
+                                              # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
+        'MGGA_C_M06_HF'                : 234, # Y. Zhao and D. G. Truhlar, J. Phys. Chem. A 110, 13126 (2006)
         'MGGA_C_M06'                   : 235, # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
         'MGGA_C_M06_2X'                : 236, # Y. Zhao and D. G. Truhlar, Theor. Chem. Acc. 120, 215 (2008)
         'MGGA_C_M05'                   : 237, # Y. Zhao, N. E. Schultz, and D. G. Truhlar, J. Chem. Phys. 123, 161103 (2005)
@@ -510,8 +510,8 @@ else:
         'MGGA_C_PKZB'                  : 239, # J. P. Perdew, S. Kurth, A. Zupan, and P. Blaha, Phys. Rev. Lett. 82, 2544 (1999)
         'MGGA_C_BC95'                  : 240, # A. D. Becke, J. Chem. Phys. 104, 1040 (1996)
         'MGGA_C_REVTPSS'               : 241, # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 103, 026403 (2009)
-        # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 106, 179902 (2011)
-'MGGA_XC_TPSSLYP1W'            : 242, # E. E. Dahlke and D. G. Truhlar, J. Phys. Chem. B 109, 15677 (2005)
+                                              # J. P. Perdew, A. Ruzsinszky, G. I. Csonka, L. A. Constantin, and J. Sun, Phys. Rev. Lett. 106, 179902 (2011)
+        'MGGA_XC_TPSSLYP1W'            : 242, # E. E. Dahlke and D. G. Truhlar, J. Phys. Chem. B 109, 15677 (2005)
         'MGGA_X_MK00B'                 : 243, # F. R. Manby and P. J. Knowles, J. Chem. Phys. 112, 7002 (2000)
         'MGGA_X_BLOC'                  : 244, # L. A. Constantin, E. Fabiano, and F. Della Sala, J. Chem. Theory Comput. 9, 2256 (2013)
         'MGGA_X_MODTPSS'               : 245, # J. P. Perdew, A. Ruzsinszky, J. Tao, G. I. Csonka, and G. E. Scuseria, Phys. Rev. A 76, 042506 (2007)
@@ -535,10 +535,10 @@ else:
         'MGGA_X_SA_TPSS'               : 542, # L. A. Constantin, E. Fabiano, J. M. Pitarke, and F. Della Sala, Phys. Rev. B 93, 115127 (2016)
         'MGGA_K_PC07'                  : 543, # J. P. Perdew and L. A. Constantin, Phys. Rev. B 75, 155109 (2007)
         'MGGA_C_KCIS'                  : 562, # J. Rey and A. Savin, Int. J. Quantum Chem. 69, 581 (1998)
-        # J. B. Krieger, J. Chen, G. J. Iafrate, and A. Savin, \enquote {Construction of an accurate self-interaction-corrected correlation energy functional based on an electron gas with a gap,} in Electron Correlations and Materials Properties, edited by A. Gonis, N. Kioussis, and M. Ciftan (Springer US, Boston, MA, 1999) pp. 463--477
-        # J. B. Krieger, J. Chen, and S. Kurth, AIP Conference Proceedings 577, 48 (2001)
-        # J. Toulouse, A. Savin, and C. Adamo, J. Chem. Phys. 117, 10465 (2002)
-'MGGA_XC_LP90'                 : 564, # C. Lee and R. G. Parr, Phys. Rev. A 42, 193 (1990)
+                                              # J. B. Krieger, J. Chen, G. J. Iafrate, and A. Savin, \enquote {Construction of an accurate self-interaction-corrected correlation energy functional based on an electron gas with a gap,} in Electron Correlations and Materials Properties, edited by A. Gonis, N. Kioussis, and M. Ciftan (Springer US, Boston, MA, 1999) pp. 463--477
+                                              # J. B. Krieger, J. Chen, and S. Kurth, AIP Conference Proceedings 577, 48 (2001)
+                                              # J. Toulouse, A. Savin, and C. Adamo, J. Chem. Phys. 117, 10465 (2002)
+        'MGGA_XC_LP90'                 : 564, # C. Lee and R. G. Parr, Phys. Rev. A 42, 193 (1990)
         'MGGA_C_B88'                   : 571, # A. D. Becke, J. Chem. Phys. 88, 1053 (1988)
         'MGGA_X_GX'                    : 575, # P.-F. Loos, J. Chem. Phys. 146, 114108 (2017)
         'MGGA_X_PBE_GX'                : 576, # P.-F. Loos, J. Chem. Phys. 146, 114108 (2017)
@@ -547,8 +547,8 @@ else:
         'MGGA_C_SCAN_VV10'             : 584, # J. G. Brandenburg, J. E. Bates, J. Sun, and J. P. Perdew, Phys. Rev. B 94, 115144 (2016)
         'MGGA_C_REVSCAN_VV10'          : 585, # P. D. Mezei, G. I. Csonka, and M. Kallay, J. Chem. Theory Comput. 0, null (0)
         'MGGA_X_BR89_EXPLICIT'         : 586, # A. D. Becke and M. R. Roussel, Phys. Rev. A 39, 3761 (1989)
-        # E. Proynov, Z. Gan, and J. Kong, Chem. Phys. Lett. 455, 103 (2008)
-'HYB_MGGA_X_DLDF'              : 36 , # K. Pernal, R. Podeszwa, K. Patkowski, and K. Szalewicz, Phys. Rev. Lett. 103, 263201 (2009)
+                                              # E. Proynov, Z. Gan, and J. Kong, Chem. Phys. Lett. 455, 103 (2008)
+        'HYB_MGGA_X_DLDF'              : 36 , # K. Pernal, R. Podeszwa, K. Patkowski, and K. Szalewicz, Phys. Rev. Lett. 103, 263201 (2009)
         'HYB_MGGA_X_MS2H'              : 224, # J. Sun, R. Haunschild, B. Xiao, I. W. Bulik, G. E. Scuseria, and J. P. Perdew, J. Chem. Phys. 138, 044113 (2013)
         'HYB_MGGA_X_MN12_SX'           : 248, # R. Peverati and D. G. Truhlar, Phys. Chem. Chem. Phys. 14, 16187 (2012)
         'HYB_MGGA_X_SCAN0'             : 264, # K. Hui and J.-D. Chai, J. Chem. Phys. 144, 044114 (2016), 10.1063/1.4940734
@@ -587,7 +587,7 @@ else:
     }
 
     PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
-                       ('GGA_C_SPBE', 'MGGA_X_REVTPSS')])
+                           ('GGA_C_SPBE', 'MGGA_X_REVTPSS')])
 
 
 def _xc_key_without_underscore(xc_keys):
@@ -622,15 +622,16 @@ XC_CODES.update({
     'B3LYPG'        : 402,  # VWN3, used by Gaussian
     'B3P86'         : 'B3P865',  # VWN5 version
     'B3P865'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN',
-    #?'B3P86G'        : 403,  # VWN3, used by Gaussian
-'B3P86G'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN3',
+    # FIXME: Check if Gaussian takes a different form for B3P86
+    #'B3P86G'        : 403,  # VWN3, used by Gaussian
+    'B3P86G'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN3',
     'B3PW91'        : 'B3PW915',
     'B3PW915'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN',
     #'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN3',
-'B3PW91G'       : 401,
+    'B3PW91G'       : 401,
     #'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
     #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN3',
-'O3LYP'         : 404, # in libxc == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', may be erroreous
+    'O3LYP'         : 404, # in libxc == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', may be erroreous
     'MPW3PW'        : 'MPW3PW5',  # VWN5 version
     'MPW3PW5'       : '.2*HF + .08*SLATER + .72*MPW91, .81*PW91 + .19*VWN',
     'MPW3PWG'       : 415,  # VWN3, used by Gaussian
