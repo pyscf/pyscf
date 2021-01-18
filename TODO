@@ -18,3 +18,19 @@ Decide what to move to addons?
 - balance ease of maintenance with ease of development
 
 Docs: Xing finish HF outline 
+- HF [1st draft] -- garnet to edit
+- DFT [1st draft] -- garnet to edit
+- TDDFT 
+
+Qiming:
+- Move SHCI/DMRG to pyscf-external
+- Geometry optimizers
+- List others
+- Plan new docs for external
+
+Garnet: write to nao people
+
+Xing: put next 6 mods to document
+
+Ask Susi
+Flake config
