@@ -17,6 +17,7 @@ requirements:
     - make
     - mkl-devel
     - blas
+    - numpy
   host:
     - pip
     - python
