@@ -25,16 +25,6 @@ from setuptools import setup, find_packages, Extension
 from setuptools.command.install import install
 from setuptools.command.build_ext import build_ext
 
-try:
-    import numpy
-except ImportError as e:
-    print('**************************************************')
-    print('* numpy was not installed in your system.  Please run')
-    print('*     pip install numpy')
-    print('* before installing pyscf.')
-    print('**************************************************')
-    raise e
-
 topdir = os.path.abspath(os.path.join(__file__, '..'))
 
 CLASSIFIERS = [
