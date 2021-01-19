@@ -25,8 +25,12 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install and Test
-        run: ./.github/workflows/run_ci.sh
+      - name: Install system deps
+        run: ./.github/workflows/ci_linux/deps_apt.sh
+
+      - name: Install Python deps
+        run: ./.github/workflows/ci_"$os"/python_deps.sh
+
       - name: publish-to-conda
         uses: fcakyon/conda-publish-action@v1.3
         with:
