@@ -26,9 +26,9 @@ requirements:
     - h5py
   run:
     - python
-    - numpy
+    - numpy!=1.16,!=1.17
+    - scipy<1.5
     - h5py
-    - scipy
 
 test:
   imports:
