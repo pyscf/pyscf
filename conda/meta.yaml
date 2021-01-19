@@ -18,17 +18,26 @@ requirements:
     - mkl-devel
     - blas
     - numpy
+    - libxc
+    - xcfun
+    - libcint
   host:
     - pip
     - python
     - numpy!=1.16,!=1.17
     - scipy<1.5
     - h5py
+    - libxc
+    - xcfun
+    - libcint
   run:
     - python
     - numpy!=1.16,!=1.17
     - scipy<1.5
     - h5py
+    - libxc
+    - xcfun
+    - libcint
 
 test:
   imports:
