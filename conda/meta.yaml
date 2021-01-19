@@ -10,6 +10,9 @@ source:
 
 build:
   number: 0
+  script: pip install numpy
+          pip install . -vv
+          
 
 requirements:
   build:
