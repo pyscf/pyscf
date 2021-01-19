@@ -27,6 +27,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install system deps
         run: ./.github/workflows/ci_linux/deps_apt.sh
+      - name: Build pyscf libs
+        run: ./.github/workflows/ci_linux/build_pyscf.sh
 
       - name: publish-to-conda
         uses: fcakyon/conda-publish-action@v1.3
