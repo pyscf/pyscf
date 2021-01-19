@@ -2,5 +2,4 @@
 # and the -e makes it exit whenever a command in the script returns nonzero exit status.
 set -x -e
 
-$PYTHON -m pip install numpy
 $PYTHON -m pip install . -vv
