@@ -15,7 +15,7 @@ requirements:
   host:
     - pip
     - python
-    - numpy
+    - numpy 1.18
     - scipy
     - h5py
   run:
