@@ -60,7 +60,7 @@ CLASSIFIERS = [
 NAME             = 'pyscf'
 MAINTAINER       = 'Qiming Sun'
 MAINTAINER_EMAIL = 'osirpt.sun@gmail.com'
-DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
+DESCRIPTION      = 'Python-based Simulations of Chemistry Framework'
 #LONG_DESCRIPTION = ''
 URL              = 'http://www.pyscf.org'
 DOWNLOAD_URL     = 'http://github.com/pyscf/pyscf'
@@ -191,7 +191,7 @@ if 'LDFLAGS' in os.environ:
     blas_found = any(x in os.environ['LDFLAGS']
                      for x in ('blas', 'atlas', 'openblas', 'mkl', 'Accelerate'))
 else:
-    blas_found = False
+    blas_found = True
 
 blas_include = []
 blas_lib_dir = []

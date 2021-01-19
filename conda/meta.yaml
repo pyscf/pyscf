@@ -12,6 +12,11 @@ build:
   number: 0
 
 requirements:
+  build:
+    - cmake
+    - make
+    - mkl-devel
+    - blas
   host:
     - pip
     - python
