@@ -20,11 +20,14 @@ requirements:
   host:
     - pip
     - python
-    - numpy 1.18
+    - numpy
     - scipy
     - h5py
   run:
     - python
+    - numpy
+    - h5py
+    - scipy
 
 test:
   imports:
