@@ -13,11 +13,6 @@ build:
   script: python setup.py install --single-version-externally-managed --record record.txt
 
 requirements:
-  build:
-    - python
-    - numpy
-    - scipy
-    - h5py
   host:
     - pip
     - python
