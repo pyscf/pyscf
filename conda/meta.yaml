@@ -21,14 +21,14 @@ requirements:
   host:
     - pip
     - python
-    - numpy!=1.16,!=1.17
+    - numpy>1.8,!=1.16,!=1.17
     - scipy<1.5
-    - h5py
+    - h5py>2.2
   run:
     - python
-    - numpy!=1.16,!=1.17
+    - numpy>1.8,!=1.16,!=1.17
     - scipy<1.5
-    - h5py
+    - h5py>2.2
 
 test:
   imports:
