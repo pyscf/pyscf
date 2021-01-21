@@ -34,6 +34,7 @@ mol.build()
 mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
 mf.kernel()
 myadc = adc.ADC(mf)
+myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
 
 def tearDownModule():
     global mol,mf
@@ -76,7 +77,6 @@ class KnownValues(unittest.TestCase):
 
     def test_dfhf_dfadc2_ea(self):
   
-        myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(2)"
         myadc.method_type = "ea"

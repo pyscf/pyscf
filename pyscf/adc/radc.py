@@ -80,10 +80,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
 
-    t1, t2 = myadc.compute_amplitudes(eris)
+    t1, t2, t2_vvvv_imds = myadc.compute_amplitudes(eris)
     e_corr = myadc.compute_energy(t2, eris)
 
-    return e_corr, t1, t2
+    return e_corr, t1, t2, t2_vvvv_imds
 
 
 def compute_amplitudes(myadc, eris):
@@ -162,6 +162,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_2 = None
     t1_3 = None
+    t2_vvvv_imds = None
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
 
@@ -173,11 +174,17 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.vvvv, np.ndarray):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-            t2_2 = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
+            t2_vvvv_imds = np.dot(eris_vvvv,temp.T).reshape(nvir,nvir,-1)
+            t2_vvvv_imds = np.ascontiguousarray(t2_vvvv_imds.transpose(2,0,1)).reshape(nocc,nocc,nvir,nvir)
         elif isinstance(eris.vvvv, list):
-            t2_2 = contract_ladder(myadc,t2_1[:],eris.vvvv)
+            t2_vvvv_imds = contract_ladder(myadc,t2_1[:],eris.vvvv)
         else:
-            t2_2 = contract_ladder(myadc,t2_1[:],eris.Lvv)
+            t2_vvvv_imds = contract_ladder(myadc,t2_1[:],eris.Lvv)
+
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_vvvv_imds = radc_ao2mo.write_dataset(t2_vvvv_imds)
+
+        t2_2 = t2_vvvv_imds[:].copy()
 
         t2_2 += lib.einsum('kilj,klab->ijab',eris_oooo,t2_1[:],optimize=True)
         t2_2 += lib.einsum('kcbj,kica->ijab',eris_ovvo,t2_1[:],optimize=True)
@@ -413,7 +420,7 @@ def compute_amplitudes(myadc, eris):
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
 
-    return t1, t2
+    return t1, t2, t2_vvvv_imds
 
 
 def compute_energy(myadc, t2, eris):
@@ -603,6 +610,7 @@ class RADC(lib.StreamObject):
         self.e_corr = None
         self.t1 = None
         self.t2 = None
+        self.t2_vvvv_imds = None
         self._nocc = mf.mol.nelectron//2
         self._nmo = mo_coeff.shape[1]
         self._nvir = self._nmo - self._nocc
@@ -682,7 +690,7 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
         
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2, self.t2_vvvv_imds = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         return self.e_corr, self.t1, self.t2
@@ -723,7 +731,7 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals() 
             
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2, self.t2_vvvv_imds = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         self.method_type = self.method_type.lower()
@@ -1011,11 +1019,7 @@ def get_imds_ea(adc, eris=None):
         log.timer_debug1("Starting M_ab vvvv ADC(3) calculation")
 
         if isinstance(eris.vvvv, np.ndarray):
-            t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
-            eris_vvvv = eris.vvvv
-            temp_t2 = np.dot(t2_1_r,eris_vvvv)
-            temp_t2 = temp_t2.reshape(nocc,nocc,nvir,nvir)
- 
+            temp_t2 = adc.t2_vvvv_imds
             M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2, optimize=True)
             M_ab += 0.25*lib.einsum('mlaf,lmbf->ab',t2_1, temp_t2, optimize=True)
             M_ab += 0.25*lib.einsum('lmaf,mlbf->ab',t2_1, temp_t2, optimize=True)
@@ -1026,19 +1030,21 @@ def get_imds_ea(adc, eris=None):
             M_ab += 0.25*lib.einsum('lmaf,lmfb->ab',t2_1, temp_t2, optimize=True)
             M_ab -= lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2, optimize=True)
 
-            temp_vvvv_t2 = np.dot(eris_vvvv,t2_1_r.T)
-            temp_vvvv_t2 = temp_vvvv_t2.reshape(nvir,nvir,nocc,nocc)
-            M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp_vvvv_t2, t2_1, optimize=True)
-            M_ab -= 0.25*lib.einsum('adlm,lmbd->ab',temp_vvvv_t2, t2_1, optimize=True)
-            M_ab -= 0.25*lib.einsum('adml,mlbd->ab',temp_vvvv_t2, t2_1, optimize=True)
-            M_ab += 0.25*lib.einsum('adml,lmbd->ab',temp_vvvv_t2, t2_1, optimize=True)
-
             M_ab -= 0.25*lib.einsum('mlad,mlbd->ab', temp_t2, t2_1, optimize=True)
             M_ab += 0.25*lib.einsum('mlad,lmbd->ab', temp_t2, t2_1, optimize=True)
             M_ab += 0.25*lib.einsum('lmad,mlbd->ab', temp_t2, t2_1, optimize=True)
             M_ab -= 0.25*lib.einsum('lmad,lmbd->ab', temp_t2, t2_1, optimize=True)
             M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2, t2_1, optimize=True)
+            del temp_t2
 
+            temp_vvvv_t2 = adc.t2_vvvv_imds.T
+            M_ab += 0.25*lib.einsum('adlm,mlbd->ab',temp_vvvv_t2, t2_1, optimize=True)
+            M_ab -= 0.25*lib.einsum('adlm,lmbd->ab',temp_vvvv_t2, t2_1, optimize=True)
+            M_ab -= 0.25*lib.einsum('adml,mlbd->ab',temp_vvvv_t2, t2_1, optimize=True)
+            M_ab += 0.25*lib.einsum('adml,lmbd->ab',temp_vvvv_t2, t2_1, optimize=True)
+            del temp_vvvv_t2
+
+            eris_vvvv =  eris.vvvv
             eris_vvvv = eris_vvvv.reshape(nvir,nvir,nvir,nvir)
             M_ab -= lib.einsum('mldf,mled,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
             M_ab += lib.einsum('mldf,lmed,aebf->ab',t2_1, t2_1, eris_vvvv, optimize=True)
@@ -1053,11 +1059,7 @@ def get_imds_ea(adc, eris=None):
             eris_vvvv = eris_vvvv.reshape(nvir*nvir,nvir*nvir)
 
         else:
-            if isinstance(eris.vvvv, list):
-                temp_t2_vvvv = contract_ladder(adc,t2_1,eris.vvvv)
-            else :
-                temp_t2_vvvv = contract_ladder(adc,t2_1,eris.Lvv)
-
+            temp_t2_vvvv = adc.t2_vvvv_imds[:]
             M_ab -= 0.25*lib.einsum('mlaf,mlbf->ab',t2_1, temp_t2_vvvv, optimize=True)
             M_ab += 0.25*lib.einsum('mlaf,lmbf->ab',t2_1, temp_t2_vvvv, optimize=True)
             M_ab += 0.25*lib.einsum('lmaf,mlbf->ab',t2_1, temp_t2_vvvv, optimize=True)
@@ -1275,16 +1277,7 @@ def get_imds_ip(adc, eris=None):
             M_ij += 0.5 * lib.einsum('j,ji->ij',e_occ, M_ij_t_1, optimize=True)
             del M_ij_t_1
 
-            if isinstance(eris.vvvv, np.ndarray):
-                eris_vvvv = eris.vvvv
-                t2_1_r = t2_1.reshape(nocc*nocc,nvir*nvir)
-                temp_t2_vvvv = np.dot(t2_1_r,eris_vvvv)
-                temp_t2_vvvv = temp_t2_vvvv.reshape(nocc,nocc,nvir,nvir)
-            elif isinstance(eris.vvvv, list):
-                temp_t2_vvvv = contract_ladder(adc,t2_1,eris.vvvv)
-            else :
-                temp_t2_vvvv = contract_ladder(adc,t2_1,eris.Lvv)
-
+            temp_t2_vvvv = adc.t2_vvvv_imds[:]
             M_ij += 0.25*lib.einsum('ilde,jlde->ij',t2_1, temp_t2_vvvv, optimize = True)
             M_ij -= 0.25*lib.einsum('ilde,ljde->ij',t2_1, temp_t2_vvvv, optimize = True)
             M_ij -= 0.25*lib.einsum('lide,jlde->ij',t2_1, temp_t2_vvvv, optimize = True)
@@ -1294,6 +1287,7 @@ def get_imds_ip(adc, eris=None):
             M_ij += 0.25*lib.einsum('lide,jled->ij',t2_1, temp_t2_vvvv, optimize = True)
             M_ij -= 0.25*lib.einsum('lide,ljed->ij',t2_1, temp_t2_vvvv, optimize = True)
             M_ij +=lib.einsum('ilde,jlde->ij',t2_1, temp_t2_vvvv, optimize = True)
+            del temp_t2_vvvv
 
             log.timer_debug1("Starting the small integrals  calculation")
             temp_t2_v_1 = lib.einsum('lmde,jldf->mejf',t2_1, t2_1,optimize=True)
@@ -2560,6 +2554,7 @@ class RADCEA(RADC):
         self.tol_residual  = adc.tol_residual
         self.t1 = adc.t1
         self.t2 = adc.t2
+        self.t2_vvvv_imds = adc.t2_vvvv_imds
         self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
@@ -2669,6 +2664,7 @@ class RADCIP(RADC):
         self.tol_residual  = adc.tol_residual
         self.t1 = adc.t1
         self.t2 = adc.t2
+        self.t2_vvvv_imds = adc.t2_vvvv_imds
         self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
