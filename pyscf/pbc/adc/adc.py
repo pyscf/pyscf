@@ -17,141 +17,93 @@ import numpy
 
 from pyscf import lib
 from pyscf.adc import radc
+from pyscf.adc import radc_ao2mo
 from pyscf.adc import uadc
 from pyscf.pbc import mp
+from pyscf.cc import rccsd
 
 class RADC(radc.RADC):
-    def radc(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
+        #if abs(mf.kpt).max() > 1e-9:
+        #    raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        warn_pbc2d_eri(self._scf)
-        if mbpt2:
-            pt = mp.RMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
-            self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocc, nvir = self.t2.shape[1:3]
-            self.t1 = numpy.zeros((nocc,nvir))
-            return self.e_corr, self.t1, self.t2
-        return radc.RADC.radc(self, t1, t2, eris)
+        warn_pbc2d_eri(mf)
+        radc.RADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
-    def ao2mo(self, mo_coeff=None):
-        from pyscf.pbc import tools
+    def kernel(self, nroots=1, guess=None, eris=None):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
+    
+        self.method = self.method.lower()
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+            raise NotImplementedError(self.method)
+    
+         
+
+#        if self.verbose >= logger.WARN:
+#            self.check_sanity()
+#        self.dump_flags_gs()
+    
+#        nmo = self._nmo
+#        nao = self.mo_coeff.shape[0]
+#        nmo_pair = nmo * (nmo+1) // 2
+#        nao_pair = nao * (nao+1) // 2
+#        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+#        mem_now = lib.current_memory()[0]
+#
+#        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+#           if getattr(self, 'with_df', None): 
+#               self.with_df = self.with_df
+#           else :
+#               self.with_df = self._scf.with_df
+#
+#           def df_transform():
+#              return radc_ao2mo.transform_integrals_df(self)
+#           self.transform_integrals = df_transform
+#        elif (self._scf._eri is None or
+#            (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+#           def outcore_transform():
+#               return radc_ao2mo.transform_integrals_outcore(self)
+#           self.transform_integrals = outcore_transform
+
+        #transform_integrals = radc_ao2mo.transform_integrals_incore
+        #eris = self.transform_integrals() 
+
+        mo_coeff = self._scf.mo_coeff
+        nocc = self._nocc
+
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        # _scf.exxdiv affects eris.fock. HF exchange correction should be
-        # excluded from the Fock matrix.
         with lib.temporary_env(self._scf, exxdiv=None):
-            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)        
 
-        # eris.mo_energy so far is just the diagonal part of the Fock matrix
-        # without the exxdiv treatment. Here to add the exchange correction to
-        # get better orbital energies. It is important for the low-dimension
-        # systems since their occupied and the virtual orbital energies may
-        # overlap which may lead to numerical issue in the CCSD iterations.
-        #if mo_coeff is self._scf.mo_coeff:
-        #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
-        #else:
+    
+        exit()
 
-        # Add the HFX correction of Ewald probe charge method.
-        # FIXME: Whether to add this correction for other exxdiv treatments?
-        # Without the correction, MP2 energy may be largely off the
-        # correct value.
-        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-        eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
-        return eris
+        self.e_corr, self.t1, self.t2 = radc.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self._finalize()
 
-class UCCSD(uccsd.UCCSD):
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        warn_pbc2d_eri(self._scf)
-        if mbpt2:
-            pt = mp.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
-            self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, noccb = self.nocc
-            nmoa, nmob = self.nmo
-            nvira, nvirb = nmoa-nocca, nmob-noccb
-            self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
-            return self.e_corr, self.t1, self.t2
-        return uccsd.UCCSD.ccsd(self, t1, t2, eris)
+        self.method_type = self.method_type.lower()
+        if(self.method_type == "ea"):
+            e_exc, v_exc, spec_fac, x, adc_es = radc.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-    def ao2mo(self, mo_coeff=None):
-        from pyscf.pbc import tools
-        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        # _scf.exxdiv affects eris.fock. HF exchange correction should be
-        # excluded from the Fock matrix.
-        with lib.temporary_env(self._scf, exxdiv=None):
-            eris = uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        elif(self.method_type == "ip"):
+            e_exc, v_exc, spec_fac, x, adc_es = radc.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        #if mo_coeff is self._scf.mo_coeff:
-        #    idxa, idxb = self.get_frozen_mask()
-        #    mo_e_a, mo_e_b = self._scf.mo_energy
-        #    eris.mo_energy = (mo_e_a[idxa], mo_e_b[idxb])
-        #else:
-        nocca, noccb = eris.nocc
-        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-        eris.mo_energy = (_adjust_occ(eris.mo_energy[0], nocca, -madelung),
-                          _adjust_occ(eris.mo_energy[1], noccb, -madelung))
-        return eris
+        else:
+            raise NotImplementedError(self.method_type)
+        self._adc_es = adc_es
+        return e_exc, v_exc, spec_fac, x
 
-class GCCSD(gccsd.GCCSD):
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        warn_pbc2d_eri(self._scf)
-        if mbpt2:
-            from pyscf.pbc.mp import mp2
-            pt = mp2.GMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
-            self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocc, nvir = self.t2.shape[1:3]
-            self.t1 = numpy.zeros((nocc,nvir))
-            return self.e_corr, self.t1, self.t2
-        return gccsd.GCCSD.ccsd(self, t1, t2, eris)
 
-    def ao2mo(self, mo_coeff=None):
-        from pyscf.pbc import tools
-        with_df = self._scf.with_df
-        kpt = self._scf.kpt
-        def ao2mofn(mo_coeff):
-            nao, nmo = mo_coeff.shape
-            mo_a = mo_coeff[:nao//2]
-            mo_b = mo_coeff[nao//2:]
-            orbspin = getattr(mo_coeff, 'orbspin', None)
-            if orbspin is None:
-                eri  = with_df.ao2mo(mo_a, kpt, compact=False)
-                eri += with_df.ao2mo(mo_b, kpt, compact=False)
-                eri1 = with_df.ao2mo((mo_a,mo_a,mo_b,mo_b), kpt, compact=False)
-                eri += eri1
-                eri += eri1.T
-                eri = eri.reshape([nmo]*4)
-            else:
-                # If GHF orbitals have orbspin labels, alpha and beta orbitals
-                # occupy different columns. Here merging them into one set of
-                # orbitals then zero out spin forbidden MO integrals
-                mo = mo_a + mo_b
-                eri  = with_df.ao2mo(mo, kpt, compact=False).reshape([nmo]*4)
-                sym_forbid = (orbspin[:,None] != orbspin)
-                eri[sym_forbid,:,:] = 0
-                eri[:,:,sym_forbid] = 0
-            return eri
-
-        # _scf.exxdiv affects eris.fock. HF exchange correction should be
-        # excluded from the Fock matrix.
-        with lib.temporary_env(self._scf, exxdiv=None):
-            eris = gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-
-        #if mo_coeff is self._scf.mo_coeff:
-        #    eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
-        #else:
-        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-        eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
-        return eris
-
-def _adjust_occ(mo_energy, nocc, shift):
-    '''Modify occupied orbital energy'''
-    mo_energy = mo_energy.copy()
-    mo_energy[:nocc] += shift
-    return mo_energy
+#def _adjust_occ(mo_energy, nocc, shift):
+#    '''Modify occupied orbital energy'''
+#    mo_energy = mo_energy.copy()
+#    mo_energy[:nocc] += shift
+#    return mo_energy
 
 
 from pyscf.pbc import scf
-scf.hf.RHF.CCSD = lib.class_as_method(RCCSD)
-scf.uhf.UHF.CCSD = lib.class_as_method(UCCSD)
-scf.ghf.GHF.CCSD = lib.class_as_method(GCCSD)
-scf.rohf.ROHF.CCSD = None
-
+scf.hf.RHF.ADC = lib.class_as_method(RADC)
+#scf.uhf.UHF.CCSD = lib.class_as_method(UCCSD)
+#scf.ghf.GHF.CCSD = lib.class_as_method(GCCSD)
+#scf.rohf.ROHF.CCSD = None

@@ -14,14 +14,13 @@
 # limitations under the License.
 
 from pyscf.pbc import scf
-#from pyscf.pbc.adc import adc
-from pyscf.pbc.adc import kadc_rhf as kadc
+from pyscf.pbc.adc import adc,kadc_rhf 
 
-#def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-#    mf = scf.addons.convert_to_rhf(mf)
-#    return adc.RADC(mf, frozen, mo_coeff, mo_occ)
-#
-#ADC = RADC
+def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    mf = scf.addons.convert_to_rhf(mf)
+    return adc.RADC(mf, frozen, mo_coeff, mo_occ)
+
+ADC = RADC
 
 
 def KRADC(mf, frozen=None, mo_coeff=None, mo_occ=None):

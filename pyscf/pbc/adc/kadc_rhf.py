@@ -42,6 +42,7 @@ class RADC(pyscf.adc.radc.RADC):
         self.kpts = self._scf.kpts
         #self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.cell = self._scf.cell
+        self.mo_coeff = self._scf.mo_coeff
         #kpts = mf.kpts
         #nkpts = mf.nkpts
         #nocc = mf.nocc

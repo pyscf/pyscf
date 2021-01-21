@@ -34,6 +34,8 @@ def transform_integrals_incore(myadc):
      #nmo = myadc.nmo
      #nvir = nmo - nocc
 
+     dtype = myadc.mo_coeff[0].dtype
+     print (dtype)
 
 
 
