@@ -276,8 +276,7 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.vvvv_p, np.ndarray):
             eris_vvvv = eris.vvvv_p
             temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
-            t2_1_vvvv_a = np.dot(eris_vvvv,temp.T)
-            t2_1_vvvv_a = np.ascontiguousarray(t2_1_vvvv_a.T).reshape(nocc_a, nocc_a, -1)
+            t2_1_vvvv_a = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
             del eris_vvvv
         elif isinstance(eris.vvvv_p, list):
             t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.vvvv_p)
@@ -307,8 +306,7 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.VVVV_p, np.ndarray):
             eris_VVVV = eris.VVVV_p
             temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]).reshape(nocc_b*nocc_b,-1)
-            t2_1_vvvv_b = np.dot(eris_VVVV,temp.T)
-            t2_1_vvvv_b = np.ascontiguousarray(t2_1_vvvv_b.T).reshape(nocc_b, nocc_b, -1)
+            t2_1_vvvv_b = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
             del eris_VVVV
         elif isinstance(eris.VVVV_p, list) : 
             t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.VVVV_p)
@@ -337,7 +335,7 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.vVvV_p, np.ndarray):
             temp = t2_1_ab.reshape(nocc_a*nocc_b,nvir_a*nvir_b)
             eris_vVvV = eris.vVvV_p
-            t2_1_vvvv_ab = np.dot(eris_vVvV,temp.T).T.reshape(nocc_a,nocc_b,nvir_a,nvir_b)
+            t2_1_vvvv_ab = np.dot(temp,eris_vVvV.T).reshape(nocc_a,nocc_b,nvir_a,nvir_b)
         elif isinstance(eris.vVvV_p, list):
             t2_1_vvvv_ab = contract_ladder(myadc,t2_1_ab[:],eris.vVvV_p)
         else :

@@ -174,8 +174,7 @@ def compute_amplitudes(myadc, eris):
         if isinstance(eris.vvvv, np.ndarray):
             eris_vvvv = eris.vvvv
             temp = t2_1.reshape(nocc*nocc,nvir*nvir)
-            t2_1_vvvv = np.dot(eris_vvvv,temp.T).reshape(nvir,nvir,-1)
-            t2_1_vvvv = np.ascontiguousarray(t2_1_vvvv.transpose(2,0,1)).reshape(nocc,nocc,nvir,nvir)
+            t2_1_vvvv = np.dot(temp,eris_vvvv.T).reshape(nocc,nocc,nvir,nvir)
         elif isinstance(eris.vvvv, list):
             t2_1_vvvv = contract_ladder(myadc,t2_1[:],eris.vvvv)
         else:
