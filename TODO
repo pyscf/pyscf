@@ -20,15 +20,15 @@ Decide what to move to addons?
 Docs: Xing finish HF outline 
 - HF [1st draft] -- garnet to edit
 - DFT [1st draft] -- garnet to edit
-- TDDFT 
+- TDDFT -- garnet to edit
 
 Qiming:
-- Move SHCI/DMRG to pyscf-external
-- Geometry optimizers
-- List others
-- Plan new docs for external
+- Move SHCI/DMRG to pyscf-external <-- [ ]
+- Geometry optimizers <-- [ ]
+- List others <-- [ ]
+- Plan new docs for external <-- [ ]
 
-Garnet: write to nao people
+Garnet: write to nao people [x] <-- remove
 
 Xing: put next 6 mods to document
 mp2
@@ -40,5 +40,5 @@ casci
 casscf
 gw
 
-Ask Susi
-Flake config
+Ask Susi -- [do today]
+Flake config <-- [ ]
