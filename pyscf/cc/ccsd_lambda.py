@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -258,7 +258,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     l1new  = numpy.einsum('ijab,jb->ia', l2new, t1) * 2
     l1new -= numpy.einsum('jiab,jb->ia', l2new, t1)
     l2new *= .5  # *.5 because of l2+l2.transpose(1,0,3,2) in the end
-    tmp = tmp1 = None
+    tmp = None
 
     w1 = imds.w1 - numpy.diag(mo_e_v)
     w2 = imds.w2 - numpy.diag(mo_e_o)

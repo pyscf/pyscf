@@ -584,7 +584,7 @@ else:
         'HYB_MGGA_XC_TPSS1KCIS'        : 569, # Y. Zhao, B. J. Lynch, and D. G. Truhlar, Phys. Chem. Chem. Phys. 7, 43 (2005)
         'HYB_MGGA_X_REVSCAN0'          : 583, # P. D. Mezei, G. I. Csonka, and M. Kallay, J. Chem. Theory Comput. 0, null (0)
         'HYB_MGGA_XC_B98'              : 598, # A. D. Becke, J. Chem. Phys. 109, 2092 (1998)
-    }
+    }  # noqa: E122
 
     PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
                            ('GGA_C_SPBE', 'MGGA_X_REVTPSS')])
@@ -654,7 +654,7 @@ XC_CODES.update({
     'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
-})
+})  # noqa: E122
 
 XC_KEYS = set(XC_CODES.keys())
 
@@ -729,7 +729,7 @@ XC_ALIAS = {
     'MN12SX'            : 'MN12_SX',
     'M052X'             : 'M05_2X',
     'M062X'             : 'M06_2X',
-}
+}  # noqa: E122
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 

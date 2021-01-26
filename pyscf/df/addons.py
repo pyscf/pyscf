@@ -64,7 +64,7 @@ DEFAULT_AUXBASIS = {
 '6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
 '6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
 '6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
-}
+}  # noqa: E122
 
 class load(ao2mo.load):
     '''load 3c2e integrals from hdf5 file. It can be used in the context

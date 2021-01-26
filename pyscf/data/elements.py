@@ -28,14 +28,14 @@ ELEMENTS = ['X',  # Ghost
     'Pa', 'U' , 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
     'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds',
     'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
-]
+]  # noqa: E128
 NUC = dict(((x,i) for i,x in enumerate(ELEMENTS)))
 NUC.update((x.upper(),i) for i,x in enumerate(ELEMENTS))
 NUC['GHOST'] = 0
 ELEMENTS_PROTON = NUC
 
 ATOMIC_NAMES = ['Ghost',
-# IUPAC version dated 28 November 2016
+    # IUPAC version dated 28 November 2016
     'Hydrogen', 'Helium', 'Lithium', 'Beryllium', 'Boron',
     'Carbon', 'Nitrogen', 'Oxygen', 'Fluorine', 'Neon',
     'Sodium', 'Magnesium', 'Aluminium', 'Silicon', 'Phosphorus',
@@ -60,7 +60,7 @@ ATOMIC_NAMES = ['Ghost',
     'Seaborgium', 'Bohrium', 'Hassium', 'Meitnerium', 'Darmastadtium',
     'Roentgenium', 'Copernicium', 'Nihonium', 'Flerovium', 'Moscovium',
     'Livermorium', 'Tennessine', 'Oganesson'
-]
+]  # noqa: E128
 
 ISOTOPE_MAIN = [
     0  ,   # GHOST

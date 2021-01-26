@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -211,7 +211,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
 
@@ -249,11 +248,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         feri = erifile
 
     if comp == 1:
-        chunks = (nmoj,nmol)
-        shape = (nij_pair,nkl_pair)
+        chunks = (nmoj, nmol)
+        shape = (nij_pair, nkl_pair)
     else:
-        chunks = (1,nmoj,nmol)
-        shape = (comp,nij_pair,nkl_pair)
+        chunks = (1, nmoj, nmol)
+        shape = (comp, nij_pair, nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.create_dataset(dataname, shape, 'f8')

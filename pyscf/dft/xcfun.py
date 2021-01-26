@@ -164,7 +164,7 @@ XC = XC_CODES = {
 'B97_2XC'       : 'B97_2X + B97_2C + HF*0.21',
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
-}
+}  # noqa: E122
 
 # Some XC functionals have conventional name, like M06-L means M06-L for X
 # functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the

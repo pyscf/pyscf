@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,10 +104,10 @@ def spatial2spin_ip(r1, r2, orbspin=None):
     idxoab = idxoa[:,None] * nocc + idxob
     idxoba = idxob[:,None] * nocc + idxoa
     idxobb = idxob[:,None] * nocc + idxob
-    #idxvaa = idxva[:,None] * nvir + idxva
-    #idxvab = idxva[:,None] * nvir + idxvb
-    #idxvba = idxvb[:,None] * nvir + idxva
-    #idxvbb = idxvb[:,None] * nvir + idxvb
+    # idxvaa = idxva[:,None] * nvir + idxva
+    # idxvab = idxva[:,None] * nvir + idxvb
+    # idxvba = idxvb[:,None] * nvir + idxva
+    # idxvbb = idxvb[:,None] * nvir + idxvb
     r2aaa = r2aaa.reshape(nocc_a*nocc_a, nvir_a)
     r2baa = r2baa.reshape(nocc_b*nocc_a, nvir_a)
     r2abb = r2abb.reshape(nocc_a*nocc_b, nvir_b)
@@ -1309,7 +1309,7 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     Hr2bb+= lib.einsum('eb,ijae->ijab', tmpb, t2bb)
     Hr2ab+= lib.einsum('EB,iJaE->iJaB', tmpb, t2ab)
     Hr2ab+= lib.einsum('eb,iJeA->iJbA', tmpa, t2ab)
-    eirs_ovov = eris_ovOV = eris_OVOV = None
+    eris_ovOV = eris_OVOV = None
 
     Hr2aa-= lib.einsum('mbij,ma->ijab', imds.wovoo, r1a)
     Hr2bb-= lib.einsum('mbij,ma->ijab', imds.wOVOO, r1b)
@@ -1629,13 +1629,11 @@ def eeccsd_diag(eom, imds=None):
     iJB =-np.einsum('ieJB,iJeB->iJB', eris_ovOV, t2ab)
     Ijb =-np.einsum('jbIE,jIbE->Ijb', eris_ovOV, t2ab)
     iJb =-np.einsum('ibJE,iJbE->iJb', eris_ovOV, t2ab)
-    IjB =-np.einsum('jeIB,jIeB->IjB', eris_ovOV, t2ab)
     jab = np.einsum('kajb,jkab->jab',      ovov, t2aa)
     JAB = np.einsum('kajb,jkab->jab',      OVOV, t2bb)
     jAb =-np.einsum('jbKA,jKbA->jAb', eris_ovOV, t2ab)
     JaB =-np.einsum('kaJB,kJaB->JaB', eris_ovOV, t2ab)
     jaB =-np.einsum('jaKB,jKaB->jaB', eris_ovOV, t2ab)
-    JAb =-np.einsum('kbJA,kJbA->JAb', eris_ovOV, t2ab)
     eris_ovov = eris_ovOV = eris_OVOV = ovov = OVOV = None
     Hr2aa = lib.direct_sum('ijb+a->ijba', ijb, Fva)
     Hr2bb = lib.direct_sum('ijb+a->ijba', IJB, Fvb)
@@ -2693,12 +2691,8 @@ def enforce_symm_2p_spin(r1, r2, orbspin, excitation):
     idxvb = np.where(orbspin[nocc:] == 1)[0]
 
     idxoaa = idxoa[:,None] * nocc + idxoa
-    idxoab = idxoa[:,None] * nocc + idxob
-    idxoba = idxob[:,None] * nocc + idxoa
     idxobb = idxob[:,None] * nocc + idxob
     idxvaa = idxva[:,None] * nvir + idxva
-    idxvab = idxva[:,None] * nvir + idxvb
-    idxvba = idxvb[:,None] * nvir + idxva
     idxvbb = idxvb[:,None] * nvir + idxvb
 
     if excitation == 'ip':
@@ -2727,7 +2721,6 @@ def enforce_symm_2p_spin_ea(r1, r2, orbspin):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import ao2mo
     #from pyscf import scf
     #from pyscf.cc import rccsd
 
@@ -2793,13 +2786,13 @@ if __name__ == '__main__':
     r1, r2 = spin2spatial_ip(r1, r2, orbspin)
 
     vector = myeom.amplitudes_to_vector(r1, r2)
-#    r1x, r2x = myeom.vector_to_amplitudes(vector)
-#    print(abs(r1[0]-r1x[0]).max())
-#    print(abs(r1[1]-r1x[1]).max())
-#    print(abs(r2[0]-r2x[0]).max())
-#    print(abs(r2[1]-r2x[1]).max())
-#    print(abs(r2[2]-r2x[2]).max())
-#    print(abs(r2[3]-r2x[3]).max())
+    r1x, r2x = myeom.vector_to_amplitudes(vector)
+    print(abs(r1[0]-r1x[0]).max() < 1e-13 and
+          abs(r1[1]-r1x[1]).max() < 1e-13 and
+          abs(r2[0]-r2x[0]).max() < 1e-13 and
+          abs(r2[1]-r2x[1]).max() < 1e-13 and
+          abs(r2[2]-r2x[2]).max() < 1e-13 and
+          abs(r2[3]-r2x[3]).max() < 1e-13)
     Hvector = myeom.matvec(vector, imds=imds)
     print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
     print('diag', lib.finger(myeom.get_diag()) - (-9.6676217223549763+9.325219825942975j))
@@ -2816,24 +2809,24 @@ if __name__ == '__main__':
     r1, r2 = spin2spatial_ea(r1, r2, orbspin)
 
     vector = myeom.amplitudes_to_vector(r1, r2)
-#    r1x, r2x = myeom.vector_to_amplitudes(vector)
-#    print(abs(r1[0]-r1x[0]).max())
-#    print(abs(r1[1]-r1x[1]).max())
-#    print(abs(r2[0]-r2x[0]).max())
-#    print(abs(r2[1]-r2x[1]).max())
-#    print(abs(r2[2]-r2x[2]).max())
-#    print(abs(r2[3]-r2x[3]).max())
+    r1x, r2x = myeom.vector_to_amplitudes(vector)
+    print(abs(r1[0]-r1x[0]).max() < 1e-13 and
+          abs(r1[1]-r1x[1]).max() < 1e-13 and
+          abs(r2[0]-r2x[0]).max() < 1e-13 and
+          abs(r2[1]-r2x[1]).max() < 1e-13 and
+          abs(r2[2]-r2x[2]).max() < 1e-13 and
+          abs(r2[3]-r2x[3]).max() < 1e-13)
     Hvector = myeom.matvec(vector, imds=imds)
     print('ea', lib.finger(Hvector) - (6.5543877287461187-13.175055314063574j))
     print('diag', lib.finger(myeom.get_diag()) - (-57.353207240857785+1.4052857730841204j))
 
-    #mycc = rccsd.RCCSD(mf)
-    #ecc, t1, t2 = mycc.kernel()
-    #print(ecc - -0.21334326214236796)
-
-   # myeom = EOMIP(mycc)
-   # print("IP energies... (right eigenvector)")
-   # e,v = myeom.ipccsd(nroots=2)
-    #assert(abs(e[0] - 0.3092874788775446) < 1e-10)
-    #print(e[1] - 0.3092874632094273)
-    #print(e[2] - 0.4011171508707691)
+    mycc = uccsd.UCCSD(mol.UHF().run())
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.04946750711013597)
+    e,v = mycc.ipccsd(nroots=6)
+    print(e[0] - 0.3092874511803249)
+    print(e[1] - 0.3092874511803249)
+    print(e[2] - 0.4011171373779585)
+    print(e[3] - 0.4011171373779585)
+    print(e[4] - 0.6107409208314764)
+    print(e[5] - 0.6107409208314764)

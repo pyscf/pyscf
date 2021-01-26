@@ -134,7 +134,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     j2c = None
     naoaux, naux = low.shape
     log.debug('size of aux basis %d', naux)
-    t1 = log.timer_debug1('2c2e', *t0)
+    log.timer_debug1('2c2e', *t0)
 
     int3c = gto.moleintor.ascint3(mol._add_suffix(int3c))
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -902,8 +902,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                '    mf_hf = mol.HF()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
