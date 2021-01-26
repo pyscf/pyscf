@@ -3,7 +3,7 @@
 # This code was copied from the data generation program of Tencent Alchemy
 # project (https://github.com/tencent-alchemy).
 #
-# 
+#
 # #
 # # Copyright 2019 Tencent America LLC. All Rights Reserved.
 # #
@@ -247,18 +247,20 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             h1ao = hcore_deriv(ia, ja)
             e1[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
 
+#
 # The first order RI basis response
 #    (10|1)(0|00)
 #    (10|0)(1|0)(0|00)
 #    (10|0)(0|1)(0|00)
 #    (10|0)(1|00)
+#
         if hessobj.auxbasis_response:
             wk1_Pij = rho_ip1[p0:p1].transpose(2,3,0,1)
             rhoj1_P = np.einsum('pxij,ji->px', wk1_Pij, dm0[:,p0:p1])
-#    (10|1)(0|0)(0|00)
+            # (10|1)(0|0)(0|00)
             int3c_ip1ip2 = get_int3c_ip1ip2(shls_slice)
             wj11_p = np.einsum('xijp,ji->xp', int3c_ip1ip2, dm0[:,p0:p1])
-#    (10|0)(1|0)(0|00)
+            # (10|0)(1|0)(0|00)
             wj0_01 = np.einsum('ypq,q->yp', int2c_ip1, rhoj0_P)
             if with_k:
                 rhok0_P_I = lib.einsum('plj,il->pji', rhok0a_Pl_, dm0a[p0:p1])
@@ -270,13 +272,13 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                 wk1_IpJ+= lib.einsum('ipyk,kj->ipyj', wkb_ip2_Ipk[p0:p1], dm0b)
                 rho2c_PQ = lib.einsum('pxij,qji->xqp', wk1_Pij, rhok0_PJI)
             for j0, (q0, q1) in enumerate(auxslices[:,2:]):
-#    (10|1)(0|00)
+                # (10|1)(0|00)
                 _ej  = np.einsum('xp,p->x', wj11_p[:,q0:q1], rhoj0_P[q0:q1]).reshape(3,3)
-#    (10|0)(0|1)(0|00)
+                # (10|0)(0|1)(0|00)
                 _ej -= lib.einsum('yqp,q,px->xy', int2c_ip1[:,q0:q1], rhoj0_P[q0:q1], rhoj1_P)
-#    (10|0)(1|0)(0|00)
+                # (10|0)(1|0)(0|00)
                 _ej -= lib.einsum('px,yp->xy', rhoj1_P[q0:q1], wj0_01[:,q0:q1])
-#    (10|0)(1|00)
+                # (10|0)(1|00)
                 _ej += lib.einsum('px,py->xy', rhoj1_P[q0:q1], wj_ip2[q0:q1])
                 if hessobj.auxbasis_response > 1:
                     ej[i0,j0] += _ej * 2
@@ -298,10 +300,12 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                         ek[j0,i0] += _ek.T
             int3c_ip1ip2 = None
 
+#
 # The second order RI basis response
+#
         if hessobj.auxbasis_response > 1:
-#    (00|2)(0|00)
-#    (00|0)(2|0)(0|00)
+            # (00|2)(0|00)
+            # (00|0)(2|0)(0|00)
             shl0, shl1, p0, p1 = auxslices[ia]
             shls_slice = (0, nbas, 0, nbas, shl0, shl1)
             int3c_ipip2 = get_int3c_ipip2(shls_slice)
@@ -314,24 +318,24 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                 ek[i0,i0] += np.einsum('xijp,pij->x', int3c_ipip2, rhok0_PJI).reshape(3,3)
                 ek[i0,i0] -= np.einsum('pq,xpq->x', rho2c_0[p0:p1], int2c_ipip1[:,p0:p1]).reshape(3,3)
                 rhok0_PJI = None
-#    (00|0)(1|1)(0|00)
-#    (00|1)(1|0)(0|00)
-#    (00|1)(0|1)(0|00)
-#    (00|1)(1|00)
-            rhoj1 = lib.einsum('px,pq->xq', wj_ip2[p0:p1], int2c_inv[p0:p1])
-#    (00|0)(0|1)(1|0)(0|00)
-            rhoj0_01 = lib.einsum('xp,pq->xq', wj0_01[:,p0:p1], int2c_inv[p0:p1])
-#    (00|0)(1|0)(1|0)(0|00)
-            ip1_2c_2c = lib.einsum('xpq,qr->xpr', int2c_ip1[:,p0:p1], int2c_inv)
-            rhoj0_10 = lib.einsum('p,xpq->xq', rhoj0_P[p0:p1], ip1_2c_2c)
+                # (00|0)(1|1)(0|00)
+                # (00|1)(1|0)(0|00)
+                # (00|1)(0|1)(0|00)
+                # (00|1)(1|00)
+                rhoj1 = lib.einsum('px,pq->xq', wj_ip2[p0:p1], int2c_inv[p0:p1])
+                # (00|0)(0|1)(1|0)(0|00)
+                rhoj0_01 = lib.einsum('xp,pq->xq', wj0_01[:,p0:p1], int2c_inv[p0:p1])
+                # (00|0)(1|0)(1|0)(0|00)
+                ip1_2c_2c = lib.einsum('xpq,qr->xpr', int2c_ip1[:,p0:p1], int2c_inv)
+                rhoj0_10 = lib.einsum('p,xpq->xq', rhoj0_P[p0:p1], ip1_2c_2c)
             if with_k:
-#    (00|0)(0|1)(1|0)(0|00)
+                # (00|0)(0|1)(1|0)(0|00)
                 ip1_rho2c = .5 * lib.einsum('xpq,qr->xpr', int2c_ip1[:,p0:p1], rho2c_0)
                 rho2c_1  = lib.einsum('xrq,rp->xpq', ip1_rho2c, int2c_inv[p0:p1])
-#    (00|0)(1|0)(1|0)(0|00)
+                # (00|0)(1|0)(1|0)(0|00)
                 rho2c_1 += lib.einsum('xrp,rq->xpq', ip1_2c_2c, rho2c_0[p0:p1])
-#    (00|1)(0|1)(0|00)
-#    (00|1)(1|0)(0|00)
+                # (00|1)(0|1)(0|00)
+                # (00|1)(1|0)(0|00)
                 int3c_ip2 = get_int3c_ip2(shls_slice)
                 tmp = lib.einsum('xuvr,vj,ui,qij,rp->xpq', int3c_ip2,
                                  mocca, mocca, rhok0a_P__, int2c_inv[p0:p1])
@@ -342,31 +346,31 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                 int3c_ip2 = tmp = None
             for j0, (q0, q1) in enumerate(auxslices[:,2:]):
                 _ej  = 0
-#    (00|0)(1|1)(0|00)
-#    (00|0)(1|0)(0|1)(0|00)
+                # (00|0)(1|1)(0|00)
+                # (00|0)(1|0)(0|1)(0|00)
                 _ej += .5 * np.einsum('p,xypq,q->xy', rhoj0_P[p0:p1], int2c_ip_ip[:,:,p0:p1,q0:q1], rhoj0_P[q0:q1])
-#    (00|1)(1|0)(0|00)
+                # (00|1)(1|0)(0|00)
                 _ej -= lib.einsum('xp,yp->xy', rhoj1[:,q0:q1], wj0_01[:,q0:q1])
-#    (00|1)(1|00)
+                # (00|1)(1|00)
                 _ej += .5 * lib.einsum('xp,py->xy', rhoj1[:,q0:q1], wj_ip2[q0:q1])
-#    (00|0)(0|1)(1|0)(0|00)
+                # (00|0)(0|1)(1|0)(0|00)
                 _ej += .5 * np.einsum('xp,yp->xy', rhoj0_01[:,q0:q1], wj0_01[:,q0:q1])
-#    (00|1)(0|1)(0|00)
+                # (00|1)(0|1)(0|00)
                 _ej -= lib.einsum('yqp,q,xp->xy', int2c_ip1[:,q0:q1], rhoj0_P[q0:q1], rhoj1)
-#    (00|0)(1|0)(1|0)(0|00)
+                # (00|0)(1|0)(1|0)(0|00)
                 _ej += np.einsum('xp,yp->xy', rhoj0_10[:,q0:q1], wj0_01[:,q0:q1])
                 ej[i0,j0] += _ej
                 ej[j0,i0] += _ej.T
                 if with_k:
-#    (00|0)(1|1)(0|00)
-#    (00|0)(1|0)(0|1)(0|00)
+                    # (00|0)(1|1)(0|00)
+                    # (00|0)(1|0)(0|1)(0|00)
                     _ek  = .5 * np.einsum('pq,xypq->xy', rho2c_0[p0:p1,q0:q1], int2c_ip_ip[:,:,p0:p1,q0:q1])
-#    (00|1)(0|1)(0|00)
-#    (00|1)(1|0)(0|00)
-#    (00|0)(0|1)(1|0)(0|00)
-#    (00|0)(1|0)(1|0)(0|00)
+                    # (00|1)(0|1)(0|00)
+                    # (00|1)(1|0)(0|00)
+                    # (00|0)(0|1)(1|0)(0|00)
+                    # (00|0)(1|0)(1|0)(0|00)
                     _ek += np.einsum('xpq,ypq->xy', rho2c_1[:,q0:q1], int2c_ip1[:,q0:q1])
-#    (00|1)(1|00)
+                    # (00|1)(1|00)
                     _ek += .5 * lib.einsum('pxij,pq,qyij->xy', wka_ip2_P__[p0:p1],
                                            int2c_inv[p0:p1,q0:q1], wka_ip2_P__[q0:q1])
                     _ek += .5 * lib.einsum('pxij,pq,qyij->xy', wkb_ip2_P__[p0:p1],

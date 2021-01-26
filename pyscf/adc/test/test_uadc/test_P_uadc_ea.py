@@ -43,7 +43,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.14132152692445013, 6)
 
         myadcea = adc.uadc.UADCEA(myadc) 
@@ -59,9 +59,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2x(self):
         myadc.method = "adc(2)-x"
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.14132152692445013, 6)
-
+        myadc.kernel_gs()
         myadcea = adc.uadc.UADCEA(myadc) 
         e,v,p = myadcea.kernel(nroots=3)
 
@@ -75,7 +73,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc3(self):
         myadc.method = "adc(3)"
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295977562, 6)
 
         myadcea = adc.uadc.UADCEA(myadc) 

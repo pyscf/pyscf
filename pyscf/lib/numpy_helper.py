@@ -500,7 +500,7 @@ def take_2d(a, idx, idy, out=None):
        ctypes.c_int(idx.size), ctypes.c_int(idy.size))
     return out
 
-def takebak_2d(out, a, idx, idy):
+def takebak_2d(out, a, idx, idy, thread_safe=True):
     '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
     for a 2D array.
 
@@ -514,21 +514,27 @@ def takebak_2d(out, a, idx, idy):
     '''
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
-    idx = numpy.asarray(idx, dtype=numpy.int32)
-    idy = numpy.asarray(idy, dtype=numpy.int32)
-    if a.dtype == numpy.double:
+    if out.dtype != a.dtype:
+        a = a.astype(out.dtype)
+    if out.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif a.dtype == numpy.complex:
+    elif out.dtype == numpy.complex:
         fn = _np_helper.NPztakebak_2d
     else:
-        out[idx[:,None], idy] += a
+        if thread_safe:
+            out[idx[:,None], idy] += a
+        else:
+            raise NotImplementedError
         return out
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
        idy.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(out.shape[1]), ctypes.c_int(a.shape[1]),
-       ctypes.c_int(idx.size), ctypes.c_int(idy.size))
+       ctypes.c_int(idx.size), ctypes.c_int(idy.size),
+       ctypes.c_int(thread_safe))
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):
@@ -1005,31 +1011,36 @@ def direct_sum(subscripts, *operands):
     out.flags.writeable = True  # old numpy has this issue
     return out
 
-def condense(opname, a, locs):
+def condense(opname, a, loc_x, loc_y=None):
     '''
     .. code-block:: python
 
-        nd = loc[-1]
-        out = numpy.empty((nd,nd))
-        for i,i0 in enumerate(loc):
-            i1 = loc[i+1]
-            for j,j0 in enumerate(loc):
-                j1 = loc[j+1]
+        for i,i0 in enumerate(loc_x):
+            i1 = loc_x[i+1]
+            for j,j0 in enumerate(loc_y):
+                j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1,j0:j1])
-        return out
     '''
-    assert(a.flags.c_contiguous)
     assert(a.dtype == numpy.double)
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
     op = getattr(_np_helper, opname)
-    locs = numpy.asarray(locs, numpy.int32)
-    nloc = locs.size - 1
-    out = numpy.empty((nloc,nloc))
+    if loc_y is None:
+        loc_y = loc_x
+    loc_x = numpy.asarray(loc_x, numpy.int32)
+    loc_y = numpy.asarray(loc_y, numpy.int32)
+    nloc_x = loc_x.size - 1
+    nloc_y = loc_y.size - 1
+    if a.flags.f_contiguous:
+        out = numpy.zeros((nloc_x, nloc_y), order='F')
+    else:
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
-                          locs.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc))
+                          loc_x.ctypes.data_as(ctypes.c_void_p),
+                          loc_y.ctypes.data_as(ctypes.c_void_p),
+                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
     return out
 
 def expm(a):

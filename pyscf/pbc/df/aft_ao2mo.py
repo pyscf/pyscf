@@ -75,15 +75,15 @@ def get_eri(mydf, kpts=None,
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
-# rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
+            # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             zdotNC(pqkR*coulG[p0:p1], pqkI*coulG[p0:p1], pqkR.T, pqkI.T,
                    1, eriR, eriI, 1)
             pqkR = pqkI = None
         pqkR = pqkI = coulG = None
-# transpose(0,1,3,2) because
-# j == k && i == l  =>
-# (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
-# rho_rs(-G+k_rs) = conj(transpose(rho_sr(G+k_sr), (0,2,1)))
+        # transpose(0,1,3,2) because
+        # j == k && i == l  =>
+        # (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
+        # rho_rs(-G+k_rs) = conj(transpose(rho_sr(G+k_sr), (0,2,1)))
         eri = lib.transpose((eriR+eriI*1j).reshape(-1,nao,nao), axes=(0,2,1))
         return eri.reshape(nao**2,-1)
 

@@ -48,7 +48,7 @@ IRREP_MAP = {'D2h': (1,         # Ag
              'C1' : (1,)}
 
 def d2h_subgroup(gpname):
-    if gpname.lower() == 'dooh':
+    if gpname.lower() in ('dooh', 'so3'):
         gpname = 'D2h'
     elif gpname.lower() == 'coov':
         gpname = 'C2v'
@@ -64,7 +64,7 @@ def irrep_name2id(gpname, symb):
 def convert_orbsym(gpname, orbsym):
     '''Convert orbital symmetry irrep_id to Block internal irrep_id
     '''
-    if gpname.lower() == 'dooh':
+    if gpname.lower() in ('dooh', 'so3'):
         orbsym = [IRREP_MAP['D2h'][i % 10] for i in orbsym]
     elif gpname.lower() == 'coov':
         orbsym = [IRREP_MAP['C2h'][i % 10] for i in orbsym]
@@ -108,7 +108,9 @@ LZSYM_MAP = (
 def convert_lzsym(gpname, orbsym):
     '''Convert orbital symmetry irrep_id to Block internal irrep_id
     '''
-    if gpname.lower() == 'dooh':
+    if gpname.lower() == 'so3':
+        orbsym = [LZSYM_MAP[i % 100] for i in orbsym]
+    elif gpname.lower() in 'dooh':
         orbsym = [LZSYM_MAP[i] for i in orbsym]
     elif gpname.lower() == 'coov':
         raise NotImplementedError

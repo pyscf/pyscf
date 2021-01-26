@@ -128,7 +128,6 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         else:
             mu = mu0
             mo_occs = f = f_occ(mu, mo_es, sigma)
-            
 
         # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
         if mf.smearing_method.lower() == 'fermi':
@@ -398,7 +397,8 @@ def convert_to_ghf(mf, out=None):
                 for k in range(nkpts):
                     if is_rhf:
                         mo_a = mo_b = mf.mo_coeff[k]
-                        ea = eb = mf.mo_energy[k]
+                        ea = getattr(mf.mo_energy[k], 'mo_ea', mf.mo_energy[k])
+                        eb = getattr(mf.mo_energy[k], 'mo_eb', mf.mo_energy[k])
                         occa = mf.mo_occ[k] > 0
                         occb = mf.mo_occ[k] == 2
                         orbspin = mol_addons.get_ghf_orbspin(ea, mf.mo_occ[k], True)

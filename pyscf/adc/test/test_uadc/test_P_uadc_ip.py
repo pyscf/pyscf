@@ -43,7 +43,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 
@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
         myadc.method = "adc(2)-x"
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 
@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc3(self):
         myadc.method = "adc(3)"
-        e, t_amp1, t_amp2 = myadc.kernel()
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295970712, 6)
 
         myadcip = adc.uadc.UADCIP(myadc) 

@@ -418,7 +418,7 @@ def canonical_orth_(S, thr=1e-7):
     X = numpy.dot(numpy.diag(normlz), X)
     return X
 
-def partial_cholesky_orth_(S, cholthr=1e-9, canthr=1e-7):
+def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     '''Partial Cholesky orthogonalization for curing overcompleteness.
 
     References:
@@ -492,7 +492,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         def eigh(h, s):
-            x = partial_cholesky_orth_(s, threshold, cholesky_threshold)
+            x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
@@ -532,16 +532,21 @@ def convert_to_uhf(mf, out=None, remove_df=False):
                 mf1.mo_occ = mf.mo_occ
                 mf1.mo_coeff = mf.mo_coeff
                 mf1.mo_energy = mf.mo_energy
-            elif getattr(mf, 'kpts', None) is None:  # UHF
+            elif getattr(mf, 'kpts', None) is None:  # RHF/ROHF
                 mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
-                mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+                # ROHF orbital energies, not canonical UHF orbital energies
+                mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
+                mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
+                mf1.mo_energy = (mo_ea, mo_eb)
                 mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
             else:  # This to handle KRHF object
                 mf1.mo_occ = ([numpy.asarray(occ> 0, dtype=numpy.double)
                                for occ in mf.mo_occ],
                               [numpy.asarray(occ==2, dtype=numpy.double)
                                for occ in mf.mo_occ])
-                mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+                mo_ea = getattr(mf.mo_energy, 'mo_ea', mf.mo_energy)
+                mo_eb = getattr(mf.mo_energy, 'mo_eb', mf.mo_energy)
+                mf1.mo_energy = (mo_ea, mo_eb)
                 mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
         return mf1
 

@@ -33,7 +33,11 @@ cell.rcut = 17
 cell.build(0,0)
 nao = cell.nao_nr()
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell
+    del cell
+
+class KnownValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])

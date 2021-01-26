@@ -412,6 +412,17 @@ def format_basis(basis_tab):
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
     '''
+    basis_converter = _generate_basis_converter()
+    fmt_basis = {}
+    for atom, atom_basis in basis_tab.items():
+        symb = _atom_symbol(atom)
+        fmt_basis[symb] = basis_converter(symb, atom_basis)
+
+        if len(fmt_basis[symb]) == 0:
+            raise BasisNotFoundError('Basis not found for  %s' % symb)
+    return fmt_basis
+
+def _generate_basis_converter():
     def nparray_to_list(item):
         val = []
         for x in item:
@@ -423,35 +434,29 @@ def format_basis(basis_tab):
                 val.append(x)
         return val
 
-    def convert(basis_name, symb):
+    def load(basis_name, symb):
         if basis_name.lower().startswith('unc'):
             return uncontract(basis.load(basis_name[3:], symb))
         else:
             return basis.load(basis_name, symb)
 
-    fmt_basis = {}
-    for atom, atom_basis in basis_tab.items():
-        symb = _atom_symbol(atom)
-        stdsymb = _std_symbol_without_ghost(symb)
-
-        if isinstance(atom_basis, (str, unicode)):
-            bset = convert(str(atom_basis), stdsymb)
-        elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
+    def converter(symb, raw_basis):
+        if isinstance(raw_basis, (str, unicode)):
+            bset = load(str(raw_basis), _std_symbol_without_ghost(symb))
+        elif (any(isinstance(x, (str, unicode)) for x in raw_basis)
               # The first element is the basis of internal format
-              or not isinstance(atom_basis[0][0], int)):
+              or not isinstance(raw_basis[0][0], int)):
+            stdsymb = _std_symbol_without_ghost(symb)
             bset = []
-            for rawb in atom_basis:
+            for rawb in raw_basis:
                 if isinstance(rawb, (str, unicode)):
-                    bset += convert(str(rawb), stdsymb)
+                    bset += load(str(rawb), stdsymb)
                 else:
                     bset += nparray_to_list(rawb)
         else:
-            bset = nparray_to_list(atom_basis)
-        fmt_basis[symb] = bset
-
-        if len(fmt_basis[symb]) == 0:
-            raise BasisNotFoundError('Basis not found for  %s' % symb)
-    return fmt_basis
+            bset = nparray_to_list(raw_basis)
+        return bset
+    return converter
 
 def uncontracted_basis(_basis):
     '''Uncontract internal format _basis
@@ -1821,15 +1826,18 @@ def atom_mass_list(mol, isotope_avg=False):
 
     return numpy.array(mass)
 
-def condense_to_shell(mol, mat, compressor=numpy.max):
+def condense_to_shell(mol, mat, compressor='max'):
     '''The given matrix is first partitioned to blocks, based on AO shell as
-    delimiter.  Then call compressor function to abstract each block.
+    delimiter. Then call compressor function to abstract each block.
     '''
     ao_loc = mol.ao_loc_nr()
-    abstract = numpy.empty((mol.nbas,mol.nbas))
-    for i, i0 in enumerate(ao_loc[:mol.nbas]):
-        for j, j0 in enumerate(ao_loc[:mol.nbas]):
-            abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    if callable(compressor):
+        abstract = numpy.empty((mol.nbas, mol.nbas))
+        for i, i0 in enumerate(ao_loc[:mol.nbas]):
+            for j, j0 in enumerate(ao_loc[:mol.nbas]):
+                abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    else:
+        abstract = lib.condense(compressor, mat, ao_loc)
     return abstract
 
 
@@ -1997,8 +2005,8 @@ class Mole(lib.StreamObject):
         topgroup : str
             Point group of the system.
         groupname : str
-            The supported subgroup of the point group. It can be one of Dooh,
-            Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+            The supported subgroup of the point group. It can be one of SO3,
+            Dooh, Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
         nelectron : int
             sum of nuclear charges - :attr:`Mole.charge`
         symm_orb : a list of numpy.ndarray
@@ -2232,6 +2240,7 @@ class Mole(lib.StreamObject):
     copy = copy
 
     pack = pack
+
     @lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
@@ -2240,6 +2249,7 @@ class Mole(lib.StreamObject):
         return self
 
     dumps = dumps
+
     @lib.with_doc(loads.__doc__)
     def loads(self, molstr):
         return loads(molstr)
@@ -2587,7 +2597,7 @@ class Mole(lib.StreamObject):
                     if nprim < nctr:
                         logger.warn(self, 'num. primitives smaller than num. contracted basis')
                     self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
-                                      % (b[0], kappa, nprim, nprim, nctr))
+                                      % (b[0], kappa, nprim, nctr))
                     for k, x in enumerate(b_coeff):
                         if k == 0:
                             self.stdout.write('%-15.12g  ' % x[0])

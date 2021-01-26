@@ -370,8 +370,15 @@ def init_guess_by_minao(mol):
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
+            if symb in mol._basis:
+                input_basis = mol._basis[symb]
+            elif stdsymb in mol._basis:
+                input_basis = mol._basis[stdsymb]
+            else:
+                raise KeyError(symb)
+
             basis4ecp = [[] for i in range(4)]
-            for bas in mol._basis[symb]:
+            for bas in input_basis:
                 l = bas[0]
                 if l < 4:
                     basis4ecp[l].append(bas)
@@ -1098,8 +1105,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
 
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
