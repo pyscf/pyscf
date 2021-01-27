@@ -935,20 +935,20 @@ del(SVD_TOL)
 def _force_SO3_degeneracy_(dr, orbsym):
     '''Force orbitals of same angular momentum to use the same rotation matrix'''
     orbsym = numpy.asarray(orbsym)
-    orbsym_l = orbsym % 100
+    orbsym_l = orbsym // 100
     lmax = max(orbsym_l)
 
     for l in range(lmax + 1):
         idx_l = numpy.where(orbsym_l == l)[0]
-        nso_l = dix_l.size
+        nso_l = idx_l.size
         if nso_l > 0:
             degen = l * 2 + 1
-            nso_m = nso_l / degen
-            dr_l = dr[idx[:,None],idx].reshape(degen, nso_m, degen, nso_m)
+            nso_m = nso_l // degen
+            dr_l = dr[idx_l[:,None],idx_l].reshape(degen, nso_m, degen, nso_m)
             dr_avg = numpy.einsum('ipiq->pq', dr_l) / degen
             for m in range(degen):
                 dr_l[m,:,m,:] = dr_avg
-            dr[idx[:,None],idx] = dr_l.reshape(nso_l, nso_l)
+            dr[idx_l[:,None],idx_l] = dr_l.reshape(nso_l, nso_l)
     return dr
 
 def _force_Ex_Ey_degeneracy_(dr, orbsym):

@@ -192,6 +192,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
             convention as documented in
             https://www.molpro.net/info/current/doc/manual/node36.html
     '''
+    mol = mf.mol
     mo_coeff = mf.mo_coeff
     assert mo_coeff.dtype == numpy.double
 
