@@ -36,6 +36,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log = logger.new_logger(mycc, verbose)
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
+    assert t1.dtype == np.double
+    assert t2.dtype == np.double
 
     nocc, nvir = t1.shape
     nmo = nocc + nvir

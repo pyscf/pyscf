@@ -227,8 +227,6 @@ class RCCSD(ccsd.CCSD):
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
-        assert(t1.dtype == np.double)
-        assert(t2.dtype == np.double)
         return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
     def density_fit(self, auxbasis=None, with_df=None):

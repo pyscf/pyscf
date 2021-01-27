@@ -30,7 +30,7 @@ from pyscf.lib import logger
 from pyscf.scf import ucphf
 from pyscf.scf import _response_functions
 from pyscf.dft import numint
-from psycf.ao2mo import _ao2mo
+from pyscf.ao2mo import _ao2mo
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
 from pyscf.data import nist
