@@ -24,7 +24,7 @@ from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
 from pyscf import fci
-from pyscf.soscf.newton_ah import _force_Ex_Ey_degeneracy_
+from pyscf.soscf.newton_ah import _force_SO3_degeneracy_, _force_Ex_Ey_degeneracy_
 
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
@@ -125,7 +125,9 @@ def _symmetrize(mat, orbsym, groupname):
     allowed = orbsym.reshape(-1,1) == orbsym
     mat1[allowed] = mat[allowed]
 
-    if groupname in ('Dooh', 'Coov'):
+    if groupname == 'SO3':
+        _force_SO3_degeneracy_(mat1, orbsym)
+    elif groupname in ('Dooh', 'Coov'):
         _force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 

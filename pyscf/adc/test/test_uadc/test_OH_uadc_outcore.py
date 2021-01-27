@@ -44,28 +44,32 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_ip_adc2(self):
+    def test_ea_adc2(self):
   
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.16402828164387906, 6)
+        myadc.max_memory = 50
+        myadc.method_type = "ea"
+        e,v,p = myadc.kernel(nroots=3)
+        e_corr = myadc.e_corr
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        self.assertAlmostEqual(e_corr, -0.16402828164387806, 6)
 
-        self.assertAlmostEqual(e[0], 0.4342864327917968, 6)
-        self.assertAlmostEqual(e[1], 0.47343844767816784, 6)
-        self.assertAlmostEqual(e[2], 0.5805631452815511, 6)
+        self.assertAlmostEqual(e[0], -0.048666915263496924, 6)
+        self.assertAlmostEqual(e[1], 0.030845983085818485, 6)
+        self.assertAlmostEqual(e[2], 0.03253522816723711, 6)
 
-        self.assertAlmostEqual(p[0], 0.9066975034860368, 6)
-        self.assertAlmostEqual(p[1], 0.8987660491377468, 6)
-        self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
+        self.assertAlmostEqual(p[0], 0.9228959646746451, 6)
+        self.assertAlmostEqual(p[1], 0.9953781149964537, 6)
+        self.assertAlmostEqual(p[2], 0.9956169835481459, 6)
+
 
     def test_ip_adc2x(self):
   
+        myadc.max_memory = 50
+        myadc.incore_complete = False
         myadc.method = "adc(2)-x"
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.16402828164387906, 6)
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        myadc.method_type = "ip"
+        e,v,p = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4389083582117278, 6)
         self.assertAlmostEqual(e[1], 0.45720829251439343, 6)
@@ -75,34 +79,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
         self.assertAlmostEqual(p[2], 0.212879313736106, 6)
 
-    def test_ip_adc3(self):
+
+    def test_ea_adc3(self):
   
+        myadc.max_memory = 60
+        myadc.incore_complete = False
         myadc.method = "adc(3)"
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.17616203329072194, 6)
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.17616203329072136, 6)
 
-        e,v,p = myadc.ip_adc(nroots=3)
+        myadc.method_type = "ea"
+        e,v,p = myadc.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.4794423247368058, 6)
-        self.assertAlmostEqual(e[1], 0.4872370596653387, 6)
-        self.assertAlmostEqual(e[2], 0.5726961805214643, 6)
+        self.assertAlmostEqual(e[0], -0.045097652872531736, 6)
+        self.assertAlmostEqual(e[1], 0.03004291636971322, 6)
+        self.assertAlmostEqual(e[2], 0.03153897437644345, 6)
 
-        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
-        self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
-        self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
+        self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
+        self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
+        self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
+
       
-    def test_ip_adc3_oneroot(self):
-  
-        myadc.method = "adc(3)"
-        e, t_amp1, t_amp2 = myadc.kernel()
-        self.assertAlmostEqual(e, -0.17616203329072194, 6)
-
-        e,v,p = myadc.ip_adc(nroots=1)
-
-        self.assertAlmostEqual(e, 0.4794423247368058, 6)
-
-        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
-
 if __name__ == "__main__":
-    print("IP calculations for different ADC methods for open-shell molecule")
+    print("Out-of-core EA and IP calculations for different UADC methods for open-shell molecule OH")
     unittest.main()

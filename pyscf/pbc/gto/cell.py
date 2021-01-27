@@ -24,9 +24,9 @@ import warnings
 import numpy as np
 import scipy.linalg
 try:
-  from scipy.special import factorial2
+    from scipy.special import factorial2
 except:
-  from scipy.misc import factorial2
+    from scipy.misc import factorial2
 from scipy.special import erf, erfc
 import scipy.optimize
 import pyscf.lib.parameters as param
@@ -592,21 +592,7 @@ def get_Gv(cell, mesh=None, **kwargs):
         Gv : (ngrids, 3) ndarray of floats
             The array of G-vectors.
     '''
-    if mesh is None:
-        mesh = cell.mesh
-    if 'gs' in kwargs:
-        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
-                      'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in kwargs['gs']]
-
-    gx = np.fft.fftfreq(mesh[0], 1./mesh[0])
-    gy = np.fft.fftfreq(mesh[1], 1./mesh[1])
-    gz = np.fft.fftfreq(mesh[2], 1./mesh[2])
-    gxyz = lib.cartesian_prod((gx, gy, gz))
-
-    b = cell.reciprocal_vectors()
-    Gv = lib.ddot(gxyz, b)
-    return Gv
+    return get_Gv_weights(cell, mesh, **kwargs)[0]
 
 def get_Gv_weights(cell, mesh=None, **kwargs):
     '''Calculate G-vectors and weights.

@@ -66,11 +66,16 @@ C, 0.8917,  2.6751,  2.6751'''
         self.assertAlmostEqual(e1, -45.42583489512954, 8)
 
     def test_rsh_df(self):
+        mf = pbcdft.KUKS(cell)
+        mf.xc = 'camb3lyp'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
+
         mf = pbcdft.KUKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
 
 
 if __name__ == '__main__':

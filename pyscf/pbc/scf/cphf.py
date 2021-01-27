@@ -84,7 +84,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
         return np.hstack(v)
 
     _mo1 = lib.krylov(vind_vo, mo1base,
-                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log).flatten()
+                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log).flatten()
     log.timer('krylov solver in CPHF', *t0)
     mo1 = []
     for k in range(nkpt):

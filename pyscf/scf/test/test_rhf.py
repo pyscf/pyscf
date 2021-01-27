@@ -155,6 +155,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm), -9.0532680910696772, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 31.804465975542513, 9)
 
+        mol = gto.M(atom=[['Mg',(0, 0, 0)], ['!Mg',(0, 1, 0)], ['O',(0, 0, 1)]],
+                    basis={'O': 'sto3g', 'Mg': 'sto3g'},
+                    ecp='lanl2dz')
+        dm = mol.RHF().init_guess_by_minao()
+        self.assertAlmostEqual(lib.fp(dm), -0.8255591441786179, 9)
+
     def test_init_guess_atom(self):
         mol = gto.M(
             verbose = 7,

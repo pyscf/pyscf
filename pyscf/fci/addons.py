@@ -225,10 +225,12 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     if isinstance(wfnsym, str):
         wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
 
-    if mol.groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('SO3', 'Dooh', 'Coov'):
         def irrep_id2lz(irrep_id):
             # See also symm.basis.DOOH_IRREP_ID_TABLE
             level = irrep_id // 10
+            if mol.groupname == 'SO3':
+                level = level % 10  # See SO3 irreps in pyscf.symm.basis
             d2h_id = irrep_id % 10
             # irrep_id 0,1,4,5 corresponds to lz = 0,2,4,...
             # irrep_id 2,3,6,7 corresponds to lz = 1,3,5,...

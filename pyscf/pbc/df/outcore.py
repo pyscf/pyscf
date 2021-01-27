@@ -22,12 +22,12 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
 from pyscf.pbc.lib.kpts_helper import gamma_point, unique, KPT_DIFF_TOL
-from pyscf.pbc.df.incore import wrap_int3c
+from pyscf.pbc.df.incore import wrap_int3c, make_auxcell
 
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
+def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     r'''3-center AO integrals (L|ij) with double lattice sum:
@@ -39,6 +39,11 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
     if isinstance(erifile, h5py.Group):
@@ -143,7 +148,7 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     return erifile
 
 
-def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
+def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
             verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:
@@ -158,6 +163,11 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
     if isinstance(erifile, h5py.Group):

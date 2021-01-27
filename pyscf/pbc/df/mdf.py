@@ -208,9 +208,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 shls_slice = (bstart, bend, 0, cell.nbas)
 
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                            b, gxyz[p0:p1], Gvbase, kpt,
-                                            adapted_kptjs, out=buf)
+                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                           b, gxyz[p0:p1], Gvbase, kpt,
+                                           adapted_kptjs, out=buf)
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -395,7 +395,24 @@ class MDF(df.DF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            cell = self.cell
+            # * AFT is computationally more efficient than MDF if the Coulomb
+            #   attenuation tends to the long-range role (i.e. small omega).
+            # * Note: changing to AFT integrator may cause small difference to
+            #   the MDF integrator. If a very strict MDF result is desired,
+            #   we can disable this trick by setting
+            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            # * The sparse mesh is not appropriate for low dimensional systems
+            #   with infinity vacuum since the ERI may require large mesh to
+            #   sample density in vacuum.
+            if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+                mydf = aft.AFTDF(cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:
