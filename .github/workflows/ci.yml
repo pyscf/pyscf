@@ -13,12 +13,20 @@ name: CI
 on: [push, pull_request]
 
 jobs:
+  lint:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: install requirements
+        run: pip install --quiet "flake8>=3.7.0"
+      - name: Static analysis
+        run: flake8 --config .flake8 pyscf
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [macos-latest, ubuntu-18.04]
-        python-version: [2.7, 3.5, 3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8, 3.9]
         exclude:
           - os: macos-latest
             python-version: 3.8
