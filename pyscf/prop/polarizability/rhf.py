@@ -127,7 +127,7 @@ def hyper_polarizability(polobj, with_cphf=True):
 # The krylov solver in this implementation often fails. see
 # https://github.com/pyscf/pyscf/issues/507
 def __FIXME_cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
-                   max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
+                           max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     log = logger.new_logger(verbose=verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
 

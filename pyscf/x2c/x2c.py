@@ -378,11 +378,11 @@ class X2C_UHF(hf.SCF):
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:mol.nelectron] = 1
         if mol.nelectron < len(mo_energy):
-            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
         else:
-            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
                         mol.nelectron, mo_energy[mol.nelectron-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
@@ -693,7 +693,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
     try:
         e, a = scipy.linalg.eigh(h, m)
         cl = a[:nao,nao:]
-        cs = a[nao:,nao:]
+        # cs = a[nao:,nao:]
         e = e[nao:]
     except scipy.linalg.LinAlgError:
         d, t = numpy.linalg.eigh(m)
@@ -704,7 +704,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
         a = numpy.dot(t, a)
         idx = e > -c**2
         cl = a[:nao,idx]
-        cs = a[nao:,idx]
+        # cs = a[nao:,idx]
         e = e[idx]
 
 # The so obtaied X seems not numerically stable.  We changed to the
@@ -735,10 +735,11 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 # Using R[A] = R[A]^{-1} A^+ S A,  Eq (0) turns to
 #      = S A R[A]^{-1}^+ A^+ h1 A R[A]^{-1} A^+ S
 #      = S A R[A]^{-1}^+ e R[A]^{-1} A^+ S                (2)
+
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
-# Adopt (2) here becuase X is not appeared in Eq (2).
-# R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
+    # Adopt (2) here becuase X is not appeared in Eq (2).
+    # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
     h1 = reduce(numpy.dot, (r.T.conj()*e, r))

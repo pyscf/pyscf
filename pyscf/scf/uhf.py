@@ -536,7 +536,7 @@ def mulliken_spin_pop(mol, dm, s=None, verbose=logger.DEBUG):
         Ms : nparray
             Mulliken spin density on each atom
     '''
-    if s is None: s = get_ovlp(mol)
+    if s is None: s = hf.get_ovlp(mol)
 
     dma = dm[0]
     dmb = dm[1]
@@ -582,7 +582,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
 def mulliken_meta_spin(mol, dm_ao, verbose=logger.DEBUG,
-                  pre_orth_method=PRE_ORTH_METHOD, s=None):
+                       pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken spin population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
@@ -912,12 +912,12 @@ class UHF(hf.SCF):
                              pre_orth_method=pre_orth_method)
 
     def mulliken_meta_spin(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method=PRE_ORTH_METHOD, s=None):
+                           pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
         return mulliken_meta_spin(mol, dm, s=s, verbose=verbose,
-                             pre_orth_method=pre_orth_method)
+                                  pre_orth_method=pre_orth_method)
 
     @lib.with_doc(spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):

@@ -224,7 +224,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
 def so2ao_mo_coeff(so, irrep_mo_coeff):
     '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
     '''
-    return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir]) \
+    return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir])
                          for ir in range(so.__len__())])
 
 def check_irrep_nelec(mol, irrep_nelec, nelec):

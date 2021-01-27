@@ -39,27 +39,27 @@ def grad_nuc(mol, atmlst=None):
                  / distances_in_AA[mask])
     div[~mask] = (-alpha[~mask] * numpy.exp(-alpha[~mask] * distances_in_AA[~mask])
                   / distances_in_AA[~mask])
-#    scale1 = numpy.zeros((natm,3,natm,natm))
-#    for i in range(natm):
-#        v = dR[i] * div[i,:,None]
-#        scale1[i,:,i] = v.T
-#        scale1[i,:,:,i] = v.T
-#
-#    gs += .5 * numpy.einsum('i,j,sxij,ij->sx', z_eff, z_eff, scale1,
-#                            mopac_param.E2/distances_in_AA - gamma)
+    #scale1 = numpy.zeros((natm,3,natm,natm))
+    #for i in range(natm):
+    #    v = dR[i] * div[i,:,None]
+    #    scale1[i,:,i] = v.T
+    #    scale1[i,:,:,i] = v.T
+    #
+    #gs += .5 * numpy.einsum('i,j,sxij,ij->sx', z_eff, z_eff, scale1,
+    #                        mopac_param.E2/distances_in_AA - gamma)
     gs += numpy.einsum('i,j,ijx,ij,ij->ix', z_eff, z_eff, dR, div,
                        mopac_param.E2/distances_in_AA - gamma)
 
     div = -mopac_param.E2 / distances_in_AA**3
     div[numpy.diag_indices(natm)] = 0
-#    t1 = numpy.zeros((natm,3,natm,natm))
-#    for i in range(natm):
-#        v = dR[i] * div[i,:,None]
-#        t1[i,:,i] = v.T
-#        t1[i,:,:,i] = v.T
-#
-#    gs += .5 * numpy.einsum('i,j,ij,sxij->sx', z_eff, z_eff, scale,
-#                            t1-_get_gamma1(mol))
+    #t1 = numpy.zeros((natm,3,natm,natm))
+    #for i in range(natm):
+    #    v = dR[i] * div[i,:,None]
+    #    t1[i,:,i] = v.T
+    #    t1[i,:,:,i] = v.T
+    #
+    #gs += .5 * numpy.einsum('i,j,ij,sxij->sx', z_eff, z_eff, scale,
+    #                        t1-_get_gamma1(mol))
     t1 = numpy.einsum('ijx,ij->xij', dR, div)
     gs += numpy.einsum('i,j,ij,xij->ix', z_eff, z_eff, scale, t1-gamma1)
 
@@ -221,13 +221,13 @@ if __name__ == '__main__':
 
     mol1 = mol.copy()
     mol1.set_geom_([['O' , (0. , 0.     , 0.0001)],
-              [1   , (0. , -0.757 , 0.587)],
-              [1   , (0. , 0.757  , 0.587)]])
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)]])
     mol2 = mol.copy()
     mindo_mol1 = mindo3._make_mindo_mol(mol1)
     mol2.set_geom_([['O' , (0. , 0.     ,-0.0001)],
-              [1   , (0. , -0.757 , 0.587)],
-              [1   , (0. , 0.757  , 0.587)]])
+                    [1   , (0. , -0.757 , 0.587)],
+                    [1   , (0. , 0.757  , 0.587)]])
     mindo_mol2 = mindo3._make_mindo_mol(mol2)
 
     g1 = mfs.nuc_grad_method().kernel()

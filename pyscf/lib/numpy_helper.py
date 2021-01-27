@@ -30,7 +30,7 @@ from numpy import asarray  # For backward compatibility
 EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
 
 try:
-# Import tblis before libnp_helper to avoid potential dl-loading conflicts
+    # Import tblis before libnp_helper to avoid potential dl-loading conflicts
     from pyscf.lib import tblis_einsum
     FOUND_TBLIS = True
 except (ImportError, OSError):
@@ -65,11 +65,10 @@ else:
         if '->' in subscripts:
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
-            indices = indices_in + [idx_final]
+            # indices = indices_in + [idx_final]
         else:
             idx_final = ''
             indices_in = subscripts.split('->')[0].split(',')
-            indices = indices_in
 
         if len(indices_in) <= 2:
             idx_removed = set(indices_in[0]).intersection(set(indices_in[1]))
@@ -107,7 +106,7 @@ def _contract(subscripts, *tensors, **kwargs):
         return _numpy_einsum(idx_str, *tensors)
 
     A, B = tensors
-    # Call numpy.asarray because A or B may be HDF5 Datasets 
+    # Call numpy.asarray because A or B may be HDF5 Datasets
     A = numpy.asarray(A, order='A')
     B = numpy.asarray(B, order='A')
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
@@ -237,7 +236,7 @@ def einsum(subscripts, *tensors, **kwargs):
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
         else:
-            idx_final = ''
+            # idx_final = ''
             indices_in = subscripts.split('->')[0].split(',')
         tensors = list(tensors)
         contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
@@ -1073,12 +1072,14 @@ class NPArrayWithTag(numpy.ndarray):
     #    obj = numpy.asarray(a).view(cls)
     #    obj.__dict__.update(kwargs)
     #    return obj
-# Customize __reduce__ and __setstate__ to keep tags after serialization
-# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+
+    # Customize __reduce__ and __setstate__ to keep tags after serialization
+    # pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
     def __reduce__(self):
         pickled = numpy.ndarray.__reduce__(self)
         state = pickled[2] + (self.__dict__,)
         return (pickled[0], pickled[1], state)
+
     def __setstate__(self, state):
         numpy.ndarray.__setstate__(self, state[0:-1])
         self.__dict__.update(state[-1])
@@ -1110,7 +1111,7 @@ def split_reshape(a, shapes):
     The entries of shapes indicate the shape of each tensor.
 
     Returns:
-        tensors : a list of tensors 
+        tensors : a list of tensors
 
     Examples:
 

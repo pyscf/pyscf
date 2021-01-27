@@ -92,7 +92,7 @@ def to_berny_log(pyscf_log):
 def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize geometry with pyberny for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -170,7 +170,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize geometry with pyberny for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 

@@ -558,11 +558,11 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.uhf.UHF):
-# Remove with_df for SOSCF method because the post-HF code checks the
-# attribute .with_df to identify whether an SCF object is DF-SCF method.
-# with_df in SOSCF is used in orbital hessian approximation only.  For the
-# returned SCF object, whehter with_df exists in SOSCF has no effects on the
-# mean-field energy and other properties.
+        # Remove with_df for SOSCF method because the post-HF code checks the
+        # attribute .with_df to identify whether an SCF object is DF-SCF method.
+        # with_df in SOSCF is used in orbital hessian approximation only.  For the
+        # returned SCF object, whehter with_df exists in SOSCF has no effects on the
+        # mean-field energy and other properties.
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:

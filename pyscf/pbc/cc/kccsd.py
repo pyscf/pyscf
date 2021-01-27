@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -578,16 +578,20 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
@@ -600,7 +604,8 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt[(eris.orbspin[kp][:, None] != eris.orbspin[kq]).ravel()] = 0

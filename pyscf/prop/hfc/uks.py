@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic unrestricted Hartree-Fock hyperfine coupling tensor
+Non-relativistic unrestricted DFT hyperfine coupling tensor
 (In testing)
 
 Refs:
@@ -26,10 +26,13 @@ Refs:
 '''
 
 import numpy
+import warnings
 from pyscf import lib
 from pyscf.scf import _vhf
 from pyscf.prop.hfc import uhf as uhf_hfc
 from pyscf.prop.gtensor.uks import get_vxc_soc
+
+warnings.warn('Module HFC is under testing')
 
 
 # Note the (-) sign of beta-beta block is included in the integral

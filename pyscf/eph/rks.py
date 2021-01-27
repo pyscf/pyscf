@@ -54,7 +54,6 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
-            vrho = vxc[0]
             frr = fxc[0]
             ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc)
             for ia in range(mol.natm):
@@ -69,14 +68,14 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
     elif xctype == 'GGA':
         ao_deriv = 2
-        v_ip = np.zeros((3,nao,nao))
+        # v_ip = np.zeros((3,nao,nao))
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho = ni.eval_rho2(mol, ao[:4], mo_coeff, mo_occ, mask, 'GGA')
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            #rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
+            # rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
             for ia in range(mol.natm):

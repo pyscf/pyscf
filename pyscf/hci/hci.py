@@ -52,15 +52,15 @@ def contract_2e_ctypes(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
     hdiag = numpy.asarray(hdiag, order='C')
     ci1 = numpy.asarray(ci1, order='C')
 
-    libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p), 
-                        eri.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_int(norb), 
-                        ctypes.c_int(nelec[0]), 
-                        ctypes.c_int(nelec[1]), 
-                        strs.ctypes.data_as(ctypes.c_void_p), 
-                        civec.ctypes.data_as(ctypes.c_void_p), 
-                        hdiag.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_ulonglong(ndet), 
+    libhci.contract_h_c(h1.ctypes.data_as(ctypes.c_void_p),
+                        eri.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_int(norb),
+                        ctypes.c_int(nelec[0]),
+                        ctypes.c_int(nelec[1]),
+                        strs.ctypes.data_as(ctypes.c_void_p),
+                        civec.ctypes.data_as(ctypes.c_void_p),
+                        hdiag.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_ulonglong(ndet),
                         ci1.ctypes.data_as(ctypes.c_void_p))
 
     return ci1
@@ -86,7 +86,7 @@ def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
             if len(desb) + len(desa) > 2:
                 continue
             if len(desa) + len(desb) == 1:
-# alpha->alpha
+                # alpha->alpha
                 if len(desb) == 0:
                     i,a = desa[0], crea[0]
                     occsa = str2orblst(stria, norb)[0]
@@ -99,7 +99,7 @@ def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
                     sign = cre_des_sign(a, i, stria)
                     ci1[jp] += sign * fai * civec[ip]
                     ci1[ip] += sign * fai * civec[jp]
-# beta ->beta
+                    # beta ->beta
                 elif len(desa) == 0:
                     i,a = desb[0], creb[0]
                     occsa = str2orblst(stria, norb)[0]
@@ -114,25 +114,25 @@ def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
                     ci1[ip] += sign * fai * civec[jp]
 
             else:
-# alpha,alpha->alpha,alpha
+                # alpha,alpha->alpha,alpha
                 if len(desb) == 0:
                     i,j = desa
                     a,b = crea
-# 6 conditions for i,j,a,b
-# --++, ++--, -+-+, +-+-, -++-, +--+ 
+                    # 6 conditions for i,j,a,b
+                    # --++, ++--, -+-+, +-+-, -++-, +--+
                     if a > j or i > b:
-# condition --++, ++--
+                        # condition --++, ++--
                         v = eri[a,j,b,i]-eri[a,i,b,j]
                         sign = cre_des_sign(b, i, stria)
                         sign*= cre_des_sign(a, j, stria)
                     else:
-# condition -+-+, +-+-, -++-, +--+ 
+                        # condition -+-+, +-+-, -++-, +--+
                         v = eri[a,i,b,j]-eri[a,j,b,i]
                         sign = cre_des_sign(b, j, stria)
                         sign*= cre_des_sign(a, i, stria)
                     ci1[jp] += sign * v * civec[ip]
                     ci1[ip] += sign * v * civec[jp]
-# beta ,beta ->beta ,beta
+                    # beta ,beta ->beta ,beta
                 elif len(desa) == 0:
                     i,j = desb
                     a,b = creb
@@ -146,7 +146,7 @@ def contract_2e(h1_h2, civec, norb, nelec, hdiag=None, **kwargs):
                         sign*= cre_des_sign(a, i, strib)
                     ci1[jp] += sign * v * civec[ip]
                     ci1[ip] += sign * v * civec[jp]
-# alpha,beta ->alpha,beta
+                    # alpha,beta ->alpha,beta
                 else:
                     i,a = desa[0], crea[0]
                     j,b = desb[0], creb[0]
@@ -174,13 +174,13 @@ def contract_ss(civec, norb, nelec):
     civec = numpy.asarray(civec, order='C')
     ci1 = numpy.asarray(ci1, order='C')
 
-    libhci.contract_ss_c(ctypes.c_int(norb), 
-                        ctypes.c_int(nelec[0]), 
-                        ctypes.c_int(nelec[1]), 
-                        strs.ctypes.data_as(ctypes.c_void_p), 
-                        civec.ctypes.data_as(ctypes.c_void_p), 
-                        ctypes.c_ulonglong(ndet), 
-                        ci1.ctypes.data_as(ctypes.c_void_p))
+    libhci.contract_ss_c(ctypes.c_int(norb),
+                         ctypes.c_int(nelec[0]),
+                         ctypes.c_int(nelec[1]),
+                         strs.ctypes.data_as(ctypes.c_void_p),
+                         civec.ctypes.data_as(ctypes.c_void_p),
+                         ctypes.c_ulonglong(ndet),
+                         ci1.ctypes.data_as(ctypes.c_void_p))
 
     return ci1
 
@@ -210,20 +210,20 @@ def cre_des_sign(p, q, string):
         n1 = 0
         for i in range(nset-pg, nset-qg-1):
             n1 += bin(string[i]).count('1')
-        n1 += bin(string[-1-pg] & numpy.uint64((1<<pb) - 1)).count('1')
+        n1 += bin(string[-1-pg] & numpy.uint64((1 << pb) - 1)).count('1')
         n1 += string[-1-qg] >> numpy.uint64(qb+1)
     elif pg < qg:
         n1 = 0
         for i in range(nset-qg, nset-pg-1):
             n1 += bin(string[i]).count('1')
-        n1 += bin(string[-1-qg] & numpy.uint64((1<<qb) - 1)).count('1')
+        n1 += bin(string[-1-qg] & numpy.uint64((1 << qb) - 1)).count('1')
         n1 += string[-1-pg] >> numpy.uint64(pb+1)
     else:
         if p > q:
             mask = numpy.uint64((1 << pb) - (1 << (qb+1)))
         else:
             mask = numpy.uint64((1 << qb) - (1 << (pb+1)))
-        n1 = bin(string[-1-pg]&mask).count('1')
+        n1 = bin(string[-1-pg] & mask).count('1')
 
     if n1 % 2:
         return -1
@@ -265,9 +265,9 @@ def argunique_ctypes(strs):
 
     nstrs_ = numpy.array([nstrs])
 
-    libhci.argunique(strs.ctypes.data_as(ctypes.c_void_p), 
-                     sort_idx.ctypes.data_as(ctypes.c_void_p), 
-                     nstrs_.ctypes.data_as(ctypes.c_void_p), 
+    libhci.argunique(strs.ctypes.data_as(ctypes.c_void_p),
+                     sort_idx.ctypes.data_as(ctypes.c_void_p),
+                     nstrs_.ctypes.data_as(ctypes.c_void_p),
                      ctypes.c_int(nset))
 
     sort_idx = sort_idx[:nstrs_[0]]
@@ -303,8 +303,8 @@ def find1(s):
     return [i for i,x in enumerate(bin(s)[2:][::-1]) if x == '1']
 
 def toggle_bit(s, place):
-    g, b = place//64, place%64
-    s[-1-g] ^= numpy.uint64(1<<b)
+    g, b = place // 64, place % 64
+    s[-1-g] ^= numpy.uint64(1 << b)
     return s
 
 def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
@@ -314,7 +314,7 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
     nset = nset // 2
     neleca, nelecb = nelec
 
-    h1 = numpy.asarray(h1, order='C')  
+    h1 = numpy.asarray(h1, order='C')
     eri = numpy.asarray(eri, order='C')
     jk = numpy.asarray(jk, order='C')
     civec = numpy.asarray(civec, order='C')
@@ -338,18 +338,18 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
 
         str_add_batch = numpy.asarray(str_add_batch, order='C')
 
-        libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p), 
-                           eri.ctypes.data_as(ctypes.c_void_p), 
-                           jk.ctypes.data_as(ctypes.c_void_p), 
-                           eri_sorted.ctypes.data_as(ctypes.c_void_p), 
-                           jk_sorted.ctypes.data_as(ctypes.c_void_p), 
-                           ctypes.c_int(norb), 
-                           ctypes.c_int(neleca), 
-                           ctypes.c_int(nelecb), 
-                           strs.ctypes.data_as(ctypes.c_void_p), 
-                           civec.ctypes.data_as(ctypes.c_void_p), 
-                           ctypes.c_ulonglong(ndet_start), 
-                           ctypes.c_ulonglong(ndet_finish), 
+        libhci.select_strs(h1.ctypes.data_as(ctypes.c_void_p),
+                           eri.ctypes.data_as(ctypes.c_void_p),
+                           jk.ctypes.data_as(ctypes.c_void_p),
+                           eri_sorted.ctypes.data_as(ctypes.c_void_p),
+                           jk_sorted.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(norb),
+                           ctypes.c_int(neleca),
+                           ctypes.c_int(nelecb),
+                           strs.ctypes.data_as(ctypes.c_void_p),
+                           civec.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_ulonglong(ndet_start),
+                           ctypes.c_ulonglong(ndet_finish),
                            ctypes.c_double(myci.select_cutoff),
                            str_add_batch.ctypes.data_as(ctypes.c_void_p),
                            n_str_add_batch.ctypes.data_as(ctypes.c_void_p))
@@ -376,7 +376,7 @@ def enlarge_space(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, nelec):
     strs = strs[cidx]
 
     ci_coeff = [as_SCIvector(c[cidx], strs) for c in civec]
- 
+
     strs_new = strs.copy()
 
     for p in range(nroots):
@@ -405,8 +405,8 @@ def str2orblst(string, norb):
     for k in reversed(range(nset)):
         s = string[k]
         occ.extend([x+off for x in find1(s)])
-        for i in range(0, min(64, norb-off)): 
-            if not (s & numpy.uint64(1<<i)):
+        for i in range(0, min(64, norb-off)):
+            if not (s & numpy.uint64(1 << i)):
                 vir.append(i+off)
         off += 64
     return occ, vir
@@ -421,7 +421,7 @@ def orblst2str(lst, norb):
 def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None, max_iter=None,
-                       max_memory=None, verbose=None, ecore=0, return_integrals=False, 
+                       max_memory=None, verbose=None, ecore=0, return_integrals=False,
                        eri_sorted=None, jk=None, jk_sorted=None, **kwargs):
     if verbose is None:
         log = logger.Logger(myci.stdout, myci.verbose)
@@ -481,7 +481,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
     e_last = 0
     float_tol = 3e-4
-    conv = False
+    # conv = False
     for icycle in range(max_iter):
         ci_strs = ci0[0]._strs
         float_tol = max(float_tol*.3, tol*1e2)
@@ -502,7 +502,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         log.info('Cycle %d  E = %s  dE = %.8g', icycle, numpy.array(e)+ecore, de)
 
         if abs(de) < tol*1e3:
-            conv = True
+            # conv = True
             break
 
         last_ci0_size = float(len(ci_strs))
@@ -511,7 +511,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         t_current = logger.perf_counter() - t_start
         log.debug('Timing for selecting configurations: %10.3f', t_current)
         if (((1 - myci.conv_ndet_tol) < len(ci0[0]._strs)/last_ci0_size < (1 + myci.conv_ndet_tol))):
-            conv = True
+            # conv = True
             break
 
     ci_strs = ci0[0]._strs
@@ -584,24 +584,24 @@ def fix_spin(myci, shift=.2, ss=None, **kwargs):
         ci1 = numpy.asarray(ci1, order='C')
         ci2 = numpy.asarray(ci2, order='C')
 
-        libhci.contract_h_c_ss_c(h1.ctypes.data_as(ctypes.c_void_p), 
-                                 eri.ctypes.data_as(ctypes.c_void_p), 
-                                 ctypes.c_int(norb), 
-                                 ctypes.c_int(nelec[0]), 
-                                 ctypes.c_int(nelec[1]), 
-                                 strs.ctypes.data_as(ctypes.c_void_p), 
-                                 civec.ctypes.data_as(ctypes.c_void_p), 
-                                 hdiag.ctypes.data_as(ctypes.c_void_p), 
-                                 ctypes.c_ulonglong(ndet), 
+        libhci.contract_h_c_ss_c(h1.ctypes.data_as(ctypes.c_void_p),
+                                 eri.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(norb),
+                                 ctypes.c_int(nelec[0]),
+                                 ctypes.c_int(nelec[1]),
+                                 strs.ctypes.data_as(ctypes.c_void_p),
+                                 civec.ctypes.data_as(ctypes.c_void_p),
+                                 hdiag.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_ulonglong(ndet),
                                  ci1.ctypes.data_as(ctypes.c_void_p),
                                  ci2.ctypes.data_as(ctypes.c_void_p))
 
         if ss < sz*(sz+1)+.1:
-# (S^2-ss)|Psi> to shift state other than the lowest state
+            # (S^2-ss)|Psi> to shift state other than the lowest state
             ci2 -= ss * civec
         else:
-# (S^2-ss)^2|Psi> to shift states except the given spin.
-# It still relies on the quality of initial guess
+            # (S^2-ss)^2|Psi> to shift states except the given spin.
+            # It still relies on the quality of initial guess
             tmp = ci2.copy()
             tmp -= ss * civec
             ci2 = -ss * tmp
@@ -671,12 +671,12 @@ def make_rdm12s(civec, norb, nelec):
     rdm2bb = numpy.asarray(rdm2bb, order='C')
 
     # Compute 1- and 2-RDMs
-    libhci.compute_rdm12s(ctypes.c_int(norb), 
-                          ctypes.c_int(nelec[0]), 
-                          ctypes.c_int(nelec[1]), 
-                          strs.ctypes.data_as(ctypes.c_void_p), 
-                          civec.ctypes.data_as(ctypes.c_void_p), 
-                          ctypes.c_ulonglong(ndet), 
+    libhci.compute_rdm12s(ctypes.c_int(norb),
+                          ctypes.c_int(nelec[0]),
+                          ctypes.c_int(nelec[1]),
+                          strs.ctypes.data_as(ctypes.c_void_p),
+                          civec.ctypes.data_as(ctypes.c_void_p),
+                          ctypes.c_ulonglong(ndet),
                           rdm1a.ctypes.data_as(ctypes.c_void_p),
                           rdm1b.ctypes.data_as(ctypes.c_void_p),
                           rdm2aa.ctypes.data_as(ctypes.c_void_p),

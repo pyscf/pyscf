@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -192,17 +192,16 @@ def proj_ref_ao(mol, minao='minao', kpts=None, return_labels=False):
     Args:
         return_labels: if True, return the labels as well.
     """
-    nao = mol.nao_nr()
     nkpts = len(kpts)
     pmol = iao.reference_mol(mol, minao)
     s1 = np.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
     s2 = np.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
     s12 = np.asarray(pgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts))
-    s21 = np.swapaxes(s12, -1, -2).conj()
+    #s21 = np.swapaxes(s12, -1, -2).conj()
     C_ao_lo = np.zeros((nkpts, s1.shape[-1], s2.shape[-1]), dtype=np.complex128)
     for k in range(nkpts):
         s1cd_k = la.cho_factor(s1[k])
-        s2cd_k = la.cho_factor(s2[k])
+        #s2cd_k = la.cho_factor(s2[k])
         C_ao_lo[k] = la.cho_solve(s1cd_k, s12[k])
 
     if return_labels:
@@ -299,7 +298,7 @@ if __name__ == '__main__':
     U_val = [5.0]
 
     mf = KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
-            minao_ref='gth-szv')
+                minao_ref='gth-szv')
     mf.conv_tol = 1e-10
     print (mf.U_idx)
     print (mf.U_val)

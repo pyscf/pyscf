@@ -21,6 +21,7 @@ Refs:
 
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -29,6 +30,8 @@ from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.rotational_gtensor import rhf as rhf_rotg
 from pyscf.data import nist
+
+warnings.warn('Module ESR is under testing')
 
 
 def dia(gobj, dm0, gauge_orig=None):

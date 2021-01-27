@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -109,16 +109,16 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
 
     if u_aa != 0:  # u * n_alpha^+ n_alpha
         for i in range(norb):
-            maska = (strsa & (1<<i)) > 0
+            maska = (strsa & (1 << i)) > 0
             fcinew[maska] += u_aa * fcivec[maska]
     if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
         for i in range(norb):
-            maska = (strsa & (1<<i)) > 0
-            maskb = (strsb & (1<<i)) > 0
-            fcinew[maska[:,None]&maskb] += 2*u_ab * fcivec[maska[:,None]&maskb]
+            maska = (strsa & (1 << i)) > 0
+            maskb = (strsb & (1 << i)) > 0
+            fcinew[maska[:,None] & maskb] += 2*u_ab * fcivec[maska[:,None] & maskb]
     if u_bb != 0:  # u * n_beta^+ n_beta
         for i in range(norb):
-            maskb = (strsb & (1<<i)) > 0
+            maskb = (strsb & (1 << i)) > 0
             fcinew[:,maskb] += u_bb * fcivec[:,maskb]
     return fcinew
 

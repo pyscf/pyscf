@@ -53,7 +53,7 @@ if sys.version_info >= (3,):
 
 
 FUNC_CODE = {
-#   mf.xc            name in dftd3 library      dftd3 versions
+    # mf.xc          name in dftd3 library      dftd3 versions
     'BLYP'         : ('b-lyp',                  (2,3,4,5,6)),
     'B88,LYP'      : ('b-lyp',                  (2,3,4,5,6)),
     'BP86'         : ('b-p',                    (2,3,4,5,6)),

@@ -541,7 +541,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         eris.ovOV = eris.feri['ovOV']
         eris.OVOV = eris.feri['OVOV']
 
-    time1 = log.timer('Integral transformation', *time0)
+    log.timer('Integral transformation', *time0)
     return eris
 
 def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):

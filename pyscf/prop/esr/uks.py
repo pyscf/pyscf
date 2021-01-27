@@ -26,12 +26,15 @@ Refs:
 '''
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.dft import numint
 from pyscf.prop.nmr import uks as uks_nmr
 from pyscf.prop.esr import uhf as uhf_esr
 from pyscf.grad import rks as rks_grad
+
+warnings.warn('Module ESR is under testing')
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -86,7 +89,7 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             _cross3x3_(vmat[0], mol, aow, ao[1:], mask, shls_slice, ao_loc)
             aow = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,1])
             _cross3x3_(vmat[1], mol, aow, ao[1:], mask, shls_slice, ao_loc)
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))

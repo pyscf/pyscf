@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf.scf import ucphf
 from pyscf.scf import _response_functions
 from pyscf.dft import numint
+from psycf.ao2mo import _ao2mo
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
 from pyscf.data import nist
@@ -68,7 +69,7 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
 
 def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
     # Imaginary part of H01 operator
-    # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p> 
+    # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p>
     # Im[A01 dot p] = Im[vec{r}/r^3 x vec{p}] = Im[-i p (1/r) x p] = -p (1/r) x p
     orboa = mo_coeff[0][:,mo_occ[0]> 0]
     orbva = mo_coeff[0][:,mo_occ[0]==0]
@@ -121,7 +122,6 @@ def make_fc(sscobj, nuc_pair=None):
 def solve_mo1_fc(sscobj, h1):
     cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
-    mol = sscobj.mol
     mf = sscobj._scf
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
@@ -326,8 +326,8 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
     if mo_energy is None: mo_energy = sscobj._scf.mo_energy
-    if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
-    if mo_occ    is None: mo_occ = sscobj._scf.mo_occ
+    if mo_coeff is None: mo_coeff = sscobj._scf.mo_coeff
+    if mo_occ is None: mo_occ = sscobj._scf.mo_occ
     if with_cphf is None: with_cphf = sscobj.cphf
 
     mol = sscobj.mol
@@ -429,7 +429,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
                 ktensor[i,j] = ktensor[j,i] = iso_ssc[k]
                 if self.verbose >= logger.DEBUG:
                     _write(self.stdout, e11[k],
-                           '\nSSC E11 between %d %s and %d %s' \
+                           '\nSSC E11 between %d %s and %d %s'
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
 #                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')

@@ -75,7 +75,8 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
     e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-    e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+    e_ia = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+    hdiag = e_ia
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
 

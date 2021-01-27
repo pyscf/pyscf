@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,8 +68,7 @@ def sfx2c1e(mf):
     else:
         doc = mf_class.__doc__
     class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
-        __doc__ = doc + \
-        '''
+        __doc__ = doc + '''
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
@@ -157,7 +156,7 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-# The treatment of pnucp local part has huge effects to hcore
+            # The treatment of pnucp local part has huge effects to hcore
             #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
             #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)

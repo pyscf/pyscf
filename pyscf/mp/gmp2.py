@@ -1,4 +1,4 @@
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if t2 is None: t2 = mp.t2
-    nmo = nmo0 = mp.nmo
+    nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
 
     if mp.frozen is None:

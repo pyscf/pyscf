@@ -26,13 +26,15 @@ Refs:
 '''
 
 
-
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import jk
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
+
+warnings.warn('Module magnetizability is under testing')
 
 
 def dia(magobj, gauge_orig=None):

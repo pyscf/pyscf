@@ -26,16 +26,16 @@ Log level
 ======= ======
 Level   number
 ------- ------
-DEBUG4  9 
-DEBUG3  8 
-DEBUG2  7 
-DEBUG1  6 
-DEBUG   5 
-INFO    4 
-NOTE    3 
-WARN    2 
-ERROR   1 
-QUIET   0 
+DEBUG4  9
+DEBUG3  8
+DEBUG2  7
+DEBUG1  6
+DEBUG   5
+INFO    4
+NOTE    3
+WARN    2
+ERROR   1
+QUIET   0
 ======= ======
 
 Large value means more noise in the output file.

@@ -18,6 +18,7 @@
 
 '''
 Non-relativistic magnetizability tensor for DFT
+(In testing)
 
 Refs:
 [1] R. Cammi, J. Chem. Phys., 109, 3185 (1998)
@@ -26,11 +27,14 @@ Refs:
 
 
 import numpy
+import warnings
 from pyscf import lib
 from pyscf.scf import jk
 from pyscf.dft import numint
 from pyscf.prop.nmr import rks as rks_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
+
+warnings.warn('Module magnetizability is under testing')
 
 
 def dia(magobj, gauge_orig=None):

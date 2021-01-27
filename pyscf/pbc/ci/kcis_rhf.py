@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,7 +79,6 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
     evals = [None] * len(kptlist)
     evecs = [None] * len(kptlist)
-    convs = [None] * len(kptlist)
 
     cpu1 = (logger.process_clock(), logger.perf_counter())
     for k, kshift in enumerate(kptlist):
@@ -257,9 +256,13 @@ def cis_H(cis, kshift, eris=None):
             for kj in range(nkpts):
                 kb = kconserv_r[kj]
                 # contribution from 2 (ai|jb) = 2 B^L_ai B^L_jb
-                tmp = 2. * einsum("Lai,Ljb->iajb", eris.Lpq_mo[ka,ki][:, nocc:, :nocc], eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
+                tmp = 2. * einsum("Lai,Ljb->iajb",
+                                  eris.Lpq_mo[ka,ki][:, nocc:, :nocc],
+                                  eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
                 # contribution from -(ab|ji) = - B^L_ab B^L_ji
-                tmp -= einsum("Lab,Lji->iajb", eris.Lpq_mo[ka,kb][:, nocc:, nocc:], eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
+                tmp -= einsum("Lab,Lji->iajb",
+                              eris.Lpq_mo[ka,kb][:, nocc:, nocc:],
+                              eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
                 tmp *= 1. / nkpts
                 H[ki, kj] += tmp.reshape(nov, nov)
 
@@ -634,7 +637,6 @@ def _init_cis_df_eris(cis, eris):
         # DF-driven CCSD implementation.
         raise NotImplementedError
 
-    nocc = cis.nocc
     nmo = cis.nmo
     nao = cell.nao_nr()
 

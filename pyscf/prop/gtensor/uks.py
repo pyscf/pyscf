@@ -27,6 +27,7 @@ Refs:
 '''
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -36,6 +37,8 @@ from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 from pyscf.data import nist
 from pyscf.grad import rks as rks_grad
+
+warnings.warn('Module g-tensor is under testing')
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -173,7 +176,7 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             _cross3x3_(vmat[0], mol, aow, ao[1:], mask, shls_slice, ao_loc)
             aow = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,1])
             _cross3x3_(vmat[1], mol, aow, ao[1:], mask, shls_slice, ao_loc)
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))
@@ -187,7 +190,7 @@ def get_vxc_soc(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             wva, wvb = numint._uks_gga_wv0((rho_a, rho_b), vxc, weight)
 
             ip_ao = ao[1:4]
-            ipip_ao = ao[4:]
+            #ipip_ao = ao[4:]
             aow = rks_grad._make_dR_dao_w(ao, wva)
             _cross3x3_(vmat[0], mol, aow, ip_ao, mask, shls_slice, ao_loc)
             aow = rks_grad._make_dR_dao_w(ao, wvb)

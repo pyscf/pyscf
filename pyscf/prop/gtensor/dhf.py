@@ -23,10 +23,13 @@ Refs: TCA, 129, 715
 '''
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.data import nist
+
+warnings.warn('Module g-tensor is under testing')
 
 
 # TODO: 3 SCF for sx, sy, sz
@@ -38,7 +41,7 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     log = lib.logger.new_logger(gobj, verbose)
     mf = gobj._scf
     mol = mf.mol
-# Add finite field to remove degeneracy
+    # Add finite field to remove degeneracy
     mag_field = numpy.ones(3) * 1e-6
     h10 = dhf_nmr.make_h10rkb(mol, None, None, False, log)
     sc = numpy.dot(mf.get_ovlp(), mf.mo_coeff)
@@ -84,7 +87,7 @@ class GTensor(lib.StreamObject):
         self.chkfile = mf.chkfile
         self._scf = mf
 
-# gauge_orig=None will call GIAO. A coordinate array leads to common gauge
+        # gauge_orig=None will call GIAO. A coordinate array leads to common gauge
         self.gauge_orig = None
         self.cphf = True
         self.max_cycle_cphf = 20
@@ -122,8 +125,7 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.M(
         atom = [['Ne', (0.,0.,0.)],
-                #['He', (.4,.7,0.)],
-               ],
+                ['He', (.4,.7,0.)], ],
         basis = 'ccpvdz', spin=2, charge=2)
     mf = scf.DHF(mol).run()
     print(GTensor(mf).kernel((0,0,0)))

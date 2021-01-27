@@ -146,7 +146,7 @@ def sph_pure2real(l, reorder_p=True):
     return u
 
 def sph_real2pure(l, reorder_p=True):
-    ''' 
+    '''
     Transformation matrix: from real spherical harmonic functions to the pure
     spherical harmonic functions.
 

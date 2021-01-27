@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,7 +54,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert (frozen == 0)
 
     if orbs is None:
         orbs = range(gw.nmo)
@@ -62,7 +66,6 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         kptlist = range(gw.nkpts)
     nkpts = gw.nkpts
     nklist = len(kptlist)
-    norbs = len(orbs)
 
     # v_xc
     dm = np.array(mf.make_rdm1())
@@ -72,7 +75,6 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
     if gw.fc:
@@ -105,7 +107,8 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
 
     conv = True
     # This code does not support metals
-    homo = -99.; lumo = 99.
+    homo = -99.
+    lumo = 99.
     for k in range(nkpts):
         if homo < mf.mo_energy[k][nocc-1]:
             homo = mf.mo_energy[k][nocc-1]
@@ -197,7 +200,8 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
     kscaled -= kscaled[0]
 
     # This code does not support metals
-    homo = -99.; lumo = 99.
+    homo = -99.
+    lumo = 99.
     for k in range(nkpts):
         if homo < mo_energy[k][nocc-1]:
             homo = mo_energy[k][nocc-1]
@@ -215,10 +219,10 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
 
     # Compute occ for -iw and vir for iw separately
     # to avoid branch cuts in analytic continuation
-    omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_vir = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ = [i for i in orbs if i < nocc]
     norbs_occ = len(orbs_occ)
 
@@ -240,7 +244,6 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
     if gw.fc:
         # Set up q mesh for q->0 finite size correction
         q_pts = np.array([1e-3,0,0]).reshape(1,3)
-        nq_pts = len(q_pts)
         q_abs = gw.mol.get_abs_kpts(q_pts)
 
         # Get qij = 1/sqrt(Omega) * < psi_{ik} | e^{iqr} | psi_{ak-q} > at q: (nkpts, nocc, nvir)
@@ -265,7 +268,8 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                     Lij_out = None
                     # Read (L|pq) and ao2mo transform to (L|ij)
                     Lpq = []
-                    for LpqR, LpqI, sign in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
+                    for LpqR, LpqI, sign \
+                            in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
                     # support uneqaul naux on different k points
                     Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
@@ -322,8 +326,10 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                         Wn_P0 = einsum('Pnm,P->nm',Lij[kn],eps_inv_P0).diagonal()
                         Wn_P0 = Wn_P0.real * 2.
                         Del_P0 = np.sqrt(gw.mol.vol/4./np.pi**3) * (6.*np.pi**2/gw.mol.vol/nkpts)**(2./3.) * Wn_P0[orbs]
-                        sigma[k][:norbs_occ] += -einsum('n,nw->nw',Del_P0[:norbs_occ],g0_occ[kn][orbs][:norbs_occ]) /np.pi
-                        sigma[k][norbs_occ:] += -einsum('n,nw->nw',Del_P0[norbs_occ:],g0_vir[kn][orbs][norbs_occ:]) /np.pi
+                        sigma[k][:norbs_occ] += -einsum('n,nw->nw', Del_P0[:norbs_occ],
+                                                        g0_occ[kn][orbs][:norbs_occ]) /np.pi
+                        sigma[k][norbs_occ:] += -einsum('n,nw->nw', Del_P0[norbs_occ:],
+                                                        g0_vir[kn][orbs][norbs_occ:]) /np.pi
         else:
             for w in range(nw):
                 Pi = get_rho_response(gw, freqs[w], mo_energy, Lij, kL, kidx)
@@ -467,7 +473,6 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -573,7 +578,7 @@ class KRGWAC(lib.StreamObject):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         log.info('GW nocc = %d, nvir = %d, nkpts = %d', nocc, nvir, nkpts)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
@@ -632,24 +637,24 @@ class KRGWAC(lib.StreamObject):
         return self.mo_energy
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft, scf
+    from pyscf.pbc import gto
     from pyscf.pbc.lib import chkfile
     import os
     # This test takes a few minutes
     cell = gto.Cell()
     cell.build(unit = 'angstrom',
-            a = '''
-                0.000000     1.783500     1.783500
-                1.783500     0.000000     1.783500
-                1.783500     1.783500     0.000000
-            ''',
-            atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
-            dimension = 3,
-            max_memory = 8000,
-            verbose = 4,
-            pseudo = 'gth-pade',
-            basis='gth-szv',
-            precision=1e-10)
+               a = '''
+               0.000000     1.783500     1.783500
+               1.783500     0.000000     1.783500
+               1.783500     1.783500     0.000000
+               ''',
+               atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
+               dimension = 3,
+               max_memory = 8000,
+               verbose = 4,
+               pseudo = 'gth-pade',
+               basis='gth-szv',
+               precision=1e-10)
 
     kpts = cell.make_kpts([3,1,1],scaled_center=[0,0,0])
     gdf = df.GDF(cell, kpts)

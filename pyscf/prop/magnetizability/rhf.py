@@ -27,7 +27,7 @@ Refs:
 '''
 
 
-
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -35,6 +35,8 @@ from pyscf.scf import jk
 from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.data import nist
+
+warnings.warn('Module magnetizability is under testing')
 
 
 #TODO: Eq (102) of TCA, 90, 421 to partition the dia- and para-magnetic terms

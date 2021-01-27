@@ -1,16 +1,16 @@
 #
 # Modified based on MINDO3_Parameters.py and Slater.py in PyQuante-1.6
 #
-"""\
+"""
  MINDO3.py: Dewar's MINDO/3 Semiempirical Method
 
  This program is part of the PyQuante quantum chemistry program suite.
 
- Copyright (c) 2004, Richard P. Muller. All Rights Reserved. 
+ Copyright (c) 2004, Richard P. Muller. All Rights Reserved.
 
  PyQuante version 1.2 and later is covered by the modified BSD
  license. Please see the file LICENSE that is part of this
- distribution. 
+ distribution.
 """
 
 import numpy
@@ -147,7 +147,7 @@ ZP3 = numpy.array((
 # *** BETA3 AND ALP3 ARE THE BOND PARAMETERS USED IN THE
 #     RESONANCE INTEGRAL AND THE CORE CORE REPULSION INTEGRAL RESPECTIVE
 Bxy = numpy.array((
-#       H                  B         C         N         O         F                     Si        P         S        Cl
+        # H                B         C         N         O         F                     Si        P         S        Cl
         0.244770,
         0       , 0,
         0       , 0, 0,
@@ -170,7 +170,7 @@ BETA3 = lib.unpack_tril(Bxy)
 del(Bxy)
 
 Axy = numpy.array((
-#       H                  B         C         N         O         F                     Si        P         S        Cl
+        # H                B         C         N         O         F                     Si        P         S        Cl
         1.489450,
         0       , 0,
         0       , 0, 0,
@@ -302,7 +302,7 @@ gexps = { # indexed by N,s_or_p:
     (2,1) : gexps_2p,
     (3,0) : gexps_3s,
     (3,1) : gexps_3p
-    }
+}
 
 gcoefs = {  # indexed by N,s_or_p:
     (1,0) : gcoefs_1s,
@@ -310,7 +310,7 @@ gcoefs = {  # indexed by N,s_or_p:
     (2,1) : gcoefs_2p,
     (3,0) : gcoefs_3s,
     (3,1) : gcoefs_3p
-    }
+}
 
 gexps_old = { # indexed by N,s_or_p:
     (1,0) : gexps_1s,
@@ -318,7 +318,7 @@ gexps_old = { # indexed by N,s_or_p:
     (2,1) : gexps_old_2,
     (3,0) : gexps_old_3,
     (3,1) : gexps_old_3
-    }
+}
 
 gcoefs_old = {  # indexed by N,s_or_p:
     (1,0) : gcoefs_1s,
@@ -326,6 +326,6 @@ gcoefs_old = {  # indexed by N,s_or_p:
     (2,1) : gcoefs_old_2p,
     (3,0) : gcoefs_3s,
     (3,1) : gcoefs_3p
-    }
+}
 
 del(lib)

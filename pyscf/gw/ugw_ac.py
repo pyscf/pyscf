@@ -42,7 +42,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -56,21 +56,24 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+
     # only support frozen core
-    assert (isinstance(gw.frozen, int))
+    assert (isinstance(frozen, int))
 
     nocca, noccb = gw.nocc
     nmoa, nmob = gw.nmo
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
-    assert (gw.frozen < nocca and gw.frozen < noccb)
+    assert (frozen < nocca and frozen < noccb)
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
     if orbs is None:
         orbs = range(nmoa)
     else:
-        orbs = [x - gw.frozen for x in orbs]
+        orbs = [x - frozen for x in orbs]
         if orbs[0] < 0:
             logger.warn(gw, 'GW orbs must be larger than frozen core!')
             raise RuntimeError
@@ -80,13 +83,13 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     vj = mf.get_j()
     v_mf[0] = v_mf[0] - (vj[0] + vj[1])
     v_mf[1] = v_mf[1] - (vj[0] + vj[1])
-    v_mf_frz = np.zeros((2, nmo-gw.frozen, nmo-gw.frozen))
+    v_mf_frz = np.zeros((2, nmo-frozen, nmo-frozen))
     for s in range(2):
         v_mf_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, v_mf[s], mo_coeff[s]))
     v_mf = v_mf_frz
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df and frozen == 0:
         # density fitting vk
         vk = np.zeros_like(v_mf)
         vk[0] = -einsum('Lni,Lim->nm',Lpq[0,:,:,:nocca],Lpq[0,:,:nocca,:])
@@ -99,7 +102,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         vj = uhf.get_j(gw.mol,dm)
         vk[0] = vk[0] - (vj[0] + vj[1])
         vk[1] = vk[1] - (vj[0] + vj[1])
-        vk_frz = np.zeros((2, nmo-gw.frozen, nmo-gw.frozen))
+        vk_frz = np.zeros((2, nmo-frozen, nmo-frozen))
         for s in range(2):
             vk_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, vk[s], mo_coeff[s]))
         vk = vk_frz
@@ -141,7 +144,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                     dsigma = pade_thiele(ep-ef+de, omega_fit[s,p-orbs[0]], coeff[s,:,p-orbs[0]]).real - sigmaR.real
                 zn = 1.0/(1.0-dsigma/de)
                 e = ep + zn*(sigmaR.real + vk[s,p,p] - v_mf[s,p,p])
-                mo_energy[s,p+gw.frozen] = e
+                mo_energy[s,p+frozen] = e
             else:
                 # self-consistently solve QP equation
                 def quasiparticle(omega):
@@ -152,7 +155,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                     return omega - mf_mo_energy[s][p] - (sigmaR.real + vk[s,p,p] - v_mf[s,p,p])
                 try:
                     e = newton(quasiparticle, mf_mo_energy[s][p], tol=1e-6, maxiter=100)
-                    mo_energy[s,p+gw.frozen] = e
+                    mo_energy[s,p+frozen] = e
                 except RuntimeError:
                     conv = False
     mo_coeff = gw._scf.mo_coeff
@@ -209,10 +212,12 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
 
     # Compute occ for -iw and vir for iw separately
     # to avoid branch cuts in analytic continuation
-    omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_vir = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_occ[0] = 0.j
+    omega_vir[0] = 0.j
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ_a = [i for i in orbs if i < nocca]
     orbs_occ_b = [i for i in orbs if i < noccb]
     norbs_occ_a = len(orbs_occ_a)
@@ -308,7 +313,7 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
+        # target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -379,7 +384,7 @@ class UGWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_ugw_UGW_ac', 'pade')
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -420,7 +425,7 @@ class UGWAC(lib.StreamObject):
         nvirb = nmob - noccb
         log.info('GW (nocca, noccb) = (%d, %d), (nvira, nvirb) = (%d, %d)',
                  nocca, noccb, nvira, nvirb)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
@@ -491,7 +496,7 @@ class UGWAC(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = 'O 0 0 0'
@@ -514,8 +519,7 @@ if __name__ == '__main__':
     gw.linearized = False
     gw.ac = 'pade'
     gw.kernel(orbs=range(nocca-3,nocca+3))
-    print(gw.mo_energy)
-    assert(abs(gw.mo_energy[0][nocca-1]--0.521932084529)<1e-5)
-    assert(abs(gw.mo_energy[0][nocca]-0.167547592784)<1e-5)
-    assert(abs(gw.mo_energy[1][noccb-1]--0.464605523684)<1e-5)
-    assert(abs(gw.mo_energy[1][noccb]--0.0133557793765)<1e-5)
+    assert (abs(gw.mo_energy[0][nocca-1]- -0.521932084529) < 1e-5)
+    assert (abs(gw.mo_energy[0][nocca] -0.167547592784) < 1e-5)
+    assert (abs(gw.mo_energy[1][noccb-1]- -0.464605523684) < 1e-5)
+    assert (abs(gw.mo_energy[1][noccb]- -0.0133557793765) < 1e-5)

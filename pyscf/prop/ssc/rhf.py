@@ -111,7 +111,7 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
 
 def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
     # Imaginary part of H01 operator
-    # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p> 
+    # 1/2(A01 dot p + p dot A01) => (a01p + c.c.)/2 ~ <a01p>
     # Im[A01 dot p] = Im[vec{r}/r^3 x vec{p}] = Im[-i p (1/r) x p] = -p (1/r) x p
     orbo = mo_coeff[:,mo_occ> 0]
     orbv = mo_coeff[:,mo_occ==0]
@@ -270,8 +270,8 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
     if mo_energy is None: mo_energy = sscobj._scf.mo_energy
-    if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
-    if mo_occ    is None: mo_occ = sscobj._scf.mo_occ
+    if mo_coeff is None: mo_coeff = sscobj._scf.mo_coeff
+    if mo_occ is None: mo_occ = sscobj._scf.mo_occ
     if with_cphf is None: with_cphf = sscobj.cphf
 
     mol = sscobj.mol
@@ -407,7 +407,7 @@ class SpinSpinCoupling(lib.StreamObject):
                 ktensor[i,j] = ktensor[j,i] = iso_ssc[k]
                 if self.verbose >= logger.DEBUG:
                     _write(self.stdout, e11[k],
-                           '\nSSC E11 between %d %s and %d %s' \
+                           '\nSSC E11 between %d %s and %d %s'
                            % (i, self.mol.atom_symbol(i),
                               j, self.mol.atom_symbol(j)))
 #                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')

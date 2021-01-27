@@ -89,11 +89,10 @@ def get_hcore(cell, kpts):
     dtype = h1.dtype
     if cell._pseudo:
         SI=cell.get_SI()
-        nao = cell.nao_nr()
         Gv = cell.Gv
         natom = cell.natm
         coords = cell.get_uniform_grids()
-        ngrids, nkpts = len(coords), len(kpts)
+        ngrids = len(coords)
         vlocG = get_vlocG(cell)
         vpplocG = -np.einsum('ij,ij->j', SI, vlocG)
         vpplocG[0] = np.sum(get_alphas(cell))
@@ -197,7 +196,8 @@ def hcore_generator(mf, cell=None, kpts=None):
                     SPG_lm_G_aoG = np.einsum('anmg, gp->anmp', SPG_lmi_G, aokG)
                     tmp_1 = np.einsum('ij,ajmp->aimp', hl, SPG_lm_G_aoG)
                     tmp_2 = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                    vppnl = np.einsum('imp,aimq->apq', SPG_lm_aoG.conj(), tmp_1) + np.einsum('aimp,imq->apq',   SPG_lm_G_aoG.conj(), tmp_2)
+                    vppnl = (np.einsum('imp,aimq->apq', SPG_lm_aoG.conj(), tmp_1) +
+                             np.einsum('aimp,imq->apq', SPG_lm_G_aoG.conj(), tmp_2))
                     vppnl *=(1./ngrids**2)
                     if dtype==np.float64:
                         hcore[:,kn] += vppnl.real
@@ -229,10 +229,10 @@ def grad_nuc(cell, atmlst):
             r1 = ri-rj + Lall
             r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
             r = r.reshape(len(r),1)
-            ewovrl_grad[i] += np.sum(- (qi * qj / r ** 3 * r1 * \
-                                    scipy.special.erfc(ew_eta * r).reshape(len(r),1)), axis = 0)
-            ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) * \
-                                    np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
+            ewovrl_grad[i] += np.sum(- (qi * qj / r ** 3 * r1 *
+                                        scipy.special.erfc(ew_eta * r).reshape(len(r),1)), axis = 0)
+            ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) *
+                                     np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
 
     mesh = gto.cell._cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
@@ -263,12 +263,10 @@ def get_jk(mf_grad, dm, kpts):
     return vj, vk
 
 def get_j(mf_grad, dm, kpts):
-    vk= mf_grad.get_j(dm, kpts)
-    return vj
+    return mf_grad.get_j(dm, kpts)
 
 def get_k(mf_grad, dm, kpts):
-    vk= mf_grad.get_k(dm, kpts)
-    return vk
+    return mf_grad.get_k(dm, kpts)
 
 def get_veff(mf_grad, dm, kpts):
     '''NR Hartree-Fock Coulomb repulsion'''

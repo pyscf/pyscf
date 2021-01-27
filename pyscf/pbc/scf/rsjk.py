@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -893,11 +893,9 @@ if __name__ == '__main__':
                        He     0.4917  0.4917  0.4917'''
         cell.basis = {'He': [[0, [4.1, 1, -.2],
                                  [0.5, .2, .5],
-                                 [0.15, .5, .5]
-                             ],
-                             [1, [0.3, 1]],
+                                 [0.15, .5, .5]],
                              #[1, [1.5, 1]],
-                            ]}
+                             [1, [0.3, 1]],]}
         cell.build()
         cell.verbose = 6
         cells.append(cell)

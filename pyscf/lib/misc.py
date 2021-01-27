@@ -50,7 +50,7 @@ c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
 def load_library(libname):
-# numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
+    # numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
     if '1.6' in numpy.__version__:
         if (sys.platform.startswith('linux') or
             sys.platform.startswith('gnukfreebsd')):
@@ -68,7 +68,7 @@ def load_library(libname):
         return numpy.ctypeslib.load_library(libname, _loaderpath)
 
 #Fixme, the standard resouce module gives wrong number when objects are released
-#see http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
+# http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
@@ -735,10 +735,10 @@ class ThreadWithReturnValue(Thread):
         if self._e is not None:
             raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
         else:
-# Note: If the return value of target is huge, Queue.get may raise
-# SystemError: NULL result without error in PyObject_Call
-# It is because return value is cached somewhere by pickle but pickle is
-# unable to handle huge amount of data.
+            # Note: If the return value of target is huge, Queue.get may raise
+            # SystemError: NULL result without error in PyObject_Call
+            # It is because return value is cached somewhere by pickle but pickle is
+            # unable to handle huge amount of data.
             return self._q.get()
     get = join
 
@@ -826,13 +826,13 @@ class call_in_background(object):
                 global_import_lock = imp.lock_held()
 
             if self.sync or global_import_lock:
-# Some modules like nosetests, coverage etc
-#   python -m unittest test_xxx.py  or  nosetests test_xxx.py
-# hang when Python multi-threading was used in the import stage due to (Python
-# import lock) bug in the threading module.  See also
-# https://github.com/paramiko/paramiko/issues/104
-# https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-# Disable the asynchoronous mode for safe importing
+                # Some modules like nosetests, coverage etc
+                #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
+                # hang when Python multi-threading was used in the import stage due to (Python
+                # import lock) bug in the threading module.  See also
+                # https://github.com/paramiko/paramiko/issues/104
+                # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
+                # Disable the asynchoronous mode for safe importing
                 def def_async_fn(i):
                     return fns[i]
 
@@ -950,7 +950,7 @@ class GradScanner:
 
     @property
     def converged(self):
-# Some base methods like MP2 does not have the attribute converged
+        # Some base methods like MP2 does not have the attribute converged
         conv = getattr(self.base, 'converged', True)
         return conv
 

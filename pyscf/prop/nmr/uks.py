@@ -57,7 +57,7 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             vmat[1,0] += numint._dot_ao_ao(mol, aow, giao[0], mask, shls_slice, ao_loc)
             vmat[1,1] += numint._dot_ao_ao(mol, aow, giao[1], mask, shls_slice, ao_loc)
             vmat[1,2] += numint._dot_ao_ao(mol, aow, giao[2], mask, shls_slice, ao_loc)
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         buf = numpy.empty((10,blksize,nao))

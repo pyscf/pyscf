@@ -21,9 +21,12 @@ Non-relativistic static and dynamic polarizability and hyper-polarizability tens
 (In testing)
 '''
 
+import warnings
 from pyscf.prop.polarizability.uhf import \
         (polarizability, hyper_polarizability, polarizability_with_freq,
          Polarizability)  # noqa
+
+warnings.warn('Module polarizability is under testing')
 
 
 if __name__ == '__main__':

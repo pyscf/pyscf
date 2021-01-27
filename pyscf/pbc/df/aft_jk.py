@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     weight = 1./len(kpts)
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         _update_vj_(vj_kpts, aoaoks, dms, coulG[p0:p1], weight)
-    aoao = aoaoks = p0 = p1 = None
+    aoaoks = p0 = p1 = None
 
     if gamma_point(kpts):
         vj_kpts = vj_kpts.real.copy()

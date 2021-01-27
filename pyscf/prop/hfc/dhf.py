@@ -23,10 +23,14 @@ Refs: JCP 134, 044111 (2011); DOI:10.1063/1.3526263
 '''
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
+
+warnings.warn('Module HFC is under testing')
+
 
 # TODO: 3 SCF for sx, sy, sz
 
@@ -133,8 +137,7 @@ if __name__ == '__main__':
     from pyscf import scf
     mol = gto.M(
         atom = [['Li', (0.,0.,0.)],
-                #['He', (.4,.7,0.)],
-               ],
+                ['He', (.4,.7,0.)], ],
         basis = 'ccpvdz', spin=1)
     mf = scf.DHF(mol).run()
     hfc = HFC(mf)

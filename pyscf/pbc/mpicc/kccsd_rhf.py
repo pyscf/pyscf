@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -104,8 +104,11 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
 def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     task_list = generate_max_task_list(vec_shape)
     read_success = False
-    return False, None  # TODO: find a way to make the amplitudes are consistent
-                        # with the signs of the eris/t-amplitudes when restarting
+
+    # TODO: find a way to make the amplitudes are consistent
+    # with the signs of the eris/t-amplitudes when restarting
+    return False, None
+
     print("attempting to read in eom amplitudes from file ", filename)
     if os.path.isfile(filename):
         print("reading eom amplitudes from file. shape=", vec_shape)
@@ -176,17 +179,11 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 def update_t1(cc,t1,t2,eris,ints1e):
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
-    mo_e_o = [e[:nocc] for e in eris.mo_energy]
-    mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
 
     # Get location of padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:,:nocc,nocc:]
-    foo = fock[:,:nocc,:nocc]
-    fvv = fock[:,nocc:,nocc:]
-
-    ds_type = t1.dtype
 
     Foo,Fvv,Fov,Loo,Lvv = ints1e
 
@@ -228,13 +225,16 @@ def update_t1(cc,t1,t2,eris,ints1e):
                 tau_term[kk] -= unpack_tril(t2,nkpts,ki,kk,kk,kconserv[ki,kk,kk]).transpose(1,0,2,3)
             tau_term[ka] += einsum('ic,ka->kica',t1[ki],t1[ka])
 
-            t1new[ka] += einsum('kc,kica->ia',Fov[:].reshape(nocc*nkpts,nvir),
-                                              tau_term[:].reshape(nocc*nkpts,nocc,nvir,nvir))
+            t1new[ka] += einsum('kc,kica->ia',
+                                Fov[:].reshape(nocc*nkpts,nvir),
+                                tau_term[:].reshape(nocc*nkpts,nocc,nvir,nvir))
 
-            t1new[ka] += einsum('akic,kc->ia',eris_voov_aXi[iterka,:,iterki].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
-                                              2*t1[:].reshape(nocc*nkpts,nvir))
-            t1new[ka] += einsum('kaic,kc->ia',eris_ovov_Xai[:,iterka,iterki].reshape(nocc*nkpts,nvir,nocc,nvir),
-                                               -t1[:].reshape(nocc*nkpts,nvir))
+            t1new[ka] += einsum('akic,kc->ia',
+                                eris_voov_aXi[iterka,:,iterki].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
+                                2*t1[:].reshape(nocc*nkpts,nvir))
+            t1new[ka] += einsum('kaic,kc->ia',
+                                eris_ovov_Xai[:,iterka,iterki].reshape(nocc*nkpts,nvir,nocc,nvir),
+                                -t1[:].reshape(nocc*nkpts,nvir))
         loader.slave_finished()
 
     comm.Barrier()
@@ -295,7 +295,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
-    fock = eris.fock
     tril_shape = ((nkpts)*(nkpts+1))//2
 
     mo_e_o = [e[:nocc] for e in eris.mo_energy]
@@ -310,10 +309,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     #            if ki <= kj:
     #                t2tmp[tril_index(ki,kj),ka] = t2[ki,kj,ka]
     #t2 = t2tmp
-
-    fov = fock[:,:nocc,nocc:]
-    foo = fock[:,:nocc,:nocc]
-    fvv = fock[:,nocc:,nocc:]
 
     #mo_e = eris.fock.diagonal()
     #eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -355,7 +350,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     #t2new = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
     t2new_tril = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
 
-    cput1 = logger.process_clock(), logger.perf_counter()
     cput2 = logger.process_clock(), logger.perf_counter()
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,nkpts,nkpts,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
@@ -408,7 +402,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
             kk_block_size = len(kklist)
             eris_oovv1 = numpy.empty((kk_block_size,kl_block_size,nkpts,nocc,nocc,nvir,nvir),
-                                  dtype=t2.dtype)
+                                     dtype=t2.dtype)
             #  Now fill in the matrix elements
             for iterkl,kl in enumerate(range(kblock[0],kblock[1])):
                 for iterki,ki in enumerate(ranges0):
@@ -416,8 +410,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                         kk = kconserv[kj,kl,ki]
                         iterkk = numpy.where(numpy.asarray(kklist)==kk)[0][0]
                         eris_oovv1[iterkk,iterkl,:] = _cp(eris.oovv[kk,kl,:])
-
-            kl_slice = slice(kblock[0],kblock[1])
 
             for iterkl,kl in enumerate(range(kblock[0],kblock[1])):
                 for iterki,ki in enumerate(ranges0):
@@ -435,8 +427,9 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                             wOOoo = _cp(eris_oooo[iterkj,iterki,kl].transpose(3,2,1,0)).conj()
                             wOOoo += einsum('klic,jc->klij',eris_ovoo_ij[iterki,iterkj,kk].transpose(2,3,0,1).conj(),t1[kj])
                             wOOoo += einsum('lkjc,ic->klij',eris_ovoo_ji[iterkj,iterki,kl].transpose(2,3,0,1).conj(),t1[ki])
-                            wOOoo += einsum('klcd,ijcd->klij',eris_oovv1[iterkk,iterkl,:].transpose(1,2,0,3,4).reshape(nocc,nocc,nkpts*nvir,nvir),
-                                                              tau1_ooVV.transpose(1,2,0,3,4).reshape(nocc,nocc,nkpts*nvir,nvir))
+                            wOOoo += einsum('klcd,ijcd->klij',
+                                            eris_oovv1[iterkk,iterkl,:].transpose(1,2,0,3,4).reshape(nocc,nocc,nkpts*nvir,nvir),
+                                            tau1_ooVV.transpose(1,2,0,3,4).reshape(nocc,nocc,nkpts*nvir,nvir))
 
                             for iterka,ka in enumerate(ranges2):
                                 # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
@@ -498,7 +491,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                         for iterki,ki in enumerate(ranges0):
                             kj = kj_list[iterki]
                             #tau1_ooVV[iterki]    += t2[ki,kj,:]
-                            tau1_ooVV[iterki]    += unpack_tril(t2,nkpts,ki,kj,range(nkpts),kconserv[ki,range(nkpts),kj])
+                            tau1_ooVV[iterki] += unpack_tril(t2,nkpts,ki,kj,range(nkpts),kconserv[ki,range(nkpts),kj])
                             tau1_ooVV[iterki,ki] += einsum('ic,jd->ijcd',t1[ki],t1[kj])
                         tau1_ooVV = tau1_ooVV.transpose(0,2,3,1,4,5).reshape(len(ranges0),nocc,nocc,-1)
                         tmp = einsum('kijd,dab->kijab',tau1_ooVV,wvvVV)
@@ -530,7 +523,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(numpy.floor(mem/pre)),1),nkpts)
-    BLKSIZE = (nkpts_blksize,nkpts,1,)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,nkpts,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -568,8 +560,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                         #tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
                         tmp += einsum('ki,kjab->ijab',-Loo[ki],unpack_tril(t2,nkpts,ki,kj,ka,kconserv[ki,ka,kj]))
                         # t1 with ooov terms       (1/2)
-                        tmp2 = eris_ooov_ji[iterkj,iterki,kb].transpose(3,2,1,0).conj() + \
-                                einsum('akic,jc->akij',eris_voovR1_aXi[iterki,iterka,kb],t1[kj]) #ooov[kj,ki,kb,ka] ovvo[kb,ka,kj,ki]
+                        tmp2 = (eris_ooov_ji[iterkj,iterki,kb].transpose(3,2,1,0).conj() +
+                                einsum('akic,jc->akij',eris_voovR1_aXi[iterki,iterka,kb],t1[kj])) #ooov[kj,ki,kb,ka] ovvo[kb,ka,kj,ki]
                         tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
                         if ki == kj:
                             t2new_tril[tril_index(ki,kj),ka] += tmp
@@ -616,19 +608,18 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                     _WvOoV -= 0.5*einsum('dc,iad->aic',oOvV_f,tau2_OovV) # kc consolidated into c, ld consolidated into d
                     _WOvoV -= 0.5*einsum('dc,iad->aic',oOVv_f,tau2_OovV)
                     #_WvOoV += 0.5*einsum('dc,iad->aic',2*oOvV_f-oOVv_f,t2[ki,:,ka].transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
-                    _WvOoV += 0.5*einsum('dc,iad->aic',
-                                          2*oOvV_f-oOVv_f,
+                    _WvOoV += 0.5*einsum('dc,iad->aic', 2*oOvV_f-oOVv_f,
                                           unpack_tril(t2,nkpts,ki,range(nkpts),ka,kconserv[ki,ka,range(nkpts)]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
 
                     for iterkj,kj in enumerate(ranges1):
                         if ki <= kj:
                             kb = kconserv[ki,ka,kj]
                             #tmp = einsum('aic,jbc->ijab',(2*_WvOoV-_WOvoV),t2[kj,kk_slice,kb].transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
-                            tmp = einsum('aic,jbc->ijab',(2*_WvOoV-_WOvoV),
-                                    unpack_tril(t2,nkpts,kj,kk_range,kb,kconserv[kj,kb,kk_range]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
+                            tmp = einsum('aic,jbc->ijab',2*_WvOoV-_WOvoV,
+                                         unpack_tril(t2,nkpts,kj,kk_range,kb,kconserv[kj,kb,kk_range]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
                             #tmp -= einsum('aic,jbc->ijab',_WvOoV,t2[kk_slice,kj,kb].transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             tmp -= einsum('aic,jbc->ijab',_WvOoV,
-                                    unpack_tril(t2,nkpts,kk_range,kj,kb,kconserv[kk_range,kb,kj]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
+                                          unpack_tril(t2,nkpts,kk_range,kj,kb,kconserv[kk_range,kb,kj]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             if ki == kj:
                                 t2new_tril[tril_index(ki,kj),ka] += tmp
                                 t2new_tril[tril_index(ki,kj),kb] += tmp.transpose(1,0,3,2)
@@ -688,8 +679,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                         #tmp += einsum('kj,kiba->ijab',-Loo[kj],t2[kj,ki,kb])
                         tmp += einsum('kj,kiba->ijab',-Loo[kj],unpack_tril(t2,nkpts,kj,ki,kb,kconserv[kj,kb,ki]))
                         # t1 with ooov terms (2/2)
-                        tmp2 = eris_ooov_ij[iterki,iterkj,ka].transpose(3,2,1,0).conj() + \
-                                einsum('bkjc,ic->bkji',eris_voovR1_bXj[iterkj,iterkb,ka],t1[ki]) #ooov[ki,kj,ka,kb] ovvo[ka,kb,ki,kj]
+                        tmp2 = (eris_ooov_ij[iterki,iterkj,ka].transpose(3,2,1,0).conj() +
+                                einsum('bkjc,ic->bkji',eris_voovR1_bXj[iterkj,iterkb,ka],t1[ki])) #ooov[ki,kj,ka,kb] ovvo[ka,kb,ki,kj]
                         tmp -= einsum('bkji,ka->ijab',tmp2,t1[ka])
                         t2new_tril[tril_index(ki,kj),ka] += tmp
                         #t2new[ki,kj,ka] += tmp
@@ -731,17 +722,17 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                     _WOvoV -= 0.5*einsum('dc,jbd->bjc',oOVv_f,tau2_OovV)
                     #_WvOoV += 0.5*einsum('dc,jbd->bjc',2*oOvV_f-oOVv_f,t2[kj,:,kb].transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
                     _WvOoV += 0.5*einsum('dc,jbd->bjc',2*oOvV_f-oOVv_f,
-                            unpack_tril(t2,nkpts,kj,range(nkpts),kb,kconserv[kj,kb,range(nkpts)]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
+                                         unpack_tril(t2,nkpts,kj,range(nkpts),kb,kconserv[kj,kb,range(nkpts)]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
 
                     for iterki,ki in enumerate(ranges0):
                         if ki < kj:
                             ka = kconserv[ki,kb,kj]
                             #tmp = einsum('bjc,iac->ijab',(2*_WvOoV-_WOvoV),t2[ki,kk_slice,ka].transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
-                            tmp = einsum('bjc,iac->ijab',(2*_WvOoV-_WOvoV),
-                                    unpack_tril(t2,nkpts,ki,kk_range,ka,kconserv[ki,ka,kk_range]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
+                            tmp = einsum('bjc,iac->ijab',2*_WvOoV-_WOvoV,
+                                         unpack_tril(t2,nkpts,ki,kk_range,ka,kconserv[ki,ka,kk_range]).transpose(1,3,0,2,4).reshape(nocc,nvir,-1))
                             #tmp -= einsum('bjc,iac->ijab',_WvOoV,t2[kk_slice,ki,ka].transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             tmp -= einsum('bjc,iac->ijab',_WvOoV,
-                                    unpack_tril(t2,nkpts,kk_range,ki,ka,kconserv[kk_range,ka,ki]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
+                                          unpack_tril(t2,nkpts,kk_range,ki,ka,kconserv[kk_range,ka,ki]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             t2new_tril[tril_index(ki,kj),ka] += tmp
                             #t2new[ki,kj,ka] += tmp
         loader.slave_finished()
@@ -778,8 +769,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                     for iterkb,kb in enumerate(ranges2):
                         ka = kconserv[ki,kb,kj]
                         # t1 with ovvv terms  (part 1/2)
-                        tmp2 = eris_vovvL1_jib[iterki,iterkb,iterkj].transpose(3,2,1,0).conj() - \
-                                einsum('kbic,ka->abic',eris_ovovRev_Xbi[iterki,iterkb,ka],t1[ka]) #ovvv[ki,kj,ka,kb]  ovov[ka,kb,ki,kj]
+                        tmp2 = (eris_vovvL1_jib[iterki,iterkb,iterkj].transpose(3,2,1,0).conj() -
+                                einsum('kbic,ka->abic',eris_ovovRev_Xbi[iterki,iterkb,ka],t1[ka])) #ovvv[ki,kj,ka,kb]  ovov[ka,kb,ki,kj]
                         tmp  = einsum('abic,jc->ijab',tmp2,t1[kj])
                         if ki == kj:
                             t2new_tril[tril_index(ki,kj),ka] += tmp
@@ -821,7 +812,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                             ka = kconserv[ki,kb,kj]
                             #tmp = einsum('bic,jac->ijab',_WOvoV,t2[kk_slice,kj,ka].transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             tmp = einsum('bic,jac->ijab',_WOvoV,
-                                    unpack_tril(t2,nkpts,kk_range,kj,ka,kconserv[kk_range,ka,kj]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
+                                         unpack_tril(t2,nkpts,kk_range,kj,ka,kconserv[kk_range,ka,kj]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             if ki == kj:
                                 t2new_tril[tril_index(ki,kj),ka] -= tmp
                                 t2new_tril[tril_index(ki,kj),kb] -= tmp.transpose(1,0,3,2)
@@ -864,8 +855,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                     for iterka,ka in enumerate(ranges2):
                         kb = kconserv[ki,ka,kj]
                         # t1 with ovvv terms  (part 2/2)
-                        tmp2 = eris_vovvL1_ija[iterkj,iterka,iterki].transpose(3,2,1,0).conj() - \
-                                einsum('kajc,kb->bajc',eris_ovovRev_Xaj[iterkj,iterka,kb],t1[kb]) #ovvv[kj,ki,kb,ka]  ovov[kb,ka,kj,ki]
+                        tmp2 = (eris_vovvL1_ija[iterkj,iterka,iterki].transpose(3,2,1,0).conj() -
+                                einsum('kajc,kb->bajc',eris_ovovRev_Xaj[iterkj,iterka,kb],t1[kb])) #ovvv[kj,ki,kb,ka]  ovov[kb,ka,kj,ki]
                         tmp  = einsum('bajc,ic->ijab',tmp2,t1[ki])
                         t2new_tril[tril_index(ki,kj),ka] += tmp
                         #t2new[ki,kj,ka] += tmp
@@ -900,8 +891,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
                         if ki < kj:
                             kb = kconserv[ki,ka,kj]
                             #tmp = einsum('ajc,ibc->ijab',_WOvoV,t2[kk_slice,ki,kb].transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
-                            tmp = einsum('ajc,ibc->ijab',_WOvoV,
-                                    unpack_tril(t2,nkpts,kk_range,ki,kb,kconserv[kk_range,kb,ki]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
+                            tmp = einsum('ajc,ibc->ijab', _WOvoV,
+                                         unpack_tril(t2,nkpts,kk_range,ki,kb,kconserv[kk_range,kb,ki]).transpose(2,3,0,1,4).reshape(nocc,nvir,-1))
                             t2new_tril[tril_index(ki,kj),ka] -= tmp
                             #t2new[ki,kj,ka] -= tmp
         loader.slave_finished()
@@ -983,13 +974,13 @@ def energy_tril(cc, t1, t2, eris):
         for kj in range(nkpts):
             for ka in range(nkpts):
                 if ki <= kj:
-                   kb = kconserv[ki,ka,kj]
-                   e += einsum('ijab,ijab', tau[tril_index(ki,kj),ka],
-                               (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
+                    kb = kconserv[ki,ka,kj]
+                    e += einsum('ijab,ijab', tau[tril_index(ki,kj),ka],
+                                (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
                 if kj < ki:
-                   kb = kconserv[ki,ka,kj]
-                   e += einsum('ijab,ijab', tau[tril_index(kj,ki),kb].transpose(1,0,3,2),
-                               (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
+                    kb = kconserv[ki,ka,kj]
+                    e += einsum('ijab,ijab', tau[tril_index(kj,ki),kb].transpose(1,0,3,2),
+                                (2.*eris.oovv[ki,kj,ka]-eris.oovv[ki,kj,kb].transpose(0,1,3,2)))
     comm.Barrier()
     e /= nkpts
     return e.real
@@ -1041,7 +1032,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,1,nkpts,))
         loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
-        cput1 = logger.process_clock(), logger.perf_counter()
         good2go = True
         while(good2go):
             good2go, data = loader.slave_set()
@@ -1112,8 +1102,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
         woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
         self.emp2 = 0
-        foo = eris.fock[:,:nocc,:nocc].copy()
-        fvv = eris.fock[:,nocc:,nocc:].copy()
         eris_oovv = eris.oovv.copy()
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
@@ -1125,22 +1113,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
         kconserv = self.kconserv
-        for ki in range(nkpts):
-          for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                # For discussion of LARGE_DENOM, see t1new update above
-                eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-                n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-                eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            # For discussion of LARGE_DENOM, see t1new update above
+            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
 
-                ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-                n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-                ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
-                eijab = eia[:, None, :, None] + ejb[:, None, :]
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
 
-                woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-                t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
+            woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
+            t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
 
         t2 = numpy.conj(t2)
         emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
@@ -1236,8 +1222,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
     def ipccsd(self, nroots=2*4, kptlist=None):
         time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
         nkpts = self.nkpts
         if kptlist is None:
             kptlist = range(nkpts)
@@ -1253,7 +1237,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             self.kshift = kshift
             diag = self.ipccsd_diag()
             diag = self.mask_frozen_ip(diag, kshift, const=LARGE_DENOM)
-            precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
             rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
@@ -1296,7 +1279,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
 
-        nproc = comm.Get_size()
         t1,t2 = self.t1, self.t2
         nkpts,nocc,nvir = self.t1.shape
         nkpts = self.nkpts
@@ -1310,7 +1292,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
         imds = self.imds
 
-        cput2 = logger.process_clock(), logger.perf_counter()
         Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
         loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,))
         loader.set_ranges((range(nkpts),))
@@ -1353,8 +1334,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             for kl in range(nkpts):
                 kk_list = range(nkpts)
                 kd_list = kconserv[kl,kshift,kk_list]
-                tmp += einsum('lc,l->c',(2.*imds.Woovv[kl,kk_list,kd_list].transpose(1,0,2,3,4) \
-                                           -imds.Woovv[kk_list,kl,kd_list].transpose(2,0,1,3,4)).reshape(-1,nvir),
+                tmp += einsum('lc,l->c', (2.*imds.Woovv[kl,kk_list,kd_list].transpose(1,0,2,3,4) -
+                                          imds.Woovv[kk_list,kl,kd_list].transpose(2,0,1,3,4)).reshape(-1,nvir),
                                          r2[kk_list,kl].transpose(2,0,1,3).reshape(-1))
             for iterki, ki in enumerate(ranges0):
                 for iterkj, kj in enumerate(ranges1):
@@ -1370,8 +1351,9 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
                     kl_list = range(nkpts)
                     kk_list = kconserv[ki,kl_list,kj]
-                    Hr2[ki,kj] += einsum('klij,klb->ijb',WooooS_Xij[kl_list,iterki,iterkj].transpose(1,0,2,3,4).reshape(nocc,nocc*nkpts,nocc,nocc),
-                                                         r2[kk_list,kl_list].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir))
+                    Hr2[ki,kj] += einsum('klij,klb->ijb',
+                                         WooooS_Xij[kl_list,iterki,iterkj].transpose(1,0,2,3,4).reshape(nocc,nocc*nkpts,nocc,nocc),
+                                         r2[kk_list,kl_list].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir))
 
             Wovov_Xbi = _cp(imds.Wovov[:,s1,s0])
 
@@ -1386,10 +1368,13 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             for iterkj,kj in enumerate(ranges0):
                 for iterkb,kb in enumerate(ranges1):
                     ki = kconserv[kshift,kj,kb]
-                    Hr2[ki,kj] += einsum('bljd,ild->ijb',Wvoov_bXj[iterkb,:,iterkj].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
-                                                         (2.*r2[ki,:].transpose(1,0,2,3)-r2[:,ki].transpose(2,0,1,3)).reshape(nocc,nocc*nkpts,nvir))
-                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',Wovov_Xbj[:,iterkb,iterkj].reshape(nocc*nkpts,nvir,nocc,nvir),
-                                                          r2[ki,:].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir)) #typo in nooijen's paper
+                    Hr2[ki,kj] += einsum('bljd,ild->ijb',
+                                         Wvoov_bXj[iterkb,:,iterkj].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
+                                         (2.*r2[ki,:].transpose(1,0,2,3)-
+                                          r2[:,ki].transpose(2,0,1,3)).reshape(nocc,nocc*nkpts,nvir))
+                    Hr2[ki,kj] += -einsum('lbjd,ild->ijb',
+                                          Wovov_Xbj[:,iterkb,iterkj].reshape(nocc*nkpts,nvir,nocc,nvir),
+                                          r2[ki,:].transpose(1,0,2,3).reshape(nocc,nocc*nkpts,nvir))  #typo in nooijen's paper
             loader.slave_finished()
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
@@ -1400,8 +1385,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
     def lipccsd(self, nroots=2*4, kptlist=None):
         time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
         nkpts = self.nkpts
         if kptlist is None:
             kptlist = range(nkpts)
@@ -1416,7 +1399,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
-            precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__lipccsd" + str(kshift) + "__.hdf5"
             rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
@@ -1445,7 +1427,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
 
-        nproc = comm.Get_size()
         t1,t2 = self.t1, self.t2
         nkpts,nocc,nvir = self.t1.shape
         nkpts = self.nkpts
@@ -1459,7 +1440,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
         imds = self.imds
 
-        cput2 = logger.process_clock(), logger.perf_counter()
         Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
         Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
 
@@ -1521,7 +1501,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                         kk = kconserv[kshift,kl,kd]
                         tmp = einsum('bljd,kjb->kld',Wvoov_blX[iterkb,iterkl,kj],r2[kk,kj])
                         Hr2[kk,kl] += 2.*tmp
-                        Hr2[kk,kl] -= einsum('lbjd,kjb->kld',Wovov_lbX[iterkl,iterkb,kj],r2[kk,kj]) # typo in nooijen's paper
+                        Hr2[kk,kl] -= einsum('lbjd,kjb->kld', Wovov_lbX[iterkl,iterkb,kj],
+                                             r2[kk,kj])  # typo in nooijen's paper
 
                         # Notice we switch around the variable kk and kl
                         kd = kconserv[kl,kj,kb]
@@ -1633,14 +1614,13 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return vector
 
     def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
-        nproc = comm.Get_size()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         kconserv = self.kconserv
         eris = self.eris
         kshift = self.kshift
-        t1, t2 = self.t1, self.t2
+        t2 = self.t2
         foo = eris.fock[:,:nocc,:nocc]
         fvv = eris.fock[:,nocc:,nocc:]
 
@@ -1849,7 +1829,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                                 tmp2 = -einsum('aei,jkbe->ijkab',tmp,tril)
                                 rijkab_tmp += tmp2
 
-                                kn = kshift
                                 # ki is free, kj is free, ka is free, kk is free
                                 # km, kb -> fixed
                                 # (i,j,k) -> (i,j,k)
@@ -1908,7 +1887,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
             if rank == 0:
-                logger.info(self, 'EOM-IPCCSD* delta energy = %.15g (Imag = %.15g)' % (star_energy.real,star_energy.imag))
+                logger.info(self, 'EOM-IPCCSD* delta energy = %.15g (Imag = %.15g)',
+                            star_energy.real,star_energy.imag)
             e.append(star_energy+_eval)
 
         return np.array(e)
@@ -1974,8 +1954,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
                             Hr2[kj,ka,j,b,:] += -WovovRev_jaj.transpose(1,0,3,2)[b,j,b,j]
                             for a in range(nvir):
-                                Hr2[kj,ka,j,a,b] += numpy.dot(unpack_tril(t2,nkpts,kshift,kj,ka,kconserv[kshift,ka,kj])[:,j,a,b],-2.*imds.Woovv[kshift,kj,ka,:,j,a,b]
-                                                                                          +imds.Woovv[kshift,kj,kb,:,j,b,a])
+                                Hr2[kj,ka,j,a,b] += numpy.dot(unpack_tril(t2,nkpts,kshift,kj,ka,kconserv[kshift,ka,kj])[:,j,a,b],
+                                                              -2.*imds.Woovv[kshift,kj,ka,:,j,a,b] + imds.Woovv[kshift,kj,kb,:,j,b,a])
 
             loader.slave_finished()
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
@@ -1986,8 +1966,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
     def eaccsd(self, nroots=2*4, kptlist=None):
         time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
         nkpts = self.nkpts
         if kptlist is None:
             kptlist = range(nkpts)
@@ -2003,7 +1981,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             self.kshift = kshift
             diag = self.eaccsd_diag()
             diag = self.mask_frozen_ea(diag, kshift, const=LARGE_DENOM)
-            precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__reaccsd" + str(kshift) + "__.hdf5"
             rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
@@ -2067,14 +2044,15 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                 Hr1 += 2.*einsum('ld,lad->a',imds.Fov[kl],r2[kl,kshift])
                 Hr1 +=   -einsum('ld,lda->a',imds.Fov[kl],r2[kl,kl])
                 kd_list = numpy.array(kconserv[kshift,range(nkpts),kl])
-                Hr1 += einsum('alxcd,lxcd->a',2.*Wvovv_slX[iterkl,:].transpose(1,2,0,3,4)-Wvovv_slX[iterkl,kd_list].transpose(1,2,0,4,3),
-                               r2[kl,:].transpose(1,0,2,3))
+                Hr1 += einsum('alxcd,lxcd->a',
+                              (2.*Wvovv_slX[iterkl,:].transpose(1,2,0,3,4) -
+                               Wvovv_slX[iterkl,kd_list].transpose(1,2,0,4,3)),
+                              r2[kl,:].transpose(1,0,2,3))
             loader.slave_finished()
         comm.Allreduce(MPI.IN_PLACE, Hr1, op=MPI.SUM)
         Hr1 += einsum('ac,c->a',imds.Lvv[kshift],r1)
 
         Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
-        cput2 = logger.process_clock(), logger.perf_counter()
         mem = 0.5e9
         pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
         nkpts_blksize  = min(max(int(numpy.floor(mem/pre)),1),nkpts)
@@ -2125,26 +2103,28 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             for iterkj,kj in enumerate(ranges0):
                 for iterka,ka in enumerate(ranges1):
                     kb = kconserv[kshift,ka,kj]
-                    Hr2[kj,ka] += -einsum('k,kjab->jab',tmp,unpack_tril(t2,nkpts,kshift,kj,ka,kb))
+                    Hr2[kj,ka] += -einsum('k,kjab->jab', tmp, unpack_tril(t2,nkpts,kshift,kj,ka,kb))
 
             WovovRev_Xbj = _cp(imds.WovovRev[s0,s1,:])
             WvoovR1_bXj = _cp(imds.WvoovR1[s0,s1,:])
             for iterkj,kj in enumerate(ranges0):
                 for iterkb,kb in enumerate(ranges1):
                     ka = kconserv[kshift,kb,kj]
-                    Hr2[kj,ka] += -einsum('bldj,lad->jab',WovovRev_Xbj[iterkj,iterkb,:].transpose(2,0,1,4,3).reshape(nvir,nkpts*nocc,nvir,nocc),
+                    Hr2[kj,ka] += -einsum('bldj,lad->jab',
+                                          WovovRev_Xbj[iterkj,iterkb,:].transpose(2,0,1,4,3).reshape(nvir,nkpts*nocc,nvir,nocc),
                                           r2[:,ka].reshape(nkpts*nocc,nvir,nvir))
                     kl_range = _cp(range(nkpts))
                     kd_range = _cp(kconserv[kb,kj,kl_range])
-                    kl_slice = slice(0,nkpts)
-                    Hr2[kj,ka] += einsum('bljd,lad->jab',WvoovR1_bXj[iterkj,iterkb,:].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
-                                            (2.*r2[:,ka]-r2[kl_range,kd_range].transpose(0,1,3,2)).reshape(nocc*nkpts,nvir,nvir))
+                    Hr2[kj,ka] += einsum('bljd,lad->jab',
+                                         WvoovR1_bXj[iterkj,iterkb,:].transpose(1,0,2,3,4).reshape(nvir,nocc*nkpts,nocc,nvir),
+                                         (2.*r2[:,ka]-r2[kl_range,kd_range].transpose(0,1,3,2)).reshape(nocc*nkpts,nvir,nvir))
 
             Wvvvv_abX = _cp(imds.Wvvvv[s0,s1])
             for iterka,ka in enumerate(ranges0):
                 for iterkb,kb in enumerate(ranges1):
                     kj = kconserv[ka,kshift,kb]
-                    Hr2[kj,ka] += einsum('abx,jx->jab',Wvvvv_abX[iterka,iterkb,:].transpose(1,2,0,3,4).reshape(nvir,nvir,nvir*nkpts*nvir),
+                    Hr2[kj,ka] += einsum('abx,jx->jab',
+                                         Wvvvv_abX[iterka,iterkb,:].transpose(1,2,0,3,4).reshape(nvir,nvir,nvir*nkpts*nvir),
                                          r2[kj,:].transpose(1,0,2,3).reshape(nocc,nvir*nkpts*nvir))
             loader.slave_finished()
 
@@ -2157,8 +2137,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
     def leaccsd(self, nroots=2*4, kptlist=None):
         time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc
-        nvir = self.nmo - nocc
         nkpts = self.nkpts
         if kptlist is None:
             kptlist = range(nkpts)
@@ -2173,7 +2151,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
-            precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__leaccsd" + str(kshift) + "__.hdf5"
             rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
@@ -2365,7 +2342,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         kconserv = self.kconserv
         eris = self.eris
         kshift = self.kshift
-        t1, t2 = self.t1, self.t2
+        t2 = self.t2
         foo = eris.fock[:,:nocc,:nocc]
         fvv = eris.fock[:,nocc:,nocc:]
 
@@ -2416,13 +2393,14 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
             star_energy = numpy.array(0.0 + 1j*0.0)
             for kirange, kjrange in mpi.work_stealing_partition(task_list):
-                eris_oovv_jiX = _cp(eris.oovv[slice(*kjrange),slice(*kirange),range(nkpts)])
+                #eris_oovv_jiX = _cp(eris.oovv[slice(*kjrange),slice(*kirange),range(nkpts)])
                 eris_oovv_ijX = _cp(eris.oovv[slice(*kirange),slice(*kjrange),range(nkpts)])
 
                 eris_ooov_jiX = _cp(eris.ooov[slice(*kjrange),slice(*kirange),range(nkpts)])
                 eris_ooov_ijX = _cp(eris.ooov[slice(*kirange),slice(*kjrange),range(nkpts)])
 
-                kclist = kpts_helper.get_kconserv3(self._scf.cell, self.kpts, [range(*kirange),range(*kjrange),kshift,range(nkpts),range(nkpts)])
+                kclist = kpts_helper.get_kconserv3(self._scf.cell, self.kpts,
+                                                   [range(*kirange),range(*kjrange),kshift,range(nkpts),range(nkpts)])
 
                 for iterki, ki in enumerate(range(*kirange)):
                     for iterkj, kj in enumerate(range(*kjrange)):
@@ -2578,7 +2556,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                                 # ke = ki + kj - ka
                                 # kc = kf + ke - kb
                                 #    = ks + ki + kj - ka - kb
-                                kf = kshift
                                 ke = kconserv[ki,ka,kj]
                                 vvvv = _cp(eris.vvvv[kb,kc,ke])
                                 tmp2 = einsum('bcef,f->bce',vvvv,r1)
@@ -2586,7 +2563,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                                 tmp = - einsum('bce,ijae->ijabc',tmp2,tril)
                                 rijabc_tmp += tmp
 
-                                kf = kshift
                                 ke = kconserv[kj,kb,ki]
                                 vvvv = _cp(eris.vvvv[ka,kc,ke])
                                 tmp2 = einsum('acef,f->ace',vvvv,r1)
@@ -2668,7 +2644,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
             comm.Allreduce(MPI.IN_PLACE, star_energy, op=MPI.SUM)
             if rank == 0:
-                logger.info(self, 'EOM-EACCSD* delta energy = %.15g (Imag = %.15g)' % (star_energy.real,star_energy.imag))
+                logger.info(self, 'EOM-EACCSD* delta energy = %.15g (Imag = %.15g)',
+                            star_energy.real,star_energy.imag)
             e.append(star_energy+_eval)
 
         return np.array(e)
@@ -2697,7 +2674,6 @@ class _ERIS:
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         cput0 = (logger.process_clock(), logger.perf_counter())
-        moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -2747,18 +2723,19 @@ class _ERIS:
             logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
                             'May cause issues in convergence.', gap)
 
-        mem_now = pyscf.lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo
 
         kconserv = cc.kconserv
         khelper = cc.khelper
 
         log = logger.Logger(cc.stdout, cc.verbose)
+        #mem_now = pyscf.lib.current_memory()[0]
+        #if (method == 'incore' and (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
         if False:
-        #if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
-        #    or cc.mol.incore_anyway):
             log.info('using incore ERI storage')
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
+            unique_klist = list(khelper.symm_map.keys())
+            nUnique_klist = len(unique_klist)
 
             # Looping over unique list of k-vectors
             loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,))
@@ -2865,29 +2842,29 @@ class _ERIS:
 
             ds_type = dtype
 
-            self.oooo  = self.feri1.create_dataset('oooo',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=ds_type)
-            self.ooov  = self.feri1.create_dataset('ooov',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
-            self.ovoo  = self.feri1.create_dataset('ovoo',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=ds_type)
-            self.oovv  = self.feri1.create_dataset('oovv',  (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=ds_type)
+            self.oooo = self.feri1.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=ds_type)
+            self.ooov = self.feri1.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
+            self.ovoo = self.feri1.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=ds_type)
+            self.oovv = self.feri1.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=ds_type)
 
-            self.ovov  = self.feri1.create_dataset('ovov',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
-            self.ovvo  = self.feri1.create_dataset('ovvo',  (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=ds_type)
-            self.voov  = self.feri1.create_dataset('voov',  (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
-            self.ovvv  = self.feri1.create_dataset('ovvv',  (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
-            self.vovv  = self.feri1.create_dataset('vovv',  (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
-            self.vvvv  = self.feri1.create_dataset('vvvv',  (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=ds_type)
+            self.ovov = self.feri1.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
+            self.ovvo = self.feri1.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=ds_type)
+            self.voov = self.feri1.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
+            self.ovvv = self.feri1.create_dataset('ovvv', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
+            self.vovv = self.feri1.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
+            self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=ds_type)
 
-            self.ovovL1  = self.feri1.create_dataset('ovovL1',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
-            self.ooovL1  = self.feri1.create_dataset('ooovL1',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
-            #self.ovvvL1  = self.feri1.create_dataset('ovvvL1',  (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
-            self.ovovRev  = self.feri1.create_dataset('ovovRev',  (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
-            self.ooovRev  = self.feri1.create_dataset('ooovRev',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
-            self.ovvvRev  = self.feri1.create_dataset('ovvvRev',  (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
+            self.ovovL1 = self.feri1.create_dataset('ovovL1', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
+            self.ooovL1 = self.feri1.create_dataset('ooovL1', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
+            #self.ovvvL1 = self.feri1.create_dataset('ovvvL1', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
+            self.ovovRev = self.feri1.create_dataset('ovovRev', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=ds_type)
+            self.ooovRev = self.feri1.create_dataset('ooovRev', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
+            self.ovvvRev = self.feri1.create_dataset('ovvvRev', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=ds_type)
 
-            self.voovR1  = self.feri1.create_dataset('voovR1',  (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
-            self.ooovR1  = self.feri1.create_dataset('ooovR1',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
-            self.vovvR1  = self.feri1.create_dataset('vovvR1',  (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
-            self.vovvL1  = self.feri1.create_dataset('vovvL1',  (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
+            self.voovR1 = self.feri1.create_dataset('voovR1', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=ds_type)
+            self.ooovR1 = self.feri1.create_dataset('ooovR1', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
+            self.vovvR1 = self.feri1.create_dataset('vovvR1', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
+            self.vovvL1 = self.feri1.create_dataset('vovvL1', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=ds_type)
 
             mem = 0.5e9
             pre = 1.*nocc*nocc*nmo*nmo*nkpts*16
@@ -2942,7 +2919,7 @@ class _ERIS:
                 if good2go is False:
                     break
                 ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
-                rslice = [slice(0,max(x)-min(x)) for x in (ranges0,ranges1,ranges2)]
+                #rslice = [slice(0,max(x)-min(x)) for x in (ranges0,ranges1,ranges2)]
                 for kp in ranges0:
                     for kq in ranges2:
                         for kr in ranges1:
@@ -2993,10 +2970,10 @@ class _ERIS:
                 if good2go is False:
                     break
                 ranges0, ranges1, ranges2 = loader1.get_blocks_from_data(data)
-                rslice = [slice(0,len(x)) for x in (ranges0,ranges1,ranges2)]
+                #rslice = [slice(0,len(x)) for x in (ranges0,ranges1,ranges2)]
                 for kp in ranges0:
                     for kq in ranges2:
-                       for kr in ranges1:
+                        for kr in ranges1:
                             ks = kconserv[kp,kq,kr]
                             orbo_p = mo_coeff[kp][:,:nocc]
                             orbv_r = mo_coeff[kr][:,nocc:]
@@ -3012,21 +2989,21 @@ class _ERIS:
                             self.vovvL1[kp,ks,kr] = eri_kpt.transpose(1,0,3,2)[:,:,nocc:,nocc:]
 
                 self.ovoo[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
-                                                            tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,:nocc]
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,:nocc]
                 self.ovov[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
-                                                            tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:]
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:]
                 self.ovovL1[min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1,min(ranges0):max(ranges0)+1] = \
-                                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:].transpose(1,2,0,3,4,5,6)
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:].transpose(1,2,0,3,4,5,6)
                 self.ovovRev[min(ranges2):max(ranges2)+1,min(ranges1):max(ranges1)+1,min(ranges0):max(ranges0)+1] = \
-                                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:].transpose(2,1,0,3,4,5,6)
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,:nocc,nocc:].transpose(2,1,0,3,4,5,6)
                 self.ovvo[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
-                                                            tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,:nocc]
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,:nocc]
                 self.ovvv[min(ranges0):max(ranges0)+1,min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1] = \
-                                                            tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:]
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:]
                 #self.ovvvL1[min(ranges1):max(ranges1)+1,min(ranges2):max(ranges2)+1,min(ranges0):max(ranges0)+1] = \
-                #                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:].transpose(1,2,0,3,4,5,6)
+                #        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:].transpose(1,2,0,3,4,5,6)
                 self.ovvvRev[min(ranges2):max(ranges2)+1,min(ranges1):max(ranges1)+1,min(ranges0):max(ranges0)+1] = \
-                                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:].transpose(2,1,0,3,4,5,6)
+                        tmp_block[:len(ranges0),:len(ranges1),:len(ranges2),:,:,nocc:,nocc:].transpose(2,1,0,3,4,5,6)
                 loader1.slave_finished()
 
             comm.Barrier()

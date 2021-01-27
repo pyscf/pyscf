@@ -76,7 +76,7 @@ class MPIPool(object):
         if self.is_master():
             return
 
-        status = MPI.Status()
+        MPI.Status()
 
         while True:
             # Event loop.

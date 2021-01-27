@@ -140,7 +140,7 @@ class NSR(rhf_nmr.NMR):
         if self.verbose >= logger.NOTE:
             for i, atm_id in enumerate(self.shielding_nuc):
                 _write(self.stdout, e11[i],
-                       '\ntotal NSR of atom %d %s' \
+                       '\ntotal NSR of atom %d %s'
                        % (atm_id, self.mol.atom_symbol(atm_id)))
                 _write(self.stdout, e11[i], '\nNuclear spin rotation (kHz)')
                 _write(self.stdout, e_dia[i], 'dia-magnetic contribution (kHz)')

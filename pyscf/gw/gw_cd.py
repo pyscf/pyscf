@@ -40,7 +40,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -54,7 +54,12 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+
+    assert frozen == 0
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -67,10 +72,9 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df and frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -194,7 +198,6 @@ def get_sigmaR_diag(gw, omega, orbp, ef, Lpq):
     '''
     mo_energy = gw._scf.mo_energy
     nocc = gw.nocc
-    nmo = gw.nmo
     naux = Lpq.shape[0]
 
     if omega > ef:
@@ -298,7 +301,7 @@ class GWCD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
@@ -347,7 +350,6 @@ class GWCD(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         mem_incore = (2*nmo**2*naux) * 8/1e6
         mem_now = lib.current_memory()[0]
@@ -384,7 +386,6 @@ if __name__ == '__main__':
 
     gw = GWCD(mf)
     gw.kernel(orbs=range(0,nocc+3))
-    print gw.mo_energy
     assert(abs(gw.mo_energy[nocc-1]--0.41284735)<1e-5)
     assert(abs(gw.mo_energy[nocc]-0.16574524)<1e-5)
     assert(abs(gw.mo_energy[0]--19.53387986)<1e-5)

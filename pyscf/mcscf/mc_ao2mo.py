@@ -130,7 +130,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
             ti1 = log.timer('AO integrals buffer', *ti0)
         bufpa = bufs2[:sh_range[2]]
         _ao2mo.nr_e1(buf, mo, pashape, 's4', 's1', out=bufpa)
-# jc_pp, kc_pp
+        # jc_pp, kc_pp
         if level == 1: # ppaa, papa and vhf, jcp, kcp
             if log.verbose >= logger.DEBUG1:
                 ti1 = log.timer('buffer-pa', *ti1)
@@ -187,7 +187,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
         if log.verbose >= logger.DEBUG1:
             ti1 = log.timer('half transformation of the buffer', *ti1)
 
-# ppaa, papa
+        # ppaa, papa
         faapp_buf[str(istep)] = \
                 bufpa.reshape(sh_range[2],nmo,ncas)[:,ncore:nocc].reshape(-1,ncas**2).T
         p0 = 0

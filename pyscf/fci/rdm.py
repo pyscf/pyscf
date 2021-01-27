@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -192,10 +192,11 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
                        link_indexb.ctypes.data_as(ctypes.c_void_p))
     rdm3 = _complete_dm3_(rdm2, rdm3)
     return rdm1.T, rdm2, rdm3
+
 def _complete_dm3_(dm2, dm3):
-# fci_4pdm.c assumed symmetry p >= r >= t for 3-pdm <p^+ q r^+ s t^+ u>
-# Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
-# complete the full 3-pdm
+    # fci_4pdm.c assumed symmetry p >= r >= t for 3-pdm <p^+ q r^+ s t^+ u>
+    # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
+    # complete the full 3-pdm
     def transpose01(ijk, i, j, k):
         jik = ijk.transpose(1,0,2)
         jik[:,j] -= dm2[i,:,k,:]
@@ -209,7 +210,7 @@ def _complete_dm3_(dm2, dm3):
         dm3[i,:,k,:,j,:] = ikj
         return ikj
 
-# ijk -> jik -> jki -> kji -> kij -> ikj
+    # ijk -> jik -> jki -> kji -> kij -> ikj
     norb = dm2.shape[0]
     for i in range(norb):
         for j in range(i+1):
@@ -263,10 +264,11 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     rdm3 = _complete_dm3_(rdm2, rdm3)
     rdm4 = _complete_dm4_(rdm3, rdm4)
     return rdm1.T, rdm2, rdm3, rdm4
+
 def _complete_dm4_(dm3, dm4):
-# fci_4pdm.c assumed symmetry p >= r >= t >= v for 4-pdm <p^+ q r^+ s t^+ u v^+ w>
-# Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
-# complete the full 4-pdm
+    # fci_4pdm.c assumed symmetry p >= r >= t >= v for 4-pdm <p^+ q r^+ s t^+ u v^+ w>
+    # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
+    # complete the full 4-pdm
     def transpose01(ijkl, i, j, k, l):
         jikl = ijkl.transpose(1,0,2,3)
         jikl[:,j] -= dm3[i,:,k,:,l,:]

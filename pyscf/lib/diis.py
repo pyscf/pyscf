@@ -158,9 +158,9 @@ class DIIS(object):
             self._head += 1
 
         elif self._xprev is None:
-# If push_err_vec is not called in advance, the error vector is generated
-# as the diff of the current vec and previous returned vec (._xprev)
-# So store the first trial vec as the previous returned vec
+            # If push_err_vec is not called in advance, the error vector is generated
+            # as the diff of the current vec and previous returned vec (._xprev)
+            # So store the first trial vec as the previous returned vec
             self._xprev = x
             self._store('xprev', x)
             if 'xprev' not in self._buffer:  # not incore
@@ -200,7 +200,7 @@ class DIIS(object):
         return len(self._bookkeep)
 
     def update(self, x, xerr=None):
-        '''Extrapolate vector 
+        '''Extrapolate vector
 
         * If xerr the error vector is given, this function will push the target
         vector and error vector in the DIIS subspace, and use the error vector

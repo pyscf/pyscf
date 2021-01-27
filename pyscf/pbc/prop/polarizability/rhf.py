@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ from functools import reduce
 
 def ifft(cell, fk, kpts, Ls):
     kpts_scaled = cell.get_scaled_kpts(kpts)
-    kpts_scaled = np.mod(np.mod(kpts_scaled, 1), 1) 
+    kpts_scaled = np.mod(np.mod(kpts_scaled, 1), 1)
     kpts = cell.get_abs_kpts(kpts_scaled)
     expkL = np.asarray(np.exp(-1j*np.dot(kpts, Ls.T)))
     Nk = len(kpts)
@@ -42,7 +42,6 @@ def fft(cell, fg, kpts, Ls):
     kpts_scaled = np.mod(np.mod(kpts_scaled, 1), 1)
     kpts = cell.get_abs_kpts(kpts_scaled)
     expkL = np.asarray(np.exp(1j*np.dot(kpts, Ls.T)))
-    Nk = len(kpts)
     fk = np.dot(expkL, fg)
     return fk
 
@@ -66,7 +65,6 @@ def fft_k_deriv2(cell, fg, kpts, Ls):
 
 def check_k_grids(cell, mat, kpts, fft_tol=1e-6):
     Ls = cell.get_lattice_Ls(discard=False)
-    nkpt = len(kpts)
 
     matg = ifft(cell, mat, kpts, Ls)
     matk = fft(cell, matg, kpts, Ls)
@@ -117,12 +115,12 @@ def get_z_ao(cell, kpts=np.zeros((1,3)), charge_center=None):
 
 def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
     r'''Computes the periodic version of the dipole matrix in MO basis, then
-    transformed back to AO basis. 
+    transformed back to AO basis.
 
     Note this function differs from :func:`get_z_ao` in that it contains the
     k derivative of the MO coefficients.
 
-    .. math:: 
+    .. math::
 
         \Omega_{pq}(k) = (\psi_{p}(k)|i e^{ikr} \nabla_{k} e^{-ikr}|\psi_{q}(k)) \\
         \Omega_{\mu\nu}(k) = S_{\mu\lambda}(k) C_{\lambda p}(k) \Omega_{pq}(k) C_{\sigma q}(k) S_{\sigma\nu}(k)
@@ -151,7 +149,6 @@ def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
     cell = mf.cell
     mo_energy = mf.mo_energy
     mo_coeff = np.asarray(mf.mo_coeff)
-    mo_occ = mf.mo_occ
     nkpt, nao, nmo = mo_coeff.shape
 
     if charge_center is None:
@@ -162,7 +159,7 @@ def get_z(polobj, Zao=None, Rao=None, Kao=None, charge_center=None):
         with cell.with_common_orig(charge_center):
             Zao = cell.pbc_intor('int1e_r', comp=3, kpts=kpts)
     if Rao is None:
-        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1) 
+        Rao = cell.pbc_intor("int1e_ovlp", kpts=kpts, kderiv=1)
     if Kao is None:
         fock = mf.get_fock()
         Kao = get_k_deriv(cell, fock, kpts)
@@ -274,7 +271,7 @@ def polarizability(polobj, with_cphf=True):
     else:
         raise NotImplementedError
 
-    e2 = 0    
+    e2 = 0
     for k in range(nkpt):
         e2 += np.einsum('xpi,ypi->xy', h1[k].conj(), mo1[k])
     e2 = -2.0 / nkpt * (e2 + e2.T.conj())
@@ -583,7 +580,7 @@ class Polarizability(mol_polar):
         def vind(mo1):
             dm1 = []
             for k in range(nkpt):
-                dm1_k = lib.einsum('xai,pa,qi->xpq', 
+                dm1_k = lib.einsum('xai,pa,qi->xpq',
                                    mo1[k].reshape(-1, nvir[k], nocc[k]),
                                    orbv[k], orbo[k].conj())
                 dm1_k = (dm1_k + dm1_k.transpose(0,2,1).conj()) * 2

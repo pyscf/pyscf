@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ class load_balancer:
 #        if rank == 0:
 #            print("Starting new mpi_load_balance...")
 #        print("proc ", rank, " setting ranges ", inindices)
-        size = self.size
-        if BLKSIZE == None:
+        if BLKSIZE is None:
             BLKSIZE = self.BLKSIZE
         if len(BLKSIZE) != len(inindices):
             print("BLKSIZE AND ININDICES MUST HAVE SAME SHAPE!!!!")
@@ -92,28 +91,28 @@ class load_balancer:
                 data = block_indices[iwork]
                 tag = tags.WORK
                 working_procs.append(i)
-#            print("MASTER : sending out msg to processor ", i, data)
+                #print("MASTER : sending out msg to processor ", i, data)
             self.COMM.isend(obj=data, dest=i, tag=tag)
             iwork += 1
 
         for i in range(iwork,nwork+1):
-            msg = self.COMM.Probe(MPI.ANY_SOURCE, tag=tags.WORK_DONE, status=status)
+            self.COMM.Probe(MPI.ANY_SOURCE, tag=tags.WORK_DONE, status=status)
             recieved_from = status.Get_source()
             data = self.COMM.recv(source=recieved_from, tag=tags.WORK_DONE)
             iwork_recieved += 1
-#            print("MASTER : just recieved work_done from processor ", recieved_from, " (",iwork_recieved,"/",nwork,")")
+            #print("MASTER : just recieved work_done from processor ", recieved_from, " (",iwork_recieved,"/",nwork,")")
             if i == nwork:
-##                print("MASTER : returning...")
+                #print("MASTER : returning...")
                 break
 
             data = block_indices[i]
             tag = tags.WORK
-#            print("MASTER : sending out new work to processor ", recieved_from, data)
+            #print("MASTER : sending out new work to processor ", recieved_from, data)
             self.COMM.isend(obj=data, dest=recieved_from, tag=tag)
 
         for i in range(iwork_recieved,nwork):
-#            print("waiting on work...")
-            msg = self.COMM.Probe(MPI.ANY_SOURCE, tag=tags.WORK_DONE, status=status)
+            #print("waiting on work...")
+            self.COMM.Probe(MPI.ANY_SOURCE, tag=tags.WORK_DONE, status=status)
             recieved_from = status.Get_source()
             data = self.COMM.recv(source=recieved_from, tag=tags.WORK_DONE)
 
@@ -122,29 +121,29 @@ class load_balancer:
         for i in working_procs:
             data = 0
             tag = tags.KILL
-#            print("MASTER (ALL_WORK_DONE): sending kill out to rank ", i, data)
+            #print("MASTER (ALL_WORK_DONE): sending kill out to rank ", i, data)
             self.COMM.isend(obj=data, dest=i, tag=tag)
 
         return
 
     def slave_set(self):
         if self.rank > 0:
-#            print("SLAVE : ", self.rank, " starting...")
+            #print("SLAVE : ", self.rank, " starting...")
             status = MPI.Status()
-#            print("SLAVE : ", self.rank, " probing for message...")
-            msg = self.COMM.Probe(0, MPI.ANY_TAG, status=status)
-#            print("SLAVE : ", self.rank, " recieved a message... ", status.Get_tag())
+            #print("SLAVE : ", self.rank, " probing for message...")
+            self.COMM.Probe(0, MPI.ANY_TAG, status=status)
+            #print("SLAVE : ", self.rank, " recieved a message... ", status.Get_tag())
             self.working = True
             if status.Get_tag() == tags.WORK:
                 workingBlock = self.COMM.recv(source=0, tag=tags.WORK)
-#                print("SLAVE : ", self.rank, " just recieved ", workingBlock)
+                #print("SLAVE : ", self.rank, " just recieved ", workingBlock)
                 self.curr_block = workingBlock
                 self.working = True
                 return True, workingBlock
             else:
                 self.working = False
                 workingBlock = self.COMM.recv(source=0, tag=tags.KILL)
-#                print("SLAVE : ", self.rank, " dying...")
+                #print("SLAVE : ", self.rank, " dying...")
                 return False, 0
         else:
             return False, 0

@@ -33,6 +33,7 @@ Ref:
 '''
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf import scf
@@ -40,6 +41,9 @@ from pyscf import x2c
 from pyscf.data import nist
 from pyscf.data import elements
 from pyscf.data.nucprop import ISOTOPE_QUAD_MOMENT
+
+warnings.warn('Module EFG is under testing')
+
 
 def kernel(method, efg_nuc=None):
     log = lib.logger.Logger(method.stdout, method.verbose)
@@ -167,7 +171,7 @@ def _get_quad_nuc(mol, atm_id):
 def _get_quadrupole_integrals(mol, atm_id):
     nao = mol.nao
     with mol.with_rinv_origin(mol.atom_coord(atm_id)):
-        # Compute the integrals of quadrupole operator 
+        # Compute the integrals of quadrupole operator
         # (3 \vec{r} \vec{r} - r^2) / r^5
         ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
         ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
@@ -186,7 +190,7 @@ def _get_quadrupole_integrals(mol, atm_id):
 def _get_sfx2c_quadrupole_integrals(mol, atm_id):
     nao = mol.nao
     with mol.with_rinv_origin(mol.atom_coord(atm_id)):
-        # Compute the integrals of quadrupole operator 
+        # Compute the integrals of quadrupole operator
         # < sigma dot p | (3 \vec{r} \vec{r} - r^2) / r^5 | sigma dot p >
         ipipv = mol.intor('int1e_ipipprinvp', 9).reshape(3,3,nao,nao)
         ipvip = mol.intor('int1e_ipprinvpip', 9).reshape(3,3,nao,nao)

@@ -80,11 +80,11 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vja, vjb, vka, vkb= rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
-                                     ['ji->s2kl', -dm0a[:,p0:p1],  # vja
-                                      'ji->s2kl', -dm0b[:,p0:p1],  # vjb
-                                      'li->s1kj', -dm0a[:,p0:p1],  # vka
-                                      'li->s1kj', -dm0b[:,p0:p1]], # vkb
-                                     shls_slice=shls_slice)
+                                             ['ji->s2kl', -dm0a[:,p0:p1],  # vja
+                                              'ji->s2kl', -dm0b[:,p0:p1],  # vjb
+                                              'li->s1kj', -dm0a[:,p0:p1],  # vka
+                                              'li->s1kj', -dm0b[:,p0:p1]], # vkb
+                                             shls_slice=shls_slice)
         vhfa = vja + vjb - vka
         vhfb = vjb + vjb - vkb
         vtota = h1 + v1[0] + vhfa + vhfa.transpose(0,2,1)

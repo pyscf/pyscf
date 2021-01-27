@@ -28,6 +28,7 @@ Refs:
 
 
 from functools import reduce
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -35,6 +36,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.scf import _response_functions  # noqa
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.data import nist
+
+warnings.warn('Module ZFS is under testing')
 
 
 def koseki_charge(z):

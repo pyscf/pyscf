@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Jun Yang <junyang4711@gmail.com>
-#
 
 import numpy
 from pyscf import lib
@@ -37,7 +33,6 @@ def _gamma1_intermediates(cc, t1, t2, l1=None, l2=None):
     nkpts, nocca, nvira = t1a.shape
     _, noccb, nvirb = t1b.shape
 
-    dtype = np.result_type(t1a, t1b, t2aa, t2ab, t2bb)
     kconserv = cc.khelper.kconserv
 
     dooa  = -einsum('xie,xje->xij', l1a, t1a)
@@ -162,22 +157,22 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 
 
 if __name__ == '__main__':
-
     import numpy as np
     from pyscf.pbc import gto
-    from pyscf.pbc import scf,cc
+    from pyscf.pbc import scf
     from pyscf import lib
+    from pyscf.pbc.cc import KUCCSD
 
     a0 = 3.0
     vac = 200
     nmp = [1,1,1]
     dis = 10
     vec = [[ 3.0/2.0*a0*dis,np.sqrt(3.0)/2.0*a0*dis,  0],
-        [-3.0/2.0*a0*dis,np.sqrt(3.0)/2.0*a0*dis,  0],
-        [          0,                  0,vac]]
+           [-3.0/2.0*a0*dis,np.sqrt(3.0)/2.0*a0*dis,  0],
+           [          0,                  0,vac]]
     bas = 'cc-pvdz'
     pos = [['H',(-a0/2.0,0,0)],
-        ['H',( a0/2.0,0,0)]]
+           ['H',( a0/2.0,0,0)]]
 
     cell = gto.M(unit='B',a=vec,atom=pos,basis=bas,verbose=4)
     cell.precision = 1e-11
@@ -188,14 +183,15 @@ if __name__ == '__main__':
 
     dm = kmf.get_init_guess()
     aoind = cell.aoslice_by_atom()
-    dm[0,:,aoind[0][2]:aoind[0][3], aoind[0][2]:aoind[0][3]] = 0
-    dm[0,:,aoind[1][2]:aoind[1][3], aoind[1][2]:aoind[1][3]] = 2 * dm[0,:,aoind[1][2]:aoind[1][3], aoind[1][2]:aoind[1][3]]
-    dm[1,:,aoind[0][2]:aoind[0][3], aoind[0][2]:aoind[0][3]] = dm[1,:,aoind[0][2]:aoind[0][3], aoind[0][2]:aoind[0][3]] * 2
-    dm[1,:,aoind[1][2]:aoind[1][3], aoind[1][2]:aoind[1][3]] = 0
+    idx0, idx1 = aoind
+    dm[0,:,idx0[2]:idx0[3], idx0[2]:idx0[3]] = 0
+    dm[0,:,idx1[2]:idx1[3], idx1[2]:idx1[3]] = dm[0,:,idx1[2]:idx1[3], idx1[2]:idx1[3]] * 2
+    dm[1,:,idx0[2]:idx0[3], idx0[2]:idx0[3]] = dm[1,:,idx0[2]:idx0[3], idx0[2]:idx0[3]] * 2
+    dm[1,:,idx1[2]:idx1[3], idx1[2]:idx1[3]] = 0
 
     ehf = kmf.kernel(dm)
 
-    kcc = cc.KUCCSD(kmf)
+    kcc = KUCCSD(kmf)
     ecc, t1, t2 = kcc.kernel()
 
     dm1a,dm1b = make_rdm1(kcc, t1, t2, l1=None, l2=None)

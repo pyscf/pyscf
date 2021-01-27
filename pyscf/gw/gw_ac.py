@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -56,16 +56,21 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+
     # only support frozen core
-    assert (isinstance(gw.frozen, int))
-    assert (gw.frozen < gw.nocc)
+    assert (isinstance(frozen, int))
+    assert (frozen < gw.nocc)
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
     if orbs is None:
         orbs = range(gw.nmo)
     else:
-        orbs = [x - gw.frozen for x in orbs]
+        orbs = [x - frozen for x in orbs]
         if orbs[0] < 0:
             logger.warn(gw, 'GW orbs must be larger than frozen core!')
             raise RuntimeError
@@ -76,10 +81,9 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df and frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -119,7 +123,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                 dsigma = pade_thiele(ep-ef+de, omega_fit[p-orbs[0]], coeff[:,p-orbs[0]]).real - sigmaR.real
             zn = 1.0/(1.0-dsigma/de)
             e = ep + zn*(sigmaR.real + vk[p,p] - v_mf[p,p])
-            mo_energy[p+gw.frozen] = e
+            mo_energy[p+frozen] = e
         else:
             # self-consistently solve QP equation
             def quasiparticle(omega):
@@ -130,7 +134,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                 return omega - mf_mo_energy[p] - (sigmaR.real + vk[p,p] - v_mf[p,p])
             try:
                 e = newton(quasiparticle, mf_mo_energy[p], tol=1e-6, maxiter=100)
-                mo_energy[p+gw.frozen] = e
+                mo_energy[p+frozen] = e
             except RuntimeError:
                 conv = False
 
@@ -161,7 +165,6 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
     '''
     mo_energy = _mo_energy_without_core(gw, gw._scf.mo_energy)
     nocc = gw.nocc
-    nmo = gw.nmo
     nw = len(freqs)
     naux = Lpq.shape[0]
     norbs = len(orbs)
@@ -181,8 +184,8 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
     # to avoid branch cuts in analytic continuation
     omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
     omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ = [i for i in orbs if i < nocc]
     norbs_occ = len(orbs_occ)
 
@@ -265,7 +268,7 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
+        # target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -332,7 +335,7 @@ class GWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_gw_GW_ac', 'pade')
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -369,7 +372,7 @@ class GWAC(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
@@ -421,7 +424,6 @@ class GWAC(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         mem_incore = (2*nmo**2*naux) * 8/1e6
         mem_now = lib.current_memory()[0]
@@ -438,7 +440,7 @@ class GWAC(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = [
@@ -462,5 +464,5 @@ if __name__ == '__main__':
     gw.ac = 'pade'
     gw.kernel(orbs=range(nocc-3,nocc+3))
     print(gw.mo_energy)
-    assert(abs(gw.mo_energy[nocc-1]--0.412849230989)<1e-5)
-    assert(abs(gw.mo_energy[nocc]-0.165745160102)<1e-5)
+    assert (abs(gw.mo_energy[nocc-1]- -0.412849230989) < 1e-5)
+    assert (abs(gw.mo_energy[nocc] -0.165745160102) < 1e-5)

@@ -28,7 +28,7 @@
 # given molecule.  Regular operations (rotation, mirror etc) can be applied
 # then to identify the symmetry.  Current implementation only checks the
 # rotation functions and it's roughly enough for D2h and subgroups.
-# 
+#
 # There are special cases this detection method may break down, eg two H8 cube
 # molecules sitting on the same center but with random orientation.  The
 # system is in C1 while this detection method gives O group because the
@@ -358,7 +358,7 @@ def as_subgroup(topgroup, axes, subgroup=None):
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
 
         elif (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
-            subgroup in ('C2v', 'Cs')):
+              subgroup in ('C2v', 'Cs')):
             # Special treatment for D2d, D4d, .... get_subgroup gives D2 by
             # default while C2v is also D2d's subgroup.
             groupname = 'C2v'
@@ -450,10 +450,10 @@ def symm_identical_atoms(gpname, atoms):
     return eql_atom_ids
 
 def check_given_symm(gpname, atoms, basis=None):
-# more strict than symm_identical_atoms, we required not only the coordinates
-# match, but also the symbols and basis functions
+    # more strict than symm_identical_atoms, we required not only the coordinates
+    # match, but also the symbols and basis functions
 
-#FIXME: compare the basis set when basis is given
+    #FIXME: compare the basis set when basis is given
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
         if numpy.allclose(coords[:,:2], 0, atol=TOLERANCE):
@@ -795,11 +795,11 @@ def _remove_dupvec(vs):
 
 def _make_axes(z, x):
     y = numpy.cross(z, x)
-    x = numpy.cross(y, z) # because x might not perp to z
+    x = numpy.cross(y, z)  # because x might not perp to z
     return _normalize(numpy.array((x,y,z)))
 
 def _refine(axes):
-# Make sure the axes can be rotated from continuous unitary transformation
+    # Make sure the axes can be rotated from continuous unitary transformation
     if axes[2,2] < 0:
         axes[2] *= -1
     if abs(axes[0,0]) > abs(axes[1,0]):

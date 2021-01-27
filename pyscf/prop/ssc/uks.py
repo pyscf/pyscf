@@ -51,7 +51,7 @@ SSC = SpinSpinCoupling
 from pyscf import lib
 from pyscf import dft
 dft.uks.UKS.SSC = dft.uks.UKS.SpinSpinCoupling = \
-dft.uks_symm.UKS.SSC = dft.uks_symm.UKS.SpinSpinCoupling = \
+        dft.uks_symm.UKS.SSC = dft.uks_symm.UKS.SpinSpinCoupling = \
         lib.class_as_method(SSC)
 
 if __name__ == '__main__':

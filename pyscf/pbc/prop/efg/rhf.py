@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ def _get_quad_nuc(cell, atm_id):
 
 
 def _fft_quad_integrals(mydf, dm, efg_nuc):
-    # Use FFTDF to compute the integrals of quadrupole operator 
+    # Use FFTDF to compute the integrals of quadrupole operator
     # (3 \vec{r} \vec{r} - r^2) / r^5
     cell = mydf.cell
     if cell.dimension != 3:
@@ -182,7 +182,7 @@ def _fft_quad_integrals(mydf, dm, efg_nuc):
     return efg_e
 
 def _aft_quad_integrals(mydf, dm, efg_nuc):
-    # Use AFTDF to compute the integrals of quadrupole operator 
+    # Use AFTDF to compute the integrals of quadrupole operator
     # (3 \vec{r} \vec{r} - r^2) / r^5
     cell = mydf.cell
     if cell.dimension != 3:

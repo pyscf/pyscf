@@ -193,7 +193,7 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 if with_s:
                     matSS[idm] += _vxc2x2_to_mat(mol, ao[2:], weight, rho, vrho,
                                                  mask, shls_slice, ao_loc)
-                rho = m = exc = vxc = vrho = None
+                rho = exc = vxc = vrho = None
     elif xctype == 'GGA':
         raise NotImplementedError
     else:
@@ -326,12 +326,11 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf.dft import dks
 
-    mol = gto.M(
-        atom = [
+    mol = gto.M(atom=[
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6311g*',)
+        [1   , (0. , 0.757  , 0.587)]],
+        basis='6311g*')
     mf = dks.UKS(mol)
     mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
     mf.grids.prune = None

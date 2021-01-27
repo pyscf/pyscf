@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,8 +83,8 @@ def fast_iao_mullikan_pop(mf,cell,a=None):
     if a is None:
         a = numpy.eye(mf.make_rdm1().shape[1])
     #converts the occupied MOs to the IAO basis
-    ovlpS = mf.get_ovlp()
-    CIb = reduce(numpy.dot, (a.T, ovlpS , mf.make_rdm1()))
+    #ovlpS = mf.get_ovlp()
+    #CIb = reduce(numpy.dot, (a.T, ovlpS , mf.make_rdm1()))
 
     #
     # This is the mullikan population below here

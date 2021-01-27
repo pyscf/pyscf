@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ def bcast(buf, root=0):
 
 ## Useful when sending large batches of arrays
 #def safe_bcast(buf, root=0):
-    
+
 
 def reduce(sendbuf, op=MPI.SUM, root=0):
     sendbuf = numpy.asarray(sendbuf, order='C')
@@ -201,16 +201,16 @@ def allreduce(sendbuf, op=MPI.SUM):
     return recvbuf
 
 def gather(sendbuf, root=0):
-#    if pool.debug:
-#        if rank == 0:
-#            res = [sendbuf]
-#            for k in range(1, pool.size):
-#                dat = comm.recv(source=k)
-#                res.append(dat)
-#            return numpy.vstack([x for x in res if len(x) > 0])
-#        else:
-#            comm.send(sendbuf, dest=0)
-#            return sendbuf
+    #if pool.debug:
+    #    if rank == 0:
+    #        res = [sendbuf]
+    #        for k in range(1, pool.size):
+    #            dat = comm.recv(source=k)
+    #            res.append(dat)
+    #        return numpy.vstack([x for x in res if len(x) > 0])
+    #    else:
+    #        comm.send(sendbuf, dest=0)
+    #        return sendbuf
 
     sendbuf = numpy.asarray(sendbuf, order='C')
     mpi_dtype = sendbuf.dtype.char

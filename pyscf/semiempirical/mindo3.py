@@ -48,7 +48,7 @@ def get_hcore(mol):
     hcore *= ao_ip[:,None] + ao_ip
     hcore *= _get_beta0(ao_atom_charges[:,None], ao_atom_charges)
 
-    # U term 
+    # U term
     hcore[numpy.diag_indices(nao)] = _to_ao_labels(mol, basis_u)
 
     # Nuclear attraction

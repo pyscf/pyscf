@@ -36,8 +36,7 @@ __all__ = ['tot_parity_odd',
            'linearmole_irrep_id2symb',
            'linearmole_symm_adapted_basis',
            'so3_irrep_symb2id',
-           'so3_irrep_id2symb',
-          ]
+           'so3_irrep_id2symb',]
 
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
@@ -56,7 +55,7 @@ def tot_parity_odd(op, l, m):
     else:
         ox,oy,oz = OP_PARITY_ODD[op]
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
-        return (ox and gx)^(oy and gy)^(oz and gz)
+        return (ox and gx) ^ (oy and gy) ^ (oz and gz)
 
 def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     if gpname == 'SO3':
@@ -206,7 +205,8 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-# This branch should never be reached if basis_tab is formated by function mole.format_basis
+        # This branch should never be reached if basis_tab is formated by
+        # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:
         nctr = len(basis[1]) - 1

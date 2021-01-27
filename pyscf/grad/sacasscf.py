@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
 
+import copy, time, gc
+import numpy as np
+from functools import reduce
+from itertools import product
+from scipy import linalg
 from pyscf.grad import lagrange
 from pyscf.mcscf.addons import StateAverageMCSCFSolver, StateAverageFCISolver, StateAverageMixFCISolver, state_average_mix_
 from pyscf.grad.mp2 import _shell_prange
@@ -26,11 +29,6 @@ from pyscf.fci.direct_spin1 import _unpack_nelec
 from pyscf.fci.spin_op import spin_square
 from pyscf.fci import cistring
 from pyscf import lib, ao2mo, mcscf
-import numpy as np
-import copy, time, gc
-from functools import reduce
-from itertools import product
-from scipy import linalg
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None):
     ''' Modification of pyscf.grad.casscf.kernel to compute instead the orbital
@@ -59,7 +57,6 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
 
-    mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
 
@@ -140,7 +137,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     dm2Lbuf += dm2Lbuf.transpose (0,2,1)
     dm2Lbuf = np.ascontiguousarray (dm2Lbuf)
     dm2Lbuf = ao2mo._ao2mo.nr_e2(dm2Lbuf.reshape (ncas**2,nmo**2), mo_coeff.T,
-                                (0, nao, 0, nao)).reshape(ncas**2,nao,nao)
+                                 (0, nao, 0, nao)).reshape(ncas**2,nao,nao)
     dm2buf = lib.pack_tril(dm2buf)
     dm2buf[:,diag_idx] *= .5
     dm2buf = dm2buf.reshape(ncas,ncas,nao_pair)
@@ -160,7 +157,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     # MRH: 3 components of eri array and 1 density matrix array: FOUR arrays of this size are required!
     blksize = min(nao, max(2, blksize))
-    lib.logger.info (mc, 'SA-CASSCF Lorb_dot_dgorb memory remaining for eri manipulation: {} MB; using blocksize = {}'.format (max_memory, blksize)) 
+    lib.logger.info (mc, 'SA-CASSCF Lorb_dot_dgorb memory remaining for eri manipulation: {} MB; using blocksize = {}'.format (max_memory, blksize))
     t0 = lib.logger.timer (mc, 'SA-CASSCF Lorb_dot_dgorb 1-electron part', *t0)
 
     for k, ia in enumerate(atmlst):
@@ -227,7 +224,6 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
-    nroots = len (ci)
 
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
@@ -285,7 +281,7 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     # MRH: 3 components of eri array and 1 density matrix array: FOUR arrays of this size are required!
     blksize = min(nao, max(2, blksize))
-    lib.logger.info (mc, 'SA-CASSCF Lci_dot_dgci memory remaining for eri manipulation: {} MB; using blocksize = {}'.format (max_memory, blksize)) 
+    lib.logger.info (mc, 'SA-CASSCF Lci_dot_dgci memory remaining for eri manipulation: {} MB; using blocksize = {}'.format (max_memory, blksize))
     t0 = lib.logger.timer (mc, 'SA-CASSCF Lci_dot_dgci 1-electron part', *t0)
 
     for k, ia in enumerate(atmlst):
@@ -371,7 +367,7 @@ def as_scanner(mcscf_grad, state=None):
                 kwargs['state'] = self.state
             de = self.kernel(**kwargs)
             return e_tot, de
-            
+
     return CASSCF_GradScanner(mcscf_grad)
 
 
@@ -406,7 +402,7 @@ class Gradients (lagrange.Gradients):
         self.weights = np.array ([1])
         try:
             self.e_states = np.asarray (mc.e_states)
-        except AttributeError as e:
+        except AttributeError:
             self.e_states = np.asarray (mc.e_tot)
         if isinstance (mc, StateAverageMCSCFSolver):
             self.weights = np.asarray (mc.weights)
@@ -483,7 +479,7 @@ class Gradients (lagrange.Gradients):
         if e_states is None:
             try:
                 e_states = self.e_states = np.asarray (self.base.e_states)
-            except AttributeError as e:
+            except AttributeError:
                 e_states = self.e_states = np.asarray (self.base.e_tot)
         if level_shift is None: level_shift=self.level_shift
         return lagrange.Gradients.kernel (self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris, mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
@@ -503,8 +499,8 @@ class Gradients (lagrange.Gradients):
         g_all = np.zeros (self.nlag)
         g_all[:self.ngorb] = g_all_state[:self.ngorb]
         # No need to reshape or anything, just use the magic of repeated slicing
-        offs = sum ([na * nb for na, nb in zip (self.na_states[:state],
-            self.nb_states[:state])]) if state > 0 else 0
+        offs = sum ([na * nb for na, nb in zip(self.na_states[:state],
+                                               self.nb_states[:state])]) if state > 0 else 0
         g_all[self.ngorb:][offs:][:ndet] = g_all_state[self.ngorb:]
         return g_all
 
@@ -549,12 +545,6 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         elif eris is None:
             eris = self.eris
-        ncas = self.base.ncas
-        nelecas = self.base.nelecas
-        if getattr(self.base.fcisolver, 'gen_linkstr', None):
-            linkstr  = self.base.fcisolver.gen_linkstr(ncas, nelecas, False)
-        else:
-            linkstr  = None
 
         # Just sum the weights now... Lorb can be implicitly summed
         # Lci may be in the csf basis
@@ -567,7 +557,7 @@ class Gradients (lagrange.Gradients):
         t0 = (time.clock (), time.time ())
         de_Lci = Lci_dot_dgci_dx (Lci, self.weights, self.base, mo_coeff=mo, ci=ci, atmlst=atmlst, mf_grad=mf_grad, eris=eris, verbose=verbose)
         lib.logger.info (self, '--------------- %s gradient Lagrange CI response ---------------',
-                    self.base.__class__.__name__)
+                         self.base.__class__.__name__)
         if verbose >= lib.logger.INFO: rhf_grad._write(self, self.mol, de_Lci, atmlst)
         lib.logger.info (self, '----------------------------------------------------------------')
         t0 = lib.logger.timer (self, '{} gradient Lagrange CI response'.format (self.base.__class__.__name__), *t0)
@@ -575,13 +565,13 @@ class Gradients (lagrange.Gradients):
         # Orb part
         de_Lorb = Lorb_dot_dgorb_dx (Lorb, self.base, mo_coeff=mo, ci=ci, atmlst=atmlst, mf_grad=mf_grad, eris=eris, verbose=verbose)
         lib.logger.info (self, '--------------- %s gradient Lagrange orbital response ---------------',
-                    self.base.__class__.__name__)
+                         self.base.__class__.__name__)
         if verbose >= lib.logger.INFO: rhf_grad._write(self, self.mol, de_Lorb, atmlst)
         lib.logger.info (self, '----------------------------------------------------------------------')
         t0 = lib.logger.timer (self, '{} gradient Lagrange orbital response'.format (self.base.__class__.__name__), *t0)
 
         return de_Lci + de_Lorb
-    
+
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, state=None, mo=None, ci=None, **kwargs):
         # This needs to be rewritten substantially to work properly with state_average_mix
         if state is None: state = self.state
@@ -594,13 +584,13 @@ class Gradients (lagrange.Gradients):
             except AttributeError:
                 nelec = sum (_unpack_nelec (self.base.nelecas))
                 xci_ss = [spin_square (x, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
-                    for x, m in zip (xci, self.spin_states)]
-            xci_ss = [x / max (y, 1e-8) for x, y in zip (xci_ss, xci_norm)] 
+                          for x, m in zip (xci, self.spin_states)]
+            xci_ss = [x / max (y, 1e-8) for x, y in zip (xci_ss, xci_norm)]
             xci_multip = [np.sqrt (x+.25) - .5 for x in xci_ss]
             for ix, (norm, ss, multip) in enumerate (zip (xci_norm, xci_ss, xci_multip)):
                 lib.logger.debug (self,
-                    ' State {} {} norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format
-                    (ix, label, norm, ss, multip))
+                                  ' State {} {} norm = {:.7e} ; <S^2> = {:.7f} ; 2S+1 = {:.7f}'.format(
+                                      ix, label, norm, ss, multip))
         borb, bci = self.unpack_uniq_var (bvec)
         lib.logger.debug (self, 'Orbital rotation gradient norm = {:.7e}'.format (linalg.norm (borb)))
         _debug_cispace (bci, 'CI gradient')
@@ -666,15 +656,15 @@ class Gradients (lagrange.Gradients):
         #lib.logger.debug (self, "{} gradient Lagrange factor, external-external orbital rotations (redundant!):\n{}".format (
         #    self.base.__class__.__name__, Lorb[nocc:,nocc:]))
         #'''
-        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part overlap with true CI SA space:\n{}".format ( 
+        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part overlap with true CI SA space:\n{}".format (
         #    self.base.__class__.__name__, Lci_ci_ovlp))
-        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part self overlap matrix:\n{}".format ( 
+        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part self overlap matrix:\n{}".format (
         #    self.base.__class__.__name__, Lci_Lci_ovlp))
-        #lib.logger.debug (self, "{} gradient Lagrange factor, CI vector self overlap matrix:\n{}".format ( 
+        #lib.logger.debug (self, "{} gradient Lagrange factor, CI vector self overlap matrix:\n{}".format (
         #    self.base.__class__.__name__, ci_ci_ovlp))
-        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part response overlap with SA space:\n{}".format ( 
+        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part response overlap with SA space:\n{}".format (
         #    self.base.__class__.__name__, bci_ci_ovlp))
-        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part residual overlap with SA space:\n{}".format ( 
+        #lib.logger.debug (self, "{} gradient Lagrange factor, CI part residual overlap with SA space:\n{}".format (
         #    self.base.__class__.__name__, eci_ci_ovlp))
         #neleca, nelecb = _unpack_nelec (nelecas)
         #spin = neleca - nelecb + 1
@@ -742,9 +732,10 @@ class Gradients (lagrange.Gradients):
             deltaorb, deltaci = self.unpack_uniq_var (deltax)
             gci = np.concatenate ([g.ravel () for g in gci])
             deltaci = np.concatenate ([d.ravel () for d in deltaci])
-            lib.logger.info (self, ('Lagrange optimization iteration {}, |gorb| = {}, |gci| = {}, '
-                '|dLorb| = {}, |dLci| = {}').format (itvec[0], linalg.norm (gorb), linalg.norm (gci),
-                linalg.norm (deltaorb), linalg.norm (deltaci))) 
+            lib.logger.info(self, ('Lagrange optimization iteration {}, |gorb| = {}, |gci| = {}, '
+                                   '|dLorb| = {}, |dLci| = {}').format (
+                                       itvec[0], linalg.norm (gorb), linalg.norm (gci),
+                                       linalg.norm (deltaorb), linalg.norm (deltaci)))
             Lvec_last[:] = x[:]
         return my_call
 
@@ -792,7 +783,7 @@ class SACASLagPrec (lagrange.LagPrec):
         First two factors of the inverse diagonal CI Hessian projected into SA space:
         Rci(I)|J> <J|Rci(I)|K>^{-1} <K|Rci(I)
         note: right-hand bra and R_I factor not included due to storage considerations
-        Make the operand's matrix element with <K|Rci(I) before taking the dot product! 
+        Make the operand's matrix element with <K|Rci(I) before taking the dot product!
 '''
 
     # TODO: fix me (subclass me? wrap me?) for state_average_mix
@@ -829,7 +820,7 @@ class SACASLagPrec (lagrange.LagPrec):
             Rci = Aci + self.level_shift
             Rci[abs(Rci)<1e-8] = 1e-8
             Rci = 1./Rci
-            # R_I|J> 
+            # R_I|J>
             # Indices: I, det, J
             Rci_cross = Rci[:,:,None] * ci.T[None,:,:]
             # S(I)_JK = <J|R_I|K> (first index of CI contract with middle index of R_I|J> and reshape to put I first)
@@ -871,10 +862,10 @@ class SACASLagPrec (lagrange.LagPrec):
             # R_I|H I> (indices: I, det)
             Rx = Rci * xci
             # <J|R_I|H I> (indices: J, I)
-            sa_ovlp = np.dot (ci.conjugate (), Rx.T) 
+            sa_ovlp = np.dot (ci.conjugate (), Rx.T)
             # R_I|J> S(I)_JK^-1 <K|R_I|H I> (indices: I, det)
             Rx_sub = np.zeros_like (Rx)
-            for iroot in range (nroots): 
+            for iroot in range (nroots):
                 Rx_sub[iroot] = np.dot (Rci_sa[iroot], sa_ovlp[:,iroot])
             for i, j in enumerate (desort_spin):
                 try:
@@ -885,7 +876,4 @@ class SACASLagPrec (lagrange.LagPrec):
         assert (all ([i is not None for i in Mxci]))
         return Mxci
 
-from pyscf import mcscf
 mcscf.addons.StateAverageMCSCFSolver.Gradients = lib.class_as_method(Gradients)
-
-

@@ -584,7 +584,7 @@ else:
         'HYB_MGGA_XC_TPSS1KCIS'        : 569, # Y. Zhao, B. J. Lynch, and D. G. Truhlar, Phys. Chem. Chem. Phys. 7, 43 (2005)
         'HYB_MGGA_X_REVSCAN0'          : 583, # P. D. Mezei, G. I. Csonka, and M. Kallay, J. Chem. Theory Comput. 0, null (0)
         'HYB_MGGA_XC_B98'              : 598, # A. D. Becke, J. Chem. Phys. 109, 2092 (1998)
-    }  # noqa: E122
+    }
 
     PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
                            ('GGA_C_SPBE', 'MGGA_X_REVTPSS')])
@@ -654,7 +654,7 @@ XC_CODES.update({
     'REVPBE0'       : '.25*HF + .75*PBE_R, PBE',
     'B1B95'         : 440,
     'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
-})  # noqa: E122
+})  # noqa: E501
 
 XC_KEYS = set(XC_CODES.keys())
 
@@ -994,7 +994,7 @@ def parse_xc(description):
           | v3tau3
 
         see also libxc_itrf.c
-    '''
+    '''  # noqa: E501
     hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if description is None:
         return hyb, []
@@ -1278,7 +1278,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
           | v3sigma3[:,10]    = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
 
         see also libxc_itrf.c
-    '''
+    '''  # noqa: E501
     hyb, fn_facs = parse_xc(xc_code)
     if omega is not None:
         hyb[2] = float(omega)
@@ -1476,12 +1476,11 @@ define_xc.__doc__ = define_xc_.__doc__
 
 if __name__ == '__main__':
     from pyscf import gto, dft
-    mol = gto.M(
-        atom = [
+    mol = gto.M(atom=[
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        )
+        [1   , (0. , 0.757  , 0.587)]],
+    )
     mf = dft.RKS(mol)
     #mf._numint.libxc = dft.xcfun
     mf.xc = 'camb3lyp'

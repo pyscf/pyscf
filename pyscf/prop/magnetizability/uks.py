@@ -27,6 +27,7 @@ Refs:
 
 
 import numpy
+import warnings
 from pyscf import lib
 from pyscf.scf import jk
 from pyscf.dft import numint
@@ -34,6 +35,8 @@ from pyscf.prop.nmr import uks as uks_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
 from pyscf.prop.magnetizability import uhf as uhf_mag
 from pyscf.prop.magnetizability import rks as rks_mag
+
+warnings.warn('Module magnetizability is under testing')
 
 
 def dia(magobj, gauge_orig=None):

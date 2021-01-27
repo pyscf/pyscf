@@ -59,7 +59,7 @@ def dia(nmrobj, gauge_orig=None, shielding_nuc=None, dm0=None):
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
         with mol.with_rinv_origin(mol.atom_coord(atm_id)):
-# a11part = (B dot) -1/2 frac{\vec{r}_N}{r_N^3} r (dot mu)
+            # a11part = (B dot) -1/2 frac{\vec{r}_N}{r_N^3} r (dot mu)
             if gauge_orig is None:
                 h11 = mol.intor('int1e_giao_a11part', comp=9)
             else:
@@ -120,9 +120,9 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
     return h1
 
 def get_jk(mol, dm0):
-# J = Im[(i i|\mu g\nu) + (i gi|\mu \nu)] = -i (i i|\mu g\nu)
-# K = Im[(\mu gi|i \nu) + (\mu i|i g\nu)]
-#   = [-i (\mu g i|i \nu)] - h.c.   (-h.c. for anti-symm because of the factor -i)
+    # J = Im[(i i|\mu g\nu) + (i gi|\mu \nu)] = -i (i i|\mu g\nu)
+    # K = Im[(\mu gi|i \nu) + (\mu i|i g\nu)]
+    #   = [-i (\mu g i|i \nu)] - h.c.   (-h.c. for anti-symm because of the factor -i)
     intor = mol._add_suffix('int2e_ig1')
     vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
@@ -134,7 +134,7 @@ def get_jk(mol, dm0):
 def make_h10giao(mol, dm0):
     vj, vk = get_jk(mol, dm0)
     h1 = vj - .5 * vk
-# Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
+    # Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
     if mol.has_ecp():
         h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
@@ -144,7 +144,7 @@ def make_h10giao(mol, dm0):
 def make_s10(mol, gauge_orig=None):
     '''First order overlap matrix wrt external magnetic field.'''
     if gauge_orig is None:
-# Im[<g\mu |g\nu>]
+        # Im[<g\mu |g\nu>]
         s1 = -mol.intor_asymmetric('int1e_igovlp', 3)
     else:
         nao = mol.nao_nr()
@@ -183,8 +183,8 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             given function is used to compute induced potential
     '''
     if mo_energy is None: mo_energy = nmrobj._scf.mo_energy
-    if mo_coeff  is None: mo_coeff = nmrobj._scf.mo_coeff
-    if mo_occ    is None: mo_occ = nmrobj._scf.mo_occ
+    if mo_coeff is None: mo_coeff = nmrobj._scf.mo_coeff
+    if mo_occ is None: mo_occ = nmrobj._scf.mo_occ
     if with_cphf is None: with_cphf = nmrobj.cphf
 
     cput1 = (logger.process_clock(), logger.perf_counter())
@@ -308,7 +308,7 @@ class NMR(lib.StreamObject):
         if self.verbose >= logger.NOTE:
             for i, atm_id in enumerate(self.shielding_nuc):
                 _write(self.stdout, e11[i],
-                       '\ntotal shielding of atom %d %s' \
+                       '\ntotal shielding of atom %d %s'
                        % (atm_id, self.mol.atom_symbol(atm_id)))
                 _write(self.stdout, msc_dia[i], 'dia-magnetic contribution')
                 _write(self.stdout, msc_para[i], 'para-magnetic contribution')

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -683,7 +683,7 @@ class GDF(aft.AFTDF):
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
-    get_nuc = aft.get_nuc
+    get_nuc = aft.get_nuc  # noqa: F811
     get_pp = aft.get_pp
 
     # Note: Special exxdiv by default should not be used for an arbitrary

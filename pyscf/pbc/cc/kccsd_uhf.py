@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -254,8 +254,8 @@ def update_amps(cc, t1, t2, eris):
     #    kv = kconserv[kx, kz, kw]
     #    for ku in range(nkpts):
     #        ky = kconserv[kw, kv, ku]
-            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
-            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
+    #        #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
+    #        #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
 
     for km, ke, kb in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ke, kb]
@@ -459,11 +459,11 @@ def energy(cc, t1, t2, eris):
     tauab = t2ab + t1t1ab
     taubb = t2bb + 2*t1t1bb
     d = 0.0 + 0.j
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa)
-            - einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa) -
+               einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
     d += einsum('xzyiajb,xyzijab->',eris.ovOV,tauab)
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb)
-            - einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb) -
+               einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
     e = s + d
     e /= nkpts
     if abs(e.imag) > 1e-4:
@@ -742,11 +742,11 @@ class KUCCSD(uccsd.UCCSD):
         t2 = (t2aa,t2ab,t2bb)
 
         d = 0.0 + 0.j
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa)
-                - einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa) -
+                   einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
         d += einsum('xzyiajb,xyzijab->',eris.ovOV,t2ab)
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb)
-                - einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb) -
+                   einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
         self.emp2 = d/nkpts
 
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
@@ -1119,7 +1119,7 @@ scf.kuhf.KUHF.CCSD = lib.class_as_method(KUCCSD)
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, cc
+    from pyscf.pbc import gto
     from pyscf import lo
 
     cell = gto.Cell()

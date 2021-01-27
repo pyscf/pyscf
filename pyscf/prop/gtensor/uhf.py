@@ -29,6 +29,7 @@ In some literature, muB is not explicitly presented in the perturbation formula.
 
 
 from functools import reduce
+import warnings
 import copy
 import numpy
 from pyscf import lib
@@ -38,6 +39,9 @@ from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.zfs.uhf import koseki_charge
 from pyscf.data import nist
+
+warnings.warn('Module g-tensor is under testing')
+
 
 def dia(gobj, dm0, gauge_orig=None):
     '''Note the side effects of set_common_origin'''

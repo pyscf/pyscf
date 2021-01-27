@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -139,8 +139,9 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     #dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
     #                          norb, nelec, link_index, 1)
-# NOT use FCIrdm12kern_spin0 because for small system, the kernel may call
-# direct diagonalization, which may not fulfil  fcivec = fcivet.T
+
+    # NOT use FCIrdm12kern_spin0 because for small system, the kernel may call
+    # direct diagonalization, which may not fulfil  fcivec = fcivet.T
     dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_sf', fcivec, fcivec,
                               norb, nelec, link_index, 1)
     if reorder:
@@ -254,8 +255,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             pw = pv = None
 
         if pspace_size >= na*na and ci0 is None and not davidson_only:
-# The degenerated wfn can break symmetry.  The davidson iteration with proper
-# initial guess doesn't have this issue
+            # The degenerated wfn can break symmetry.  The davidson iteration with proper
+            # initial guess doesn't have this issue
             if na*na == 1:
                 return pw[0]+ecore, pv[:,0].reshape(1,1)
             elif nroots > 1:
@@ -272,9 +273,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                 civec = civec.reshape(na,na)
                 civec = lib.transpose_sum(civec) * .5
                 # direct diagonalization may lead to triplet ground state
-##TODO: optimize initial guess.  Using pspace vector as initial guess may have
-## spin problems.  The 'ground state' of psapce vector may have different spin
-## state to the true ground state.
+
+                #TODO: optimize initial guess.  Using pspace vector as initial guess may have
+                # spin problems.  The 'ground state' of psapce vector may have different spin
+                # state to the true ground state.
                 try:
                     return pw[0]+ecore, _check_(civec.reshape(na,na))
                 except ValueError:

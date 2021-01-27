@@ -22,9 +22,13 @@ spectroscopy for relativistic 4-component DHF and DKS methods.
 (In testing)
 '''
 
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.prop.efg import rhf as rhf_efg
+
+warnings.warn('Module EFG is under testing')
+
 
 def kernel(method, efg_nuc=None):
     log = lib.logger.Logger(method.stdout, method.verbose)
