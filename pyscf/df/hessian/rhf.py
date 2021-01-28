@@ -318,7 +318,8 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                 _ej  = 0
                 # (00|0)(1|1)(0|00)
                 # (00|0)(1|0)(0|1)(0|00)
-                _ej += .5 * np.einsum('p,xypq,q->xy', rhoj0_P[p0:p1], int2c_ip_ip[:,:,p0:p1,q0:q1], rhoj0_P[q0:q1])
+                _ej += .5 * np.einsum('p,xypq,q->xy', rhoj0_P[p0:p1],
+                                      int2c_ip_ip[:,:,p0:p1,q0:q1], rhoj0_P[q0:q1])
                 # (00|1)(1|0)(0|00)
                 _ej -= lib.einsum('xp,yp->xy', rhoj1[:,q0:q1], wj0_01[:,q0:q1])
                 # (00|1)(1|00)
@@ -334,15 +335,17 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                 if with_k:
                     # (00|0)(1|1)(0|00)
                     # (00|0)(1|0)(0|1)(0|00)
-                    _ek  = .5 * np.einsum('pq,xypq->xy', rho2c_0[p0:p1,q0:q1], int2c_ip_ip[:,:,p0:p1,q0:q1])
+                    _ek  = .5 * np.einsum('pq,xypq->xy', rho2c_0[p0:p1,q0:q1],
+                                          int2c_ip_ip[:,:,p0:p1,q0:q1])
                     # (00|1)(0|1)(0|00)
                     # (00|1)(1|0)(0|00)
                     # (00|0)(0|1)(1|0)(0|00)
                     # (00|0)(1|0)(1|0)(0|00)
                     _ek += np.einsum('xpq,ypq->xy', rho2c_1[:,q0:q1], int2c_ip1[:,q0:q1])
                     # (00|1)(1|00)
-                    _ek += .5 * lib.einsum('pxij,pq,qyij->xy', wk_ip2_P__[p0:p1],
-                                       int2c_inv[p0:p1,q0:q1], wk_ip2_P__[q0:q1])
+                    _ek += .5 * lib.einsum('pxij,pq,qyij->xy',
+                                           wk_ip2_P__[p0:p1], int2c_inv[p0:p1,q0:q1],
+                                           wk_ip2_P__[q0:q1])
                     ek[i0,j0] += _ek * .5
                     ek[j0,i0] += _ek.T * .5
 

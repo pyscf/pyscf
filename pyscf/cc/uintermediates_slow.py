@@ -177,7 +177,7 @@ def Wvvvo(t1,t2,eris,_Wvvvv=None):
     Wabei += -einsum('me,miab->abei',FFov,t2)
     Wabei += 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
     Wabei += -tmp1 + tmp1.transpose(1,0,2,3)
-    Wabei += -tmp2 + tmp2.transpose(1,0,2,3) 
+    Wabei += -tmp2 + tmp2.transpose(1,0,2,3)
     nocc,nvir = t1.shape
     if _Wvvvv is None:
         _Wvvvv = Wvvvv(t1,t2,eris)
