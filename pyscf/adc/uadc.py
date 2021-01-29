@@ -58,9 +58,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
-    logger.info(adc, "\n*************************************************************")
-    logger.info(adc, "                  ADC calculation summary")
-    logger.info(adc, "*************************************************************")
+    str = ("\n*************************************************************"
+           "\n            ADC calculation summary"
+           "\n*************************************************************")
+    logger.info(adc, str)
 
     if nfalse >= 1:
         logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
@@ -184,7 +185,7 @@ def compute_amplitudes(myadc, eris):
     a = 0
     for p in range(0,nocc_a,chnk_size):
         if getattr(myadc, 'with_df', None):
-            eris_ovvv = dfadc.get_ovvv_a_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+            eris_ovvv = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
         else :
             eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
         k = eris_ovvv.shape[0]
@@ -204,7 +205,7 @@ def compute_amplitudes(myadc, eris):
     a = 0
     for p in range(0,nocc_b,chnk_size):
         if getattr(myadc, 'with_df', None):
-            eris_OVvv = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+            eris_OVvv = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
         else :
             eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
         k = eris_OVvv.shape[0]
@@ -219,7 +220,7 @@ def compute_amplitudes(myadc, eris):
     a = 0
     for p in range(0,nocc_a,chnk_size):
         if getattr(myadc, 'with_df', None):
-            eris_ovVV = dfadc.get_ovvv_a_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+            eris_ovVV = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
         else :
             eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
         k = eris_ovVV.shape[0]
@@ -238,7 +239,7 @@ def compute_amplitudes(myadc, eris):
     a = 0
     for p in range(0,nocc_b,chnk_size):
         if getattr(myadc, 'with_df', None):
-            eris_OVVV = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+            eris_OVVV = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
         else :
             eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
         k = eris_OVVV.shape[0]
@@ -445,7 +446,7 @@ def compute_amplitudes(myadc, eris):
         a = 0
         for p in range(0,nocc_a,chnk_size):
             if getattr(myadc, 'with_df', None):
-                eris_ovvv = dfadc.get_ovvv_a_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                eris_ovvv = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
             else :
                 eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
             k = eris_ovvv.shape[0]
@@ -475,7 +476,7 @@ def compute_amplitudes(myadc, eris):
         a = 0
         for p in range(0,nocc_b,chnk_size):
             if getattr(myadc, 'with_df', None):
-                eris_OVVV = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                eris_OVVV = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
             else :
                 eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
             k = eris_OVVV.shape[0]
@@ -505,7 +506,7 @@ def compute_amplitudes(myadc, eris):
         a = 0
         for p in range(0,nocc_a,chnk_size):
             if getattr(myadc, 'with_df', None):
-                eris_ovVV = dfadc.get_ovvv_a_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                eris_ovVV = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
             else :
                 eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
             k = eris_ovVV.shape[0]
@@ -528,7 +529,7 @@ def compute_amplitudes(myadc, eris):
         a = 0
         for p in range(0,nocc_b,chnk_size):
             if getattr(myadc, 'with_df', None):
-                eris_OVvv = dfadc.get_ovvv_a_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                eris_OVvv = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
             else :
                 eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
             k = eris_OVvv.shape[0]
@@ -762,17 +763,19 @@ def density_matrix_so(myadc, T=None):
 
 def analyze(myadc):
 
-    logger.info(myadc, "\n*************************************************************")
-    logger.info(myadc, "                Eigenvector analysis summary")
-    logger.info(myadc, "*************************************************************")
+    str = ("\n*************************************************************"
+          "\n           Eigenvector analysis summary"                    
+          "\n*************************************************************")
+    logger.info(myadc, str)
 
     myadc.analyze_eigenvector()
  
     if myadc.compute_properties:
 
-        logger.info(myadc, "\n*************************************************************")
-        logger.info(myadc, "            Spectroscopic factors analysis summary")
-        logger.info(myadc, "*************************************************************")
+        str = ("\n*************************************************************"
+               "\n            Spectroscopic factors analysis summary"
+               "\n*************************************************************")
+        logger.info(myadc, str)
 
         myadc.analyze_spec_factor()
 
@@ -1163,7 +1166,7 @@ def get_imds_ea(adc, eris=None):
         a = 0
         for p in range(0,nocc_a,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_ovvv = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                eris_ovvv = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
             else :
                 eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
             k = eris_ovvv.shape[0]
@@ -1182,7 +1185,7 @@ def get_imds_ea(adc, eris=None):
         a = 0
         for p in range(0,nocc_b,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_OVvv = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                eris_OVvv = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
             else :
                 eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
             k = eris_OVvv.shape[0]
@@ -1198,7 +1201,7 @@ def get_imds_ea(adc, eris=None):
         a = 0
         for p in range(0,nocc_b,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_OVVV = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                eris_OVVV = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
             else :
                 eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
             k = eris_OVVV.shape[0]
@@ -1216,7 +1219,7 @@ def get_imds_ea(adc, eris=None):
         a = 0
         for p in range(0,nocc_a,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_ovVV = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                eris_ovVV = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
             else :
                 eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
             k = eris_ovVV.shape[0]
@@ -2575,7 +2578,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         temp = np.zeros((nocc_a, nvir_a, nvir_a))
         for p in range(0,nocc_a,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_ovvv = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                eris_ovvv = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
             else :
                 eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
             k = eris_ovvv.shape[0]
@@ -2599,7 +2602,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         temp = np.zeros((nocc_b, nvir_a, nvir_b))
         for p in range(0,nocc_b,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_OVvv = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                eris_OVvv = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
             else :
                 eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
             k = eris_OVvv.shape[0]
@@ -2619,7 +2622,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         temp = np.zeros((nocc_b, nvir_b, nvir_b))
         for p in range(0,nocc_b,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_OVVV = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                eris_OVVV = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
             else :
                 eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
             k = eris_OVVV.shape[0]
@@ -2641,7 +2644,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
         temp = np.zeros((nocc_a, nvir_b, nvir_a))
         for p in range(0,nocc_a,chnk_size):
             if getattr(adc, 'with_df', None):
-                eris_ovVV = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                eris_ovVV = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
             else :
                 eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
             k = eris_ovVV.shape[0]
@@ -2853,7 +2856,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1_2 = np.zeros((nocc_a,nvir_a,nvir_a))
                for p in range(0,nocc_a,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ovvv = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                       eris_ovvv = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
                    else :
                        eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
                    k = eris_ovvv.shape[0]
@@ -2900,7 +2903,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp = np.zeros((nocc_a,nvir_b,nvir_b))
                for p in range(0,nocc_a,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ovVV = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                       eris_ovVV = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
                    else :
                        eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
                    k = eris_ovVV.shape[0]
@@ -2972,7 +2975,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1_4 = np.zeros((nocc_b,nvir_b,nvir_b))
                for p in range(0,nocc_b,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_OVVV = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                       eris_OVVV = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
                    else :
                        eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
                    k = eris_OVVV.shape[0]
@@ -3011,7 +3014,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp = np.zeros((nocc_b,nvir_a,nvir_a))
                for p in range(0,nocc_b,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_OVvv = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                       eris_OVvv = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
                    else :
                        eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
                    k = eris_OVvv.shape[0]
@@ -3373,7 +3376,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp_1 = lib.einsum('pbc,ap->abc',t2_1_a_t,r_aaa, optimize=True)
                for p in range(0,nocc_a,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ovvv = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                       eris_ovvv = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
                    else :
                        eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
                    k = eris_ovvv.shape[0]
@@ -3442,7 +3445,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp_1 = lib.einsum('pbc,ap->abc',t2_1_b_t,r_bbb, optimize=True)
                for p in range(0,nocc_b,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_OVVV = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                       eris_OVVV = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
                    else :
                        eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
                    k = eris_OVVV.shape[0]
@@ -3506,7 +3509,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp_2 = np.zeros((nvir_a, nvir_b, nvir_b))
                for p in range(0,nocc_a,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ovVV = dfadc.get_ovvv_a_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                       eris_ovVV = dfadc.get_ovvv_spin_df(adc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
                    else :
                        eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
                    k = eris_ovVV.shape[0]
@@ -3531,7 +3534,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                temp_2 = np.zeros((nvir_a, nvir_b, nvir_a))
                for p in range(0,nocc_b,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_OVvv = dfadc.get_ovvv_a_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                       eris_OVvv = dfadc.get_ovvv_spin_df(adc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
                    else :
                        eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
                    k = eris_OVvv.shape[0]

@@ -59,9 +59,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
-    #logger.info(adc, "\n*************************************************************")
-    #logger.info(adc, "                  ADC calculation summary")
-    #logger.info(adc, "*************************************************************")
     str = ("\n*************************************************************"
            "\n            ADC calculation summary"
            "\n*************************************************************")
@@ -524,10 +521,6 @@ def density_matrix(myadc, T=None):
 
 def analyze(myadc):
 
-    #logger.info(myadc, "\n*************************************************************")
-    #logger.info(myadc, "                Eigenvector analysis summary")
-    #logger.info(myadc, "*************************************************************")
-
     str = ("\n*************************************************************"
           "\n           Eigenvector analysis summary"                    
           "\n*************************************************************")
@@ -536,10 +529,6 @@ def analyze(myadc):
     myadc.analyze_eigenvector()
  
     if myadc.compute_properties:
-
-        #logger.info(myadc, "\n*************************************************************")
-        #logger.info(myadc, "            Spectroscopic factors analysis summary")
-        #logger.info(myadc, "*************************************************************")
 
         str = ("\n*************************************************************"
                "\n            Spectroscopic factors analysis summary"
