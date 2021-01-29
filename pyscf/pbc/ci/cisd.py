@@ -20,8 +20,8 @@ from pyscf.pbc import mp
 
 class RCISD(cisd.RCISD):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        if abs(mf.kpt).max() > 1e-9:
-            raise NotImplementedError
+        #if abs(mf.kpt).max() > 1e-9:
+        #    raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
         cisd.RCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)

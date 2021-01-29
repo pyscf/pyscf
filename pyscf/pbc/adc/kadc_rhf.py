@@ -27,30 +27,36 @@ from pyscf.pbc import scf
 from pyscf.lib import logger
 from pyscf.pbc.adc import kadc_ao2mo
 from pyscf import __config__
+from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,
+                               padded_mo_coeff, get_frozen_mask)
+from pyscf.pbc.lib import kpts_helper
+
 
 class RADC(pyscf.adc.radc.RADC):
-
-    #max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
         assert (isinstance(mf, scf.khf.KSCF))
-        #pyscf.adc.radc.RADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
+
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+        if mo_occ is None:
+            mo_occ = mf.mo_occ
       
         self._scf = mf
-
         self.kpts = self._scf.kpts
-        #self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
+        self.verbose = mf.verbose
+        self.max_memory = mf.max_memory
+
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.cell = self._scf.cell
-        self.mo_coeff = self._scf.mo_coeff
-        #kpts = mf.kpts
-        #nkpts = mf.nkpts
-        #nocc = mf.nocc
-        #nmo = mf.nmo
-        #nvir = nmo - nocc
-        #self.ip_partition = None
-        #self.ea_partition = None
-        #self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
+        self.mo_coeff = mo_coeff
+        self.mo_occ = mo_occ
+        self.frozen = frozen
+
+        self._nocc = None
+        self._nmo = None
+
 
         ##################################################
         # don't modify the following attributes, unless you know what you are doing
@@ -63,6 +69,20 @@ class RADC(pyscf.adc.radc.RADC):
 
     transform_integrals = kadc_ao2mo.transform_integrals_incore
 
+    @property
+    def nkpts(self):
+        return len(self.kpts)
+
+    @property
+    def nocc(self):
+        return self.get_nocc()
+
+    @property
+    def nmo(self):
+        return self.get_nmo()
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
 
     def kernel_gs(self):
 
