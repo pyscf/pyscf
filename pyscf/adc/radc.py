@@ -59,12 +59,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
-    logger.info(adc, "\n*************************************************************")
-    logger.info(adc, "                  ADC calculation summary")
-    logger.info(adc, "*************************************************************")
+    str = ("\n*************************************************************"
+           "\n            ADC calculation summary"
+           "\n*************************************************************")
+    logger.info(adc, str)
 
     if nfalse >= 1:
-        logger.info(adc, "\n WARNING : Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
+        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
 
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
@@ -120,8 +121,8 @@ def compute_amplitudes(myadc, eris):
     if not isinstance(eris.oooo, np.ndarray):
         t2_1 = radc_ao2mo.write_dataset(t2_1)
         
-    del (v2e_oovv)
-    del (D2)
+    del v2e_oovv
+    del D2
 
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
@@ -129,7 +130,7 @@ def compute_amplitudes(myadc, eris):
 
     if isinstance(eris.ovvv, type(None)):
         chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
-    else :
+    else:
         chnk_size = nocc
     a = 0
     t1_2 = np.zeros((nocc,nvir))
@@ -203,7 +204,7 @@ def compute_amplitudes(myadc, eris):
         t2_2 = t2_2/D2
         if not isinstance(eris.oooo, np.ndarray):
             t2_2 = radc_ao2mo.write_dataset(t2_2)
-        del (D2)
+        del D2
 
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
         
@@ -474,12 +475,12 @@ def contract_ladder(myadc,t_amp,vvvv):
             k = vvvv_p.shape[0]
             vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
             t[a:a+k] = np.dot(vvvv_p,t_amp).reshape(-1,nvir,nocc*nocc)
-            del (vvvv_p)
+            del vvvv_p
             a += k
     else :
         raise Exception("Unknown vvvv type") 
 
-    del (t_amp)
+    del t_amp
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
 
     return t
@@ -520,17 +521,19 @@ def density_matrix(myadc, T=None):
 
 def analyze(myadc):
 
-    logger.info(myadc, "\n*************************************************************")
-    logger.info(myadc, "                Eigenvector analysis summary")
-    logger.info(myadc, "*************************************************************")
+    str = ("\n*************************************************************"
+          "\n           Eigenvector analysis summary"                    
+          "\n*************************************************************")
+    logger.info(myadc, str)
 
     myadc.analyze_eigenvector()
  
     if myadc.compute_properties:
 
-        logger.info(myadc, "\n*************************************************************")
-        logger.info(myadc, "            Spectroscopic factors analysis summary")
-        logger.info(myadc, "*************************************************************")
+        str = ("\n*************************************************************"
+               "\n            Spectroscopic factors analysis summary"
+               "\n*************************************************************")
+        logger.info(myadc, str)
 
         myadc.analyze_spec_factor()
 
@@ -1079,7 +1082,7 @@ def get_imds_ea(adc, eris=None):
             M_ab += 0.25*lib.einsum('lmad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
             M_ab -= 0.25*lib.einsum('lmad,lmbd->ab', temp_t2_vvvv, t2_1, optimize=True)
             M_ab -= lib.einsum('mlad,mlbd->ab', temp_t2_vvvv, t2_1, optimize=True)
-            del (temp_t2_vvvv)
+            del temp_t2_vvvv
 
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
             a = 0 
@@ -1116,12 +1119,12 @@ def get_imds_ea(adc, eris=None):
                     temp[a:a+k] += 0.5*lib.einsum('lmdf,lmed,aefb->ab',t2_1, t2_1,  vvvv, optimize=True)
                     temp[a:a+k] += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1, t2_1, vvvv, optimize=True)
                     temp[a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1, t2_1, vvvv, optimize=True)
-                    del (vvvv)
+                    del vvvv
                     a += k
 
             M_ab += temp
-            del (temp)
-            del (t2_1)
+            del temp
+            del t2_1
 
     cput0 = log.timer_debug1("Completed M_ab ADC(3) calculation", *cput0)
     return M_ab
@@ -1437,7 +1440,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     # Compute precond in 2p1h-2p1h block
 
     diag[s2:f2] = D_iab
-    del (D_iab)
+    del D_iab
 
 #    ###### Additional terms for the preconditioner ####
 #
@@ -1583,7 +1586,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
              k = dataset.shape[0]
              dataset = dataset[:].reshape(-1,nvir*nvir)
              r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
-             del (dataset)
+             del dataset
              a += k
     elif getattr(myadc, 'with_df', None):
         for p in range(0,nvir,chnk_size):
@@ -1591,7 +1594,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
             k = vvvv_p.shape[0]
             vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
             r2_vvvv[:,a:a+k] = np.dot(r2,vvvv_p.T).reshape(nocc,-1,nvir)
-            del (vvvv_p)
+            del vvvv_p
             a += k
     else :
         raise Exception("Unknown vvvv type") 
@@ -1732,7 +1735,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
                s[s1:f1] += lib.einsum('lmj,lamj->a',temp, eris_ovoo, optimize=True)
                s[s1:f1] -= lib.einsum('lmj,malj->a',temp, eris_ovoo, optimize=True)
-               del (temp)
+               del temp
 
                temp_1 = -lib.einsum('lmzw,jzw->jlm',t2_1,r2)
                s[s1:f1] -= lib.einsum('jlm,lamj->a',temp_1, eris_ovoo, optimize=True)
@@ -1810,12 +1813,12 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp_1 = -lib.einsum('lyd,lixd->ixy',temp,t2_1,optimize=True)
                s[s2:f2] -= temp_1.reshape(-1)
 
-               del (temp_s_a)
-               del (temp_s_a_1)
-               del (temp_t2_r2_1)
-               del (temp_t2_r2_2)
-               del (temp_t2_r2_3)
-               del (temp_t2_r2_4)
+               del temp_s_a
+               del temp_s_a_1
+               del temp_t2_r2_1
+               del temp_t2_r2_2
+               del temp_t2_r2_3
+               del temp_t2_r2_4
 
                temp_1 = lib.einsum('b,lbmi->lmi',r1,eris_ovoo)
                s[s2:f2] += lib.einsum('lmi,lmxy->ixy',temp_1, t2_1, optimize=True).reshape(-1)
@@ -1825,11 +1828,11 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
                temp  -= lib.einsum('lxd,ildy->ixy',temp_2_1,t2_1,optimize=True)
                s[s2:f2] += temp.reshape(-1)
               
-               del (t2_1)
-               del (temp)
-               del (temp_1)
-               del (temp_1_1)
-               del (temp_2_1)
+               del t2_1
+               del temp
+               del temp_1
+               del temp_1_1
+               del temp_2_1
 
         cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         return s

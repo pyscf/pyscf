@@ -17,6 +17,8 @@ import numpy as np
 
 def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
 
+    ''' Returns approximate ovvv integrals used in restricted implementation'''
+
     nocc = myadc._nocc
     nvir = myadc._nvir
     naux = myadc.with_df.get_naoaux()
@@ -34,7 +36,9 @@ def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
     return ovvv    
 
 
-def  get_ovvv_a_df(myadc, Lov, Lvv, p, chnk_size):
+def  get_ovvv_spin_df(myadc, Lov, Lvv, p, chnk_size):
+
+    ''' Returns approximate ovvv integrals (different spin cases) used in unrestricted implementation '''
 
     norb_1 = Lov.shape[1]
     norb_2 = Lov.shape[2]
@@ -58,6 +62,8 @@ def  get_ovvv_a_df(myadc, Lov, Lvv, p, chnk_size):
 
 def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
+    ''' Returns approximate vvvv integrals used in restricted implementation'''
+
     nocc = myadc._nocc
     nvir = myadc._nvir
     naux = myadc.with_df.get_naoaux()
@@ -77,6 +83,8 @@ def  get_vvvv_df(myadc, Lvv, p, chnk_size):
 
 
 def  get_vvvv_antisym_df(myadc, Lvv, p, chnk_size):
+
+    ''' Returns approximate antisymmetrized vvvv integrals (alpha/beta spin) used in unrestricted implementation'''
 
     naux = myadc.with_df.get_naoaux()
     nvir = Lvv.shape[1]
@@ -98,6 +106,8 @@ def  get_vvvv_antisym_df(myadc, Lvv, p, chnk_size):
 
 
 def  get_vVvV_df(myadc, Lvv, LVV, p, chnk_size):
+
+    ''' Returns approximate vvvv integrals (mixed spin) used in unrestricted implementation'''
 
     naux = myadc.with_df.get_naoaux()
     nvir_1 = Lvv.shape[1]
