@@ -4142,10 +4142,10 @@ def analyze_eigenvector_ea(adc):
     f_bbb = s_bbb + n_doubles_bbb
 
     U = adc.U
-
+    print("eig vec shape: ", U.shape)
     for I in range(U.shape[1]):
-        U1 = U[I, :f_b]
-        U2 = U[I, f_b:]
+        U1 = U[:f_b, I]
+        U2 = U[f_b:, I]
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 = np.dot(U2, U2) 
            
@@ -4159,10 +4159,10 @@ def analyze_eigenvector_ea(adc):
         temp_bbb[:,ab_b[1],ab_b[0]] = -U[s_bbb:f_bbb,I].reshape(nocc_b,-1).copy()
         U_bbb = temp_bbb.reshape(-1).copy()
 
-        U_sq = U[I,:].copy()**2
+        U_sq = U[:,I].copy()**2
         ind_idx = np.argsort(-U_sq)
         U_sq = U_sq[ind_idx] 
-        U_sorted = U[I,ind_idx].copy()
+        U_sorted = U[ind_idx,I].copy()
 
         U_sq_aaa = U_aaa.copy()**2
         U_sq_bbb = U_bbb.copy()**2
@@ -4180,10 +4180,6 @@ def analyze_eigenvector_ea(adc):
         ind_idx_aaa = ind_idx_aaa[U_sq_aaa > evec_print_tol**2]
         ind_idx_bbb = ind_idx_bbb[U_sq_bbb > evec_print_tol**2]
         
-        temp_doubles_aaa_idx = [0,0,0]  
-        temp_doubles_aba_idx = [0,0,0]  
-        temp_doubles_bab_idx = [0,0,0]  
-        temp_doubles_bbb_idx = [0,0,0]  
         singles_a_idx = []
         singles_b_idx = []
         doubles_aaa_idx = []
@@ -4211,24 +4207,18 @@ def analyze_eigenvector_ea(adc):
                 orb_bab = orb - s_bab       
                 i_rem = orb_bab % (nvir_a*nvir_b)
                 i_idx = orb_bab//(nvir_a*nvir_b)
-                temp_doubles_bab_idx[0] = int(i_idx + 1)
                 a_rem = i_rem % nvir_b
                 b_idx = i_rem//nvir_b
-                temp_doubles_bab_idx[1] = int(b_idx + 1 + nocc_a)
-                temp_doubles_bab_idx[2] = int(a_rem + 1 + nocc_b)
-                doubles_bab_idx.append(temp_doubles_bab_idx)
+                doubles_bab_idx.append((i_idx + 1, b_idx + 1 + nocc_a, a_rem + 1 + nocc_b))
                 doubles_bab_val.append(U_sorted[iter_idx])
           
             if orb in range(s_aba,f_aba):
                 orb_aba = orb - s_aba     
                 i_rem = orb_aba % (nvir_b*nvir_a)
                 i_idx = orb_aba//(nvir_b*nvir_a)
-                temp_doubles_aba_idx[0] = int(i_idx + 1)
                 a_rem = i_rem % nvir_a
                 b_idx = i_rem//nvir_a
-                temp_doubles_aba_idx[1] = int(b_idx + 1 + nocc_b)
-                temp_doubles_aba_idx[2] = int(a_rem + 1 + nocc_a)
-                doubles_aba_idx.append(temp_doubles_aba_idx)
+                doubles_aba_idx.append((i_idx + 1, b_idx + 1 + nocc_b, a_rem + 1 + nocc_a))
                 doubles_aba_val.append(U_sorted[iter_idx])
 
             iter_idx += 1
@@ -4236,22 +4226,16 @@ def analyze_eigenvector_ea(adc):
         for orb_aaa in ind_idx_aaa:              
             i_rem = orb_aaa % (nvir_a*nvir_a)
             i_idx = orb_aaa//(nvir_a*nvir_a)
-            temp_doubles_aaa_idx[0] = int(i_idx + 1)
             a_rem = i_rem % nvir_a
             b_idx = i_rem//nvir_a
-            temp_doubles_aaa_idx[1] = int(b_idx + 1 + nocc_a)
-            temp_doubles_aaa_idx[2] = int(a_rem + 1 + nocc_a)
-            doubles_aaa_idx.append(temp_doubles_aaa_idx)
+            doubles_aaa_idx.append((i_idx + 1, b_idx + 1 + nocc_a, a_rem + 1 + nocc_a))
 
         for orb_bbb in ind_idx_bbb:                
             i_rem = orb_bbb % (nvir_b*nvir_b)
             i_idx = orb_bbb//(nvir_b*nvir_b)
-            temp_doubles_bbb_idx[0] = int(i_idx + 1)
             a_rem = i_rem % nvir_b
             b_idx = i_rem//nvir_b
-            temp_doubles_bbb_idx[1] = int(b_idx + 1 + nocc_b)
-            temp_doubles_bbb_idx[2] = int(a_rem + 1 + nocc_b)
-            doubles_bbb_idx.append(temp_doubles_bbb_idx)
+            doubles_bbb_idx.append((i_idx + 1, b_idx + 1 + nocc_b, a_rem + 1 + nocc_b))
         
         doubles_aaa_val = list(U_sorted_aaa)
         doubles_bbb_val = list(U_sorted_bbb)
@@ -4347,7 +4331,7 @@ def analyze_eigenvector_ip(adc):
         U2 = U[f_b:,I]
         U1dotU1 = np.dot(U1, U1) 
         U2dotU2 = np.dot(U2, U2) 
-           
+
         temp_aaa = np.zeros((nvir_a, nocc_a, nocc_a))
         temp_aaa[:,ij_a[0],ij_a[1]] =  U[s_aaa:f_aaa,I].reshape(nvir_a,-1).copy()
         temp_aaa[:,ij_a[1],ij_a[0]] = -U[s_aaa:f_aaa,I].reshape(nvir_a,-1).copy()
@@ -4406,8 +4390,8 @@ def analyze_eigenvector_ip(adc):
                 orb_bab = orb - s_bab       
                 vir_rem = orb_bab % (nocc_a*nocc_b)
                 vir_idx = orb_bab//(nocc_a*nocc_b)
-                j_rem = vir_rem % nocc_b
-                i_idx = vir_rem//nocc_b
+                j_rem = vir_rem % nocc_a
+                i_idx = vir_rem//nocc_a
                 doubles_bab_idx.append((vir_idx + 1 + nocc_b, i_idx + 1, j_rem + 1))
                 doubles_bab_val.append(U_sorted[iter_idx])
           
@@ -4415,8 +4399,8 @@ def analyze_eigenvector_ip(adc):
                 orb_aba = orb - s_aba     
                 vir_rem = orb_aba % (nocc_b*nocc_a)
                 vir_idx = orb_aba//(nocc_b*nocc_a)
-                j_rem = vir_rem % nocc_a
-                i_idx = vir_rem//nocc_a
+                j_rem = vir_rem % nocc_b
+                i_idx = vir_rem//nocc_b
                 doubles_aba_idx.append((vir_idx + 1 + nocc_a, i_idx + 1, j_rem + 1))
                 doubles_aba_val.append(U_sorted[iter_idx])
 
@@ -4460,28 +4444,28 @@ def analyze_eigenvector_ip(adc):
             logger.info(adc, "     i     j     a     U(i,j,a)")
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_aaa_idx):
-                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[2], print_doubles[1], print_doubles[0], doubles_aaa_val[idx])
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aaa_val[idx])
 
         if doubles_bab_val:
             logger.info(adc, "\n2h1p(beta|alpha|beta) block: ") 
             logger.info(adc, "     i     j     a     U(i,j,a)")
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bab_idx):
-                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[2], print_doubles[1], print_doubles[0], doubles_bab_val[idx])
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bab_val[idx])
 
         if doubles_aba_val:
             logger.info(adc, "\n2h1p(alpha|beta|alpha) block: ") 
             logger.info(adc, "     i     j     a     U(i,j,a)")
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_aba_idx):
-                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[2], print_doubles[1], print_doubles[0], doubles_aba_val[idx])
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_aba_val[idx])
 
         if doubles_bbb_val:
             logger.info(adc, "\n2h1p(beta|beta|beta) block: ") 
             logger.info(adc, "     i     j     a     U(i,j,a)")
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bbb_idx):
-                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[2], print_doubles[1], print_doubles[0], doubles_bbb_val[idx])
+                logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
 
         logger.info(adc, "\n*************************************************************\n")
 

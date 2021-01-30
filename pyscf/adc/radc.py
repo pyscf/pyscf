@@ -2291,7 +2291,6 @@ def analyze_eigenvector_ea(adc):
         U_sorted = U_sorted[U_sq > evec_print_tol**2]
         ind_idx = ind_idx[U_sq > evec_print_tol**2]
 
-        temp_doubles_idx = [0,0,0]  
         singles_idx = []
         doubles_idx = []
         singles_val = []
@@ -2309,15 +2308,10 @@ def analyze_eigenvector_ea(adc):
                       
                 i_rem = orb_d_idx % (nvir*nvir)
                 i_idx = orb_d_idx//(nvir*nvir)
-                temp_doubles_idx[0] = int(i_idx + 1) 
                 a_rem = i_rem % nvir
                 b_idx = i_rem//nvir
-                temp_doubles_idx[1] = int(b_idx + 1 + nocc)
-                temp_doubles_idx[2] = int(a_rem + 1 + nocc)
-                          
-                doubles_idx.append(temp_doubles_idx)
+                doubles_idx.append((i_idx + 1, b_idx + 1 + nocc, a_rem + 1 + nocc))
                 doubles_val.append(U_sorted[iter_num])
-                temp_doubles_idx = [0,0,0]
                 
             iter_num += 1 
      
@@ -2368,7 +2362,6 @@ def analyze_eigenvector_ip(adc):
         U_sorted = U_sorted[U_sq > evec_print_tol**2]
         ind_idx = ind_idx[U_sq > evec_print_tol**2]
              
-        temp_doubles_idx = [0,0,0]  
         singles_idx = []
         doubles_idx = []
         singles_val = []
@@ -2386,14 +2379,10 @@ def analyze_eigenvector_ip(adc):
                       
                 a_rem = orb_d_idx % (nocc*nocc)
                 a_idx = orb_d_idx//(nocc*nocc)
-                temp_doubles_idx[0] = int(a_idx + 1 + n_singles) 
                 j_rem = a_rem % nocc
                 i_idx = a_rem//nocc
-                temp_doubles_idx[1] = int(i_idx + 1)
-                temp_doubles_idx[2] = int(j_rem + 1)
-                doubles_idx.append(temp_doubles_idx)
+                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_rem + 1))
                 doubles_val.append(U_sorted[iter_num])
-                temp_doubles_idx = [0,0,0]
                 
             iter_num += 1 
 
