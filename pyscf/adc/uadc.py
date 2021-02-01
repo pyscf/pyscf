@@ -4466,7 +4466,7 @@ def analyze_eigenvector_ip(adc):
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bbb_idx):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
-
+        print('doubles norm total: ', 0.5*np.dot(doubles_aaa_val,doubles_aaa_val) + np.dot(doubles_bab_val,doubles_bab_val)+ np.dot(doubles_aba_val,doubles_aba_val) + 0.5*np.dot(doubles_bbb_val,doubles_bbb_val))
         logger.info(adc, "\n*************************************************************\n")
 
 
