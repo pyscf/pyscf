@@ -20,7 +20,7 @@
 Non-relativistic static/dynamic polarizability and hyper-polarizability
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -439,7 +439,7 @@ def cphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
     # library is needed.
     from scipy.optimize import newton_krylov
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     mo_coeff = np.asarray(mf.mo_coeff)
     nkpt, nao, nmo = mo_coeff.shape

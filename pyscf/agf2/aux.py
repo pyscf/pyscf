@@ -20,7 +20,7 @@
 Auxiliary space class and helper functions.
 '''
 
-import time
+
 import numpy as np
 import scipy.linalg.blas
 from pyscf import lib

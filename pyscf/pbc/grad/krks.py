@@ -26,14 +26,14 @@ import numpy as np
 from pyscf.pbc.dft import numint
 from pyscf import lib
 from pyscf.lib import logger
-import time
+
 
 def get_veff(ks_grad, dm=None, kpts=None):
     mf = ks_grad.base
     cell = ks_grad.cell
     if dm is None: dm = mf.make_rdm1()
     if kpts is None: kpts = mf.kpts
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = mf._numint
     if ks_grad.grids is not None:

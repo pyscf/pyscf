@@ -69,7 +69,7 @@ control at which level the timing information should be output.  It is 5
 >>> import sys, time
 >>> from pyscf import lib
 >>> log = lib.logger.Logger(sys.stdout, 4)
->>> t0 = time.clock()
+>>> t0 = logger.process_clock()
 >>> log.timer('test', t0)
 >>> lib.logger.TIMER_LEVEL = 4
 >>> log.timer('test', t0)
@@ -79,9 +79,10 @@ control at which level the timing information should be output.  It is 5
 
 import sys
 import time
+
 if sys.version_info < (3, 0):
-    process_clock = time.clock
-    perf_counter = time.time
+    process_clock = logger.process_clock
+    perf_counter = logger.perf_counter
 else:
     process_clock = time.process_time
     perf_counter = time.perf_counter

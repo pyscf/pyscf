@@ -23,7 +23,7 @@ the 4-index integrals (ij|kl) = (ij|lk) = (ji|kl) are assumed.
 Note MO integrals are treated in chemist's notation
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -36,7 +36,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO,
            fintermediates=None, fupdate=None):
     if eris is None: eris = mycc.ao2mo()
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)
 
     if t1 is None: t1 = mycc.t1
@@ -235,7 +235,7 @@ def make_intermediates(mycc, t1, t2, eris):
 # update L1, L2
 def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     if imds is None: imds = make_intermediates(mycc, t1, t2, eris)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]

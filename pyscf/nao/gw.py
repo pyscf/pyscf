@@ -12,7 +12,7 @@ from timeit import default_timer as timer
 from numpy import stack, dot, zeros, einsum, pi, log, array, require
 import scipy.sparse as sparse
 from pyscf.nao import scf
-import time
+
 
 try:
   import numba as nb
@@ -23,7 +23,7 @@ except:
 def __LINE__():
       return sys._getframe(1).f_lineno
 
-start_time = time.time()
+start_time = logger.perf_counter()
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
 

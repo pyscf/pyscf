@@ -16,14 +16,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 from pyscf import lib, __config__
 from pyscf.grad import rhf as rhf_grad
 from pyscf.soscf import ciah
 import numpy as np
 from scipy import linalg, optimize
 from scipy.sparse import linalg as sparse_linalg
-import time
+
 
 default_level_shift = getattr(__config__, 'grad_lagrange_Gradients_level_shift', 1e-8)
 default_conv_atol = getattr (__config__, 'grad_lagrange_Gradients_conv_atol', 1e-12)
@@ -126,7 +126,7 @@ class Gradients (rhf_grad.GradientsMixin):
         return (info_int==0), Lvec, bvec, Aop, Adiag
                     
     def kernel (self, level_shift=None, **kwargs):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = lib.logger.new_logger(self, self.verbose)
         if 'atmlst' in kwargs:
             self.atmlst = kwargs['atmlst']

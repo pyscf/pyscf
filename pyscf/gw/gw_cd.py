@@ -30,7 +30,7 @@ Useful References:
     J. Chem. Theory Comput. 14, 4856-4869 (2018)
 '''
 
-import time
+
 from functools import reduce
 import numpy
 import numpy as np
@@ -334,7 +334,7 @@ class GWCD(lib.StreamObject):
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff,

@@ -27,7 +27,7 @@ need to contact Cyrus Umrigar to get the program.
 import os
 import sys
 import json
-import time
+
 import tempfile
 import copy
 import glob

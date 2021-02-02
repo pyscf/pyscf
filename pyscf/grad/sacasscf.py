@@ -43,7 +43,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
 
     # dmo = smoT.dao.smo
     # dao = mo.dmo.moT
-    t0 = (time.clock (), time.time ())
+    t0 = (logger.process_clock (), logger.perf_counter ())
 
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
@@ -219,7 +219,7 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     if mc.frozen is not None:
         raise NotImplementedError
 
-    t0 = (time.clock (), time.time ())
+    t0 = (logger.process_clock (), logger.perf_counter ())
     mol = mc.mol
     ncore = mc.ncore
     ncas = mc.ncas
@@ -564,7 +564,7 @@ class Gradients (lagrange.Gradients):
         #ci = np.ravel (ci).reshape (self.nroots, -1)
 
         # CI part
-        t0 = (time.clock (), time.time ())
+        t0 = (logger.process_clock (), logger.perf_counter ())
         de_Lci = Lci_dot_dgci_dx (Lci, self.weights, self.base, mo_coeff=mo, ci=ci, atmlst=atmlst, mf_grad=mf_grad, eris=eris, verbose=verbose)
         lib.logger.info (self, '--------------- %s gradient Lagrange CI response ---------------',
                     self.base.__class__.__name__)

@@ -21,7 +21,7 @@ Non-relativistic rotational g-tensor for DFT
 '''
 
 
-import time
+
 from pyscf.prop.nmr import rks as rks_nmr
 from pyscf.prop.rotational_gtensor import rhf as rhf_g
 from pyscf.prop.magnetizability import rks as rks_mag

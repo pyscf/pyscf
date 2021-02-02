@@ -20,7 +20,7 @@
 Functions to support chkfiles with MPI
 '''
 
-import time
+
 import numpy as np
 import h5py
 from pyscf import lib

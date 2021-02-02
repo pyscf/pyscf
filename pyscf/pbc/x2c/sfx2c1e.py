@@ -17,7 +17,7 @@
 spin-free X2C correction for extended systems (experimental feature)
 '''
 
-import time
+
 from functools import reduce
 import copy
 import numpy
@@ -209,7 +209,7 @@ def get_pnucp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()

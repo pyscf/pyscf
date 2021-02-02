@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import sys
-import time
+
 import threading
 import traceback
 import numpy

@@ -21,7 +21,7 @@ Auxiliary second-order Green's function perturbation theory for
 unrestricted references for arbitrary moment consistency
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -55,7 +55,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ[0]) is aux.GreensFunction

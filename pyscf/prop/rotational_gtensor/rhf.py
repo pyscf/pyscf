@@ -25,7 +25,7 @@ Refs:
 '''
 
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -152,7 +152,7 @@ class RotationalGTensor(rhf_mag.Magnetizability):
         return self
 
     def kernel(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
 

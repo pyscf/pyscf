@@ -18,7 +18,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -31,7 +31,7 @@ from pyscf import __config__
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, **kwargs):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if eom.verbose >= logger.WARN:
         eom.check_sanity()
@@ -398,7 +398,7 @@ def ipccsd_diag(eom, imds=None):
 
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
     from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
@@ -748,7 +748,7 @@ def eaccsd_diag(eom, imds=None):
     return vector
 
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
@@ -1750,7 +1750,7 @@ class _IMDS:
         self._made_shared_2e = False
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Loo = imd.Loo(t1, t2, eris)
@@ -1762,7 +1762,7 @@ class _IMDS:
         return self
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1780,7 +1780,7 @@ class _IMDS:
         if not self._made_shared_2e and ip_partition != 'mp':
             self._make_shared_2e()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1795,7 +1795,7 @@ class _IMDS:
 
     def make_t3p2_ip(self, cc, ip_partition=None):
         assert(ip_partition is None)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1816,7 +1816,7 @@ class _IMDS:
         if not self._made_shared_2e and ea_partition != 'mp':
             self._make_shared_2e()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1833,7 +1833,7 @@ class _IMDS:
 
     def make_t3p2_ea(self, cc, ea_partition=None):
         assert(ea_partition is None)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1850,7 +1850,7 @@ class _IMDS:
 
 
     def make_ee(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

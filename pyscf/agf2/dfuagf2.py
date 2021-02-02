@@ -21,7 +21,7 @@ Auxiliary second-order Green's function perturbation theory for
 unrestricted references with density fitting
 '''
 
-import time
+
 import numpy as np
 import ctypes
 from pyscf import lib
@@ -57,7 +57,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ[0]) is aux.GreensFunction
@@ -260,7 +260,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -304,7 +304,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b):
     ''' Returns nested tuple of ndarray
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     cxa, cxb = np.eye(agf2.nmo[0]), np.eye(agf2.nmo[1])

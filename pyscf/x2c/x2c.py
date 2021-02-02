@@ -14,7 +14,6 @@
 # limitations under the License.
 
 
-import time
 from functools import reduce
 import copy
 import numpy
@@ -408,7 +407,7 @@ class X2C_UHF(hf.SCF):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
         vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)

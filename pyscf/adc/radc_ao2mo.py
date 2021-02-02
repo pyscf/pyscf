@@ -20,7 +20,7 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-import time
+
 import h5py
 import tempfile
 
@@ -55,7 +55,7 @@ def transform_integrals_incore(myadc):
 ### Out-of-core integral transformation for integrals in Chemists' notation###
 def transform_integrals_outcore(myadc):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mol = myadc.mol
@@ -93,7 +93,7 @@ def transform_integrals_outcore(myadc):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     fswap = lib.H5TmpFile()
     max_memory = myadc.max_memory-lib.current_memory()[0]
     if max_memory <= 0:
@@ -150,7 +150,7 @@ def transform_integrals_outcore(myadc):
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
 
-        cput3 = time.clock(), time.time()
+        cput3 = logger.process_clock(), logger.perf_counter()
         avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
         chnk_size = calculate_chunk_size(myadc)
 
@@ -179,7 +179,7 @@ def transform_integrals_outcore(myadc):
 
 ### DF integral transformation for integrals in Chemists' notation###
 def transform_integrals_df(myadc):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_coeff = np.asarray(myadc.mo_coeff, order='F')

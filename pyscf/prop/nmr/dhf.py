@@ -21,7 +21,7 @@ NMR shielding of Dirac Hartree-Fock
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -208,7 +208,7 @@ def get_fock(nmrobj, dm0=None, gauge_orig=None):
     '''
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
     mol = nmrobj.mol
     if nmrobj.mb.upper() == 'RMB':
@@ -306,12 +306,12 @@ class NMR(rhf_nmr.NMR):
         return self
 
     def shielding(self, mo1=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         unit_ppm = nist.ALPHA**2 * 1e6
         msc_dia = self.dia() * unit_ppm
         t0 = logger.timer(self, 'h11', *t0)

@@ -42,7 +42,7 @@ sblk = 200
 Set mf.direct_scf = False because no traditional 2e integrals
 '''
 
-import time
+
 import ctypes
 import numpy
 import scipy.linalg
@@ -57,7 +57,7 @@ from pyscf.scf import _vhf
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
-    t0 = time.clock(), time.time()
+    t0 = logger.process_clock(), logger.perf_counter()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -102,18 +102,18 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
             coords = coords[mask]
 
         if sgx.debug:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             gbn = batch_nuc(mol, coords)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
             if with_j:
                 jg = numpy.einsum('gij,xij->xg', gbn, dms)
             if with_k:
                 gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
             gbn = None
         else:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             jg, gv = batch_jk(mol, coords, dms, fg.copy())
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
         if with_j:
             xj = lib.einsum('gv,xg->xgv', ao, jg)
@@ -146,7 +146,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
 
 def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
-    t0 = time.clock(), time.time()
+    t0 = logger.process_clock(), logger.perf_counter()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -203,19 +203,19 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             rhog = None
 
         if sgx.debug:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             gbn = batch_nuc(mol, coords)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
             if with_j:
                 jpart = numpy.einsum('guv,xg->xuv', gbn, rhog)
             if with_k:
                 gv = lib.einsum('gtv,xgt->xgv', gbn, fg)
             gbn = None
         else:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             if with_j: rhog = rhog.copy()
             jpart, gv = batch_jk(mol, coords, rhog, fg.copy())
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
         if with_j:
             vj += jpart
@@ -315,7 +315,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
 # pre for get_k
 # Use default mesh grids and weights
 def get_gridss(mol, level=1, gthrd=1e-10):
-    Ktime = (time.clock(), time.time())
+    Ktime = (logger.process_clock(), logger.perf_counter())
     grids = dft.gen_grid.Grids(mol)
     grids.level = level
     grids.build()

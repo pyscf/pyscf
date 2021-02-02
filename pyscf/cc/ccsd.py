@@ -22,7 +22,7 @@ RCCSD for real integrals
 (ij|kl) = (ji|kl) = (kl|ij) = ...
 '''
 
-import time
+
 import ctypes
 from functools import reduce
 import numpy
@@ -51,7 +51,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
     log.info('Init E_corr(CCSD) = %.15g', eccsd)
@@ -95,7 +95,7 @@ def update_amps(mycc, t1, t2, eris):
         raise NotImplementedError
     assert(isinstance(eris, _ChemistsERIs))
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     fock = eris.fock
@@ -275,7 +275,7 @@ def update_amps(mycc, t1, t2, eris):
 
 
 def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nvir_pair = nvir * (nvir+1) // 2
@@ -376,7 +376,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
     Using symmetry t2[ijab] = t2[jiba] and Ht2[ijab] = Ht2[jiba], compute the
     lower triangular part of  Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if with_ovvv is None:
         with_ovvv = mycc.direct
@@ -428,7 +428,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     without using symmetry t2[ijab] = t2[jiba] in t2 or Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if t1 is None:
         tau = t2
@@ -486,7 +486,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         return numpy.zeros_like(t2)
 
     _dgemm = lib.numpy_helper._dgemm
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -607,7 +607,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert(vvvv is not None)
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -999,7 +999,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def get_init_guess(self, eris=None):
         return self.init_amps(eris)[1:]
     def init_amps(self, eris=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         mo_e = eris.mo_energy
@@ -1342,7 +1342,7 @@ class _ChemistsERIs:
         raise NotImplementedError
 
 def _make_eris_incore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -1399,7 +1399,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -1433,7 +1433,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     if not mycc.direct:
         max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
         eris.feri2 = lib.H5TmpFile()
@@ -1491,7 +1491,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     return eris
 
 def _make_df_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)

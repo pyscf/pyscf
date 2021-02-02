@@ -28,7 +28,7 @@ Method:
 '''
 
 from functools import reduce
-import time
+
 import numpy
 import numpy as np
 import h5py
@@ -685,7 +685,7 @@ class KRGWCD(lib.StreamObject):
             logger.warn(self, 'Memory may not be enough!')
             raise NotImplementedError
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff, orbs=orbs,

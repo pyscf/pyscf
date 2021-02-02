@@ -26,7 +26,7 @@ See Also:
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -620,7 +620,7 @@ class KSCF(pbchf.SCF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.rsjk:
             vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                       with_j, with_k, omega, self.exxdiv)

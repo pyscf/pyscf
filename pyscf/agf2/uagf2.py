@@ -21,7 +21,7 @@ Auxiliary second-order Green's function perturbation theory for
 unrestricted references
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -60,7 +60,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ[0]) is aux.GreensFunction
@@ -188,7 +188,7 @@ def fock_loop(agf2, eri, gf, se):
     assert type(se[0]) is aux.SelfEnergy
     assert type(se[1]) is aux.SelfEnergy
 
-    cput0 = cput1 = (time.clock(), time.time())
+    cput0 = cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     diis = lib.diis.DIIS(agf2)
@@ -792,7 +792,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -824,7 +824,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -860,7 +860,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     spin = 1: (bbbb, bbaa)
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo
@@ -918,7 +918,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     spin = 1: (bbbb, bbaa)
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo

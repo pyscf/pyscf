@@ -20,7 +20,7 @@
 Auxiliary second-order Green's function perturbation theory
 '''
 
-import time
+
 import numpy as np
 import copy
 from pyscf import lib
@@ -39,7 +39,7 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 
     log = logger.new_logger(agf2, verbose)
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     name = agf2.__class__.__name__
 
     if eri is None: eri = agf2.ao2mo()
@@ -142,7 +142,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ) is aux.GreensFunction
@@ -290,7 +290,7 @@ def fock_loop(agf2, eri, gf, se):
     assert type(gf) is aux.GreensFunction
     assert type(se) is aux.SelfEnergy
 
-    cput0 = cput1 = (time.clock(), time.time())
+    cput0 = cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     diis = lib.diis.DIIS(agf2)
@@ -1017,7 +1017,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -1036,7 +1036,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -1058,7 +1058,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
     ''' Returns ndarray
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     cx = np.eye(eri.nmo)
@@ -1080,7 +1080,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     ''' Returns H5 dataset
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo

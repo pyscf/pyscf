@@ -27,7 +27,7 @@ from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 from pyscf.eph import rhf as rhf_eph
 from pyscf.eph.uhf import uhf_deriv_generator
-import time
+
 from pyscf import lib
 
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):

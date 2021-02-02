@@ -17,7 +17,7 @@ GMP2 in spin-orbital form
 E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -296,7 +296,7 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     return eris
 
 def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mp.stdout, mp.verbose)
     eris = _PhysicistsERIs()
     eris._common_init_(mp, mo_coeff)

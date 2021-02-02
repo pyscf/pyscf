@@ -28,7 +28,7 @@ from pyscf.pbc.dft.numint import eval_ao_kpts
 from pyscf.pbc import gto, tools
 from pyscf.gto import mole
 import scipy
-import time
+
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     '''
@@ -49,7 +49,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     hcore_deriv = mf_grad.hcore_generator(cell, kpts)
     s1 = mf_grad.get_ovlp(cell, kpts)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
     vhf = mf_grad.get_veff(dm0, kpts)
     log.timer('gradients of 2e part', *t0)
@@ -306,7 +306,7 @@ class GradientsMixin(molgrad.GradientsMixin):
         if kpts is None: kpts = self.kpts
         if dm is None: dm = self.base.make_rdm1()
         exxdiv = self.base.exxdiv
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vj, vk = self.base.with_df.get_jk_e1(dm, kpts, exxdiv=exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -314,7 +314,7 @@ class GradientsMixin(molgrad.GradientsMixin):
     def get_j(self, dm=None, kpts=None):
         if kpts is None: kpts = self.kpts
         if dm is None: dm = self.base.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vj = self.base.with_df.get_j_e1(dm, kpts)
         logger.timer(self, 'vj', *cpu0)
         return vj
@@ -323,7 +323,7 @@ class GradientsMixin(molgrad.GradientsMixin):
         if kpts is None: kpts = self.kpts
         if dm is None: dm = self.base.make_rdm1()
         exxdiv = self.base.exxdiv
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vk = self.base.with_df.get_k_e1(dm, kpts, kpts_band, exxdiv)
         logger.timer(self, 'vk', *cpu0)
         return vk
@@ -410,7 +410,7 @@ class Gradients(GradientsMixin):
             logger.note(self, '----------------------------------------------')
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ

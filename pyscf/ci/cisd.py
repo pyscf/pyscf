@@ -20,7 +20,7 @@
 Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -102,7 +102,7 @@ def make_diagonal(myci, eris):
     return numpy.hstack((ehf, e1diag.reshape(-1), e2diag.reshape(-1)))
 
 def contract(myci, civec, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(myci.stdout, myci.verbose)
     nocc = myci.nocc
     nmo = myci.nmo

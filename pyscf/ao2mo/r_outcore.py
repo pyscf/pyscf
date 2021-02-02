@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import tempfile
 import numpy
 import h5py
@@ -39,7 +39,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo',
 def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
-    time_0pass = (time.clock(), time.time())
+    time_0pass = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if '_spinor' not in intor:
         log.warn('r_ao2mo requires spinor integrals.\n'
@@ -143,14 +143,14 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             tioi += ti2[1]-ti0[1]
             pbuf = _ao2mo.r_e2(buf[:nrow], mokl, klshape, tao, ao_loc, aosym)
 
-            tw1 = time.time()
+            tw1 = logger.perf_counter()
             if comp == 1:
                 h5d_eri[row0:row1] = pbuf
             else:
                 h5d_eri[icomp,row0:row1] = pbuf
-            tioi += time.time()-tw1
+            tioi += logger.perf_counter()-tw1
 
-            ti1 = (time.clock(), time.time())
+            ti1 = (logger.process_clock(), logger.perf_counter())
             log.debug('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f, I/O time: %9.2f',
                       istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1], tioi)
             ti0 = ti1
@@ -169,7 +169,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
             ao2mopt=None):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     ijsame = iden_coeffs(mo_coeffs[0], mo_coeffs[1])
@@ -352,11 +352,11 @@ if __name__ == '__main__':
     eri0 = numpy.dot(eri0.reshape(-1,nao), mo)
     eri0 = eri0.reshape((nmo,)*4)
 
-    print(time.clock())
+    print(logger.process_clock())
     full(mol, mo, 'h2oeri.h5', max_memory=10, ioblk_size=5)
     with h5py.File('h2oeri.h5', 'r') as feri:
         eri1 = numpy.array(feri['eri_mo']).reshape((nmo,)*4)
 
-    print(time.clock())
+    print(logger.process_clock())
     print(numpy.allclose(eri0, eri1))
 

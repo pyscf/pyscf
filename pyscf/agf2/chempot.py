@@ -20,7 +20,7 @@
 Functions for tuning the chemical potential.
 '''
 
-import time
+
 import numpy as np
 from scipy import optimize
 from pyscf import lib

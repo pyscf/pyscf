@@ -20,7 +20,7 @@
 Dirac Hartree-Fock
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -507,7 +507,7 @@ class DHF(hf.SCF):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.new_logger(self)
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
@@ -544,7 +544,7 @@ class DHF(hf.SCF):
             return vj - vk
 
     def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         self.build()
         self.dump_flags()

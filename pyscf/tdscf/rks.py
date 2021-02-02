@@ -20,7 +20,7 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf import symm
@@ -105,7 +105,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'

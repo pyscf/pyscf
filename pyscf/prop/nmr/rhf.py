@@ -21,7 +21,7 @@ Non-relativistic NMR shielding tensor
 '''
 
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -187,7 +187,7 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if mo_occ    is None: mo_occ = nmrobj._scf.mo_occ
     if with_cphf is None: with_cphf = nmrobj.cphf
 
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
 
     mol = nmrobj.mol
@@ -286,7 +286,7 @@ class NMR(lib.StreamObject):
     def kernel(self, mo1=None):
         return self.shielding(mo1)
     def shielding(self, mo1=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
 

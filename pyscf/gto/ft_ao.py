@@ -186,9 +186,9 @@ if __name__ == '__main__':
     gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
     Gv = 2*numpy.pi * numpy.dot(gxyz, b)
 
-    import time
-    print(time.clock())
+    
+    print(logger.process_clock())
     print(numpy.linalg.norm(ft_aopair(mol, Gv, None, 's1', b, gxyz, gs)) - 63.0239113778)
-    print(time.clock())
+    print(logger.process_clock())
     print(numpy.linalg.norm(ft_ao(mol, Gv, None, b, gxyz, gs))-56.8273147065)
-    print(time.clock())
+    print(logger.process_clock())
