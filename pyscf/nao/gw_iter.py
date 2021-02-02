@@ -6,7 +6,7 @@ from timeit import default_timer as timer
 import numpy as np
 from numpy import stack, dot, zeros, einsum, pi, log, array, require
 from pyscf.nao import scf, gw
-import time
+
 
 def profile(fnc):
     """
@@ -28,7 +28,7 @@ def profile(fnc):
         return retval
     return inner
 
-start_time = time.time()
+start_time = logger.perf_counter()
 
 class gw_iter(gw):
   """
@@ -66,16 +66,16 @@ class gw_iter(gw):
     r"""
     This compares np.solve and LinearOpt-lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
     """
-    import time
+    
     import numpy as np
     ww = 1j*self.ww_ia
-    t = time.time()
+    t = logger.perf_counter()
     si0_1 = self.si_c(ww)      #method 1:  numpy.linalg.solve
-    t1 = time.time() - t
+    t1 = logger.perf_counter() - t
     print('numpy: {} sec'.format(t1))
-    t2 = time.time()
+    t2 = logger.perf_counter()
     si0_2 = self.si_c2(ww)     #method 2:  scipy.sparse.linalg.lgmres
-    t3 = time.time() - t2
+    t3 = logger.perf_counter() - t2
     print('lgmres: {} sec'.format(t3))
     summ = abs(si0_1 + si0_2).sum()
     diff = abs(si0_1 - si0_2).sum()

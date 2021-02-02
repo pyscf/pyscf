@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from functools import reduce
-import time
+
 import numpy
 import numpy as np
 
@@ -124,7 +124,7 @@ class UCCSD(ccsd.CCSD):
     get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         mo_e = eris.fock.diagonal()
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -484,7 +484,7 @@ class UCCSD(ccsd.CCSD):
 class _PhysicistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         moidx = cc.get_frozen_mask()
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = [cc.mo_coeff[0][:,moidx[0]],
@@ -537,7 +537,7 @@ class _PhysicistsERIs:
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
             self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
             if mo_coeff[0].dtype == np.float: buf = buf.real
@@ -555,7 +555,7 @@ class _PhysicistsERIs:
             self.ooov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
             self.oovv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
             if mo_coeff[0].dtype == np.float: buf = buf.real
@@ -673,7 +673,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -692,7 +692,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -710,7 +710,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -728,7 +728,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris

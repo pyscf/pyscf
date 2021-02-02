@@ -25,7 +25,7 @@ import ctypes
 import os
 import sys
 import struct
-import time
+
 import tempfile
 from subprocess import check_call, check_output, STDOUT, CalledProcessError
 import numpy
@@ -379,12 +379,12 @@ class DMRGCI(lib.StreamObject):
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave=self.mpiprefix
             #self.mpiprefix=""
             executeBLOCK(self)
             self.mpiprefix=mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print('......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
@@ -402,7 +402,7 @@ class DMRGCI(lib.StreamObject):
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are also stored here as E3[i1,j2,k3,l3,m2,n1]
         # This is NOT done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
         with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
@@ -418,7 +418,7 @@ class DMRGCI(lib.StreamObject):
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
-        end = time.time()
+        end = logger.perf_counter()
         print('......reading the RDM took    %10.2f sec' %(end-start))
         return onepdm, twopdm, threepdm
 
@@ -458,12 +458,12 @@ class DMRGCI(lib.StreamObject):
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave=self.mpiprefix
             #self.mpiprefix=""
             executeBLOCK(self)
             self.mpiprefix=mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print('......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
@@ -477,7 +477,7 @@ class DMRGCI(lib.StreamObject):
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         if (filetype == "binary") :
           # The binary files coming from STACKBLOCK and BLOCK are different
           # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
@@ -514,7 +514,7 @@ class DMRGCI(lib.StreamObject):
             a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
                                      int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
             self.populate(E3, [a,b,c,  f,e,d], integral)
-        end = time.time()
+        end = logger.perf_counter()
         print('......reading the RDM took    %10.2f sec' %(end-start))
         print('')
         return E3
@@ -540,12 +540,12 @@ class DMRGCI(lib.StreamObject):
               logger.debug1(self, 'Block Input conf')
               logger.debug1(self, open(inFile, 'r').read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave=self.mpiprefix
             #self.mpiprefix=""
             executeBLOCK(self)
             self.mpiprefix=mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print('......production of RDMs took %10.2f sec' %(end-start))
 
             if self.verbose >= logger.DEBUG1:
@@ -560,7 +560,7 @@ class DMRGCI(lib.StreamObject):
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
         # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
         # This is done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         if (filetype == "binary") :
           # The binary files coming from STACKBLOCK and BLOCK are different:
           # - STACKBLOCK does not have 4RDM
@@ -598,7 +598,7 @@ class DMRGCI(lib.StreamObject):
               a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
                                            int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
               self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
-        end = time.time()
+        end = logger.perf_counter()
         print('......reading the RDM took    %10.2f sec' %(end-start))
         print('')
         return E4

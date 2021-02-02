@@ -20,7 +20,7 @@
 Foster-Boys localization
 '''
 
-import time
+
 import numpy
 from functools import reduce
 
@@ -42,7 +42,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         localizer.check_sanity()
     localizer.dump_flags()
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(localizer, verbose=verbose)
 
     if localizer.conv_tol_grad is None:

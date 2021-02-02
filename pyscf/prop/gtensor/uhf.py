@@ -27,7 +27,7 @@ Note g-tensor = 1/muB d^2 E/ dB dS
 In some literature, muB is not explicitly presented in the perturbation formula.
 '''
 
-import time
+
 from functools import reduce
 import copy
 import numpy
@@ -474,7 +474,7 @@ class GTensor(lib.StreamObject):
         return self
 
     def kernel(self, mo1=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
 

@@ -26,7 +26,7 @@ Refs:
     JCP 127, 164112 (2007); 10.1063/1.2772857
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -189,7 +189,7 @@ def make_soc2e(zfsobj, mo_coeff, mo_occ):
     return haa, hab, hba, hbb
 
 def solve_mo1(sscobj, h1):
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
 
     mo_energy = sscobj._scf.mo_energy
@@ -311,7 +311,7 @@ class ZeroFieldSplitting(lib.StreamObject):
         return self
 
     def kernel(self, mo1=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
 

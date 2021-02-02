@@ -22,7 +22,7 @@
 # # Author: Qiming Sun <osirpt.sun@gmail.com>
 # #
 
-import time
+
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rks as rks_grad
@@ -34,7 +34,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     '''
     if mol is None: mol = ks_grad.mol
     if dm is None: dm = ks_grad.base.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
     ni = mf._numint

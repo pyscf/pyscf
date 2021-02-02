@@ -22,7 +22,7 @@ Non-relativistic static and dynamic polarizability and hyper-polarizability tens
 '''
 
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -145,7 +145,7 @@ def hyper_polarizability(polobj, with_cphf=True):
 def ucphf_with_freq(mf, mo_energy, mo_occ, h1, freq=0,
                     max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0

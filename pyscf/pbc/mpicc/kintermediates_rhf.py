@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-import time
+
 import pyscf.pbc.tools as tools
 from mpi4py import MPI
 from pyscf.lib import logger

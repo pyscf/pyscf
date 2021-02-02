@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -640,7 +640,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Foo = imd.Foo(t1, t2, eris)
@@ -659,7 +659,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -673,7 +673,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -694,7 +694,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -708,7 +708,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -729,7 +729,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 

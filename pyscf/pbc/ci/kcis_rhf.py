@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -59,7 +59,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     Returns:
         tuple -- A tuple of excitation energies and corresponding eigenvectors
     """
-    cpu0 = (time.clock(), time.time())
+    cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(cis.stdout, cis.verbose)
     cis.dump_flags()
 
@@ -81,7 +81,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     evecs = [None] * len(kptlist)
     convs = [None] * len(kptlist)
 
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
 
@@ -210,7 +210,7 @@ def cis_H(cis, kshift, eris=None):
     Returns:
         2D array -- the Hamiltonian matrix reshaped into (ki,i,a) by (kj,j,b)
     """
-    cpu0 = (time.clock(), time.time())
+    cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(cis.stdout, cis.verbose)
 
     if eris is None:
@@ -455,7 +455,7 @@ class KCIS(lib.StreamObject):
 class _CIS_ERIS:
     def __init__(self, cis, mo_coeff=None, method="incore"):
         log = logger.Logger(cis.stdout, cis.verbose)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         cell = cis._scf.cell
         nocc = cis.nocc
@@ -575,7 +575,7 @@ class _CIS_ERIS:
                 )
 
                 # <ia|pq> = (ip|aq)
-                cput1 = time.clock(), time.time()
+                cput1 = logger.process_clock(), logger.perf_counter()
                 for kp in range(nkpts):
                     for kq in range(nkpts):
                         for kr in range(nkpts):
@@ -647,7 +647,7 @@ def _init_cis_df_eris(cis, eris):
     eris.dtype = dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
 
     with h5py.File(cis._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'][:]

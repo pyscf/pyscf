@@ -26,7 +26,7 @@ much of the code below is adapted from code published freely on the website of G
 Ref: JCTC, 2013, 9, 4834-4843
 '''
 
-from time import time
+import time 
 from functools import reduce
 import numpy
 from pyscf.lib import logger
@@ -117,7 +117,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
     iaos = orth.vec_lowdin(iaos, s)
 
     #static variables
-    StartTime = time()
+    StartTime = time.time()
     L  = 0 # initialize a value of the localization function for safety
     #max_iter = 20000 #for some reason the convergence of solid is slower
     #fGradConv = 1e-10 #this ought to be pumped up to about 1e-8 but for testing purposes it's fine
@@ -191,7 +191,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
         fGrad = fGrad**.5
 
         log.debug(" {0:5d} {1:12.8f} {2:11.2e} {3:8.2f}"
-                  .format(it+1, L**(1./exponent), fGrad, time()-StartTime))
+                  .format(it+1, L**(1./exponent), fGrad, time.time()-StartTime))
         if fGrad < grad_tol:
             Converged = True
             break

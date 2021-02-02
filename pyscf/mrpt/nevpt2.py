@@ -18,7 +18,7 @@
 #
 
 import ctypes
-import time
+
 import tempfile
 from functools import reduce
 import numpy
@@ -702,7 +702,7 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
             log = self.verbose
         else:
             log = logger.Logger(self.stdout, self.verbose)
-        time0 = (time.clock(), time.time())
+        time0 = (logger.process_clock(), logger.perf_counter())
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -919,7 +919,7 @@ def trans_e1_incore(mc, mo):
 
 def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     mol = mc.mol
     log = logger.Logger(mc.stdout, verbose)
     ncore = mc.ncore
@@ -954,7 +954,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
             time1[:] = logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
     time0 = logger.timer(mol, 'halfe1', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     with h5py.File(cvcvfile.name, 'w') as f5:

@@ -20,7 +20,7 @@
 Non-relativistic Hartree-Fock analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 import ctypes
 from pyscf import gto
@@ -47,7 +47,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -313,7 +313,7 @@ class GradientsBasics(lib.StreamObject):
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -404,7 +404,7 @@ class Gradients(GradientsBasics):
     grad_elec = grad_elec
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ

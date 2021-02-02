@@ -18,7 +18,7 @@ MO integrals for UCASSCF methods
 '''
 
 import ctypes
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -68,7 +68,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 def trans_e1_outcore(mol, mo, ncore, ncas,
                      max_memory=None, ioblk_size=512, verbose=logger.WARN):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     nao, nmo = mo[0].shape
     nao_pair = nao*(nao+1)//2
@@ -95,7 +95,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         return buf
 
     time0 = log.timer('halfe1-beta', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
             _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_bufa,
@@ -129,7 +129,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         return buf
 
     time0 = log.timer('halfe1-alpha', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
             _trans_aapp_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_aapp', *time0)

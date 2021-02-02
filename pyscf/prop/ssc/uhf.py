@@ -21,7 +21,7 @@ Non-relativistic UHF spin-spin coupling (SSC) constants
 '''
 
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -119,7 +119,7 @@ def make_fc(sscobj, nuc_pair=None):
 
 # See also the UHF to GHF stability analysis
 def solve_mo1_fc(sscobj, h1):
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
     mol = sscobj.mol
     mf = sscobj._scf
@@ -323,7 +323,7 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
 
 def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
               h1=None, s1=None, with_cphf=None):
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sscobj.stdout, sscobj.verbose)
     if mo_energy is None: mo_energy = sscobj._scf.mo_energy
     if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
@@ -395,7 +395,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
         if len(self.nuc_pair) == 0:
             return
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
         mol = self.mol

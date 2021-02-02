@@ -27,7 +27,7 @@ Simple usage::
 
 import sys
 import numpy
-import time
+
 import ctypes
 from pyscf import lib
 from pyscf import ao2mo
@@ -456,13 +456,13 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
 
     if eri_sorted is None and jk is None and jk_sorted is None:
         log.debug("\nSorting two-electron integrals...")
-        t_start = time.time()
+        t_start = logger.perf_counter()
         eri_sorted = abs(eri).argsort()[::-1]
         jk = eri.reshape([norb]*4)
         jk = jk - jk.transpose(2,1,0,3)
         jk = jk.ravel()
         jk_sorted = abs(jk).argsort()[::-1]
-        t_current = time.time() - t_start
+        t_current = logger.perf_counter() - t_start
         log.debug('Timing for sorting the integrals: %10.3f', t_current)
 
     # Initial guess
@@ -488,14 +488,14 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         log.info('\nMacroiteration %d', icycle)
         log.info('Number of CI configurations: %d', ci_strs.shape[0])
         hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
-        t_start = time.time()
+        t_start = logger.perf_counter()
         e, ci0 = myci.eig(hop, ci0, precond, tol=float_tol, lindep=lindep,
                           max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                           max_memory=max_memory, verbose=log, **kwargs)
         if not isinstance(ci0, (tuple, list)):
             ci0 = [ci0]
             e = [e]
-        t_current = time.time() - t_start
+        t_current = logger.perf_counter() - t_start
         log.debug('Timing for solving the eigenvalue problem: %10.3f', t_current)
         ci0 = [as_SCIvector(c, ci_strs) for c in ci0]
         de, e_last = min(e)-e_last, min(e)
@@ -506,9 +506,9 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             break
 
         last_ci0_size = float(len(ci_strs))
-        t_start = time.time()
+        t_start = logger.perf_counter()
         ci0 = myci.enlarge_space(ci0, h1e, eri, jk, eri_sorted, jk_sorted, norb, nelec)
-        t_current = time.time() - t_start
+        t_current = logger.perf_counter() - t_start
         log.debug('Timing for selecting configurations: %10.3f', t_current)
         if (((1 - myci.conv_ndet_tol) < len(ci0[0]._strs)/last_ci0_size < (1 + myci.conv_ndet_tol))):
             conv = True

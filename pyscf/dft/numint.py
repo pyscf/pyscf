@@ -2077,7 +2077,7 @@ _NumInt = NumInt
 
 
 if __name__ == '__main__':
-    import time
+    
     from pyscf import gto
     from pyscf import dft
 
@@ -2096,7 +2096,7 @@ if __name__ == '__main__':
     numpy.random.seed(1)
     dm1 = numpy.random.random((dm.shape))
     dm1 = lib.hermi_triu(dm1)
-    print(time.clock())
+    print(logger.process_clock())
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, dm1, spin=0)
     print(res[1] - -37.084047825971282)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm1,dm1), spin=1)
@@ -2105,4 +2105,4 @@ if __name__ == '__main__':
     print(res[1] - -8.6313329288394947)
     res = mf._numint.nr_vxc(mol, mf.grids, mf.xc, (dm,dm), spin=1)
     print(res[1] - -21.520301399504582)
-    print(time.clock())
+    print(logger.process_clock())

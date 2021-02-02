@@ -19,7 +19,7 @@ Refs:
     Mole. Phys. 9, 6, 585, 1964
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib

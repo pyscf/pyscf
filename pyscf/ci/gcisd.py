@@ -21,7 +21,7 @@ General spin-orbital CISD
 '''
 
 import warnings
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -325,7 +325,7 @@ class GCISD(cisd.CISD):
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]

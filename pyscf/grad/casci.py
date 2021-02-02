@@ -24,7 +24,7 @@ J. Comput. Chem., 5, 589
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -45,7 +45,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mc_grad, verbose)
     mol = mc_grad.mol
     ncore = mc.ncore

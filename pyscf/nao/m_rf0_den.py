@@ -8,9 +8,9 @@ import scipy.linalg.blas as blas
 from pyscf.nao.m_libnao import libnao
 from ctypes import c_double, c_int64, c_int, POINTER
 
-import time
-ts = time.time()
-te = time.time()
+
+ts = logger.perf_counter()
+te = logger.perf_counter()
 
 try:
   import numba as nb

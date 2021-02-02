@@ -23,7 +23,6 @@ Ref.
 J. Comput. Chem., 5, 589
 '''
 
-import time
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -41,7 +40,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     if mc.frozen is not None:
         raise NotImplementedError
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mc_grad, verbose)
     mol = mc_grad.mol
     ncore = mc.ncore

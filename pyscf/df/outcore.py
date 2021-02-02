@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import tempfile
 import numpy
 import scipy.linalg
@@ -45,7 +45,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
     log = logger.new_logger(mol, verbose)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
 
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
@@ -105,7 +105,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     '''
     assert(aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
 
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
@@ -201,7 +201,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     if tmpdir is None:
