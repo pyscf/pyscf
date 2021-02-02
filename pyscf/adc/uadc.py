@@ -4142,7 +4142,7 @@ def analyze_eigenvector_ea(adc):
     f_bbb = s_bbb + n_doubles_bbb
 
     U = adc.U
-    print("eig vec shape: ", U.shape)
+
     for I in range(U.shape[1]):
         U1 = U[:f_b, I]
         U2 = U[f_b:, I]
@@ -4191,51 +4191,51 @@ def analyze_eigenvector_ea(adc):
         doubles_bab_val = []
         doubles_aba_val = []  
         iter_idx = 0
-        for orb in ind_idx:
+        for orb_idx in ind_idx:
 
-            if orb in range(s_a,f_a):
-                orb_a = orb + 1 + nocc_a
-                singles_a_idx.append(orb_a)
+            if orb_idx in range(s_a,f_a):
+                a_idx = orb_idx + 1 + nocc_a
+                singles_a_idx.append(a_idx)
                 singles_a_val.append(U_sorted[iter_idx])
                
-            if orb in range(s_b,f_b):
-                orb_b = orb - s_b + 1 + nocc_b
-                singles_b_idx.append(orb_b)
+            if orb_idx in range(s_b,f_b):
+                a_idx = orb_idx - s_b + 1 + nocc_b
+                singles_b_idx.append(a_idx)
                 singles_b_val.append(U_sorted[iter_idx])
 
-            if orb in range(s_bab,f_bab):
-                orb_bab = orb - s_bab       
-                i_rem = orb_bab % (nvir_a*nvir_b)
-                i_idx = orb_bab//(nvir_a*nvir_b)
-                a_rem = i_rem % nvir_b
-                b_idx = i_rem//nvir_b
-                doubles_bab_idx.append((i_idx + 1, b_idx + 1 + nocc_a, a_rem + 1 + nocc_b))
+            if orb_idx in range(s_bab,f_bab):
+                iab_idx = orb_idx - s_bab       
+                ab_rem = iab_idx % (nvir_a*nvir_b)
+                i_idx = iab_idx//(nvir_a*nvir_b)
+                a_idx = ab_rem//nvir_b
+                b_idx = ab_rem % nvir_b
+                doubles_bab_idx.append((i_idx + 1, a_idx + 1 + nocc_a, b_idx + 1 + nocc_b))
                 doubles_bab_val.append(U_sorted[iter_idx])
           
-            if orb in range(s_aba,f_aba):
-                orb_aba = orb - s_aba     
-                i_rem = orb_aba % (nvir_b*nvir_a)
-                i_idx = orb_aba//(nvir_b*nvir_a)
-                a_rem = i_rem % nvir_a
-                b_idx = i_rem//nvir_a
-                doubles_aba_idx.append((i_idx + 1, b_idx + 1 + nocc_b, a_rem + 1 + nocc_a))
+            if orb_idx in range(s_aba,f_aba):
+                iab_idx = orb_idx - s_aba     
+                ab_rem = iab_idx % (nvir_b*nvir_a)
+                i_idx = iab_idx//(nvir_b*nvir_a)
+                a_idx = ab_rem//nvir_a
+                b_idx = ab_rem % nvir_a
+                doubles_aba_idx.append((i_idx + 1, a_idx + 1 + nocc_b, b_idx + 1 + nocc_a))
                 doubles_aba_val.append(U_sorted[iter_idx])
 
             iter_idx += 1
              
         for orb_aaa in ind_idx_aaa:              
-            i_rem = orb_aaa % (nvir_a*nvir_a)
+            ab_rem = orb_aaa % (nvir_a*nvir_a)
             i_idx = orb_aaa//(nvir_a*nvir_a)
-            a_rem = i_rem % nvir_a
-            b_idx = i_rem//nvir_a
-            doubles_aaa_idx.append((i_idx + 1, b_idx + 1 + nocc_a, a_rem + 1 + nocc_a))
+            a_idx = ab_rem//nvir_a
+            b_idx = ab_rem % nvir_a
+            doubles_aaa_idx.append((i_idx + 1, a_idx + 1 + nocc_a, b_idx + 1 + nocc_a))
 
         for orb_bbb in ind_idx_bbb:                
-            i_rem = orb_bbb % (nvir_b*nvir_b)
+            ab_rem = orb_bbb % (nvir_b*nvir_b)
             i_idx = orb_bbb//(nvir_b*nvir_b)
-            a_rem = i_rem % nvir_b
-            b_idx = i_rem//nvir_b
-            doubles_bbb_idx.append((i_idx + 1, b_idx + 1 + nocc_b, a_rem + 1 + nocc_b))
+            a_idx = ab_rem//nvir_b
+            b_idx = ab_rem % nvir_b
+            doubles_bbb_idx.append((i_idx + 1, a_idx + 1 + nocc_b, b_idx + 1 + nocc_b))
         
         doubles_aaa_val = list(U_sorted_aaa)
         doubles_bbb_val = list(U_sorted_bbb)
@@ -4374,51 +4374,51 @@ def analyze_eigenvector_ip(adc):
         doubles_bab_val = []
         doubles_aba_val = []  
         iter_idx = 0
-        for orb in ind_idx:
+        for orb_idx in ind_idx:
 
-            if orb in range(s_a,f_a):
-                orb_a = orb + 1
-                singles_a_idx.append(orb_a)
+            if orb_idx in range(s_a,f_a):
+                i_idx = orb_idx + 1
+                singles_a_idx.append(i_idx)
                 singles_a_val.append(U_sorted[iter_idx])
                
-            if orb in range(s_b,f_b):
-                orb_b = orb - s_b + 1
-                singles_b_idx.append(orb_b)
+            if orb_idx in range(s_b,f_b):
+                i_idx = orb_idx - s_b + 1
+                singles_b_idx.append(i_idx)
                 singles_b_val.append(U_sorted[iter_idx])
 
-            if orb in range(s_bab,f_bab):
-                orb_bab = orb - s_bab       
-                vir_rem = orb_bab % (nocc_a*nocc_b)
-                vir_idx = orb_bab//(nocc_a*nocc_b)
-                j_rem = vir_rem % nocc_a
-                i_idx = vir_rem//nocc_a
-                doubles_bab_idx.append((vir_idx + 1 + nocc_b, i_idx + 1, j_rem + 1))
+            if orb_idx in range(s_bab,f_bab):
+                aij_idx = orb_idx - s_bab       
+                ij_rem = aij_idx % (nocc_a*nocc_b)
+                a_idx = aij_idx//(nocc_a*nocc_b)
+                i_idx = ij_rem//nocc_a
+                j_idx = ij_rem % nocc_a
+                doubles_bab_idx.append((a_idx + 1 + nocc_b, i_idx + 1, j_idx + 1))
                 doubles_bab_val.append(U_sorted[iter_idx])
           
-            if orb in range(s_aba,f_aba):
-                orb_aba = orb - s_aba     
-                vir_rem = orb_aba % (nocc_b*nocc_a)
-                vir_idx = orb_aba//(nocc_b*nocc_a)
-                j_rem = vir_rem % nocc_b
-                i_idx = vir_rem//nocc_b
-                doubles_aba_idx.append((vir_idx + 1 + nocc_a, i_idx + 1, j_rem + 1))
+            if orb_idx in range(s_aba,f_aba):
+                aij_idx = orb_idx - s_aba     
+                ij_rem = aij_idx % (nocc_b*nocc_a)
+                a_idx = aij_idx//(nocc_b*nocc_a)
+                i_idx = ij_rem//nocc_b
+                j_idx = ij_rem % nocc_b
+                doubles_aba_idx.append((a_idx + 1 + nocc_a, i_idx + 1, j_idx + 1))
                 doubles_aba_val.append(U_sorted[iter_idx])
 
             iter_idx += 1
              
         for orb_aaa in ind_idx_aaa:              
-            vir_rem = orb_aaa % (nocc_a*nocc_a)
-            vir_idx = orb_aaa//(nocc_a*nocc_a)
-            j_rem = vir_rem % nocc_a
-            i_idx = vir_rem//nocc_a
-            doubles_aaa_idx.append((vir_idx + 1 + nocc_a, i_idx + 1, j_rem + 1))
+            ij_rem = orb_aaa % (nocc_a*nocc_a)
+            a_idx = orb_aaa//(nocc_a*nocc_a)
+            i_idx = ij_rem//nocc_a
+            j_idx = ij_rem % nocc_a
+            doubles_aaa_idx.append((a_idx + 1 + nocc_a, i_idx + 1, j_idx + 1))
 
         for orb_bbb in ind_idx_bbb:                
-            vir_rem = orb_bbb % (nocc_b*nocc_b)
-            vir_idx = orb_bbb//(nocc_b*nocc_b)
-            j_rem = vir_rem % nocc_b
-            i_idx = vir_rem//nocc_b
-            doubles_bbb_idx.append((vir_idx + 1 + nocc_b, i_idx + 1, j_rem + 1))
+            ij_rem = orb_bbb % (nocc_b*nocc_b)
+            a_idx = orb_bbb//(nocc_b*nocc_b)
+            i_idx = ij_rem//nocc_b
+            j_idx = ij_rem % nocc_b
+            doubles_bbb_idx.append((a_idx + 1 + nocc_b, i_idx + 1, j_idx + 1))
 
         doubles_aaa_val = list(U_sorted_aaa)
         doubles_bbb_val = list(U_sorted_bbb)
@@ -4466,7 +4466,7 @@ def analyze_eigenvector_ip(adc):
             logger.info(adc, "-------------------------------")
             for idx, print_doubles in enumerate(doubles_bbb_idx):
                 logger.info(adc, '  %4d  %4d  %4d     %7.4f', print_doubles[1], print_doubles[2], print_doubles[0], doubles_bbb_val[idx])
-        print('doubles norm total: ', 0.5*np.dot(doubles_aaa_val,doubles_aaa_val) + np.dot(doubles_bab_val,doubles_bab_val)+ np.dot(doubles_aba_val,doubles_aba_val) + 0.5*np.dot(doubles_bbb_val,doubles_bbb_val))
+
         logger.info(adc, "\n*************************************************************\n")
 
 

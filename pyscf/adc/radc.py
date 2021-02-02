@@ -2300,17 +2300,17 @@ def analyze_eigenvector_ea(adc):
         for orb_idx in ind_idx:
             
             if orb_idx < n_singles:
-                orb_s_idx = orb_idx + 1 + nocc
-                singles_idx.append(orb_s_idx)
+                a_idx = orb_idx + 1 + nocc
+                singles_idx.append(a_idx)
                 singles_val.append(U_sorted[iter_num])
+
             if orb_idx >= n_singles:
-                orb_d_idx = orb_idx - n_singles
-                      
-                i_rem = orb_d_idx % (nvir*nvir)
-                i_idx = orb_d_idx//(nvir*nvir)
-                a_rem = i_rem % nvir
-                b_idx = i_rem//nvir
-                doubles_idx.append((i_idx + 1, b_idx + 1 + nocc, a_rem + 1 + nocc))
+                iab_idx = orb_idx - n_singles
+                ab_rem = iab_idx % (nvir*nvir)
+                i_idx = iab_idx //(nvir*nvir)
+                a_idx = ab_rem//nvir
+                b_idx = ab_rem % nvir
+                doubles_idx.append((i_idx + 1, a_idx + 1 + nocc, b_idx + 1 + nocc))
                 doubles_val.append(U_sorted[iter_num])
                 
             iter_num += 1 
@@ -2371,17 +2371,17 @@ def analyze_eigenvector_ip(adc):
         for orb_idx in ind_idx:
             
             if orb_idx < n_singles:
-                orb_s_idx = orb_idx + 1
-                singles_idx.append(orb_s_idx)
+                i_idx = orb_idx + 1
+                singles_idx.append(i_idx)
                 singles_val.append(U_sorted[iter_num])
+
             if orb_idx >= n_singles:
-                orb_d_idx = orb_idx - n_singles
-                      
-                a_rem = orb_d_idx % (nocc*nocc)
-                a_idx = orb_d_idx//(nocc*nocc)
-                j_rem = a_rem % nocc
-                i_idx = a_rem//nocc
-                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_rem + 1))
+                aij_idx = orb_idx - n_singles
+                ij_rem = aij_idx % (nocc*nocc)
+                a_idx = aij_idx//(nocc*nocc)
+                i_idx = ij_rem//nocc
+                j_idx = ij_rem % nocc
+                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_idx + 1))
                 doubles_val.append(U_sorted[iter_num])
                 
             iter_num += 1 
