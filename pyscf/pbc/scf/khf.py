@@ -610,7 +610,7 @@ class KSCF(pbchf.SCF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                      with_j, with_k, omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)

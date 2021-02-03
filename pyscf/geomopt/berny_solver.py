@@ -108,7 +108,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         opt.params = conv_params
         opt.kernel()
     '''
-    t0 = logger.process_clock(), logger.perf_counter()
+    t0 = lib.logger.process_clock(), lib.logger.perf_counter()
     mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])

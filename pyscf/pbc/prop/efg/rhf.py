@@ -189,7 +189,7 @@ def _aft_quad_integrals(mydf, dm, efg_nuc):
         raise NotImplementedError
 
     log = lib.logger.new_logger(mydf)
-    t0 = t1 = (logger.process_clock(), logger.perf_counter())
+    t0 = t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
     mesh = mydf.mesh
     kpts = mydf.kpts
