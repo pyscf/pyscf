@@ -1,5 +1,5 @@
 from . import lib, gto, scf, ao2mo
-from .post_scf import *
+from .post_scf import *  # noqa: F403
 from . import grad
 from . import gw
 from . import hci

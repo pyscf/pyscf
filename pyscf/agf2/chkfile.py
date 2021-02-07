@@ -20,7 +20,6 @@
 Functions to support chkfiles with MPI
 '''
 
-import time
 import numpy as np
 import h5py
 from pyscf import lib
@@ -105,7 +104,7 @@ def load_agf2(chkfile):
     return load_mol(chkfile), dic
 
 
-def dump_agf2(agf2, chkfile=None, key='agf2', 
+def dump_agf2(agf2, chkfile=None, key='agf2',
               gf=None, se=None, frozen=None, nmom=None,
               mo_energy=None, mo_coeff=None, mo_occ=None):
     ''' Save the AGF2 calculatuion to a chkfile.

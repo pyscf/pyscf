@@ -60,7 +60,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ[0]) is aux.GreensFunction
@@ -110,7 +110,6 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     else:
         qeri = _make_qmo_eris_outcore(agf2, eri, (ci_a, ci_a, ca_a), (ci_b, ci_b, ca_b), spin=1)
 
-    rv = np.s_[::-1]
     if isinstance(qeri[0], np.ndarray):
         vv, vev = _agf2.build_mats_uagf2_incore(qeri, (ei_b, ei_a), (ea_b, ea_a), **facs)
     else:
@@ -188,7 +187,7 @@ def fock_loop(agf2, eri, gf, se):
     assert type(se[0]) is aux.SelfEnergy
     assert type(se[1]) is aux.SelfEnergy
 
-    cput0 = cput1 = (time.clock(), time.time())
+    cput0 = cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     diis = lib.diis.DIIS(agf2)
@@ -203,11 +202,13 @@ def fock_loop(agf2, eri, gf, se):
     nauxa, nauxb = sea.naux, seb.naux
     nqmoa, nqmob = nauxa+nmoa, nauxb+nmob
     bufa, bufb = np.zeros((nqmoa, nqmoa)), np.zeros((nqmob, nqmob))
+    rdm1a_prev = 0
+    rdm1b_prev = 0
     converged = False
     opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
-        sea, opt = minimize_chempot(sea, focka, nalph, x0=sea.chempot, 
+        sea, opt = minimize_chempot(sea, focka, nalph, x0=sea.chempot,
                                     occupancy=1, **opts)
         seb, opt = minimize_chempot(seb, fockb, nbeta, x0=seb.chempot,
                                     occupancy=1, **opts)
@@ -253,9 +254,9 @@ def fock_loop(agf2, eri, gf, se):
     se = (sea, seb)
 
     log.info('fock converged = %s' % converged)
-    log.info(' alpha: chempot = %.9g  dN = %.3g  |ddm| = %.3g', 
+    log.info(' alpha: chempot = %.9g  dN = %.3g  |ddm| = %.3g',
              sea.chempot, nerra, derra)
-    log.info(' beta:  chempot = %.9g  dN = %.3g  |ddm| = %.3g', 
+    log.info(' beta:  chempot = %.9g  dN = %.3g  |ddm| = %.3g',
              seb.chempot, nerrb, derrb)
     log.timer('fock loop', *cput0)
 
@@ -353,12 +354,12 @@ class UAGF2(ragf2.RAGF2):
             Convergence threshold for first-order reduced density matrix.
             Default value is 1e-8.
         conv_tol_nelec : float
-            Convergence threshold for the number of electrons. Default 
+            Convergence threshold for the number of electrons. Default
             value is 1e-6.
         max_cycle : int
             Maximum number of AGF2 iterations. Default value is 50.
         max_cycle_outer : int
-            Maximum number of outer Fock loop iterations. Default 
+            Maximum number of outer Fock loop iterations. Default
             value is 20.
         max_cycle_inner : int
             Maximum number of inner Fock loop iterations. Default
@@ -375,7 +376,7 @@ class UAGF2(ragf2.RAGF2):
             Minimum space of DIIS. Default value is 1.
         fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        fock_diis_min_space : 
+        fock_diis_min_space :
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -402,7 +403,7 @@ class UAGF2(ragf2.RAGF2):
             Whether convergence was successful
         se : tuple of SelfEnergy
             Auxiliaries of the self-energy for each spin
-        gf : tuple of GreensFunction 
+        gf : tuple of GreensFunction
             Auxiliaries of the Green's function for each spin
     '''
 
@@ -689,7 +690,7 @@ class UAGF2(ragf2.RAGF2):
         else:
             return e_ea, v_ea
 
-    
+
     @property
     def nocc(self):
         if self._nocc is None:
@@ -792,7 +793,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -805,7 +806,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 
     eri_aa = ao2mo.addons.restore('s4', eri_aa, nmoa)
     eri_bb = ao2mo.addons.restore('s4', eri_bb, nmob)
-    
+
     eri_ab = ao2mo.incore.general(agf2._scf._eri, (moa,moa,mob,mob), verbose=log)
     assert eri_ab.shape == (nmoa*(nmob+1)//2, nmob*(nmob+1)//2)
     eri_ba = np.transpose(eri_ab)
@@ -824,7 +825,6 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -833,7 +833,6 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     mol = agf2.mol
     moa = np.asarray(eris.mo_coeff[0], order='F')
     mob = np.asarray(eris.mo_coeff[1], order='F')
-    naoa, naob = moa.shape[0], mob.shape[0]
     nmoa, nmob = eris.nmo
 
     eris.feri = lib.H5TmpFile()
@@ -860,7 +859,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     spin = 1: (bbbb, bbaa)
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo
@@ -873,7 +872,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs_a, coeffs_b, spin=None):
         cxa = cxa[:,mask[0]]
         cxb = cxb[:,mask[1]]
 
-    npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
+    # npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
     nia, nja, naa = [x.shape[1] for x in coeffs_a]
@@ -918,19 +917,17 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
     spin = 1: (bbbb, bbaa)
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo
     nmoa, nmob = nmo
 
-    cxa = np.eye(nmoa)
-    cxb = np.eye(nmob)
     mask = get_frozen_mask(agf2)
     frozena = np.sum(~mask[0])
     frozenb = np.sum(~mask[1])
 
-    npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
+    # npaira, npairb = nmoa*(nmoa+1)//2, nmob*(nmob+1)//2
     cia, cja, caa = coeffs_a
     cib, cjb, cab = coeffs_b
     nia, nja, naa = [x.shape[1] for x in coeffs_a]
@@ -985,7 +982,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
         eri.feri.create_dataset('qmo/bb', (nmob-frozenb, nib, njb, nab), 'f8')
 
         max_memory = agf2.max_memory - lib.current_memory()[0]
-        blksize = int((max_memory/8e-6) / max(nmob**3+nmob*njb*nab, 
+        blksize = int((max_memory/8e-6) / max(nmob**3+nmob*njb*nab,
                                               nmob*nmoa**2*nja*naa))
         blksize = min(nmob, max(BLKMIN, blksize))
         log.debug1('blksize (uagf2._make_qmo_eris_outcore) = %d', blksize)
@@ -1018,7 +1015,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
             eri.feri['qmo/bb'][inds] = np.asarray(buf, order='C')
 
     if spin is None:
-        qeri = ((eri.feri['qmo/aa'], eri.feri['qmo/ab']), 
+        qeri = ((eri.feri['qmo/aa'], eri.feri['qmo/ab']),
                 (eri.feri['qmo/ba'], eri.feri['qmo/bb']))
     elif spin == 0:
         qeri = (eri.feri['qmo/aa'], eri.feri['qmo/ab'])
@@ -1045,6 +1042,6 @@ if __name__ == '__main__':
     uagf2.ipagf2(nroots=5)
     uagf2.eaagf2(nroots=5)
 
-    
+
     uagf2 = uagf2.density_fit()
     uagf2.run()

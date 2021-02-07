@@ -111,7 +111,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
 
             eija_aa = gfo_a.energy[i] + eja_a[:i]
             eija_ab = gfo_a.energy[i] + eja_b
-            
+
             p0, p1 = p1, p1 + i*nva
             e[p0:p1] = eija_aa.ravel()
             v[:,p0:p1] = falph * (xija_aa - xjia_aa)
@@ -159,12 +159,12 @@ class UAGF2(uagf2.UAGF2):
             Convergence threshold for first-order reduced density matrix.
             Default value is 1e-8.
         conv_tol_nelec : float
-            Convergence threshold for the number of electrons. Default 
+            Convergence threshold for the number of electrons. Default
             value is 1e-6.
         max_cycle : int
             Maximum number of AGF2 iterations. Default value is 50.
         max_cycle_outer : int
-            Maximum number of outer Fock loop iterations. Default 
+            Maximum number of outer Fock loop iterations. Default
             value is 20.
         max_cycle_inner : int
             Maximum number of inner Fock loop iterations. Default
@@ -174,7 +174,7 @@ class UAGF2(uagf2.UAGF2):
             zero. Default 1e-11.
         fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        fock_diis_min_space : 
+        fock_diis_min_space :
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -201,7 +201,7 @@ class UAGF2(uagf2.UAGF2):
             Whether convergence was successful
         se : tuple of SelfEnergy
             Auxiliaries of the self-energy for each spin
-        gf : tuple of GreensFunction 
+        gf : tuple of GreensFunction
             Auxiliaries of the Green's function for each spin
     '''
 
@@ -244,7 +244,7 @@ class UAGF2(uagf2.UAGF2):
         if gf is None: gf = self.init_gf()
 
         focka = fockb = None
-        if self.nmom[1] != None:
+        if self.nmom[1] is not None:
             focka, fockb = self.get_fock(eri=eri, gf=gf)
 
         if os_factor is None: os_factor = self.os_factor

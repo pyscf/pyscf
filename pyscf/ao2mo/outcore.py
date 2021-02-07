@@ -332,7 +332,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     fswap = None
     if isinstance(erifile, str):
         feri.close()
-       
+
     log.timer('AO->MO transformation for %s 2 pass'%intor, *time_1pass)
     log.timer('AO->MO transformation for %s '%intor, *time_0pass)
     return erifile
