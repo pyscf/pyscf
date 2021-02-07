@@ -26,7 +26,7 @@ Note MO integrals are treated in chemist's notation
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -246,7 +246,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             return self.ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -268,7 +268,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)

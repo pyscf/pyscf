@@ -18,7 +18,7 @@
 
 '''Density expansion on plane waves'''
 
-import time
+
 import copy
 import numpy
 from pyscf import lib
@@ -106,7 +106,7 @@ def get_pp_loc_part1(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t0 = t1 = (time.clock(), time.time())
+    t0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)

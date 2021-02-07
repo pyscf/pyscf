@@ -23,7 +23,7 @@ Refs:
 With strong orthogonalization ansatz 2
 '''
 
-import time
+
 from functools import reduce
 import numpy
 import scipy.linalg

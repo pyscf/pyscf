@@ -22,7 +22,7 @@ Hartree-Fock
 
 import sys
 import tempfile
-import time
+
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -112,7 +112,7 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.11.
 Keyword argument "init_dm" is replaced by "dm0"''')
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
@@ -1631,7 +1631,7 @@ class SCF(lib.StreamObject):
         converged SCF energy = -98.5521904482821
         -98.552190448282104
         '''
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         self.dump_flags()
         self.build(self.mol)
@@ -1680,7 +1680,7 @@ class SCF(lib.StreamObject):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
 

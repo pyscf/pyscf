@@ -15,7 +15,7 @@
 from mpi4py import MPI
 import pyscf.lib
 import numpy as np
-import time
+
 import sys
 from time import sleep
 

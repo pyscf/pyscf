@@ -20,7 +20,7 @@
 MP2 analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from functools import reduce
@@ -34,7 +34,7 @@ from pyscf.ao2mo import _ao2mo
 def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     mp = mp_grad.base
     log = logger.new_logger(mp, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     log.debug('Build mp2 rdm1 intermediates')
     d1 = mp2._gamma1_intermediates(mp, t2)

@@ -21,7 +21,7 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 2-step optimization algorithm
 '''
 
-import time
+
 import numpy
 import copy
 import pyscf.lib.logger as logger
@@ -31,7 +31,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 2-step CASSCF')
 
     mo = mo_coeff

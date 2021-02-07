@@ -24,7 +24,7 @@ Refs:
     JCP 118, 3939 (2002); DOI:10.1063/1.1540619
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -263,7 +263,7 @@ class HyperfineCoupling(lib.StreamObject):
         return self
 
     def kernel(self, mo1=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
         mol = self.mol

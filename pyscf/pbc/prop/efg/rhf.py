@@ -28,7 +28,7 @@ Ref:
 [2] H. Akai et al. Prog. Theor. Phys. Suppl. 101, 11 (1990)
 '''
 
-import time
+
 import numpy
 import scipy.special
 from pyscf import lib
@@ -189,7 +189,7 @@ def _aft_quad_integrals(mydf, dm, efg_nuc):
         raise NotImplementedError
 
     log = lib.logger.new_logger(mydf)
-    t0 = t1 = (time.clock(), time.time())
+    t0 = t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
 
     mesh = mydf.mesh
     kpts = mydf.kpts

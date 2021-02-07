@@ -421,7 +421,7 @@ def _unpack(norb, nelec, link_index):
 
 
 if __name__ == '__main__':
-    import time
+    
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
@@ -453,5 +453,5 @@ if __name__ == '__main__':
     eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
     e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
-    print('t',time.clock())
+    print('t',logger.process_clock())
 

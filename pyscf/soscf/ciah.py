@@ -17,7 +17,7 @@
 #
 
 import sys
-import time
+
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -76,7 +76,7 @@ class CIAHOptimizer(lib.StreamObject):
 
 
 def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
-    t2m = (time.clock(), time.time())
+    t2m = (logger.process_clock(), logger.perf_counter())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:

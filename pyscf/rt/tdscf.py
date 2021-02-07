@@ -91,9 +91,9 @@ class RTTDSCF(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
         fmat, c_am, v_lm, rho = self.initialcondition(prm)
-        start = time.time()
+        start = logger.perf_counter()
         self.prop(fmat, c_am, v_lm, rho, output)
-        end = time.time()
+        end = logger.perf_counter()
         logger.info(self,"Propagation time: %f", end-start)
 
         logger.warn(self, 'RT-TDSCF is an experimental feature. It is '
@@ -372,7 +372,7 @@ class RTTDSCF(lib.StreamObject):
             v_lm: float
                 Transformation Matrix |LAO><MO|
         """
-        start = time.time()
+        start = logger.perf_counter()
         n_occ = int(sum(self.ks.mo_occ)/2)
         err = 100
         it = 0
@@ -422,7 +422,7 @@ class RTTDSCF(lib.StreamObject):
         logger.log(self, "Converged Energy: %f", etot)
         # logger.log(self, "Eigenvalues: %f", eigs.real)
         # print "Eigenvalues: ", eigs.real
-        end = time.time()
+        end = logger.perf_counter()
         logger.info(self, "Initial Fock Built time: %f", end-start)
         return fmat, c_am, v_lm
 
@@ -617,7 +617,7 @@ class RTTDSCF(lib.StreamObject):
         rhom12 = rho.copy()
         f = open(output,"a")
         logger.log(self,"\n\nPropagation Begins")
-        start = time.time()
+        start = logger.perf_counter()
         while (it<self.params["MaxIter"]):
             rho, rhom12, c_am, v_lm, fmat, jmat, kmat = self.tddftstep(fmat, c_am, v_lm, rho, rhom12, tnow)
             # rho = newrho.copy()
@@ -628,7 +628,7 @@ class RTTDSCF(lib.StreamObject):
             tnow = tnow + self.params["dt"]
             if it%self.params["StatusEvery"] ==0 or \
             it == self.params["MaxIter"]-1:
-                end = time.time()
+                end = logger.perf_counter()
                 logger.log(self, "%f hr/ps", \
                 (end - start)/(60*60*tnow * FSPERAU * 0.001))
             it = it + 1

@@ -19,7 +19,7 @@
 
 import os
 import sys
-import time
+
 import math
 import copy
 import subprocess
@@ -69,7 +69,7 @@ def writeh1e_sym(h1e,f,tol,shift0 =1,shift1 =1):
 
 def write_chk(mc,root,chkfile):
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     fh5 = h5py.File(chkfile,'w')
 
     if mc.fcisolver.nroots > 1:
@@ -233,7 +233,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         logger.debug1(nevptsolver, 'Block Input conf')
         logger.debug1(nevptsolver, block_conf)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     # function nevpt_integral_mpi is called in this cmd
     cmd = ' '.join((nevptsolver.mpiprefix,

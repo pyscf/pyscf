@@ -21,7 +21,7 @@
 #         Chong Sun
 #
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -624,7 +624,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     return vector
 
 def _add_vvvv_ea(mycc, r2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     r2aaa, r2aba, r2bab, r2bbb = r2
     nocca, noccb = mycc.nocc
@@ -1949,7 +1949,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Foo, self.FOO = uintermediates.Foo(t1, t2, eris)
@@ -1976,7 +1976,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -1993,7 +1993,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -2070,7 +2070,7 @@ class _IMDS:
         return self
 
     def make_ee(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

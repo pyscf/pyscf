@@ -27,6 +27,7 @@ import re
 import platform
 import gc
 import time
+
 import json
 import ctypes
 import numpy
@@ -2619,7 +2620,7 @@ class Mole(lib.StreamObject):
                 exps = self.bas_exp(i)
                 logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
-        logger.info(self, 'CPU time: %12.2f', time.clock())
+        logger.info(self, 'CPU time: %12.2f', logger.process_clock())
         return self
 
     def set_common_origin(self, coord):

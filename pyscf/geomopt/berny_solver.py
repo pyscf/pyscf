@@ -28,7 +28,7 @@ if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
            'with:\n\n\tpip install -U pyberny')
     raise ImportError(msg)
 
-import time
+
 import numpy
 import logging
 from pyscf import lib
@@ -108,7 +108,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         opt.params = conv_params
         opt.kernel()
     '''
-    t0 = time.clock(), time.time()
+    t0 = lib.logger.process_clock(), lib.logger.perf_counter()
     mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])

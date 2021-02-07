@@ -26,7 +26,7 @@ Refs:
 '''
 
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -89,7 +89,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
             given function is used to compute induced potential
     '''
     log = logger.Logger(magobj.stdout, magobj.verbose)
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
 
     mol = magobj.mol
     mf = magobj._scf

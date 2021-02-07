@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import itertools
-import time
+
 import sys
 import numpy as np
 
@@ -860,7 +860,7 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
         r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
             be accessed via r2[k_i, k_j, k_a, i, j, a, b]
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sys.stdout, logger.DEBUG)
     nvir = nmo - nocc
     nov = nocc*nvir
@@ -908,7 +908,7 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
         return: a vector with all r1 elements, and r2 elements whose indices
     satisfy (i k_i a k_a) >= (j k_j b k_b)
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(sys.stdout, logger.DEBUG)
     # r1 indices: k_i, i, a
     nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
@@ -979,7 +979,7 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     This implementation can be checked against the spin-orbital version in 
     `eom_kccsd_ghf.eeccsd_matvec()`.
     """
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
 
     if imds is None: imds = eom.make_imds()
@@ -1327,7 +1327,7 @@ def eeccsd_cis_approx_slow(eom, kshift, nroots=1, imds=None, **kwargs):
 
     Note that such evaluation has N^3 cost, but error free (because matvec() has been proven correct).
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
 
     if imds is None: imds = eom.make_imds()
@@ -1518,7 +1518,7 @@ class _IMDS:
             self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1530,7 +1530,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1556,7 +1556,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1579,7 +1579,7 @@ class _IMDS:
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
     def make_t3p2_ip(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1601,7 +1601,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1630,7 +1630,7 @@ class _IMDS:
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_t3p2_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1647,7 +1647,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1672,7 +1672,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

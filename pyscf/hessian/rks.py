@@ -20,7 +20,7 @@
 Non-relativistic RKS analytical Hessian
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -36,7 +36,7 @@ from pyscf.grad import rks  # noqa
 def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None):
     log = logger.new_logger(hessobj, verbose)
-    time0 = t1 = (time.clock(), time.time())
+    time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mol = hessobj.mol
     mf = hessobj.base

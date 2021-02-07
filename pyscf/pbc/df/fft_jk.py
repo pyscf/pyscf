@@ -20,7 +20,7 @@
 JK with discrete Fourier transformation
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import tools
@@ -245,7 +245,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     #ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (time.clock(), time.time())
+    t1 = (lib.logger.process_clock(), lib.logger.perf_counter())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -358,7 +358,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
 
     vR_dm = np.empty((3,nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue

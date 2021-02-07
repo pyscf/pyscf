@@ -32,7 +32,7 @@ Ref:
     Kossmann, Ute Becker, Edward Valeev, Frank Neese. Mol. Phys. 113, 1961 (2015)
 '''
 
-import time
+
 import numpy
 import numpy as np
 import scipy.linalg
@@ -54,7 +54,7 @@ def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     '''Partial derivative
     '''
     log = logger.new_logger(hessobj, verbose)
-    time0 = t1 = (time.clock(), time.time())
+    time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mol = hessobj.mol
     mf = hessobj.base

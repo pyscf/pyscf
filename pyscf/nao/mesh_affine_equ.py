@@ -38,7 +38,7 @@ class mesh_affine_equ():
     return self
 
   def write(self, fname, **kw):
-    import time
+    
     import pyscf
     from pyscf import lib
     """  Result: .cube file with the field in the file fname.  """
