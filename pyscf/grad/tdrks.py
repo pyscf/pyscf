@@ -19,7 +19,7 @@
 # J. Chem. Phys. 117, 7433
 #
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -47,7 +47,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
             TDA energy gradients.
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf

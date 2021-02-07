@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import ctypes
-import time
+
 from functools import reduce
 import numpy
 import h5py
@@ -76,7 +76,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 # level > 1: ppaa, papa only.  It affects accuracy of hdiag
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     log.debug1('trans_e1_outcore level %d  max_memory %d', level, max_memory)
     nao, nmo = mo.shape

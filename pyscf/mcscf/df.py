@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import ctypes
 from functools import reduce
 import numpy
@@ -212,7 +212,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
 
             log = logger.Logger(self.stdout, self.verbose)
             # Add the approximate diagonal term for orbital hessian
-            t1 = t0 = (time.clock(), time.time())
+            t1 = t0 = (logger.process_clock(), logger.perf_counter())
             mo = numpy.asarray(mo_coeff, order='F')
             nao, nmo = mo.shape
             ncore = self.ncore
@@ -273,7 +273,7 @@ class _ERIS(object):
             log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
-        t1 = t0 = (time.clock(), time.time())
+        t1 = t0 = (logger.process_clock(), logger.perf_counter())
         self.feri = lib.H5TmpFile()
         self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
         self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')

@@ -8,7 +8,7 @@ import ctypes
 import h5py
 import numpy as np
 import pyscf.pbc.cc.kccsd_rhf
-import time
+
 
 from itertools import product
 from pyscf import lib
@@ -49,7 +49,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         energy_t (float): The real-part of the k-point CCSD(T) energy.
     '''
     assert isinstance(mycc, pyscf.pbc.cc.kccsd_rhf.RCCSD)
-    cpu1 = cpu0 = (time.clock(), time.time())
+    cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:

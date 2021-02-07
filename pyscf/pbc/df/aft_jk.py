@@ -20,7 +20,7 @@
 JK with analytic Fourier transformation
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -70,7 +70,7 @@ def _update_vj_(vj_kpts, aoaoks, dms, coulG, weight):
 
 def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -115,7 +115,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     mesh = mydf.mesh
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -253,7 +253,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     dm = numpy.asarray(dm, order='C')
     dms = _format_dms(dm, [kpt])

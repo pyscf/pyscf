@@ -25,7 +25,7 @@ import ctypes
 import os
 import sys
 import struct
-import time
+
 import tempfile
 import warnings
 from subprocess import check_call
@@ -478,12 +478,12 @@ class SHCI(pyscf.lib.StreamObject):
                 logger.debug1(self, "SHCI Input conf")
                 logger.debug1(self, open(inFile, "r").read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave = self.mpiprefix
             # self.mpiprefix=""
             executeSHCI(self)
             self.mpiprefix = mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print("......production of RDMs took %10.2f sec" % (end - start))
             sys.stdout.flush()
 
@@ -502,7 +502,7 @@ class SHCI(pyscf.lib.StreamObject):
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are also stored here as E3[i1,j2,k3,l3,m2,n1]
         # This is NOT done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         threepdm = numpy.zeros((norb, norb, norb, norb, norb, norb))
         file3pdm = "spatial3RDM.%d.%d.txt" % (state, state)
         with open(os.path.join(self.scratchDirectory, file3pdm), "r") as f:
@@ -518,7 +518,7 @@ class SHCI(pyscf.lib.StreamObject):
         twopdm /= nelectrons - 2
         onepdm = numpy.einsum("ijjk->ki", twopdm)
         onepdm /= nelectrons - 1
-        end = time.time()
+        end = logger.perf_counter()
         print("......reading the RDM took    %10.2f sec" % (end - start))
         sys.stdout.flush()
         return onepdm, twopdm, threepdm
@@ -568,12 +568,12 @@ class SHCI(pyscf.lib.StreamObject):
                 logger.debug1(self, "SHCI Input conf")
                 logger.debug1(self, open(inFile, "r").read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave = self.mpiprefix
             # self.mpiprefix=""
             executeSHCI(self)
             self.mpiprefix = mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print("......production of RDMs took %10.2f sec" % (end - start))
             sys.stdout.flush()
 
@@ -591,7 +591,7 @@ class SHCI(pyscf.lib.StreamObject):
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         if filetype == "binary":
             print("Reading binary 3RDM from DICE")
             fname = os.path.join(self.scratchDirectory, "spatial3RDM.%d.%d.bin" % (state, state))
@@ -622,7 +622,7 @@ class SHCI(pyscf.lib.StreamObject):
                     float(linesp[6]),
                 )
                 self.populate(E3, [a, b, c, f, e, d], integral)
-        end = time.time()
+        end = logger.perf_counter()
         print("......reading the RDM took    %10.2f sec" % (end - start))
         print("")
         sys.stdout.flush()
@@ -661,12 +661,12 @@ class SHCI(pyscf.lib.StreamObject):
                 logger.debug1(self, "SHCI Input conf")
                 logger.debug1(self, open(inFile, "r").read())
 
-            start = time.time()
+            start = logger.perf_counter()
             mpisave = self.mpiprefix
             # self.mpiprefix=""
             executeSHCI(self)
             self.mpiprefix = mpisave
-            end = time.time()
+            end = logger.perf_counter()
             print("......production of RDMs took %10.2f sec" % (end - start))
             sys.stdout.flush()
 
@@ -685,7 +685,7 @@ class SHCI(pyscf.lib.StreamObject):
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
         # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
         # This is done with SQA in mind.
-        start = time.time()
+        start = logger.perf_counter()
         if filetype == "binary":
             print("Reading binary 4RDM from DICE")
             fname = os.path.join(self.scratchDirectory, "spatial4RDM.%d.%d.bin" % (state, state))
@@ -722,7 +722,7 @@ class SHCI(pyscf.lib.StreamObject):
                     float(linesp[8]),
                 )
                 self.populate(E4, [a, b, c, d, h, g, f, e], integral)
-        end = time.time()
+        end = logger.perf_counter()
         print("......reading the RDM took    %10.2f sec" % (end - start))
         print("")
         sys.stdout.flush()

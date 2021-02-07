@@ -26,7 +26,7 @@ pyscf.grad.tduhf
 pyscf.grad.tduks
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -104,7 +104,7 @@ def tdrhf_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     See also function pyscf.grad.tdrhf.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -239,7 +239,7 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     See also function pyscf.grad.tdrks.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -432,7 +432,7 @@ def tduhf_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     See also function pyscf.grad.tduhf.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -632,7 +632,7 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     See also function pyscf.grad.tduks.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf

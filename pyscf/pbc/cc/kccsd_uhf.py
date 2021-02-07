@@ -21,7 +21,7 @@
 #          Alec White
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -59,7 +59,7 @@ def convert_mo_coeff(mo_coeff):
     return mo_coeff
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
 
     t1a, t1b = t1
@@ -683,7 +683,7 @@ class KUCCSD(uccsd.UCCSD):
             return _make_eris_outcore(self, mo_coeff)
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
 
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo
@@ -840,7 +840,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     #if not (cc.frozen is None or cc.frozen == 0):
     #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(cc)
     cell = cc._scf.cell
     thisdf = cc._scf.with_df

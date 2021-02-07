@@ -20,7 +20,7 @@
 Non-relativistic restricted Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -65,7 +65,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
@@ -186,7 +186,7 @@ def get_vsap(ks, mol=None):
         matrix Vsap = Vnuc + J + Vxc.
     '''
     if mol is None: mol = ks.mol
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)

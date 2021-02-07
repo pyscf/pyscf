@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -66,7 +66,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
                                   chunks=(nocc,1,nvir,nocc))
     fswap = lib.H5TmpFile()
 
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     pvOOv = lib.einsum('ikca,jkcb->aijb', l2, t2)
     moo = numpy.einsum('dljd->jl', pvOOv) * 2
     mvv = numpy.einsum('blld->db', pvOOv) * 2
@@ -154,7 +154,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
                                   chunks=(nocc,min(nocc,nvir),1,nvir))
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1]
         gvvvv = lib.einsum('ijab,ijcd->abcd', l2tmp, t2)

@@ -21,7 +21,7 @@ Extension to scipy.linalg module developed for PBC branch.
 '''
 
 from functools import reduce
-import time
+
 import numpy as np
 import scipy.linalg
 
@@ -90,7 +90,7 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
         import sys
         log = logger.Logger(sys.stdout, verbose)
 
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
 
     Mmin = min(neig,N)
     Mmax = min(N,2000)

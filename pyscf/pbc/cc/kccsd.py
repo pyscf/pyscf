@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 import numpy
 from functools import reduce
 
@@ -66,7 +66,7 @@ def energy(cc, t1, t2, eris):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -353,7 +353,7 @@ class GCCSD(gccsd.GCCSD):
         return self
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -471,7 +471,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     from pyscf.pbc.cc.ccsd import _adjust_occ
 
     log = logger.Logger(cc.stdout, cc.verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = gccsd._PhysicistsERIs()
     cell = cc._scf.cell
     kpts = cc.kpts
@@ -711,7 +711,7 @@ class _IMDS:
         self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -723,7 +723,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -749,7 +749,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -774,7 +774,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris

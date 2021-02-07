@@ -21,7 +21,7 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -328,7 +328,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 #            x *= 1e-2/norm_x
         return x
 
-    t3m = (time.clock(), time.time())
+    t3m = (logger.process_clock(), logger.perf_counter())
     u = g_kf = g_orb = norm_gorb = dxi = kfcount = jkcount = None
     dm0 = vhf0 = None
     g_op = lambda: g_orb
@@ -465,7 +465,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
            conv_tol=1e-10, conv_tol_grad=None, max_cycle=50, dump_chk=True,
            callback=None, verbose=logger.NOTE):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mf, verbose)
     mol = mf._scf.mol
     if mol != mf.mol:
@@ -681,7 +681,7 @@ class _CIAH_SOSCF(object):
         return self._scf.reset(mol)
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if dm0 is not None:
             if isinstance(dm0, str):
                 sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm0)

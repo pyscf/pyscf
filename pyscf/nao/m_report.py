@@ -1,9 +1,9 @@
 from __future__ import print_function, division
 import numpy as np
 from pyscf.data.nist import HARTREE2EV
-import time
 
-start_time = time.time()
+
+start_time = logger.perf_counter()
 
 def report_gw (self):
     """ Prints the energy levels of mean-field and G0W0"""
@@ -64,7 +64,7 @@ def report_gw (self):
                 out_file.write("\nWarning: Swapping in QP orbital energies has happened!")
                 print('Energy-sorted MO indices: \t {}'.format(swap))                
                 out_file.write('\nEnergy-sorted MO indices: \t {}'.format(swap))
-        elapsed_time = time.time() - start_time
+        elapsed_time = logger.perf_counter() - start_time
         print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
         out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c"))) 
         out_file.close
@@ -140,7 +140,7 @@ def report_mfx(self, dm1=None):
             ss = self.mf.spin_square()
             print('<S^2> and  2S+1                  :%16.7f %16.7f'%(ss[0],ss[1]))
             print('Instead of                       :%16.7f %16.7f'%(s_ref, 2*sp+1))
-    elapsed_time = time.time() - start_time
+    elapsed_time = logger.perf_counter() - start_time
     print('\nMean-field running time is: {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time))))
     #sys.stdout.close()
 

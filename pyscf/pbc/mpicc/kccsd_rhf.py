@@ -19,7 +19,7 @@
 
 import copy
 from functools import reduce
-import time
+
 import numpy
 import os
 import numpy as np
@@ -292,7 +292,7 @@ def update_t1(cc,t1,t2,eris,ints1e):
 # following Hirata, ..., Barlett, J. Chem. Phys. 120, 2581 (2004)
 
 def update_amps(cc, t1, t2, eris, max_memory=2000):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -355,8 +355,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     #t2new = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
     t2new_tril = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
 
-    cput1 = time.clock(), time.time()
-    cput2 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
+    cput2 = logger.process_clock(), logger.perf_counter()
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,nkpts,nkpts,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -454,7 +454,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     cput2 = log.timer_debug1('transforming Woooo', *cput2)
 
-    cput2 = time.clock(), time.time()
+    cput2 = logger.process_clock(), logger.perf_counter()
 
     mem = 0.5e9
     pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
@@ -525,7 +525,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     cput2 = log.timer_debug1('transforming Wvvvv', *cput2)
 
     # Making Wvoov and Wovov terms. (part 1/2)
-    cput2 = time.clock(), time.time()
+    cput2 = logger.process_clock(), logger.perf_counter()
 
     mem = 0.5e9
     pre = 1.*nocc*nvir*nvir*nvir*nkpts*16
@@ -650,7 +650,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     # Making Wvoov and Wovov terms (part 2/2)
 
-    cput2 = time.clock(), time.time()
+    cput2 = logger.process_clock(), logger.perf_counter()
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,1,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -748,7 +748,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     cput2 = log.timer_debug1('transforming Wvoov (bj)', *cput2)
 
-    cput2 = time.clock(), time.time()
+    cput2 = logger.process_clock(), logger.perf_counter()
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,nkpts,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -834,7 +834,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     cput2 = log.timer_debug1('transforming Wovov (bi)', *cput2)
 
-    cput2 = time.clock(), time.time()
+    cput2 = logger.process_clock(), logger.perf_counter()
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,1,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -1019,7 +1019,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         self.__imds__ = None
 
     def _init_amps_tril(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -1041,7 +1041,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,1,nkpts,))
         loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
-        cput1 = time.clock(), time.time()
+        cput1 = logger.process_clock(), logger.perf_counter()
         good2go = True
         while(good2go):
             good2go, data = loader.slave_set()
@@ -1104,7 +1104,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return self.emp2, t1, t2_tril
 
     def _init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -1234,7 +1234,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return vector
 
     def ipccsd(self, nroots=2*4, kptlist=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -1310,7 +1310,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
         imds = self.imds
 
-        cput2 = time.clock(), time.time()
+        cput2 = logger.process_clock(), logger.perf_counter()
         Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
         loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,))
         loader.set_ranges((range(nkpts),))
@@ -1398,7 +1398,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return vector
 
     def lipccsd(self, nroots=2*4, kptlist=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -1459,7 +1459,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
         imds = self.imds
 
-        cput2 = time.clock(), time.time()
+        cput2 = logger.process_clock(), logger.perf_counter()
         Hr1 = numpy.zeros(r1.shape,dtype=t1.dtype)
         Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
 
@@ -1984,7 +1984,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return vector
 
     def eaccsd(self, nroots=2*4, kptlist=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -2074,7 +2074,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         Hr1 += einsum('ac,c->a',imds.Lvv[kshift],r1)
 
         Hr2 = numpy.zeros(r2.shape,dtype=t1.dtype)
-        cput2 = time.clock(), time.time()
+        cput2 = logger.process_clock(), logger.perf_counter()
         mem = 0.5e9
         pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
         nkpts_blksize  = min(max(int(numpy.floor(mem/pre)),1),nkpts)
@@ -2155,7 +2155,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         return vector
 
     def leaccsd(self, nroots=2*4, kptlist=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         log = logger.Logger(self.stdout, self.verbose)
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -2696,7 +2696,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
         kpts = cc.kpts
@@ -2935,7 +2935,7 @@ class _ERIS:
 
             tmp_block_shape = BLKSIZE + (nocc,nocc,nmo,nmo)
             tmp_block = numpy.empty(shape=tmp_block_shape,dtype=ds_type)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             good2go = True
             while(good2go):
                 good2go, data = loader.slave_set()
@@ -2986,7 +2986,7 @@ class _ERIS:
             tmp_block_shape = BLKSIZE + (nocc,nvir,nmo,nmo)
             tmp_block  = numpy.empty(shape=tmp_block_shape,dtype=ds_type)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             good2go = True
             while(good2go):
                 good2go, data = loader1.slave_set()

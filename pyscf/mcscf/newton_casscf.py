@@ -20,7 +20,7 @@
 Second order CASSCF
 '''
 
-import time
+
 import copy
 from functools import reduce
 from itertools import product
@@ -550,7 +550,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
              'Its performance is bad for large systems.')
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start SO-CASSCF (newton CASSCF)')
     if callback is None:
         callback = casscf.callback
