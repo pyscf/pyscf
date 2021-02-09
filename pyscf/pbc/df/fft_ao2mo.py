@@ -133,7 +133,7 @@ def general(mydf, mo_coeffs, kpts=None,
     max_memory = mydf.max_memory - lib.current_memory()[0]
     # MAX:
     if max_memory <= 0:
-        log.logger.warn(cell, "max_memory = %d", max_memory)
+        lib.logger.warn(cell, "max_memory = %d", max_memory)
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
@@ -144,7 +144,7 @@ def general(mydf, mo_coeffs, kpts=None,
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6
             if max_memory <= 0:
-                log.logger.warn(cell, "2: max_memory = %d", max_memory)
+                lib.logger.warn(cell, "2: max_memory = %f (before = %f)", max_memory, max_memory+moiT.nbytes*1e-6)
 
             eri = _contract_compact(mydf, (moiT,mojT), coulG, max_memory=max_memory)
             if not compact:
@@ -156,7 +156,7 @@ def general(mydf, mo_coeffs, kpts=None,
             fac = numpy.array(1.)
             max_memory = max_memory - sum([x.nbytes for x in mos])*1e-6
             if max_memory <= 0:
-                log.logger.warn(cell, "2: max_memory = %d", max_memory)
+                lib.logger.warn(cell, "2: max_memory = %f", max_memory)
 
             eri = _contract_plain(mydf, mos, coulG, fac, max_memory=max_memory).real
         return eri
@@ -220,7 +220,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
     # DEBUG
-    print("nmoi=%d, nmok=%d, max_memory=%f, eri.size=%f, ngrids=%d" % (nmoi, nmok, max_memory*1e6/16, eri.size, ngrids))
+    #print("nmoi=%d, nmok=%d, max_memory=%f, eri.size=%f, ngrids=%d" % (nmoi, nmok, max_memory*1e6/16, eri.size, ngrids))
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
     #assert blksize > 0
     # Recover?

@@ -38,7 +38,7 @@ def get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, part=None, symmetri
     # By default inherit from base object
     if part is None:
         part = self.base.energy_part
-    log.debug("Amplitude partitioning = %s", part)
+    #log.debug("Amplitude partitioning = %s", part)
     if part not in ("first-occ", "first-vir", "democratic"):
         raise ValueError("Unknown partitioning of amplitudes: %s", part)
 
@@ -191,6 +191,8 @@ def get_local_energy(self, cc, pC1, pC2, eris):
     e2 -=  einsum('ijab,jabi', pC2, eris_ovvo)
 
     log.debug("Energy components E1=%16.8g, E2=%16.8g", e1, e2)
+    if e1 > 1e-4 and 10*e1 > e2:
+        log.warning("WARNING: Large E1 component!")
 
     # Symmetry factor if fragment is repeated in molecule, (e.g. in hydrogen rings: only calculate one fragment)
     e_loc = self.symmetry_factor * (e1 + e2)

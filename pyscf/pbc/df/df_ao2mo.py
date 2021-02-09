@@ -40,7 +40,7 @@ def get_eri(mydf, kpts=None,
     if not _iskconserv(cell, kptijkl):
         lib.logger.warn(cell, 'df_ao2mo: momentum conservation not found in '
                         'the given k-points %s', kptijkl)
-        return numpy.zeros((nao,nao,nao,nao))
+        #return numpy.zeros((nao,nao,nao,nao))
 
     kpti, kptj, kptk, kptl = kptijkl
     nao_pair = nao * (nao+1) // 2

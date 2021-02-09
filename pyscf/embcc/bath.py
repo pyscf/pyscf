@@ -85,8 +85,6 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     C_virenv : ndarray
         Virtual environment orbitals.
     """
-    log.info("Making DMET bath")
-    log.info("+--------------+")
     C_local = self.C_local
     C_env = self.C_env
     S = self.mf.get_ovlp()
@@ -131,25 +129,57 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     C_virenv = C_env[:,mask_virenv].copy()
 
     # FANCY NEW PRINTING
-    ttol = 1e-12
-    mask_ttol = np.logical_and(eig >= ttol, eig <= 1-ttol)
-    log.info("Eigenvalues of environment DM in (0, 1):")
-    for e in eig[mask_ttol]:
-        if e < tol:
-            s = "virtual environment"
-        elif e > 1-tol:
-            s = "occupied environment"
-        else:
-            s = "DMET bath"
+    print_tol = 1e-10
+    strong_tol = 0.1
+    #limits = [1-print_tol, 1-tol, 1-strong_tol, strong_tol, tol, print_tol]
+    limits = [print_tol, tol, strong_tol, 1-strong_tol, 1-tol, 1-print_tol]
+    if np.any(np.logical_and(eig > limits[0], eig <= limits[-1])):
+        names = [
+                "Unentangled vir. env. orbital",
+                "Weakly-entangled vir. bath orbital",
+                "Strongly-entangled bath orbital",
+                "Weakly-entangled occ. bath orbital",
+                "Unentangled occ. env. orbital",
+                ]
+        log.info("Non-trivial (0 or 1) eigenvalues (e) of non-fragment DM:")
+        for i, e in enumerate(eig):
+            name = None
+            for j, llim in enumerate(limits[:-1]):
+                ulim = limits[j+1]
+                if (llim < e and e <= ulim):
+                    name = names[j]
+                    break
+            if name:
+                log.info("  * %-34s :  e=%12.6g  1-e=%12.6g", name, e, 1-e)
 
-        log.info("%11.6e (%s orbital)", e, s)
+    #mask_ttol = np.logical_and(eig >= ttol, eig <= 1-ttol)
+    #mask_occ = np.logical_and(eig >= 0.5, eig <= 1-ttol)
+    #log.info("  1-eigenvalues of orbitals with occupation >= 0.5:")
+    #for e in eig[mask_occ]:
+    #    if (1-e) < tol:
+    #        s = "environment"
+    #    elif (1-e) < 0.1:
+    #        s = "weakly entangled"
+    #    else:
+    #        s = "strongly entangled"
+    #    log.info("    %16.10g  ->  %s occupied orbital", 1-e, s)
+    #    log.info("    %s occupied orbital  ->  %16.10g", s, 1-e)
+    #mask_vir = np.logical_and(eig >= ttol, eig < 0.5)
+    #log.info("  eigenvalues of orbitals with occupation < 0.5:")
+    #for e in eig[mask_vir]:
+    #    if e < tol:
+    #        s = "environment"
+    #    elif e < 0.1:
+    #        s = "weakly entangled"
+    #    else:
+    #        s = "strongly entangled"
+    #    log.info("    %16.10g  ->  %s virtual orbital", e, s)
 
     # Calculate entanglement entropy
     entropy = np.sum(eig * (1-eig))
     entropy_bath = np.sum(eig[mask_bath] * (1-eig[mask_bath]))
     log.info("Full entanglement entropy: %.6e", entropy)
-    log.info("Bath entanglement entropy: %.6e", entropy_bath)
-    log.info("Captured %% of entanglement entropy: %.2f %%", 100*entropy_bath/entropy)
+    log.info("Bath entanglement entropy: %.6e ( %.2f %%)", entropy_bath, 100*entropy_bath/entropy)
 
     # TEST
     #p = np.linalg.multi_dot((C_local.T, S, self.mf.make_rdm1(), S, C_local)) / 2
@@ -238,8 +268,9 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None,
     C_env : ndarray
         Environment orbitals.
     """
+    log.debug("type=%r, nbath=%r, tol=%r, energy_tol=%r, C_ref given=%r",
+            bathtype, nbath, tol, energy_tol, C_ref is not None)
 
-    log.debug("Making bath of type %r (nbath=%r, tol=%r, energy_tol=%r, C_ref given=%r)", bathtype, nbath, tol, energy_tol, C_ref is not None)
     eigref_out = None
     e_delta_mp2 = None
     # No bath (None or False)
@@ -559,10 +590,14 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     if eris is None:
         # For PBC [direct_init to avoid expensive Fock rebuild]
         if self.use_pbc:
-            #eris = mp2.ao2mo()
-            mo_energy = np.hstack((eo, ev))
             fock = np.linalg.multi_dot((c_act.T, f, c_act))
-            eris = mp2.ao2mo(direct_init=True, mo_energy=mo_energy, fock=fock)
+            # TRY NEW
+            if isinstance(self.mf.with_df._cderi, np.ndarray):
+                from .pbc_gdf_ao2mo import ao2mo
+                eris = ao2mo(mp2, fock=fock, mp2=True)
+            else:
+                mo_energy = np.hstack((eo, ev))
+                eris = mp2.ao2mo(direct_init=True, mo_energy=mo_energy, fock=fock)
         # For molecular calculations with DF
         elif hasattr(mp2, "with_df"):
             eris = mp2.ao2mo(store_eris=True)
@@ -582,14 +617,17 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
         #assert np.allclose(eris.ovov, eris2.ovov)
     t = (MPI.Wtime() - t0)
-    log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+    if t > 1:
+        log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
     assert (eris.ovov is not None)
 
     t0 = MPI.Wtime()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
-    log.debug("Time for MP2 kernel: %s", get_time_string(MPI.Wtime()-t0))
+    t = (MPI.Wtime() - t0)
+    if t > 10:
+        log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
     e_mp2_full *= self.symmetry_factor
-    log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
+    log.debug("Full MP2 energy=  %12.8g htr", e_mp2_full)
 
     # Exact MP2 amplitudes
     #if True and hasattr(self.base, "_t2_exact"):
@@ -622,7 +660,7 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Project first occupied index onto local space
     _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
     e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
-    log.debug("Local MP2 energy = %12.8g htr", e_mp2)
+    log.debug("Local MP2 energy= %12.8g htr", e_mp2)
 
     # MP2 density matrix
     if local_dm is True:
@@ -929,10 +967,8 @@ def make_mp2_bath(self,
         raise ValueError("nbath, tol, and energy_tol are None.")
     if kind not in ("occ", "vir"):
         raise ValueError("Unknown kind: %s", kind)
-    if kind == "occ":
-        kind = "occupied"
-    else:
-        kind = "virtual"
+    kindname = {"occ": "occupied", "vir" : "virtual"}
+    kind = kindname[kind]
 
     # All occupied and virtual orbitals
     c_occall = np.hstack((c_occclst, c_occenv))
@@ -1076,10 +1112,10 @@ def make_mp2_bath(self,
     # Output some information
     log.info("%s MP2 natural orbitals:" % kind.title())
     if nbath > 0:
-        log.info("%3d bath orbitals:        largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
+        log.info("  * %3d bath orbitals:        largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
             nbath, max(dm_occ[:nbath]), min(dm_occ[:nbath]), np.mean(dm_occ[:nbath]))
     if nbath < nenv:
-        log.info("%3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
+        log.info("  * %3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
                 nenv-nbath, max(dm_occ[nbath:]), min(dm_occ[nbath:]), np.mean(dm_occ[nbath:]))
     #log.debug("All:\n%r", dm_occ)
 

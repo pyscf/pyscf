@@ -25,6 +25,7 @@ See also the original implementation at
 https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 '''
 
+import logging
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -32,6 +33,7 @@ from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc import scf
 
+log = logging.getLogger(__name__)
 
 def get_phase(cell, kpts, kmesh=None):
     '''
@@ -61,7 +63,7 @@ def get_phase(cell, kpts, kmesh=None):
     scell = tools.super_cell(cell, kmesh)
     return scell, phase
 
-def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5):
+def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_tol=1e-3):
     scell, phase = get_phase(cell, kpts, kmesh)
 
     E_g = np.hstack(mo_energy)
@@ -79,7 +81,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5):
     s = scell.pbc_intor('int1e_ovlp')
     orth_err = abs(np.linalg.multi_dot((C_gamma.conj().T, s, C_gamma)) - np.eye(Nmo*Nk)).max()
     #assert(orth_err < tol_orth)
-    if orth_err < tol_orth:
+    if orth_err > tol_orth:
         print("Warning: insufficient orthogonality of Gamma point orbitals: %e" % orth_err)
 
     # Transform MO indices
@@ -90,14 +92,18 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5):
             shift = min(E_g[degen_mask]) - .1
             f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
                        C_gamma[:,degen_mask].conj().T)
-            assert(abs(f.imag).max() < 1e-4)
+            #assert(abs(f.imag).max() < imag_tol)
+            if abs(f.imag).max() > imag_tol:
+                log.error("Error: Large imaginary part in Fock matrix: %.3e", abs(f.imag).max())
 
             e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
             C_gamma = C_gamma.real
             C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
         else:
             f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-            assert(abs(f.imag).max() < 1e-4)
+            #assert(abs(f.imag).max() < imag_tol)
+            if abs(f.imag).max() > imag_tol:
+                log.error("Error: Large imaginary part in Fock matrix: %.3e", abs(f.imag).max())
             e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
 
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)

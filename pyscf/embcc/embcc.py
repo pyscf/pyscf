@@ -50,6 +50,7 @@ class EmbCC:
             "bath_type",
             "bath_size",
             "bath_tol",
+            "bath_tol_per_electron",
             "bath_energy_tol",
             "dmet_bath_tol",
             "power1_occ_bath_tol",
@@ -64,6 +65,7 @@ class EmbCC:
             bath_type="mp2-natorb",
             bath_size=None,
             bath_tol=None,
+            bath_tol_per_electron=True,
             bath_energy_tol=1e-3,
             minao="minao",
             use_ref_orbitals_dmet=True,
@@ -89,9 +91,14 @@ class EmbCC:
             or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
         """
 
+        log.info("INITIALIZING EmbCC")
+        log.info("******************")
+        log.changeIndentLevel(1)
+
         # --- Check input
         if not mf.converged:
-            raise ValueError("Mean-field calculation not converged.")
+            #raise ValueError("Mean-field calculation not converged.")
+            log.warning("Mean-field calculation not converged.")
 
         # Local orbital types:
         # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
@@ -119,6 +126,7 @@ class EmbCC:
         self.bath_type = bath_type
         self.bath_size = bath_size
         self.bath_tol = bath_tol
+        self.bath_tol_per_electron = bath_tol_per_electron
         self.bath_energy_tol = bath_energy_tol
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
@@ -167,11 +175,22 @@ class EmbCC:
 
         # Orthogonalize insufficiently orthogonal MOs
         # (For example as a result of k2gamma conversion with low cell.precision)
-        self.mf.mo_coeff = orthogonalize_mo(self.mf)
+        c = self.mf.mo_coeff.copy()
+        assert np.allclose(c.imag, 0)
+        ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
+        nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
+        log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
+        if nonorth > 1e-8:
+            log.info("Orthogonalizing orbitals...")
+            self.mf.mo_coeff = orthogonalize_mo(c, self.get_ovlp(), tol=1e-6)
+            change = abs(np.diag(np.linalg.multi_dot((self.mf.mo_coeff.T, self.get_ovlp(), c)))-1)
+            log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
             self.init_fragments()
+
+        log.changeIndentLevel(-1)
 
     def init_fragments(self):
         if self.local_orbital_type == "IAO":
@@ -231,6 +250,10 @@ class EmbCC:
     @property
     def mol(self):
         return self.mf.mol
+
+    @property
+    def norb(self):
+        return self.mol.nao_nr()
 
     def get_ovlp(self, *args, **kwargs):
         return self.mf.get_ovlp(*args, **kwargs)
@@ -452,12 +475,18 @@ class EmbCC:
         """
         #assert len(indices) > 0
         # Get new ID
-        cluster_id = len(self.clusters)
-        # Check that ID and name are unique
+        cluster_id = len(self.clusters) + 1
+        # Check that ID is unique
         for cluster in self.clusters:
-            if name == cluster.name:
-                raise ValueError("Cluster with name %s already exists." % name)
             assert (cluster_id != cluster.id)
+        # Make name unique
+        for i in range(1, 100):
+            name_i = name if i == 1 else "%s-%d" % (name, i)
+            if name_i not in [x.name for x in self.clusters]:
+                name = name_i
+                break
+        else:
+            raise ValueError("Cluster with name %s already exists." % name)
         # Pass options to cluster object via keyword arguments
         for opt in self.default_options:
             kwargs[opt] = kwargs.get(opt, getattr(self, opt))
@@ -510,24 +539,34 @@ class EmbCC:
         """
         Parameters
         ---------
-        atoms : list or str
+        atoms : list of int/str or int/str
             Atom labels of atoms in cluster.
         name : str
             Name of cluster.
         """
-        # atoms may be a single atom label
-        #if isinstance(atoms, str) or isinstance(atoms, int):
-        if isinstance(atoms, str):
+        # Atoms may be a single atom index/label
+        if isinstance(atoms, int) or isinstance(atoms, str):
             atoms = [atoms]
+
         # Check if atoms are valid labels of molecule
-        atom_symbols = [self.mol.atom_symbol(atomid) for atomid in range(self.mol.natm)]
-        if check_atoms:
+        atom_labels_mol = [self.mol.atom_symbol(atomid) for atomid in range(self.mol.natm)]
+        if isinstance(atoms[0], str) and check_atoms:
             for atom in atoms:
-                if atom not in atom_symbols:
-                    raise ValueError("Atom %s not in molecule." % atom)
+                if atom not in atom_labels_mol:
+                    raise ValueError("Atom with label %s not in molecule." % atom)
+
+        # Get atom indices/labels
+        if isinstance(atoms[0], int):
+            atom_indices = atoms
+            atom_labels = [self.mol.atom_symbol(i) for i in atoms]
+        else:
+            atom_indices = np.nonzero(np.isin(atom_labels_mol, atoms))[0]
+            atom_labels = atoms
+        assert len(atom_indices) == len(atom_labels)
+
+        # Generate cluster name if not given
         if name is None:
-            name = ",".join(atoms)
-        log.debug("Making atom cluster with name=%s", name)
+            name = ",".join(atom_labels)
 
         # Indices refers to AOs or IAOs, respectively
 
@@ -541,20 +580,24 @@ class EmbCC:
         # Lowdin orthonalized AOs
         elif self.local_orbital_type == "LAO":
             lao_atoms = [lao[1] for lao in self.lao_labels]
-            indices = np.nonzero(np.isin(lao_atoms, atoms))[0]
+            indices = np.nonzero(np.isin(lao_atoms, atom_labels))[0]
             C_local, C_env = self.make_local_lao_orbitals(indices)
 
         # Orthogonal intrinsic AOs
         elif self.local_orbital_type == "IAO":
             # Base atom for each IAO
-            iao_atoms = [iao[1] for iao in self.iao_labels]
-            indices = np.nonzero(np.isin(iao_atoms, atoms))[0]
+            #iao_atoms = [iao[1] for iao in self.iao_labels]
+            #indices = np.nonzero(np.isin(iao_atoms, atom_labels))[0]
+            # NEW: Atoms by index!
+            iao_atoms = [iao[0] for iao in self.iao_labels]
+            indices = np.nonzero(np.isin(iao_atoms, atom_indices))[0]
+
             C_local, C_env = self.make_local_iao_orbitals(indices)
 
         # Non-orthogonal intrinsic AOs
         elif self.local_orbital_type == "NonOrth-IAO":
             ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
-            indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
+            indices = np.nonzero(np.isin(ao_atoms, atom_labels))[0]
             C_local, C_env = self.make_local_nonorth_iao_orbitals(indices, minao=self.minao)
 
         # Projected molecular orbitals
@@ -565,9 +608,9 @@ class EmbCC:
 
             # Use atom labels as AO labels
             log.debug("Making occupied projector.")
-            Po = self.make_ao_projector_general(None, ao_labels=atoms, basis2=kwargs.pop("basis_proj_occ", None))
+            Po = self.make_ao_projector_general(None, ao_labels=atom_labels, basis2=kwargs.pop("basis_proj_occ", None))
             log.debug("Making virtual projector.")
-            Pv = self.make_ao_projector_general(None, ao_labels=atoms, basis2=kwargs.pop("basis_proj_vir", None))
+            Pv = self.make_ao_projector_general(None, ao_labels=atom_labels, basis2=kwargs.pop("basis_proj_vir", None))
             log.debug("Done.")
 
             o = (self.mf.mo_occ > 0)
@@ -601,7 +644,7 @@ class EmbCC:
 
         # TEMP
         #ao_indices = get_ao_indices_at_atoms(self.mol, atomids)
-        ao_indices = atom_labels_to_ao_indices(self.mol, atoms)
+        ao_indices = atom_labels_to_ao_indices(self.mol, atom_labels)
         cluster.ao_indices = ao_indices
 
         return cluster
@@ -728,6 +771,22 @@ class EmbCC:
         assert (ortherr < max(2*nonorthmax, 1e-7))
         assert (ortherr < 1e-4)
 
+        # Check that all electrons are in IAO DM
+        dm_iao = np.linalg.multi_dot((C_iao.T, S, self.mf.make_rdm1(), S, C_iao))
+        nelec_iao = np.trace(dm_iao)
+        log.debug("Total number of electrons in IAOs: %.8f", nelec_iao)
+        if abs(nelec_iao - self.mol.nelectron) > 1e-4:
+            log.error("ERROR: IAOs do not span entire occupied space.")
+
+        # Print electron distribution
+        log.info("MEAN-FIELD OCCUPANCY PER ATOM")
+        log.info("*****************************")
+        iao_atoms = np.asarray([i[0] for i in iao_labels])
+        for a in range(self.mol.natm):
+            mask = np.where(iao_atoms == a)[0]
+            ne = np.trace(dm_iao[mask][:,mask])
+            log.info("  * %3d: %-6s= %.8f", a, self.mol.atom_symbol(a), ne)
+
         return C_iao, C_env, iao_labels
 
     def make_lowdin_ao(self):
@@ -758,46 +817,43 @@ class EmbCC:
 
     def kernel(self, **kwargs):
 
+        MPI_comm.Barrier()
+        t_start = MPI.Wtime()
+
         if not self.clusters:
             raise ValueError("No clusters defined for calculation.")
 
-        MPI_comm.Barrier()
-        t_start = MPI.Wtime()
+        nelec_frags = sum([x.symmetry_factor*x.nelec_mf_frag for x in self.clusters])
+        log.info("Total number of mean-field electrons over all fragments= %.8f", nelec_frags)
+        if abs(nelec_frags - np.rint(nelec_frags)) > 1e-4:
+            log.warning("WARNING: Number of electrons not integer!")
 
         for idx, cluster in enumerate(self.clusters):
             if MPI_rank != (idx % MPI_size):
                 continue
 
-            if MPI_size > 1:
-                mpi_info = " on MPI process %3d" % MPI_rank
-            else:
-                mpi_info = ""
-            msg = "Now running cluster %3d: %s%s." % (cluster.id, cluster.name, mpi_info)
-            log.info(msg + "\n" + len(msg)*"-")
+            mpi_info = (" on MPI process %3d" % MPI_rank) if MPI_size > 1 else ""
+            msg = "RUNNING CLUSTER %3d: %s%s" % (cluster.id, cluster.name, mpi_info.upper())
+            log.info(msg)
+            log.info(len(msg)*"*")
+            log.changeIndentLevel(1)
             cluster.run(**kwargs)
-            log.info("Cluster %3d: %s is done.", cluster.id, cluster.name)
+            log.info("Cluster %3d: %s%s is done.", cluster.id, cluster.name, mpi_info)
+            log.changeIndentLevel(-1)
 
         #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
         attributes = ["converged", "e_corr", "e_pert_t",
                 #"e_pert_t2",
                 "e_delta_mp2",
-                "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d"]
+                "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d",
+                "nactive", "nfrozen"]
         results = self.collect_results(*attributes)
         if MPI_rank == 0 and not np.all(results["converged"]):
-            log.critical("converged = %s", results["converged"])
-            log.critical("The following fragment(s) did not converge:")
-            for i, cluster in enumerate(self.clusters):
+            log.critical("CRITICAL: The following fragments did not converge:")
+            for i, x in enumerate(self.clusters):
                 if not results["converged"][i]:
-                    log.critical("%3d %s [%s]", cluster.id, cluster.name, cluster.solver)
+                    log.critical("%3d %s solver= %s", x.id, x.name, x.solver)
             #raise RuntimeError("Not all cluster converged")
-
-        # TEST energy
-        #import pyscf
-        #import pyscf.cc
-        #cc = pyscf.cc.CCSD(self.mf)
-        #eris = cc.ao2mo()
-        #energy = cc.energy(t1=self.T1, t2=self.T2, eris=eris)
-        #log.info("EmbCC energy=%.8g", energy)
 
         self.e_corr = sum(results["e_corr"])
         self.e_pert_t = sum(results["e_pert_t"])
@@ -866,11 +922,11 @@ class EmbCC:
     def collect_results(self, *attributes):
         """Use MPI to collect results from all clusters."""
 
-        log.debug("Collecting attributes %r from all clusters", (attributes,))
+        #log.debug("Collecting attributes %r from all clusters", (attributes,))
         clusters = self.clusters
 
         def mpi_reduce(attr, op=MPI.SUM, root=0):
-            res = MPI_comm.reduce(np.asarray([getattr(c, attr) for c in clusters]), op=op, root=root)
+            res = MPI_comm.reduce(np.asarray([getattr(x, attr) for x in clusters]), op=op, root=root)
             return res
 
         results = {}
@@ -879,29 +935,45 @@ class EmbCC:
 
         return results
 
+    def show_cluster_sizes(self, results, show_largest=True):
+        log.info("CLUSTER SIZES")
+        log.info("*************")
+        fmtstr = "  * %3d %-10s  :  active=%4d  frozen=%4d  ( %5.1f %%)"
+        imax = [0]
+        for i, x in enumerate(self.clusters):
+            nactive = results["nactive"][i]
+            nfrozen = results["nfrozen"][i]
+            log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.norb)
+            if i == 0:
+                continue
+            if nactive > results["nactive"][imax[0]]:
+                imax = [i]
+            elif nactive == results["nactive"][imax[0]]:
+                imax.append(i)
+
+        if show_largest:
+            log.info("LARGEST CLUSTERS")
+            log.info("****************")
+            for i in imax:
+                x = self.clusters[i]
+                nactive = results["nactive"][i]
+                nfrozen = results["nfrozen"][i]
+                log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.norb)
+
     def print_results(self, results):
-        log.info("Energy contributions per cluster")
-        log.info("--------------------------------")
-        # Name solver nactive (local, dmet bath, add bath) nfrozen E_corr_full E_corr
-        #linefmt = "%10s  %6s  %3d (%3d,%3d,%3d)  %3d: Full=%16.8g Eh Local=%16.8g Eh"
-        #totalfmt = "Total=%16.8g Eh"
-        #for c in self.clusters:
-        #    log.info(linefmt, c.name, c.solver, len(c)+c.nbath, len(c), c.nbath0, c.nbath-c.nbath0, c.nfrozen, c.e_corr_full, c.e_corr)
-        #linefmt  = "%3d %20s [%8s] = %16.8g htr + %16.8g htr = %16.8g"
-        linefmt  = "%3d %20s (%8s) [Eh] = %16.8g + %16.8g + %16.8g = %16.8g"
-        for i, cluster in enumerate(self.clusters):
+        self.show_cluster_sizes(results)
+
+        log.info("CLUSTER ENERGIES")
+        log.info("****************")
+        log.info("CCSD / CCSD+dMP2 / CCSD+dMP2+(T)")
+        fmtstr = "  * %3d %-10s  :  %16.8g  %16.8g  %16.8g"
+        for i, x in enumerate(self.clusters):
             e_corr = results["e_corr"][i]
             e_pert_t = results["e_pert_t"][i]
             e_delta_mp2 = results["e_delta_mp2"][i]
-            e_all = e_corr + e_pert_t + e_delta_mp2
-            log.info(linefmt, cluster.id, cluster.name, cluster.solver,
-                    e_corr, e_pert_t, e_delta_mp2, e_all)
+            log.info(fmtstr, x.id, x.trimmed_name(10), e_corr, e_corr+e_delta_mp2, e_corr+e_delta_mp2+e_pert_t)
 
-        log.info("Total / +dMP2 [Eh]= %16.8g / %16.8g", self.e_corr, self.e_corr+self.e_delta_mp2)
-        if self.e_pert_t:
-            log.info("(T) [Eh]= %16.8g", self.e_pert_t)
-            #log.info("(T) [Eh]= %16.8g", self.e_pert_t2)
-            log.info("CCSD(T) / +dMP2 [Eh]= %16.8g / %16.8g", self.e_corr+self.e_pert_t, self.e_corr++self.e_pert_t+self.e_delta_mp2)
+        log.info("  * %-14s  :  %16.8g  %16.8g  %16.8g", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
         #log.info("E(DMET) = %16.8g htr", self.e_dmet)
 
     def reset(self, mf=None, **kwargs):

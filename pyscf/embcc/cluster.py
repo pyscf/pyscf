@@ -66,14 +66,15 @@ class Cluster:
             Atomic orbital indices of cluster. [ local_orbital_type == "ao" ]
             Intrinsic atomic orbital indices of cluster. [ local_orbital_type == "iao" ]
         """
-
-
         self.base = base
         self.id = cluster_id
         self.name = name
-        log.debug("Making cluster %d: %s with local orbital type %s", self.id, self.name, self.local_orbital_type)
         #self.indices = indices
         self.ao_indices = ao_indices
+        msg = "CREATING CLUSTER %d: %s" % (self.id, self.name)
+        log.info(msg)
+        log.info(len(msg)*"*")
+        log.info("  * Local orbital type= %s", self.local_orbital_type)     # depends on self.base
 
         # NEW: local and environment orbitals
         if C_local.shape[-1] == 0:
@@ -81,13 +82,13 @@ class Cluster:
 
         self.C_local = C_local
         self.C_env = C_env
+        log.info("  * Size= %d", self.size)     # depends on self.C_local
 
         # Determine number of mean-field electrons in fragment space
-        S = self.mf.get_ovlp()
-        dm = np.linalg.multi_dot((self.C_local.T, S, self.mf.make_rdm1(), S, self.C_local))
-        self.nelec_frag = np.trace(dm)
-        log.info("Mean-field electrons in fragment space=%.5f", self.nelec_frag)
-
+        s = self.base.get_ovlp()
+        dm = np.linalg.multi_dot((self.C_local.T, s, self.mf.make_rdm1(), s, self.C_local))
+        self.nelec_mf_frag = np.trace(dm)
+        log.info("  * Mean-field electrons= %.5f", self.nelec_mf_frag)
 
         #assert self.nlocal == len(self.indices)
         #assert (self.size == len(self.indices) or self.local_orbital_type in ("NonOrth-IAO", "PMO"))
@@ -97,6 +98,7 @@ class Cluster:
         if solver not in self.base.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
+        log.info("  * Solver= %s", self.solver)
 
         #if not hasattr(bath_size, "__getitem__"):
         if not has_length(bath_size, 2):
@@ -111,13 +113,13 @@ class Cluster:
         # Relative tolerances?
         if kwargs.get("bath_tol_per_electron", True):
             if bath_tol[0] is not None:
-                bath_tol = (self.nelec_frag*bath_tol[0], bath_tol[1])
+                bath_tol = (self.nelec_mf_frag*bath_tol[0], bath_tol[1])
             if bath_tol[1] is not None:
-                bath_tol = (bath_tol[0], self.nelec_frag*bath_tol[1])
+                bath_tol = (bath_tol[0], self.nelec_mf_frag*bath_tol[1])
             if bath_energy_tol[0] is not None:
-                bath_energy_tol = (self.nelec_frag*bath_energy_tol[0], bath_energy_tol[1])
+                bath_energy_tol = (self.nelec_mf_frag*bath_energy_tol[0], bath_energy_tol[1])
             if bath_energy_tol[1] is not None:
-                bath_energy_tol = (bath_energy_tol[0], self.nelec_frag*bath_energy_tol[1])
+                bath_energy_tol = (bath_energy_tol[0], self.nelec_mf_frag*bath_energy_tol[1])
 
         #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
         if bath_type not in self.base.VALID_BATH_TYPES:
@@ -159,6 +161,7 @@ class Cluster:
 
         # Other
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
+        log.info("  * Symmetry factor= %f", self.symmetry_factor)
 
         # Restart solver from previous solution [True/False]
         #self.restart_solver = kwargs.get("restart_solver", True)
@@ -207,12 +210,12 @@ class Cluster:
         #self.nfrozen = None
         self.e_delta_mp2 = 0.0
 
-        self.active = None
-        self.active_occ = None
-        self.active_vir = None
-        self.frozen = None
-        self.frozen_occ = None
-        self.frozen_vir = None
+        self.active = []
+        self.active_occ = []
+        self.active_vir = []
+        self.frozen = []
+        self.frozen_occ = []
+        self.frozen_vir = []
 
         # These are used by the solver
         self.mo_coeff = None
@@ -257,6 +260,11 @@ class Cluster:
     #def nlocal(self):
     #    """Number of local (fragment) orbitals."""
     #    return self.C_local.shape[-1]
+
+    def trimmed_name(self, length=10):
+        if len(self.name) <= length:
+            return self.name
+        return self.name[:(length-3)] + "..."
 
     @property
     def size(self):
@@ -636,8 +644,6 @@ class Cluster:
         if self.iteration > 1:
             log.debug("Iteration %d", self.iteration)
 
-        log.debug("Running solver %s for cluster %s on MPI process %d", solver, self.name, MPI_rank)
-
         if len(active) == 1:
             log.debug("Only one orbital in cluster. No correlation energy.")
             solver = None
@@ -700,10 +706,11 @@ class Cluster:
                 if self.use_pbc:
                     c_act = mo_coeff[:,active]
                     fock = np.linalg.multi_dot((c_act.T, self.base.get_fock(), c_act))
-                    eris = cc.ao2mo_direct(fock=fock)
-                    #eris2 = cc.ao2mo()
-                    #log.debug("Max fock diff: %e", np.amax(abs(eris.fock - eris2.fock)))
-                    #log.debug("Max mo diff: %e", np.amax(abs(eris.mo_energy - eris2.mo_energy)))
+                    if isinstance(self.mf.with_df._cderi, np.ndarray):
+                        from .pbc_gdf_ao2mo import ao2mo
+                        eris = ao2mo(cc, fock=fock)
+                    else:
+                        eris = cc.ao2mo_direct(fock=fock)
                 else:
                     eris = cc.ao2mo()
                 t = (MPI.Wtime()-t0)
@@ -1099,12 +1106,14 @@ class Cluster:
             if ref_orbitals.get("dmet-bath", None) is not None:
                 assert np.allclose(ref_orbitals["dmet-bath"], self.refdata_in["dmet-bath"])
 
-        t0_bath = MPI.Wtime()
-
-        t0 = MPI.Wtime()
+        t0_bath = t0 = MPI.Wtime()
+        log.info("MAKING DMET BATH")
+        log.info("****************")
+        log.changeIndentLevel(1)
         #C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=ref_orbitals.get("dmet-bath", None))
         C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
         log.debug("Time for DMET bath: %s", get_time_string(MPI.Wtime()-t0))
+        log.changeIndentLevel(-1)
 
         # Add additional orbitals to cluster [optional]
         # First-order power orbitals:
@@ -1152,6 +1161,7 @@ class Cluster:
         self.refdata_out["dmet-bath"] = C_bath
 
         # === Additional bath orbitals
+
         if self.use_ref_orbitals_bath:
             #C_occref = ref_orbitals.get("occ-bath", None)
             #C_virref = ref_orbitals.get("vir-bath", None)
@@ -1176,20 +1186,32 @@ class Cluster:
         #occbath_eigref = None
         #virbath_eigref = None
 
+        log.info("MAKING OCCUPIED BATH")
+        log.info("********************")
         t0 = MPI.Wtime()
+        log.changeIndentLevel(1)
         C_occbath, C_occenv2, e_delta_occ, occbath_eigref = self.make_bath(
                 C_occenv, self.bath_type, "occ",
                 C_ref=C_occref, eigref=occbath_eigref,
                 # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
                 nbath=self.bath_target_size[0], tol=self.bath_tol[0], energy_tol=self.bath_energy_tol[0])
+        log.debug("Time for occupied %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
+        log.changeIndentLevel(-1)
+
+        log.info("MAKING VIRTUAL BATH")
+        log.info("*******************")
+        t0 = MPI.Wtime()
+        log.changeIndentLevel(1)
         C_virbath, C_virenv2, e_delta_vir, virbath_eigref = self.make_bath(
                 C_virenv, self.bath_type, "vir",
                 C_ref=C_virref, eigref=virbath_eigref,
                 # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
                 nbath=self.bath_target_size[1], tol=self.bath_tol[1], energy_tol=self.bath_energy_tol[1])
-        log.debug("Time for %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
+        log.debug("Time for virtual %r bath: %s", self.bath_type, get_time_string(MPI.Wtime()-t0))
+        log.changeIndentLevel(-1)
+
         C_occenv, C_virenv = C_occenv2, C_virenv2
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
@@ -1215,25 +1237,18 @@ class Cluster:
         log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
         # FULL MP2 correction [TESTING]
-        #if True:
-        if False:
-            Co1 = np.hstack((C_occclst, C_occenv))
-            Cv1 = np.hstack((C_virclst, C_virenv))
-            Co2 = np.hstack((C_occclst, C_occbath))
-            Cv2 = np.hstack((C_virclst, C_virbath))
-            self.e_delta_mp2 = self.get_mp2_correction(Co1, Cv1, Co2, Cv2)
-            log.debug("Full MP2 correction = %.8g", self.e_delta_mp2)
+        #Co1 = np.hstack((C_occclst, C_occenv))
+        #Cv1 = np.hstack((C_virclst, C_virenv))
+        #Co2 = np.hstack((C_occclst, C_occbath))
+        #Cv2 = np.hstack((C_virclst, C_virbath))
+        #self.e_delta_mp2 = self.get_mp2_correction(Co1, Cv1, Co2, Cv2)
+        #log.debug("Full MP2 correction = %.8g", self.e_delta_mp2)
 
         # === Canonicalize orbitals
-        if True:
-            t0 = MPI.Wtime()
-            C_occact = self.canonicalize(C_occclst, C_occbath)
-            C_viract = self.canonicalize(C_virclst, C_virbath)
-            log.debug("Time for canonicalization: %s", get_time_string(MPI.Wtime()-t0))
-        else:
-            C_occact = np.hstack((C_occclst, C_occbath))
-            C_viract = np.hstack((C_virclst, C_virbath))
-
+        C_occact = self.canonicalize(C_occclst, C_occbath)
+        C_viract = self.canonicalize(C_virclst, C_virbath)
+        #C_occact = np.hstack((C_occclst, C_occbath))
+        #C_viract = np.hstack((C_virclst, C_virbath))
         self.C_occact = C_occact
         self.C_viract = C_viract
 
@@ -1266,16 +1281,23 @@ class Cluster:
         self.frozen_occ = frozen_occ
         self.frozen_vir = frozen_vir
         # Orbital numbers
-        log.debug("Orbitals")
-        log.debug("--------")
-        log.debug("Active (occ., vir., all) = %4d  %4d  %4d", C_occact.shape[-1], C_viract.shape[-1], self.nactive)
-        log.debug("Frozen (occ., vir., all) = %4d  %4d  %4d", C_occenv.shape[-1], C_virenv.shape[-1], self.nfrozen)
+        log.info("ORBITALS")
+        log.info("********")
+        #log.info("* Active (occ., vir., all) = %4d  %4d  %4d", C_occact.shape[-1], C_viract.shape[-1], self.nactive)
+        #log.info("* Frozen (occ., vir., all) = %4d  %4d  %4d", C_occenv.shape[-1], C_virenv.shape[-1], self.nfrozen)
+        log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", len(active_occ), len(frozen_occ), len(active_occ)+len(frozen_occ))
+        log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", len(active_vir), len(frozen_vir), len(active_vir)+len(frozen_vir))
+        log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", self.nactive, self.nfrozen, self.nactive+self.nfrozen)
 
         log.debug("Wall time for bath: %s", get_time_string(MPI.Wtime()-t0_bath))
 
+        log.info("RUNNING %s SOLVER", solver)
+        log.info((len(solver)+15)*"*")
         t0 = MPI.Wtime()
+        log.changeIndentLevel(1)
         converged, e_corr = self.run_solver(solver, mo_coeff, mo_occ, active=active, frozen=frozen)
-        log.debug("Wall time for %s: %s", solver, get_time_string(MPI.Wtime()-t0))
+        log.debug("Wall time for %s solver: %s", solver, get_time_string(MPI.Wtime()-t0))
+        log.changeIndentLevel(-1)
 
         #self.converged = converged
         #self.e_corr = e_corr

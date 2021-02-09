@@ -1,6 +1,7 @@
 import functools
 import os
 import logging
+#from contextlib import contextmanager
 
 import numpy as np
 import scipy
@@ -13,6 +14,7 @@ __all__ = [
         "amplitudes_C2T",
         "amplitudes_T2C",
         "einsum",
+        "IndentedLog",
         "reorder_columns",
         "get_time_string",
         "eigassign",
@@ -29,6 +31,19 @@ log = logging.getLogger(__name__)
 
 einsum = functools.partial(np.einsum, optimize=True)
 
+class IndentedLog:
+
+    def __init__(self, log, indent=2, char=" "):
+        self._log = log
+        self._indentstr = indent*char
+
+    def __getattr__(self, attr):
+
+        def indented(msg, *args, **kwargs):
+            return getattr(self._log, attr)(self._indentstr + msg, *args, **kwargs)
+        return indented
+
+
 def log_time(name, time, logger=log.debug):
     logger("Time for %s [s]: %.3f (%s)", name, t, get_time_string(t))
 
@@ -38,26 +53,37 @@ def has_length(a, length=2):
     except TypeError:
         return False
 
-def orthogonalize_mo(mf, tol=1e-8):
-    """Orthogonalize MOs, such that C^T S C == 1."""
-    c = mf.mo_coeff
-    assert np.all(c.imag == 0)
-    chi = np.linalg.multi_dot((c.T, mf.get_ovlp(), c))
-    maxnonorth = abs(chi - np.eye(chi.shape[-1])).max()
-    log.debug("Max. abs. element of CSC-1: %.2e" % maxnonorth)
-    if maxnonorth > tol:
-        assert np.allclose(chi, chi.T)
-        e, v = np.linalg.eigh(chi)
-        assert np.all(e > 0)
-        r = einsum("ai,i,bi->ab", v, 1/np.sqrt(e), v)
-        cr = np.dot(c, r)
-        chi = np.linalg.multi_dot((cr.T, mf.get_ovlp(), cr))
-        maxnonorth = abs(chi - np.eye(chi.shape[-1])).max()
-        assert (maxnonorth <= tol)
-        ovlp = np.linalg.multi_dot((cr.T, mf.get_ovlp(), c))
-        log.debug("max(abs(diag(C'SC-1))): %.2e" % abs(np.diag(ovlp)-1).max())
-        c = cr
-    return c
+def orthogonalize_mo(c, s, tol=1e-8):
+    """Orthogonalize MOs, such that C^T S C = I (identity matrix).
+
+    Parameters
+    ----------
+    c : ndarray
+        MO orbital coefficients.
+    s : ndarray
+        AO overlap matrix.
+    tol : float, optional
+        Tolerance.
+
+    Returns
+    -------
+    c_out : ndarray
+        Orthogonalized MO coefficients.
+    """
+    assert np.allclose(c.imag,  0)
+    chi = np.linalg.multi_dot((c.T, s, c))
+    assert np.allclose(chi, chi.T)
+    e, v = np.linalg.eigh(chi)
+    assert np.all(e > 0)
+    r = einsum("ai,i,bi->ab", v, 1/np.sqrt(e), v)
+    c_out = np.dot(c, r)
+    chi_out = np.linalg.multi_dot((c_out.T, s, c_out))
+    # Check orthogonality within tol
+    nonorth = abs(chi_out - np.eye(chi_out.shape[-1])).max()
+    if tol is not None and nonorth > tol:
+        raise RuntimeError("ERROR: Orbital non-orthogonality= %.3e" % nonorth)
+
+    return c_out
 
 def amplitudes_C2T(C1, C2):
     T1 = C1.copy()
