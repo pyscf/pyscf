@@ -50,6 +50,7 @@ def transform_integrals_incore(myadc):
 
      kconserv = myadc.khelper.kconserv
      khelper = myadc.khelper
+
      orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
      orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
@@ -58,11 +59,11 @@ def transform_integrals_incore(myadc):
 
      log.info('using incore ERI storage')
      eris.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
-     eris.ooov = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
      eris.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+     eris.ovoo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+     #eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
      eris.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
-     eris.voov = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
-     eris.vovv = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
+     eris.ovvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
      #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
      #self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
@@ -73,15 +74,21 @@ def transform_integrals_incore(myadc):
           if dtype == np.float: eri_kpt = eri_kpt.real
           eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
           for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
-              eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
-              eris.oooo[kp, kr, kq] = eri_kpt_symm[:nocc, :nocc, :nocc, :nocc] / nkpts
-              eris.ooov[kp, kr, kq] = eri_kpt_symm[:nocc, :nocc, :nocc, nocc:] / nkpts
-              eris.oovv[kp, kr, kq] = eri_kpt_symm[:nocc, :nocc, nocc:, nocc:] / nkpts
-              eris.ovov[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, :nocc, nocc:] / nkpts
-              eris.voov[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
-              eris.vovv[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, nocc:, nocc:] / nkpts
+              #eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr).transpose(0,2,1,3)
+              eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr)
+              #eris.oooo[kp, kr, kq] = eri_kpt_symm[:nocc, :nocc, :nocc, :nocc] / nkpts
+              #eris.oovv[kp, kr, kq] = eri_kpt_symm[:nocc, :nocc, nocc:, nocc:] / nkpts
+              #eris.ovoo[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, :nocc, :nocc] / nkpts
+              #eris.ovvo[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, nocc:, :nocc] / nkpts
+              #eris.ovvv[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, nocc:, nocc:] / nkpts
               #self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
-
+              eris.oooo[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,:nocc]/nkpts 
+              eris.oovv[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc, nocc:,nocc:]/nkpts
+              #eris.ooov[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,nocc:]/nkpts
+              eris.ovov[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,nocc:]/nkpts
+              #eris.voov[kq,kp,ks] = tmp[:nocca,nocca:,nocca:,:nocca].conj().transpose(1,0,3,2)
+              #eris.vovv[kq,kp,ks] = tmp[:nocca,nocca:,nocca:,nocca:].conj().transpose(1,0,3,2)
+           
      return eris
 
 

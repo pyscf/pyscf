@@ -1385,6 +1385,7 @@ def get_imds_ip(adc, eris=None):
         del t2_1
 
     cput0 = log.timer_debug1("Completed M_ij ADC(n) calculation", *cput0)
+
     return M_ij
 
 
@@ -1428,7 +1429,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 
     # Compute precond in 2p1h-2p1h block
 
-    diag[s2:f2] = D_iab
+    diag[s2:f2] = D_iab.copy()  
     del D_iab
 
 #    ###### Additional terms for the preconditioner ####
@@ -1510,7 +1511,9 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 
     # Compute precond in 2p1h-2p1h block
 
-    diag[s2:f2] = D_aij.copy()
+    #diag[s2:f2] = 1/10000000000.0 * D_aij.copy() 
+    diag[s2:f2] = D_aij.copy() 
+    #diag[s2:f2] = 1000
 
 #    ###### Additional terms for the preconditioner ####
 #    if (method == "adc(2)-x" or method == "adc(3)"):
@@ -1871,19 +1874,21 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
         s[s1:f1] = lib.einsum('ij,j->i',M_ij,r1)
 
-############ ADC(2) i - kja block #########################
+############# ADC(2) i - kja block #########################
+#
+#        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
+#        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo, r2, optimize = True)
+#
+############### ADC(2) ajk - i block ############################
+#
+#        temp = lib.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
+#        s[s2:f2] += temp.reshape(-1)
+#
+################# ADC(2) ajk - bil block ############################
 
-        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
-        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo, r2, optimize = True)
-
-############## ADC(2) ajk - i block ############################
-
-        temp = lib.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
-        s[s2:f2] += temp.reshape(-1)
-
-################ ADC(2) ajk - bil block ############################
-
-        s[s2:f2] += D_aij * r2.reshape(-1)
+        #s[s2:f2] += 100000000000.0 * D_aij * r2.reshape(-1) 
+        s[s2:f2] += D_aij * r2.reshape(-1) 
+        #s[s2:f2] += 1000 * r2.reshape(-1) 
 
 ############### ADC(3) ajk - bil block ############################
 
