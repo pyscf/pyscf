@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 TEST_MODULE = False
 
-def k2gamma(mf, kpts, unfold_j3c=True):
+def k2gamma(mf, kpts):
     """kpts is the mesh!"""
     mf_sc = pyscf_k2gamma.k2gamma(mf, kpts, tol_orth=1e-4)
     ncells = np.product(kpts)
@@ -31,18 +31,17 @@ def k2gamma(mf, kpts, unfold_j3c=True):
     # k2gamma GDF
     if isinstance(mf.with_df, pyscf.pbc.df.GDF):
         mf_sc = mf_sc.density_fit()
-        if unfold_j3c:
-            j3c = gdf_k2gamma(mf.cell, mf.with_df, mf.kpts)
+        j3c = gdf_k2gamma(mf.cell, mf.with_df, mf.kpts)
 
-            if TEST_MODULE:
-                eri_3c = einsum("Lij,Lkl->ijkl", j3c.conj(), j3c)
-                n = j3c.shape[-1]
-                eri = mf_sc.with_df.get_eri(compact=False).reshape(n,n,n,n)
-                log.info("ERI error: norm=%.3e max=%.3e", np.linalg.norm(eri_3c-eri), abs(eri_3c-eri).max())
-                log.info("ERI from unfolding:\n%r", eri_3c[0,0,0,:20])
-                log.info("ERI exact:\n%r", eri[0,0,0,:20])
+        if TEST_MODULE:
+            eri_3c = einsum("Lij,Lkl->ijkl", j3c.conj(), j3c)
+            n = j3c.shape[-1]
+            eri = mf_sc.with_df.get_eri(compact=False).reshape(n,n,n,n)
+            log.info("ERI error: norm=%.3e max=%.3e", np.linalg.norm(eri_3c-eri), abs(eri_3c-eri).max())
+            log.info("ERI from unfolding:\n%r", eri_3c[0,0,0,:20])
+            log.info("ERI exact:\n%r", eri[0,0,0,:20])
 
-            mf_sc.with_df._cderi = j3c
+        mf_sc.with_df._cderi = j3c
 
     return mf_sc
 
@@ -108,73 +107,49 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
     scell, phase = pyscf_k2gamma.get_phase(cell, kpts)
 
     t0 = timer()
+    kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0]
     # Check that first k-point is Gamma point
     assert np.all(kpts[0] == 0)
-    kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
     if compact:
         ncomp = nk*nao*(nk*nao+1)//2
         j3c = np.zeros((nk, naux, ncomp), dtype=dtype)
     else:
         j3c = np.zeros((nk, naux, nk*nao, nk*nao), dtype=dtype)
 
-    #fast = True
-    fast = False
+    # TEST PHASE MATRIX
+#    phase2 = einsum("kR,qS->kRqS", phase, phase.conj())
+#    for i in range(nk):
+#        for j in range(nk):
+#            for i2 in range(nk):
+#                if i == i2:
+#                    continue
+#                for j2 in range(nk):
+#                    if j == j2:
+#                        continue
+#                    diff_max = abs(phase2[:,i,:,j] - phase2[:,i2,:,j2].T.conj()).max()
+#                    diff_norm = np.linalg.norm(phase2[:,i,:,j] - phase2[:,i2,:,j2].T.conj())
+#                    print("Difference %d %d to %d %d = %e %e" % (i, j, i2, j2, diff_max, diff_norm))
+#
+    #1/0
 
     # Bottlenecking unfolding step O(N^4):
-    if not fast:
-        for i in range(nk):
-            for j in range(i+1):
-                #l = kconserv[i,j,0]
-                l = kconserv[i,j]
-                tmp = einsum("Lab,R,S->LRaSb", j3c_k[:,i,:,j], phase[:,i], phase[:,j].conj()).reshape(naux, nk*nao, nk*nao)
+    for i in range(nk):
+        for j in range(i+1):
+            l = kconserv[i,j]
+            tmp = einsum("Lab,R,S->LRaSb", j3c_k[:,i,:,j], phase[:,i], phase[:,j].conj()).reshape(naux, nk*nao, nk*nao)
+            #tmp2 = einsum("Lab,RS->LRaSb", j3c_k[:,i,:,j], phase2[:,i,:,j]).reshape(naux, nk*nao, nk*nao)
+            #assert np.allclose(tmp, tmp2)
+            if compact:
+                j3c[l]+= pyscf.lib.pack_tril(tmp)
+            else:
+                j3c[l] += tmp
+
+            if i != j:
+                l = kconserv[j,i]
                 if compact:
-                    j3c[l]+= pyscf.lib.pack_tril(tmp)
+                    j3c[l] += pyscf.lib.pack_tril(tmp.transpose([0,2,1]).conj())
                 else:
-                    j3c[l] += tmp
-
-                if i != j:
-                    #l = kconserv[j,i,0]
-                    l = kconserv[j,i]
-                    if compact:
-                        j3c[l] += pyscf.lib.pack_tril(tmp.transpose([0,2,1]).conj())
-                    else:
-                        j3c[l] += tmp.transpose([0,2,1]).conj()
-    else:
-        raise NotImplementedError()
-        import ctypes
-        log.debug("Loading library libbc")
-        libpbc = pyscf.lib.load_library("libpbc")
-        log.debug("Library loaded")
-        log.debug("First element before= %.3e", j3c[0,0,0])
-        log.debug("Passed data from Python:")
-        log.debug("nk= %d, nao= %d, naux= %d", nk, nao, naux)
-        log.debug("kconserv= %d %d ... %d", kconserv[0,0], kconserv[0,1], kconserv[-1,-1])
-        log.debug("phase.real= %e %e ... %e", phase.real[0,0], phase.real[0,1], phase.real[-1,-1])
-        log.debug("phase.imag= %e %e ... %e", phase.imag[0,0], phase.imag[0,1], phase.imag[-1,-1])
-        log.debug("j3c_k.real= %e %e ... %e", j3c_k.real[0,0,0,0,0], j3c_k.real[0,0,0,0,1], j3c_k.real[-1,-1,-1,-1,-1])
-        log.debug("j3c_k.imag= %e %e ... %e", j3c_k.imag[0,0,0,0,0], j3c_k.imag[0,0,0,0,1], j3c_k.imag[-1,-1,-1,-1,-1])
-        log.debug("j3c.real= %e %e ... %e", j3c.real[0,0,0], j3c.real[0,0,1], j3c.real[-1,-1,-1])
-        log.debug("j3c.imag= %e %e ... %e", j3c.imag[0,0,0], j3c.imag[0,0,1], j3c.imag[-1,-1,-1])
-        log.debug("kconserv.flags: %r", kconserv.flags)
-        log.debug("j3c_k.flags: %r", j3c_k.flags)
-        log.debug("j3c.flags: %r", j3c.flags)
-
-        libpbc.j3c_k2gamma(
-                ctypes.c_int64(nk),
-                ctypes.c_int64(nao),
-                ctypes.c_int64(naux),
-                kconserv.ctypes.data_as(ctypes.c_void_p),
-                phase.ctypes.data_as(ctypes.c_void_p),
-                j3c_k.ctypes.data_as(ctypes.c_void_p),
-                # Out
-                j3c.ctypes.data_as(ctypes.c_void_p),
-                )
-        log.debug("Done.")
-        log.debug("j3c.real= %e %e ... %e", j3c.real[0,0,0], j3c.real[0,0,1], j3c.real[-1,-1,-1])
-        log.debug("j3c.imag= %e %e ... %e", j3c.imag[0,0,0], j3c.imag[0,0,1], j3c.imag[-1,-1,-1])
-        log.debug("j3c.flags: %r", j3c.flags)
-        log.debug("j3c.shape: %r", list(j3c.shape))
-
+                    j3c[l] += tmp.transpose([0,2,1]).conj()
     if compact:
         j3c = j3c.reshape(nk*naux, ncomp) / np.sqrt(nk)
     else:

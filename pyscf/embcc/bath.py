@@ -592,7 +592,7 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         if self.use_pbc:
             fock = np.linalg.multi_dot((c_act.T, f, c_act))
             # TRY NEW
-            if isinstance(self.mf.with_df._cderi, np.ndarray):
+            if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
                 from .pbc_gdf_ao2mo import ao2mo
                 eris = ao2mo(mp2, fock=fock, mp2=True)
             else:
@@ -1040,12 +1040,26 @@ def make_mp2_bath(self,
     #
     e_delta_mp2 = None
     if nbath is not None:
+        #if isinstance(nbath, (float, np.floating)):
+        #    assert nbath >= 0.0
+        #    assert nbath <= 1.0
+        #    nbath_int = int(nbath*len(dm_occ) + 0.5)
+        #    log.info("nbath = %.1f %% -> nbath = %d", nbath*100, nbath_int)
+        #    nbath = nbath_int
+
+        # Changed behavior!!!
         if isinstance(nbath, (float, np.floating)):
-            assert nbath >= 0.0
-            assert nbath <= 1.0
-            nbath_int = int(nbath*len(dm_occ) + 0.5)
-            log.info("nbath = %.1f %% -> nbath = %d", nbath*100, nbath_int)
-            nbath = nbath_int
+            assert ((nbath >= 0.0) and (nbath <= 1.0))
+            dm_occ_tot = np.sum(dm_occ)
+            # Add bath orbitals
+            for n in range(len(dm_occ)+1):
+                dm_occ_n = np.sum(dm_occ[:n])
+                if (dm_occ_n / dm_occ_tot) >= nbath:
+                    break
+            nbath = n
+            log.info("(De)occupation of environment space: all %d orbitals= %.5f  %d bath orbitals= %.5f ( %.3f%% )",
+                    len(dm_occ), dm_occ_tot, nbath, dm_occ_n, 100.0*dm_occ_n/dm_occ_tot)
+
         nbath = min(nbath, len(dm_occ))
     # Determine number of bath orbitals based on occupation tolerance
     elif tol is not None:
@@ -1087,10 +1101,11 @@ def make_mp2_bath(self,
         e_delta_mp2 = err
 
     # Check for degenerate subspaces, split by nbath
-    if (nbath > 0) and (nbath < nenv):
-        if np.isclose(dm_occ[nbath-1], dm_occ[nbath]):
-            log.warning("Bath space is splitting a degenerate subspace of occupation numbers: %.8e and %.8e",
+    while (nbath > 0) and (nbath < nenv) and np.isclose(dm_occ[nbath-1], dm_occ[nbath], rtol=1e-5, atol=1e-11):
+        log.warning("Bath space is splitting a degenerate subspace of occupation numbers: %.8e and %.8e",
                     dm_occ[nbath-1], dm_occ[nbath])
+        nbath += 1
+        log.warning("Adding one additional bath orbital.")
 
     ###protect_degeneracies = False
     ####protect_degeneracies = True

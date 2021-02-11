@@ -24,12 +24,9 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8):
     mf = cc._scf
 
     if mp2:
-        #eris = pyscf.mp.mp2._ChemistsERIs()
         from pyscf.mp.mp2 import _ChemistsERIs
     else:
-        #import pyscf.cc
         from pyscf.cc.rccsd import _ChemistsERIs
-        #eris = pyscf.cc.rccsd._ChemistsERIs()
     eris = _ChemistsERIs()
 
     eris.mo_coeff = mo_coeff = _mo_without_core(cc, cc.mo_coeff)
@@ -54,8 +51,7 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8):
     o, v = np.s_[:eris.nocc], np.s_[eris.nocc:]
     log.debug("Performing integral transformations using (L|ab) integrals.")
     log.debug("Number of auxiliaries= %d , AOs= %d , occ. MOs= %d , vir MOs= %d", naux, nao, nocc, nvir)
-    log.debug("Memory for (L|ab)= %.3f GB", j3c.nbytes / 1e9)
-    log.debug("DEBUG: %r", list(j3c.shape))
+    log.debug("Memory for 3c-integrals (L|ab)= %.3f GB", j3c.nbytes / 1e9)
     if mp2:
         log.debug("Memory for (L|ij)= %.3f GB", naux*nocc*nvir * 16/1e9)
         log.debug("Memory for (ij|kl)= %.3f GB", nocc**2*nvir**2 * 8/1e9)

@@ -951,9 +951,9 @@ class EmbCC:
             elif nactive == results["nactive"][imax[0]]:
                 imax.append(i)
 
-        if show_largest:
-            log.info("LARGEST CLUSTERS")
-            log.info("****************")
+        if show_largest and len(self.clusters) > 1:
+            log.info("LARGEST CLUSTER")
+            log.info("***************")
             for i in imax:
                 x = self.clusters[i]
                 nactive = results["nactive"][i]
