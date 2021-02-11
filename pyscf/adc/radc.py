@@ -1152,6 +1152,7 @@ def get_imds_ip(adc, eris=None):
         eris = adc.transform_integrals()
 
     eris_ovvo = eris.ovvo
+    M_ij = np.zeros((nocc,nocc))
 
     # i-j block
     # Zeroth-order terms
@@ -1162,39 +1163,39 @@ def get_imds_ip(adc, eris=None):
     t2_1 = t2[0][:]
 
     M_ij +=  lib.einsum('d,ilde,jlde->ij',e_vir,t2_1, t2_1, optimize=True)
-    M_ij -=  lib.einsum('d,ilde,ljde->ij',e_vir,t2_1, t2_1, optimize=True)
-    M_ij -=  lib.einsum('d,lide,jlde->ij',e_vir,t2_1, t2_1, optimize=True)
-    M_ij +=  lib.einsum('d,lide,ljde->ij',e_vir,t2_1, t2_1, optimize=True)
-    M_ij +=  lib.einsum('d,ilde,jlde->ij',e_vir,t2_1, t2_1, optimize=True)
-    M_ij +=  lib.einsum('d,iled,jled->ij',e_vir,t2_1, t2_1, optimize=True)
+    #M_ij -=  lib.einsum('d,ilde,ljde->ij',e_vir,t2_1, t2_1, optimize=True)
+    #M_ij -=  lib.einsum('d,lide,jlde->ij',e_vir,t2_1, t2_1, optimize=True)
+    #M_ij +=  lib.einsum('d,lide,ljde->ij',e_vir,t2_1, t2_1, optimize=True)
+    #M_ij +=  lib.einsum('d,ilde,jlde->ij',e_vir,t2_1, t2_1, optimize=True)
+    #M_ij +=  lib.einsum('d,iled,jled->ij',e_vir,t2_1, t2_1, optimize=True)
 
-    M_ij -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
-    M_ij += 0.5 *  lib.einsum('l,ilde,ljde->ij',e_occ,t2_1, t2_1, optimize=True)
-    M_ij += 0.5 *  lib.einsum('l,lide,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
-    M_ij -= 0.5 *  lib.einsum('l,lide,ljde->ij',e_occ,t2_1, t2_1, optimize=True)
-    M_ij -= 0.5*lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
-    M_ij -= 0.5*lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij += 0.5 *  lib.einsum('l,ilde,ljde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij += 0.5 *  lib.einsum('l,lide,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('l,lide,ljde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij -= 0.5*lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
+    #M_ij -= 0.5*lib.einsum('l,ilde,jlde->ij',e_occ,t2_1, t2_1, optimize=True)
 
-    M_ij_t = lib.einsum('ilde,jlde->ij', t2_1,t2_1, optimize=True)
-    M_ij -= lib.einsum('i,ij->ij',e_occ,M_ij_t, optimize=True)
-    M_ij -= lib.einsum('j,ij->ij',e_occ,M_ij_t, optimize=True)
+    #M_ij_t = lib.einsum('ilde,jlde->ij', t2_1,t2_1, optimize=True)
+    #M_ij -= lib.einsum('i,ij->ij',e_occ,M_ij_t, optimize=True)
+    #M_ij -= lib.einsum('j,ij->ij',e_occ,M_ij_t, optimize=True)
 
-    M_ij_t = lib.einsum('ilde,ljde->ij', t2_1,t2_1, optimize=True)
-    M_ij += 0.5 * lib.einsum('i,ij->ij',e_occ,M_ij_t, optimize=True)
-    M_ij += 0.5 * lib.einsum('j,ij->ij',e_occ,M_ij_t, optimize=True)
-    del M_ij_t
+    #M_ij_t = lib.einsum('ilde,ljde->ij', t2_1,t2_1, optimize=True)
+    #M_ij += 0.5 * lib.einsum('i,ij->ij',e_occ,M_ij_t, optimize=True)
+    #M_ij += 0.5 * lib.einsum('j,ij->ij',e_occ,M_ij_t, optimize=True)
+    #del M_ij_t
 
-    M_ij += 0.5 *  lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 *  lib.einsum('lide,jdel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 *  lib.einsum('ilde,jedl->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 *  lib.einsum('lide,jedl->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += 0.5 *  lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('lide,jdel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('ilde,jedl->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += 0.5 *  lib.einsum('lide,jedl->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += lib.einsum('ilde,jdel->ij',t2_1, eris_ovvo,optimize=True)
 
-    M_ij += 0.5 *  lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 *  lib.einsum('ljde,idel->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij -= 0.5 *  lib.einsum('jlde,ldei->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += 0.5 *  lib.einsum('ljde,ldei->ij',t2_1, eris_ovvo,optimize=True)
-    M_ij += lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += 0.5 *  lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('ljde,idel->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij -= 0.5 *  lib.einsum('jlde,ldei->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += 0.5 *  lib.einsum('ljde,ldei->ij',t2_1, eris_ovvo,optimize=True)
+    #M_ij += lib.einsum('jlde,idel->ij',t2_1, eris_ovvo,optimize=True)
 
     del t2_1
     cput0 = log.timer_debug1("Completed M_ij second-order terms ADC(2) calculation", *cput0)
@@ -1512,8 +1513,8 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     # Compute precond in 2p1h-2p1h block
 
     #diag[s2:f2] = 1/10000000000.0 * D_aij.copy() 
-    diag[s2:f2] = D_aij.copy() 
-    #diag[s2:f2] = 1000
+    #diag[s2:f2] = D_aij.copy() 
+    diag[s2:f2] = 1e-12 * D_aij.copy()
 
 #    ###### Additional terms for the preconditioner ####
 #    if (method == "adc(2)-x" or method == "adc(3)"):
@@ -1887,8 +1888,8 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 ################# ADC(2) ajk - bil block ############################
 
         #s[s2:f2] += 100000000000.0 * D_aij * r2.reshape(-1) 
-        s[s2:f2] += D_aij * r2.reshape(-1) 
-        #s[s2:f2] += 1000 * r2.reshape(-1) 
+        #s[s2:f2] += D_aij * r2.reshape(-1) 
+        s[s2:f2] += 1e12 * r2.reshape(-1) 
 
 ############### ADC(3) ajk - bil block ############################
 
