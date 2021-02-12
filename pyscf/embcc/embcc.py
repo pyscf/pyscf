@@ -65,7 +65,7 @@ class EmbCC:
             bath_type="mp2-natorb",
             bath_size=None,
             bath_tol=None,
-            bath_tol_per_electron=True,
+            bath_tol_per_electron=False,
             bath_energy_tol=1e-3,
             minao="minao",
             use_ref_orbitals_dmet=True,

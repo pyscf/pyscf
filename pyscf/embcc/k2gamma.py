@@ -58,6 +58,28 @@ def kptidx_bz(cell, kpts, kpt):
         raise RuntimeError("Error finding k-point %r in %r" % (kpt_external, kpts))
     return res[0]
 
+def get_j3c_from_gdf(cell, gdf, kpts):
+    nao = cell.nao_nr()
+    nk = len(kpts)
+    if gdf.auxcell is None:
+        gdf.build(with_j3c=False)
+    naux = gdf.auxcell.nao_nr()
+    dtype = np.complex
+    j3c_k = np.zeros((naux, nk, nao, nk, nao), dtype=dtype)
+    for i, ki in enumerate(kpts):
+        for j, kj in enumerate(kpts[:i+1]):
+            for lr, li, sign in gdf.sr_loop([ki, kj], compact=False):
+                assert (sign == 1)
+                nauxk = lr.shape[0]
+                assert nauxk <= naux
+                tmp = (lr+1j*li).reshape(nauxk, nao, nao)
+                j3c_k[:nauxk,i,:,j,:] += tmp
+                if i != j:
+                    j3c_k[:nauxk,j,:,i,:] += tmp.transpose([0,2,1]).conj()
+
+    return j3c_k
+
+
 def gdf_k2gamma(cell, gdf, kpts, compact=True):
     """Unfold k-point sampled three center-integrals (l|ki,qj) into supercell integrals (L|IJ).
 
@@ -73,7 +95,7 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
     cell : pyscf.pbc.gto.Cell
         Cell object of the primitive cell.
     gdf : pyscf.pbc.df.GDF
-        Gaussian-density fitting object of the primitive cell.
+        Gaussian-density fitting object of the primitive cell or 3c-integrals.
     kpts : ndarray(K, 3)
         K-point array.
     compact : bool, optional
@@ -86,24 +108,26 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
     """
 
     nao = cell.nao_nr()
-    naux = gdf.auxcell.nao_nr()
     nk = len(kpts)
     dtype = np.complex
 
+    #if gdf._cderi is not None:
+    if isinstance(gdf._cderi, np.ndarray):
+        j3c_k = gdf._cderi
+    #    elif isinstance(gdf._cderi, str):
+    #        j3c_k = np.load(gdf._cderi)
+    #    #j3c_k = lib.unpack_tril(j3c_k).reshape(-1, nk, nao, nk, nao)
+    #    j3c_k = j3c_k.reshape(-1, nk, nao, nk, nao)
     # Evaluate k-point sampled primitive three-center integrals
-    t0 = timer()
-    j3c_k = np.zeros((naux, nk, nao, nk, nao), dtype=dtype)
-    for i, ki in enumerate(kpts):
-        for j, kj in enumerate(kpts[:i+1]):
-            for lr, li, sign in gdf.sr_loop([ki, kj], compact=False):
-                assert (sign == 1)
-                nauxk = lr.shape[0]
-                assert nauxk <= naux
-                tmp = (lr+1j*li).reshape(nauxk, nao, nao)
-                j3c_k[:nauxk,i,:,j,:] += tmp
-                if i != j:
-                    j3c_k[:nauxk,j,:,i,:] += tmp.transpose([0,2,1]).conj()
-    log.debug("Time to evaluate k-point sampled three-center integrals: %.3f", timer()-t0)
+    #if isinstance(gdf, np.ndarray):
+        j3c_k = j3c_k.reshape(-1, nk, nao, nk, nao)
+    elif isinstance(gdf, pyscf.pbc.df.GDF):
+        t0 = timer()
+        j3c_k = get_j3c_from_gdf(cell, gdf, kpts)
+        log.debug("Time to evaluate k-point sampled three-center integrals: %.3f", timer()-t0)
+    else:
+        raise ValueError("Invalid type for gdf: %s" % type(gdf))
+    naux = j3c_k.shape[0]
 
     scell, phase = pyscf_k2gamma.get_phase(cell, kpts)
 

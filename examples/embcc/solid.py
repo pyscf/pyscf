@@ -47,7 +47,8 @@ def get_arguments():
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF", help="Density-fitting method")
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
-    parser.add_argument("--save-gdf")
+    #parser.add_argument("--save-gdf", default="gdf-%.2f.npy")
+    parser.add_argument("--save-gdf", default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf")
 
     # Embedded correlated calculation
@@ -78,17 +79,15 @@ def get_arguments():
                 "atoms" : ["C"],
                 "ndim" : 3,
                 "pseudopot" : "gth-pade",
-                #"lattice_consts" : [3.55, 3.56, 3.57, 3.58, 3.59, 3.60, 3.61, 3.62],
                 "lattice_consts" : np.arange(3.55, 3.62+1e-12, 0.01),
                 # For 2x2x2:
-                #"lattice_consts" : [3.61, 3.62, 3.63, 3.64, 3.65, 3.66, 3.67, 3.68],
+                #"lattice_consts" : np.arange(3.61, 3.68+1e-12, 0.01),
                 }
     elif args.system == "hBN":
         defaults = {
                 "atoms" : ["B", "N"],
                 "ndim" : 2,
                 "pseudopot" : "gth-pade",
-                #"lattice_consts" : 2.5 + 0.02*np.arange(-3, 3+1),
                 "lattice_consts" : np.arange(2.44, 2.56+1e-12, 0.02),
                 "vacuum_size" : 20.0
                 }
@@ -96,7 +95,6 @@ def get_arguments():
         defaults = {
                 "atoms" : ["Sr", "Ti", "O"],
                 "ndim" : 3,
-                #"lattice_consts" : [3.7, 3.8, 3.9, 4.0, 4.1]
                 "lattice_consts" : np.arange(3.6, 4.2+1e-12, 0.1),
                 }
     for key, val in defaults.items():
@@ -173,20 +171,21 @@ def make_cell(a, args):
     return cell
 
 def run_mf(a, cell, args):
-    if args.k_points is None:
+    if args.k_points is None or np.product(args.k_points) == 1:
+        kpts = cell.make_kpts([1, 1, 1])
         mf = pyscf.pbc.scf.RHF(cell)
     else:
         kpts = cell.make_kpts(args.k_points)
         mf = pyscf.pbc.scf.KRHF(cell, kpts)
-    # Load from checkpoint file
-    load_scf_success = False
+    # Load SCF from checkpoint file
+    load_scf_ok = False
     if args.load_scf:
         fname = (args.load_scf % a) if ("%" in args.load_scf) else args.load_scf
-        log.info("Loading SCF from file %s", fname)
+        log.info("Loading SCF from file %s...", fname)
         try:
             mf.__dict__.update(pyscf.pbc.scf.chkfile.load(fname, "scf"))
-            log.info("SCF successfully loaded.")
-            load_scf_success = True
+            load_scf_ok = True
+            log.info("SCF loaded successfully.")
         except IOError:
             log.error("IO ERROR loading SCF from file %s", fname)
             log.error("Calculating SCF instead.")
@@ -196,61 +195,53 @@ def run_mf(a, cell, args):
             log.error("Calculating SCF instead.")
 
     # Density-fitting
-    if not load_scf_success:
-        if args.df != "FFTDF":
-            if args.df == "GDF":
-                mf = mf.density_fit()
-                if args.auxbasis is not None:
-                    log.info("Loading auxbasis %s.", args.auxbasis)
-                    mf.with_df.auxbasis = args.auxbasis
-                elif args.auxbasis_file is not None:
-                    log.info("Loading auxbasis from file %s.", args.auxbasis_file)
-                    mf.with_df.auxbasis = {atom : pyscf.gto.load(args.auxbasis, atom) for atom in args.atoms}
-
-                t0 = MPI.Wtime()
-                if args.save_gdf is not None:
-                    mf.with_df._cderi_to_save = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
-                mf.with_df.build()
-                log.info("Time for GDF [s]: %.3f", (MPI.Wtime()-t0))
+    if args.df == "GDF":
+        mf = mf.density_fit()
+        if args.auxbasis is not None:
+            log.info("Loading auxbasis %s.", args.auxbasis)
+            mf.with_df.auxbasis = args.auxbasis
+        elif args.auxbasis_file is not None:
+            log.info("Loading auxbasis from file %s.", args.auxbasis_file)
+            mf.with_df.auxbasis = {atom : pyscf.gto.load(args.auxbasis, atom) for atom in args.atoms}
+        load_gdf_ok = False
+        # Load GDF
+        if args.load_gdf is not None:
+            fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+            if os.path.isfile(fname):
+                log.info("Loading GDF from file %s...", fname)
+                mf.with_df._cderi = fname
+                load_gdf_ok = True
             else:
-                raise NotImplementedError()
+                log.error("Could not load GDF from file %s. File not found." % fname)
+        # Calculate GDF
+        if not load_gdf_ok:
+            if args.save_gdf is not None:
+                fname = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
+                mf.with_df._cderi_to_save = fname
+                log.info("Saving GDF to file %s...", fname)
+            log.info("Building GDF...")
+            t0 = MPI.Wtime()
+            mf.with_df.build()
+            log.info("Time for GDF build: %.3f s", (MPI.Wtime()-t0))
+
     # Calculate SCF
-    if not load_scf_success:
+    if not load_scf_ok:
         if args.save_scf:
-            mf.chkfile = (args.save_scf % a) if ("%" in args.save_scf) else args.save_scf
-        # Mean-field calculation
+            fname = (args.save_scf % a) if ("%" in args.save_scf) else args.save_scf
+            mf.chkfile = fname
         t0 = MPI.Wtime()
         mf.kernel()
-        log.info("Time for HF [s]: %.3f", (MPI.Wtime()-t0))
+        log.info("Time for HF: %.3f s", (MPI.Wtime()-t0))
         if args.hf_stability_check:
             t0 = MPI.Wtime()
             mo_stab = mf.stability()[0]
             stable = np.allclose(mo_stab, mf.mo_coeff)
-            log.info("Time for HF stability check [s]: %.3f", (MPI.Wtime()-t0))
+            log.info("Time for HF stability check: %.3f s", (MPI.Wtime()-t0))
             assert stable
-    log.info("HF energy= %.8e", mf.e_tot)
-    log.info("HF converged= %r", mf.converged)
-    return mf
+    log.info("HF converged: %r", mf.converged)
+    log.info("HF energy: %.8e", mf.e_tot)
 
-def k2gamma(mf, args):
-    t0 = MPI.Wtime()
-    j3c = None
-    if args.load_gdf:
-        fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
-        if os.path.isfile(fname):
-            log.debug("Loading GDF from file %s", fname)
-            j3c = np.load(fname)
-        else:
-            log.debug("Could not load GDF from file %s. File not found", fname)
-    mf_sc = pyscf.embcc.k2gamma.k2gamma(mf, args.k_points, unfold_j3c=(j3c is None))
-    if j3c is not None:
-        mf_sc.with_df._cderi = j3c
-    elif args.save_gdf:
-        fname = args.save_gdf % a
-        log.debug("Saving GDF in file %s", fname)
-        np.save(fname, mf_sc.with_df._cderi)
-    log.info("Time for k2gamma [s]: %.3f", (MPI.Wtime()-t0))
-    return mf_sc
+    return mf
 
 args = get_arguments()
 
@@ -266,11 +257,13 @@ for i, a in enumerate(args.lattice_consts):
     cell = make_cell(a, args)
 
     # Mean-field
-    mf = run_mf(cell, args)
+    mf = run_mf(a, cell, args)
 
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
-        mf = k2gamma(mf, args)
+        t0 = MPI.Wtime()
+        mf = pyscf.embcc.k2gamma.k2gamma(mf, args.k_points)
+        log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
         ncells = np.product(args.k_points)
     else:
         mf._eri = None
@@ -290,7 +283,7 @@ for i, a in enumerate(args.lattice_consts):
     for j, btol in enumerate(args.bath_tol):
 
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
-            bath_type=args.bath_type, bath_tol=btol, bath_tol_per_electron=False,
+            bath_type=args.bath_type, bath_tol=btol,
             mp2_correction=args.mp2_correction,
             power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
             )

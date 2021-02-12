@@ -27,6 +27,7 @@ from .util import *
 from .bath import *
 from .energy import *
 from . import ccsd_t
+from . import pbc_gdf_ao2mo
 #from .embcc import VALID_SOLVERS
 
 __all__ = [
@@ -707,8 +708,7 @@ class Cluster:
                     c_act = mo_coeff[:,active]
                     fock = np.linalg.multi_dot((c_act.T, self.base.get_fock(), c_act))
                     if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
-                        from .pbc_gdf_ao2mo import ao2mo
-                        eris = ao2mo(cc, fock=fock)
+                        eris = pbc_gdf_ao2mo.ao2mo(cc, fock=fock)
                     else:
                         eris = cc.ao2mo_direct(fock=fock)
                 else:
@@ -740,8 +740,8 @@ class Cluster:
             dg_t1 = cc.get_t1_diagnostic()
             dg_d1 = cc.get_d1_diagnostic()
             dg_d2 = cc.get_d2_diagnostic()
-            log.info("(T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
-            log.info("(good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
+            log.info("  (T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
+            log.info("  (good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
             dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
             dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
             dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
