@@ -34,7 +34,10 @@ from pyscf.lo import iao
 from pyscf.lo import orth, pipek
 from pyscf import __config__
 
-def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e-8, max_iter=200, verbose=logger.NOTE):
+MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
+
+def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None,
+        exponent=4, grad_tol=1e-8, max_iter=200, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals
 
     This function serves as a wrapper to the underlying localization functions
@@ -81,7 +84,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None, exponent=4, grad_tol=1e
     return ibos
 
 def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
-            verbose=logger.NOTE):
+            minao=MINAO, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
     This implementation follows Knizia's implementation execept that the
@@ -126,7 +129,9 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
     #dynamic variables
     Converged = False
 
-    Atoms  = [mol.atom_symbol(i) for i in range(mol.natm)]
+    # render Atoms list without ghost atoms
+    iao_mol = iao.reference_mol(mol, minao=minao)
+    Atoms = [iao_mol.atom_pure_symbol(i) for i in range(iao_mol.natm)]
 
     #generates the parameters we need about the atomic structure
     nAtoms = len(Atoms)
@@ -231,7 +236,6 @@ def PipekMezey(mol, orbocc, iaos, s, exponent):
     # Note: PM with Lowdin-orth IAOs is implemented in pipek.PM class
     # TODO: Merge the implemenation here to pipek.PM
 
-    MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
     iao_inv = numpy.linalg.solve(s_iao, cs)
@@ -400,3 +404,4 @@ def MakeAtomIbOffsets(Atoms):
         iBfAt.append(iBfAt[-1] + nAoX[Atom])
     return iBfAt, nCoreX, nAoX, AoLabels
 
+del(MINAO)

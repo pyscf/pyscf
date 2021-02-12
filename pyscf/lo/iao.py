@@ -30,6 +30,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import __config__
 from pyscf.lo.orth import vec_lowdin
+from pyscf.data.elements import is_ghost_atom
 
 # Alternately, use ANO for minao
 # orthogonalize iao with coefficients obtained by
@@ -110,6 +111,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
+    # remove ghost atoms
+    pmol.atom = [atom for atom in gto.format_atom(pmol.atom, unit='au') if not is_ghost_atom(atom[0])]
     if getattr(pmol, 'rcut', None) is not None:
         pmol.rcut = None
     pmol.build(False, False, basis=minao)
