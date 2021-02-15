@@ -940,7 +940,7 @@ def _force_SO3_degeneracy_(dr, orbsym):
 
     for l in range(lmax + 1):
         idx_l = numpy.where(orbsym_l == l)[0]
-        nso_l = dix_l.size
+        nso_l = idx_l.size
         if nso_l > 0:
             degen = l * 2 + 1
             nso_m = nso_l / degen
