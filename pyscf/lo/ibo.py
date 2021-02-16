@@ -86,7 +86,7 @@ def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None,
     return ibos
 
 def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
-            minao, verbose=logger.NOTE):
+            minao=MINAO, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
     This implementation follows Knizia's implementation execept that the
@@ -215,7 +215,7 @@ def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
     return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
-def PipekMezey(mol, orbocc, iaos, s, exponent, minao):
+def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
     '''
     Note this localization is slightly different to Knizia's implementation.
     The localization here reserves orthogonormality during optimization.
