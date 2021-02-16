@@ -47,35 +47,35 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-##################################################################
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nocc
-    n_doubles = nvir * nocc * nocc
-
-    s1 = 0
-    f1 = n_singles
-    s2 = f1
-    f2 = s2 + n_doubles
-
-    dim = n_singles + n_doubles   
-
-    I = np.identity(dim)
-    M = np.zeros((dim,dim))
-
-    for i in range(dim):
-        M[:,i] = matvec(I[:,i])
-
-    M_1 = M[n_singles:,n_singles:]   
-    M_0 = M[:n_singles,:n_singles]   
- 
-    print (np.diag(M_0))
-    #print (np.linalg.norm(np.diag(M_1)))
-    #M_coupling_1 = M[:n_singles,n_singles:]
-    #M_coupling_2 = M[n_singles:,:n_singles]
-
-
+###################################################################
+#    nocc = adc._nocc
+#    nvir = adc._nvir
+#
+#    n_singles = nocc
+#    n_doubles = nvir * nocc * nocc
+#
+#    s1 = 0
+#    f1 = n_singles
+#    s2 = f1
+#    f2 = s2 + n_doubles
+#
+#    dim = n_singles + n_doubles   
+#
+#    I = np.identity(dim)
+#    M = np.zeros((dim,dim))
+#
+#    for i in range(dim):
+#        M[:,i] = matvec(I[:,i])
+#
+#    M_1 = M[n_singles:,n_singles:]   
+#    M_0 = M[:n_singles,:n_singles]   
+# 
+#    print (np.diag(M_0))
+#    #print (np.linalg.norm(np.diag(M_1)))
+#    #M_coupling_1 = M[:n_singles,n_singles:]
+#    #M_coupling_2 = M[n_singles:,:n_singles]
+#
+#
 ###################################################################
     guess = adc.get_init_guess(nroots, diag, ascending = True)
 
@@ -1904,7 +1904,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
         s[s1:f1] = lib.einsum('ij,j->i',M_ij,r1)
 
-############# ADC(2) i - kja block #########################
+############ ADC(2) i - kja block #########################
 
         s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
         s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo, r2, optimize = True)
@@ -1912,13 +1912,13 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 ####### ###### ADC(2) ajk - i block ############################
 
         temp = lib.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
-        s[s2:f2] += temp.reshape(-1)
+#        s[s2:f2] += temp.reshape(-1)
 
 ################# ADC(2) ajk - bil block ############################
 
         #s[s2:f2] += 100000000000.0 * D_aij * r2.reshape(-1) 
+        #s[s2:f2] += 1e12 * D_aij * r2.reshape(-1) 
         s[s2:f2] += D_aij * r2.reshape(-1) 
-        #s[s2:f2] += 1e12 * r2.reshape(-1) 
 
 ############### ADC(3) ajk - bil block ############################
 
