@@ -96,8 +96,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
               "\n*************************************************************")
     logger.info(adc, header)
 
-    if nfalse >= 1:
-        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
+    #if nfalse >= 1:
+    #    logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
 
     for n in range(nroots):
         print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
@@ -1543,7 +1543,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     # Compute precond in 2p1h-2p1h block
 
     diag[s2:f2] = D_aij.copy() 
-    #diag[s2:f2] = 1e-12 * D_aij.copy()
+    #diag[s2:f2] = 1e-13 * D_aij.copy()
 
 #    ###### Additional terms for the preconditioner ####
 #    if (method == "adc(2)-x" or method == "adc(3)"):
@@ -1912,12 +1912,12 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 ####### ###### ADC(2) ajk - i block ############################
 
         temp = lib.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
-#        s[s2:f2] += temp.reshape(-1)
+        s[s2:f2] += temp.reshape(-1)
 
 ################# ADC(2) ajk - bil block ############################
 
         #s[s2:f2] += 100000000000.0 * D_aij * r2.reshape(-1) 
-        #s[s2:f2] += 1e12 * D_aij * r2.reshape(-1) 
+        #s[s2:f2] += 1e-13 * D_aij * r2.reshape(-1) 
         s[s2:f2] += D_aij * r2.reshape(-1) 
 
 ############### ADC(3) ajk - bil block ############################

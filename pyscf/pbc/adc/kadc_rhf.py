@@ -801,7 +801,6 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
 
     #nocc = adc._nocc
     #nvir = adc._nvir
-
     nkpts = adc.nkpts
     t2 = adc.t2
     kconserv = adc.khelper.kconserv
@@ -847,7 +846,7 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
 
     # Compute precond in 2p1h-2p1h block
 
-    #diag[s2:f2] += 1e-12 * e_ija.reshape(-1) 
+    #diag[s2:f2] += 1e-13 * e_ija.reshape(-1) 
     diag[s2:f2] += e_ija.reshape(-1) 
 
     diag = -diag
@@ -920,6 +919,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
     #e_ija = e_ij[:,:,:,None,None] - e_vir[None,None,None,:,:]
     #e_ija = e_ija.transpose(0,3,4,1,2).copy()
     e_ija = - e_vir[:,:,None,None,None] + e_ij[None,None,:,:,:] 
+    #e_ija = e_ija.transpose(0,2,1,4,3).copy()
     e_ija = e_ija.transpose(0,2,1,3,4).copy()
 
     if M_ij is None:
@@ -952,16 +952,17 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
                 s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
                 s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
 
-################ ADC(2) ajk - i block ############################
+################# ADC(2) ajk - i block ############################
 
-                #temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
-                temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk], r1, optimize = True)
-#                temp[ka,kj] = -lib.einsum('jaik,i->ajk', eris_ovoo[kj,ka,ki].conj(), r1, optimize = True)
-#        s[s2:f2] += temp.reshape(-1)
+                temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
+                #temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk], r1, optimize = True)
+                #temp[ka,kj] = lib.einsum('kaji,i->ajk', eris_ovoo[kk,ka,kj].conj(), r1, optimize = True)
+                #temp[ka,kj] = -lib.einsum('jaik,i->ajk', eris_ovoo[kj,ka,ki].conj(), r1, optimize = True)
+        s[s2:f2] += temp.reshape(-1)
 
 ################# ADC(2) ajk - bil block ############################
 
-        #s[s2:f2] += 1e12 * e_ija.reshape(-1) * r2.reshape(-1) 
+        #s[s2:f2] += 1e-13 * e_ija.reshape(-1) * r2.reshape(-1) 
         s[s2:f2] += e_ija.reshape(-1) * r2.reshape(-1) 
 
 ################ ADC(3) ajk - bil block ############################
