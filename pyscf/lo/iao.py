@@ -111,7 +111,7 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
-    atoms = [atom in gto.format_atom(pmol.atom, unit='au')]
+    atoms = [atom for atom in gto.format_atom(pmol.atom, unit=1)]
     # remove ghost atoms
     pmol.atom = [atom for atom in atoms if not is_ghost_atom(atom[0])]
     if len(pmol.atom) != len(atoms):
