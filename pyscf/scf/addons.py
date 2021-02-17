@@ -47,16 +47,21 @@ def frac_occ_(mf, tol=1e-3):
     mol = mf.mol
 
     def guess_occ(mo_energy, nocc):
-        sorted_idx = numpy.argsort(mo_energy)
-        homo = mo_energy[sorted_idx[nocc-1]]
-        lumo = mo_energy[sorted_idx[nocc]]
-        frac_occ_lst = abs(mo_energy - homo) < tol
-        integer_occ_lst = (mo_energy <= homo) & (~frac_occ_lst)
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[integer_occ_lst] = 1
-        degen = numpy.count_nonzero(frac_occ_lst)
-        frac = nocc - numpy.count_nonzero(integer_occ_lst)
-        mo_occ[frac_occ_lst] = float(frac) / degen
+        if nocc:
+            sorted_idx = numpy.argsort(mo_energy)
+            homo = mo_energy[sorted_idx[nocc-1]]
+            lumo = mo_energy[sorted_idx[nocc]]
+            frac_occ_lst = abs(mo_energy - homo) < tol
+            integer_occ_lst = (mo_energy <= homo) & (~frac_occ_lst)
+            mo_occ[integer_occ_lst] = 1
+            degen = numpy.count_nonzero(frac_occ_lst)
+            frac = nocc - numpy.count_nonzero(integer_occ_lst)
+            mo_occ[frac_occ_lst] = float(frac) / degen
+        else:
+            homo = 0.0
+            lumo = 0.0
+            frac_occ_lst = numpy.zeros_like(mo_energy, dtype=bool)
         return mo_occ, numpy.where(frac_occ_lst)[0], homo, lumo
 
     get_grad = None
@@ -69,14 +74,20 @@ def frac_occ_(mf, tol=1e-3):
 
             if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
                 mo_occ = numpy.array([mo_occa, mo_occb])
-                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
-                            '%6g for beta orbitals %s',
-                            mo_occa[frac_lsta[0]], frac_lsta,
-                            mo_occb[frac_lstb[0]], frac_lstb)
-                logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
-                logger.info(mf, '  beta  HOMO = %.12g  LUMO = %.12g', homob, lumob)
-                logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
-                logger.debug(mf, '  beta  mo_energy = %s', mo_energy[1])
+                if len(frac_lstb):
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                                '%6g for beta orbitals %s',
+                                mo_occa[frac_lsta[0]], frac_lsta,
+                                mo_occb[frac_lstb[0]], frac_lstb)
+                    logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.info(mf, '  beta  HOMO = %.12g  LUMO = %.12g', homob, lumob)
+                    logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
+                    logger.debug(mf, '  beta  mo_energy = %s', mo_energy[1])
+                else:
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  ',
+                                mo_occa[frac_lsta[0]], frac_lsta)
+                    logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
             else:
                 mo_occ = old_get_occ(mo_energy, mo_coeff)
             return mo_occ
@@ -89,12 +100,18 @@ def frac_occ_(mf, tol=1e-3):
 
             if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
                 mo_occ = mo_occa + mo_occb
-                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
-                            '%6g for beta orbitals %s',
-                            mo_occa[frac_lsta[0]], frac_lsta,
-                            mo_occb[frac_lstb[0]], frac_lstb)
-                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
-                logger.debug(mf, '  mo_energy = %s', mo_energy)
+                if len(frac_lstb):
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                                '%6g for beta orbitals %s',
+                                mo_occa[frac_lsta[0]], frac_lsta,
+                                mo_occb[frac_lstb[0]], frac_lstb)
+                    logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  mo_energy = %s', mo_energy)
+                else:
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  ',
+                                mo_occa[frac_lsta[0]], frac_lsta)
+                    logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  mo_energy = %s', mo_energy)
             else:
                 mo_occ = old_get_occ(mo_energy, mo_coeff)
             return mo_occ

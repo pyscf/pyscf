@@ -18,6 +18,7 @@ E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
 '''
 
 import time
+import copy
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -196,6 +197,16 @@ class GMP2(mp2.MP2):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.mp import dfgmp2
+        mymp = dfgmp2.DFGMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mymp.with_df = with_df
+        if mymp.with_df.auxbasis != auxbasis:
+            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df.auxbasis = auxbasis
+        return mymp
 
     def nuc_grad_method(self):
         raise NotImplementedError

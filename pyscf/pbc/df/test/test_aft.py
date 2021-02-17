@@ -16,6 +16,7 @@ import unittest
 import numpy
 import numpy as np
 
+from pyscf import lib
 from pyscf.pbc import gto as pgto
 import pyscf.pbc.dft as pdft
 from pyscf.pbc.df import fft, aft, mdf
@@ -328,33 +329,32 @@ kdf0.auxbasis = 'weigend'
 kdf0.mesh = [21] * 3
 kdf0.kpts = kpts
 
-
-def finger(a):
-    w = np.cos(np.arange(a.size))
-    return np.dot(w, a.ravel())
+def tearDownModule():
+    global cell, cell1, kdf0
+    del cell, cell1, kdf0
 
 class KnownValues(unittest.TestCase):
     def test_get_pp_loc_part1_high_cost(self):
         df = aft.AFTDF(cell)
         v1 = aft.get_pp_loc_part1(df, kpts[0])
-        self.assertAlmostEqual(finger(v1), (-6.0893491060887159+0.19823828749533859j), 8)
+        self.assertAlmostEqual(lib.fp(v1), (-6.0893491060887159+0.19823828749533859j), 8)
 
     def test_aft_get_nuc(self):
         df = aft.AFTDF(cell)
         v1 = df.get_nuc(kpts[0])
-        self.assertAlmostEqual(finger(v1), (-5.764786312608102+0.19126292955145852j), 8)
+        self.assertAlmostEqual(lib.fp(v1), (-5.764786312608102+0.19126292955145852j), 8)
 
     def test_aft_get_pp(self):
         v0 = pgto.pseudo.get_pp(cell, kpts[0])
         v1 = aft.AFTDF(cell).get_pp(kpts)
         self.assertTrue(np.allclose(v0, v1[0], atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(finger(v1[0]), (-5.6240305085898807+0.22094834207603817j), 8)
+        self.assertAlmostEqual(lib.fp(v1[0]), (-5.6240305085898807+0.22094834207603817j), 8)
 
         v0 = pgto.pseudo.get_pp(cell, kpts[1])
         self.assertTrue(np.allclose(v0, v1[1], atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(finger(v1[1]), (-5.53877585793+1.043933371359j) ,8)
-        self.assertAlmostEqual(finger(v1[2]), (-6.05309558678+0.281728966073j), 8)
-        self.assertAlmostEqual(finger(v1[3]), (-5.60115995450+0.275973062529j), 8)
+        self.assertAlmostEqual(lib.fp(v1[1]), (-5.53877585793+1.043933371359j) ,8)
+        self.assertAlmostEqual(lib.fp(v1[2]), (-6.05309558678+0.281728966073j), 8)
+        self.assertAlmostEqual(lib.fp(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
     def test_aft_get_ao_eri(self):
         df0 = fft.FFTDF(cell1)
@@ -377,17 +377,17 @@ class KnownValues(unittest.TestCase):
         eri0 = df0.get_ao_eri(compact=True)
         eri1 = df.get_ao_eri(compact=True)
         self.assertTrue(np.allclose(eri0, eri1, atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(finger(eri1), 0.80425361966560172, 8)
+        self.assertAlmostEqual(lib.fp(eri1), 0.80425361966560172, 8)
 
         eri0 = df0.get_ao_eri(kpts[0])
         eri1 = df.get_ao_eri(kpts[0])
         self.assertTrue(np.allclose(eri0, eri1, atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(finger(eri1), (2.9346374476387949-0.20479054936779137j), 8)
+        self.assertAlmostEqual(lib.fp(eri1), (2.9346374476387949-0.20479054936779137j), 8)
 
         eri0 = df0.get_ao_eri(kpts)
         eri1 = df.get_ao_eri(kpts)
         self.assertTrue(np.allclose(eri0, eri1, atol=1e-5, rtol=1e-5))
-        self.assertAlmostEqual(finger(eri1), (0.33709287302019619-0.94185725020966538j), 8)
+        self.assertAlmostEqual(lib.fp(eri1), (0.33709287302019619-0.94185725020966538j), 8)
 
     def test_get_eri_gamma(self):
         odf0 = mdf.MDF(cell1)
@@ -396,30 +396,30 @@ class KnownValues(unittest.TestCase):
         eri0000 = odf.get_eri(compact=True)
         self.assertTrue(eri0000.dtype == numpy.double)
         self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(eri0000), 0.23714016293926865, 9)
+        self.assertAlmostEqual(lib.fp(eri0000), 0.23714016293926865, 9)
 
     def test_get_eri_gamma(self):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
+        self.assertAlmostEqual(lib.fp(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
 
         eri1111 = odf.get_eri((kpts[0]+1e-8,kpts[0]+1e-8,kpts[0],kpts[0]))
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
+        self.assertAlmostEqual(lib.fp(eri1111), (1.2410388899583582-5.2370501878355006e-06j), 9)
 
     def test_get_eri_0011(self):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(np.allclose(eri0011, ref, atol=1e-3, rtol=1e-3))
-        self.assertAlmostEqual(finger(eri0011), (1.2410162858084512+0.00074485383749912936j), 9)
+        self.assertAlmostEqual(lib.fp(eri0011), (1.2410162858084512+0.00074485383749912936j), 9)
 
         ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[0],kpts[1],kpts[1]))
         eri0011 = odf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(np.allclose(eri0011, ref, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
+        self.assertAlmostEqual(lib.fp(eri0011), (1.2410162860852818+0.00074485383748954838j), 9)
 
     def test_get_eri_0110(self):
         odf = aft.AFTDF(cell1)
@@ -428,22 +428,22 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
         eri0110 = odf.get_eri((kpts[0]+1e-8,kpts[1]+1e-8,kpts[1],kpts[0]))
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-6, rtol=1e-6))
-        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+        self.assertAlmostEqual(lib.fp(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
 
         ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, (kpts[0],kpts[1],kpts[1],kpts[0]))
         eri0110 = odf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+        self.assertAlmostEqual(lib.fp(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
         eri0110 = odf.get_eri((kpts[0]+1e-8,kpts[1]+1e-8,kpts[1],kpts[0]))
         self.assertTrue(np.allclose(eri0110, ref, atol=1e-9, rtol=1e-9))
-        self.assertAlmostEqual(finger(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
+        self.assertAlmostEqual(lib.fp(eri0110), (1.2928399254827956-0.011820590601969154j), 9)
 
     def test_get_eri_0123(self):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri(kpts)
         eri1111 = odf.get_eri(kpts)
         self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)
-        self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
+        self.assertAlmostEqual(lib.fp(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
 
         ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
         self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)

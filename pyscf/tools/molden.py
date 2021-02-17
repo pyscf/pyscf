@@ -210,6 +210,8 @@ def _parse_gto(lines, envs):
 # * Do not use iter() here. Python 2 and 3 are different in iter()
     def read_one_bas(lsym, nb, fac=1):
         fac = float(fac)
+        if fac == float(0):
+            fac = float(1)
         bas = [lib.param.ANGULARMAP[lsym.lower()],]
         for i in range(int(nb)):
             dat = _d2e(next(lines_iter)).split()
@@ -247,12 +249,13 @@ def _parse_mo(lines, envs):
     spins = []
     mo_occ = []
     mo_coeff = []
+    mo_coeff_prim = [] # primary data, will be reworked for missing values
     for line in lines[1:]:
         line = line.upper()
         if 'SYM' in line:
             irrep_labels.append(line.split('=')[1].strip())
-            orb = []
-            mo_coeff.append(orb)
+            orb_prim = {}
+            mo_coeff_prim.append(orb_prim)
         elif 'ENE' in line:
             mo_energy.append(float(_d2e(line).split('=')[1].strip()))
         elif 'SPIN' in line:
@@ -260,14 +263,22 @@ def _parse_mo(lines, envs):
         elif 'OCC' in line:
             mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            orb.append(float(_d2e(line.split()[1])))
+            orb_prim.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
+
+    number_of_aos = max([max(orb_prim_data) for orb_prim_data in mo_coeff_prim])
+    number_of_mos = len(mo_coeff_prim)
+
+    mo_coeff = numpy.zeros([number_of_aos, number_of_mos])
+    for n, orb_prim_data in enumerate(mo_coeff_prim):
+        for m, c in orb_prim_data.items():
+            mo_coeff[m-1, n] = c
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
     aoidx = numpy.argsort(order_ao_index(mol))
-    mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+    mo_coeff = mo_coeff[aoidx]
     if mol.cart:
-# Cartesian GTOs are normalized in molden format but they are not in pyscf
+        # Cartesian GTOs are normalized in molden format but they are not in pyscf
         s = mol.intor('int1e_ovlp')
         mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
 
@@ -291,18 +302,20 @@ def _parse_core(lines, envs):
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
 
-_SEC_PARSER = {'GTO'      : _parse_gto,
-               'N_ATOMS'  : _parse_natoms,
+_SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'ATOMS'    : _parse_atoms,
+               'GTO'      : _parse_gto,
                'CHARGE'   : _parse_charge,
                'MO'       : _parse_mo,
                'CORE'     : _parse_core,
-               'MOLDEN FORMAT' : lambda *args: None,
-              }
+               'MOLDEN FORMAT' : lambda *args: None,}
+
+_SEC_ORDER = ['N_ATOMS', 'ATOMS', 'GTO', 'CHARGE', 'MO', 'CORE', 'MOLDEN FORMAT']
 
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
+    sec_kinds = {} # found sections and their lines are stored in this dic
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
         mol.cart = True
@@ -310,9 +323,7 @@ def load(moldenfile, verbose=0):
                   'unit'  : lib.param.BOHR,
                   'mol'   : mol,
                   'atoms' : None,
-                  'basis' : None,
-                 }
-        mo_section_count = 0
+                  'basis' : None,}
 
         while True:
             lines = _read_one_section(f)
@@ -321,21 +332,11 @@ def load(moldenfile, verbose=0):
                 break
 
             sec_title = sec_title[1:sec_title.index(']')].upper()
-            if sec_title == 'MO':
-                res = _parse_mo(lines, tokens)
-                if mo_section_count == 0:  # Alpha orbitals
-                    mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+            if sec_title in _SEC_PARSER:
+                if sec_title not in sec_kinds:
+                    sec_kinds.update({sec_title : [lines]})
                 else:
-                    mo_energy    = mo_energy   , res[1]
-                    mo_coeff     = mo_coeff    , res[2]
-                    mo_occ       = mo_occ      , res[3]
-                    irrep_labels = irrep_labels, res[4]
-                    spins        = spins       , res[5]
-
-                mo_section_count += 1
-
-            elif sec_title in _SEC_PARSER:
-                _SEC_PARSER[sec_title.upper()](lines, tokens)
+                    sec_kinds[sec_title].append(lines)
 
             elif sec_title[:2] in ('5D', '7F', '9G'):
                 mol.cart = False
@@ -346,14 +347,41 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-    if mo_section_count == 0:
-        if spins[-1][0] == 'B':  # If including beta orbitals
-            offset = spins.index(spins[-1])
-            mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
-            mo_coeff     = mo_coeff    [:offset], mo_coeff    [offset:]
-            mo_occ       = mo_occ      [:offset], mo_occ      [offset:]
-            irrep_labels = irrep_labels[:offset], irrep_labels[offset:]
-            spins        = spins       [:offset], spins       [offset:]
+    for sec_kind in _SEC_ORDER:
+        if sec_kind == 'MO' and 'MO' in sec_kinds:
+            if len(sec_kinds['MO']) == 1:
+                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        _parse_mo(sec_kinds['MO'][0], tokens)
+                # If found only one MO section while 'B' appears in the spins
+                # labels, the MOs so obtained are spin orbitals, with beta
+                # orbitals at the second half of the mo_coeff matrix.
+                if any(s[0] == 'B' for s in spins):
+                    if mo_coeff.shape[0] == mo_coeff.shape[1]:
+                        # general spin orbitals which allows to mix spin alpha
+                        # and spin beta components in the same orbitals
+                        raise NotImplementedError
+                    else:
+                        # Regular spin orbitals, alpha and beta do not mix
+                        beta_idx = numpy.array([s[0] == 'B' for s in spins])
+                        alpha_idx = ~beta_idx
+                        mo_energy = mo_energy[alpha_idx], mo_energy[beta_idx]
+                        mo_coeff = mo_coeff[:,alpha_idx], mo_coeff[:,beta_idx]
+                        mo_occ = mo_occ[alpha_idx], mo_occ[beta_idx]
+                        irrep_labels = numpy.array(irrep_labels)
+                        irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
+                        spins = numpy.array(spins)
+                        spins = spins[alpha_idx], spins[beta_idx]
+
+            elif len(sec_kinds['MO']) == 2:
+                res_a = _parse_mo(sec_kinds['MO'][0], tokens)
+                res_b = _parse_mo(sec_kinds['MO'][1], tokens)
+                mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        list(zip(res_a[1:], res_b[1:]))
+                mol = res_b[0]
+
+        if sec_kind in sec_kinds:
+            for n, content in enumerate(sec_kinds[sec_kind]):
+                _SEC_PARSER[sec_kind](content, tokens)
 
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())

@@ -67,7 +67,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
         if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+            # TODO: check wave function symmetry
+            log.note('Wave-function symmetry = %s', mol.groupname)
         else:
             log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, wfnsym))
@@ -289,7 +290,8 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                     mol.nelectron-fix_ne, ' '.join(float_irname))
     return fix_na, fix_nb, float_irname
 
-#TODO: force E1gx/E1gy ... use the same coefficients
+#TODO: force Dooh, Doov orbitals E1gx/E1gy ... using the same coefficients
+#TODO: force SO3 orbitals p+0,p-1,p+1, ... using the same coefficients
 def eig(mf, h, s):
     '''Solve generalized eigenvalue problem, for each irrep.  The
     eigenvalues and eigenvectors are not sorted to ascending order.
@@ -739,17 +741,19 @@ class SymAdaptedROHF(rohf.ROHF):
 
             nirrep = len(mol.irrep_id)
             orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            irreps = numpy.asarray(mol.irrep_id)
+            ndoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==2], axis=1)
+            nsoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==1], axis=1)
+
             wfnsym = 0
-            ndoccs = []
-            nsoccs = []
-            for k,ir in enumerate(mol.irrep_id):
-                ndoccs.append(sum(orbsym_in_d2h[mo_occ==2] == ir))
-                nsoccs.append(sum(orbsym_in_d2h[mo_occ==1] == ir))
-                if nsoccs[k] % 2 == 1:
-                    wfnsym ^= ir
+            # wfn symmetry is determined by the odd number of electrons in each irrep
+            for k in numpy.where(nsoccs % 2 == 1)[0]:
+                ir_in_d2h = mol.irrep_id[k] % 10  # convert to D2h irreps
+                wfnsym ^= ir_in_d2h
+
             if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+                # TODO: check wave function symmetry
+                log.note('Wave-function symmetry = %s', mol.groupname)
             else:
                 log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))

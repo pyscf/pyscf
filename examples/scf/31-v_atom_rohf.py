@@ -127,4 +127,3 @@ mf.irrep_nelec['E2gy'] = (1,0)
 dm = mf.make_rdm1()
 mf.kernel(dm)
 #mf.analyze()
-

@@ -338,7 +338,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
 
     def test_rohf_so3(self):
-        mol = gto.M(atom='C', basis='ccpvdz', spin=4, symmetry=True, verbose=5)
+        mol = gto.M(atom='C', basis='ccpvdz', spin=4, symmetry=True)
         mf = mol.RHF().newton()
         mf.irrep_nelec = {
             's+0': (2,1),
@@ -350,6 +350,16 @@ class KnownValues(unittest.TestCase):
         mf.run()
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, -37.590682604205696, 9)
+
+        mol = gto.Mole()
+        mol.atom = 'N 0 0 0'
+        mol.spin=3
+        mol.symmetry = True
+        mol.basis = 'ccpvtz'
+        mol.build()
+        mf = mol.ROHF().newton().run()
+        mf.irrep_nelec = {'s+0': 4}
+        self.assertAlmostEqual(mf.e_tot, -54.3973578450836, 9)
 
 
 if __name__ == "__main__":
