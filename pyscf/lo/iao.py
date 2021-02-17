@@ -111,8 +111,13 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
+    atoms = [atom in gto.format_atom(pmol.atom, unit='au')]
     # remove ghost atoms
-    pmol.atom = [atom for atom in gto.format_atom(pmol.atom, unit='au') if not is_ghost_atom(atom[0])]
+    pmol.atom = [atom for atom in atoms if not is_ghost_atom(atom[0])]
+    if len(pmol.atom) != len(atoms):
+        logger.info(mol, 'Ghost atoms found in system. '
+                    'Current IAO does not support ghost atoms. '
+                    'They are removed from IAO reference basis.')
     if getattr(pmol, 'rcut', None) is not None:
         pmol.rcut = None
     pmol.build(False, False, basis=minao)
