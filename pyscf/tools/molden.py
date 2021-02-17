@@ -63,7 +63,11 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             occ[:neleca] = 1
         else:
             occ[:nelecb] = 1
-    fout.write('[MO]\n')
+
+    if spin == 'Alpha':
+        # Avoid duplicated [MO] session when dumping beta orbitals
+        fout.write('[MO]\n')
+
     for imo in range(nmo):
         fout.write(' Sym= %s\n' % symm[imo])
         fout.write(' Ene= %15.10g\n' % ene[imo])
