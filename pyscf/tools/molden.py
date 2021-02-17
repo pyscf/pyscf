@@ -265,27 +265,20 @@ def _parse_mo(lines, envs):
         else:
             orb_prim.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
 
-    orb_list = []
-    for orb_prim_data in mo_coeff_prim:
-        orb_list.extend(list(orb_prim_data))
-    number_of_aos = max(orb_list)
+    number_of_aos = max([max(orb_prim_data) for orb_prim_data in mo_coeff_prim])
     number_of_mos = len(mo_coeff_prim)
 
-    for n in range(number_of_mos):
-        orb = []
-        mo_coeff.append(orb)
-        for m in range(number_of_aos):
-            try:
-                orb.append(mo_coeff_prim[n][m+1])
-            except KeyError:
-                orb.append(0)
+    mo_coeff = numpy.zeros([number_of_aos, number_of_mos])
+    for n, orb_prim_data in enumerate(mo_coeff_prim):
+        for m, c in orb_prim_data.items():
+            mo_coeff[m-1, n] = c
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
     aoidx = numpy.argsort(order_ao_index(mol))
     mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
     if mol.cart:
-# Cartesian GTOs are normalized in molden format but they are not in pyscf
+        # Cartesian GTOs are normalized in molden format but they are not in pyscf
         s = mol.intor('int1e_ovlp')
         mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
 
@@ -315,8 +308,7 @@ _SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'CHARGE'   : _parse_charge,
                'MO'       : _parse_mo,
                'CORE'     : _parse_core,
-               'MOLDEN FORMAT' : lambda *args: None,
-              }
+               'MOLDEN FORMAT' : lambda *args: None,}
 
 _SEC_ORDER = ['N_ATOMS', 'ATOMS', 'GTO', 'CHARGE', 'MO', 'CORE', 'MOLDEN FORMAT']
 
@@ -331,8 +323,7 @@ def load(moldenfile, verbose=0):
                   'unit'  : lib.param.BOHR,
                   'mol'   : mol,
                   'atoms' : None,
-                  'basis' : None,
-                 }
+                  'basis' : None,}
 
         while True:
             lines = _read_one_section(f)
@@ -357,33 +348,39 @@ def load(moldenfile, verbose=0):
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
     for sec_kind in _SEC_ORDER:
-        if sec_kind in sec_kinds:
-            secs_of_kind = len(sec_kinds[sec_kind])
-            for n in range(secs_of_kind):
-                if sec_kind == 'MO':
-
-                    res = _parse_mo(sec_kinds['MO'][n], tokens)
-                    if n == 0:  # alpha orbitals
-                        (mol, mo_energy, mo_coeff, mo_occ, irrep_labels,
-                        spins) = res
+        if sec_kind == 'MO' and 'MO' in sec_kinds:
+            if len(sec_kinds['MO']) == 1:
+                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        _parse_mo(sec_kinds['MO'], tokens)
+                # If found only one MO section while 'B' appears in the spins
+                # labels, the MOs so obtained are spin orbitals, with beta
+                # orbitals at the second half of the mo_coeff matrix.
+                if any(s[0] == 'B' for s in spins):
+                    if mo_coeff.shape[0] == mo_coeff.shape[1]:
+                        # general spin orbitals which allows to mix spin alpha
+                        # and spin beta components in the same orbitals
+                        raise NotImplementedError
                     else:
-                        mo_energy    = mo_energy   , res[1]
-                        mo_coeff     = mo_coeff    , res[2]
-                        mo_occ       = mo_occ      , res[3]
-                        irrep_labels = irrep_labels, res[4]
-                        spins        = spins       , res[5]
+                        # Regular spin orbitals, alpha and beta do not mix
+                        beta_idx = numpy.array([s[0] == 'B' for s in spins])
+                        alpha_idx = ~beta_idx
+                        mo_energy = mo_energy[alpha_idx], mo_energy[beta_idx]
+                        mo_coeff = mo_coeff[:,alpha_idx], mo_coeff[:,beta_idx]
+                        mo_occ = mo_occ[alpha_idx], mo_occ[beta_idx]
+                        irrep_labels = numpy.array(irrep_labels)
+                        irrep_labels = irrep_labels[alpha_idx], irrep_labels[beta_idx]
+                        spins = numpy.array(spins)
+                        spins = spins[alpha_idx], spins[beta_idx]
 
-                else:
-                    _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
+            elif len(sec_kinds['MO']) == 2:
+                res_a = _parse_mo(sec_kinds['MO'][0], tokens)
+                res_b = _parse_mo(sec_kinds['MO'][1], tokens)
+                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        list(zip(res_a, res_b))
 
-    if 'MO' not in sec_kinds:
-        if spins[-1][0] == 'B':  # If including beta orbitals
-            offset = spins.index(spins[-1])
-            mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
-            mo_coeff     = mo_coeff    [:offset], mo_coeff    [offset:]
-            mo_occ       = mo_occ      [:offset], mo_occ      [offset:]
-            irrep_labels = irrep_labels[:offset], irrep_labels[offset:]
-            spins        = spins       [:offset], spins       [offset:]
+        if sec_kind in sec_kinds:
+            for n, content in enumerate(sec_kinds[sec_kind]):
+                _SEC_PARSER[sec_kind](content, tokens)
 
     if isinstance(mo_occ, tuple):
         mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
