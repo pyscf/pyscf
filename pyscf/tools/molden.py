@@ -276,7 +276,7 @@ def _parse_mo(lines, envs):
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
     aoidx = numpy.argsort(order_ao_index(mol))
-    mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+    mo_coeff = mo_coeff[aoidx]
     if mol.cart:
         # Cartesian GTOs are normalized in molden format but they are not in pyscf
         s = mol.intor('int1e_ovlp')
@@ -351,7 +351,7 @@ def load(moldenfile, verbose=0):
         if sec_kind == 'MO' and 'MO' in sec_kinds:
             if len(sec_kinds['MO']) == 1:
                 mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
-                        _parse_mo(sec_kinds['MO'], tokens)
+                        _parse_mo(sec_kinds['MO'][0], tokens)
                 # If found only one MO section while 'B' appears in the spins
                 # labels, the MOs so obtained are spin orbitals, with beta
                 # orbitals at the second half of the mo_coeff matrix.
@@ -375,8 +375,9 @@ def load(moldenfile, verbose=0):
             elif len(sec_kinds['MO']) == 2:
                 res_a = _parse_mo(sec_kinds['MO'][0], tokens)
                 res_b = _parse_mo(sec_kinds['MO'][1], tokens)
-                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
-                        list(zip(res_a, res_b))
+                mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        list(zip(res_a[1:], res_b[1:]))
+                mol = res_b[0]
 
         if sec_kind in sec_kinds:
             for n, content in enumerate(sec_kinds[sec_kind]):
