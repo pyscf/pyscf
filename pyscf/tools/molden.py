@@ -210,6 +210,8 @@ def _parse_gto(lines, envs):
 # * Do not use iter() here. Python 2 and 3 are different in iter()
     def read_one_bas(lsym, nb, fac=1):
         fac = float(fac)
+        if fac == float(0):
+            fac = float(1)
         bas = [lib.param.ANGULARMAP[lsym.lower()],]
         for i in range(int(nb)):
             dat = _d2e(next(lines_iter)).split()
@@ -247,12 +249,13 @@ def _parse_mo(lines, envs):
     spins = []
     mo_occ = []
     mo_coeff = []
+    mo_coeff_prim = [] # primary data, will be reworked for missing values
     for line in lines[1:]:
         line = line.upper()
         if 'SYM' in line:
             irrep_labels.append(line.split('=')[1].strip())
-            orb = []
-            mo_coeff.append(orb)
+            orb_prim = {}
+            mo_coeff_prim.append(orb_prim)
         elif 'ENE' in line:
             mo_energy.append(float(_d2e(line).split('=')[1].strip()))
         elif 'SPIN' in line:
@@ -260,7 +263,22 @@ def _parse_mo(lines, envs):
         elif 'OCC' in line:
             mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            orb.append(float(_d2e(line.split()[1])))
+            orb_prim.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
+
+    orb_list = []
+    for orb_prim_data in mo_coeff_prim:
+        orb_list.extend(list(orb_prim_data))
+    number_of_aos = max(orb_list)
+    number_of_mos = len(mo_coeff_prim)
+
+    for n in range(number_of_mos):
+        orb = []
+        mo_coeff.append(orb)
+        for m in range(number_of_aos):
+            try:
+                orb.append(mo_coeff_prim[n][m+1])
+            except KeyError:
+                orb.append(0)
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
@@ -291,18 +309,21 @@ def _parse_core(lines, envs):
                          'ECP information was lost when saving to molden format.\n\n')
     return mol.ecp
 
-_SEC_PARSER = {'GTO'      : _parse_gto,
-               'N_ATOMS'  : _parse_natoms,
+_SEC_PARSER = {'N_ATOMS'  : _parse_natoms,
                'ATOMS'    : _parse_atoms,
+               'GTO'      : _parse_gto,
                'CHARGE'   : _parse_charge,
                'MO'       : _parse_mo,
                'CORE'     : _parse_core,
                'MOLDEN FORMAT' : lambda *args: None,
               }
 
+_SEC_ORDER = ['N_ATOMS', 'ATOMS', 'GTO', 'CHARGE', 'MO', 'CORE', 'MOLDEN FORMAT']
+
 def load(moldenfile, verbose=0):
     '''Extract mol and orbitals from molden file
     '''
+    sec_kinds = {} # found sections and their lines are stored in this dic
     with open(moldenfile, 'r') as f:
         mol = gto.Mole()
         mol.cart = True
@@ -312,7 +333,6 @@ def load(moldenfile, verbose=0):
                   'atoms' : None,
                   'basis' : None,
                  }
-        mo_section_count = 0
 
         while True:
             lines = _read_one_section(f)
@@ -321,21 +341,11 @@ def load(moldenfile, verbose=0):
                 break
 
             sec_title = sec_title[1:sec_title.index(']')].upper()
-            if sec_title == 'MO':
-                res = _parse_mo(lines, tokens)
-                if mo_section_count == 0:  # Alpha orbitals
-                    mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+            if sec_title in _SEC_PARSER:
+                if sec_title not in sec_kinds:
+                    sec_kinds.update({sec_title : [lines]})
                 else:
-                    mo_energy    = mo_energy   , res[1]
-                    mo_coeff     = mo_coeff    , res[2]
-                    mo_occ       = mo_occ      , res[3]
-                    irrep_labels = irrep_labels, res[4]
-                    spins        = spins       , res[5]
-
-                mo_section_count += 1
-
-            elif sec_title in _SEC_PARSER:
-                _SEC_PARSER[sec_title.upper()](lines, tokens)
+                    sec_kinds[sec_title].append(lines)
 
             elif sec_title[:2] in ('5D', '7F', '9G'):
                 mol.cart = False
@@ -346,7 +356,27 @@ def load(moldenfile, verbose=0):
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
-    if mo_section_count == 0:
+    for sec_kind in _SEC_ORDER:
+        if sec_kind in sec_kinds:
+            secs_of_kind = len(sec_kinds[sec_kind])
+            for n in range(secs_of_kind):
+                if sec_kind == 'MO':
+
+                    res = _parse_mo(sec_kinds['MO'][n], tokens)
+                    if n == 0:  # alpha orbitals
+                        (mol, mo_energy, mo_coeff, mo_occ, irrep_labels,
+                        spins) = res
+                    else:
+                        mo_energy    = mo_energy   , res[1]
+                        mo_coeff     = mo_coeff    , res[2]
+                        mo_occ       = mo_occ      , res[3]
+                        irrep_labels = irrep_labels, res[4]
+                        spins        = spins       , res[5]
+
+                else:
+                    _SEC_PARSER[sec_kind](sec_kinds[sec_kind][n], tokens)
+
+    if 'MO' not in sec_kinds:
         if spins[-1][0] == 'B':  # If including beta orbitals
             offset = spins.index(spins[-1])
             mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
