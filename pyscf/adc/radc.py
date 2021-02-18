@@ -67,11 +67,15 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #    for i in range(dim):
 #        M[:,i] = matvec(I[:,i])
 #
-#    M_1 = M[n_singles:,n_singles:]   
 #    M_0 = M[:n_singles,:n_singles]   
+#    M_1 = M[n_singles:,n_singles:]   
+#    M_01 = M[:n_singles,n_singles:]   
+#    M_10 = M[n_singles:,:n_singles]   
 # 
-#    print (np.diag(M_0))
-#    #print (np.linalg.norm(np.diag(M_1)))
+#    print (np.linalg.norm(M_0))
+#    print (np.linalg.norm(M_1))
+#    print (np.linalg.norm(M_01))
+#    print (np.linalg.norm(M_10))
 #    #M_coupling_1 = M[:n_singles,n_singles:]
 #    #M_coupling_2 = M[n_singles:,:n_singles]
 #

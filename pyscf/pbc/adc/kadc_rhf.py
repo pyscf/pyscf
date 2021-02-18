@@ -96,14 +96,16 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 #    for i in range(dim):
 #        M[:,i] = matvec(I[:,i])
 #
-#    #M_coupling_1 = M[:n_singles,n_singles:]
-#    #M_coupling_2 = M[n_singles:,:n_singles]
+#    M_coupling_1 = M[:n_singles,n_singles:]
+#    M_coupling_2 = M[n_singles:,:n_singles]
 #
 #    M_0 = M[:n_singles,:n_singles]   
 #    M_1 = M[n_singles:,n_singles:]   
 # 
-#    #print (np.linalg.norm(np.diag(M_1).real))
-#    print ((np.diag(M_0).real))
+#    print (np.linalg.norm(M_0))
+#    print (np.linalg.norm(M_1))
+#    print (np.linalg.norm(M_coupling_1))
+#    print (np.linalg.norm(M_coupling_2))
 #    exit()    
 #
 ################################################################################
@@ -954,10 +956,11 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 ################# ADC(2) ajk - i block ############################
 
-                temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
+                temp[ka,kj] += lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
                 #temp[ka,kj] = lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk], r1, optimize = True)
                 #temp[ka,kj] = lib.einsum('kaji,i->ajk', eris_ovoo[kk,ka,kj].conj(), r1, optimize = True)
                 #temp[ka,kj] = -lib.einsum('jaik,i->ajk', eris_ovoo[kj,ka,ki].conj(), r1, optimize = True)
+                
         s[s2:f2] += temp.reshape(-1)
 
 ################# ADC(2) ajk - bil block ############################
