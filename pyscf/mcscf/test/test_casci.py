@@ -232,6 +232,15 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(myci.fcisolver.mol is mol)
         self.assertTrue(myci.with_df.mol is mol)
 
+    def test_casci_SO3_symm(self):
+        mol = gto.M(atom='N', basis='ccpvdz', spin=3, symmetry=True)
+        mf = mol.RHF().newton().run()
+        mc = mf.CASSCF(4, 5)
+        e = mc.run()
+        self.assertAlmostEqual(e, -54.3820511374897, 9)
+
+        mc.wfnsym = 4
+        self.assertRaises(RuntimeError, mc.run)
 
 if __name__ == "__main__":
     print("Full Tests for CASCI")
