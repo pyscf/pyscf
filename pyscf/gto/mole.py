@@ -2882,6 +2882,11 @@ class Mole(lib.StreamObject):
         '''Whether pseudo potential is used in the system.'''
         return len(self._ecpbas) > 0 or self._pseudo
 
+    def has_ecp_soc(self):
+        '''Whether spin-orbit coupling is enabled in ECP.'''
+        return (len(self._ecpbas) > 0 and
+                numpy.any(self._ecpbas[:,SO_TYPE_OF] == 1))
+
 
 #######################################################
 #NOTE: atm_id or bas_id start from 0
