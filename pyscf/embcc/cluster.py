@@ -195,7 +195,7 @@ class Cluster:
         # Maximum number of iterations for consistency of amplitudes between clusters
         self.maxiter = kwargs.get("maxiter", 1)
 
-        self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 120)
+        self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 200)
 
         self.set_default_attributes()
 
@@ -358,6 +358,14 @@ class Cluster:
         mf.e_tot
         """
         return self.base.mf
+
+    ##@property
+    ##def mo_energy(self):
+    ##    return self.base.mo_energy
+
+    ##@property
+    ##def mo_coeff(self):
+    ##    return self.base.mo_coeff
 
     @property
     def mol(self):
@@ -783,8 +791,8 @@ class Cluster:
             if self.maxiter > 1:
                 log.debug("Maxiter=%3d, storing amplitudes.", self.maxiter)
                 if self.base.T1 is None:
-                    No = sum(self.mf.mo_occ > 0)
-                    Nv = len(self.mf.mo_occ) - No
+                    No = sum(self.base.mo_occ > 0)
+                    Nv = len(self.base.mo_occ) - No
                     self.base.T1 = np.zeros((No, Nv))
                     self.base.T2 = np.zeros((No, No, Nv, Nv))
 
@@ -798,8 +806,8 @@ class Cluster:
                 S = self.mf.get_ovlp()
                 Co = cc.mo_coeff[:,act][:,occ]
                 Cv = cc.mo_coeff[:,act][:,vir]
-                Cmfo = self.mf.mo_coeff[:,self.mf.mo_occ>0]
-                Cmfv = self.mf.mo_coeff[:,self.mf.mo_occ==0]
+                Cmfo = self.base.mo_coeff[:,self.base.mo_occ>0]
+                Cmfv = self.base.mo_coeff[:,self.base.mo_occ==0]
                 Ro = np.linalg.multi_dot((Cmfo.T, S, Co))
                 Rv = np.linalg.multi_dot((Cmfv.T, S, Cv))
                 pT1, pT2 = self.transform_amplitudes(Ro, Rv, pT1, pT2)

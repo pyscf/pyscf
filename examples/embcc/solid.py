@@ -31,6 +31,7 @@ def get_arguments():
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
     parser.add_argument("--lattice-consts", type=float, nargs="*")
+    parser.add_argument("--ref-lattice-const", type=float)
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
     parser.add_argument("--precision", type=float, default=1e-5)
@@ -39,24 +40,26 @@ def get_arguments():
     parser.add_argument("--energy-per", choices=["atom", "cell"], help="Express total energy per unit cell or per atom.")
 
     # Mean-field
-    parser.add_argument("--save-scf", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
-    parser.add_argument("--load-scf")
+    parser.add_argument("--save-scf", help="Save primitive cell SCF.", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
+    parser.add_argument("--load-scf", help="Load primitive cell SCF.")
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
 
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF", help="Density-fitting method")
+    parser.add_argument("--gdf-mesh", type=int, nargs=3)
+    parser.add_argument("--gdf-mesh-factor", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     #parser.add_argument("--save-gdf", default="gdf-%.2f.npy")
-    parser.add_argument("--save-gdf", default="gdf-%.2f.h5")
-    parser.add_argument("--load-gdf")
+    parser.add_argument("--save-gdf", help="Save primitive cell GDF", default="gdf-%.2f.h5")
+    parser.add_argument("--load-gdf", help="Load primitive cell GDF")
 
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
-    parser.add_argument("--dmet-bath-tol", type=float, default=0.05, help="Tolerance for DMET bath orbitals. Default=0.05.")
+    parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
     #parser.add_argument("--bath-sizes", type=int, nargs="*")
     parser.add_argument("--bath-tol", type=float, nargs="*",
             default=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
@@ -70,16 +73,18 @@ def get_arguments():
     parser.add_argument("--power1-vir-bath-tol", type=float, default=False)
     parser.add_argument("--local-occ-bath-tol", type=float, default=False)
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
+    parser.add_argument("--test-mode", type=int, default=0)
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
     # System specific default arguments
     if args.system == "diamond":
         defaults = {
-                "atoms" : ["C"],
+                "atoms" : ["C", "C"],
                 "ndim" : 3,
                 "pseudopot" : "gth-pade",
-                "lattice_consts" : np.arange(3.55, 3.62+1e-12, 0.01),
+                #"lattice_consts" : np.arange(3.55, 3.62+1e-12, 0.01),
+                "lattice_consts" : np.arange(3.4, 3.8+1e-12, 0.1),
                 # For 2x2x2:
                 #"lattice_consts" : np.arange(3.61, 3.68+1e-12, 0.01),
                 }
@@ -95,11 +100,27 @@ def get_arguments():
         defaults = {
                 "atoms" : ["Sr", "Ti", "O"],
                 "ndim" : 3,
-                "lattice_consts" : np.arange(3.6, 4.2+1e-12, 0.1),
+                #
+                #"lattice_consts" : np.arange(3.6, 4.2+1e-12, 0.1),
+                "ref_lattice_const" : 3.9,
+                "lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
                 }
+
     for key, val in defaults.items():
         if getattr(args, key) is None:
             setattr(args, key, val)
+
+    # Reference geometry which defines cell parameters
+    if args.ref_lattice_const is None:
+        args.ref_lattice_const = len(args.lattice_consts)//2
+    elif args.ref_lattice_const != -1.0:
+        args.ref_lattice_const = np.arange(len(args.lattice_consts))[abs(args.lattice_consts-args.ref_lattice_const)<1e-14]
+        assert len(args.ref_lattice_const) == 1
+    elif args.ref_lattice_const == -1.0:
+        args.ref_lattice_const = False
+    else:
+        raise ValueError()
+    #log.debug("Reference lattice constant= %.3f", args.lattice_consts[args.ref_lattice_const])
 
     if args.energy_per is None:
         if args.system in ("diamond",):
@@ -121,7 +142,7 @@ def make_diamond(a, atoms):
         [0.0, 0.5, 0.5],
         [0.5, 0.0, 0.5]])
     coords = a * np.asarray([[0, 0, 0], [1, 1, 1]])/4
-    atom = [(atoms[0], coords[0]), (atoms[0], coords[1])]
+    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
 def make_hBN(a, c, atoms):
@@ -147,7 +168,8 @@ def make_perovskite(a, atoms):
         ]
     return amat, atom
 
-def make_cell(a, args):
+def make_cell(a, args, refcell=None):
+
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
@@ -157,6 +179,19 @@ def make_cell(a, args):
         cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
     cell.dimension = args.ndim
     cell.precision = args.precision
+    # Copy settings from refcell if given
+    if refcell is not None:
+        cell.precision = refcell.precision
+        # cell.ke_cutoff or mesh?
+        cell.ke_cutoff = refcell.ke_cutoff
+        #cell.mesh = refcell.mesh
+        # cell.rcut or nimgs?
+        cell.rcut = refcell.rcut
+        #cell.nimgs = refcell.nimgs
+        cell.ew_cut = refcell.ew_cut
+        cell.ew_eta = refcell.ew_eta
+    else:
+        cell.precision = args.precision
     cell.verbose = args.pyscf_verbose
     cell.basis = args.basis
     if args.pseudopot:
@@ -170,7 +205,7 @@ def make_cell(a, args):
         cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
     return cell
 
-def run_mf(a, cell, args):
+def run_mf(a, cell, args, refdf=None):
     if args.k_points is None or np.product(args.k_points) == 1:
         kpts = cell.make_kpts([1, 1, 1])
         mf = pyscf.pbc.scf.RHF(cell)
@@ -183,16 +218,19 @@ def run_mf(a, cell, args):
         fname = (args.load_scf % a) if ("%" in args.load_scf) else args.load_scf
         log.info("Loading SCF from file %s...", fname)
         try:
-            mf.__dict__.update(pyscf.pbc.scf.chkfile.load(fname, "scf"))
-            load_scf_ok = True
-            log.info("SCF loaded successfully.")
+            chkfile_dict = pyscf.pbc.scf.chkfile.load(fname, "scf")
+            log.info("Loaded attributes: %r", list(chkfile_dict.keys()))
+            mf.__dict__.update(chkfile_dict)
         except IOError:
-            log.error("IO ERROR loading SCF from file %s", fname)
+            log.error("Could not load SCF from file %s. File not found." % fname)
             log.error("Calculating SCF instead.")
         except Exception as e:
-            log.error("Exception: %s", e)
             log.error("ERROR loading SCF from file %s", fname)
+            log.error("Exception: %s", e)
             log.error("Calculating SCF instead.")
+        else:
+            load_scf_ok = True
+            log.info("SCF loaded successfully.")
 
     # Density-fitting
     if args.df == "GDF":
@@ -207,14 +245,22 @@ def run_mf(a, cell, args):
         # Load GDF
         if args.load_gdf is not None:
             fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+            log.info("Loading GDF from file %s...", fname)
             if os.path.isfile(fname):
-                log.info("Loading GDF from file %s...", fname)
                 mf.with_df._cderi = fname
                 load_gdf_ok = True
             else:
                 log.error("Could not load GDF from file %s. File not found." % fname)
         # Calculate GDF
         if not load_gdf_ok:
+            if refdf is not None:
+                mf.with_df.eta = refdf.eta
+                mf.with_df.mesh = refdf.mesh
+            if args.gdf_mesh is not None:
+                mf.with_df.mesh = args.gdf_mesh
+            elif args.gdf_mesh_factor is not None:
+                mf.with_df.mesh = [int(args.gdf_mesh_factor*n) for n in mf.with_df.mesh]
+
             if args.save_gdf is not None:
                 fname = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
                 mf.with_df._cderi_to_save = fname
@@ -245,6 +291,23 @@ def run_mf(a, cell, args):
 
 args = get_arguments()
 
+# Reference cell
+if args.ref_lattice_const:
+    aref = args.lattice_consts[args.ref_lattice_const]
+    refcell = make_cell(aref, args)
+    # Reference DF
+    if args.df == "FFTDF":
+        refdf = None
+    # For .eta and .mesh
+    elif args.df == "GDF":
+        if args.k_points is not None:
+            kpts = refcell.make_kpts(args.k_points)
+            refdf = pyscf.pbc.df.GDF(refcell, kpts)
+        else:
+            refdf = pyscf.pbc.df.GDF(refcell)
+else:
+    refcell, refdf = None, None
+
 # Loop over geometries
 for i, a in enumerate(args.lattice_consts):
 
@@ -254,10 +317,10 @@ for i, a in enumerate(args.lattice_consts):
         log.changeIndentLevel(1)
 
     # Setup cell
-    cell = make_cell(a, args)
+    cell = make_cell(a, args, refcell=refcell)
 
     # Mean-field
-    mf = run_mf(a, cell, args)
+    mf = run_mf(a, cell, args, refdf=refdf)
 
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
@@ -268,6 +331,10 @@ for i, a in enumerate(args.lattice_consts):
     else:
         mf._eri = None
         ncells = np.product(args.supercell) if args.supercell else 1
+
+
+    if args.test_mode == 1:
+        raise SystemExit()
 
     natom = mf.mol.natm
     eref = natom if (args.energy_per == "atom") else ncells

@@ -20,6 +20,10 @@ log = logging.getLogger(__name__)
 
 TEST_MODULE = False
 
+# Note that the imaginary part of (L|ij) only contributes to the real part of (ij|kl)
+# when squared with itself - a tolerance of 1e-7 means that the real part is only affected by ~1e-14
+DEFAULT_IMAG_TOL = 1e-7
+
 def k2gamma(mf, kpts, unfold_j3c=True):
     """kpts is the mesh!"""
     mf_sc = pyscf_k2gamma.k2gamma(mf, kpts, tol_orth=1e-4)
@@ -58,7 +62,10 @@ def kptidx_bz(cell, kpts, kpt):
         raise RuntimeError("Error finding k-point %r in %r" % (kpt_external, kpts))
     return res[0]
 
-def get_j3c_from_gdf(cell, gdf, kpts):
+def get_j3c_from_gdf(cell, gdf, kpts, use_kpts_sym=True, imag_tol=DEFAULT_IMAG_TOL):
+    """
+    If abs(imag).max() < imag_tol, only the real part of j3c will be saved
+    """
     nao = cell.nao_nr()
     nk = len(kpts)
     if gdf.auxcell is None:
@@ -66,21 +73,35 @@ def get_j3c_from_gdf(cell, gdf, kpts):
     naux = gdf.auxcell.nao_nr()
     dtype = np.complex
     j3c_k = np.zeros((naux, nk, nao, nk, nao), dtype=dtype)
-    for i, ki in enumerate(kpts):
-        for j, kj in enumerate(kpts[:i+1]):
-            for lr, li, sign in gdf.sr_loop([ki, kj], compact=False):
-                assert (sign == 1)
-                nauxk = lr.shape[0]
-                assert nauxk <= naux
-                tmp = (lr+1j*li).reshape(nauxk, nao, nao)
-                j3c_k[:nauxk,i,:,j,:] += tmp
-                if i != j:
-                    j3c_k[:nauxk,j,:,i,:] += tmp.transpose([0,2,1]).conj()
+
+    if use_kpts_sym:
+        for i, ki in enumerate(kpts):
+            for j, kj in enumerate(kpts[:i+1]):
+                for lr, li, sign in gdf.sr_loop([ki, kj], compact=False):
+                    assert (sign == 1)
+                    nauxk = lr.shape[0]
+                    assert nauxk <= naux
+                    tmp = (lr+1j*li).reshape(nauxk, nao, nao)
+                    j3c_k[:nauxk,i,:,j,:] += tmp
+                    if i != j:
+                        j3c_k[:nauxk,j,:,i,:] += tmp.transpose([0,2,1]).conj()
+    else:
+        for i, ki in enumerate(kpts):
+            for j, kj in enumerate(kpts):
+                for lr, li, sign in gdf.sr_loop([ki, kj], compact=False):
+                    assert (sign == 1)
+                    nauxk = lr.shape[0]
+                    assert nauxk <= naux
+                    j3c_k[:nauxk,i,:,j,:] += (lr+1j*li).reshape(nauxk, nao, nao)
+
+    # Discard imaginary part, if close to zero
+    if imag_tol and abs(j3c_k.imag).max() < imag_tol:
+        j3c_k = j3c_k.real
 
     return j3c_k
 
 
-def gdf_k2gamma(cell, gdf, kpts, compact=True):
+def gdf_k2gamma(cell, gdf, kpts, compact=True, use_kpts_sym=True, imag_tol=DEFAULT_IMAG_TOL):
     """Unfold k-point sampled three center-integrals (l|ki,qj) into supercell integrals (L|IJ).
 
     Sizes:
@@ -123,11 +144,12 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
         j3c_k = j3c_k.reshape(-1, nk, nao, nk, nao)
     elif isinstance(gdf, pyscf.pbc.df.GDF):
         t0 = timer()
-        j3c_k = get_j3c_from_gdf(cell, gdf, kpts)
+        j3c_k = get_j3c_from_gdf(cell, gdf, kpts, use_kpts_sym=use_kpts_sym)
         log.debug("Time to evaluate k-point sampled three-center integrals: %.3f", timer()-t0)
     else:
         raise ValueError("Invalid type for gdf: %s" % type(gdf))
     naux = j3c_k.shape[0]
+    log.debug("dtype of k-point sampled j3c: %r", j3c.dtype)
 
     scell, phase = pyscf_k2gamma.get_phase(cell, kpts)
 
@@ -146,23 +168,31 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
 
     # Bottlenecking unfolding step O(N^4):
     if not fast:
-        for i in range(nk):
-            for j in range(i+1):
-                #l = kconserv[i,j,0]
-                l = kconserv[i,j]
-                tmp = einsum("Lab,R,S->LRaSb", j3c_k[:,i,:,j], phase[:,i], phase[:,j].conj()).reshape(naux, nk*nao, nk*nao)
-                if compact:
-                    j3c[l]+= pyscf.lib.pack_tril(tmp)
-                else:
-                    j3c[l] += tmp
-
-                if i != j:
-                    #l = kconserv[j,i,0]
-                    l = kconserv[j,i]
+        if use_kpts_sym:
+            for i in range(nk):
+                for j in range(i+1):
+                    l = kconserv[i,j]
+                    tmp = einsum("Lab,R,S->LRaSb", j3c_k[:,i,:,j], phase[:,i], phase[:,j].conj()).reshape(naux, nk*nao, nk*nao)
                     if compact:
-                        j3c[l] += pyscf.lib.pack_tril(tmp.transpose([0,2,1]).conj())
+                        j3c[l]+= pyscf.lib.pack_tril(tmp)
                     else:
-                        j3c[l] += tmp.transpose([0,2,1]).conj()
+                        j3c[l] += tmp
+
+                    if i != j:
+                        l = kconserv[j,i]
+                        if compact:
+                            j3c[l] += pyscf.lib.pack_tril(tmp.transpose([0,2,1]).conj())
+                        else:
+                            j3c[l] += tmp.transpose([0,2,1]).conj()
+        else:
+            for i in range(nk):
+                for j in range(nk):
+                    l = kconserv[i,j]
+                    tmp = einsum("Lab,R,S->LRaSb", j3c_k[:,i,:,j], phase[:,i], phase[:,j].conj()).reshape(naux, nk*nao, nk*nao)
+                    if compact:
+                        j3c[l]+= pyscf.lib.pack_tril(tmp)
+                    else:
+                        j3c[l] += tmp
     else:
         raise NotImplementedError()
         import ctypes
@@ -198,6 +228,10 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True):
         log.debug("j3c.imag= %e %e ... %e", j3c.imag[0,0,0], j3c.imag[0,0,1], j3c.imag[-1,-1,-1])
         log.debug("j3c.flags: %r", j3c.flags)
         log.debug("j3c.shape: %r", list(j3c.shape))
+
+    # Discard imaginary part if close to zero
+    if imag_tol and abs(j3c.imag).max() < imag_tol:
+        j3c = j3c.real
 
     if compact:
         j3c = j3c.reshape(nk*naux, ncomp) / np.sqrt(nk)

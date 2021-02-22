@@ -28,7 +28,7 @@ class _ChemistsERIs_mp2_j3c(_ChemistsERIs_mp2):
         # j3c is (L|ov) for MP2
         l = r = self._j3c
         ovov = (einsum("Lij,Lkl->ijkl", l.real, r.real)
-              - einsum("Lij,Lkl->ijkl", l.imag, r.imag))
+              + einsum("Lij,Lkl->ijkl", l.imag, r.imag))
         return ovov
 
     # Only here such that parent classes ovov initialization is ignored
@@ -52,7 +52,7 @@ class _ChemistsERIs_cc_j3c(_ChemistsERIs_cc):
         l = self._j3c[:,masks[name[0]],masks[name[1]]]
         r = self._j3c[:,masks[name[2]],masks[name[3]]]
         part = (einsum("Lij,Lkl->ijkl", l.real, r.real)
-              - einsum("Lij,Lkl->ijkl", l.imag, r.imag))
+              + einsum("Lij,Lkl->ijkl", l.imag, r.imag))
         # TODO: Check imaginary part?
         return part
 
@@ -112,8 +112,8 @@ class _ChemistsERIs_cc_j3c(_ChemistsERIs_cc):
     def vvvv(self, val):
         pass
 
-
-def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit="auto", max_mem = 50.0):
+#def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit="auto", max_mem=200.0):
+def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit=False, max_mem=200.0):
     """
     Parameters
     ----------
@@ -185,24 +185,28 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit="auto", max_mem = 50.
                 j3c_mo[l] = einsum("ab,ai,bj->ij", pyscf.lib.unpack_tril(j3c[l]), mo_coeff[:,o], mo_coeff[:,v])
 
         # Test imaginary part (column 0 only)
-        if True:
+        if np.iscomplexobj(j3c_mo):
             eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, j3c_mo[:,:,0].imag)
                     - einsum("Lij,Lk->ijk", j3c_mo.imag, j3c_mo[:,:,0].real))
-            if abs(eri_im).max() > imag_tol:
-                log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
+            #if abs(eri_im).max() > imag_tol:
+            #    log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
+
+            #eri_im = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.imag)
+            #        - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.real))
+            log.info("Imaginary part of (ij|kl=0): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
             del eri_im
 
         if not contract_jit:
             # Avoid storage of complex (ij|kl) [Assumes imaginary part must be zero!]
-            eri = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real)
-                 - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.imag))
-
-            eri = eri.real
+            eri = einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real
+            if np.iscomplexobj(j3c_mo):
+                 eri += einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.imag)
             eris.ovov = eri
         else:
             # Contract (L|ij) just-in-time (oooo, ovoo, ... defined in class)
             eris._j3c = j3c_mo
 
+    # Coupled-cluster
     else:
         log.debug("Memory for (L|ij)= %.3f GB", naux*norb**2 * 16/1e9)
 
@@ -215,18 +219,23 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit="auto", max_mem = 50.
                 j3c_mo[l] = einsum("ab,ai,bj->ij", pyscf.lib.unpack_tril(j3c[l]), mo_coeff, mo_coeff)
 
         # Test imaginary part (column 0 only)
-        if True:
+        if np.iscomplexobj(j3c_mo):
             eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, j3c_mo[:,:,0].imag)
                     - einsum("Lij,Lk->ijk", j3c_mo.imag, j3c_mo[:,:,0].real))
-            if abs(eri_im).max() > imag_tol:
-                log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
+            #if abs(eri_im).max() > imag_tol:
+            #    log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
+
+            #eri_im = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.imag)
+            #        - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.real))
+            log.info("Imaginary part of (ij|kl=0): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
             del eri_im
 
         if not contract_jit:
 
             # Avoid storage of complex (ij|kl) [Assumes imaginary part must be zero!]
-            eri = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real)
-                 - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.imag))
+            eri = einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real)
+            if np.iscomplexobj(j3c_mo):
+                 eri += einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.imag)
 
             eris.oooo = eri[o,o,o,o].copy()
             eris.ovoo = eri[o,v,o,o].copy()

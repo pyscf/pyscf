@@ -354,14 +354,14 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
     """
 
     if kind == "occ":
-        mask = self.mf.mo_occ > 0
+        mask = self.base.mo_occ > 0
     elif kind == "vir":
-        mask = self.mf.mo_occ == 0
+        mask = self.base.mo_occ == 0
 
     S = self.mf.get_ovlp()
-    CSC_loc = np.linalg.multi_dot((self.C_local.T, S, self.mf.mo_coeff[:,mask]))
-    CSC_env = np.linalg.multi_dot((C_env.T, S, self.mf.mo_coeff[:,mask]))
-    e = self.mf.mo_energy[mask]
+    CSC_loc = np.linalg.multi_dot((self.C_local.T, S, self.base.mo_coeff[:,mask]))
+    CSC_env = np.linalg.multi_dot((C_env.T, S, self.base.mo_coeff[:,mask]))
+    e = self.base.mo_energy[mask]
 
     # Matsubara points
     if bathtype == "power":
@@ -632,8 +632,8 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Exact MP2 amplitudes
     #if True and hasattr(self.base, "_t2_exact"):
     if False:
-        c_mf_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
-        c_mf_vir = self.mf.mo_coeff[:,self.mf.mo_occ==0]
+        c_mf_occ = self.base.mo_coeff[:,self.base.mo_occ>0]
+        c_mf_vir = self.base.mo_coeff[:,self.base.mo_occ==0]
         s = self.base.get_ovlp()
         csco = np.linalg.multi_dot((c_mf_occ.T, s, c_occ))
         cscv = np.linalg.multi_dot((c_mf_vir.T, s, c_vir))

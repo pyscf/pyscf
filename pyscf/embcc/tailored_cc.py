@@ -9,8 +9,8 @@
                 act = cc.get_frozen_mask()
                 Co = mo_coeff[:,act][:,mo_occ[act]>0]
                 Cv = mo_coeff[:,act][:,mo_occ[act]==0]
-                Cmfo = self.mf.mo_coeff[:,self.mf.mo_occ>0]
-                Cmfv = self.mf.mo_coeff[:,self.mf.mo_occ==0]
+                Cmfo = self.base.mo_coeff[:,self.base.mo_occ>0]
+                Cmfv = self.base.mo_coeff[:,self.base.mo_occ==0]
                 S = self.mf.get_ovlp()
                 Ro = np.linalg.multi_dot((Co.T, S, Cmfo))
                 Rv = np.linalg.multi_dot((Cv.T, S, Cmfv))

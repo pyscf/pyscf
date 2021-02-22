@@ -72,7 +72,7 @@ class EmbCC:
             use_ref_orbitals_bath=False,
             mp2_correction=True,
             maxiter=1,
-            dmet_bath_tol=1e-8,
+            dmet_bath_tol=1e-4,
             energy_part="first-occ",
             # Perform numerical localization on fragment orbitals
             localize_fragment=False,
@@ -112,7 +112,24 @@ class EmbCC:
         if bath_type not in self.VALID_BATH_TYPES:
             raise ValueError("Unknown bath type: %s" % bath_type)
 
+        # Convert KRHF to Gamma-point RHF
+        if isinstance(mf, pyscf.pbc.scf.KRHF) or isinstance(mf.mo_coeff, list):
+            log.info("Converting KRHF to gamma-point RHF calculation")
+            assert np.allclose(mf.kpts[0], 0)
+            mf_g = pyscf.pbc.scf.RHF(mf.cell)
+            mf_g.kpts = mf.kpts[0]
+            mf_g.mo_energy = mf.mo_energy[0].copy()
+            mf_g.mo_occ = mf.mo_occ[0].copy()
+            mf_g.mo_coeff = mf.mo_coeff[0].copy()
+            mf_g.with_df = mf.with_df
+            mf = mf_g
+
         self.mf = mf
+        self.mo_energy = mf.mo_energy.copy()
+        self.mo_occ = mf.mo_occ.copy()
+        self.mo_coeff = mf.mo_coeff.copy()
+
+        self.max_memory = self.mf.max_memory
 
         self.local_orbital_type = local_type
         self.minao = minao
@@ -170,20 +187,21 @@ class EmbCC:
             self._fock = self.mf.get_fock()
             log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
         else:
-            cs = np.dot(self.mf.mo_coeff.T, self.get_ovlp())
-            self._fock = np.einsum("ia,i,ib->ab", cs, self.mf.mo_energy, cs)
+            cs = np.dot(self.mo_coeff.T, self.get_ovlp())
+            #log.debug("SHAPES: %r %r %r %r", list(self.mo_coeff.shape), list(self.get_ovlp().shape), list(cs.shape), list(self.mo_energy.shape))
+            self._fock = np.einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
 
         # Orthogonalize insufficiently orthogonal MOs
         # (For example as a result of k2gamma conversion with low cell.precision)
-        c = self.mf.mo_coeff.copy()
+        c = self.mo_coeff.copy()
         assert np.allclose(c.imag, 0)
         ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
         if nonorth > 1e-8:
             log.info("Orthogonalizing orbitals...")
-            self.mf.mo_coeff = orthogonalize_mo(c, self.get_ovlp(), tol=1e-6)
-            change = abs(np.diag(np.linalg.multi_dot((self.mf.mo_coeff.T, self.get_ovlp(), c)))-1)
+            self.mo_coeff = orthogonalize_mo(c, self.get_ovlp(), tol=1e-6)
+            change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
 
         # Prepare fragments
@@ -414,7 +432,7 @@ class EmbCC:
         return C_local, C_env
 
     def make_local_nonorth_iao_orbitals(self, ao_indices, minao="minao"):
-        C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
+        C_occ = self.mo_coeff[:,self.mo_occ>0]
         C_ao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
 
         ao_labels = np.asarray(self.mol.ao_labels())[ao_indices]
@@ -435,17 +453,17 @@ class EmbCC:
 
         # Add remaining space
         # Transform to MO basis
-        C_local_mo = np.linalg.multi_dot((self.mf.mo_coeff.T, S, C_local))
+        C_local_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_local))
         # Get eigenvectors of projector into complement
         P_local = np.dot(C_local_mo, C_local_mo.T)
-        norb = self.mf.mo_coeff.shape[-1]
+        norb = self.mo_coeff.shape[-1]
         P_env = np.eye(norb) - P_local
         e, C = np.linalg.eigh(P_env)
         assert np.all(np.logical_or(abs(e) < 1e-10, abs(e)-1 < 1e-10))
         mask_env = (e > 1e-10)
         assert (np.sum(mask_env) + nlocal == norb)
         # Transform back to AO basis
-        C_env = np.dot(self.mf.mo_coeff, C[:,mask_env])
+        C_env = np.dot(self.mo_coeff, C[:,mask_env])
 
         # Test orthogonality
         C = np.hstack((C_local, C_env))
@@ -613,9 +631,9 @@ class EmbCC:
             Pv = self.make_ao_projector_general(None, ao_labels=atom_labels, basis2=kwargs.pop("basis_proj_vir", None))
             log.debug("Done.")
 
-            o = (self.mf.mo_occ > 0)
-            v = (self.mf.mo_occ == 0)
-            C = self.mf.mo_coeff
+            o = (self.mo_occ > 0)
+            v = (self.mo_occ == 0)
+            C = self.mo_coeff
             So = np.linalg.multi_dot((C[:,o].T, Po, C[:,o]))
             Sv = np.linalg.multi_dot((C[:,v].T, Pv, C[:,v]))
             eo, Vo = np.linalg.eigh(So)
@@ -717,13 +735,13 @@ class EmbCC:
             Atom ID for each IAO.
         """
         # Orthogonality of input mo_coeff
-        mo_coeff = self.mf.mo_coeff
+        mo_coeff = self.mo_coeff
         norb = mo_coeff.shape[-1]
         S = self.get_ovlp()
         nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
         log.debug("Max orthogonality error in canonical basis = %.1e" % nonorthmax)
 
-        C_occ = self.mf.mo_coeff[:,self.mf.mo_occ>0]
+        C_occ = self.mo_coeff[:,self.mo_occ>0]
         C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
         niao = C_iao.shape[-1]
         log.debug("Total number of IAOs=%3d", niao)
@@ -734,7 +752,7 @@ class EmbCC:
 
         # Add remaining virtual space
         # Transform to MO basis
-        C_iao_mo = np.linalg.multi_dot((self.mf.mo_coeff.T, S, C_iao))
+        C_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_iao))
         # Get eigenvectors of projector into complement
         P_iao = np.dot(C_iao_mo, C_iao_mo.T)
         P_env = np.eye(norb) - P_iao
@@ -755,7 +773,7 @@ class EmbCC:
             log.critical("Total number of orbitals = %d", norb)
             raise RuntimeError()
         # Transform back to AO basis
-        C_env = np.dot(self.mf.mo_coeff, C[:,mask_env])
+        C_env = np.dot(self.mo_coeff, C[:,mask_env])
 
         # Get base atoms of IAOs
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)

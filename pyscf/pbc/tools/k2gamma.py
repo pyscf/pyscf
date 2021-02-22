@@ -34,6 +34,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import scf
 
 log = logging.getLogger(__name__)
+#print("Log for k2gamma = %s")
 
 def get_phase(cell, kpts, kmesh=None):
     '''
@@ -75,14 +76,31 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
     C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
     C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
 
+    with open("mo-energies-k.txt", "ab") as f:
+        f.write(b"---\n")
+        np.savetxt(f, np.asarray(mo_energy).T)
+
     E_sort_idx = np.argsort(E_g)
     E_g = E_g[E_sort_idx]
+
+    with open("mo-energies-g.txt", "ab") as f:
+        f.write(b"---\n")
+        np.savetxt(f, E_g)
+
     C_gamma = C_gamma[:,E_sort_idx]
     s = scell.pbc_intor('int1e_ovlp')
     orth_err = abs(np.linalg.multi_dot((C_gamma.conj().T, s, C_gamma)) - np.eye(Nmo*Nk)).max()
+    log.info("Max orthogonality error in k2gamma: %e", orth_err)
     #assert(orth_err < tol_orth)
     if orth_err > tol_orth:
         print("Warning: insufficient orthogonality of Gamma point orbitals: %e" % orth_err)
+    log.info("Largest imaginary part in C_gamma in k2gamma= %e", abs(C_gamma.imag).max())
+    print("Largest imaginary part in C_gamma in k2gamma= %e" % abs(C_gamma.imag).max())
+
+    # Fock matrix
+    f = np.dot(C_gamma * E_g, C_gamma.conj().T)
+    log.info("Largest imaginary part in Fock matrix in k2gamma= %e", abs(f.imag).max())
+    print("Largest imaginary part in Fock matrix in k2gamma= %e" % abs(f.imag).max())
 
     # Transform MO indices
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
@@ -93,8 +111,9 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
             f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
                        C_gamma[:,degen_mask].conj().T)
             #assert(abs(f.imag).max() < imag_tol)
+            log.info("Largest imaginary part in f in k2gamma= %e", abs(f.imag).max())
             if abs(f.imag).max() > imag_tol:
-                log.error("Error: Large imaginary part in Fock matrix: %.3e", abs(f.imag).max())
+                log.error("Error: Large imaginary part in f matrix: %.3e", abs(f.imag).max())
 
             e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
             C_gamma = C_gamma.real
@@ -102,15 +121,21 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
         else:
             f = np.dot(C_gamma * E_g, C_gamma.conj().T)
             #assert(abs(f.imag).max() < imag_tol)
+            log.info("Largest imaginary part in f in k2gamma= %e", abs(f.imag).max())
             if abs(f.imag).max() > imag_tol:
-                log.error("Error: Large imaginary part in Fock matrix: %.3e", abs(f.imag).max())
+                log.error("Error: Large imaginary part in f matrix: %.3e", abs(f.imag).max())
             e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
+    else:
+        log.info("No degeneracy")
 
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     # overlap between k-point unitcell and gamma-point supercell
     s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(Nk,Nao,NR*Nao)
     # The unitary transformation from k-adapted orbitals to gamma-point orbitals
     mo_phase = lib.einsum('kum,kuv,vi->kmi', C_k.conj(), s_k_g, C_gamma)
+
+    # Fock matrix
+    f = np.dot(C_gamma * E_g, C_gamma.conj().T)
 
     return scell, E_g, C_gamma, mo_phase
 
