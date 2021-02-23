@@ -149,7 +149,7 @@ def gdf_k2gamma(cell, gdf, kpts, compact=True, use_kpts_sym=True, imag_tol=DEFAU
     else:
         raise ValueError("Invalid type for gdf: %s" % type(gdf))
     naux = j3c_k.shape[0]
-    log.debug("dtype of k-point sampled j3c: %r", j3c.dtype)
+    log.debug("dtype of k-point sampled j3c: %r", j3c_k.dtype)
 
     scell, phase = pyscf_k2gamma.get_phase(cell, kpts)
 

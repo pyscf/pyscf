@@ -27,7 +27,8 @@ from .util import *
 from .bath import *
 from .energy import *
 from . import ccsd_t
-from . import pbc_gdf_ao2mo
+#from . import pbc_gdf_ao2mo
+from . import ao2mo_j3c
 #from .embcc import VALID_SOLVERS
 
 __all__ = [
@@ -44,7 +45,6 @@ class Cluster:
 
     TOL_CLUSTER_OCC = 1e-3
     TOL_OCC = 1e-3
-
 
     def __init__(self, base, cluster_id, name,
             #indices, C_local, C_env,
@@ -716,7 +716,21 @@ class Cluster:
                     c_act = mo_coeff[:,active]
                     fock = np.linalg.multi_dot((c_act.T, self.base.get_fock(), c_act))
                     if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
-                        eris = pbc_gdf_ao2mo.ao2mo(cc, fock=fock)
+                        #t0 = MPI.Wtime()
+                        #eris = pbc_gdf_ao2mo.ao2mo(cc, fock=fock)
+                        #t1 = MPI.Wtime()
+                        # TEST NEW
+                        eris = ao2mo_j3c.ao2mo_ccsd(cc, fock=fock)
+                        #t2 = MPI.Wtime()
+                        #log.info("TIME OLD: %f TIME NEW: %f", (t1-t0), (t2-t1))
+                        #assert np.allclose(eris.mo_energy, eris2.mo_energy)
+                        #assert np.allclose(eris.oooo, eris2.oooo)
+                        #assert np.allclose(eris.ovoo, eris2.ovoo)
+                        #assert np.allclose(eris.ovov, eris2.ovov)
+                        #assert np.allclose(eris.ovvo, eris2.ovvo)
+                        #assert np.allclose(eris.oovv, eris2.oovv)
+                        #assert np.allclose(eris.ovvv, eris2.ovvv)
+                        #assert np.allclose(eris.vvvv, eris2.vvvv)
                     else:
                         eris = cc.ao2mo_direct(fock=fock)
                 else:

@@ -184,21 +184,21 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit=False, max_mem=200.0)
             for l in range(naux):
                 j3c_mo[l] = einsum("ab,ai,bj->ij", pyscf.lib.unpack_tril(j3c[l]), mo_coeff[:,o], mo_coeff[:,v])
 
-        # Test imaginary part (column 0 only)
+        # Test imaginary part (k=l diagonal only)
         if np.iscomplexobj(j3c_mo):
-            eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, j3c_mo[:,:,0].imag)
-                    - einsum("Lij,Lk->ijk", j3c_mo.imag, j3c_mo[:,:,0].real))
+            eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, np.diagonal(j3c_mo.imag, axis1=1, axis2=2))
+                    - einsum("Lij,Lk->ijk", j3c_mo.imag, np.diagonal(j3c_mo.real, axis1=1, axis2=2)))
             #if abs(eri_im).max() > imag_tol:
             #    log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
 
             #eri_im = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.imag)
             #        - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.real))
-            log.info("Imaginary part of (ij|kl=0): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
+            log.info("Imaginary part of (ij|k=l): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
             del eri_im
 
         if not contract_jit:
             # Avoid storage of complex (ij|kl) [Assumes imaginary part must be zero!]
-            eri = einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real
+            eri = einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.real)
             if np.iscomplexobj(j3c_mo):
                  eri += einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.imag)
             eris.ovov = eri
@@ -220,14 +220,14 @@ def ao2mo(cc, fock, mp2=False, imag_tol=1e-8, contract_jit=False, max_mem=200.0)
 
         # Test imaginary part (column 0 only)
         if np.iscomplexobj(j3c_mo):
-            eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, j3c_mo[:,:,0].imag)
-                    - einsum("Lij,Lk->ijk", j3c_mo.imag, j3c_mo[:,:,0].real))
+            eri_im = (einsum("Lij,Lk->ijk", j3c_mo.real, np.diagonal(j3c_mo.imag, axis1=1, axis2=2))
+                    - einsum("Lij,Lk->ijk", j3c_mo.imag, np.diagonal(j3c_mo.real, axis1=1, axis2=2)))
             #if abs(eri_im).max() > imag_tol:
             #    log.error("Error: Large imaginary part in ERIs: %.3e", abs(eri_im).max())
 
             #eri_im = (einsum("Lij,Lkl->ijkl", j3c_mo.real, j3c_mo.imag)
             #        - einsum("Lij,Lkl->ijkl", j3c_mo.imag, j3c_mo.real))
-            log.info("Imaginary part of (ij|kl=0): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
+            log.info("Imaginary part of (ij|k=l): norm= %.3e , max= %.3e", np.linalg.norm(eri_im), abs(eri_im).max())
             del eri_im
 
         if not contract_jit:

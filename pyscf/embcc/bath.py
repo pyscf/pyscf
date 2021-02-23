@@ -12,7 +12,8 @@ import pyscf.ao2mo
 
 from .util import *
 from .tests import *
-from . import pbc_gdf_ao2mo
+#from . import pbc_gdf_ao2mo
+from . import ao2mo_j3c
 
 __all__ = [
         "project_ref_orbitals",
@@ -594,7 +595,13 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
             fock = np.linalg.multi_dot((c_act.T, f, c_act))
             # TRY NEW
             if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
-                eris = pbc_gdf_ao2mo.ao2mo(mp2, fock=fock, mp2=True)
+                #eris = pbc_gdf_ao2mo.ao2mo(mp2, fock=fock, mp2=True)
+                # TEST NEW
+                mo_energy = np.hstack((eo, ev))
+                eris = ao2mo_j3c.ao2mo_mp2(mp2, mo_energy=mo_energy)
+                #assert np.allclose(eris.mo_energy, eris2.mo_energy)
+                #assert np.allclose(eris.ovov, eris2.ovov)
+
             else:
                 mo_energy = np.hstack((eo, ev))
                 eris = mp2.ao2mo(direct_init=True, mo_energy=mo_energy, fock=fock)
