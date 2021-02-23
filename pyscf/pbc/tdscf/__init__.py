@@ -18,12 +18,16 @@
 
 from pyscf.pbc.tdscf import rhf
 from pyscf.pbc.tdscf import uhf
-from pyscf.pbc.tdscf import rks
-from pyscf.pbc.tdscf import uks
 from pyscf.pbc.tdscf import krhf
 from pyscf.pbc.tdscf import kuhf
-from pyscf.pbc.tdscf import krks
-from pyscf.pbc.tdscf import kuks
+
+try:
+    from pyscf.pbc.tdscf import rks
+    from pyscf.pbc.tdscf import uks
+    from pyscf.pbc.tdscf import krks
+    from pyscf.pbc.tdscf import kuks
+except (ImportError, IOError):
+    pass
 
 def TDHF(mf):
     import numpy

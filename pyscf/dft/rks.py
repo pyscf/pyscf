@@ -29,7 +29,6 @@ from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
 from pyscf.dft import gen_grid
-from pyscf.dft import numint
 from pyscf import __config__
 
 
@@ -277,6 +276,7 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
+    from pyscf.dft import numint
     mf.xc = xc
     mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)

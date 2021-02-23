@@ -48,11 +48,11 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.df.incore import aux_e2
 from pyscf.gto import moleintor
 from pyscf.scf import _vhf
+from pyscf.dft import gen_grid
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
@@ -316,7 +316,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
 # Use default mesh grids and weights
 def get_gridss(mol, level=1, gthrd=1e-10):
     Ktime = (logger.process_clock(), logger.perf_counter())
-    grids = dft.gen_grid.Grids(mol)
+    grids = gen_grid.Grids(mol)
     grids.level = level
     grids.build()
 

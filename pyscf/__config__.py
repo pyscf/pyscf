@@ -4,6 +4,7 @@ import os, sys
 # All parameters initialized before loading pyscf_conf.py will be overwritten
 # by the dynamic importing procedure.
 #
+
 DEBUG = False
 
 MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB

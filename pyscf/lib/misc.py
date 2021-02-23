@@ -50,22 +50,19 @@ c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
 def load_library(libname):
-    # numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
-    if '1.6' in numpy.__version__:
-        if (sys.platform.startswith('linux') or
-            sys.platform.startswith('gnukfreebsd')):
-            so_ext = '.so'
-        elif sys.platform.startswith('darwin'):
-            so_ext = '.dylib'
-        elif sys.platform.startswith('win'):
-            so_ext = '.dll'
-        else:
-            raise OSError('Unknown platform')
-        libname_so = libname + so_ext
-        return ctypes.CDLL(os.path.join(os.path.dirname(__file__), libname_so))
-    else:
+    try:
         _loaderpath = os.path.dirname(__file__)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
+    except OSError:
+        from pyscf import __path__ as ext_modules
+        for path in ext_modules:
+            libpath = os.path.join(path, 'lib')
+            if os.path.isdir(libpath):
+                for files in os.listdir(libpath):
+                    if files.startswith(libname):
+                        return numpy.ctypeslib.load_library(libname, libpath)
+        sys.stderr.write(f'Failed to load library {libname}\n')
+        raise
 
 #Fixme, the standard resouce module gives wrong number when objects are released
 # http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
@@ -1008,6 +1005,63 @@ class light_speed(temporary_env):
     def __enter__(self):
         temporary_env.__enter__(self)
         return self.c
+
+def repo_info(repo_path):
+    '''
+    Repo location, version, git branch and commit ID
+    '''
+
+    def git_version(orig_head, head, branch):
+        git_version = []
+        if orig_head:
+            git_version.append('GIT ORIG_HEAD %s' % orig_head)
+        if branch:
+            git_version.append('GIT HEAD (branch %s) %s' % (branch, head))
+        elif head:
+            git_version.append('GIT HEAD      %s' % head)
+        return '\n'.join(git_version)
+
+    repo_path = os.path.abspath(repo_path)
+
+    if os.path.isdir(os.path.join(repo_path, '.git')):
+        git_str = git_version(*git_info(repo_path))
+
+    elif os.path.isdir(os.path.abspath(os.path.join(repo_path, '..', '.git'))):
+        repo_path = os.path.abspath(os.path.join(repo_path, '..'))
+        git_str = git_version(*git_info(repo_path))
+
+    else:
+        git_str = None
+
+    # TODO: Add info of BLAS, libcint, libxc, libxcfun, tblis if applicable
+
+    info = {'path': repo_path}
+    if git_str:
+        info['git'] = git_str
+    return info
+
+def git_info(repo_path):
+    orig_head = None
+    head = None
+    branch = None
+    try:
+        with open(os.path.join(repo_path, '.git', 'ORIG_HEAD'), 'r') as f:
+            orig_head = f.read().strip()
+    except IOError:
+        pass
+
+    try:
+        head = os.path.join(repo_path, '.git', 'HEAD')
+        with open(head, 'r') as f:
+            head = f.read().splitlines()[0].strip()
+
+        if head.startswith('ref:'):
+            branch = os.path.basename(head)
+            with open(os.path.join(repo_path, '.git', head.split(' ')[1]), 'r') as f:
+                head = f.read().strip()
+    except IOError:
+        pass
+    return orig_head, head, branch
 
 
 if __name__ == '__main__':

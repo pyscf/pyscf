@@ -29,8 +29,7 @@ except (ImportError, OSError):
         libxc = xcfun
     except (ImportError, OSError):
         warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
-        from pyscf.dft import xc
-        libxc = xc
+        raise
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
 from pyscf import __config__

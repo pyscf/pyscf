@@ -46,7 +46,6 @@ from pyscf.dft import gks_symm
 from pyscf.dft import dks
 from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
-from pyscf.df import density_fit
 from pyscf.dft.gen_grid import sg1_prune, nwchem_prune, treutler_prune, \
         stratmann, original_becke, Grids
 from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
