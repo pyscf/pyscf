@@ -45,6 +45,8 @@ def transform_integrals_incore(myadc):
     eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()  # noqa: E501
     eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()  # noqa: E501
 
+    eris.vooo = ao2mo.general(myadc._scf._eri, (vir, occ, occ, occ), compact=False).reshape(nvir, nocc, nocc, nocc).copy()
+
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
         eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
@@ -221,6 +223,8 @@ def transform_integrals_df(myadc):
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
+
+    eris.vooo = eris.feri1.create_dataset('vooo', (nvir,nocc,nocc,nocc), 'f8', chunks=(1,nocc,nocc,nocc))
 
     eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
     eris.ovoo[:] = lib.ddot(eris.Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)

@@ -61,6 +61,7 @@ def transform_integrals_incore(myadc):
      eris.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
      eris.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
      eris.ovoo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+     eris.vooo = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)
      eris.ooov = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
      #eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
      eris.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
@@ -87,6 +88,7 @@ def transform_integrals_incore(myadc):
               eris.oovv[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc, nocc:,nocc:]/nkpts
               eris.ooov[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,nocc:]/nkpts
               eris.ovoo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,:nocc]/nkpts
+              eris.vooo[kp,kq,kr] = eri_kpt_symm[nocc:,:nocc,:nocc,:nocc]/nkpts
               eris.ovov[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,nocc:]/nkpts
               #eris.voov[kq,kp,ks] = tmp[:nocca,nocca:,nocca:,:nocca].conj().transpose(1,0,3,2)
               #eris.vovv[kq,kp,ks] = tmp[:nocca,nocca:,nocca:,nocca:].conj().transpose(1,0,3,2)
