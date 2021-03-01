@@ -1905,7 +1905,6 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         r2 = r2.reshape(nvir,nocc,nocc)
 
         eris_ovoo = eris.ovoo
-        eris_vooo = eris.vooo
 
 ############ ADC(2) ij block ############################
 
@@ -1916,22 +1915,13 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
         s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
         s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo, r2, optimize = True)
 
-        #s[s1:f1] += 0.5 * lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
-        #s[s1:f1] -= 0.5 * lib.einsum('jaki,akj->i', eris_ovoo, r2, optimize = True)
-        #s[s1:f1] -= 0.5 * lib.einsum('kaji,ajk->i', eris_ovoo, r2, optimize = True)
-        #s[s1:f1] += 0.5 * lib.einsum('kaji,akj->i', eris_ovoo, r2, optimize = True)
-        #s[s1:f1] += lib.einsum('jaki,ajk->i', eris_ovoo, r2, optimize = True)
-
 ######### ###### ADC(2) ajk - i block ############################
 
         temp = lib.einsum('jaki,i->ajk', eris_ovoo, r1, optimize = True).reshape(-1)
-        #temp = lib.einsum('ajik,i->ajk', eris_vooo, r1, optimize = True).reshape(-1)
         s[s2:f2] += temp.reshape(-1)
 
 ################# ADC(2) ajk - bil block ############################
 
-        #s[s2:f2] += -1.0 * r2.reshape(-1) 
-        #s[s2:f2] += 1e-13 * D_aij * r2.reshape(-1) 
         s[s2:f2] += D_aij * r2.reshape(-1) 
 
 ############### ADC(3) ajk - bil block ############################
