@@ -945,6 +945,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
     e_ij_n = e_ij.transpose(0,2,1,3).copy()
     e_ija = - e_vir[:,:,None,None,None,None] + e_ij_n[None,None,:,:,:,:] 
     e_ija = e_ija.transpose(0,2,3,1,4,5).copy()
+    #e_ija = e_ija.transpose(0,3,2,1,5,4).copy()
 
 #    e_ija = - e_vir[:,:,None,None,None] + e_ij[None,None,:,:,:] 
 #    e_ija = e_ija.transpose(0,2,1,3,4).copy()
@@ -980,19 +981,19 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
             for kk in range(nkpts):
                 ka = kconserv[kk, kshift, kj]
 
-                #s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk].conj(), r2[ka,kj], optimize = True)
-                #s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj].conj(), r2[ka,kj], optimize = True)
+                s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
+                s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
 
                 #temp_new += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
                 #temp_new -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
 
                 #s[s1:f1] += temp_new
 
-                s[s1:f1] += 0.5 * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
-                s[s1:f1] -= 0.5 * lib.einsum('jaki,akj->i', eris_ovoo[kj,ka,kk], r2[ka,kk], optimize = True)
-                s[s1:f1] -= 0.5 * lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
-                s[s1:f1] += 0.5 * lib.einsum('kaji,akj->i', eris_ovoo[kk,ka,kj], r2[ka,kk], optimize = True)
-                s[s1:f1] += lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
+                #s[s1:f1] += 0.5 * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
+                #s[s1:f1] -= 0.5 * lib.einsum('jaki,akj->i', eris_ovoo[kj,ka,kk], r2[ka,kk], optimize = True)
+                #s[s1:f1] -= 0.5 * lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
+                #s[s1:f1] += 0.5 * lib.einsum('kaji,akj->i', eris_ovoo[kk,ka,kj], r2[ka,kk], optimize = True)
+                #s[s1:f1] += lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
 ################### ADC(2) ajk - i block ############################
 
                 #temp[ka,kj] += lib.einsum('ajik,i->ajk', eris_vooo[ka,kj,kshift], r1, optimize = True)
@@ -1008,11 +1009,13 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
         #s[s2:f2] += -1.0 * r2.reshape(-1) 
         #s[s2:f2] += e_ija.reshape(-1) * r2.reshape(-1) 
+        temp_aij = np.zeros_like((r2),dtype=np.complex)
         for kj in range(nkpts):
             for kk in range(nkpts):
                 ka = kconserv[kk, kshift, kj]
-                temp[ka,kj] += e_ija[ka,kj,kshift] *  r2[ka,kj]
-        s[s2:f2] += temp.reshape(-1)
+                #temp_aij[ka,kj] += e_ija[ka,kj,kshift] *  r2[ka,kj]
+                temp_aij[ka,kj] += e_ija[ka,kj,kk] *  r2[ka,kj]
+        s[s2:f2] += temp_aij.reshape(-1)
 
 ################ ADC(3) ajk - bil block ############################
 #
