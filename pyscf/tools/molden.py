@@ -271,8 +271,8 @@ def _parse_mo(lines, envs):
             coeff_idx.append([int(ao_id) - 1, mo_id])
             mo_coeff_prim.append(float(c))
 
-    coeff_idx = numpy.array(coeff_idx)
-    number_of_aos, number_of_mos = coeff_idx.max(axis=0) + 1
+    coeff_idx = numpy.array(coeff_idx).transpose()
+    number_of_aos, number_of_mos = coeff_idx.max(axis=1) + 1
     mo_coeff = numpy.zeros([number_of_aos, number_of_mos])
     mo_coeff[coeff_idx[0], coeff_idx[1]] = mo_coeff_prim
 
