@@ -597,8 +597,9 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
             if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
                 #eris = pbc_gdf_ao2mo.ao2mo(mp2, fock=fock, mp2=True)
                 # TEST NEW
-                mo_energy = np.hstack((eo, ev))
-                eris = ao2mo_j3c.ao2mo_mp2(mp2, mo_energy=mo_energy)
+                #mo_energy = np.hstack((eo, ev))
+                #eris = ao2mo_j3c.ao2mo_mp2(mp2, mo_energy=mo_energy)
+                eris = ao2mo_j3c.ao2mo_mp2(mp2, fock=fock)
                 #assert np.allclose(eris.mo_energy, eris2.mo_energy)
                 #assert np.allclose(eris.ovov, eris2.ovov)
 

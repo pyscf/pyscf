@@ -32,8 +32,10 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc import scf
+from pyscf import embcc
 
-log = logging.getLogger(__name__)
+#log = logging.getLogger(__name__)
+log = embcc.log
 #print("Log for k2gamma = %s")
 
 def get_phase(cell, kpts, kmesh=None):
@@ -111,7 +113,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
             f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
                        C_gamma[:,degen_mask].conj().T)
             #assert(abs(f.imag).max() < imag_tol)
-            log.info("Largest imaginary part in f in k2gamma= %e", abs(f.imag).max())
+            log.info("Largest imaginary part in f in k2gamma (method 1)= %e", abs(f.imag).max())
             if abs(f.imag).max() > imag_tol:
                 log.error("Error: Large imaginary part in f matrix: %.3e", abs(f.imag).max())
 
@@ -121,7 +123,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
         else:
             f = np.dot(C_gamma * E_g, C_gamma.conj().T)
             #assert(abs(f.imag).max() < imag_tol)
-            log.info("Largest imaginary part in f in k2gamma= %e", abs(f.imag).max())
+            log.info("Largest imaginary part in f in k2gamma (method 2)= %e", abs(f.imag).max())
             if abs(f.imag).max() > imag_tol:
                 log.error("Error: Large imaginary part in f matrix: %.3e", abs(f.imag).max())
             e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)

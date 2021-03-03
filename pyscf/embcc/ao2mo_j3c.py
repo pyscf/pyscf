@@ -67,8 +67,9 @@ def j3c_to_mo_eris(j3c, mo_coeff, nocc, compact=False, ovov_only=False):
             j3c_oo = np.zeros((naux, nocc, nocc), dtype=j3c.dtype)
             j3c_vv = np.zeros((naux, nvir, nvir), dtype=j3c.dtype)
         # Avoid unpacking entire j3c at once
-        zfac = 2 if np.iscomplexobj(j3c) else 1
-        stepsize = int(500 / (max(nocc, nvir)**2 * zfac * 8/1e6))
+        #zfac = 2 if np.iscomplexobj(j3c) else 1
+        #stepsize = int(500 / (max(nocc, nvir)**2 * zfac * 8/1e6))
+        stepsize = 1
         log.debug("Stepsize= %d", stepsize)
         for lmin, lmax in pyscf.lib.prange(0, naux, stepsize):
             l = np.s_[lmin:lmax]
@@ -120,7 +121,7 @@ def _get_mem_ccsd(nocc, nvir, compact=False, unit=DEFAULT_MEM_UNIT):
     mem = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4)*MEM_UNITS[unit.lower()]
     return mem
 
-def ao2mo_mp2(mp, mo_energy):
+def ao2mo_mp2(mp, fock):
     """Creates pyscf.mp compatible _ChemistsERIs object.
 
     Parameters
@@ -140,10 +141,11 @@ def ao2mo_mp2(mp, mo_energy):
     eris.mo_coeff = mo_coeff
     eris.nocc = mp.nocc
     eris.e_hf = mp._scf.e_tot
-    eris.mo_energy = mo_energy.copy()
+    eris.mo_energy = fock.diagonal().copy()
+    eris.fock = fock.copy()
 
     j3c = mp._scf.with_df._cderi
-    g = j3c_to_mo_eris(j3c, mo_coeff, eris.nocc)
+    g = j3c_to_mo_eris(j3c, mo_coeff, eris.nocc, ovov_only=True)
     for key, val in g.items():
         setattr(eris, key, val)
 

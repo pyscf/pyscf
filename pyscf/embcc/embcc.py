@@ -9,6 +9,7 @@ from mpi4py import MPI
 
 import pyscf
 import pyscf.lo
+import pyscf.scf
 
 from .util import *
 from .cluster import Cluster
@@ -78,6 +79,7 @@ class EmbCC:
             localize_fragment=False,
             # Additional bath orbitals
             power1_occ_bath_tol=False, power1_vir_bath_tol=False, local_occ_bath_tol=False, local_vir_bath_tol=False,
+            **kwargs
             ):
         """
         Parameters
@@ -136,6 +138,15 @@ class EmbCC:
 
         self.maxiter = maxiter
         self.energy_part = energy_part
+
+        # New implementation of options
+        # TODO: Change other options to here
+        self.opts = Options()
+        self.opts.make_rdm1 = kwargs.pop("make_rdm1", False)
+        self.opts.ip_eom = kwargs.pop("ip_eom", False)
+        self.opts.ea_eom = kwargs.pop("ea_eom", False)
+        if kwargs:
+            raise ValueError("Unknown arguments: %r" % kwargs.keys())
 
         # Options
         self.solver = solver
@@ -207,6 +218,10 @@ class EmbCC:
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
             self.init_fragments()
+
+        # Population analysis
+        self.lo = pyscf.lo.orth_ao(self.mol, "lowdin")
+        self.pop_analysis()
 
         log.changeIndentLevel(-1)
 
@@ -832,6 +847,28 @@ class EmbCC:
         C_lao = pyscf.lo.vec_lowdin(C_lao, S)
         lao_labels = self.mol.ao_labels(None)
         return C_lao, lao_labels
+
+    def pop_analysis(self):
+        mo = np.linalg.solve(self.lo, self.mf.mo_coeff)
+        dm = self.mf.make_rdm1(mo, self.mf.mo_occ)
+        pop, chg = self.mf.mulliken_pop(dm=dm, s=np.eye(dm.shape[-1]))
+
+        log.info("Mean-field population analysis")
+        log.info("******************************")
+        # per orbital
+        for i, s in enumerate(self.mol.ao_labels()):
+            log.info("  * MF population of OrthAO %4d %-16s = %10.5f", i, s, pop[i])
+        # per atom
+        log.info("Mean-field atomic charges")
+        log.info("*************************")
+        for ia in range(self.mol.natm):
+            symb = self.mol.atom_symbol(ia)
+            log.info("  * MF charge at atom %3d %-3s = %10.5f", ia, symb, chg[ia])
+
+        self.pop_mf = pop
+        self.pop_mf_chg = chg
+        return pop, chg
+
 
     def kernel(self, **kwargs):
 

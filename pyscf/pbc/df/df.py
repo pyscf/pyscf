@@ -224,8 +224,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             #log.error(msg)
             #raise scipy.linalg.LinAlgError('\n'.join([str(e), msg]))
             w, v = scipy.linalg.eigh(j2c)
-            log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
-            log.debug('cond = %.4g, drop %d bfns',
+            log.info('DF metric linear dependency for kpt %s', uniq_kptji_id)
+            log.info('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
             v1 = v[:,w>mydf.linear_dep_threshold].conj().T
             v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)

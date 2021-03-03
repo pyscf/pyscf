@@ -19,6 +19,7 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
+
 def get_local_amplitudes(self, cc, C1, C2, **kwargs):
     """Wrapper for get_local_amplitudes, where the mo coefficients are extracted from a MP2 or CC object."""
 
@@ -181,16 +182,14 @@ def get_local_energy(self, cc, pC1, pC2, eris):
 
     if hasattr(eris, "ovvo"):
         eris_ovvo = eris.ovvo
-    # MP2 only has eris.ovov
-    # These are actually different integrals though ?!
+    # MP2 only has eris.ovov - are these the same integrals?
     else:
         no, nv = pC2.shape[1:3]
-        #eris_ovvo = eris.ovov.reshape(no,nv,no,nv).transpose(0, 1, 3, 2)
-        eris_ovvo = eris.ovov[:].reshape(no,nv,no,nv).transpose(0, 1, 3, 2)
+        eris_ovvo = eris.ovov[:].reshape(no,nv,no,nv).transpose(0, 1, 3, 2).conj()
     e2 = 2*einsum('ijab,iabj', pC2, eris_ovvo)
     e2 -=  einsum('ijab,jabi', pC2, eris_ovvo)
 
-    log.debug("Energy components E1=%16.8g, E2=%16.8g", e1, e2)
+    log.info("Energy components: E1=%16.8g, E2=%16.8g", e1, e2)
     if e1 > 1e-4 and 10*e1 > e2:
         log.warning("WARNING: Large E1 component!")
 

@@ -8,6 +8,8 @@ import scipy
 import scipy.optimize
 
 __all__ = [
+        "Object",
+        "Options",
         "log_time",
         "has_length",
         "orthogonalize_mo",
@@ -30,6 +32,16 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 einsum = functools.partial(np.einsum, optimize=True)
+
+class Object:
+    pass
+
+class Options:
+
+    def get(self, attr, default=None):
+        if hasattr(self, attr):
+            return getattr(self, attr)
+        return default
 
 class IndentedLog:
 

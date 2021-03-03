@@ -35,6 +35,7 @@ def get_arguments():
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
     parser.add_argument("--precision", type=float, default=1e-5)
+    parser.add_argument("--rcut", type=float)
     parser.add_argument("--pyscf-verbose", type=int, default=4)
     parser.add_argument("--exp-to-discard", type=float, help="If set, discard diffuse basis functions.")
     parser.add_argument("--energy-per", choices=["atom", "cell"], help="Express total energy per unit cell or per atom.")
@@ -57,6 +58,9 @@ def get_arguments():
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
+    parser.add_argument("--make-rdm1", action="store_true")
+    parser.add_argument("--ip-eom", action="store_true")
+    parser.add_argument("--ea-eom", action="store_true")
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
     parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
@@ -109,6 +113,8 @@ def get_arguments():
     for key, val in defaults.items():
         if getattr(args, key) is None:
             setattr(args, key, val)
+
+    args.lattice_consts = np.asarray(args.lattice_consts)
 
     # Reference geometry which defines cell parameters
     if args.ref_lattice_const is None:
@@ -192,6 +198,10 @@ def make_cell(a, args, refcell=None):
         cell.ew_eta = refcell.ew_eta
     else:
         cell.precision = args.precision
+
+    if args.rcut is not None:
+        cell.rcut = args.rcut
+
     cell.verbose = args.pyscf_verbose
     cell.basis = args.basis
     if args.pseudopot:
@@ -235,6 +245,11 @@ def run_mf(a, cell, args, refdf=None):
     # Density-fitting
     if args.df == "GDF":
         mf = mf.density_fit()
+
+        # TEST
+        #mf.with_df.linear_dep_threshold = 1e-7
+        mf.with_df.linear_dep_threshold = 1e-5
+
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
             mf.with_df.auxbasis = args.auxbasis
@@ -260,6 +275,8 @@ def run_mf(a, cell, args, refdf=None):
                 mf.with_df.mesh = args.gdf_mesh
             elif args.gdf_mesh_factor is not None:
                 mf.with_df.mesh = [int(args.gdf_mesh_factor*n) for n in mf.with_df.mesh]
+            # Force odd mesh
+            mf.with_df.mesh = [2*(n//2)+1 for n in mf.with_df.mesh]
 
             if args.save_gdf is not None:
                 fname = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
@@ -349,11 +366,19 @@ for i, a in enumerate(args.lattice_consts):
     # Loop over bath tolerances
     for j, btol in enumerate(args.bath_tol):
 
+        kwargs = {
+                "make_rdm1" : args.make_rdm1,
+                "ip_eom" : args.ip_eom,
+                "ea_eom" : args.ea_eom,
+                }
+
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
             bath_type=args.bath_type, bath_tol=btol,
             mp2_correction=args.mp2_correction,
             power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
+            **kwargs
             )
+        #ccx.make_rdm1 = True
 
         # Define atomic fragments, first argument is atom label or index
         if args.system == "diamond":

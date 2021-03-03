@@ -28,6 +28,82 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 
+def get_eri_test(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    if mydf._cderi is None:
+        mydf.build()
+
+    cell = mydf.cell
+    nao = cell.nao_nr()
+    kptijkl = _format_kpts(kpts)
+    if not _iskconserv(cell, kptijkl):
+        lib.logger.warn(cell, 'df_ao2mo: momentum conservation not found in '
+                        'the given k-points %s', kptijkl)
+        #return numpy.zeros((nao,nao,nao,nao))
+
+    kpti, kptj, kptk, kptl = kptijkl
+    nao_pair = nao * (nao+1) // 2
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6)
+
+#####################
+## gamma point, the integral is real and with s4 symmetry
+#    if gamma_point(kptijkl):
+#        eriR = numpy.zeros((nao_pair,nao_pair))
+#        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, True):
+#            lib.ddot(LpqR.T, LpqR, sign, eriR, 1)
+#            LpqR = LpqI = None
+#        if not compact:
+#            eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
+#        return eriR
+#
+#    elif is_zero(kpti-kptk) and is_zero(kptj-kptl):
+#        eriR = numpy.zeros((nao*nao,nao*nao))
+#        eriI = numpy.zeros((nao*nao,nao*nao))
+#        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+#            zdotNN(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
+#            LpqR = LpqI = None
+#        return eriR + eriI*1j
+#
+#####################
+## (kpt) i == j == k == l != 0
+##
+## (kpt) i == l && j == k && i != j && j != k  =>
+## both vbar and ovlp are zero. It corresponds to the exchange integral.
+##
+## complex integrals, N^4 elements
+#    elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
+#        eriR = numpy.zeros((nao*nao,nao*nao))
+#        eriI = numpy.zeros((nao*nao,nao*nao))
+#        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+#            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
+#            LpqR = LpqI = None
+## transpose(0,1,3,2) because
+## j == k && i == l  =>
+## (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
+#        eri = lib.transpose((eriR+eriI*1j).reshape(-1,nao,nao), axes=(0,2,1))
+#        return eri.reshape(nao**2,-1)
+#
+#####################
+## aosym = s1, complex integrals
+##
+## kpti == kptj  =>  kptl == kptk
+## If kpti == kptj, (kptl-kptk)*a has to be multiples of 2pi because of the wave
+## vector symmetry.  k is a fraction of reciprocal basis, 0 < k/b < 1, by definition.
+## So  kptl/b - kptk/b  must be -1 < k/b < 1.
+##
+#    else:
+    if True:
+        eriR = numpy.zeros((nao*nao,nao*nao))
+        eriI = numpy.zeros((nao*nao,nao*nao))
+        blksize = int(max_memory*.4e6/16/nao**2)
+        for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
+            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, sign, eriR, eriI, 1)
+            LpqR = LpqI = LrsR = LrsI = None
+        return eriR + eriI*1j
+
+
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
