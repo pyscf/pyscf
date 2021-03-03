@@ -41,6 +41,7 @@ from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     kptlist = [0]
+    #kptlist = None
 
     adc.method = adc.method.lower()
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -58,13 +59,21 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     nkpts = adc.nkpts
     nocc = adc.nocc
     nvir = adc.nmo - adc.nocc
-    n_singles = nocc
-    n_doubles = nkpts * nkpts * nvir * nocc * nocc
+
+    #n_singles = nocc
+    #n_doubles = nkpts * nkpts * nvir * nocc * nocc
+    #size = n_singles + n_doubles
+
+    n_singles = nvir
+    n_doubles = nkpts * nkpts * nocc * nvir * nvir
     size = n_singles + n_doubles
+
+
     nroots = min(nroots,size)
 
     if kptlist is None:
         kptlist = range(nkpts)
+
 
     #if dtype is None:
     dtype = np.result_type(adc.t2)
@@ -665,20 +674,12 @@ def get_imds_ea(adc, eris=None):
     method = adc.method
     nkpts = adc.nkpts
 
-#    t1 = adc.t1
     t2_1 = adc.t2
-    #mymp = mp.KMP2(adc._scf)
-    #emp2, t2_1 = mymp.kernel()
-    #t2_1 = mp.kmp2.kernel()[1]
-#    t1_2 = t1[0]
-#
-#    nocc = adc._nocc
-#    nvir = adc._nvir
-#
     mo_energy =  adc.mo_energy
     mo_coeff =  adc.mo_coeff
     nmo =  adc.get_nmo
     nocc = adc.t2.shape[3]
+    nvir = adc.nmo - adc.nocc
     kconserv = adc.khelper.kconserv
 
     mo_coeff, mo_energy = _add_padding(adc, mo_coeff, mo_energy)
@@ -689,62 +690,115 @@ def get_imds_ea(adc, eris=None):
     e_occ = np.array(e_occ)
     e_vir = np.array(e_vir)
 
-    idn_occ = np.identity(nocc)
-    M_ij = np.empty((nkpts,nocc,nocc),dtype=t2_1.dtype)
+    idn_vir = np.identity(nvir)
+##    if eris is None:
+##        eris = adc.transform_integrals()
 
-#    if eris is None:
-#        eris = adc.transform_integrals()
-#
     eris_ovov = eris.ovov
 
-    # i-j block
+#    M_ij = np.empty((nkpts,nocc,nocc),dtype=t2_1.dtype)
+#
+##
+#    eris_ovov = eris.ovov
+#
+#    # i-j block
+#    # Zeroth-order terms
+#
+#    for ki in range(nkpts):
+#        kj = ki
+#        M_ij[ki] = lib.einsum('ij,j->ij', idn_occ , e_occ[kj])
+#        for kl in range(nkpts):
+#            for kd in range(nkpts):
+#                ke = kconserv[kj,kd,kl]
+#                M_ij[ki] +=  lib.einsum('d,ilde,jlde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] -=  lib.einsum('d,ilde,ljde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kl,kj,kd].conj(), optimize=True)
+#                M_ij[ki] -=  lib.einsum('d,lide,jlde->ij',e_vir[kd],t2_1[kl,ki,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] +=  lib.einsum('d,lide,ljde->ij',e_vir[kd],t2_1[kl,ki,kd], t2_1[kl,kj,kd].conj(), optimize=True)
+#                M_ij[ki] +=  lib.einsum('d,ilde,jlde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] +=  lib.einsum('d,iled,jled->ij',e_vir[kd],t2_1[ki,kl,ke], t2_1[kj,kl,ke].conj(), optimize=True)
+#
+#                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] += 0.5 *  lib.einsum('l,ilde,ljde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kl,kj,kd].conj(), optimize=True)
+#                M_ij[ki] += 0.5 *  lib.einsum('l,lide,jlde->ij',e_occ[kl],t2_1[kl,ki,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('l,lide,ljde->ij',e_occ[kl],t2_1[kl,ki,kd], t2_1[kl,kj,kd].conj(), optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+#
+#                M_ij_t = lib.einsum('ilde,jlde->ij', t2_1[ki,kl,kd],t2_1[kj,kl,kd].conj(), optimize=True)
+#                M_ij[ki] -= lib.einsum('i,ij->ij',e_occ[ki],M_ij_t, optimize=True)
+#                M_ij[ki] -= lib.einsum('j,ij->ij',e_occ[kj],M_ij_t, optimize=True)
+#                del M_ij_t
+#                
+#                M_ij_t = lib.einsum('ilde,ljde->ij', t2_1[ki,kl,kd],t2_1[kl,kj,kd].conj(), optimize=True)
+#                M_ij[ki] += 0.5 * lib.einsum('i,ij->ij',e_occ[ki], M_ij_t, optimize=True)
+#                M_ij[ki] += 0.5 * lib.einsum('j,ij->ij',e_occ[kj],M_ij_t, optimize=True)
+#                del M_ij_t
+#
+#                M_ij[ki] += 0.5 *  lib.einsum('ilde,jdle->ij',t2_1[ki,kl,kd], eris_ovov[kj,kd,kl],optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('lide,jdle->ij',t2_1[kl,ki,kd], eris_ovov[kj,kd,kl],optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('ilde,jeld->ij',t2_1[ki,kl,kd], eris_ovov[kj,ke,kl],optimize=True)
+#                M_ij[ki] += 0.5 *  lib.einsum('lide,jeld->ij',t2_1[kl,ki,kd], eris_ovov[kj,ke,kl],optimize=True)
+#                M_ij[ki] += lib.einsum('ilde,jdle->ij',t2_1[ki,kl,kd], eris_ovov[kj,kd,kl],optimize=True)
+#                
+#                M_ij[ki] += 0.5 *  lib.einsum('jlde,idle->ij',t2_1[kj,kl,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('ljde,idle->ij',t2_1[kl,kj,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
+#                M_ij[ki] -= 0.5 *  lib.einsum('jlde,ldie->ij',t2_1[kj,kl,kd].conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
+#                M_ij[ki] += 0.5 *  lib.einsum('ljde,ldie->ij',t2_1[kl,kj,kd].conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
+#                M_ij[ki] += lib.einsum('jlde,idle->ij',t2_1[kj,kl,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
+#    
+#    cput0 = log.timer_debug1("Completed M_ij second-order terms ADC(2) calculation", *cput0)
+#    return M_ij
+
+    # a-b block
     # Zeroth-order terms
+    M_ab = np.empty((nkpts,nvir,nvir),dtype=t2_1.dtype)
 
-    for ki in range(nkpts):
-        kj = ki
-        M_ij[ki] = lib.einsum('ij,j->ij', idn_occ , e_occ[kj])
+    for ka in range(nkpts):
+        kb = ka
+        M_ab[ka] = lib.einsum('ab,a->ab', idn_vir, e_vir[ka])
         for kl in range(nkpts):
-            for kd in range(nkpts):
-                ke = kconserv[kj,kd,kl]
-                M_ij[ki] +=  lib.einsum('d,ilde,jlde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] -=  lib.einsum('d,ilde,ljde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kl,kj,kd].conj(), optimize=True)
-                M_ij[ki] -=  lib.einsum('d,lide,jlde->ij',e_vir[kd],t2_1[kl,ki,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] +=  lib.einsum('d,lide,ljde->ij',e_vir[kd],t2_1[kl,ki,kd], t2_1[kl,kj,kd].conj(), optimize=True)
-                M_ij[ki] +=  lib.einsum('d,ilde,jlde->ij',e_vir[kd],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] +=  lib.einsum('d,iled,jled->ij',e_vir[kd],t2_1[ki,kl,ke], t2_1[kj,kl,ke].conj(), optimize=True)
+            for km in range(nkpts):
 
-                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] += 0.5 *  lib.einsum('l,ilde,ljde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kl,kj,kd].conj(), optimize=True)
-                M_ij[ki] += 0.5 *  lib.einsum('l,lide,jlde->ij',e_occ[kl],t2_1[kl,ki,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('l,lide,ljde->ij',e_occ[kl],t2_1[kl,ki,kd], t2_1[kl,kj,kd].conj(), optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('l,ilde,jlde->ij',e_occ[kl],t2_1[ki,kl,kd], t2_1[kj,kl,kd].conj(), optimize=True)
+                kd = kconserv[kl,ka,km]
+                # Second-order terms
 
-                M_ij_t = lib.einsum('ilde,jlde->ij', t2_1[ki,kl,kd],t2_1[kj,kl,kd].conj(), optimize=True)
-                M_ij[ki] -= lib.einsum('i,ij->ij',e_occ[ki],M_ij_t, optimize=True)
-                M_ij[ki] -= lib.einsum('j,ij->ij',e_occ[kj],M_ij_t, optimize=True)
-                del M_ij_t
-                
-                M_ij_t = lib.einsum('ilde,ljde->ij', t2_1[ki,kl,kd],t2_1[kl,kj,kd].conj(), optimize=True)
-                M_ij[ki] += 0.5 * lib.einsum('i,ij->ij',e_occ[ki], M_ij_t, optimize=True)
-                M_ij[ki] += 0.5 * lib.einsum('j,ij->ij',e_occ[kj],M_ij_t, optimize=True)
-                del M_ij_t
+                M_ab[ka] +=  lib.einsum('l,lmad,lmbd->ab',e_occ[kl] ,t2_1[kl,km,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] -=  lib.einsum('l,lmad,mlbd->ab',e_occ[kl] ,t2_1[kl,km,ka], t2_1[km,kl,kb].conj(),optimize=True)
+                M_ab[ka] -=  lib.einsum('l,mlad,lmbd->ab',e_occ[kl] ,t2_1[km,kl,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] +=  lib.einsum('l,mlad,mlbd->ab',e_occ[kl] ,t2_1[km,kl,ka], t2_1[km,kl,kb].conj(),optimize=True)
+                M_ab[ka] +=  lib.einsum('l,lmad,lmbd->ab',e_occ[kl] ,t2_1[kl,km,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] +=  lib.einsum('l,mlad,mlbd->ab',e_occ[kl] ,t2_1[km,kl,ka], t2_1[km,kl,kb].conj(),optimize=True)
 
-                M_ij[ki] += 0.5 *  lib.einsum('ilde,jdle->ij',t2_1[ki,kl,kd], eris_ovov[kj,kd,kl],optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('lide,jdle->ij',t2_1[kl,ki,kd], eris_ovov[kj,kd,kl],optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('ilde,jeld->ij',t2_1[ki,kl,kd], eris_ovov[kj,ke,kl],optimize=True)
-                M_ij[ki] += 0.5 *  lib.einsum('lide,jeld->ij',t2_1[kl,ki,kd], eris_ovov[kj,ke,kl],optimize=True)
-                M_ij[ki] += lib.einsum('ilde,jdle->ij',t2_1[ki,kl,kd], eris_ovov[kj,kd,kl],optimize=True)
-                
-                M_ij[ki] += 0.5 *  lib.einsum('jlde,idle->ij',t2_1[kj,kl,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('ljde,idle->ij',t2_1[kl,kj,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
-                M_ij[ki] -= 0.5 *  lib.einsum('jlde,ldie->ij',t2_1[kj,kl,kd].conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
-                M_ij[ki] += 0.5 *  lib.einsum('ljde,ldie->ij',t2_1[kl,kj,kd].conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
-                M_ij[ki] += lib.einsum('jlde,idle->ij',t2_1[kj,kl,kd].conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
-    
-    cput0 = log.timer_debug1("Completed M_ij second-order terms ADC(2) calculation", *cput0)
+                M_ab[ka] -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir[kd], t2_1[kl,km,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('d,lmad,mlbd->ab',e_vir[kd], t2_1[kl,km,ka], t2_1[km,kl,kb].conj(),optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('d,mlad,lmbd->ab',e_vir[kd], t2_1[km,kl,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir[kd], t2_1[km,kl,ka], t2_1[km,kl,kb].conj(),optimize=True)
+                M_ab[ka] -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir[kd], t2_1[kl,km,ka], t2_1[kl,km,kb].conj(),optimize=True)
+                M_ab[ka] -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir[kd], t2_1[km,kl,ka], t2_1[km,kl,kb].conj(),optimize=True)
 
-    return M_ij
+                M_ab_t = lib.einsum('lmad,lmbd->ab', t2_1[kl,km,ka],t2_1[kl,km,kb].conj(), optimize=True)
+                M_ab[ka] -= 1 *  lib.einsum('a,ab->ab',e_vir[ka],M_ab_t,optimize=True)
+                M_ab[ka] -= 1 *  lib.einsum('b,ab->ab',e_vir[kb],M_ab_t,optimize=True)
+                del M_ab_t
+
+                M_ab_t = lib.einsum('lmad,mlbd->ab', t2_1[kl,km,ka],t2_1[km,kl,kb].conj(), optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('a,ab->ab',e_vir[ka],M_ab_t,optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('b,ab->ab',e_vir[kb],M_ab_t,optimize=True)
+                del M_ab_t
+
+                M_ab[ka] -= 0.5 *  lib.einsum('lmad,lbmd->ab',t2_1[kl,km,ka], eris_ovov[kl,kb,km],optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('mlad,lbmd->ab',t2_1[km,kl,ka], eris_ovov[kl,kb,km],optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('lmad,ldmb->ab',t2_1[kl,km,ka], eris_ovov[kl,kd,km],optimize=True)
+                M_ab[ka] -= 0.5 *  lib.einsum('mlad,ldmb->ab',t2_1[km,kl,ka], eris_ovov[kl,kd,km],optimize=True)
+                M_ab[ka] -=        lib.einsum('lmad,lbmd->ab',t2_1[kl,km,ka], eris_ovov[kl,kb,km],optimize=True)
+
+                M_ab[ka] -= 0.5 *  lib.einsum('lmbd,lamd->ab',t2_1[kl,km,kb].conj(), eris_ovov[kl,ka,km].conj(),optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('mlbd,lamd->ab',t2_1[km,kl,kb].conj(), eris_ovov[kl,ka,km].conj(),optimize=True)
+                M_ab[ka] += 0.5 *  lib.einsum('lmbd,ldma->ab',t2_1[kl,km,kb].conj(), eris_ovov[kl,kd,km].conj(),optimize=True)
+                M_ab[ka] -= 0.5 *  lib.einsum('mlbd,ldma->ab',t2_1[km,kl,kb].conj(), eris_ovov[kl,kd,km].conj(),optimize=True)
+                M_ab[ka] -=        lib.einsum('lmbd,lamd->ab',t2_1[kl,km,kb].conj(), eris_ovov[kl,ka,km].conj(),optimize=True)
+ 
+    return M_ab
 
 def get_imds_ip(adc, eris=None):
 
@@ -839,7 +893,7 @@ def get_imds_ip(adc, eris=None):
     return M_ij
 
 
-def ea_adc_diag(adc,kshift,M_ij=None,eris=None):
+def ea_adc_diag(adc,kshift,M_ab=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
@@ -848,8 +902,8 @@ def ea_adc_diag(adc,kshift,M_ij=None,eris=None):
 
     method = adc.method
 
-    if M_ij is None:
-        M_ij = adc.get_imds()
+    if M_ab is None:
+        M_ab = adc.get_imds()
 
     #nocc = adc._nocc
     #nvir = adc._nvir
@@ -857,9 +911,9 @@ def ea_adc_diag(adc,kshift,M_ij=None,eris=None):
     t2 = adc.t2
     kconserv = adc.khelper.kconserv
     nocc = adc.nocc
-    n_singles = nocc
     nvir = adc.nmo - adc.nocc
-    n_doubles = nkpts * nkpts * nvir * nocc * nocc
+    n_singles = nvir
+    n_doubles = nkpts * nkpts * nocc * nvir * nvir
 
     dim = n_singles + n_doubles
 
@@ -876,26 +930,30 @@ def ea_adc_diag(adc,kshift,M_ij=None,eris=None):
     e_occ = [mo_energy[k][:nocc] for k in range(nkpts)]
     e_vir = [mo_energy[k][nocc:] for k in range(nkpts)]
 
-    e_ij = np.zeros((nkpts,nocc,nkpts,nocc), dtype=t2.dtype)
+    e_ab = np.zeros((nkpts,nvir,nkpts,nvir), dtype=t2.dtype)
 
     e_vir = np.array(e_vir)
     e_occ = np.array(e_occ)
         
-    e_ij = e_occ[:,:,None,None] + e_occ[None,None,:,:]
-    e_ija = - e_vir[:,:,None,None,None,None] + e_ij[None,None,:,:,:,:] 
-    e_ija = e_ija.transpose(0,2,4,1,3,5).copy()
+    e_ab = e_vir[:,:,None,None] + e_vir[None,None,:,:]
+    e_iab = - e_occ[:,:,None,None,None,None] + e_ab[None,None,:,:,:,:] 
+    e_iab = e_iab.transpose(0,2,4,1,3,5).copy()
+
+    e_iab_ones = np.ones_like(e_iab)
 
     diag = np.zeros((dim), dtype=np.complex)
 
     # Compute precond in h1-h1 block
-    M_ij_diag = np.diagonal(M_ij[kshift])
-    diag[s1:f1] = M_ij_diag.copy()
+    M_ab_diag = np.diagonal(M_ab[kshift])
+    diag[s1:f1] = M_ab_diag.copy()
 
     # Compute precond in 2p1h-2p1h block
 
-    diag[s2:f2] += e_ija[kshift].reshape(-1) 
+    #diag[s2:f2] += e_iab[:,kshift].reshape(-1) 
+    #diag[s2:f2] += 1e13 * e_iab[:,kshift].reshape(-1) 
+    diag[s2:f2] += e_iab[:,kshift].reshape(-1) 
 
-    diag = -diag
+    diag = diag
     log.timer_debug1("Completed ea_diag calculation")
 
     return diag
@@ -961,7 +1019,7 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
 
     return diag
 
-def ea_adc_matvec(adc, kshift, M_ij=None, eris=None):
+def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -972,9 +1030,9 @@ def ea_adc_matvec(adc, kshift, M_ij=None, eris=None):
     nocc = adc.nocc
     kconserv = adc.khelper.kconserv
     t2 = adc.t2
-    n_singles = nocc
     nvir = adc.nmo - adc.nocc
-    n_doubles = nkpts * nkpts * nvir * nocc * nocc
+    n_singles = nvir
+    n_doubles = nkpts * nkpts * nocc * nvir * nvir
 
     dim = n_singles + n_doubles
 
@@ -991,17 +1049,17 @@ def ea_adc_matvec(adc, kshift, M_ij=None, eris=None):
     e_occ = [mo_energy[k][:nocc] for k in range(nkpts)]
     e_vir = [mo_energy[k][nocc:] for k in range(nkpts)]
 
-    e_ij = np.zeros((nkpts,nocc,nkpts,nocc), dtype=t2.dtype)
+    e_ab = np.zeros((nkpts,nvir,nkpts,nvir), dtype=t2.dtype)
 
     e_vir = np.array(e_vir)
     e_occ = np.array(e_occ)
         
-    e_ij = e_occ[:,:,None,None] + e_occ[None,None,:,:]
-    e_ija = - e_vir[:,:,None,None,None,None] + e_ij[None,None,:,:,:,:] 
-    e_ija = e_ija.transpose(0,2,4,1,3,5).copy()
+    e_ab = e_vir[:,:,None,None] + e_vir[None,None,:,:]
+    e_iab = - e_occ[:,:,None,None,None,None] + e_ab[None,None,:,:,:,:] 
+    e_iab = e_iab.transpose(0,2,4,1,3,5).copy()
 
-    if M_ij is None:
-        M_ij = adc.get_imds()
+    if M_ab is None:
+        M_ab = adc.get_imds()
 
     #Calculate sigma vector
     def sigma_(r):
@@ -1013,39 +1071,48 @@ def ea_adc_matvec(adc, kshift, M_ij=None, eris=None):
         r1 = r[s1:f1]
         r2 = r[s2:f2]
 
-        r2 = r2.reshape(nkpts,nkpts,nvir,nocc,nocc)
+        r2 = r2.reshape(nkpts,nkpts,nocc,nvir,nvir)
         temp = np.zeros_like((r2),dtype=np.complex)
-        temp_aij = np.zeros_like((r2),dtype=np.complex)
+        #temp_aij = np.zeros_like((r2),dtype=np.complex)
         
         eris_ovoo = eris.ovoo
-        eris_vooo = eris.vooo
+        eris_ovvv = eris.ovvv
 
 ############ ADC(2) ij block ############################
 
-        s[s1:f1] = lib.einsum('ij,j->i',M_ij[kshift],r1)
+        s[s1:f1] = lib.einsum('ab,b->a',M_ab[kshift],r1)
 
 ########### ADC(2) i - kja block #########################
-        for kj in range(nkpts):
-            for kk in range(nkpts):
-                ka = kconserv[kk, kshift, kj]
+#        for kj in range(nkpts):
+#            for kk in range(nkpts):
+#                ka = kconserv[kk, kshift, kj]
+#
+#                s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
+#                s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
+#
+#################### ADC(2) ajk - i block ############################
+#
+#                temp[ka,kj] += lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
+#
+        for kb in range(nkpts):
+            for kc in range(nkpts):
+                ki = kconserv[kb,kshift, kc]
+                s[s1:f1] +=  2. * lib.einsum('icab,ibc->a', eris_ovvv[ki,kc,kshift], r2[ki,kb], optimize = True)
+                s[s1:f1] -=  lib.einsum('ibac,ibc->a',   eris_ovvv[ki,kb,kshift], r2[ki,kb], optimize = True)
+   
+                temp[ki,kb] += lib.einsum('icab,a->ibc', eris_ovvv[ki,kc,kshift].conj(), r1, optimize = True)
 
-                s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk], r2[ka,kj], optimize = True)
-                s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj], r2[ka,kj], optimize = True)
+        #s[s2:f2] +=  temp_doubles.reshape(-1)
+################## ADC(2) ajk - bil block ############################
 
-################### ADC(2) ajk - i block ############################
+        #for kb in range(nkpts):
+        #    for kc in range(nkpts):
+        #        ki = kconserv[kc,kshift, kb]
+        #        #temp_aij[ka,kj] += e_ija[ka,kj,kk] *  r2[ka,kj]
+                temp[ki,kb] += e_iab[ki,kb,kc] *  r2[ki,kb]
 
-                temp[ka,kj] += lib.einsum('jaki,i->ajk', eris_ovoo[kj,ka,kk].conj(), r1, optimize = True)
-
-################# ADC(2) ajk - bil block ############################
-
-       # for kj in range(nkpts):
-       #     for kk in range(nkpts):
-       #         ka = kconserv[kk, kshift, kj]
-                #temp_aij[ka,kj] += e_ija[ka,kj,kk] *  r2[ka,kj]
-                temp[ka,kj] += e_ija[ka,kj,kk] *  r2[ka,kj]
-
+        #s[s2:f2] = 1e13 * r2.reshape(-1)
         s[s2:f2] += temp.reshape(-1)
-        #s[s2:f2] += temp_aij.reshape(-1)
 
 ################ ADC(3) ajk - bil block ############################
 #
@@ -1176,7 +1243,6 @@ def ea_adc_matvec(adc, kshift, M_ij=None, eris=None):
 #               del t2_1
 
         cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
-        s *= -1.0
 
         return s
     return sigma_

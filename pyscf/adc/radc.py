@@ -858,12 +858,12 @@ def get_imds_ea(adc, eris=None):
     M_ab +=  lib.einsum('l,lmad,lmbd->ab',e_occ,t2_1, t2_1,optimize=True)
     M_ab +=  lib.einsum('l,mlad,mlbd->ab',e_occ,t2_1, t2_1,optimize=True)
 
-    M_ab -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir,t2_1, t2_1,optimize=True)
-    M_ab += 0.5 *  lib.einsum('d,lmad,mlbd->ab',e_vir,t2_1, t2_1,optimize=True)
-    M_ab += 0.5 *  lib.einsum('d,mlad,lmbd->ab',e_vir,t2_1, t2_1,optimize=True)
-    M_ab -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir,t2_1, t2_1,optimize=True)
-    M_ab -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir,t2_1, t2_1,optimize=True)
-    M_ab -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir,t2_1, t2_1,optimize=True)
+    M_ab -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir, t2_1, t2_1,optimize=True)
+    M_ab += 0.5 *  lib.einsum('d,lmad,mlbd->ab',e_vir, t2_1, t2_1,optimize=True)
+    M_ab += 0.5 *  lib.einsum('d,mlad,lmbd->ab',e_vir, t2_1, t2_1,optimize=True)
+    M_ab -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir, t2_1, t2_1,optimize=True)
+    M_ab -= 0.5 *  lib.einsum('d,lmad,lmbd->ab',e_vir, t2_1, t2_1,optimize=True)
+    M_ab -= 0.5 *  lib.einsum('d,mlad,mlbd->ab',e_vir, t2_1, t2_1,optimize=True)
 
     M_ab_t = lib.einsum('lmad,lmbd->ab', t2_1,t2_1, optimize=True)
     M_ab -= 1 *  lib.einsum('a,ab->ab',e_vir,M_ab_t,optimize=True)
@@ -1455,6 +1455,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     D_n = -d_i + d_ab.reshape(-1)
     D_iab = D_n.reshape(-1)
 
+    D_iab_one = np.ones_like(D_iab)
     diag = np.zeros(dim)
 
     # Compute precond in p1-p1 block
@@ -1464,6 +1465,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 
     # Compute precond in 2p1h-2p1h block
 
+    #diag[s2:f2] = 1e13 * D_iab.copy()  
     diag[s2:f2] = D_iab.copy()  
     del D_iab
 
@@ -1678,7 +1680,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
         s[s1:f1] = lib.einsum('ab,b->a',M_ab,r1)
 
-############# ADC(2) a - ibc and ibc - a coupling blocks #########################
+############## ADC(2) a - ibc and ibc - a coupling blocks #########################
 
         if isinstance(eris.ovvv, type(None)):
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)
@@ -1704,6 +1706,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 ################ ADC(2) iab - jcd block ############################
 
         s[s2:f2] +=  D_iab * r2.reshape(-1)
+        #s[s2:f2] +=  1e13 * r2.reshape(-1)
 
 ############### ADC(3) iab - jcd block ############################
 
