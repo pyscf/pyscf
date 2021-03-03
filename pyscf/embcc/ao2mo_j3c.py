@@ -47,65 +47,91 @@ def j3c_to_mo_eris(j3c, mo_coeff, nocc, compact=False, ovov_only=False):
         raise NotImplementedError()
     j3c_compact = (j3c.ndim == 2)
     assert (j3c.ndim in (2, 3))
-    nvir = mo_coeff.shape[-1] - nocc
+    norb = mo_coeff.shape[-1]
+    nvir = norb - nocc
     naux = j3c.shape[0]
     o, v = np.s_[:nocc], np.s_[nocc:]
+    co, cv = mo_coeff[:,o], mo_coeff[:,v]
     assert not np.iscomplexobj(mo_coeff)
 
+    # AO->MO
     if not j3c_compact:
-        j3c_ov = einsum("Lab,ai,bj->Lij", j3c, mo_coeff[:,o], mo_coeff[:,v])
+        j3c_ov = einsum("Lab,ai,bj->Lij", j3c, co, cv)
         if not ovov_only:
-            j3c_oo = einsum("Lab,ai,bj->Lij", j3c, mo_coeff[:,o], mo_coeff[:,o])
+            j3c_oo = einsum("Lab,ai,bj->Lij", j3c, co, co)
+            j3c_vv = einsum("Lab,ai,bj->Lij", j3c, cv, cv)
             # TEST:
-            j3c_vo = einsum("Lab,ai,bj->Lij", j3c, mo_coeff[:,v], mo_coeff[:,o])
-            assert np.allclose(j3c_ov, j3c.vo.transpose((0,2,1)).conj())
-            #assert np.allclose(j3c_ov, j3c.vo.transpose((0,2,1)))
-            j3c_vv = einsum("Lab,ai,bj->Lij", j3c, mo_coeff[:,v], mo_coeff[:,v])
+            j3c_vo = einsum("Lab,ai,bj->Lij", j3c, cv, co)
     else:
         j3c_ov = np.zeros((naux, nocc, nvir), dtype=j3c.dtype)
         if not ovov_only:
             j3c_oo = np.zeros((naux, nocc, nocc), dtype=j3c.dtype)
             j3c_vv = np.zeros((naux, nvir, nvir), dtype=j3c.dtype)
+            # TEST:
+            j3c_vo = np.zeros((naux, nvir, nocc), dtype=j3c.dtype)
         # Avoid unpacking entire j3c at once
         #zfac = 2 if np.iscomplexobj(j3c) else 1
         #stepsize = int(500 / (max(nocc, nvir)**2 * zfac * 8/1e6))
+        #log.debug("Stepsize= %d", stepsize)
         stepsize = 1
-        log.debug("Stepsize= %d", stepsize)
         for lmin, lmax in pyscf.lib.prange(0, naux, stepsize):
             l = np.s_[lmin:lmax]
             j3c_l = pyscf.lib.unpack_tril(j3c[l])
-            j3c_ov[l] = einsum("Lab,ai,bj->Lij", j3c_l, mo_coeff[:,o], mo_coeff[:,v])
+            j3c_ov[l] = einsum("Lab,ai,bj->Lij", j3c_l, co, cv)
             if not ovov_only:
-                j3c_oo[l] = einsum("Lab,ai,bj->Lij", j3c_l, mo_coeff[:,o], mo_coeff[:,o])
-                j3c_vv[l] = einsum("Lab,ai,bj->Lij", j3c_l, mo_coeff[:,v], mo_coeff[:,v])
+                j3c_oo[l] = einsum("Lab,ai,bj->Lij", j3c_l, co, co)
+                j3c_vv[l] = einsum("Lab,ai,bj->Lij", j3c_l, cv, cv)
+                # TEST:
+                j3c_vo[l] = einsum("Lab,ai,bj->Lij", j3c_l, cv, co)
+    # TEST
+    assert (ovov_only or np.allclose(j3c_ov, j3c.vo.transpose((0,2,1))))
 
-    # Test imaginary part of (ij|kl)
-    if np.iscomplexobj(j3c):
-        im_ovov = (einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_ov.imag)
-                 - einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_ov.real))
-        log.info("Imaginary part of (ov|ov): norm= %.3e , max= %.3e", np.linalg.norm(im_ovov), abs(im_ovov).max())
-        del im_ovov
-
-    # Avoid storage of complex (ij|kl) [Assumes imaginary part must be zero!]
-    # OVOV part
-    mo_eris = {"ovov" : einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_ov.real)}
-    if np.iscomplexobj(j3c):
-        mo_eris["ovov"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_ov.imag)
-    # Remaining parts for CCSD
+    # 3c -> 4c
+    mo_eris = {"ovov" : einsum("Lij,Lkl->ijkl", j3c_ov, j3c_ov)}
     if not ovov_only:
-        mo_eris["oooo"] = einsum("Lij,Lkl->ijkl", j3c_oo.real, j3c_oo.real)
-        mo_eris["ovoo"] = einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_oo.real)
-        mo_eris["oovv"] = einsum("Lij,Lkl->ijkl", j3c_oo.real, j3c_vv.real)
-        mo_eris["ovvo"] = einsum("Lij,Llk->ijkl", j3c_ov.real, j3c_ov.real)         # Note transpose!
-        mo_eris["ovvv"] = einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_vv.real)
-        mo_eris["vvvv"] = einsum("Lij,Lkl->ijkl", j3c_vv.real, j3c_vv.real)
-        if np.iscomplexobj(j3c):
-            mo_eris["oooo"] += einsum("Lij,Lkl->ijkl", j3c_oo.imag, j3c_oo.imag)
-            mo_eris["ovoo"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_oo.imag)
-            mo_eris["oovv"] += einsum("Lij,Lkl->ijkl", j3c_oo.imag, j3c_vv.imag)
-            mo_eris["ovvo"] -= einsum("Lij,Llk->ijkl", j3c_ov.imag, j3c_ov.imag)    # Note tranpose + complex conjugate!
-            mo_eris["ovvv"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_vv.imag)
-            mo_eris["vvvv"] += einsum("Lij,Lkl->ijkl", j3c_vv.imag, j3c_vv.imag)
+        mo_eris["oooo"] = einsum("Lij,Lkl->ijkl", j3c_oo, j3c_oo)
+        mo_eris["ovoo"] = einsum("Lij,Lkl->ijkl", j3c_vo, j3c_oo)
+        mo_eris["oovv"] = einsum("Lij,Lkl->ijkl", j3c_oo, j3c_vv)
+        mo_eris["ovvo"] = einsum("Lij,Lkl->ijkl", j3c_ov, j3c_vo)
+        mo_eris["ovvv"] = einsum("Lij,Lkl->ijkl", j3c_ov, j3c_vv)
+        mo_eris["vvvv"] = einsum("Lij,Lkl->ijkl", j3c_vv, j3c_vv)
+
+    #elif False:
+    #    contract = "Lji,Lkl->ijkl"
+    #    mo_eris = {"ovov" : einsum(contract, j3c_ov.conj(), j3c_ov)}
+    #    if not ovov_only:
+    #        mo_eris["oooo"] = einsum(contract, j3c_oo.conj(), j3c_oo)
+    #        mo_eris["ovoo"] = einsum(contract, j3c_ov.conj(), j3c_oo)
+    #        mo_eris["oovv"] = einsum(contract, j3c_oo.conj(), j3c_vv)
+    #        mo_eris["ovvo"] = einsum(contract, j3c_ov.conj(), j3c_vo)         # Note transpose!
+    #        mo_eris["ovvv"] = einsum(contract, j3c_ov.conj(), j3c_vv)
+    #        mo_eris["vvvv"] = einsum(contract, j3c_vv.conj(), j3c_vv)
+
+    #    mo_eris2 = {}
+    #    for key, val in mo_eris.items():
+    #        log.info("Max imaginary element in %s = %g", key, (abs(val.imag).max()))
+    #        mo_eris2[key] = val.real
+    #    mo_eris = mo_eris2
+
+    #else:
+    #    mo_eris = {"ovov" : einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_ov.real)}
+    #    if np.iscomplexobj(j3c):
+    #        mo_eris["ovov"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_ov.imag)
+    #    # Remaining parts for CCSD
+    #    if not ovov_only:
+    #        mo_eris["oooo"] = einsum("Lij,Lkl->ijkl", j3c_oo.real, j3c_oo.real)
+    #        mo_eris["ovoo"] = einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_oo.real)
+    #        mo_eris["oovv"] = einsum("Lij,Lkl->ijkl", j3c_oo.real, j3c_vv.real)
+    #        mo_eris["ovvo"] = einsum("Lij,Llk->ijkl", j3c_ov.real, j3c_ov.real)         # Note transpose!
+    #        mo_eris["ovvv"] = einsum("Lij,Lkl->ijkl", j3c_ov.real, j3c_vv.real)
+    #        mo_eris["vvvv"] = einsum("Lij,Lkl->ijkl", j3c_vv.real, j3c_vv.real)
+    #        if np.iscomplexobj(j3c):
+    #            mo_eris["oooo"] += einsum("Lij,Lkl->ijkl", j3c_oo.imag, j3c_oo.imag)
+    #            mo_eris["ovoo"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_oo.imag)
+    #            mo_eris["oovv"] += einsum("Lij,Lkl->ijkl", j3c_oo.imag, j3c_vv.imag)
+    #            mo_eris["ovvo"] -= einsum("Lij,Llk->ijkl", j3c_ov.imag, j3c_ov.imag)    # Note tranpose + complex conjugate!
+    #            mo_eris["ovvv"] += einsum("Lij,Lkl->ijkl", j3c_ov.imag, j3c_vv.imag)
+    #            mo_eris["vvvv"] += einsum("Lij,Lkl->ijkl", j3c_vv.imag, j3c_vv.imag)
 
     return mo_eris
 

@@ -139,19 +139,20 @@ class ClusterSolver:
             f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
             if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
                 eris = ao2mo_j3c.ao2mo_ccsd(cc, fock=f_act)
-                t1 = MPI.Wtime()
-                # Make sure this is correct!
-                eris_ = pbc_gdf_ao2mo.ao2mo(cc, fock=f_act)
-                t2 = MPI.Wtime()
-                log.info("New ao2mo: %f s , Old ao2mo: %f s", (t1-t0), (t2-t1))
-                assert np.allclose(eris.mo_energy, eris_.mo_energy)
-                assert np.allclose(eris.oooo, eris_.oooo)
-                assert np.allclose(eris.ovoo, eris_.ovoo)
-                assert np.allclose(eris.ovov, eris_.ovov)
-                assert np.allclose(eris.ovvo, eris_.ovvo)
-                assert np.allclose(eris.oovv, eris_.oovv)
-                assert np.allclose(eris.ovvv, eris_.ovvv)
-                assert np.allclose(eris.vvvv, eris_.vvvv)
+
+                #t1 = MPI.Wtime()
+                ## Make sure this is correct!
+                #eris_ = pbc_gdf_ao2mo.ao2mo(cc, fock=f_act)
+                #t2 = MPI.Wtime()
+                #log.info("New ao2mo: %f s , Old ao2mo: %f s", (t1-t0), (t2-t1))
+                #assert np.allclose(eris.mo_energy, eris_.mo_energy)
+                #assert np.allclose(eris.oooo, eris_.oooo)
+                #assert np.allclose(eris.ovoo, eris_.ovoo)
+                #assert np.allclose(eris.ovov, eris_.ovov)
+                #assert np.allclose(eris.ovvo, eris_.ovvo)
+                #assert np.allclose(eris.oovv, eris_.oovv)
+                #assert np.allclose(eris.ovvv, eris_.ovvv)
+                #assert np.allclose(eris.vvvv, eris_.vvvv)
 
             else:
                 eris = cc.ao2mo_direct(fock=f_act)

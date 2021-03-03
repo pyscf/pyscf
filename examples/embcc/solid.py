@@ -48,6 +48,7 @@ def get_arguments():
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF", help="Density-fitting method")
     parser.add_argument("--gdf-mesh", type=int, nargs=3)
+    parser.add_argument("--gdf-lindep-threshold", type=float)
     parser.add_argument("--gdf-mesh-factor", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
@@ -247,8 +248,8 @@ def run_mf(a, cell, args, refdf=None):
         mf = mf.density_fit()
 
         # TEST
-        #mf.with_df.linear_dep_threshold = 1e-7
-        mf.with_df.linear_dep_threshold = 1e-5
+        if args.gdf_lindep_threshold is not None:
+            mf.with_df.linear_dep_threshold = args.gdf_lindep_threshold
 
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
