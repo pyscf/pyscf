@@ -11,7 +11,7 @@ import pyscf.pbc
 import pyscf.pbc.tools
 
 import pyscf.embcc
-import pyscf.embcc.k2gamma
+import pyscf.embcc.k2gamma_gdf
 
 MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
@@ -343,7 +343,7 @@ for i, a in enumerate(args.lattice_consts):
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
         t0 = MPI.Wtime()
-        mf = pyscf.embcc.k2gamma.k2gamma(mf, args.k_points)
+        mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
         log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
         ncells = np.product(args.k_points)
     else:

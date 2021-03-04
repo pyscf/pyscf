@@ -96,9 +96,9 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     eig, R = eig[::-1], R[:,::-1]
 
     if (eig.min() < -1e-9):
-        log.warning("Min eigenvalue of env. DM = %.8e", eig.min())
+        log.warning("Min eigenvalue of env. DM = %.12e", eig.min())
     if ((eig.max()-1) > 1e-9):
-        log.warning("Max eigenvalue of env. DM = %.8e", eig.max())
+        log.warning("Max eigenvalue of env. DM = %.12e", eig.max())
 
     # Entanglement spectrum
     if False:

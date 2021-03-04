@@ -84,13 +84,13 @@ def j3c_to_mo_eris(j3c, mo_coeff, nocc, compact=False, ovov_only=False):
                 # TEST:
                 j3c_vo[l] = einsum("Lab,ai,bj->Lij", j3c_l, cv, co)
     # TEST
-    assert (ovov_only or np.allclose(j3c_ov, j3c.vo.transpose((0,2,1))))
+    assert (ovov_only or np.allclose(j3c_ov, j3c_vo.transpose((0,2,1))))
 
     # 3c -> 4c
     mo_eris = {"ovov" : einsum("Lij,Lkl->ijkl", j3c_ov, j3c_ov)}
     if not ovov_only:
         mo_eris["oooo"] = einsum("Lij,Lkl->ijkl", j3c_oo, j3c_oo)
-        mo_eris["ovoo"] = einsum("Lij,Lkl->ijkl", j3c_vo, j3c_oo)
+        mo_eris["ovoo"] = einsum("Lij,Lkl->ijkl", j3c_ov, j3c_oo)
         mo_eris["oovv"] = einsum("Lij,Lkl->ijkl", j3c_oo, j3c_vv)
         mo_eris["ovvo"] = einsum("Lij,Lkl->ijkl", j3c_ov, j3c_vo)
         mo_eris["ovvv"] = einsum("Lij,Lkl->ijkl", j3c_ov, j3c_vv)
