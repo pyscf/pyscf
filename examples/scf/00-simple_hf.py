@@ -11,29 +11,13 @@ A simple example to run HF calculation.
 '''
 
 import pyscf
+from systems import mol_HF_ccpvdz
 
-mol = pyscf.M(
-    atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
-    basis = 'ccpvdz',
-    symmetry = True,
-)
-
-myhf = mol.HF()
+myhf = mol_HF_ccpvdz.HF()
 myhf.kernel()
-
 # Orbital energies, Mulliken population etc.
 myhf.analyze()
 
-
-#
 # myhf object can also be created using the APIs of gto, scf module
-#
-from pyscf import gto, scf
-mol = gto.M(
-    atom = 'H 0 0 0; F 0 0 1.1',  # in Angstrom
-    basis = 'ccpvdz',
-    symmetry = True,
-)
-myhf = scf.HF(mol)
+myhf = pyscf.scf.HF(mol_HF_ccpvdz)
 myhf.kernel()
-
