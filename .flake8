@@ -17,6 +17,3 @@ per-file-ignores =
     pyscf/pbc/mpicc/kccsd_rhf.py: E501
     pyscf/pbc/mpicc/kintermediates_rhf.py: E501
     pyscf/pbc/tools/pywannier90.py: E501
-    pyscf/semiempirical/am1.py: E124,E128,E501
-    pyscf/semiempirical/mopac_param.py: E124,E128,E131,E501
-    pyscf/tools/Molpro2Pyscf/MolproXml.py: E501
