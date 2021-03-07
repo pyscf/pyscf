@@ -1334,15 +1334,6 @@ def energy_nuc(mol, charges=None, coords=None):
     if charges is None: charges = mol.atom_charges()
     if len(charges) <= 1:
         return 0
-    #e = 0
-    #for j in range(len(mol._atm)):
-    #    q2 = charges[j]
-    #    r2 = coords[j]
-    #    for i in range(j):
-    #        q1 = charges[i]
-    #        r1 = coords[i]
-    #        r = numpy.linalg.norm(r1-r2)
-    #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
