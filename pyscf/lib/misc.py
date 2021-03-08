@@ -61,7 +61,6 @@ def load_library(libname):
                 for files in os.listdir(libpath):
                     if files.startswith(libname):
                         return numpy.ctypeslib.load_library(libname, libpath)
-        sys.stderr.write(f'Failed to load library {libname}\n')
         raise
 
 #Fixme, the standard resouce module gives wrong number when objects are released

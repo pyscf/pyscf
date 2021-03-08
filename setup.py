@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import os
-from distutils.command.build import build
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
 
@@ -112,8 +111,9 @@ class CMakeBuildExt(build_ext):
 # build_py then copy all .so files into "build_ext.build_lib" directory.
 # We have to ensure build_ext being executed earlier than build_py.
 # A temporary workaround is to modifying the order of sub_commands in build class
-assert build.sub_commands[2][0] == 'build_ext'
-build.sub_commands = [build.sub_commands.pop(2)] + build.sub_commands
+from distutils.command.build import build
+build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
+                      [c for c in build.sub_commands if c[0] != 'build_ext'])
 
 setup(
     name=NAME,
