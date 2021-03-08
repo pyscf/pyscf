@@ -1,0 +1,40 @@
+{% set data = load_setup_py_data() %}
+
+
+package:
+  name: "pyscf"
+  version: "{{ data['version'] }}"
+
+source:
+  path: ..
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - cmake
+    - make
+    - mkl-devel
+    - blas
+    - numpy
+  host:
+    - pip
+    - python
+    - numpy>1.8,!=1.16,!=1.17
+    - scipy<1.5
+    - h5py>2.2
+  run:
+    - python
+    - numpy>1.8,!=1.16,!=1.17
+    - scipy<1.5
+    - h5py>2.2
+
+test:
+  imports:
+    - pyscf
+
+about:
+  home: {{ data['url'] }}
+  license: {{ data['license'] }}
+  summary: {{ data['description'] }}
