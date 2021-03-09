@@ -21,6 +21,7 @@ import numpy
 from pyscf import symm
 from pyscf import lib
 from pyscf import scf
+from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions  # noqa
@@ -132,7 +133,7 @@ class TDDFTNoHybrid(TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.get_vind(self._scf)
         precond = self.get_precond(hdiag)

@@ -423,7 +423,6 @@ def _unpack(norb, nelec, link_index):
 
 
 if __name__ == '__main__':
-    
     from functools import reduce
     from pyscf import gto
     from pyscf import scf

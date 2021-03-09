@@ -115,7 +115,7 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
 
 def get_nuc(mydf, kpts=None):
     # Pseudopotential is ignored when computing just the nuclear attraction
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     with lib.temporary_env(mydf.cell, _pseudo={}):
         nuc = get_pp_loc_part1(mydf, kpts)
     logger.timer(mydf, 'get_nuc', *t0)
@@ -255,7 +255,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))

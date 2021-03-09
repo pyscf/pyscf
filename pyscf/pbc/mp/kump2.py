@@ -35,6 +35,9 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import _frozen_sanity_check
 from pyscf.lib.parameters import LARGE_DENOM
 
+def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+    raise NotImplementedError
+
 def padding_k_idx(mp, kind="split"):
     """For a description, see `padding_k_idx` in kmp2.py.
 

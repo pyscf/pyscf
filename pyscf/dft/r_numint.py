@@ -322,7 +322,6 @@ _RNumInt = RNumInt
 
 
 if __name__ == '__main__':
-    
     from pyscf import gto
     from pyscf.dft import dks
 
@@ -337,7 +336,5 @@ if __name__ == '__main__':
     mf.grids.build()
     dm = mf.get_init_guess(key='minao')
 
-    print(logger.process_clock())
     res = mf._numint.r_vxc(mol, mf.grids, mf.xc, dm, spin=0)
     print(res[1] - 0)
-    print(logger.process_clock())
