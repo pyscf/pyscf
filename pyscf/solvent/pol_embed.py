@@ -275,14 +275,15 @@ class PolEmbed(lib.StreamObject):
         dms = dms.reshape(-1,nao,nao)
         n_dm = dms.shape[0]
 
-        #max(0, self.max_memory - lib.current_memory()[0])
         max_memory = self.max_memory
-        max_memreq = 3 * nao**2 * len(self.potentials) * 8.0/1e6
-        n_chunks = 1
-        if max_memreq >= max_memory:
-            n_chunks = int(max_memreq // max_memory + 2)
 
         if self.V_es is None:
+            # very conservative estimate (based on multipole potential integrals)
+            # when all sites have a charge, dipole, and quadrupole moment
+            max_memreq = 10 * len(self.potentials) * nao**2 * 8.0/1e6
+            n_chunks_el = 1
+            if max_memreq >= max_memory:
+                n_chunks_el = int(max_memreq // max_memory + 1)
             positions = numpy.array([p.position for p in self.potentials])
             moments = []
             orders = []
@@ -293,7 +294,9 @@ class PolEmbed(lib.StreamObject):
                     p_moments.append(m.values)
                 orders.append(m.k)
                 moments.append(p_moments)
-            self.V_es = self._compute_multipole_potential_integrals(positions, orders, moments, n_chunks)
+            self.V_es = self._compute_multipole_potential_integrals(
+                positions, orders, moments, n_chunks_el
+            )
             if self.do_ecp:
                 self.V_ecp = self.ecpmol.intor("ECPscalar")
 
@@ -313,7 +316,12 @@ class PolEmbed(lib.StreamObject):
         e_tot = []
         e_pol = []
         if n_sites > 0:
-            chunks = numpy.array_split(positions, n_chunks)
+            max_memreq = 6 * n_sites * nao**2 * 8.0/1e6
+            n_chunks_ind = 1
+            if max_memreq >= max_memory:
+                n_chunks_ind = int(max_memreq // max_memory + 1)
+
+            chunks = numpy.array_split(positions, n_chunks_ind)
             elec_fields_chunk = []
             for chunk in chunks:
                 fakemol = gto.fakemol_for_charges(chunk)
@@ -332,7 +340,7 @@ class PolEmbed(lib.StreamObject):
                 e_pol.append(self.cppe_state.energies["Polarization"]["Electronic"])
 
             induced_moments = induced_moments.reshape(n_dm, n_sites, 3)
-            induced_moments_chunked = numpy.array_split(induced_moments, n_chunks, axis=1)
+            induced_moments_chunked = numpy.array_split(induced_moments, n_chunks_ind, axis=1)
             for pos_chunk, ind_chunk in zip(chunks, induced_moments_chunked):
                 fakemol = gto.fakemol_for_charges(pos_chunk)
                 j3c = df.incore.aux_e2(self.mol, fakemol, intor='int3c2e_ip1')
@@ -387,10 +395,10 @@ class PolEmbed(lib.StreamObject):
                 idx = numpy.where(orders >= 2)[0]
                 fakemol = gto.fakemol_for_charges(sites[idx])
                 n_sites = idx.size
-                # moments_2 is the lower triangler of
+                # moments_2 is the lower triangle of
                 # [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]] i.e.
                 # XX, XY, XZ, YY, YZ, ZZ = 0,1,2,4,5,8
-                # symmetrize it to the upper triangler part
+                # symmetrize it to the upper triangle part
                 # XX, YX, ZX, YY, ZY, ZZ = 0,3,6,4,7,8
                 m2 = numpy.einsum('ga,a->ga', [moments[i][2] for i in idx],
                                   cppe.prefactors(2))
