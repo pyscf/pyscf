@@ -236,8 +236,8 @@ class KnownValues(unittest.TestCase):
         mol = gto.M(atom='N', basis='ccpvdz', spin=3, symmetry=True)
         mf = mol.RHF().newton().run()
         mc = mf.CASSCF(4, 5)
-        e = mc.run()
-        self.assertAlmostEqual(e, -54.3820511374897, 9)
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, -54.3884142370103, 9)
 
         mc.wfnsym = 4
         self.assertRaises(RuntimeError, mc.run)
