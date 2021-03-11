@@ -94,7 +94,10 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             nkpts = len(mf.kpts)
         else:
             nkpts = 1
-        nelectron = mf.cell.tot_electrons(nkpts)
+        if isinstance(mf.mol, pbcgto.Cell):
+            nelectron = mf.mol.tot_electrons(nkpts)
+        else:
+            nelectron = mf.mol.tot_electrons()
         if is_uhf:
             nocc = nelectron
             mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
@@ -180,7 +183,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
             return mf_class.get_grad(mf, mo_coeff_kpts, mo_occ_kpts, fock)
         if fock is None:
             dm1 = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
-            fock = mf.get_hcore() + mf.get_veff(mf.cell, dm1)
+            fock = mf.get_hcore() + mf.get_veff(mf.mol, dm1)
         if is_uhf:
             ga = get_grad_tril(mo_coeff_kpts[0], mo_occ_kpts[0], fock[0])
             gb = get_grad_tril(mo_coeff_kpts[1], mo_occ_kpts[1], fock[1])
