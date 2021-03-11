@@ -26,11 +26,15 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.pbc.scf import addons as pbcaddons
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
+
+
+smearing_ = pbcaddons.smearing_
 
 def frac_occ_(mf, tol=1e-3):
     '''
