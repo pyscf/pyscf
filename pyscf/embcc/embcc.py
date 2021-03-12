@@ -142,9 +142,18 @@ class EmbCC:
         # New implementation of options
         # TODO: Change other options to here
         self.opts = Options()
-        self.opts.make_rdm1 = kwargs.pop("make_rdm1", False)
-        self.opts.ip_eom = kwargs.pop("ip_eom", False)
-        self.opts.ea_eom = kwargs.pop("ea_eom", False)
+        #self.opts.make_rdm1 = kwargs.pop("make_rdm1", False)
+        #self.opts.ip_eom = kwargs.pop("ip_eom", False)
+        #self.opts.ea_eom = kwargs.pop("ea_eom", False)
+        default_opts = {
+                "make_rdm1" : False,
+                "ip_eom" : False,
+                "ea_eom" : False,
+                #"orthogonal_mo_tol" : 1e-8,
+                "orthogonal_mo_tol" : False,
+                }
+        for key, val in default_opts.items():
+            setattr(self.opts, key, kwargs.pop(key, val))
         if kwargs:
             raise ValueError("Unknown arguments: %r" % kwargs.keys())
 
@@ -209,7 +218,7 @@ class EmbCC:
         ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
-        if nonorth > 1e-8:
+        if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             log.info("Orthogonalizing orbitals...")
             self.mo_coeff = orthogonalize_mo(c, self.get_ovlp(), tol=1e-6)
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)

@@ -8,6 +8,7 @@ import scipy
 import scipy.optimize
 
 __all__ = [
+        "memory_string",
         "Object",
         "Options",
         "log_time",
@@ -32,6 +33,26 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 einsum = functools.partial(np.einsum, optimize=True)
+
+def memory_string(b, fmt=".2f"):
+    """Get memory string"""
+    if isinstance(b, np.ndarray) and b.size > 1:
+        b = b.nbytes
+    if b < 1e3:
+        mem = "B"
+    if b < 1e6:
+        b /= 1e3
+        mem = "kB"
+    if b < 1e9:
+        b /= 1e6
+        mem = "MB"
+    if b < 1e12:
+        b /= 1e9
+        mem = "GB"
+    else:
+        b /= 1e12
+        mem = "TB"
+    return "{:{fmt}} {mem}".format(b, mem=mem, fmt=fmt)
 
 class Object:
     pass

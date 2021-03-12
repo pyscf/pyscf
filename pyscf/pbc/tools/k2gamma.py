@@ -93,16 +93,15 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, tol_orth=1e-5, imag_
     s = scell.pbc_intor('int1e_ovlp')
     orth_err = abs(np.linalg.multi_dot((C_gamma.conj().T, s, C_gamma)) - np.eye(Nmo*Nk)).max()
     log.info("Max orthogonality error in k2gamma: %e", orth_err)
+
     #assert(orth_err < tol_orth)
     if orth_err > tol_orth:
-        print("Warning: insufficient orthogonality of Gamma point orbitals: %e" % orth_err)
+        log.warning("Warning: insufficient orthogonality of Gamma point orbitals: %e" % orth_err)
     log.info("Largest imaginary part in C_gamma in k2gamma= %e", abs(C_gamma.imag).max())
-    print("Largest imaginary part in C_gamma in k2gamma= %e" % abs(C_gamma.imag).max())
 
     # Fock matrix
     f = np.dot(C_gamma * E_g, C_gamma.conj().T)
     log.info("Largest imaginary part in Fock matrix in k2gamma= %e", abs(f.imag).max())
-    print("Largest imaginary part in Fock matrix in k2gamma= %e" % abs(f.imag).max())
 
     # Transform MO indices
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3

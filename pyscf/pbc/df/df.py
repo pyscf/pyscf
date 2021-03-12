@@ -59,6 +59,58 @@ from pyscf import __config__
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 
 
+#def _choleksy(a):
+#    l = scipy.linalg.cholesky(a, lower=True)
+#    ll = np.dot(l, l.T.conj())
+#    log.info("Error in CD: %.2e", abs(ll-a).max())
+#    return l
+
+def _cholesky(a, shifted_chol=False, iterate_chol=True, maxiter=20, cond_tol=10, **kwargs):
+    np = numpy
+
+    eps = np.finfo(a.dtype).eps
+
+    n = a.shape[0]
+    if shifted_chol:
+        # https://arxiv.org/pdf/1809.11085.pdf
+        size_fac = (n*(n+(n//2)**3) + n*(n+1))
+        shift = eps * 11 * np.trace(a) * size_fac
+    else:
+        shift = 0
+
+    #chol = lambda x: np.linalg.cholesky(x).T.conj()
+    chol = lambda x: scipy.linalg.cholesky(x, **kwargs).T.conj()
+    #chol = lambda x: np.linalg.cholesky(x)#.T.conj()
+
+    bi = chol(a + shift*np.eye(n))
+    #binv = np.linalg.inv(bi)
+
+    if iterate_chol:
+        k = 0
+        x_next = a
+        bi0 = bi.copy()
+        for k in range(1, maxiter+1):
+            cn = np.linalg.cond(x_next)
+            err = abs(np.dot(bi.T.conj(), bi)-a).max()
+            delta = np.linalg.norm(bi-bi0)
+            bi0 = bi.copy()
+            print("Iteration= %d condition number= %.2e delta=%.2e err= %.5e" % (k, cn, delta, err))
+            if cn <= cond_tol:
+                break
+
+            binv = np.linalg.inv(bi)
+            x_next = np.dot(np.dot(binv.T.conj(), a), binv)
+            b_next = chol(x_next)
+            bi = np.dot(b_next, bi)
+
+    bi = bi.T.conj()
+
+    # Choleksky error
+    print("Error in CD: %.2e" % abs(np.dot(bi, bi.T.conj())-a).max())
+
+    return bi
+
+
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     auxcell = addons.make_auxmol(cell, auxbasis)
 
@@ -213,8 +265,31 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         j2c_negative = None
+        hermerr = abs(j2c - j2c.T.conj()).max()
+        log.info("j2c hermiticity error for kpt %s: %.2e", uniq_kptji_id, hermerr)
         try:
-            j2c = scipy.linalg.cholesky(j2c, lower=True)
+            # Force eigenvalue decomposition
+            if mydf.force_eig:
+                raise scipy.linalg.LinAlgError
+
+                #w, v = scipy.linalg.eigh(j2c)
+                #log.info('DF metric linear dependency for kpt %s', uniq_kptji_id)
+                #log.info('cond = %.4g, drop %d bfns',
+                #      w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
+                #log.info("Smallest/largest eigenvalue= %e / %e", w[0], w[-1])
+                #mask = (w>=mydf.linear_dep_threshold)
+                #v, w = v[:,mask], w[mask]
+                #j2c2 = numpy.einsum("ai,i,bi->ab", v.conj(), w, v)
+                #log.info("Difference to original j2c= %.2e", abs(j2c2-j2c).max())
+                #j2c2 = numpy.einsum("ai,i,bi->ab", v, w, v.conj())
+                #log.info("Difference to original j2c= %.2e", abs(j2c2-j2c).max())
+                #j2c = j2c2
+
+            l = scipy.linalg.cholesky(j2c, lower=True)
+            log.info("Error in Cholesky decomposition= %.2e", abs(numpy.dot(l, l.T.conj())-j2c).max())
+            j2c = l
+            #j2c = _cholesky(j2c, lower=True)
+
             j2ctag = 'CD'
         except scipy.linalg.LinAlgError:
             #msg =('===================================\n'
@@ -227,8 +302,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             log.info('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.info('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-            v1 = v[:,w>mydf.linear_dep_threshold].conj().T
-            v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+            log.info("Smallest/largest eigenvalue= %e / %e", w[0], w[-1])
+            # OLD
+            #if False:
+            if True:
+                log.info("DISCARDING")
+                v1 = v[:,w>mydf.linear_dep_threshold].conj().T
+                v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+            # Set element to zero instead of removing them
+            else:
+                log.info("SETTING ZERO")
+                v1 = v.conj().T / numpy.sqrt(numpy.fmax(w, 1e-14)).reshape(-1,1)
+                mask = (w<=mydf.linear_dep_threshold)
+                v1[mask] = 0.0
+
             j2c = v1
             if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
                 idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
@@ -425,6 +512,8 @@ class GDF(aft.AFTDF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
+
+        self.force_eig = False
 
         # Search for optimized eta and mesh here.
         if cell.dimension == 0:

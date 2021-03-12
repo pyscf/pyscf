@@ -14,15 +14,9 @@ except (SystemError, ImportError):
     import functools
     einsum = functools.partial(np.einsum, optimize=True)
 
-__all__ = ["k2gamma_gdf"]
+__all__ = ["k2gamma_gdf", "k2gamma_4c2e", "k2gamma_3c2e"]
 
 log = logging.getLogger(__name__)
-
-TEST_MODULE = False
-
-# Note that the imaginary part of (L|ij) only contributes to the real part of (ij|kl)
-# when squared with itself - a tolerance of 1e-7 means that the real part is only affected by ~1e-14
-DEFAULT_IMAG_TOL = 1e-7
 
 def k2gamma_gdf(mf, kpts, unfold_j3c=True):
     """kpts is the mesh!"""
@@ -35,16 +29,9 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True):
     # k2gamma GDF
     if isinstance(mf.with_df, pyscf.pbc.df.GDF):
         mf_sc = mf_sc.density_fit()
+        # Store integrals in memory
         if unfold_j3c:
-            j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
-
-            if TEST_MODULE:
-                eri_3c = einsum("Lij,Lkl->ijkl", j3c, j3c)
-                n = j3c.shape[-1]
-                eri = mf_sc.with_df.get_eri(compact=False).reshape(n,n,n,n)
-                log.info("ERI error: norm=%.3e max=%.3e", np.linalg.norm(eri_3c-eri), abs(eri_3c-eri).max())
-
-            mf_sc.with_df._cderi = j3c
+            mf_sc.with_df._cderi = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
 
     return mf_sc
 
@@ -292,52 +279,57 @@ def k2gamma_4c2e(cell, gdf, kpts):
 
     maximag = abs(eri_sc.imag).max()
     if maximag > 1e-4:
-        log.error("Error: Large max imaginary part in unfolded 4c2e integrals= %.2e !!!", maximag)
+        log.error("ERROR: Large imaginary part in unfolded 4c2e integrals= %.2e !!!", maximag)
     elif maximag > 1e-8:
-        log.warning("Large max imaginary part in unfolded 4c2e integrals= %.2e", maximag)
-    #assert (maximag < 1e-5)
+        log.warning("WARNING: Large imaginary part in unfolded 4c2e integrals= %.2e !", maximag)
     return eri_sc.real
 
 def k2gamma_3c2e(cell, gdf, kpts, compact=True):
     """Unfold 3c2e integrals from a k-point sampled GDF to the supercell."""
     nao = cell.nao_nr()
     nk = len(kpts)
+    if gdf.auxcell is None:
+        gdf.build(with_j3c=False)
     naux = gdf.auxcell.nao_nr()
     scell, phase = k2gamma.get_phase(cell, kpts)
     phase = phase.T.copy()  # (R,k) -> (k,R)
     kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
     if compact:
         ncomp = nk*nao*(nk*nao+1)//2
+        mem = nk*naux*ncomp * 16
+        log.info("Size of 3c-integrals= %s", memory_string(mem))
         j3c_sc = np.zeros((nk, naux, ncomp), dtype=np.complex)
     else:
+        mem = nk*naux*nk**2*nao**2 * 16
+        log.info("Size of 3c-integrals= %s", memory_string(mem))
         j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
+    log.info("Actual size of 3c-integrals= %s", memory_string(j3c_sc))
+
     for i in range(nk):
         for j in range(nk):
             l = kconserv[i,j]
             kij = (kpts[i], kpts[j])
             j3c_kij = load_j3c(cell, gdf, kij)
-            #j3c_sc[l] += einsum("Lij,a,b->Laibj", j3c_kij, phase[i], phase[j].conj())
             tmp = einsum("Lij,a,b->Laibj", j3c_kij, phase[i], phase[j].conj()).reshape(naux, nk*nao, nk*nao)
             if compact:
                 j3c_sc[l] += pyscf.lib.pack_tril(tmp)
             else:
                 j3c_sc[l] += tmp
-            #j3c_sc[l] += einsum("Lij,a,b->Laibj", j3c_kij, phase[i].conj(), phase[j])
 
-    # Unfold auxiliary dimension to get real integrals
+    # Rotate auxiliary dimension to yield real integrals
     j3c_sc = einsum("k...,kR->R...", j3c_sc, phase)
-    #assert (abs(j3c_sc.imag).max() < 1e-9), ("max imaginary element in j3c= %.e" % abs(j3c_sc.imag).max())
     maximag = abs(j3c_sc.imag).max()
+    log.info("Max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
     if maximag > 1e-4:
-        log.error("Error: Large max imaginary part in unfolded 3c2e integrals= %.2e !!!", maximag)
+        log.error("ERROR: Large imaginary part in unfolded 3c2e integrals!!!")
     elif maximag > 1e-8:
-        log.warning("Large max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
-    j3c_sc = j3c_sc.real
+        log.warning("WARNING: Large imaginary part in unfolded 3c2e integrals!")
+    j3c_sc = j3c_sc.real / np.sqrt(nk)
 
     if compact:
-        j3c_sc = j3c_sc.reshape(nk*naux, ncomp) / np.sqrt(nk)
+        j3c_sc = j3c_sc.reshape(nk*naux, ncomp)
     else:
-        j3c_sc = j3c_sc.reshape(nk*naux, nk*nao, nk*nao) / np.sqrt(nk)
+        j3c_sc = j3c_sc.reshape(nk*naux, nk*nao, nk*nao)
         assert (np.allclose(j3c_sc, j3c_sc.transpose(0,2,1)))
 
     return j3c_sc
@@ -345,6 +337,8 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True):
 def load_j3c(cell, gdf, kij, compact=False):
     """Load 3c-integrals into memory"""
     nao = cell.nao_nr()
+    if gdf.auxcell is None:
+        gdf.build(with_j3c=False)
     naux = gdf.auxcell.nao_nr()
     j3c_kij = np.zeros((naux, nao, nao), dtype=np.complex)
 
@@ -355,8 +349,6 @@ def load_j3c(cell, gdf, kij, compact=False):
         j3c_kij[:nauxk] += (lr+1j*li).reshape(nauxk, nao, nao)
 
     return j3c_kij
-
-
 
 
 if __name__ == "__main__":

@@ -46,15 +46,18 @@ def get_arguments():
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
 
     # Density-fitting
-    parser.add_argument("--df", choices=["FFTDF", "GDF"], default="FFTDF", help="Density-fitting method")
+    parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
     parser.add_argument("--gdf-mesh", type=int, nargs=3)
     parser.add_argument("--gdf-lindep-threshold", type=float)
     parser.add_argument("--gdf-mesh-factor", type=float)
+    parser.add_argument("--gdf-exp-to-discard", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     #parser.add_argument("--save-gdf", default="gdf-%.2f.npy")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF", default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
+    parser.add_argument("--load-gdf-unfolded", action="store_true")
+    parser.add_argument("--gdf-force-eig", action="store_true")
 
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
@@ -246,46 +249,53 @@ def run_mf(a, cell, args, refdf=None):
     # Density-fitting
     if args.df == "GDF":
         mf = mf.density_fit()
-
+        df = mf.with_df
         # TEST
-        if args.gdf_lindep_threshold is not None:
-            mf.with_df.linear_dep_threshold = args.gdf_lindep_threshold
 
+        if args.gdf_exp_to_discard is not None:
+            df.exp_to_discard = args.gdf_exp_to_discard
+        if args.gdf_lindep_threshold is not None:
+            df.linear_dep_threshold = args.gdf_lindep_threshold
+        if args.gdf_force_eig:
+            df.force_eig = True
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
-            mf.with_df.auxbasis = args.auxbasis
+            df.auxbasis = args.auxbasis
         elif args.auxbasis_file is not None:
             log.info("Loading auxbasis from file %s.", args.auxbasis_file)
-            mf.with_df.auxbasis = {atom : pyscf.gto.load(args.auxbasis, atom) for atom in args.atoms}
+            df.auxbasis = {atom : pyscf.gto.load(args.auxbasis, atom) for atom in args.atoms}
         load_gdf_ok = False
         # Load GDF
         if args.load_gdf is not None:
-            fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
-            log.info("Loading GDF from file %s...", fname)
-            if os.path.isfile(fname):
-                mf.with_df._cderi = fname
-                load_gdf_ok = True
+            if not args.load_gdf_unfolded:
+                fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+                log.info("Loading GDF from file %s...", fname)
+                if os.path.isfile(fname):
+                    df._cderi = fname
+                    load_gdf_ok = True
+                else:
+                    log.error("Could not load GDF from file %s. File not found." % fname)
             else:
-                log.error("Could not load GDF from file %s. File not found." % fname)
+                log.info("Loading of unfolded GDF deferred.")
+                load_gdf_ok = True
         # Calculate GDF
         if not load_gdf_ok:
             if refdf is not None:
-                mf.with_df.eta = refdf.eta
-                mf.with_df.mesh = refdf.mesh
+                df.eta = refdf.eta
+                df.mesh = refdf.mesh
             if args.gdf_mesh is not None:
-                mf.with_df.mesh = args.gdf_mesh
+                df.mesh = args.gdf_mesh
             elif args.gdf_mesh_factor is not None:
-                mf.with_df.mesh = [int(args.gdf_mesh_factor*n) for n in mf.with_df.mesh]
+                df.mesh = [int(args.gdf_mesh_factor*n) for n in df.mesh]
             # Force odd mesh
-            mf.with_df.mesh = [2*(n//2)+1 for n in mf.with_df.mesh]
-
+            df.mesh = [2*(n//2)+1 for n in df.mesh]
             if args.save_gdf is not None:
                 fname = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
-                mf.with_df._cderi_to_save = fname
+                df._cderi_to_save = fname
                 log.info("Saving GDF to file %s...", fname)
             log.info("Building GDF...")
             t0 = MPI.Wtime()
-            mf.with_df.build()
+            df.build()
             log.info("Time for GDF build: %.3f s", (MPI.Wtime()-t0))
 
     # Calculate SCF
@@ -304,6 +314,16 @@ def run_mf(a, cell, args, refdf=None):
             assert stable
     log.info("HF converged: %r", mf.converged)
     log.info("HF energy: %.8e", mf.e_tot)
+
+    # Check orthogonality
+    if hasattr(mf, "kpts"):
+        sk = mf.get_ovlp()
+        for ik, k in enumerate(mf.kpts):
+            c = mf.mo_coeff[ik]
+            csc = np.linalg.multi_dot((c.T.conj(), sk[ik], c))
+            err = abs(csc-np.eye(c.shape[-1])).max()
+            if err > 1e-9:
+                log.error("MOs not orthogonal at k-point %d. Error= %.2e", ik, err)
 
     return mf
 
@@ -343,7 +363,13 @@ for i, a in enumerate(args.lattice_consts):
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
         t0 = MPI.Wtime()
-        mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+        if args.load_gdf and args.load_gdf_unfolded:
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=False)
+            fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+            log.info("Loading unfolded GDF from file %s...", fname)
+            mf.with_df._cderi = fname
+        else:
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
         log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
         ncells = np.product(args.k_points)
     else:
