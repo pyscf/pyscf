@@ -214,8 +214,6 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
     mf.get_grad = get_grad
     return mf
 
-mol_addons.smearing_ = smearing_
-
 def canonical_occ_(mf, nelec=None):
     '''Label the occupancies for each orbital for sampled k-points.
     This is for KUHF objects.

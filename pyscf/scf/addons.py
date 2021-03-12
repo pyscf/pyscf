@@ -32,6 +32,9 @@ LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_thresho
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
+def smearing_(*args, **kwargs):
+    from pyscf.pbc.scf.addons import smearing_
+    return smearing_(*args, **kwargs)
 
 def frac_occ_(mf, tol=1e-3):
     '''
