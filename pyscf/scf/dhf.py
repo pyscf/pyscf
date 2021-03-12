@@ -31,10 +31,15 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-try:
-    import zquatev
-except ImportError:
-    zquatev = None
+
+zquatev = None
+if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
+    try:
+        # Install zquatev with
+        # pip install git+https://github.com/sunqm/zquatev
+        import zquatev
+    except ImportError:
+        pass
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,

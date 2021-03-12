@@ -22,12 +22,12 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
 from pyscf.pbc.lib.kpts_helper import gamma_point, unique, KPT_DIFF_TOL
-from pyscf.pbc.df.incore import wrap_int3c
+from pyscf.pbc.df.incore import wrap_int3c, make_auxcell
 
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
+def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     r'''3-center AO integrals (L|ij) with double lattice sum:
@@ -39,6 +39,11 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
     if isinstance(erifile, h5py.Group):
@@ -143,7 +148,7 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     return erifile
 
 
-def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
+def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
             verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:
@@ -158,6 +163,11 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
     if isinstance(erifile, h5py.Group):
@@ -211,24 +221,34 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     auxranges = balance_segs(auxdims, buflen)
     buflen = max([x[2] for x in auxranges])
     buf = numpy.empty(nkptij*comp*ni*nj*buflen, dtype=dtype)
-    buf1 = numpy.empty_like(buf)
-
+    bufs = [buf, numpy.empty_like(buf)]
     int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst)
+
+    def process(aux_range):
+        sh0, sh1, nrow = aux_range
+        sub_slice = (shls_slice[0], shls_slice[1],
+                     shls_slice[2], shls_slice[3],
+                     shls_slice[4]+sh0, shls_slice[4]+sh1)
+        mat = numpy.ndarray((nkptij,comp,nao_pair,nrow), dtype=dtype, buffer=bufs[0])
+        bufs[:] = bufs[1], bufs[0]
+        int3c(sub_slice, mat)
+        return mat
 
     kptis = kptij_lst[:,0]
     kptjs = kptij_lst[:,1]
     kpt_ji = kptjs - kptis
     uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-# sorted_ij_idx: Sort and group the kptij_lst according to the ordering in
-# df._make_j3c to reduce the data fragment in the hdf5 file.  When datasets
-# are written to hdf5, they are saved sequentially. If the integral data are
-# saved as the order of kptij_lst, removing the datasets in df._make_j3c will
-# lead to holes that can not be reused.
+    # sorted_ij_idx: Sort and group the kptij_lst according to the ordering in
+    # df._make_j3c to reduce the data fragment in the hdf5 file.  When datasets
+    # are written to hdf5, they are saved sequentially. If the integral data are
+    # saved as the order of kptij_lst, removing the datasets in df._make_j3c will
+    # lead to disk space fragment that can not be reused.
     sorted_ij_idx = numpy.hstack([numpy.where(uniq_inverse == k)[0]
                                   for k, kpt in enumerate(uniq_kpts)])
     tril_idx = numpy.tril_indices(ni)
     tril_idx = tril_idx[0] * ni + tril_idx[1]
-    def save(istep, mat):
+
+    for istep, mat in enumerate(lib.map_with_prefetch(process, auxranges)):
         for k in sorted_ij_idx:
             v = mat[k]
             if gamma_point(kptij_lst[k]):
@@ -236,16 +256,7 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             if aosym_ks2[k] and nao_pair == ni**2:
                 v = v[:,tril_idx]
             feri['%s/%d/%d' % (dataname,k,istep)] = v
-
-    with lib.call_in_background(save) as bsave:
-        for istep, auxrange in enumerate(auxranges):
-            sh0, sh1, nrow = auxrange
-            sub_slice = (shls_slice[0], shls_slice[1],
-                         shls_slice[2], shls_slice[3],
-                         shls_slice[4]+sh0, shls_slice[4]+sh1)
-            mat = numpy.ndarray((nkptij,comp,nao_pair,nrow), dtype=dtype, buffer=buf)
-            bsave(istep, int3c(sub_slice, mat))
-            buf, buf1 = buf1, buf
+        mat = None
 
     if not isinstance(erifile, h5py.Group):
         feri.close()

@@ -130,7 +130,9 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                 }
                 break;
         case XC_FAMILY_GGA:
+#ifdef XC_FAMILY_HYB_GGA
         case XC_FAMILY_HYB_GGA:
+#endif
                 if (spin == XC_POLARIZED) {
                         rho = malloc(sizeof(double) * np*2);
                         sigma = malloc(sizeof(double) * np*3);
@@ -214,7 +216,9 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                 }
                 break;
         case XC_FAMILY_MGGA:
+#ifdef XC_FAMILY_HYB_MGGA
         case XC_FAMILY_HYB_MGGA:
+#endif
                 if (spin == XC_POLARIZED) {
                         rho = malloc(sizeof(double) * np*2);
                         sigma = malloc(sizeof(double) * np*3);
@@ -354,7 +358,9 @@ int LIBXC_is_gga(int xc_id)
         switch(func.info->family)
         {
                 case XC_FAMILY_GGA:
+#ifdef XC_FAMILY_HYB_GGA
                 case XC_FAMILY_HYB_GGA:
+#endif
                         gga = 1;
                         break;
                 default:
@@ -376,7 +382,9 @@ int LIBXC_is_meta_gga(int xc_id)
         switch(func.info->family)
         {
                 case XC_FAMILY_MGGA:
+#ifdef XC_FAMILY_HYB_MGGA
                 case XC_FAMILY_HYB_MGGA:
+#endif
                         mgga = 1;
                         break;
                 default:
@@ -395,6 +403,8 @@ int LIBXC_is_hybrid(int xc_id)
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }
+
+#if XC_MAJOR_VERSION < 6
         switch(func.info->family)
         {
 #ifdef XC_FAMILY_HYB_LDA
@@ -407,6 +417,9 @@ int LIBXC_is_hybrid(int xc_id)
                 default:
                         hyb = 0;
         }
+#else
+        hyb = (xc_hyb_type(&func) == XC_HYB_HYBRID);
+#endif
 
         xc_func_end(&func);
         return hyb;
@@ -420,6 +433,8 @@ double LIBXC_hybrid_coeff(int xc_id)
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }
+
+#if XC_MAJOR_VERSION < 6
         switch(func.info->family)
         {
 #ifdef XC_FAMILY_HYB_LDA
@@ -433,6 +448,13 @@ double LIBXC_hybrid_coeff(int xc_id)
                         factor = 0;
         }
 
+#else
+        if(xc_hyb_type(&func) == XC_HYB_HYBRID)
+          factor = xc_hyb_exx_coef(&func);
+        else
+          factor = 0.0;
+#endif
+        
         xc_func_end(&func);
         return factor;
 }
@@ -455,7 +477,19 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }
+        rsh_pars[0] = 0.0;
+        rsh_pars[1] = 0.0;
+        rsh_pars[2] = 0.0;
+
+#if XC_MAJOR_VERSION < 6
         XC(hyb_cam_coef)(&func, &rsh_pars[0], &rsh_pars[1], &rsh_pars[2]);
+#else
+        switch(xc_hyb_type(&func)) {
+        case(XC_HYB_HYBRID):
+        case(XC_HYB_CAM):
+          XC(hyb_cam_coef)(&func, &rsh_pars[0], &rsh_pars[1], &rsh_pars[2]);
+        }
+#endif
         xc_func_end(&func);
 }
 
@@ -465,7 +499,11 @@ int LIBXC_is_cam_rsh(int xc_id) {
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
                 exit(1);
         }
+#if XC_MAJOR_VERSION < 6
         int is_cam = func.info->flags & XC_FLAGS_HYB_CAM;
+#else
+        int is_cam = (xc_hyb_type(&func) == XC_HYB_CAM);
+#endif
         xc_func_end(&func);
         return is_cam;
 }
@@ -524,11 +562,15 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 nvar = MAX(nvar, 2);
                                 break;
                         case XC_FAMILY_GGA:
+#ifdef XC_FAMILY_HYB_GGA
                         case XC_FAMILY_HYB_GGA:
+#endif
                                 nvar = MAX(nvar, 5);
                                 break;
                         case XC_FAMILY_MGGA:
+#ifdef XC_FAMILY_HYB_MGGA
                         case XC_FAMILY_HYB_MGGA:
+#endif
                                 nvar = MAX(nvar, 9);
                         }
                 } else {
@@ -540,11 +582,15 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                                 nvar = MAX(nvar, 1);
                                 break;
                         case XC_FAMILY_GGA:
+#ifdef XC_FAMILY_HYB_GGA
                         case XC_FAMILY_HYB_GGA:
+#endif
                                 nvar = MAX(nvar, 2);
                                 break;
                         case XC_FAMILY_MGGA:
+#ifdef XC_FAMILY_HYB_MGGA
                         case XC_FAMILY_HYB_MGGA:
+#endif
                                 nvar = MAX(nvar, 4);
                         }
                 }
@@ -594,13 +640,17 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
 
         switch (type) {
         case XC_FAMILY_GGA:
+#ifdef XC_FAMILY_HYB_GGA
         case XC_FAMILY_HYB_GGA:
+#endif
                 vsegtot = 2;
                 fsegtot = 3;
                 ksegtot = 4;
                 break;
         case XC_FAMILY_MGGA:
+#ifdef XC_FAMILY_HYB_MGGA
         case XC_FAMILY_HYB_MGGA:
+#endif
                 vsegtot = 4;
                 fsegtot = 10;
                 ksegtot = 0;  // not supported
@@ -684,15 +734,27 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 // set the range-separated parameter
                 if (omega[i] != 0) {
                         // skip if func is not a RSH functional
+#if XC_MAJOR_VERSION < 6
                         if (func.cam_omega != 0) {
                                 func.cam_omega = omega[i];
                         }
+#else
+                        if (func.hyb_omega[0] != 0) {
+                                func.hyb_omega[0] = omega[i];
+                        }
+#endif
                         // Recursively set the sub-functionals if they are RSH
                         // functionals
                         for (j = 0; j < func.n_func_aux; j++) {
+#if XC_MAJOR_VERSION < 6
                                 if (func.func_aux[j]->cam_omega != 0) {
                                         func.func_aux[j]->cam_omega = omega[i];
                                 }
+#else
+                                if (func.func_aux[j]->hyb_omega[0] != 0) {
+                                        func.func_aux[j]->hyb_omega[0] = omega[i];
+                                }
+#endif
                         }
                 }
 

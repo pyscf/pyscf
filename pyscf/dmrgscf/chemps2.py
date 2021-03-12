@@ -17,7 +17,6 @@
 #
 
 import os, sys
-import imp
 import numpy
 import pyscf.ao2mo
 
@@ -82,6 +81,7 @@ class CheMPS2(object):
     def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, **kwargs):
         global PyCheMPS2
         if PyCheMPS2 is None:
+            import imp
             PyCheMPS2 = imp.load_dynamic('PyCheMPS2', settings.PYCHEMPS2BIN)
 
         Initializer = PyCheMPS2.PyInitialize()

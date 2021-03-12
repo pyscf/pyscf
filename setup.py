@@ -319,7 +319,7 @@ if 1:
     libcint_lib_path = search_lib_path('libcint'+so_ext, [pyscf_lib_dir,
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                       version='3.0')
+                                       version='4')
     libcint_inc_path = search_inc_path('cint.h', [pyscf_lib_dir,
                                                   os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libcint_lib_path and libcint_inc_path:
@@ -487,7 +487,7 @@ setup(
     ext_modules=extensions,
     cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
               'install': PostInstallCommand},
-    install_requires=['numpy>1.8,!=1.16,!=1.17', 'scipy<1.5', 'h5py>2.2'],
+    install_requires=['numpy>1.8,!=1.16,!=1.17', 'scipy!=1.5.0,!=1.5.1', 'h5py>2.2'],
     extras_require={
         'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
     },

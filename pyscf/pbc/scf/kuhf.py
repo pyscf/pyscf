@@ -234,8 +234,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     log.note("KUHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[:,0,:,:].real
     s_gamma = s[0,:,:].real
-    c = orth.restore_ao_character(cell, pre_orth_method)
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm_a = reduce(np.dot, (c_inv, dm_ao_gamma[0], c_inv.T.conj()))
     dm_b = reduce(np.dot, (c_inv, dm_ao_gamma[1], c_inv.T.conj()))
@@ -379,7 +378,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -450,11 +449,11 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         nelec = np.asarray(self.nelec)
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne.mean()/nkpts, nelec/nkpts)
             dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
         return dm_kpts
 
@@ -467,8 +466,16 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            if dm_kpts is None:
+                dm_kpts = self.make_rdm1()
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
 

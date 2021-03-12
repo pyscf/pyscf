@@ -348,10 +348,10 @@ def _search_dipole_gauge_origin(cell, grids, rho, log):
                 break
             log.debug1('iter %d: origin %s', i, origin)
     else:
-    # If the grids are non-cubic grids, regenerating the grids is expensive if
-    # the position or the shape of the unit cell is changed. The position of
-    # the unit cell is not optimized. The gauge origin is set to the nuclear
-    # charge center of the original unit cell.
+        # If the grids are non-cubic grids, regenerating the grids is expensive if
+        # the position or the shape of the unit cell is changed. The position of
+        # the unit cell is not optimized. The gauge origin is set to the nuclear
+        # charge center of the original unit cell.
         pass
 
     return origin
@@ -797,10 +797,10 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
     if abs(ne - cell.nelectron).sum() > 1e-7:
         logger.debug(mf, 'Big error detected in the electron number '
-                    'of initial guess density matrix (Ne/cell = %g)!\n'
-                    '  This can cause huge error in Fock matrix and '
-                    'lead to instability in SCF for low-dimensional '
-                    'systems.\n  DM is normalized wrt the number '
-                    'of electrons %s', ne, cell.nelectron)
+                     'of initial guess density matrix (Ne/cell = %g)!\n'
+                     '  This can cause huge error in Fock matrix and '
+                     'lead to instability in SCF for low-dimensional '
+                     'systems.\n  DM is normalized wrt the number '
+                     'of electrons %s', ne, cell.nelectron)
         dm *= cell.nelectron / ne
     return dm

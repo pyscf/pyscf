@@ -293,8 +293,14 @@ class FCISolver(direct_spin1.FCISolver):
         if isinstance(self.wfnsym, str):
             log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
-            log.info('Input CI wfn symmetry = %s',
-                     symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+            try:
+                log.info('Input CI wfn symmetry = %s',
+                         symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+            except KeyError:
+                raise RuntimeError('FCISolver cannot find mwfnsym Id %s in group %s. '
+                                   'This might be caused by the projection from '
+                                   'high-symmetry group to D2h symmetry.' %
+                                   (self.wfnsym, self.mol.groupname))
         else:
             log.info('CI wfn symmetry = %s', self.wfnsym)
         return self

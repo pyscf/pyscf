@@ -567,16 +567,29 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
+
+        if mycc.async_io:
+            fmap = lib.map_with_prefetch
+            unit += nvira*nvir_pair
+        else:
+            fmap = map
+
         blksize = numpy.sqrt(max(BLKMIN**2, max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
-        tril2sq = lib.square_mat_in_trilu_indices(nvira)
-        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
-        def block_contract(i0, i1):
+        def load(v_slice):
+            i0, i1 = v_slice
             off0 = i0*(i0+1)//2
             off1 = i1*(i1+1)//2
-            # TODO: prefetch vvvv
-            wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
+            return numpy.asarray(vvvv[off0:off1], order='C')
+
+        tril2sq = lib.square_mat_in_trilu_indices(nvira)
+        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
+
+        slices = [(i0, i1) for i0, i1 in lib.prange(0, nvira, blksize)]
+        for istep, wwbuf in enumerate(fmap(load, lib.prange(0, nvira, blksize))):
+            i0, i1 = slices[istep]
+            off0 = i0*(i0+1)//2
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
                 tmp = numpy.ndarray((i1-i0,nvirb,j1-j0,nvirb), buffer=loadbuf)
@@ -585,11 +598,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                                        (ctypes.c_int*4)(i0, i1, j0, j1),
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
-
-        with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
-            for p0, p1 in lib.prange(0, nvira, blksize):
-                bcontract(p0, p1)
-                time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
+            wwbuf = None
+            time0 = log.timer_debug1('vvvv [%d:%d]'%(i0,i1), *time0)
     return Ht2.reshape(t2.shape)
 
 def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):

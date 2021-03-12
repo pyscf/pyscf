@@ -535,10 +535,8 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         # not necessary.
         if cintopt is None:
             if '3c2e' in intor_name:
-                # TODO: Libcint-3.14 and newer version support to compute
-                # int3c2e without the opt for the 3rd index.
-                #cintopt = make_cintopt(atm, bas[:max(i1, j1)], env, intor_name)
-                cintopt = lib.c_null_ptr()
+                # int3c2e opt without the 3rd index.
+                cintopt = make_cintopt(atm, bas[:max(i1, j1)], env, intor_name)
             else:
                 cintopt = make_cintopt(atm, bas, env, intor_name)
 

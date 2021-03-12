@@ -28,9 +28,7 @@ except (ImportError, OSError):
         from pyscf.dft import xcfun
         libxc = xcfun
     except (ImportError, OSError):
-        warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
-        from pyscf.dft import xc
-        libxc = xc
+        raise ImportError('XC functional libraries (libxc or XCfun) are not available.')
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
 from pyscf import __config__
@@ -581,7 +579,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     '''return numpy.dot(ao, dm)'''
     ngrids, nao = ao.shape
     if nao < SWITCH_SIZE:
-        return lib.dot(dm.T, ao.T).T
+        return lib.dot(numpy.asarray(dm, order='C').T, ao.T).T
 
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
