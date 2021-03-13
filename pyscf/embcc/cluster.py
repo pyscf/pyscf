@@ -2,6 +2,7 @@
 import logging
 from collections import OrderedDict
 import functools
+from datetime import datetime
 
 # External libaries
 import numpy as np
@@ -11,16 +12,7 @@ from mpi4py import MPI
 
 # Internal libaries
 import pyscf
-#import pyscf.lo
-#import pyscf.cc
-#import pyscf.ci
-#import pyscf.mcscf
-#import pyscf.fci
-#import pyscf.mp
 import pyscf.pbc
-#import pyscf.pbc.cc
-#import pyscf.pbc.mp
-#import pyscf.pbc.tools
 
 # Local modules
 from .solver import ClusterSolver
@@ -1356,34 +1348,103 @@ class Cluster:
         # Population analysis
         if self.opts.make_rdm1 and csolver.dm1 is not None:
             self.pop_analysis(csolver.dm1)
+        # EOM analysis
+        if self.opts.ip_eom:
+            self.eom_analysis(csolver, "IP")
+        if self.opts.ea_eom:
+            self.eom_analysis(csolver, "EA")
 
         log.changeIndentLevel(-1)
 
         return self.converged, self.e_corr
 
-    def pop_analysis(self, dm1, sig_tol=0.01):
+    def pop_analysis(self, dm1, filename=None, mode="a", sig_tol=0.01):
         """Perform population analsis for the given density-matrix and compare to the MF."""
+        if filename is None:
+            filename = "%s-%s.txt" % (self.base.opts.popfile, self.name)
+
         s = self.base.get_ovlp()
         lo = self.base.lo
         dm1 = np.linalg.multi_dot((lo.T, s, dm1, s, lo))
         pop, chg = self.mf.mulliken_pop(dm=dm1, s=np.eye(dm1.shape[-1]))
-        log.info("Population analysis")
-        log.info("*******************")
         pop_mf = self.base.pop_mf
         chg_mf = self.base.pop_mf_chg
-        # per orbital
-        for i, s in enumerate(self.mf.mol.ao_labels()):
-            dmf = (pop[i]-pop_mf[i])
-            sig = (" !" if abs(dmf)>=sig_tol else "")
-            log.info("  * Population of OrthAO %4d %-16s = %10.5f , delta(MF)= %+10.5f%s", i, s, pop[i], dmf, sig)
-        # Charge per atom
-        log.info("Atomic charges")
-        log.info("**************")
-        for ia in range(self.mf.mol.natm):
-            symb = self.mf.mol.atom_symbol(ia)
-            dmf = (chg[ia]-chg_mf[ia])
-            sig = (" !" if abs(dmf)>=sig_tol else "")
-            log.info("  * Charge at atom %3d %-3s = %10.5f , delta(MF)= %+10.5f%s", ia, symb, chg[ia], dmf, sig)
+
+        tstamp = datetime.now()
+
+        log.info("[%s] Writing cluster population analysis to file \"%s\"", tstamp, filename)
+        with open(filename, mode) as f:
+            f.write("[%s] Population analysis\n" % tstamp)
+            f.write("*%s*********************\n" % (26*"*"))
+
+            # per orbital
+            for i, s in enumerate(self.mf.mol.ao_labels()):
+                dmf = (pop[i]-pop_mf[i])
+                sig = (" !" if abs(dmf)>=sig_tol else "")
+                f.write("  * Population of OrthAO %4d %-16s = %10.5f , delta(MF)= %+10.5f%s\n" %
+                        (i, s, pop[i], dmf, sig))
+            # Charge per atom
+            f.write("[%s] Atomic charges\n" % tstamp)
+            f.write("*%s****************\n" % (26*"*"))
+            for ia in range(self.mf.mol.natm):
+                symb = self.mf.mol.atom_symbol(ia)
+                dmf = (chg[ia]-chg_mf[ia])
+                sig = (" !" if abs(dmf)>=sig_tol else "")
+                f.write("  * Charge at atom %3d %-3s = %10.5f , delta(MF)= %+10.5f%s\n" %
+                        (ia, symb, chg[ia], dmf, sig))
+
+        return pop, chg
+
+    def eom_analysis(self, csolver, kind, filename=None, mode="a", sort_weight=True, r1_min=1e-2):
+        kind = kind.upper()
+        assert kind in ("IP", "EA")
+
+        if filename is None:
+            filename = "%s-%s.txt" % (self.base.opts.eomfile, self.name)
+
+        s = self.base.get_ovlp()
+        lo = self.base.lo
+        if kind == "IP":
+            e, c = csolver.ip_energy, csolver.ip_coeff
+        else:
+            e, c = csolver.ea_energy, csolver.ea_coeff
+        nroots = len(e)
+        eris = csolver._eris
+        cc = csolver._solver
+
+        tstamp = datetime.now()
+        log.info("[%s] Writing cluster %s-EOM analysis to file \"%s\"", tstamp, kind, filename)
+
+        with open(filename, mode) as f:
+            f.write("[%s] %s-EOM analysis\n" % (tstamp, kind))
+            f.write("*%s*****************\n" % (26*"*"))
+
+            for root in range(nroots):
+                r1 = c[root][:cc.nocc]
+                qp = np.linalg.norm(r1)**2
+                f.write("  %s-EOM-CCSD root= %2d , energy= %+.8g , QP-weight= %.5g\n" %
+                        (kind, root, e[root], qp))
+                if qp < 0.0 or qp > 1.0:
+                    log.error("Error: QP-weight not between 0 and 1!")
+                r1lo = einsum("i,ai,ab,bl->l", r1, eris.mo_coeff[:,:cc.nocc], s, lo)
+
+                if sort_weight:
+                    order = np.argsort(-r1lo**2)
+                    for ao, lab in enumerate(np.asarray(self.mf.mol.ao_labels())[order]):
+                        wgt = r1lo[order][ao]**2
+                        if wgt < r1_min*qp:
+                            break
+                        f.write("  * Weight of %s root %2d on OrthAO %-16s = %10.5f\n" %
+                                (kind, root, lab, wgt))
+                else:
+                    for ao, lab in enumerate(ao_labels):
+                        wgt = r1lo[ao]**2
+                        if wgt < r1_min*qp:
+                            continue
+                        f.write("  * Weight of %s root %2d on OrthAO %-16s = %10.5f\n" %
+                                (kind, root, lab, wgt))
+
+        return e, c
 
     def create_orbital_file(self, filetype="molden"):
         if filetype not in ("cube", "molden"):

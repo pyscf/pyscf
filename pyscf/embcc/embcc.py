@@ -1,6 +1,7 @@
 import logging
 import os.path
 import functools
+from datetime import datetime
 
 import numpy as np
 import scipy
@@ -142,15 +143,14 @@ class EmbCC:
         # New implementation of options
         # TODO: Change other options to here
         self.opts = Options()
-        #self.opts.make_rdm1 = kwargs.pop("make_rdm1", False)
-        #self.opts.ip_eom = kwargs.pop("ip_eom", False)
-        #self.opts.ea_eom = kwargs.pop("ea_eom", False)
         default_opts = {
                 "make_rdm1" : False,
                 "ip_eom" : False,
                 "ea_eom" : False,
                 #"orthogonal_mo_tol" : 1e-8,
                 "orthogonal_mo_tol" : False,
+                "popfile" : "population",       # Filename for population analysis
+                "eomfile" : "eom",              # Filename for EOM-CCSD states
                 }
         for key, val in default_opts.items():
             setattr(self.opts, key, kwargs.pop(key, val))
@@ -230,7 +230,7 @@ class EmbCC:
 
         # Population analysis
         self.lo = pyscf.lo.orth_ao(self.mol, "lowdin")
-        self.pop_analysis()
+        self.pop_mf, self.pop_mf_chg = self.pop_analysis()
 
         log.changeIndentLevel(-1)
 
@@ -857,25 +857,29 @@ class EmbCC:
         lao_labels = self.mol.ao_labels(None)
         return C_lao, lao_labels
 
-    def pop_analysis(self):
+    def pop_analysis(self, filename=None, mode="a"):
+        if filename is None:
+            filename = "%s.txt" % self.opts.popfile
         mo = np.linalg.solve(self.lo, self.mf.mo_coeff)
         dm = self.mf.make_rdm1(mo, self.mf.mo_occ)
         pop, chg = self.mf.mulliken_pop(dm=dm, s=np.eye(dm.shape[-1]))
 
-        log.info("Mean-field population analysis")
-        log.info("******************************")
-        # per orbital
-        for i, s in enumerate(self.mol.ao_labels()):
-            log.info("  * MF population of OrthAO %4d %-16s = %10.5f", i, s, pop[i])
-        # per atom
-        log.info("Mean-field atomic charges")
-        log.info("*************************")
-        for ia in range(self.mol.natm):
-            symb = self.mol.atom_symbol(ia)
-            log.info("  * MF charge at atom %3d %-3s = %10.5f", ia, symb, chg[ia])
+        tstamp = datetime.now()
 
-        self.pop_mf = pop
-        self.pop_mf_chg = chg
+        log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
+        with open(filename, mode) as f:
+            f.write("[%s] Mean-field population analysis\n" % tstamp)
+            f.write("*%s********************************\n" % (26*"*"))
+            # per orbital
+            for i, s in enumerate(self.mol.ao_labels()):
+                f.write("  * MF population of OrthAO %4d %-16s = %10.5f\n" % (i, s, pop[i]))
+            # per atom
+            f.write("[%s] Mean-field atomic charges\n" % tstamp)
+            f.write("*%s***************************\n" % (26*"*"))
+            for ia in range(self.mol.natm):
+                symb = self.mol.atom_symbol(ia)
+                f.write("  * MF charge at atom %3d %-3s = %10.5f\n" % (ia, symb, chg[ia]))
+
         return pop, chg
 
 

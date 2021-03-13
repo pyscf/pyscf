@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 def k2gamma_gdf(mf, kpts, unfold_j3c=True):
     """kpts is the mesh!"""
-    mf_sc = k2gamma.k2gamma(mf, kpts, tol_orth=1e-4)
+    mf_sc = k2gamma.k2gamma(mf, kpts)
     ncells = np.product(kpts)
     assert ncells == (mf_sc.cell.natm // mf.cell.natm)
     # Scale total energy to supercell size

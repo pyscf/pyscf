@@ -44,6 +44,7 @@ def get_arguments():
     parser.add_argument("--save-scf", help="Save primitive cell SCF.", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
     parser.add_argument("--load-scf", help="Load primitive cell SCF.")
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--exxdiv-none", action="store_true")
 
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
@@ -62,9 +63,10 @@ def get_arguments():
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
-    parser.add_argument("--make-rdm1", action="store_true")
-    parser.add_argument("--ip-eom", action="store_true")
-    parser.add_argument("--ea-eom", action="store_true")
+    #parser.add_argument("--make-rdm1", action="store_true")
+    #parser.add_argument("--ip-eom", action="store_true")
+    #parser.add_argument("--ea-eom", action="store_true")
+    parser.add_argument("--opts", nargs="*")
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
     parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
@@ -226,6 +228,8 @@ def run_mf(a, cell, args, refdf=None):
     else:
         kpts = cell.make_kpts(args.k_points)
         mf = pyscf.pbc.scf.KRHF(cell, kpts)
+    if args.exxdiv_none:
+        mf.exxdiv = None
     # Load SCF from checkpoint file
     load_scf_ok = False
     if args.load_scf:
@@ -393,11 +397,12 @@ for i, a in enumerate(args.lattice_consts):
     # Loop over bath tolerances
     for j, btol in enumerate(args.bath_tol):
 
-        kwargs = {
-                "make_rdm1" : args.make_rdm1,
-                "ip_eom" : args.ip_eom,
-                "ea_eom" : args.ea_eom,
-                }
+        #kwargs = {
+        #        "make_rdm1" : args.make_rdm1,
+        #        "ip_eom" : args.ip_eom,
+        #        "ea_eom" : args.ea_eom,
+        #        }
+        kwargs = {opt : True for opt in args.opts}
 
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
             bath_type=args.bath_type, bath_tol=btol,

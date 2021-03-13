@@ -170,7 +170,8 @@ class ClusterSolver:
             t = (MPI.Wtime()-t0)
             log.info("Time for RDM1: %.3f (%s)", t, get_time_string(t))
 
-        def eom_ccsd(kind, nroots=3, sort_weight=True, r1_min=0.01):
+        #def eom_ccsd(kind, nroots=3, sort_weight=True, r1_min=0.01):
+        def eom_ccsd(kind, nroots=3):
             kind = kind.upper()
             assert kind in ("IP", "EA")
             log.info("Running %s-EOM-CCSD (nroots=%d)...", kind, nroots)
@@ -179,34 +180,35 @@ class ClusterSolver:
             e, c = eom_funcs[kind](nroots=nroots, eris=eris)
             t = (MPI.Wtime()-t0)
             log.info("Time for %s-EOM-CCSD: %.3f (%s)", kind, t, get_time_string(t))
-
             if nroots == 1:
                 e, c = [e], [c]
-            s = self.cluster.base.get_ovlp()
-            lo = self.cluster.base.lo
-            for root in range(nroots):
-                r1 = c[root][:cc.nocc]
-                qp = np.linalg.norm(r1)**2
-                log.info("  %s-EOM-CCSD root= %2d , energy= %+.8g , QP-weight= %.5g", kind, root, e[root], qp)
-                if qp < 0.0 or qp > 1.0:
-                    log.error("Error: QP-weight not between 0 and 1!")
-                r1lo = einsum("i,ai,ab,bl->l", r1, eris.mo_coeff[:,:cc.nocc], s, lo)
-
-                if sort_weight:
-                    order = np.argsort(-r1lo**2)
-                    for ao, lab in enumerate(np.asarray(self.mf.mol.ao_labels())[order]):
-                        wgt = r1lo[order][ao]**2
-                        if wgt < r1_min*qp:
-                            break
-                        log.info("  * Weight of %s root %2d on OrthAO %-16s = %10.5f", kind, root, lab, wgt)
-                else:
-                    for ao, lab in enumerate(ao_labels):
-                        wgt = r1lo[ao]**2
-                        if wgt < r1_min*qp:
-                            continue
-                        log.info("  * Weight of %s root %2d on OrthAO %-16s = %10.5f", kind, root, lab, wgt)
-
             return e, c
+
+            #s = self.cluster.base.get_ovlp()
+            #lo = self.cluster.base.lo
+            #for root in range(nroots):
+            #    r1 = c[root][:cc.nocc]
+            #    qp = np.linalg.norm(r1)**2
+            #    log.info("  %s-EOM-CCSD root= %2d , energy= %+.8g , QP-weight= %.5g", kind, root, e[root], qp)
+            #    if qp < 0.0 or qp > 1.0:
+            #        log.error("Error: QP-weight not between 0 and 1!")
+            #    r1lo = einsum("i,ai,ab,bl->l", r1, eris.mo_coeff[:,:cc.nocc], s, lo)
+
+            #    if sort_weight:
+            #        order = np.argsort(-r1lo**2)
+            #        for ao, lab in enumerate(np.asarray(self.mf.mol.ao_labels())[order]):
+            #            wgt = r1lo[order][ao]**2
+            #            if wgt < r1_min*qp:
+            #                break
+            #            log.info("  * Weight of %s root %2d on OrthAO %-16s = %10.5f", kind, root, lab, wgt)
+            #    else:
+            #        for ao, lab in enumerate(ao_labels):
+            #            wgt = r1lo[ao]**2
+            #            if wgt < r1_min*qp:
+            #                continue
+            #            log.info("  * Weight of %s root %2d on OrthAO %-16s = %10.5f", kind, root, lab, wgt)
+
+            #return e, c
 
         if self.cluster.opts.ip_eom:
             self.ip_energy, self.ip_coeff = eom_ccsd("IP")
