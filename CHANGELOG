@@ -6,6 +6,7 @@ PySCF 1.7.6a (2020-12-17)
   - ADC (RADC and UADC)
   - Analytical nuclear gradients for state-average CASSCF
   - Support SO3 symmetry
+  - ECP-SOC for GHF/GKS
 * Improved
   - Threading safety in Mole temporary context
   - Basis parser to support arithmetic expressions in basis data

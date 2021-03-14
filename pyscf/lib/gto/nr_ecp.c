@@ -5559,6 +5559,9 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         return has_value;
 }
 
+/*
+ * Compute integrals < 1j * l U(r) > in Cartesian GTO basis
+ */
 int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                     int *atm, int natm, int *bas, int nbas, double *env,
                     ECPOpt *opt, double *cache)

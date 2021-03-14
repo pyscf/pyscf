@@ -799,10 +799,6 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
-#SCAN functionals have problems when sigma is small
-#https://github.com/dftlibs/xcfun/issues/144
-SINGULAR_IDS = set((45,46,47,48,49,50,51,52,53,54))
-
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
@@ -847,20 +843,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-
-    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 0:
-        if spin == 0:
-            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
-            non0idx = sigma_uu > 1e-16
-        else:
-            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
-            sigma_dd = rho_d[1]*rho_d[1] + rho_d[2]*rho_d[2] + rho_d[3]*rho_d[3]
-            non0idx = (sigma_uu > 1e-16) & (sigma_dd > 1e-16)
-        rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
-        rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
-        outbuf = numpy.zeros((non0idx.sum(),outlen))
-    else:
-        outbuf = numpy.zeros((ngrids,outlen))
+    outbuf = numpy.zeros((ngrids,outlen))
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),

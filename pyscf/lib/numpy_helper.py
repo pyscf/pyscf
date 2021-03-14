@@ -101,29 +101,43 @@ else:
 _numpy_einsum = numpy.einsum
 def _contract(subscripts, *tensors, **kwargs):
     idx_str = subscripts.replace(' ','')
-    indices  = idx_str.replace(',', '').replace('->', '')
-    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-        return _numpy_einsum(idx_str, *tensors)
-
     A, B = tensors
     # Call numpy.asarray because A or B may be HDF5 Datasets
-    A = numpy.asarray(A, order='A')
-    B = numpy.asarray(B, order='A')
+    A = numpy.asarray(A)
+    B = numpy.asarray(B)
+
+    # small problem size
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return _numpy_einsum(idx_str, *tensors)
+        return _numpy_einsum(idx_str, A, B)
 
     C_dtype = numpy.result_type(A, B)
     if FOUND_TBLIS and C_dtype == numpy.double:
         # tblis is slow for complex type
         return tblis_einsum._contract(idx_str, A, B, **kwargs)
 
-    DEBUG = kwargs.get('DEBUG', False)
+    indices  = idx_str.replace(',', '').replace('->', '')
+    if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):
+        return _numpy_einsum(idx_str, A, B)
 
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
     idxB, idxC = idxBC.split('->')
-    assert(len(idxA) == A.ndim)
-    assert(len(idxB) == B.ndim)
+    assert len(idxA) == A.ndim
+    assert len(idxB) == B.ndim
+
+    uniq_idxA = set(idxA)
+    uniq_idxB = set(idxB)
+    # Find the shared indices being summed over
+    shared_idxAB = uniq_idxA.intersection(uniq_idxB)
+
+    if (not shared_idxAB == 0 or  # Indices must overlap
+        # one operand is a subset of the other one (e.g. 'ijkl,jk->il')
+        uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
+        # repeated indices (e.g. 'iijk,kl->jl')
+        len(idxA) != len(uniq_idxA) or len(idxB) != len(uniq_idxB)):
+        return _numpy_einsum(idx_str, A, B)
+
+    DEBUG = kwargs.get('DEBUG', False)
 
     if DEBUG:
         print("*** Einsum for", idx_str)
@@ -138,15 +152,6 @@ def _contract(subscripts, *tensors, **kwargs):
     if DEBUG:
         print("rangeA =", rangeA)
         print("rangeB =", rangeB)
-
-    # duplicated indices 'in,ijj->n'
-    if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
-        return _numpy_einsum(idx_str, A, B)
-
-    # Find the shared indices being summed over
-    shared_idxAB = set(idxA).intersection(idxB)
-    if len(shared_idxAB) == 0: # Indices must overlap
-        return _numpy_einsum(idx_str, A, B)
 
     idxAt = list(idxA)
     idxBt = list(idxB)

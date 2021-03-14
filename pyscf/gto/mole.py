@@ -1335,15 +1335,6 @@ def energy_nuc(mol, charges=None, coords=None):
     if charges is None: charges = mol.atom_charges()
     if len(charges) <= 1:
         return 0
-    #e = 0
-    #for j in range(len(mol._atm)):
-    #    q2 = charges[j]
-    #    r2 = coords[j]
-    #    for i in range(j):
-    #        q1 = charges[i]
-    #        r1 = coords[i]
-    #        r = numpy.linalg.norm(r1-r2)
-    #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
@@ -2847,11 +2838,13 @@ class Mole(lib.StreamObject):
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit %s)', unit)
-            coords = mol.atom_coords()
-            for ia in range(mol.natm):
-                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
-                            ia+1, mol.atom_symbol(ia), *coords[ia])
+            logger.info(mol, 'New geometry')
+            for ia, atom in enumerate(self._atom):
+                coorda = tuple([x * param.BOHR for x in atom[1]])
+                coordb = tuple([x for x in atom[1]])
+                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
+                            '%16.12f %16.12f %16.12f Bohr\n',
+                            ia+1, mol.atom_symbol(ia), *coorda, *coordb)
         return mol
 
     def update(self, chkfile):
@@ -2865,6 +2858,11 @@ class Mole(lib.StreamObject):
     def has_ecp(self):
         '''Whether pseudo potential is used in the system.'''
         return len(self._ecpbas) > 0 or self._pseudo
+
+    def has_ecp_soc(self):
+        '''Whether spin-orbit coupling is enabled in ECP.'''
+        return (len(self._ecpbas) > 0 and
+                numpy.any(self._ecpbas[:,SO_TYPE_OF] == 1))
 
 
 #######################################################
