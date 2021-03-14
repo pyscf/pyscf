@@ -38,7 +38,9 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
         rdm2 = rdm2.copy()
     for k in range(nmo):
         rdm2[:,k,k,:] -= rdm1.T
-    #return rdm1, rdm2
+
+    # Employing the particle permutation symmetry, average over two particles
+    # to reduce numerical round off error
     rdm2 = lib.transpose_sum(rdm2.reshape(nmo*nmo,-1), inplace=True) * .5
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
