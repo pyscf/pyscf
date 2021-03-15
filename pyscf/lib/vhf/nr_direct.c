@@ -187,12 +187,13 @@ void CVHFdot_nrs8(int (*intor)(), JKOperator **jkop, JKArray **vjk,
                 return CVHFdot_nrs4(intor, jkop, vjk, dms, buf, cache, n_dm,
                                     ishls, jshls, kshls, lshls, vhfopt, envs);
         } else if (ishls[0] < kshls[0]) {
-                assert(ishls[1] == kshls[1]);
                 return;
         } else if ((ishls[1] <= jshls[0]) || (kshls[1] <= lshls[0])) {
+                assert(ishls[1] == kshls[1]);
                 return;
         }
         // else i == k && i >= j && k >= l
+        assert(ishls[1] == kshls[1]);
 
         DECLARE_ALL;
 

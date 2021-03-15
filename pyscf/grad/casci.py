@@ -248,7 +248,7 @@ def as_scanner(mcscf_grad, state=None):
     return CASCI_GradScanner(mcscf_grad)
 
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, mc):
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
@@ -256,7 +256,7 @@ class Gradients(rhf_grad.GradientsBasics):
             self.state = None  # not a specific state
         else:
             self.state = 0  # of which the gradients to be computed.
-        rhf_grad.GradientsBasics.__init__(self, mc)
+        rhf_grad.GradientsMixin.__init__(self, mc)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

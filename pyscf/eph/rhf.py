@@ -31,7 +31,6 @@ AU_TO_CM = 2.19475 * 1e5
 CUTOFF_FREQUENCY = 80
 
 def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
-    cput0 = (logger.process_clock(), logger.perf_counter())
     if mo_energy is None: mo_energy = ephobj.base.mo_energy
     if mo_coeff is None: mo_coeff = ephobj.base.mo_coeff
     if mo_occ is None: mo_occ = ephobj.base.mo_occ

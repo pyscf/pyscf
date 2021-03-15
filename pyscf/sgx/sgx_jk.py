@@ -20,14 +20,14 @@
 '''
 semi-grid Coulomb and eXchange without differencial density matrix
 
-To lower the scaling of coulomb and exchange matrix construction for large system, one 
-coordinate is analitical and the other is grid. The traditional two electron 
-integrals turn to analytical one electron integrals and numerical integration 
+To lower the scaling of coulomb and exchange matrix construction for large system, one
+coordinate is analitical and the other is grid. The traditional two electron
+integrals turn to analytical one electron integrals and numerical integration
 based on grid.(see Friesner, R. A. Chem. Phys. Lett. 1985, 116, 39)
 
-Minimizing numerical errors using overlap fitting correction.(see 
+Minimizing numerical errors using overlap fitting correction.(see
 Lzsak, R. et. al. J. Chem. Phys. 2011, 135, 144105)
-Grid screening for weighted AO value and DktXkg. 
+Grid screening for weighted AO value and DktXkg.
 Two SCF steps: coarse grid then fine grid. There are 5 parameters can be changed:
 # threshold for Xg and Fg screening
 gthrd = 1e-10
@@ -36,7 +36,7 @@ grdlvl_i = 0
 grdlvl_f = 1
 # norm_ddm threshold for grids change
 thrd_nddm = 0.03
-# set block size to adapt memory 
+# set block size to adapt memory
 sblk = 200
 
 Set mf.direct_scf = False because no traditional 2e integrals
@@ -48,11 +48,11 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.df.incore import aux_e2
 from pyscf.gto import moleintor
 from pyscf.scf import _vhf
+from pyscf.dft import gen_grid
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
@@ -316,7 +316,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
 # Use default mesh grids and weights
 def get_gridss(mol, level=1, gthrd=1e-10):
     Ktime = (logger.process_clock(), logger.perf_counter())
-    grids = dft.gen_grid.Grids(mol)
+    grids = gen_grid.Grids(mol)
     grids.level = level
     grids.build()
 

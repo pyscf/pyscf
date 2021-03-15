@@ -288,7 +288,6 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
     dm3 = dms['3']
     #dm4 = dms['4']
     ncore = mo_core.shape[1]
-    nvirt = mo_virt.shape[1]
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
 
@@ -720,9 +719,10 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
                                                self.load_ci(), self.load_ci(), ncas, self.nelecas)
         dm4 = None
 
-        dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
-               #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
-              }
+        dms = {
+            '1': dm1, '2': dm2, '3': dm3, '4': dm4,
+            # 'h1': hdm1, 'h2': hdm2, 'h3': hdm3
+        }
         time1 = log.timer('3pdm, 4pdm', *time0)
 
         eris = _ERIS(self, self.mo_coeff)

@@ -188,10 +188,10 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += numpy.einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', l2i, t2i)
+        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - lib.einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - lib.einsum('iab,jba->ij', l2i, t2i)
     return -dm1occ, dm1vir
 
 
@@ -459,8 +459,8 @@ class MP2(lib.StreamObject):
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -688,7 +688,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         #eris.ovov = eris.feri['eri_mo']
         eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max(2000, max_memory), log)
 
-    time1 = log.timer('Integral transformation', *time0)
+    log.timer('Integral transformation', *time0)
     return eris
 
 #

@@ -24,6 +24,7 @@ JCP, 144, 054101
 JCP, 144, 160901
 '''
 
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -32,8 +33,10 @@ from pyscf.dft import gen_grid
 from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
-
 from pyscf.solvent import _attach_solvent
+
+warnings.warn('Module ddPCM is under testing')
+
 
 @lib.with_doc(_attach_solvent._for_scf.__doc__)
 def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
@@ -153,7 +156,7 @@ def regularize_xt(t, eta, scale=1):
     on_shell = (1-eta < t) & (t < 1)
     xt[inner] = 1
     ti = t[on_shell] - eta*.5
-# JCP, 144, 054101
+    # JCP, 144, 054101
     xt[on_shell] = 1./eta**4 * (1-ti)**2 * (ti-1+2*eta)**2
     return xt
 
@@ -162,7 +165,7 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
     mol = pcmobj.mol
     natm = mol.natm
     lmax = pcmobj.lmax
-    eta = pcmobj.eta
+    # eta = pcmobj.eta
     nlm = (lmax+1)**2
 
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)

@@ -389,9 +389,7 @@ def hess_nuc(mol, atmlst=None):
         tmp1 = qs[i] * qs / s12**3
         tmp2 = numpy.einsum('k, ki,kj->kij',-3*qs[i]*qs/s12**5, r12, r12)
 
-        h[i,i,0,0] = \
-        h[i,i,1,1] = \
-        h[i,i,2,2] = -tmp1.sum()
+        h[i,i,0,0] = h[i,i,1,1] = h[i,i,2,2] = -tmp1.sum()
         h[i,i] -= numpy.einsum('kij->ij', tmp2)
 
         h[i,:,0,0] += tmp1

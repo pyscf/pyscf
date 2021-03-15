@@ -42,3 +42,5 @@ gw
 
 Ask Susi -- [do today]
 Flake config <-- [ ]
+
+Edit docs about the external packages and the environment variable PYSCF_EXT_PATH

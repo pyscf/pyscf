@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -772,7 +772,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
-        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
         orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)

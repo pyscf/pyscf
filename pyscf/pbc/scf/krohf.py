@@ -262,7 +262,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -335,11 +335,11 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
         nelec = float(sum(self.nelec))
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %g', ne/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 

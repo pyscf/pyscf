@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,11 +50,11 @@ def make_strings(orb_list, nelec):
         return numpy.asarray([], dtype=numpy.int64)
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
-            res = [(1<<i) for i in orb_list]
+            res = [(1 << i) for i in orb_list]
         elif nelec >= len(orb_list):
             n = 0
             for i in orb_list:
-                n = n | (1<<i)
+                n = n | (1 << i)
             res = [n]
         else:
             restorb = orb_list[:-1]
@@ -93,7 +93,7 @@ def _gen_occslst(orb_list, nelec):
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
 def _strs2occslst(strs, norb):
     na = len(strs)
-    one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
+    one_particle_strs = numpy.asarray([1 << i for i in range(norb)])
     occ_masks = (strs.reshape(-1,1) & one_particle_strs) != 0
     occslst = numpy.where(occ_masks)[1].reshape(na,-1)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
@@ -120,7 +120,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
         occ = []
         vir = []
         for i in orb_list:
-            if str0 & (1<<i):
+            if str0 & (1 << i):
                 occ.append(i)
             else:
                 vir.append(i)
@@ -129,7 +129,7 @@ def gen_linkstr_index_o0(orb_list, nelec, strs=None):
             linktab.append((i, i, strdic[str0], 1))
         for i in occ:
             for a in vir:
-                str1 = str0 ^ (1<<i) | (1<<a)
+                str1 = str0 ^ (1 << i) | (1 << a)
                 # [cre, des, target_address, parity]
                 linktab.append((a, i, strdic[str1], cre_des_sign(a, i, str0)))
         return linktab
@@ -167,7 +167,7 @@ def gen_linkstr_index_o1(orb_list, nelec, strs=None, tril=False):
         where_vir = numpy.sum(str0.reshape(-1,1) < vir, axis=0)
         parity_occ_orb = 1  # parity for annihilating occupied orbital
         for n,i in enumerate(str0):  # loop over all occupied orbitals
-            # o,v which index is bigger, to determine whether to annihilate occ-orb first 
+            # o,v which index is bigger, to determine whether to annihilate occ-orb first
             reorder_to_ov = vir > i
             str1s = numpy.empty((nvir,nelec), dtype=int)
             str1s[:] = str0
@@ -259,8 +259,8 @@ def gen_cre_str_index_o0(orb_list, nelec):
     def progate1e(str0):
         linktab = []
         for i in orb_list:
-            if not str0 & (1<<i):
-                str1 = str0 | (1<<i)
+            if not str0 & (1 << i):
+                str1 = str0 | (1 << i)
                 linktab.append((i, 0, credic[str1], cre_sign(i, str0)))
         return linktab
 
@@ -304,8 +304,8 @@ def gen_des_str_index_o0(orb_list, nelec):
     def progate1e(str0):
         linktab = []
         for i in orb_list:
-            if str0 & (1<<i):
-                str1 = str0 ^ (1<<i)
+            if str0 & (1 << i):
+                str1 = str0 ^ (1 << i)
                 linktab.append((0, i, desdic[str1], des_sign(i, str0)))
         return linktab
 
@@ -345,7 +345,7 @@ def cre_des_sign(p, q, string0):
     if p == q:
         return 1
     else:
-        if (string0 & (1<<p)) or (not (string0 & (1<<q))):
+        if (string0 & (1 << p)) or (not (string0 & (1 << q))):
             return 0
         elif p > q:
             mask = (1 << p) - (1 << (q+1))
@@ -355,17 +355,17 @@ def cre_des_sign(p, q, string0):
 
 # Determine the sign of  p^+ |string0>
 def cre_sign(p, string0):
-    if (string0 & (1<<p)):
+    if (string0 & (1 << p)):
         return 0
     else:
-        return (-1) ** bin(string0>>(p+1)).count('1')
+        return (-1) ** bin(string0 >> (p+1)).count('1')
 
 # Determine the sign of  p |string0>
 def des_sign(p, string0):
-    if (not (string0 & (1<<p))):
+    if (not (string0 & (1 << p))):
         return 0
     else:
-        return (-1) ** bin(string0>>(p+1)).count('1')
+        return (-1) ** bin(string0 >> (p+1)).count('1')
 
 # Determine the sign of  string1 = p^+ q |string0>
 def parity(string0, string1):
@@ -376,25 +376,25 @@ def parity(string0, string1):
         return bin(n).count('1')
     if ss > 0:
         # string1&ss gives the number of 1s between two strings
-        return (-1) ** (count_bit1(string1&ss))
+        return (-1) ** (count_bit1(string1 & ss))
     elif ss == 0:
         return 1
     else:
-        return (-1) ** (count_bit1(string0&(-ss)))
+        return (-1) ** (count_bit1(string0 & (-ss)))
 
 def addr2str_o0(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
     if addr == 0 or nelec == norb or nelec == 0:
-        return (1<<nelec) - 1   # ..0011..11
+        return (1 << nelec) - 1   # ..0011..11
     else:
         for i in reversed(range(norb)):
             addrcum = num_strings(i, nelec)
             if addrcum <= addr:
-                return (1<<i) | addr2str_o0(i, nelec-1, addr-addrcum)
+                return (1 << i) | addr2str_o0(i, nelec-1, addr-addrcum)
 def addr2str_o1(norb, nelec, addr):
     assert(num_strings(norb, nelec) > addr)
     if addr == 0 or nelec == norb or nelec == 0:
-        return (1<<nelec) - 1   # ..0011..11
+        return (1 << nelec) - 1   # ..0011..11
     str1 = 0
     nelec_left = nelec
     for norb_left in reversed(range(norb)):
@@ -402,10 +402,10 @@ def addr2str_o1(norb, nelec, addr):
         if nelec_left == 0:
             break
         elif addr == 0:
-            str1 |= (1<<nelec_left) - 1
+            str1 |= (1 << nelec_left) - 1
             break
         elif addrcum <= addr:
-            str1 |= 1<<norb_left
+            str1 |= 1 << norb_left
             addr -= addrcum
             nelec_left -= 1
     return str1
@@ -478,7 +478,7 @@ def sub_addrs(norb, nelec, orbital_indices, sub_nelec=0):
         strs = make_strings(range(norb), nelec)
         counts = numpy.zeros(len(strs), dtype=int)
         for i in orbital_indices:
-            counts += (strs & (1<<i)) != 0
+            counts += (strs & (1 << i)) != 0
         sub_strs = strs[counts == sub_nelec]
         return strs2addr(norb, nelec, sub_strs)
 

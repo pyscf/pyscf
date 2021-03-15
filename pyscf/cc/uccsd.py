@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -862,8 +862,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
 
 def _get_ovvv_base(ovvv, *slices):
-    if len(ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library
-                              # backward compatbility
+    if ovvv.ndim == 3:
         ovw = np.asarray(ovvv[slices])
         nocc, nvir, nvir_pair = ovw.shape
         ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))

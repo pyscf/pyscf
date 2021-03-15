@@ -1,0 +1,37 @@
+{% set data = load_setup_py_data() %}
+
+
+package:
+  name: "pyscf"
+  version: "{{ data['version'] }}"
+
+source:
+  path: ..
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - cmake
+    - make
+    - mkl
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+  run:
+    - mkl
+    - numpy>=1.13
+    - scipy!=1.5
+    - h5py>=2.7
+
+test:
+  commands:
+    - test -f ${PREFIX}/lib/python*/site-packages/pyscf/lib/libcvhf.so
+    # python version in testing environment is often changed to a different
+    # version than the building
+    # - python -c "import pyscf.lib"
+
+about:
+  home: "{{ data['url'] }}"
+  license: "{{ data['license'] }}"
+  summary: "{{ data['description'] }}"

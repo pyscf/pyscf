@@ -201,7 +201,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
 
 
 def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None):
+                          left_guess=None, eris=None, imds=None):
     '''Wrapper for running perturbative excited-states that require both left
     and right amplitudes.'''
     if imds is None:
@@ -261,8 +261,8 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
             The IP-CCSD* energy.
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
-               right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds)
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -405,7 +405,6 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
 
-    fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
@@ -600,15 +599,15 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
 
 def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-        left_guess=None, eris=None, imds=None, **kwargs):
+                left_guess=None, eris=None, imds=None, **kwargs):
     """Calculates CCSD* perturbative correction.
 
     Args:
         See also ipccd_star()
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
-               right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds)
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -755,7 +754,6 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
 
-    fock = eris.fock
     nocc, nvir = t1.shape
     dtype = np.result_type(t1, t2, eris.ovoo.dtype)
     # Notice we do not use `sort_eri` as compared to the eaccsd_star.
@@ -796,8 +794,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
             vvL = np.asarray(eris.vvL)
             nvir = int(np.sqrt(eris.vvL.shape[0]*2))
             return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
-        elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
-                                         # backward compatbility
+        elif eris.vvvv.ndim == 2:
             nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
             return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
         else:
@@ -1579,8 +1576,7 @@ def eeccsd_diag(eom, imds=None):
     Wvvaa = Wvvaa + Wvvaa.T
     if eris.vvvv is None: # AO-direct CCSD, vvvv is not generated.
         pass
-    elif len(eris.vvvv.shape) == 4:  # DO NOT use .ndim here for h5py library
-                                     # backward compatbility
+    elif eris.vvvv.ndim == 4:
         eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv), t1.shape[1])
         tmp = np.einsum('aabb->ab', eris_vvvv)
         Wvvaa += tmp

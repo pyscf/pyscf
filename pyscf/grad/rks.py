@@ -168,7 +168,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         vtmp = numpy.empty((3,nao,nao))
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
-            ngrids = weight.size
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[0], mask, 'LDA')
@@ -331,15 +330,15 @@ def grids_response_cc(grids):
 
 class Gradients(rhf_grad.Gradients):
 
-# This parameter has no effects for HF gradients. Add this attribute so that
-# the kernel function can be reused in the DFT gradients code.
+    # This parameter has no effects for HF gradients. Add this attribute so that
+    # the kernel function can be reused in the DFT gradients code.
     grid_response = getattr(__config__, 'grad_rks_Gradients_grid_response', False)
 
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
-# This parameter has no effects for HF gradients. Add this attribute so that
-# the kernel function can be reused in the DFT gradients code.
+        # This parameter has no effects for HF gradients. Add this attribute so that
+        # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
@@ -397,6 +396,9 @@ if __name__ == '__main__':
 # [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
     g.grid_response = True
     print(lib.finger(g.kernel()) - -0.049891265876709084)
+# O     0.0000000000    -0.0000000000     0.0210225191
+# H     0.0000000000     0.0281984036    -0.0105112595
+# H    -0.0000000000    -0.0281984036    -0.0105112595
 
     mf.xc = 'b88,p86'
     e0 = mf.scf()

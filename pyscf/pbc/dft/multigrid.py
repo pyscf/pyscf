@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -811,7 +811,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             nshells_t = _pgto_shells(t_cell)
 
             h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-            l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
+            #l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
             t_coeff = scipy.linalg.block_diag(*t_coeff)
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
@@ -1544,6 +1544,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
     rcuts_pgto, kecuts_pgto = _primitive_gto_cutoff(cell)
     ao_loc = cell.ao_loc_nr()
 
+    # cell that needs dense integration grids
     def make_cell_dense_exp(shls_dense, ke0, ke1):
         cell_dense = copy.copy(cell)
         cell_dense._bas = cell._bas.copy()
@@ -1575,6 +1576,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         cell_dense.rcut = max(rcut_atom)
         return cell_dense, ao_idx, ke_cutoff, rcut_atom
 
+    # cell that needs sparse integration grids
     def make_cell_sparse_exp(shls_sparse, ke0, ke1):
         cell_sparse = copy.copy(cell)
         cell_sparse._bas = cell._bas.copy()
@@ -1620,7 +1622,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
 
         mesh = tools.cutoff_to_mesh(a, ke1)
         if TO_EVEN_GRIDS:
-            mesh = (mesh+1)//2 * 2  # to the nearest even number
+            mesh = int((mesh+1)//2) * 2  # to the nearest even number
 
         if numpy.all(mesh >= fft_mesh):
             # Including all rest shells
@@ -1662,10 +1664,11 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
             break
     return tasks
 
-def _primitive_gto_cutoff(cell):
+def _primitive_gto_cutoff(cell, precision=None):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
-    precision = cell.precision * EXTRA_PREC
+    if precision is None:
+        precision = cell.precision * EXTRA_PREC
     log_prec = numpy.log(precision)
 
     rcut = []
@@ -1804,13 +1807,13 @@ def _takebak_5d(out, a, indices):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft
+    from pyscf.pbc import dft
     numpy.random.seed(22)
     cell = gto.M(
         a = numpy.eye(3)*3.5668,
-        atom = '''C     0.      0.      0.    
+        atom = '''C     0.      0.      0.
                   C     0.8917  0.8917  0.8917
-                  C     1.7834  1.7834  0.    
+                  C     1.7834  1.7834  0.
                   C     2.6751  2.6751  0.8917
                   C     1.7834  0.      1.7834
                   C     2.6751  0.8917  2.6751

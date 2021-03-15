@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -234,7 +234,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
     return gccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
-                               ao_repr=ao_repr)
+                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -469,8 +469,8 @@ if __name__ == '__main__':
     h1e = numpy.zeros((nmo,nmo))
     idxa = eris.orbspin == 0
     idxb = eris.orbspin == 1
-    h1e[idxa[:,None]&idxa] = h1a.ravel()
-    h1e[idxb[:,None]&idxb] = h1b.ravel()
+    h1e[idxa[:,None] & idxa] = h1a.ravel()
+    h1e[idxb[:,None] & idxb] = h1b.ravel()
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
           numpy.einsum('ijkl,ijkl', eri, rdm2) * .5)
     e2 += mol.energy_nuc()

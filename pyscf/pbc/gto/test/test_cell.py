@@ -155,7 +155,7 @@ class KnownValues(unittest.TestCase):
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 4)
+        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 3)
 
         a = numpy.eye(3) * 3
         a[0,1] = .2
@@ -174,7 +174,7 @@ class KnownValues(unittest.TestCase):
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 8)
+        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 7)
 
     def test_ewald_0d_inf_vacuum(self):
         cell = pgto.Cell()

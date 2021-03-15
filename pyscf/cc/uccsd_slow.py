@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,8 +74,8 @@ def update_amps(cc, t1, t2, eris):
     t2new += 0.5*einsum('ijef,abef->ijab', tau, Wvvvv)
     tmp = einsum('imae,mbej->ijab', t2, Wovvo)
     tmp -= -einsum('ie,ma,mbje->ijab', t1, t1, eris.ovov)
-    t2new += ( tmp - tmp.transpose(0,1,3,2)
-             - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
+    t2new += (tmp - tmp.transpose(0,1,3,2)
+              - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
     tmp = einsum('ie,jeba->ijab', t1, np.array(eris.ovvv).conj())
     t2new += (tmp - tmp.transpose(1,0,2,3))
     tmp = einsum('ma,mbij->ijab', t1, eris.ovoo)
@@ -309,14 +309,14 @@ class UCCSD(ccsd.CCSD):
             _Wvvvva = np.array(imds.Wvvvv[a])
             for b in range(a):
                 for j in range(nocc):
-                   Hr2[j,a,b] += imds.Fvv[a,a]
-                   Hr2[j,a,b] += imds.Fvv[b,b]
-                   Hr2[j,a,b] += -imds.Foo[j,j]
-                   Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
-                   Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
-                   Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
-                   Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b])
-                                       -np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b]))
+                    Hr2[j,a,b] += imds.Fvv[a,a]
+                    Hr2[j,a,b] += imds.Fvv[b,b]
+                    Hr2[j,a,b] += -imds.Foo[j,j]
+                    Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
+                    Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
+                    Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
+                    Hr2[j,a,b] -= 0.5*(np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b]) -
+                                       np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b]))
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -380,7 +380,7 @@ class UCCSD(ccsd.CCSD):
 
         tmpabij = einsum('mbej,imae->ijab',imds.Wovvo,r2)
 
-        Hr2 = ( tmpab - tmpab.transpose(0,1,3,2)
+        Hr2 = (tmpab - tmpab.transpose(0,1,3,2)
                + tmpij - tmpij.transpose(1,0,2,3)
                + 0.5*einsum('mnij,mnab->ijab',imds.Woooo,r2)
                + 0.5*einsum('abef,ijef->ijab',imds.Wvvvv,r2)
@@ -406,8 +406,8 @@ class UCCSD(ccsd.CCSD):
             for a in range(nvir):
                 Hr1[i,a] = imds.Fvv[a,a] - imds.Foo[i,i] + imds.Wovvo[i,a,a,i]
         for a in range(nvir):
-            tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2)
-                      -np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
+            tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2) -
+                       np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
             Hr2[:,:,:,a] += imds.Fvv[a,a] + tmp
             Hr2[:,:,a,:] += imds.Fvv[a,a] + tmp
             _Wvvvva = np.array(imds.Wvvvv[a])
@@ -420,8 +420,8 @@ class UCCSD(ccsd.CCSD):
                 Hr2[:,i,a,:] += tmp
                 Hr2[i,:,a,:] += tmp
         for i in range(nocc):
-            tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2)
-                      -np.einsum('kjba,jkab->jab', imds.Woovv, t2))
+            tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2) -
+                       np.einsum('kjba,jkab->jab', imds.Woovv, t2))
             Hr2[:,i,:,:] += -imds.Foo[i,i] + tmp
             Hr2[i,:,:,:] += -imds.Foo[i,i] + tmp
             for j in range(i):

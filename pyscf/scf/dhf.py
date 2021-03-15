@@ -31,12 +31,15 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-try:
-    # Install zquatev with
-    # pip install git+https://github.com/sunqm/zquatev
-    import zquatev
-except ImportError:
-    zquatev = None
+
+zquatev = None
+if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
+    try:
+        # Install zquatev with
+        # pip install git+https://github.com/sunqm/zquatev
+        import zquatev
+    except ImportError:
+        pass
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -64,22 +67,66 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSLL'
 
-    if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' or
-                        mf._coulomb_now.upper() == 'LLSS'):
-        scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 1e-3, 1e-1,
-                            dump_chk, dm0=dm, callback=callback,
-                            conv_check=False)
-        dm = mf.make_rdm1(mo_coeff, mo_occ)
-        mf._coulomb_now = 'SSSS'
-
     if mf.with_ssss:
+        if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' or
+                            mf._coulomb_now.upper() == 'LLSS'):
+            scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
+                    = hf.kernel(mf, 1e-3, 1e-1,
+                                dump_chk, dm0=dm, callback=callback,
+                                conv_check=False)
+            dm = mf.make_rdm1(mo_coeff, mo_occ)
         mf._coulomb_now = 'SSSS'
     else:
         mf._coulomb_now = 'SSLL'
 
     return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
                      callback=callback, conv_check=conv_check)
+
+def energy_elec(mf, dm=None, h1e=None, vhf=None):
+    r'''Electronic part of Dirac-Hartree-Fock energy
+
+    Args:
+        mf : an instance of SCF class
+
+    Kwargs:
+        dm : 2D ndarray
+            one-partical density matrix
+        h1e : 2D ndarray
+            Core hamiltonian
+        vhf : 2D ndarray
+            HF potential
+
+    Returns:
+        Hartree-Fock electronic energy and the Coulomb energy
+    '''
+    if dm is None: dm = mf.make_rdm1()
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    e1 = numpy.einsum('ij,ji->', h1e, dm).real
+    e_coul = numpy.einsum('ij,ji->', vhf, dm).real * .5
+    logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
+
+    if not mf.with_ssss:
+        # Visscher point charge corrections for small component, TCA, 98, 68
+        # Note there is a small difference to Visscher's work. The model
+        # charges in Visscher's work are obtained from atomic calculations.
+        # Charges here are Mulliken charges on small components.
+        aoslice = mf.mol.aoslice_2c_by_atom()
+        n2c = dm[0].shape[0] // 2
+        s = mf.get_ovlp()
+        ss_mul_charges = []
+        for p0, p1 in aoslice[:,2:] + n2c:
+            mul_charge = numpy.einsum('ij,ji->', s[n2c:,p0:p1], dm[p0:p1,n2c:])
+            ss_mul_charges.append(mul_charge.real)
+        ss_mul_charges = numpy.array(ss_mul_charges)
+        e_coul_ss = gto.energy_nuc(mf.mol, ss_mul_charges)
+        e_coul += e_coul_ss
+        mf.scf_summary['e_coul_ss'] = e_coul_ss
+        logger.debug(mf, 'Visscher corrections for small component = %.14g', e_coul_ss)
+
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
+    return (e1+e_coul).real, e_coul
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
@@ -196,7 +243,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         s = get_ovlp(mol)
 
     def fproj(mo):
-#TODO: check if mo is GHF orbital
+        #TODO: check if mo is GHF orbital
         if project:
             mo = addons.project_mo_r2r(chk_mol, mo, mol)
             norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
@@ -211,8 +258,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         if mo[0].ndim == 1: # nr-RHF
             dm = reduce(numpy.dot, (mo*mo_occ, mo.T))
         else: # nr-UHF
-            dm = reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) \
-               + reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T))
+            dm = (reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) +
+                  reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T)))
         dm = _proj_dmll(chk_mol, dm, mol)
     return dm
 
@@ -263,10 +310,10 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info('occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info('virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
     mol = mf.mol
     if mf.verbose >= logger.DEBUG1:
@@ -465,6 +512,8 @@ class DHF(hf.SCF):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
+
+    energy_elec = energy_elec
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol

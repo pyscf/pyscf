@@ -25,30 +25,29 @@ mol.charge = 5
 mol.build()
 
 mf = scf.ROHF(mol)
-irrep_nelec = {'A1g' :(4,3), 'E1gx': (1,0), 'E1gy': (1,0), 'E2gx': (1,0), 'E2gy': (1,0),
-               'A1u' :4, 'E1ux': 4, 'E1uy': 4}
 mf.kernel()
-# The output of .analyze() method can help to identify whether the spherical
+# The output of .analyze() method can help to verify whether the spherical
 # symmetry is conserved.
 #mf.analyze()
 
-# Set the system back to neutral atom
+# Restore the neutral atom
 mol.spin = 5
 mol.charge = 0
 
 mf.irrep_nelec = mf.get_irrep_nelec()
-mf.irrep_nelec['A1g'] = (4,3)
-mf.irrep_nelec['E1gx'] = (1,0)
-mf.irrep_nelec['E1gy'] = (1,0)
-mf.irrep_nelec['E2gx'] = (1,0)
-mf.irrep_nelec['E2gy'] = (1,0)
+mf.irrep_nelec['s+0'] = (3,3)
+mf.irrep_nelec['d-2'] = (1,0)
+mf.irrep_nelec['d-1'] = (1,0)
+mf.irrep_nelec['d+0'] = (1,0)
+mf.irrep_nelec['d+1'] = (1,0)
+mf.irrep_nelec['d+2'] = (1,0)
 dm = mf.make_rdm1()
 mf.kernel(dm)
 #mf.analyze()
 
 #
-# Regular SCF iteration may break the spherical symmetry in may systems.
-# Second order SCF model often works slightly better.
+# Regular SCF iterations sometimes break the spherical symmetry while the
+# second order SCF method works slightly better.
 #
 mf = mf.newton()
 mf.kernel(dm)
@@ -56,8 +55,8 @@ mf.kernel(dm)
 
 
 #
-# Method 2: Construct the atomic initial guess of a large basis set from a
-# calculation of small basis set.
+# Method 2: Construct the atomic initial guess of large basis from a
+# calculation of small basis.
 #
 mol = gto.Mole()
 mol.verbose = 4
@@ -74,14 +73,14 @@ mf.kernel()
 #
 # Setup the system with large basis set
 #
-mol = gto.Mole()
-mol.verbose = 4
-mol.atom = 'V'
-mol.basis = 'ccpvtz'
-mol.symmetry = True
-mol.spin = 5
-mol.charge = 0
-mol.build()
+mol1 = gto.Mole()
+mol1.verbose = 4
+mol1.atom = 'V'
+mol1.basis = 'ccpvtz'
+mol1.symmetry = True
+mol1.spin = 5
+mol1.charge = 0
+mol1.build()
 
 dm = mf.make_rdm1()
 dm = scf.addons.project_dm_nr2nr(mol, dm, mol1)
@@ -96,3 +95,35 @@ mf = mf.newton()
 mf.kernel(dm)
 #mf.analyze()
 
+
+########################################
+# Spherical symmetry was not supported until PySCF-1.7.4. SO3 symmetry was
+# recogonized as Dooh. Code below is token from old examples.
+#
+# Construct the atomic initial guess from cation.
+#
+mol = gto.Mole()
+mol.verbose = 4
+mol.atom = 'V'
+mol.basis = 'ccpvtz'
+mol.symmetry = 'Dooh'
+mol.spin = 0
+mol.charge = 5
+mol.build()
+
+mf = scf.ROHF(mol)
+mf.kernel()
+
+# Restore the neutral atom
+mol.spin = 5
+mol.charge = 0
+
+mf.irrep_nelec = mf.get_irrep_nelec()
+mf.irrep_nelec['A1g'] = (4,3)
+mf.irrep_nelec['E1gx'] = (1,0)
+mf.irrep_nelec['E1gy'] = (1,0)
+mf.irrep_nelec['E2gx'] = (1,0)
+mf.irrep_nelec['E2gy'] = (1,0)
+dm = mf.make_rdm1()
+mf.kernel(dm)
+#mf.analyze()

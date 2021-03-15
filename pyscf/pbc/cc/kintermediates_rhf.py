@@ -855,7 +855,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
                 tmp_t3Tv_jik = my_permuted_w[kj,ki,kk]
                 tmp_t3Tv_kji = my_permuted_w[kk,kj,ki]
                 Ptmp_t3Tv = add_and_permute(kpt_indices, task,
-                                (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
+                                            (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
                 Ptmp_t3Tv /= eabcijk
 
                 # Contribution to T1 amplitudes

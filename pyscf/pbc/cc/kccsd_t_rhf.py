@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: James D. McClain <jmcclain@princeton.edu>
 #
@@ -425,12 +438,9 @@ def create_t3_eris(mycc, kconserv, eris, tmpfile='tmp_t3_eris.h5'):
     dtype = np.result_type(eris_vovv, eris_oovv, eris_ooov, t2)
     if not check_read_success(feri_tmp_filename):
         feri_tmp = lib.H5TmpFile(feri_tmp_filename, 'w', **h5py_kwargs)
-        t2T_out = feri_tmp.create_dataset('t2T',
-                      (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)
-        eris_vvop_out = feri_tmp.create_dataset('vvop',
-                            (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)
-        eris_vooo_C_out = feri_tmp.create_dataset('vooo_C',
-                              (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)
+        t2T_out = feri_tmp.create_dataset('t2T', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc), dtype=dtype)  # noqa: E501
+        eris_vvop_out = feri_tmp.create_dataset('vvop', (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=dtype)  # noqa: E501
+        eris_vooo_C_out = feri_tmp.create_dataset('vooo_C', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=dtype)  # noqa: E501
 
         transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=t2T_out)
         create_eris_vvop(eris_vovv, eris_oovv, nkpts, nocc, nvir, kconserv, out=eris_vvop_out)

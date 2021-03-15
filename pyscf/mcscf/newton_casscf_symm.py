@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,14 +46,14 @@ class CASSCF(newton_casscf.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
 
         mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
-#
-#        if (getattr(self.fcisolver, 'wfnsym', None) and
-#            self.fcisolver.wfnsym is None and
-#            getattr(self.fcisolver, 'guess_wfnsym', None)):
-#            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
-#                                                 verbose=log)
-#            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
-#            log.info('Active space CI wfn symmetry = %s', wfnsym)
+
+        #if (getattr(self.fcisolver, 'wfnsym', None) and
+        #    self.fcisolver.wfnsym is None and
+        #    getattr(self.fcisolver, 'guess_wfnsym', None)):
+        #    wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
+        #                                         verbose=log)
+        #    wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
+        #    log.info('Active space CI wfn symmetry = %s', wfnsym)
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \
@@ -66,10 +66,11 @@ class CASSCF(newton_casscf.CASSCF):
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         mask = mc1step.CASSCF.uniq_var_indices(self, nmo, ncore, ncas, frozen)
-# Call _symmetrize function to remove the symmetry forbidden matrix elements
-# (by setting their mask value to 0 in _symmetrize).  Then pack_uniq_var and
-# unpack_uniq_var function only operates on those symmetry allowed matrix
-# elements.
+
+        # Call _symmetrize function to remove the symmetry forbidden matrix elements
+        # (by setting their mask value to 0 in _symmetrize).  Then pack_uniq_var and
+        # unpack_uniq_var function only operates on those symmetry allowed matrix
+        # elements.
         # self.mo_coeff.orbsym is initialized in kernel function
         return _symmetrize(mask, self.mo_coeff.orbsym, self.mol.groupname)
 

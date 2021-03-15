@@ -47,11 +47,11 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_with_x2c_scanner(self):
         mc1 = mcscf.UCASSCF(m, 4, 4).x2c().run()
-        self.assertAlmostEqual(mc1.e_tot, -75.795316854668201, 7)
+        self.assertAlmostEqual(mc1.e_tot, -75.795316854668201, 6)
 
         mc1 = mcscf.UCASSCF(m, 4, 4).x2c().as_scanner().as_scanner()
         mc1(mol)
-        self.assertAlmostEqual(mc1.e_tot, -75.795316865791847, 7)
+        self.assertAlmostEqual(mc1.e_tot, -75.795316865791847, 6)
 
     def test_0core_0virtual(self):
         mol = gto.M(atom='He', basis='321g')

@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -66,13 +66,13 @@ ANGULARMAP = {'s': 0,
               'k': 7}
 
 REAL_SPHERIC = (
-    ('',), \
-    ('x', 'y', 'z'), \
-    ('xy', 'yz', 'z^2', 'xz', 'x2-y2',), \
-    ('y^3', 'xyz', 'yz^2', 'z^3', 'xz^2', 'zx^2', 'x^3'), \
+    ('',),
+    ('x', 'y', 'z'),
+    ('xy', 'yz', 'z^2', 'xz', 'x2-y2',),
+    ('-3', '-2', '-1', ' 0', ' 1', ' 2', ' 3'),
     ('-4', '-3', '-2', '-1', ' 0', ' 1', ' 2', ' 3', ' 4'),
     ('-5', '-4', '-3', '-2', '-1', ' 0', ' 1', ' 2', ' 3', ' 4', ' 5'),
-    ('-6', '-5', '-4', '-3', '-2', '-1', ' 0', ' 1', ' 2', ' 3', ' 4', ' 5',' 6'),
+    ('-6', '-5', '-4', '-3', '-2', '-1', ' 0', ' 1', ' 2', ' 3', ' 4', ' 5', ' 6'),
 )
 
 VERBOSE_DEBUG  = 5

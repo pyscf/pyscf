@@ -12,10 +12,12 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import ao2mo
+from pyscf import fci
+from pyscf.tools import molden
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad.mp2 import _shell_prange
-
+from pyscf.fci.addons import fix_spin_
 
 def grad_elec(mc, mf_grad):
     mf = mf_grad.base
@@ -81,8 +83,9 @@ mol = gto.Mole()
 mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
 mol.verbose = 5
 mol.output = '/dev/null'
+mol.symmetry = False
 mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-14)
+mf = scf.RHF(mol).run(conv_tol=1e-12)
 
 def tearDownModule():
     global mol, mf
@@ -141,34 +144,64 @@ class KnownValues(unittest.TestCase):
 
     def test_state_average_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
+        mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
+        mc.fcisolver.conv_tol = 1e-10
         gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
-        e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.38384621394407, 9)
-        self.assertAlmostEqual(lib.fp(de), -0.1034416391211391, 7)
-
+        e_avg, de_avg = gs(mol)
+        e_0, de_0 = gs(mol, state=0)
+        e_1, de_1 = gs(mol, state=1)
         mcs = gs.base
         pmol = mol.copy()
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
-        e1 = mcs.e_average
+        e1_avg = mcs.e_average
+        e1_0 = mcs.e_states[0]
+        e1_1 = mcs.e_states[1]
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
-        e2 = mcs.e_average
-        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+        e2_avg = mcs.e_average
+        e2_0 = mcs.e_states[0]
+        e2_1 = mcs.e_states[1]
+
+        self.assertAlmostEqual(e_avg, -1.083838462140703e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877615413e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902662192770e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398928175384316e-02, 7) 
+        self.assertAlmostEqual(e_1, -1.083774262088640e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428890918624837e-01, 7)
+        self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
+        self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
+        self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
 
     def test_state_average_mix_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
-        mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
+        mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
+        fcisolvers = [fci.solver (mol, singlet=bool(i)) for i in range (2)]
+        fcisolvers[0].conv_tol = fcisolvers[1].conv_tol = 1e-10
+        fcisolvers[0].spin = 2      
+        mc = mcscf.addons.state_average_mix_(mc, fcisolvers, (.5, .5))
         gs = mc.nuc_grad_method().as_scanner()
-        e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.39289688022976, 9)
-        self.assertAlmostEqual(lib.fp(de), -0.06509352771703128, 7)
-
+        e_avg, de_avg = gs(mol)
+        e_0, de_0 = gs(mol, state=0)
+        e_1, de_1 = gs(mol, state=1)
         mcs = gs.base
         pmol = mol.copy()
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
-        e1 = mcs.e_average
+        e1_avg = mcs.e_average
+        e1_0 = mcs.e_states[0]
+        e1_1 = mcs.e_states[1]
         mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
-        e2 = mcs.e_average
-        self.assertAlmostEqual(de[1,2], (e1-e2)/0.002*lib.param.BOHR, 4)
+        e2_avg = mcs.e_average
+        e2_0 = mcs.e_states[0]
+        e2_1 = mcs.e_states[1]
+
+        self.assertAlmostEqual(e_avg, -1.083838462141992e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034392760319145e-01, 7)
+        self.assertAlmostEqual(e_0, -1.083902661656155e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398921123988113e-02, 7)
+        self.assertAlmostEqual(e_1, -1.083774262627830e+02, 9)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428891618903179e-01, 7)
+        self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
+        self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
+        self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
@@ -216,7 +249,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(g), 0.042835374915102364, 6)
 
     def test_symmetrize(self):
-        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
         g = mol.RHF.run().CASSCF(4, 4).run().Gradients().kernel()
         self.assertAlmostEqual(lib.fp(g), 0.12355818572359845, 7)
 

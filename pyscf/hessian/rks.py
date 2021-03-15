@@ -216,7 +216,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             vxc = ni.eval_xc(mf.xc, rho, 0, deriv=1)[1]
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
-            # *2 because v.T is not applied. Only v is computed in the next _dot_ao_ao 
+            # *2 because v.T is not applied. Only v is computed in the next _dot_ao_ao
             wv[0] *= 2
             aow = numpy.einsum('npi,np->pi', ao[:4], wv)
             for i in range(6):
@@ -464,7 +464,7 @@ if __name__ == '__main__':
         [1 , (0. ,  1.     , 0.000)],
         [1 , (0. , -1.517  , 1.177)],
         [1 , (0. ,  1.517  , 1.177)],
-        ]
+    ]
     mol.basis = '631g'
     mol.unit = 'B'
     mol.build()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,20 +37,20 @@ def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
     bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
 
-    mo_e = eris.fock.diagonal().real
+    mo_e = eris.mo_energy
     eia = mo_e[:nocc,None] - mo_e[nocc:]
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
 
-    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei)
-        - numpy.einsum('imbc,majk->ijkabc', t2, majk))
+    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei) -
+          numpy.einsum('imbc,majk->ijkabc', t2, majk))
     t3c = t3c - t3c.transpose(0,1,2,4,3,5) - t3c.transpose(0,1,2,5,4,3)
     t3c = t3c - t3c.transpose(1,0,2,3,4,5) - t3c.transpose(2,1,0,3,4,5)
     t3c /= d3
-#    e4 = numpy.einsum('ijkabc,ijkabc,ijkabc', t3c.conj(), d3, t3c) / 36
-#    sia = numpy.einsum('jkbc,ijkabc->ia', eris.oovv, t3c) * .25
-#    e5 = numpy.einsum('ia,ia', sia, t1.conj())
-#    et = e4 + e5
-#    return et
+    # e4 = numpy.einsum('ijkabc,ijkabc,ijkabc', t3c.conj(), d3, t3c) / 36
+    # sia = numpy.einsum('jkbc,ijkabc->ia', eris.oovv, t3c) * .25
+    # e5 = numpy.einsum('ia,ia', sia, t1.conj())
+    # et = e4 + e5
+    # return et
     t3d = numpy.einsum('ia,bcjk->ijkabc', t1, bcjk)
     t3d += numpy.einsum('ai,jkbc->ijkabc', eris.fock[nocc:,:nocc], t2)
     t3d = t3d - t3d.transpose(0,1,2,4,3,5) - t3d.transpose(0,1,2,5,4,3)

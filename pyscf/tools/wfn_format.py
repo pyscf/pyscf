@@ -194,8 +194,8 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
 if __name__ == '__main__':
     from pyscf import scf, mcscf, symm
     from pyscf.tools import molden
-    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599', 
-                unit='B', basis='ccpvtz', verbose=4, 
+    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599',
+                unit='B', basis='ccpvtz', verbose=4,
                 symmetry=1, symmetry_subgroup='d2h')
     mf = scf.RHF(mol).run()
     coeff = mf.mo_coeff[:,mf.mo_occ>0]
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     mc.kernel()
     nmo = mc.ncore + mc.ncas
     nelecas = mc.nelecas[0] + mc.nelecas[1]
-    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas) 
+    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas)
     rdm1, rdm2 = mcscf.addons._make_rdm12_on_mo(casdm1, casdm2, mc.ncore, mc.ncas, nmo)
     den_file = 'n2_cas.den'
     fspt = open(den_file,'w')
@@ -223,7 +223,7 @@ if __name__ == '__main__':
             for k in range(nmo):
                 for l in range(nmo):
                     if (abs(rdm2[i,j,k,l]) > 1e-12):
-                            fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
+                        fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
     fspt.close()
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mc.mo_coeff[:,:nmo])
     natocc, natorb = symm.eigh(-rdm1, orbsym)

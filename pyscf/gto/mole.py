@@ -413,6 +413,17 @@ def format_basis(basis_tab):
         [0.82454700000000003, 0.90469100000000002]],
         [0, [0.18319199999999999, 1.0]]]}
     '''
+    basis_converter = _generate_basis_converter()
+    fmt_basis = {}
+    for atom, atom_basis in basis_tab.items():
+        symb = _atom_symbol(atom)
+        fmt_basis[symb] = basis_converter(symb, atom_basis)
+
+        if len(fmt_basis[symb]) == 0:
+            raise BasisNotFoundError('Basis not found for  %s' % symb)
+    return fmt_basis
+
+def _generate_basis_converter():
     def nparray_to_list(item):
         val = []
         for x in item:
@@ -424,35 +435,29 @@ def format_basis(basis_tab):
                 val.append(x)
         return val
 
-    def convert(basis_name, symb):
+    def load(basis_name, symb):
         if basis_name.lower().startswith('unc'):
             return uncontract(basis.load(basis_name[3:], symb))
         else:
             return basis.load(basis_name, symb)
 
-    fmt_basis = {}
-    for atom, atom_basis in basis_tab.items():
-        symb = _atom_symbol(atom)
-        stdsymb = _std_symbol_without_ghost(symb)
-
-        if isinstance(atom_basis, (str, unicode)):
-            bset = convert(str(atom_basis), stdsymb)
-        elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
+    def converter(symb, raw_basis):
+        if isinstance(raw_basis, (str, unicode)):
+            bset = load(str(raw_basis), _std_symbol_without_ghost(symb))
+        elif (any(isinstance(x, (str, unicode)) for x in raw_basis)
               # The first element is the basis of internal format
-              or not isinstance(atom_basis[0][0], int)):
+              or not isinstance(raw_basis[0][0], int)):
+            stdsymb = _std_symbol_without_ghost(symb)
             bset = []
-            for rawb in atom_basis:
+            for rawb in raw_basis:
                 if isinstance(rawb, (str, unicode)):
-                    bset += convert(str(rawb), stdsymb)
+                    bset += load(str(rawb), stdsymb)
                 else:
                     bset += nparray_to_list(rawb)
         else:
-            bset = nparray_to_list(atom_basis)
-        fmt_basis[symb] = bset
-
-        if len(fmt_basis[symb]) == 0:
-            raise BasisNotFoundError('Basis not found for  %s' % symb)
-    return fmt_basis
+            bset = nparray_to_list(raw_basis)
+        return bset
+    return converter
 
 def uncontracted_basis(_basis):
     '''Uncontract internal format _basis
@@ -531,7 +536,7 @@ def to_uncontracted_cartesian_basis(mol):
         ncart = (l+1)*(l+2)//2
         es = mol.bas_exp(ib)
         cs = mol._libcint_ctr_coeff(ib)
-        np, nc = cs.shape
+        np, nc = cs.shape  # noqa: F811
         norm = gto_norm(l, es)
         c = numpy.einsum('pi,p,xm->pxim', cs, 1./norm, c2s[l])
         contr_coeff.append(c.reshape(np*ncart,-1))
@@ -1330,15 +1335,6 @@ def energy_nuc(mol, charges=None, coords=None):
     if charges is None: charges = mol.atom_charges()
     if len(charges) <= 1:
         return 0
-    #e = 0
-    #for j in range(len(mol._atm)):
-    #    q2 = charges[j]
-    #    r2 = coords[j]
-    #    for i in range(j):
-    #        q1 = charges[i]
-    #        r1 = coords[i]
-    #        r = numpy.linalg.norm(r1-r2)
-    #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
@@ -1822,15 +1818,18 @@ def atom_mass_list(mol, isotope_avg=False):
 
     return numpy.array(mass)
 
-def condense_to_shell(mol, mat, compressor=numpy.max):
+def condense_to_shell(mol, mat, compressor='max'):
     '''The given matrix is first partitioned to blocks, based on AO shell as
-    delimiter.  Then call compressor function to abstract each block.
+    delimiter. Then call compressor function to abstract each block.
     '''
     ao_loc = mol.ao_loc_nr()
-    abstract = numpy.empty((mol.nbas,mol.nbas))
-    for i, i0 in enumerate(ao_loc[:mol.nbas]):
-        for j, j0 in enumerate(ao_loc[:mol.nbas]):
-            abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    if callable(compressor):
+        abstract = numpy.empty((mol.nbas, mol.nbas))
+        for i, i0 in enumerate(ao_loc[:mol.nbas]):
+            for j, j0 in enumerate(ao_loc[:mol.nbas]):
+                abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
+    else:
+        abstract = lib.condense(compressor, mat, ao_loc)
     return abstract
 
 
@@ -1998,8 +1997,8 @@ class Mole(lib.StreamObject):
         topgroup : str
             Point group of the system.
         groupname : str
-            The supported subgroup of the point group. It can be one of Dooh,
-            Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+            The supported subgroup of the point group. It can be one of SO3,
+            Dooh, Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
         nelectron : int
             sum of nuclear charges - :attr:`Mole.charge`
         symm_orb : a list of numpy.ndarray
@@ -2054,8 +2053,7 @@ class Mole(lib.StreamObject):
     >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
-
-    '''
+    '''  # noqa: E501
 
     verbose = getattr(__config__, 'VERBOSE', logger.NOTE)
 
@@ -2233,6 +2231,7 @@ class Mole(lib.StreamObject):
     copy = copy
 
     pack = pack
+
     @lib.with_doc(unpack.__doc__)
     def unpack(self, moldic):
         return unpack(moldic)
@@ -2241,6 +2240,7 @@ class Mole(lib.StreamObject):
         return self
 
     dumps = dumps
+
     @lib.with_doc(loads.__doc__)
     def loads(self, molstr):
         return loads(molstr)
@@ -2504,27 +2504,11 @@ class Mole(lib.StreamObject):
                           (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
         import pyscf
-        pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
         self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-        self.stdout.write('PySCF path  %s\n' % pyscfdir)
-        try:
-            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD'), 'r') as f:
-                self.stdout.write('GIT ORIG_HEAD %s' % f.read())
-        except IOError:
-            pass
-        try:
-            head = os.path.join(pyscfdir, '..', '.git', 'HEAD')
-            with open(head, 'r') as f:
-                head = f.read().splitlines()[0]
-                self.stdout.write('GIT HEAD      %s\n' % head)
-            # or command(git log -1 --pretty=%H)
-            if head.startswith('ref:'):
-                branch = os.path.basename(head)
-                head = os.path.join(pyscfdir, '..', '.git', head.split(' ')[1])
-                with open(head, 'r') as f:
-                    self.stdout.write('GIT %s branch  %s' % (branch, f.read()))
-        except IOError:
-            pass
+        info = lib.repo_info(os.path.join(__file__, '..', '..'))
+        self.stdout.write('PySCF path  %s\n' % info['path'])
+        if 'git' in info:
+            self.stdout.write(info['git'] + '\n')
 
         self.stdout.write('\n')
         for key in os.environ:
@@ -2588,7 +2572,7 @@ class Mole(lib.StreamObject):
                     if nprim < nctr:
                         logger.warn(self, 'num. primitives smaller than num. contracted basis')
                     self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
-                                      % (b[0], kappa, nprim, nprim, nctr))
+                                      % (b[0], kappa, nprim, nctr))
                     for k, x in enumerate(b_coeff):
                         if k == 0:
                             self.stdout.write('%-15.12g  ' % x[0])
@@ -2854,11 +2838,13 @@ class Mole(lib.StreamObject):
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit %s)', unit)
-            coords = mol.atom_coords()
-            for ia in range(mol.natm):
-                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
-                            ia+1, mol.atom_symbol(ia), *coords[ia])
+            logger.info(mol, 'New geometry')
+            for ia, atom in enumerate(mol._atom):
+                coorda = tuple([x * param.BOHR for x in atom[1]])
+                coordb = tuple([x for x in atom[1]])
+                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
+                            '%16.12f %16.12f %16.12f Bohr\n',
+                            ia+1, mol.atom_symbol(ia), *coorda, *coordb)
         return mol
 
     def update(self, chkfile):
@@ -2872,6 +2858,11 @@ class Mole(lib.StreamObject):
     def has_ecp(self):
         '''Whether pseudo potential is used in the system.'''
         return len(self._ecpbas) > 0 or self._pseudo
+
+    def has_ecp_soc(self):
+        '''Whether spin-orbit coupling is enabled in ECP.'''
+        return (len(self._ecpbas) > 0 and
+                numpy.any(self._ecpbas[:,SO_TYPE_OF] == 1))
 
 
 #######################################################
@@ -3510,11 +3501,9 @@ def _parse_nuc_mod(str_or_int_or_fn):
     return nucmod
 
 def _update_from_cmdargs_(mol):
-    # Ipython shell conflicts with optparse
-    # pass sys.args when using ipython
     try:
-        __IPYTHON__
-        #sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
+        # Detect whether in Ipython shell
+        __IPYTHON__  # noqa:
         return
     except Exception:
         pass

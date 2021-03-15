@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -362,8 +362,6 @@ def ipccsd_diag(eom, kshift, imds=None):
                 Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
 
         for ki, kj in itertools.product(range(nkpts), repeat=2):
-        #for ki in range(nkpts):
-        #    for kj in range(nkpts):
             Hr2aaa[ki, kj] += lib.einsum('iijj->ij', imds.Woooo[ki, ki, kj])[:,:,None]
             Hr2abb[ki, kj] += lib.einsum('iiJJ->iJ', imds.WooOO[ki, ki, kj])[:,:,None]
             Hr2bbb[ki, kj] += lib.einsum('IIJJ->IJ', imds.WOOOO[ki, ki, kj])[:,:,None]
@@ -530,7 +528,11 @@ class EOMIP(eom_kgccsd.EOMIP):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        return nocca + noccb + nkpts*nocca*(nkpts*nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts*noccb*(nkpts*noccb-1)*nvirb//2
+        return (nocca + noccb +
+                nkpts*nocca*(nkpts*nocca-1)*nvira//2 +
+                nkpts**2*noccb*nocca*nvira +
+                nkpts**2*nocca*noccb*nvirb +
+                nkpts*noccb*(nkpts*noccb-1)*nvirb//2)
 
     def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
@@ -972,7 +974,7 @@ class EOMEA(eom_kgccsd.EOMEA):
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo
-        nvira, nvirb = nmoa-nocca, nmob-noccb
+        nvira = nmoa-nocca
         guess = []
         if koopmans:
             idx = np.zeros(nroots, dtype=np.int)
@@ -1019,8 +1021,16 @@ class EOMEA(eom_kgccsd.EOMEA):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        #return nvira + nvirb + nocca*nkpts*nvira*nkpts*nvira + nkpts**2*nocca*nvirb*nvira + nkpts**2*noccb*nvira*nvirb + noccb*nkpts*nvirb*nkpts*nvirb
-        return nvira + nvirb + nocca*nkpts*nvira*(nkpts*nvira-1)//2 + nkpts**2*nocca*nvirb*nvira + nkpts**2*noccb*nvira*nvirb + noccb*nkpts*nvirb*(nkpts*nvirb-1)//2
+        #return (nvira + nvirb +
+        #        nocca*nkpts*nvira*nkpts*nvira +
+        #        nkpts**2*nocca*nvirb*nvira +
+        #        nkpts**2*noccb*nvira*nvirb +
+        #        noccb*nkpts*nvirb*nkpts*nvirb)
+        return (nvira + nvirb +
+                nocca*nkpts*nvira*(nkpts*nvira-1)//2 +
+                nkpts**2*nocca*nvirb*nvira +
+                nkpts**2*noccb*nvira*nvirb +
+                noccb*nkpts*nvirb*(nkpts*nvirb-1)//2)
 
     def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
@@ -1077,9 +1087,9 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
 
         # 0 or 1 virtuals
-        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)
-        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)  # TODO
-        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # TODO
+        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)  # noqa: E501
+        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)  # noqa: E501
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # noqa: E501
 
         self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD IP intermediates', *cput0)
@@ -1097,7 +1107,7 @@ class _IMDS:
         #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
         self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)
         if eris.vvvv is not None:
-            self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
+            self.Wvvvv, self.WvvVV, self.WVVVV = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
         else:
             self.Wvvvv = self.WvvVV = self.WVVVV = None
         self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
 # limitations under the License.
 #
 # Author: Yang Gao <younggao1994@gmail.com>
+#
+
 '''
 Non-relativistic analytical nuclear gradients for unrestricted Kohn Sham with kpoints sampling
 '''
-#
 
 import numpy as np
 from pyscf.lib import logger
@@ -71,11 +72,9 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
-    shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
     nkpts = len(kpts)
     vmat = np.zeros((3,nset,nkpts,nao,nao), dtype=dms.dtype)
-    excsum = np.zeros(nset)
     if xctype == 'LDA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
@@ -128,7 +127,7 @@ class Gradients(uhf_grad.Gradients):
     get_veff = get_veff
 
 if __name__=='__main__':
-    from pyscf.pbc import dft, gto, scf
+    from pyscf.pbc import dft
     cell = gto.Cell()
     cell.atom = [['He', [0.0, 0.0, 0.0]], ['He', [1, 1.1, 1.2]]]
     cell.basis = 'gth-dzv'

@@ -1,0 +1,79 @@
+name: Publish
+
+on:
+  #push:
+  #  branches:
+  #    - master
+  #    - 2.0
+  #  tags:
+  #    - v2.*
+  release:
+    types:
+      published
+
+jobs:
+  release-pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build wheels
+        uses: docker://pyscf/pyscf-pypa-env:latest
+        with:
+          entrypoint: /build-wheels.sh
+          args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.0-deps-openblas.tar.gz
+      - name: List available wheels
+        run: |
+          ls ${{ github.workspace }}/linux-wheels
+      - name: Publish to PyPI
+        # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
+          packages_dir: ${{ github.workspace }}/linux-wheels
+          verbose: true
+
+  release-conda:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
+        python-version: [3.8]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: publish-to-conda
+        uses: maxibor/conda-package-publish-action@v1.1
+        with:
+          subdir: 'conda'
+          AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+
+  release-docker:
+    runs-on: ${{ matrix.os }}
+    needs: release-pypi
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1 
+        with:
+          username: pyscf
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: docker-tag
+        uses: battila7/get-version-action@v2
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v2
+        with:
+          file: docker/Dockerfile
+          push: true
+          tags: pyscf/pyscf:${{ steps.docker-tag.outputs.version-without-v }}
+          #cache-from: type=local,src=/tmp/.buildx-cache
+          #cache-to: type=local,dest=/tmp/.buildx-cache
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}

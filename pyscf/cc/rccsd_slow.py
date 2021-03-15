@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -465,8 +465,8 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def ipccsd_star_contract(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
-        assert(self.ip_partition == None)
-        t1,t2,eris = self.t1, self.t2, self.eris
+        assert self.ip_partition is None
+        t2, eris = self.t2, self.eris
         fock = eris.fock
         nocc = self.nocc
         nvir = self.nmo - nocc
@@ -764,8 +764,8 @@ class RCCSD(ccsd.CCSD):
         return vector
 
     def eaccsd_star_contract(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
-        assert(self.ea_partition == None)
-        t1,t2,eris = self.t1, self.t2, self.eris
+        assert self.ea_partition is None
+        t2, eris = self.t2, self.eris
         fock = eris.fock
         nocc = self.nocc
         nvir = self.nmo - nocc

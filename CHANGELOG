@@ -1,15 +1,12 @@
-PySCF 1.7.? (2020-?-?)
-----------------------
-* Added
-  - ADC (RADC and UADC)
-  - Analytical nuclear gradients for state-average CASSCF
-
-
-PySCF 1.7.6 (2020-11-??)
-------------------------
+PySCF 1.7.6a (2020-12-17)
+-------------------------
 * Added
   - KMP2 2-particle density matrix
   - PBC J, K matrices module rsjk (RangeSeparationJKBuilder)
+  - ADC (RADC and UADC)
+  - Analytical nuclear gradients for state-average CASSCF
+  - Support SO3 symmetry
+  - ECP-SOC for GHF/GKS
 * Improved
   - Threading safety in Mole temporary context
   - Basis parser to support arithmetic expressions in basis data

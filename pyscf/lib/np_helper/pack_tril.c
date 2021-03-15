@@ -154,8 +154,9 @@ void NPztake_2d(double complex *out, double complex *in, int *idx, int *idy,
 
 /* out[idx[:,None],idy] += in */
 void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
-                   int odim, int idim, int nx, int ny)
+                   int odim, int idim, int nx, int ny, int thread_safe)
 {
+        if (thread_safe) {
 #pragma omp parallel default(none) \
         shared(out, in, idx,idy, odim, idim, nx, ny)
 {
@@ -169,11 +170,22 @@ void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
                 }
         }
 }
+        } else {
+                size_t i, j;
+                double *pout;
+                for (i = 0; i < nx; i++) {
+                        pout = out + (size_t)odim * idx[i];
+                        for (j = 0; j < ny; j++) {
+                                pout[idy[j]] += in[i*idim+j];
+                        }
+                }
+        }
 }
 
 void NPztakebak_2d(double complex *out, double complex *in, int *idx, int *idy,
-                   int odim, int idim, int nx, int ny)
+                   int odim, int idim, int nx, int ny, int thread_safe)
 {
+        if (thread_safe) {
 #pragma omp parallel default(none) \
         shared(out, in, idx,idy, odim, idim, nx, ny)
 {
@@ -187,6 +199,16 @@ void NPztakebak_2d(double complex *out, double complex *in, int *idx, int *idy,
                 }
         }
 }
+        } else {
+                size_t i, j;
+                double complex *pout;
+                for (i = 0; i < nx; i++) {
+                        pout = out + (size_t)odim * idx[i];
+                        for (j = 0; j < ny; j++) {
+                                pout[idy[j]] += in[i*idim+j];
+                        }
+                }
+        }
 }
 
 void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)
