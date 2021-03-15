@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 import numpy as np
 from scipy import linalg, optimize
 from scipy.sparse import linalg as sparse_linalg
@@ -129,7 +128,7 @@ class Gradients (rhf_grad.GradientsMixin):
         return (info_int==0), Lvec, bvec, Aop, Adiag
 
     def kernel (self, level_shift=None, **kwargs):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = lib.logger.new_logger(self, self.verbose)
         if 'atmlst' in kwargs:
             self.atmlst = kwargs['atmlst']

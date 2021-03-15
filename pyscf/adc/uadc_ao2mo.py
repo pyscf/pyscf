@@ -21,7 +21,6 @@ import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
-import time
 import tempfile
 
 
@@ -96,7 +95,7 @@ def transform_integrals_incore(myadc):
 
 def transform_integrals_outcore(myadc):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_a = myadc.mo_coeff[0]
@@ -151,7 +150,7 @@ def transform_integrals_outcore(myadc):
     eris.OVvv = eris.feri1.create_dataset('OVvv', (nocc_b,nvir_b,nvpair_a), 'f8')
 
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     mol = myadc.mol
     tmpf = lib.H5TmpFile()
     if nocc_a > 0:
@@ -212,7 +211,7 @@ def transform_integrals_outcore(myadc):
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
 
-        cput2 = time.clock(), time.time()
+        cput2 = logger.process_clock(), logger.perf_counter()
 
         ind_vv_g = np.tril_indices(nvir_a, k=-1)
         ind_VV_g = np.tril_indices(nvir_b, k=-1)
@@ -322,7 +321,7 @@ def transform_integrals_outcore(myadc):
 
 
 def transform_integrals_df(myadc):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_coeff_a = np.asarray(myadc.mo_coeff[0], order='F')

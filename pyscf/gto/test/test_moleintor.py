@@ -300,6 +300,7 @@ class KnownValues(unittest.TestCase):
         eri0 = mol.intor('int2e_sph', aosym='s8')
         self.assertAlmostEqual(lib.finger(eri0), -10.685918926843847, 9)
 
+    def test_nr_s8_skip(self):
         eri1 = mol.intor('int2e_yp_sph', aosym=8)
         self.assertAlmostEqual(lib.finger(eri1), -10.685918926843847, 9)
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)

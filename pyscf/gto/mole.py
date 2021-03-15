@@ -2839,7 +2839,7 @@ class Mole(lib.StreamObject):
 
         if mol.verbose >= logger.INFO:
             logger.info(mol, 'New geometry')
-            for ia, atom in enumerate(self._atom):
+            for ia, atom in enumerate(mol._atom):
                 coorda = tuple([x * param.BOHR for x in atom[1]])
                 coordb = tuple([x for x in atom[1]])
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '

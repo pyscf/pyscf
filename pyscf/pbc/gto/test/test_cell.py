@@ -155,7 +155,7 @@ class KnownValues(unittest.TestCase):
         cell.low_dim_ft_type = 'inf_vacuum'
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 4)
+        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 3)
 
         a = numpy.eye(3) * 3
         a[0,1] = .2

@@ -23,7 +23,6 @@ Ref:
     Q. Sun, arXiv:2012.07929
 '''
 
-import time
 import copy
 import ctypes
 import numpy as np
@@ -100,7 +99,7 @@ class RangeSeparationJKBuilder(object):
         return self
 
     def build(self, omega=None, direct_scf_tol=None):
-        cpu0 = (time.clock(), time.time())
+        cpu0 = logger.process_clock(), logger.perf_counter()
         cell = self.cell
         kpts = self.kpts
 
@@ -230,7 +229,7 @@ class RangeSeparationJKBuilder(object):
         if kpts_band is not None:
             raise NotImplementedError
 
-        cpu0 = (time.clock(), time.time())
+        cpu0 = logger.process_clock(), logger.perf_counter()
         if self.supmol is None:
             self.build()
 
@@ -694,7 +693,7 @@ class _LongRangeAFT(aft.AFTDF):
 
     def get_j_for_bands(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         log = logger.Logger(self.stdout, self.verbose)
-        t1 = (time.clock(), time.time())
+        t1 = logger.process_clock(), logger.perf_counter()
 
         cell = self.cell
         dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -783,7 +782,7 @@ class _LongRangeAFT(aft.AFTDF):
         '''
         cell = self.cell
         log = logger.Logger(self.stdout, self.verbose)
-        t1 = (time.clock(), time.time())
+        t1 = logger.process_clock(), logger.perf_counter()
 
         mesh = self.mesh
         dm_kpts = lib.asarray(dm_kpts, order='C')

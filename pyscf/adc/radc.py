@@ -19,7 +19,6 @@
 '''
 Restricted algebraic diagrammatic construction
 '''
-import time
 import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
@@ -35,7 +34,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
     if adc.verbose >= logger.WARN:
         adc.check_sanity()
