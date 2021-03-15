@@ -17,7 +17,8 @@
 #
 
 '''
-Spin-unrestricted G0W0-AC QP eigenvalues
+Spin-unrestricted G0W0 approximation with analytic continuation
+
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
 GW-AC is recommended for valence states only, and is inaccuarate for core states.
