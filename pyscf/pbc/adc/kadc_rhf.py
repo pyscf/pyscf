@@ -1006,17 +1006,17 @@ def get_imds_ip(adc, eris=None):
 #                    M_ij[ki] +=lib.einsum('ilde,jlde->ij',t2_1[ki,kl,kd], temp_t2_vvvv[kj,kl,kd].conj(), optimize = True)
 #                    del temp_t2_vvvv
 #
-#                    log.timer_debug1("Starting the small integrals  calculation")
-#                    temp_t2_v_1 = lib.einsum('lmde,jldf->mejf',t2_1[kl,km,kd], t2_1[kj,kl,kd].conj(),optimize=True)
-#                    #M_ij[ki] -=  2 * lib.einsum('mejf,meif->ij',temp_t2_v_1.conj(), eris_ovov[km,ke,ki].conj(),optimize = True)
-#                    #M_ij[ki] -=  2 * lib.einsum('jfme,meif->ij',temp_t2_v_1, eris_ovov[km,ke,ki].conj(),optimize = True)
-#                    #M_ij[ki] +=  lib.einsum('mejf,mife->ij',temp_t2_v_1.conj(), eris_oovv[km,ki,kf].conj(),optimize = True)
-#                    #M_ij[ki] +=  lib.einsum('jfme,mife->ij',temp_t2_v_1, eris_oovv,optimize = True)
-#                    #M_ij[ki] -=  2 * lib.einsum('meif,mefj->ij',temp_t2_v_1, eris_ovvo ,optimize = True)
-#                    #M_ij[ki] -=  2 * lib.einsum('ifme,mefj->ij',temp_t2_v_1, eris_ovvo ,optimize = True)
-#                    #M_ij[ki] +=  lib.einsum('meif,mjfe->ij',temp_t2_v_1, eris_oovv ,optimize = True)
-#                    #M_ij[ki] +=  lib.einsum('ifme,mjfe->ij',temp_t2_v_1, eris_oovv ,optimize = True)
-#                    del temp_t2_v_1        
+                    log.timer_debug1("Starting the small integrals  calculation")
+                    temp_t2_v_1 = lib.einsum('lmde,jldf->mejf',t2_1[kl,km,kd], t2_1[kj,kl,kd].conj(),optimize=True)
+                    M_ij[ki] -=  2 * lib.einsum('mejf,meif->ij',temp_t2_v_1.conj(), eris_ovov[km,ke,ki].conj(),optimize = True)
+                    M_ij[ki] -=  2 * lib.einsum('jfme,meif->ij',temp_t2_v_1, eris_ovov[km,ke,ki].conj(),optimize = True)
+                    M_ij[ki] +=  lib.einsum('mejf,mife->ij',temp_t2_v_1.conj(), eris_oovv[km,ki,kf].conj(),optimize = True)
+                    M_ij[ki] +=  lib.einsum('jfme,mife->ij',temp_t2_v_1, eris_oovv,optimize = True)
+                    M_ij[ki] -=  2 * lib.einsum('meif,mefj->ij',temp_t2_v_1, eris_ovvo ,optimize = True)
+                    M_ij[ki] -=  2 * lib.einsum('ifme,mefj->ij',temp_t2_v_1, eris_ovvo ,optimize = True)
+                    M_ij[ki] +=  lib.einsum('meif,mjfe->ij',temp_t2_v_1, eris_oovv ,optimize = True)
+                    M_ij[ki] +=  lib.einsum('ifme,mjfe->ij',temp_t2_v_1, eris_oovv ,optimize = True)
+                    del temp_t2_v_1        
 #
 #                    temp_t2_v_2 = lib.einsum('lmde,ljdf->mejf',t2_1, t2_1,optimize=True)
 #                    M_ij[ki] +=  4 * lib.einsum('mejf,mefi->ij',temp_t2_v_2, eris_ovvo,optimize = True)
