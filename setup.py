@@ -71,6 +71,7 @@ EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
 EXTRAS['cornell_shci'] = ['pyscf-cornell-shci']
 EXTRAS['nao'] = ['pyscf-nao']
 EXTRAS['fciqmcscf'] = ['pyscf-fciqmc']
+EXTRAS['tblis'] = ['pyscf-tblis']
 
 class CMakeBuildExt(build_ext):
     def run(self):

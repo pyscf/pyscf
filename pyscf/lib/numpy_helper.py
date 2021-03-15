@@ -31,7 +31,7 @@ EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
 
 try:
     # Import tblis before libnp_helper to avoid potential dl-loading conflicts
-    from pyscf.lib import tblis_einsum
+    from pyscf import tblis_einsum
     FOUND_TBLIS = True
 except (ImportError, OSError):
     FOUND_TBLIS = False
@@ -113,7 +113,7 @@ def _contract(subscripts, *tensors, **kwargs):
     C_dtype = numpy.result_type(A, B)
     if FOUND_TBLIS and C_dtype == numpy.double:
         # tblis is slow for complex type
-        return tblis_einsum._contract(idx_str, A, B, **kwargs)
+        return tblis_einsum.contract(idx_str, A, B, **kwargs)
 
     indices  = idx_str.replace(',', '').replace('->', '')
     if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):

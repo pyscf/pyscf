@@ -28,10 +28,6 @@ Contact its author "Zhihao Cui" <zcui@caltech.edu> for more details of
 installation and implementations.
 '''
 
-# This is the only place needed to be modified
-# The path for the libwannier90 library
-W90LIB = 'libwannier90-path'
-
 import os, time
 import numpy as np
 from scipy.io import FortranFile
@@ -39,18 +35,13 @@ import pyscf.data.nist as param
 from pyscf import lib
 from pyscf.pbc import df
 from pyscf.pbc.dft import gen_grid, numint
-import sys
-sys.path.append(W90LIB)
 
-import importlib
-found = importlib.util.find_spec('libwannier90') is not None
-if found:
+try:
     import libwannier90
-else:
+except ImportError:
     print('WARNING: Check the installation of libwannier90 and its path in pyscf/pbc/tools/pywannier90.py')
-    print('libwannier90 path: ' + W90LIB)
     print('libwannier90 can be found at: https://github.com/hungpham2017/pyWannier90')
-    raise ImportError
+    raise
 
 
 def save_kmf(kmf, chkfile):
