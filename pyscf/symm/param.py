@@ -199,13 +199,13 @@ SPHERIC_GTO_PARITY_ODD = (
 )
 
 SUBGROUP = {
-    'SO3': ('Dooh', 'Coov', 'D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
-    'Dooh':('Coov', 'D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
-    'Coov':('C2v', 'C2', 'C1'),
+    'SO3': ('SO3', 'Dooh', 'Coov', 'D2h', 'D2', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
+    'Dooh':('Dooh', 'Coov', 'D2h', 'D2', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
+    'Coov':('Coov', 'C2v', 'C2', 'C1'),
     'D2h': ('D2h', 'C2v', 'C2h', 'C2', 'Cs', 'Ci', 'C1'),
+    'D2' : ('D2' , 'C2' , 'Ci' , 'C1'),
     'C2v': ('C2v', 'C2' , 'Cs' , 'C1'),
     'C2h': ('C2h', 'C2' , 'Cs' , 'C1'),
-    'D2' : ('D2' , 'C2' , 'Ci' , 'C1'),
     'Cs' : ('Cs' , 'C1'),
     'Ci' : ('Ci' , 'C1'),
     'C2' : ('C2' , 'C1'),
