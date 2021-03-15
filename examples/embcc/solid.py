@@ -9,6 +9,7 @@ from mpi4py import MPI
 import pyscf
 import pyscf.pbc
 import pyscf.pbc.tools
+import pyscf.pbc.mp
 
 import pyscf.embcc
 import pyscf.embcc.k2gamma_gdf
@@ -29,8 +30,10 @@ def get_arguments():
     parser.add_argument("--pseudopot")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
+    parser.add_argument("--supercell-in", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
     parser.add_argument("--lattice-consts", type=float, nargs="*")
+    parser.add_argument("--use-ref-cell", type=int, default=0)
     parser.add_argument("--ref-lattice-const", type=float)
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
@@ -43,8 +46,12 @@ def get_arguments():
     # Mean-field
     parser.add_argument("--save-scf", help="Save primitive cell SCF.", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
     parser.add_argument("--load-scf", help="Load primitive cell SCF.")
+    parser.add_argument("--load-scf-init")
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
     parser.add_argument("--exxdiv-none", action="store_true")
+
+    # MP
+    parser.add_argument("--do-mp2", action="store_true")
 
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
@@ -54,7 +61,6 @@ def get_arguments():
     parser.add_argument("--gdf-exp-to-discard", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
-    #parser.add_argument("--save-gdf", default="gdf-%.2f.npy")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF", default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
     parser.add_argument("--load-gdf-unfolded", action="store_true")
@@ -66,7 +72,7 @@ def get_arguments():
     #parser.add_argument("--make-rdm1", action="store_true")
     #parser.add_argument("--ip-eom", action="store_true")
     #parser.add_argument("--ea-eom", action="store_true")
-    parser.add_argument("--opts", nargs="*")
+    parser.add_argument("--opts", nargs="*", default=[])
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
     parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
@@ -83,7 +89,6 @@ def get_arguments():
     parser.add_argument("--power1-vir-bath-tol", type=float, default=False)
     parser.add_argument("--local-occ-bath-tol", type=float, default=False)
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
-    parser.add_argument("--test-mode", type=int, default=0)
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -112,7 +117,7 @@ def get_arguments():
                 "ndim" : 3,
                 #
                 #"lattice_consts" : np.arange(3.6, 4.2+1e-12, 0.1),
-                "ref_lattice_const" : 3.9,
+                #"ref_lattice_const" : 3.9,
                 "lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
                 }
 
@@ -123,16 +128,17 @@ def get_arguments():
     args.lattice_consts = np.asarray(args.lattice_consts)
 
     # Reference geometry which defines cell parameters
-    if args.ref_lattice_const is None:
-        args.ref_lattice_const = len(args.lattice_consts)//2
-    elif args.ref_lattice_const != -1.0:
-        args.ref_lattice_const = np.arange(len(args.lattice_consts))[abs(args.lattice_consts-args.ref_lattice_const)<1e-14]
-        assert len(args.ref_lattice_const) == 1
-    elif args.ref_lattice_const == -1.0:
-        args.ref_lattice_const = False
-    else:
-        raise ValueError()
-    #log.debug("Reference lattice constant= %.3f", args.lattice_consts[args.ref_lattice_const])
+    if args.use_ref_cell:
+        if args.ref_lattice_const is None:
+            args.ref_lattice_const = len(args.lattice_consts)//2
+        elif args.ref_lattice_const != -1.0:
+            args.ref_lattice_const = np.arange(len(args.lattice_consts))[abs(args.lattice_consts-args.ref_lattice_const)<1e-14]
+            assert len(args.ref_lattice_const) == 1
+        elif args.ref_lattice_const == -1.0:
+            args.ref_lattice_const = False
+        else:
+            raise ValueError()
+        #log.debug("Reference lattice constant= %.3f", args.lattice_consts[args.ref_lattice_const])
 
     if args.energy_per is None:
         if args.system in ("diamond",):
@@ -171,13 +177,49 @@ def make_hBN(a, c, atoms):
 
 def make_perovskite(a, atoms):
     amat = a * np.eye(3)
+
+    coords = np.asarray([
+                [0,     0,      0],
+                [a/2,   a/2,    a/2],
+                [0,     a/2,    a/2],
+                [a/2,   0,      a/2],
+                [a/2,   a/2,    0]
+                ])
     atom = [
-        ("%s %f %f %f" % (atoms[0], 0,      0,      0)),
-        ("%s %f %f %f" % (atoms[1], a/2,    a/2,    a/2)),
-        ("%s %f %f %f" % (atoms[2], 0,      a/2,    a/2)),
-        ("%s %f %f %f" % (atoms[2], a/2,    0,      a/2)),
-        ("%s %f %f %f" % (atoms[2], a/2,    a/2,    0)),
+        #("%s %f %f %f" % (atoms[0], coords[0])),
+        #("%s %f %f %f" % (atoms[1], coords[1])),
+        #("%s %f %f %f" % (atoms[2], coords[2])),
+        #("%s %f %f %f" % (atoms[2], coords[3])),
+        #("%s %f %f %f" % (atoms[2], coords[4])),
+        (atoms[0], coords[0]),
+        (atoms[1], coords[1]),
+        (atoms[2], coords[2]),
+        (atoms[2], coords[3]),
+        (atoms[2], coords[4]),
         ]
+
+    if args.supercell_in is not None:
+        atom = []
+        ncopy = args.supercell_in
+        for x in range(ncopy[0]):
+            for y in range(ncopy[1]):
+                for z in range(ncopy[2]):
+                    shift = x*amat[0] + y*amat[1] + z*amat[2]
+                    #atom.append("%s %f %f %f" % (atoms[0], coords[0]+shift))
+                    #atom.append("%s %f %f %f" % (atoms[1], coords[1]+shift))
+                    #atom.append("%s %f %f %f" % (atoms[2], coords[2]+shift))
+                    #atom.append("%s %f %f %f" % (atoms[2], coords[3]+shift))
+                    #atom.append("%s %f %f %f" % (atoms[2], coords[4]+shift))
+                    atom.append((atoms[0], coords[0]+shift))
+                    atom.append((atoms[1], coords[1]+shift))
+                    atom.append((atoms[2], coords[2]+shift))
+                    atom.append((atoms[2], coords[3]+shift))
+                    atom.append((atoms[2], coords[4]+shift))
+
+
+        amat = np.einsum("i,ij->ij", ncopy, amat)
+
+
     return amat, atom
 
 def make_cell(a, args, refcell=None):
@@ -185,10 +227,13 @@ def make_cell(a, args, refcell=None):
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
+        cell.natom_prim = 2
     if args.system == "hBN":
         cell.a, cell.atom = make_hBN(a, c=args.vacuum_size, atoms=args.atoms)
+        cell.natom_prim = 2
     elif args.system == "perovskite":
         cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
+        cell.natom_prim = 5
     cell.dimension = args.ndim
     cell.precision = args.precision
     # Copy settings from refcell if given
@@ -307,8 +352,20 @@ def run_mf(a, cell, args, refdf=None):
         if args.save_scf:
             fname = (args.save_scf % a) if ("%" in args.save_scf) else args.save_scf
             mf.chkfile = fname
+
+        if args.load_scf_init:
+            fname = (args.load_scf_init % a) if ("%" in args.load_scf_init) else args.load_scf_init
+            log.info("Loading initial guess for SCF from file %s...", fname)
+            chkfile_dict = pyscf.pbc.scf.chkfile.load(fname, "scf")
+            log.info("Loaded attributes: %r", list(chkfile_dict.keys()))
+            occ0, c0 = chkfile_dict["mo_occ"], chkfile_dict["mo_coeff"]
+            c0 = c0[:,occ0>0]
+            dm0 = 2*np.dot(c0 * occ0[occ0>0], c0.T.conj())
+        else:
+            dm0 = None
+
         t0 = MPI.Wtime()
-        mf.kernel()
+        mf.kernel(dm0=dm0)
         log.info("Time for HF: %.3f s", (MPI.Wtime()-t0))
         if args.hf_stability_check:
             t0 = MPI.Wtime()
@@ -334,7 +391,7 @@ def run_mf(a, cell, args, refdf=None):
 args = get_arguments()
 
 # Reference cell
-if args.ref_lattice_const:
+if args.use_ref_cell and args.ref_lattice_const:
     aref = args.lattice_consts[args.ref_lattice_const]
     refcell = make_cell(aref, args)
     # Reference DF
@@ -366,6 +423,7 @@ for i, a in enumerate(args.lattice_consts):
 
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
+        log.info("k2gamma...")
         t0 = MPI.Wtime()
         if args.load_gdf and args.load_gdf_unfolded:
             mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=False)
@@ -375,19 +433,25 @@ for i, a in enumerate(args.lattice_consts):
         else:
             mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
         log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
-        ncells = np.product(args.k_points)
+        #ncells = np.product(args.k_points)
     else:
         mf._eri = None
-        ncells = np.product(args.supercell) if args.supercell else 1
+        #ncells = np.product(args.supercell) if args.supercell else 1
 
-
-    if args.test_mode == 1:
-        raise SystemExit()
+    # Canonical full system MP2
+    if args.do_mp2:
+        t0 = MPI.Wtime()
+        mp2 = pyscf.pbc.mp.MP2(mf)
+        mp2.kernel()
+        log.info("Time for MP2: %.3f s", (MPI.Wtime()-t0))
 
     natom = mf.mol.natm
+    ncells = natom / cell.natom_prim
     eref = natom if (args.energy_per == "atom") else ncells
 
     energies = { "hf" : [mf.e_tot / eref], "ccsd" : [], "ccsd-dmp2" : [] }
+    if args.do_mp2:
+        energies["mp2"] = [mp2.e_tot / eref]
     if args.solver == "CCSD(T)":
         energies["ccsdt"] = []
         energies["ccsdt-dmp2"] = []
@@ -397,11 +461,6 @@ for i, a in enumerate(args.lattice_consts):
     # Loop over bath tolerances
     for j, btol in enumerate(args.bath_tol):
 
-        #kwargs = {
-        #        "make_rdm1" : args.make_rdm1,
-        #        "ip_eom" : args.ip_eom,
-        #        "ea_eom" : args.ea_eom,
-        #        }
         kwargs = {opt : True for opt in args.opts}
 
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,

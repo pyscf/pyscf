@@ -106,6 +106,7 @@ def translation_map(nk):
     return t_map
 
 def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", degen_tol=1e-3):
+    print("starting mo_k2gamma")
     scell, phase = get_phase(cell, kpts, kmesh)
 
     E_g = np.hstack(mo_energy)
@@ -161,18 +162,18 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
         print("Initial imaginary part in Gamma-point MO coefficients= %5.2e" % abs(C_gamma.imag).max())
         degen_tol = 1e-3
         idx0 = 0
-        for idx, e1 in enumerate(E_g[1:], 1):
-
-            ## Staying in degenerate subspace
-            ##if (e1-E_g[idx-1]) <= degen_tol:
+        # Looping over stop-index, append state with energy 1e9 to guarantee closing of last subspace
+        for idx, e1 in enumerate(np.hstack((E_g[1:], 1e9)), 1):
 
             # Close of previous subspace
-            if (e1-E_g[idx-1]) > degen_tol:
+            if ((e1-E_g[idx-1]) > degen_tol):
 
                 dsize = (idx-idx0)
                 # Previous subspace is only of size 1
                 if dsize == 1:
-                    print("Nondegenerate eigenvalue at E= %12.8g" % E_g[idx-1])
+                    cimag = abs(C_gamma[:,idx-1].imag).max()
+                    print("Nondegenerate eigenvalue at E= %12.8g imag(C)= %7.2e" % (E_g[idx-1], cimag))
+                    assert cimag < 1e-4
                     idx0 = idx
                     continue
 
@@ -185,9 +186,11 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
                 fimag = abs(f.imag.max())
 
                 emean, emin, emax = E_g[dspace].mean(), E_g[dspace].min(), E_g[dspace].max()
-                print("Degenerate subspace of size= %3d at E= %12.8g (min= %12.8g max=%12.8g spread=%5.2g): imag(D)= %5.2e imag(F)= %5.2e" %
+                print("Degenerate subspace of size= %2d at E= %12.8g (min= %12.8g max=%12.8g spread=%7.2g): imag(D)= %7.2e imag(F)= %7.2e" %
                         (dsize, emean, emin, emax, emax-emin, dimag, fimag))
-                assert (dimag < 1e-4)
+                if dimag > 1e-4:
+                    print("WARNING: Large imaginary component in DM!")
+                assert (dimag < 1e-3)
                 e, v = scipy.linalg.eigh(dm.real, s, type=2)
                 assert (np.count_nonzero(e > 1e-3) == dsize)
                 C_gamma[:,dspace] = v[:,e>1e-3]

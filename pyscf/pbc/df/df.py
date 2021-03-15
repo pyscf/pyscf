@@ -57,6 +57,8 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
 from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
+from timeit import default_timer
+
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
@@ -195,6 +197,7 @@ def make_modchg_basis(auxcell, smooth_eta):
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
+    time_0 = default_timer()
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
@@ -220,6 +223,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
                     kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
+    print("Time _aux_e2= %.3f" % (default_timer()-time_0))
+    time_0 = default_timer()
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -239,6 +244,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+
+    print("Time j2c= %.3f" % (default_timer()-time_0))
+    time_0 = default_timer()
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
@@ -263,6 +271,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             LkR = LkI = None
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
+
+    print("Time ft_ao= %.3f" % (default_timer()-time_0))
+    time_0 = default_timer()
 
     def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
@@ -498,6 +509,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             if not done[uniq_kptji_id]:
                 make_kpt(uniq_kptji_id, cholesky_j2c)
         done[uniq_kptji_ids] = True
+
+    print("Time make_kpt= %.3f" % (default_timer()-time_0))
 
     if cell.incore_anyway:
         return feri
