@@ -88,8 +88,12 @@ option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.0.7
+    # Uncomment for default integral library:
+    #GIT_REPOSITORY https://github.com/sunqm/libcint.git
+    #GIT_TAG v4.1.0
+    # Uncomment for X86_64 optimized library (SSE3, AVX, AVX2 and AVX-512)
+    GIT_REPOSITORY https://github.com/sunqm/qcint.git
+    GIT_TAG v4.0.6
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
