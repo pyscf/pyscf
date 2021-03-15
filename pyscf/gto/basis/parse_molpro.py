@@ -32,6 +32,9 @@ except ImportError:
     optimize_contraction = lambda basis: basis
     remove_zero = lambda basis: basis
 
+from pyscf import __config__
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
+
 MAXL = 8
 SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
 MAPSPDF = {'S': 0,

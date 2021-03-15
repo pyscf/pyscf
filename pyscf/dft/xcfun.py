@@ -823,7 +823,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         omega = [0] * len(facs)
 
-    fn_ids_set = set(fn_ids)
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
         all((is_lda(x) for x in fn_ids))):  # LDA
@@ -855,11 +854,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                             rho_u.ctypes.data_as(ctypes.c_void_p),
                             rho_d.ctypes.data_as(ctypes.c_void_p),
                             outbuf.ctypes.data_as(ctypes.c_void_p))
-
-    if outbuf.shape[0] != ngrids:
-        out = numpy.zeros((ngrids,outlen))
-        out[non0idx,:] = outbuf
-        outbuf = out
 
     outbuf = outbuf.T
     exc = outbuf[0]
