@@ -17,6 +17,7 @@ import numpy as np
 from scipy import linalg, optimize
 from scipy.sparse import linalg as sparse_linalg
 from pyscf import lib, __config__
+from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.soscf import ciah
 
@@ -80,13 +81,13 @@ class Gradients (rhf_grad.GradientsMixin):
         rhf_grad.GradientsMixin.__init__(self, method)
 
     def debug_lagrange (self, Lvec, bvec, Aop, Adiag, **kwargs):
-        lib.logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (
+        logger.debug (self, "{} gradient Lagrange factor debugging not enabled".format (
             self.base.__class__.__name__))
 
     def get_lagrange_callback (self, Lvec_last, itvec, geff_op):
         def my_call (x):
             itvec[0] += 1
-            lib.logger.info (self, 'Lagrange optimization iteration {}, |geff| = {}, |dLvec| = {}'.format (
+            logger.info (self, 'Lagrange optimization iteration {}, |geff| = {}, |dLvec| = {}'.format (
                 itvec[0], linalg.norm (geff_op (x)), linalg.norm (x - Lvec_last)))
             Lvec_last[:] = x[:]
         return my_call
@@ -112,7 +113,7 @@ class Gradients (rhf_grad.GradientsMixin):
             return Lvec_last
         precond = self.get_lagrange_precond (Adiag, level_shift=level_shift, **kwargs)
         it = np.asarray ([0])
-        lib.logger.debug(self, 'Lagrange multiplier determination intial gradient norm: {}'.format(linalg.norm(bvec)))
+        logger.debug(self, 'Lagrange multiplier determination intial gradient norm: {}'.format(linalg.norm(bvec)))
         my_call = self.get_lagrange_callback (Lvec_last, it, my_geff)
         Aop_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=Aop, dtype=bvec.dtype)
         prec_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=precond, dtype=bvec.dtype)
@@ -120,43 +121,44 @@ class Gradients (rhf_grad.GradientsMixin):
         Lvec, info_int = sparse_linalg.cg(Aop_obj, -bvec, x0=x0_guess,
                                           tol=self.conv_rtol, atol=self.conv_atol,
                                           maxiter=self.max_cycle, callback=my_call, M=prec_obj)
-        lib.logger.info (self, ('Lagrange multiplier determination {} after {} iterations\n'
-                                '   |geff| = {}, |Lvec| = {}').format (
-                                    'converged' if info_int == 0 else 'not converged',
-                                    it[0], linalg.norm (my_geff (Lvec)), linalg.norm (Lvec)))
-        if info_int < 0: lib.logger.info (self, 'Lagrange multiplier determination error code {}'.format (info_int))
+        logger.info (self, ('Lagrange multiplier determination {} after {} iterations\n'
+                            '   |geff| = {}, |Lvec| = {}').format (
+                                'converged' if info_int == 0 else 'not converged',
+                                it[0], linalg.norm (my_geff (Lvec)), linalg.norm (Lvec)))
+        if info_int < 0:
+            logger.info (self, 'Lagrange multiplier determination error code {}'.format (info_int))
         return (info_int==0), Lvec, bvec, Aop, Adiag
 
     def kernel (self, level_shift=None, **kwargs):
         cput0 = (logger.process_clock(), logger.perf_counter())
-        log = lib.logger.new_logger(self, self.verbose)
+        log = logger.new_logger(self, self.verbose)
         if 'atmlst' in kwargs:
             self.atmlst = kwargs['atmlst']
         #self.natm = len (self.atmlst)
 
-        if self.verbose >= lib.logger.WARN:
+        if self.verbose >= logger.WARN:
             self.check_sanity()
-        if self.verbose >= lib.logger.INFO:
+        if self.verbose >= logger.INFO:
             self.dump_flags()
 
         conv, Lvec, bvec, Aop, Adiag = self.solve_lagrange (level_shift=level_shift, **kwargs)
         self.debug_lagrange (Lvec, bvec, Aop, Adiag, **kwargs)
         #if not conv: raise RuntimeError ('Lagrange multiplier determination not converged!')
-        cput1 = lib.logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
+        cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 
         ham_response = self.get_ham_response (**kwargs)
-        lib.logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
-                        self.base.__class__.__name__)
+        logger.info(self, '--------------- %s gradient Hamiltonian response ---------------',
+                    self.base.__class__.__name__)
         rhf_grad._write(self, self.mol, ham_response, self.atmlst)
-        lib.logger.info(self, '----------------------------------------------')
-        cput1 = lib.logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
+        logger.info(self, '----------------------------------------------')
+        cput1 = logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
 
         LdotJnuc = self.get_LdotJnuc (Lvec, **kwargs)
-        lib.logger.info(self, '--------------- %s gradient Lagrange response ---------------',
-                        self.base.__class__.__name__)
+        logger.info(self, '--------------- %s gradient Lagrange response ---------------',
+                    self.base.__class__.__name__)
         rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
-        lib.logger.info(self, '----------------------------------------------')
-        cput1 = lib.logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
+        logger.info(self, '----------------------------------------------')
+        cput1 = logger.timer (self, 'Lagrange gradient Jacobian', *cput1)
 
         self.de = ham_response + LdotJnuc
         log.timer('Lagrange gradients', *cput0)
@@ -164,7 +166,7 @@ class Gradients (rhf_grad.GradientsMixin):
         return self.de
 
     #def dump_flags(self):
-    #    log = lib.logger.Logger(self.stdout, self.verbose)
+    #    log = logger.Logger(self.stdout, self.verbose)
     #    log.info('\n')
     #    if not self.base.converged:
     #        log.warn('Ground state method not converged')
@@ -175,11 +177,11 @@ class Gradients (rhf_grad.GradientsMixin):
     #    return self
 
     #def _finalize (self):
-    #    if self.verbose >= lib.logger.NOTE:
-    #        lib.logger.note(self, '--------------- %s gradients ---------------',
-    #                    self.base.__class__.__name__)
+    #    if self.verbose >= logger.NOTE:
+    #        logger.note(self, '--------------- %s gradients ---------------',
+    #                self.base.__class__.__name__)
     #        rhf_grad._write(self, self.mol, self.de, self.atmlst)
-    #        lib.logger.note(self, '----------------------------------------------')
+    #        logger.note(self, '----------------------------------------------')
 
 class LagPrec (object):
     ''' A callable preconditioner for solving the Lagrange equations. Default is 1/(Adiagd+level_shift) '''
