@@ -718,6 +718,8 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
+
+    print("EWALD PARAMS FOR prec=%.e mesh=%r : %e %e" % (precision, mesh, ew_eta, ew_cut))
     return ew_eta, ew_cut
 
 def _cut_mesh_for_ewald(cell, mesh):
@@ -1185,6 +1187,15 @@ class Cell(mole.Mole):
         mf.run()
         return method
 
+    #def supercell(self, ncopy):
+    #    a = self.lattice_vectors()
+    #    Ts = lib.cartesian_prod((np.arange(ncopy[0]), np.arange(ncopy[1]), np.arange(ncopy[2])))
+    #    Ls = np.dot(Ts, a)
+    #    self.a = np.einsum('i,ij->ij', ncopy, a)
+    #    symbs = [atom[0] for atom in self.atom] * nimgs
+    #    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    #    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+
     tot_electrons = tot_electrons
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -1386,6 +1397,7 @@ class Cell(mole.Mole):
         if self.mesh is None or self._mesh_from_build:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
+                print("Estimate ke_cutoff= %.6e" % ke_cutoff)
             else:
                 ke_cutoff = self.ke_cutoff
             self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
@@ -1432,6 +1444,33 @@ class Cell(mole.Mole):
                         self.get_bounding_sphere(self.ew_cut))
         return self
     kernel = build
+
+    def info(self):
+        _a = self.lattice_vectors()
+        logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
+        logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
+        logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
+        logger.info(self, 'dimension = %s', self.dimension)
+        logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
+        logger.info(self, 'Cell volume = %g', self.vol)
+        if self.exp_to_discard is not None:
+            logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
+        logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
+        logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
+        logger.info(self, 'precision = %g', self.precision)
+        logger.info(self, 'pseudo = %s', self.pseudo)
+        #if ke_cutoff is not None:
+        #    logger.info(self, 'ke_cutoff = %s', ke_cutoff)
+        #    logger.info(self, '    = %s mesh (%d PWs)',
+        #                self.mesh, np.prod(self.mesh))
+        #else:
+        logger.info(self, 'mesh = %s (%d PWs)',
+                    self.mesh, np.prod(self.mesh))
+        Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
+        logger.info(self, '    = ke_cutoff %s', Ecut)
+        logger.info(self, 'ew_eta = %g', self.ew_eta)
+        logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
+                    self.get_bounding_sphere(self.ew_cut))
 
     @property
     def h(self):

@@ -33,14 +33,13 @@ def get_arguments():
     parser.add_argument("--supercell-in", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
     parser.add_argument("--lattice-consts", type=float, nargs="*")
-    parser.add_argument("--use-ref-cell", type=int, default=0)
-    parser.add_argument("--ref-lattice-const", type=float)
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
     parser.add_argument("--precision", type=float, default=1e-5)
     parser.add_argument("--rcut", type=float)
-    parser.add_argument("--pyscf-verbose", type=int, default=4)
+    parser.add_argument("--pyscf-verbose", type=int, default=10)
     parser.add_argument("--exp-to-discard", type=float, help="If set, discard diffuse basis functions.")
+    parser.add_argument("--ke-cutoff", type=float)
     parser.add_argument("--energy-per", choices=["atom", "cell"], help="Express total energy per unit cell or per atom.")
 
     # Mean-field
@@ -117,7 +116,6 @@ def get_arguments():
                 "ndim" : 3,
                 #
                 #"lattice_consts" : np.arange(3.6, 4.2+1e-12, 0.1),
-                #"ref_lattice_const" : 3.9,
                 "lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
                 }
 
@@ -126,19 +124,6 @@ def get_arguments():
             setattr(args, key, val)
 
     args.lattice_consts = np.asarray(args.lattice_consts)
-
-    # Reference geometry which defines cell parameters
-    if args.use_ref_cell:
-        if args.ref_lattice_const is None:
-            args.ref_lattice_const = len(args.lattice_consts)//2
-        elif args.ref_lattice_const != -1.0:
-            args.ref_lattice_const = np.arange(len(args.lattice_consts))[abs(args.lattice_consts-args.ref_lattice_const)<1e-14]
-            assert len(args.ref_lattice_const) == 1
-        elif args.ref_lattice_const == -1.0:
-            args.ref_lattice_const = False
-        else:
-            raise ValueError()
-        #log.debug("Reference lattice constant= %.3f", args.lattice_consts[args.ref_lattice_const])
 
     if args.energy_per is None:
         if args.system in ("diamond",):
@@ -222,7 +207,7 @@ def make_perovskite(a, atoms):
 
     return amat, atom
 
-def make_cell(a, args, refcell=None):
+def make_cell(a, args):
 
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
@@ -236,22 +221,11 @@ def make_cell(a, args, refcell=None):
         cell.natom_prim = 5
     cell.dimension = args.ndim
     cell.precision = args.precision
-    # Copy settings from refcell if given
-    if refcell is not None:
-        cell.precision = refcell.precision
-        # cell.ke_cutoff or mesh?
-        cell.ke_cutoff = refcell.ke_cutoff
-        #cell.mesh = refcell.mesh
-        # cell.rcut or nimgs?
-        cell.rcut = refcell.rcut
-        #cell.nimgs = refcell.nimgs
-        cell.ew_cut = refcell.ew_cut
-        cell.ew_eta = refcell.ew_eta
-    else:
-        cell.precision = args.precision
 
     if args.rcut is not None:
         cell.rcut = args.rcut
+    if args.ke_cutoff is not None:
+        cell.ke_cutoff = args.ke_cutoff
 
     cell.verbose = args.pyscf_verbose
     cell.basis = args.basis
@@ -261,12 +235,17 @@ def make_cell(a, args, refcell=None):
         cell.ecp = args.ecp
     if args.exp_to_discard:
         cell.exp_to_discard = args.exp_to_discard
+    print("BEFORE BUILD")
     cell.build()
+    print("AFTER BUILD")
     if args.supercell and not np.all(args.supercell == 1):
-        cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
+        #cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
+        #cell = pyscf.pbc.tools.super_cell(cell, args.supercell, update_mesh=False)
+        cell = pyscf.pbc.tools.super_cell(cell, args.supercell, update_mesh=True, update_ewald=True)
+
     return cell
 
-def run_mf(a, cell, args, refdf=None):
+def run_mf(a, cell, args):
     if args.k_points is None or np.product(args.k_points) == 1:
         kpts = cell.make_kpts([1, 1, 1])
         mf = pyscf.pbc.scf.RHF(cell)
@@ -284,6 +263,7 @@ def run_mf(a, cell, args, refdf=None):
             chkfile_dict = pyscf.pbc.scf.chkfile.load(fname, "scf")
             log.info("Loaded attributes: %r", list(chkfile_dict.keys()))
             mf.__dict__.update(chkfile_dict)
+            mf.converged = True
         except IOError:
             log.error("Could not load SCF from file %s. File not found." % fname)
             log.error("Calculating SCF instead.")
@@ -329,9 +309,6 @@ def run_mf(a, cell, args, refdf=None):
                 load_gdf_ok = True
         # Calculate GDF
         if not load_gdf_ok:
-            if refdf is not None:
-                df.eta = refdf.eta
-                df.mesh = refdf.mesh
             if args.gdf_mesh is not None:
                 df.mesh = args.gdf_mesh
             elif args.gdf_mesh_factor is not None:
@@ -390,23 +367,6 @@ def run_mf(a, cell, args, refdf=None):
 
 args = get_arguments()
 
-# Reference cell
-if args.use_ref_cell and args.ref_lattice_const:
-    aref = args.lattice_consts[args.ref_lattice_const]
-    refcell = make_cell(aref, args)
-    # Reference DF
-    if args.df == "FFTDF":
-        refdf = None
-    # For .eta and .mesh
-    elif args.df == "GDF":
-        if args.k_points is not None:
-            kpts = refcell.make_kpts(args.k_points)
-            refdf = pyscf.pbc.df.GDF(refcell, kpts)
-        else:
-            refdf = pyscf.pbc.df.GDF(refcell)
-else:
-    refcell, refdf = None, None
-
 # Loop over geometries
 for i, a in enumerate(args.lattice_consts):
 
@@ -416,10 +376,12 @@ for i, a in enumerate(args.lattice_consts):
         log.changeIndentLevel(1)
 
     # Setup cell
-    cell = make_cell(a, args, refcell=refcell)
+    cell = make_cell(a, args)
+    cell.info()
 
     # Mean-field
-    mf = run_mf(a, cell, args, refdf=refdf)
+    mf = run_mf(a, cell, args)
+    log.info("Nuclear energy= %.8g", mf.energy_nuc())
 
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
@@ -438,12 +400,17 @@ for i, a in enumerate(args.lattice_consts):
         mf._eri = None
         #ncells = np.product(args.supercell) if args.supercell else 1
 
+    #log.info("Nuclear energy= %.8g", mf.energy_nuc())
+
+    np.savetxt("mo-energies-%.2f.txt", mf.mo_energy)
+
     # Canonical full system MP2
     if args.do_mp2:
         t0 = MPI.Wtime()
         mp2 = pyscf.pbc.mp.MP2(mf)
         mp2.kernel()
         log.info("Time for MP2: %.3f s", (MPI.Wtime()-t0))
+        log.info("MP2 E(corr)= %.8g", mp2.e_corr)
 
     natom = mf.mol.natm
     ncells = natom / cell.natom_prim
@@ -500,7 +467,8 @@ for i, a in enumerate(args.lattice_consts):
     # Write energies to files
     if MPI_rank == 0:
         for key, val in energies.items():
-            with open("%s.txt" % key, "a") as f:
-                f.write(("%6.3f" + len(val)*"  %+16.12e" + "\n") % (a, *val))
+            if val:
+                with open("%s.txt" % key, "a") as f:
+                    f.write(("%6.3f" + len(val)*"  %+16.12e" + "\n") % (a, *val))
 
     log.changeIndentLevel(-1)

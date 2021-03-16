@@ -301,6 +301,14 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             l = scipy.linalg.cholesky(j2c, lower=True)
             log.info("Error in Cholesky decomposition= %.2e", abs(numpy.dot(l, l.T.conj())-j2c).max())
             j2c = l
+
+            # Invert l
+            np = numpy
+            x = scipy.linalg.solve_triangular(l, np.identity(l.shape[-1]), lower=True)
+            errnorm = np.linalg.norm(np.dot(l, x)-np.eye(l.shape[-1]))
+            errmax = abs(np.dot(l, x)-np.eye(l.shape[-1])).max()
+            log.info("Error in inversion: norm= %.2e max= %.2e", errnorm, errmax)
+
             #j2c = _cholesky(j2c, lower=True)
 
             j2ctag = 'CD'

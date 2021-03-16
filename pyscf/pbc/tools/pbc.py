@@ -22,6 +22,7 @@ from pyscf.lib import logger
 from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
+from pyscf.pbc.tools import pbc as pbctools
 
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
 
@@ -437,6 +438,7 @@ def precompute_exx(cell, kpts):
 
 
 def madelung(cell, kpts):
+    print("CALC MADEL")
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = copy.copy(cell)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
@@ -511,7 +513,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     return np.asarray(Ls, order='C')
 
 
-def super_cell(cell, ncopy):
+def super_cell(cell, ncopy, update_mesh="legacy", update_ewald=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
     Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
@@ -538,10 +540,26 @@ def super_cell(cell, ncopy):
     Ls = np.dot(Ts, a)
     supcell = cell.copy()
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
-                             ncopy[1]*cell.mesh[1],
-                             ncopy[2]*cell.mesh[2]])
-    return _build_supcell_(supcell, cell, Ls)
+
+    supcell = _build_supcell_(supcell, cell, Ls)
+
+    if update_mesh is True:
+        if supcell.ke_cutoff is None:
+            from pyscf.pbc.gto import estimate_ke_cutoff
+            ke_cutoff = estimate_ke_cutoff(supcell, supcell.precision)
+            print("Estimate ke_cutoff= %.6e" % ke_cutoff)
+        else:
+            ke_cutoff = supcell.ke_cutoff
+        supcell._mesh = pbctools.cutoff_to_mesh(supcell.a, ke_cutoff)
+    elif update_mesh == "legacy":
+        supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
+                                 ncopy[1]*cell.mesh[1],
+                                 ncopy[2]*cell.mesh[2]])
+    if update_ewald:
+        supcell._ew_eta, supcell._ew_cut = supcell.get_ewald_params(supcell.precision, supcell.mesh)
+        print("Settings ewald parameters to %e %e" % (supcell._ew_eta, supcell._ew_cut))
+
+    return supcell
 
 
 def cell_plus_imgs(cell, nimgs):
