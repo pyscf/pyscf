@@ -43,6 +43,7 @@ import scipy.linalg
 from pyscf.gto import mole
 from pyscf.lib import norm
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm.param import OPERATOR_TABLE
 from pyscf import __config__
 
@@ -371,15 +372,15 @@ def as_subgroup(topgroup, axes, subgroup=None):
             axes = numpy.array((x,y,z))
 
         elif subgroup not in SUBGROUP[groupname]:
-            raise RuntimeError('%s not in Ablien subgroup of %s' %
-                               (subgroup, topgroup))
+            raise PointGroupSymmetryError('%s not in Ablien subgroup of %s' %
+                                          (subgroup, topgroup))
 
         groupname = subgroup
     return groupname, axes
 
 def symm_ops(gpname, axes=None):
     if axes is not None:
-        raise RuntimeError('TODO: non-standard orientation')
+        raise PointGroupSymmetryError('TODO: non-standard orientation')
     op1 = numpy.eye(3)
     opi = -1
 
@@ -440,7 +441,7 @@ def symm_identical_atoms(gpname, atoms):
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
         if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
-            raise RuntimeError('Symmetry identical atoms not found')
+            raise PointGroupSymmetryError('Symmetry identical atoms not found')
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
@@ -486,7 +487,7 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
-class RotationAxisNotFound(RuntimeError):
+class RotationAxisNotFound(PointGroupSymmetryError):
     pass
 
 class SymmSys(object):
