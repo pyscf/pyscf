@@ -32,7 +32,6 @@ Useful References:
     New J. Phys. 14, 053020 (2012)
 '''
 
-import time
 from functools import reduce
 import numpy
 import numpy as np
@@ -410,7 +409,7 @@ class GWAC(lib.StreamObject):
         if mo_energy is None:
             mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff,
