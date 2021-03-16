@@ -172,23 +172,23 @@ def compute_amplitudes(myadc, eris):
     a = 0
     t1_2 = np.zeros((nocc,nvir))
 
-#    for p in range(0,nocc,chnk_size):
-#        if getattr(myadc, 'with_df', None):
-#            eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
-#        else :
-#            eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
-#        k = eris_ovvv.shape[0]
-#       
-#        i#t1_2 += 0.5*lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
-#        #t1_2 -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv,t2_1[a:a+k,:],optimize=True)
-#        #t1_2 -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
-#        #t1_2 += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv,t2_1[a:a+k,:],optimize=True)
-#
-#        #t1_2 += lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
-#        del eris_ovvv
-#        a += k
+    for p in range(0,nocc,chnk_size):
+        if getattr(myadc, 'with_df', None):
+            eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
+        else :
+            eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
+        k = eris_ovvv.shape[0]
+       
+        t1_2 += 0.5*lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
+        t1_2 -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv,t2_1[a:a+k,:],optimize=True)
+        t1_2 -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
+        t1_2 += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv,t2_1[a:a+k,:],optimize=True)
 
-    t1_2 -= 0.5*lib.einsum('lcki,klac->ia',eris_ovoo,t2_1[:],optimize=True)
+        t1_2 += lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1[:,a:a+k],optimize=True)
+        del eris_ovvv
+        a += k
+
+    #t1_2 -= 0.5*lib.einsum('lcki,klac->ia',eris_ovoo,t2_1[:],optimize=True)
     #t1_2 += 0.5*lib.einsum('lcki,lkac->ia',eris_ovoo,t2_1[:],optimize=True)
     #t1_2 -= 0.5*lib.einsum('kcli,lkac->ia',eris_ovoo,t2_1[:],optimize=True)
     #t1_2 += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo,t2_1[:],optimize=True)
@@ -1241,14 +1241,14 @@ def get_imds_ip(adc, eris=None):
         eris_oovv = eris.oovv
         eris_ovoo = eris.ovoo
         eris_oooo = eris.oooo
-    
+      
         M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
-#        M_ij -= lib.einsum('ld,jdli->ij',t1_2, eris_ovoo,optimize=True)
-#        M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
-#
-#        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
-#        M_ij -= lib.einsum('ld,idlj->ij',t1_2, eris_ovoo,optimize=True)
-#        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
+        M_ij -= lib.einsum('ld,jdli->ij',t1_2, eris_ovoo,optimize=True)
+        M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_ovoo,optimize=True)
+
+        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
+        M_ij -= lib.einsum('ld,idlj->ij',t1_2, eris_ovoo,optimize=True)
+        M_ij += lib.einsum('ld,ldij->ij',t1_2, eris_ovoo,optimize=True)
 #        t2_2 = t2[1][:]
 #
 #        M_ij += 0.5* lib.einsum('ilde,jdel->ij',t2_2, eris_ovvo,optimize=True)
