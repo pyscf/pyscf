@@ -221,6 +221,7 @@ class TestPolEmbed(unittest.TestCase):
         mf_scanner = solvent.PE(scf.RHF(mol), potfile).as_scanner()
         mf_scanner(mol)
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 0.00020182314249546455, 9)
+        # Change solute. cppe may not support this
         mf_scanner('H  0. 0. 0.; H  0. 0. .9')
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 5.2407234004672825e-05, 9)
 
