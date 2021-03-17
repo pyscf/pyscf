@@ -218,7 +218,7 @@ class PolEmbed(lib.StreamObject):
 
             induced_moments = induced_moments.reshape(n_dm, n_sites, 3)
             #:V_ind = self._compute_field_integrals(positions, induced_moments)
-            V_ind = numpy.einsum('aijg,nga->nij', j3c, -induced_moments)
+            V_ind = lib.einsum('aijg,nga->nij', j3c, -induced_moments)
             V_ind = V_ind + V_ind.transpose(0, 2, 1)
 
         if not elec_only:
