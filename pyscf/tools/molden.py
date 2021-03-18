@@ -63,7 +63,11 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             occ[:neleca] = 1
         else:
             occ[:nelecb] = 1
-    fout.write('[MO]\n')
+
+    if spin == 'Alpha':
+        # Avoid duplicated [MO] session when dumping beta orbitals
+        fout.write('[MO]\n')
+
     for imo in range(nmo):
         fout.write(' Sym= %s\n' % symm[imo])
         fout.write(' Ene= %15.10g\n' % ene[imo])
@@ -248,30 +252,29 @@ def _parse_mo(lines, envs):
     mo_energy = []
     spins = []
     mo_occ = []
-    mo_coeff = []
     mo_coeff_prim = [] # primary data, will be reworked for missing values
+    coeff_idx = []
+    mo_id = 0
     for line in lines[1:]:
         line = line.upper()
         if 'SYM' in line:
             irrep_labels.append(line.split('=')[1].strip())
-            orb_prim = {}
-            mo_coeff_prim.append(orb_prim)
         elif 'ENE' in line:
             mo_energy.append(float(_d2e(line).split('=')[1].strip()))
+            mo_id = len(mo_energy) - 1
         elif 'SPIN' in line:
             spins.append(line.split('=')[1].strip())
         elif 'OCC' in line:
             mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            orb_prim.update({int(line.split()[0]) : float(_d2e(line.split()[1]))})
+            ao_id, c = line.split()[:2]
+            coeff_idx.append([int(ao_id) - 1, mo_id])
+            mo_coeff_prim.append(float(c))
 
-    number_of_aos = max([max(orb_prim_data) for orb_prim_data in mo_coeff_prim])
-    number_of_mos = len(mo_coeff_prim)
-
+    coeff_idx = numpy.array(coeff_idx)
+    number_of_aos, number_of_mos = coeff_idx.max(axis=0) + 1
     mo_coeff = numpy.zeros([number_of_aos, number_of_mos])
-    for n, orb_prim_data in enumerate(mo_coeff_prim):
-        for m, c in orb_prim_data.items():
-            mo_coeff[m-1, n] = c
+    mo_coeff[coeff_idx[:,0], coeff_idx[:,1]] = mo_coeff_prim
 
     mo_energy = numpy.array(mo_energy)
     mo_occ = numpy.array(mo_occ)
