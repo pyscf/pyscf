@@ -96,12 +96,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     vcoreb = np.asarray(vcoreb).reshape(-1,nao,nao)
 
     mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mata = np.einsum('xJ,xuv->Juv', vec, vcorea)
     matb = np.einsum('xJ,xuv->Juv', vec, vcoreb)
     if mo_rep:
@@ -111,9 +106,10 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(uhf_hess.Hessian):
-    def __init__(self, scf_method):
-        uhf_hess.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY=80
+    def __init__(self, scf_method, **kwargs):
+        uhf_hess.Hessian.__init__(self, scf_method, **kwargs)
+        self.CUTOFF_FREQUENCY = kwargs.pop("CUTOFF_FREQUENCY", rhf_eph.CUTOFF_FREQUENCY)
+        self.KEEP_IMAG_FREQUENCY = kwargs.pop("KEEP_IMAG_FREQUENCY", rhf_eph.KEEP_IMAG_FREQUENCY)
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph

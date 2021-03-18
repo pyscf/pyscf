@@ -14,30 +14,19 @@
 # limitations under the License.
 #
 from pyscf.pbc import scf, dft, gto, grad, df
-from pyscf.eph.rhf import solve_hmat
+from pyscf.eph.rhf import solve_hmat, _freq_mass_weighted_vec
 from pyscf.eph.eph_fd import gen_moles
 import numpy as np
-import scipy
 from pyscf.lib import logger
 import copy
 
-'''Hacky implementation of Electron-Phonon matrix from finite difference'''
-# Note, the code can only support single-kpoint mesh
+'''Electron-Phonon matrix for pbc from finite difference'''
+# Note, this code can only support single-kpoint mesh
 # cell relaxation needs to be performed before computing eph matrix
 
-AU_TO_CM = 2.19475 * 1e5
-CUTOFF_FREQUENCY = 80
-
 def copy_mf(mf, cell):
-    if mf.__class__.__name__ == 'KRHF':
-        mf1 = scf.KRHF(cell)
-    elif mf.__class__.__name__ == 'KUHF':
-        mf1 = scf.KUHF(cell)
-    elif mf.__class__.__name__ == 'KRKS':
-        mf1 = dft.KRKS(cell)
-        mf1.xc = mf.xc
-    elif mf.__class__.__name__ == 'KUKS':
-        mf1 = dft.KUKS(cell)
+    mf1 = mf.__class__(cell)
+    if hasattr(mf, 'xc'):
         mf1.xc = mf.xc
     mf1.kpts = mf.kpts
     mf1.exxdiv = getattr(mf, 'exxdiv', None)
@@ -87,27 +76,42 @@ def gen_cells(cell, disp):
     return cell_a, cell_s
 
 def get_vmat(mf, mfset, disp):
-    RESTRICTED = (mf.__class__.__name__[1] == 'R')
     nconfigs = len(mfset)
     vmat=[]
     mygrad = mf.nuc_grad_method()
 
     veff  = mygrad.get_veff()
     v1e = mygrad.get_hcore() - np.asarray(mf.cell.pbc_intor("int1e_ipkin", kpts=mf.kpts))
-    vtmp = veff - v1e.transpose(1,0,2,3)
+    # veff[axis, spin, nkpts, nao, nao]
+    # v1e[nkpts, axis, nao, nao]
+    RESTRICTED = (v1e.ndim==veff.ndim)
+    if RESTRICTED:
+        vtmp = veff - v1e.transpose(1,0,2,3)
+    else:
+        vtmp = veff - v1e.transpose(1,0,2,3)[:,None]
 
     aoslice = mf.cell.aoslice_by_atom()
     for i in range(nconfigs):
         atmid, axis = np.divmod(i, 3)
         p0, p1 = aoslice[atmid][2:]
         mf1, mf2 = mfset[i]
-        vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts)  # <u+|V+|v+>
-        vfull2 = mf2.get_veff() + mf2.get_hcore() - mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts)  # <u-|V-|v->
-        vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
         if RESTRICTED:
+            vfull1 = mf1.get_veff() + mf1.get_hcore() \
+                   - np.asarray(mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts))  # <u+|V+|v+>
+            vfull2 = mf2.get_veff() + mf2.get_hcore() \
+                   - np.asarray(mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts))  # <u-|V-|v->
+        else:
+            vfull1 = mf1.get_veff() + mf1.get_hcore()[None] \
+                   - np.asarray(mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts))[None]  # <u+|V+|v+>
+            vfull2 = mf2.get_veff() + mf2.get_hcore()[None] \
+                   - np.asarray(mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts))[None]  # <u-|V-|v->
+        vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
+        if vfull.ndim==3:
             vfull[:,p0:p1] -= vtmp[axis,:,p0:p1]
             vfull[:,:,p0:p1] -= vtmp[axis,:,p0:p1].transpose(0,2,1).conj()
-
+        else:
+            vfull[:,:,p0:p1] -= vtmp[axis,:,:,p0:p1]
+            vfull[:,:,:,p0:p1] -= vtmp[axis,:,:,p0:p1].transpose(0,1,3,2).conj()
         vmat.append(vfull)
 
     vmat= np.asarray(vmat)
@@ -130,7 +134,7 @@ def run_hess(mfset, disp):
     return hess
 
 
-def kernel(mf, disp=1e-5, mo_rep=False):
+def kernel(mf, disp=1e-4, mo_rep=False):
     if hasattr(mf, 'xc'): mf.grids.build(with_non0tab=True)
     if not mf.converged: mf.kernel()
     mo_coeff = np.asarray(mf.mo_coeff)
@@ -143,12 +147,7 @@ def kernel(mf, disp=1e-5, mo_rep=False):
     omega, vec = solve_hmat(cell, hmat)
 
     mass = cell.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    vec = _freq_mass_weighted_vec(vec, omega, mass)
     if mo_rep:
         if RESTRICTED:
             vmat = np.einsum('xuv,up,vq->xpq', vmat, mo_coeff[0].conj(), mo_coeff[0])
@@ -167,7 +166,7 @@ if __name__ == '__main__':
     C 0.000000000000   0.000000000000   0.000000000000
     C 1.685068664391   1.685068664391   1.685068664391
     '''
-    cell.basis = 'gth-dzvp'
+    cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329

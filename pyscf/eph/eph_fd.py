@@ -17,25 +17,20 @@
 
 #
 '''
-A hacky implementation of electron-phonon matrix from finite difference
+electron-phonon matrix from finite difference
 '''
 
-from pyscf import scf, dft, gto, hessian
-from pyscf.eph.rhf import solve_hmat
-import numpy as np
-import scipy
-from pyscf.lib import logger
 import copy
+import numpy as np
+from pyscf import scf, dft, gto, hessian
+from pyscf.eph.rhf import solve_hmat, _freq_mass_weighted_vec
+from pyscf.lib import logger
 
 def copy_mf(mf, mol):
-    RESTRICTED=(mf.mo_coeff.ndim==2)
     DFT = hasattr(mf, 'xc')
     if DFT:
-        if RESTRICTED:
-            mf1 = dft.RKS(mol, xc=mf.xc)
-        else:
-            mf1 = dft.UKS(mol, xc=mf.xc)
-        mf1.grids.level=mf.grids.level
+        mf1 = mf.__class__(mol, xc=mf.xc)
+        mf1.grids.level = mf.grids.level
         mf1.conv_tol = mf.conv_tol
         mf1.conv_tol_grad = mf.conv_tol_grad
     else:
@@ -137,19 +132,14 @@ def get_vmat(mf, mfset, disp):
         vmat.append(vtot)
     return np.asarray(vmat)
 
-def kernel(mf, disp=1e-5, mo_rep=False):
+def kernel(mf, disp=1e-4, mo_rep=False):
     if hasattr(mf, 'xc'): mf.grids.build()
     if not mf.converged: mf.kernel()
     RESTRICTED = (mf.mo_coeff.ndim==2)
     mol = mf.mol
     omega, vec = get_mode(mf)
     mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    vec = _freq_mass_weighted_vec(vec, omega, mass)
     mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesion coord
     mfset = run_mfs(mf, mols_a, mols_b) # run mean field calculations on all these molecules
     vmat = get_vmat(mf, mfset, disp) # extracting <p|dV|q>/dR
