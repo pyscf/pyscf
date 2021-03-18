@@ -35,7 +35,7 @@ LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 format_aux_basis = addons.make_auxmol
 
 
-def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
+def aux_e2(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=None,
            cintopt=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
 
@@ -46,6 +46,11 @@ def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
 
             cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e')
     '''
+    if isinstance(auxmol_or_auxbasis, gto.Mole):
+        auxmol = auxmol_or_auxbasis
+    else:
+        auxbasis = auxmol_or_auxbasis
+        auxmol = addons.make_auxmol(mol, auxbasis)
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
 
     # Extract the call of the two lines below
@@ -59,7 +64,7 @@ def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
     return getints(intor, atm, bas, env, shls_slice, comp, hermi, aosym,
                    ao_loc, cintopt, out)
 
-def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
+def aux_e1(mol, auxmol_or_auxbasis, intor='int3c2e', aosym='s1', comp=None, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
 
     Note aux_e1 is basically analogous to aux_e2 function. It can be viewed as
@@ -71,17 +76,32 @@ def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
 
     The same arguments as function aux_e2 can be input to aux_e1.
     '''
-    out = aux_e2(mol, auxmol, intor, aosym, comp, out)
-    if out.ndim == 2:  # comp == 1
-        out = out.T
+    if isinstance(auxmol_or_auxbasis, gto.Mole):
+        auxmol = auxmol_or_auxbasis
     else:
-        out = out.transpose(0,2,1)
+        auxbasis = auxmol_or_auxbasis
+        auxmol = addons.make_auxmol(mol, auxbasis)
+
+    out = aux_e2(mol, auxmol, intor, aosym, comp, out)
+    if out.ndim == 2:  # comp == 1, aosym == s2
+        out = out.T
+    elif out.ndim == 3:  # aosym == s1
+        assert aosym == 's1', ''
+        out = out.transpose(1, 2, 0)
+    else:  # comp > 1 and aosym == s1
+        out = out.transpose(0, 2, 3, 1)
     return out
 
 
-def fill_2c2e(mol, auxmol, intor='int2c2e', comp=None, hermi=1, out=None):
+def fill_2c2e(mol, auxmol_or_auxbasis, intor='int2c2e', comp=None, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
+    if isinstance(auxmol_or_auxbasis, gto.Mole):
+        auxmol = auxmol_or_auxbasis
+    else:
+        auxbasis = auxmol_or_auxbasis
+        auxmol = addons.make_auxmol(mol, auxbasis)
+
     return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
 
 
@@ -142,7 +162,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
 
     p1 = 0
     for istep, sh_range in enumerate(shranges):
-        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
+        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d',
                   istep+1, len(shranges), *sh_range)
         bstart, bend, nrow = sh_range
         shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)

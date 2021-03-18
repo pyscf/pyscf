@@ -37,6 +37,8 @@ def tda_denisty_matrix(td, state_id):
 
     # Add CIS contribution
     nocc = cis_t1.shape[0]
+    # Note that dm_oo and dm_vv correspond to spin-up contribution. "*2" to
+    # include the spin-down contribution
     dm[:nocc,:nocc] += dm_oo * 2
     dm[nocc:,nocc:] += dm_vv * 2
 

@@ -650,7 +650,7 @@ def _init_cis_df_eris(cis, eris):
     cput0 = (time.clock(), time.time())
 
     with h5py.File(cis._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):

@@ -171,6 +171,8 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 class KohnShamDFT(mol_ks.KohnShamDFT):
+    '''PBC-KS'''
+
     __init__ = _dft_common_init_
 
     def dump_flags(self, verbose=None):
@@ -191,8 +193,9 @@ class RKS(KohnShamDFT, pbchf.RHF):
     This is a literal duplication of the molecular RKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
-        pbchf.RHF.__init__(self, cell, kpt)
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        pbchf.RHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):

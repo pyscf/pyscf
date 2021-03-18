@@ -102,29 +102,43 @@ else:
 _numpy_einsum = numpy.einsum
 def _contract(subscripts, *tensors, **kwargs):
     idx_str = subscripts.replace(' ','')
-    indices  = idx_str.replace(',', '').replace('->', '')
-    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-        return _numpy_einsum(idx_str, *tensors)
-
     A, B = tensors
-    # Call numpy.asarray because A or B may be HDF5 Datasets 
-    A = numpy.asarray(A, order='A')
-    B = numpy.asarray(B, order='A')
+    # Call numpy.asarray because A or B may be HDF5 Datasets
+    A = numpy.asarray(A)
+    B = numpy.asarray(B)
+
+    # small problem size
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return _numpy_einsum(idx_str, *tensors)
+        return _numpy_einsum(idx_str, A, B)
 
     C_dtype = numpy.result_type(A, B)
     if FOUND_TBLIS and C_dtype == numpy.double:
         # tblis is slow for complex type
         return tblis_einsum._contract(idx_str, A, B, **kwargs)
 
-    DEBUG = kwargs.get('DEBUG', False)
+    indices  = idx_str.replace(',', '').replace('->', '')
+    if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):
+        return _numpy_einsum(idx_str, A, B)
 
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
     idxB, idxC = idxBC.split('->')
-    assert(len(idxA) == A.ndim)
-    assert(len(idxB) == B.ndim)
+    assert len(idxA) == A.ndim
+    assert len(idxB) == B.ndim
+
+    uniq_idxA = set(idxA)
+    uniq_idxB = set(idxB)
+    # Find the shared indices being summed over
+    shared_idxAB = uniq_idxA.intersection(uniq_idxB)
+
+    if (not shared_idxAB == 0 or  # Indices must overlap
+        # one operand is a subset of the other one (e.g. 'ijkl,jk->il')
+        uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
+        # repeated indices (e.g. 'iijk,kl->jl')
+        len(idxA) != len(uniq_idxA) or len(idxB) != len(uniq_idxB)):
+        return _numpy_einsum(idx_str, A, B)
+
+    DEBUG = kwargs.get('DEBUG', False)
 
     if DEBUG:
         print("*** Einsum for", idx_str)
@@ -139,15 +153,6 @@ def _contract(subscripts, *tensors, **kwargs):
     if DEBUG:
         print("rangeA =", rangeA)
         print("rangeB =", rangeB)
-
-    # duplicated indices 'in,ijj->n'
-    if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
-        return _numpy_einsum(idx_str, A, B)
-
-    # Find the shared indices being summed over
-    shared_idxAB = set(idxA).intersection(idxB)
-    if len(shared_idxAB) == 0: # Indices must overlap
-        return _numpy_einsum(idx_str, A, B)
 
     idxAt = list(idxA)
     idxBt = list(idxB)
@@ -296,7 +301,7 @@ def pack_tril(mat, axis=-1, out=None):
 
 # 1d -> 2d or 2d -> 3d, write hermitian lower triangle to upper triangle
 def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
-    '''Reverse operation of pack_tril.
+    '''Reversed operation of pack_tril.
 
     Kwargs:
         filltriu : int
@@ -500,7 +505,7 @@ def take_2d(a, idx, idy, out=None):
        ctypes.c_int(idx.size), ctypes.c_int(idy.size))
     return out
 
-def takebak_2d(out, a, idx, idy):
+def takebak_2d(out, a, idx, idy, thread_safe=True):
     '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
     for a 2D array.
 
@@ -514,21 +519,27 @@ def takebak_2d(out, a, idx, idy):
     '''
     assert(out.flags.c_contiguous)
     a = numpy.asarray(a, order='C')
-    idx = numpy.asarray(idx, dtype=numpy.int32)
-    idy = numpy.asarray(idy, dtype=numpy.int32)
-    if a.dtype == numpy.double:
+    if out.dtype != a.dtype:
+        a = a.astype(out.dtype)
+    if out.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif a.dtype == numpy.complex:
+    elif out.dtype == numpy.complex:
         fn = _np_helper.NPztakebak_2d
     else:
-        out[idx[:,None], idy] += a
+        if thread_safe:
+            out[idx[:,None], idy] += a
+        else:
+            raise NotImplementedError
         return out
+    idx = numpy.asarray(idx, dtype=numpy.int32)
+    idy = numpy.asarray(idy, dtype=numpy.int32)
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p),
        idx.ctypes.data_as(ctypes.c_void_p),
        idy.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(out.shape[1]), ctypes.c_int(a.shape[1]),
-       ctypes.c_int(idx.size), ctypes.c_int(idy.size))
+       ctypes.c_int(idx.size), ctypes.c_int(idy.size),
+       ctypes.c_int(thread_safe))
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):
@@ -1005,31 +1016,36 @@ def direct_sum(subscripts, *operands):
     out.flags.writeable = True  # old numpy has this issue
     return out
 
-def condense(opname, a, locs):
+def condense(opname, a, loc_x, loc_y=None):
     '''
     .. code-block:: python
 
-        nd = loc[-1]
-        out = numpy.empty((nd,nd))
-        for i,i0 in enumerate(loc):
-            i1 = loc[i+1]
-            for j,j0 in enumerate(loc):
-                j1 = loc[j+1]
+        for i,i0 in enumerate(loc_x):
+            i1 = loc_x[i+1]
+            for j,j0 in enumerate(loc_y):
+                j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1,j0:j1])
-        return out
     '''
-    assert(a.flags.c_contiguous)
     assert(a.dtype == numpy.double)
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
     op = getattr(_np_helper, opname)
-    locs = numpy.asarray(locs, numpy.int32)
-    nloc = locs.size - 1
-    out = numpy.empty((nloc,nloc))
+    if loc_y is None:
+        loc_y = loc_x
+    loc_x = numpy.asarray(loc_x, numpy.int32)
+    loc_y = numpy.asarray(loc_y, numpy.int32)
+    nloc_x = loc_x.size - 1
+    nloc_y = loc_y.size - 1
+    if a.flags.f_contiguous:
+        out = numpy.zeros((nloc_x, nloc_y), order='F')
+    else:
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
-                          locs.ctypes.data_as(ctypes.c_void_p),
-                          ctypes.c_int(nloc))
+                          loc_x.ctypes.data_as(ctypes.c_void_p),
+                          loc_y.ctypes.data_as(ctypes.c_void_p),
+                          ctypes.c_int(nloc_x), ctypes.c_int(nloc_y))
     return out
 
 def expm(a):

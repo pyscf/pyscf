@@ -60,8 +60,8 @@ mf.kernel()
 PiAtoms = [1,2,3,4,5,6,7,8]  #list atom numbers for your pi-system, counting from 1
 N_Core,N_Actorb, N_Virt,nelec,coeff=MakePiOS(mol,mf,PiAtoms)  
 #if you don't want the entire pi-space, use MakePiOS(mol,mf,PiAtomsList, nPiOcc,nPiVirt), where nPiOcc and nPiVirt determine how many HOMOs and LUMOs should be picked up
-nalpha=(nelec+mol.spin)/2
-nbeta=(nelec-mol.spin)/2
+nalpha=(nelec+mol.spin)//2
+nbeta=(nelec-mol.spin)//2
 
 #=================================run CASSCF
 mycas = mcscf.CASSCF(mf, N_Actorb, [nalpha,nbeta])

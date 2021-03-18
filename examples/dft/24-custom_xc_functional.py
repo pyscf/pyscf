@@ -53,6 +53,7 @@ mol = gto.M(
 #   contribution has been included.
 
 mf = dft.RKS(mol)
+# B3LYP can be constructed
 mf.xc = 'HF*0.2 + .08*LDA + .72*B88, .81*LYP + .19*VWN'
 e1 = mf.kernel()
 print('E = %.15g  ref = -76.3832244350081' % e1)

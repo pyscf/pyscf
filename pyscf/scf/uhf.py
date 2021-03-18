@@ -60,7 +60,7 @@ def init_guess_by_atom(mol, breaksym=BREAKSYM):
     return numpy.array((dma,dmb))
 
 def init_guess_by_huckel(mol, breaksym=BREAKSYM):
-    return UHF(mol).init_guess_by_huckel(mol)
+    return UHF(mol).init_guess_by_huckel(mol, breaksym)
 
 def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read SCF chkfile and make the density matrix for UHF initial guess.
@@ -572,8 +572,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     log = logger.new_logger(mol, verbose)
     if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))
@@ -591,8 +590,7 @@ def mulliken_meta_spin(mol, dm_ao, verbose=logger.DEBUG,
     log = logger.new_logger(mol, verbose)
     if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     dm_a = reduce(numpy.dot, (c_inv, dm_ao[0], c_inv.conj().T))
     dm_b = reduce(numpy.dot, (c_inv, dm_ao[1], c_inv.conj().T))
@@ -721,6 +719,8 @@ class UHF(hf.SCF):
             If given, freeze the number of (alpha,beta) electrons to the given value.
         level_shift : number or two-element list
             level shift (in Eh) for alpha and beta Fock if two-element list is given.
+        init_guess_breaksym : logical
+            If given, overwrite BREAKSYM.
 
     Examples:
 
@@ -737,6 +737,8 @@ class UHF(hf.SCF):
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
         self.nelec = None
+        self.init_guess_breaksym = None
+        self._keys = self._keys.union(["init_guess_breaksym"])
 
     @property
     def nelec(self):
@@ -790,6 +792,9 @@ class UHF(hf.SCF):
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''
         if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
         # For spin polarized system, no need to manually break spin symmetry
         if mol.spin != 0:
             breaksym = False
@@ -797,6 +802,9 @@ class UHF(hf.SCF):
 
     def init_guess_by_atom(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
         # For spin polarized system, no need to manually break spin symmetry
         if mol.spin != 0:
             breaksym = False
@@ -804,15 +812,28 @@ class UHF(hf.SCF):
 
     def init_guess_by_huckel(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol)
         mo_energy = (mo_energy, mo_energy)
         mo_coeff = (mo_coeff, mo_coeff)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
-        return self.make_rdm1(mo_coeff, mo_occ)
+        dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
+        if mol.spin == 0 and breaksym:
+            #remove off-diagonal part of beta DM
+            dmb = numpy.zeros_like(dma)
+            for b0, b1, p0, p1 in mol.aoslice_by_atom():
+                dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+        return numpy.array((dma,dmb))
+
 
     def init_guess_by_1e(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
+        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
+        if user_set_breaksym is not None:
+            breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)

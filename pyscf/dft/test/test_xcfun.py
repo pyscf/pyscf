@@ -71,14 +71,14 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.xcfun.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
         self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(9, 0.6), (3, 0.19), (16, 0.486), (0, 0.032), (6, 0.288), (46, 0.324)]))
+                                       [(8, 0.276), (6, 0.498), (3, 0.19), (16, 0.486), (0, 0.032), (56, 0.324)]))
         rsh = dft.xcfun.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.xcfun.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
         self.assertTrue(numpy.allclose(fn_facs,
-                                       [(0, 0.032), (6, 0.288), (46, 0.324), (3, 0.19), (9, 0.6), (16, 0.486)]))
+                                       [(0, 0.032), (6, 0.498), (56, 0.324), (3, 0.19), (8, 0.276), (16, 0.486)]))
         rsh = dft.xcfun.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
         self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
 
         hyb, fn_facs = dft.xcfun.parse_xc('0.5*RSH(2.04;0.56;0.3) + 0.5*BP86')
         self.assertEqual(hyb, [1.3, 1.02, 0.3])
-        self.assertEqual(fn_facs, [(6, 0.5), (46, 0.5)])
+        self.assertEqual(fn_facs, [(6, 0.5), (56, 0.5)])
 
         self.assertRaises(ValueError, dft.xcfun.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
         self.assertRaises(ValueError, dft.xcfun.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
@@ -102,7 +102,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(hyb, 0.28, 9)
 
         hyb, fn_facs = dft.xcfun.parse_xc('APBE,')
-        self.assertEqual(fn_facs[0][0], 58)
+        self.assertEqual(fn_facs[0][0], 68)
 
         hyb, fn_facs = dft.xcfun.parse_xc('VWN,')
         self.assertEqual(fn_facs, [(3, 1)])
@@ -272,6 +272,7 @@ class KnownValues(unittest.TestCase):
         check('m06,'  , deriv=1, e_place=6, v_place=6)
         check('m062x,', deriv=1, e_place=6, v_place=6)
         check('m06l,' , deriv=1, e_place=6, v_place=6)
+        check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
         check('TPSS,' ,                                  k_place=-4)
         #?check('REVTPSS,', deriv=1)  # xcfun crash
         check('APBE,')
@@ -291,6 +292,7 @@ class KnownValues(unittest.TestCase):
         check(',m06'  , deriv=1)
         check(',m062x', deriv=1)
         check(',m06l' , deriv=1)
+        check(',scan' , deriv=1, e_place=8, v_place=7)
         check(',TPSS' , deriv=1)
         check(',REVTPSS', deriv=1, e_place=2, v_place=1)
         check(',p86'    , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-1)
@@ -365,6 +367,7 @@ class KnownValues(unittest.TestCase):
         check('m06,'  , deriv=1, e_place=6, v_place=6)
         check('m062x,', deriv=1, e_place=6, v_place=6)
         check('m06l,' , deriv=1, e_place=6, v_place=6)
+        check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
         check('TPSS,' ,                                  k_place=-4)
         #?check('REVTPSS,', deriv=1)  # libxc crash
         check('APBE,')
@@ -384,6 +387,7 @@ class KnownValues(unittest.TestCase):
         check(',m06'  , deriv=1)
         check(',m062x', deriv=1)
         check(',m06l' , deriv=1)
+        check(',scan' , deriv=1, e_place=8, v_place=7)
         check(',TPSS' , deriv=1)
         check(',REVTPSS', deriv=1, e_place=2, v_place=1)
         check(',p86'    , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-2)

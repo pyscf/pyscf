@@ -22,7 +22,6 @@ Some helper functions
 
 import os, sys
 import warnings
-import imp
 import tempfile
 import functools
 import itertools
@@ -268,6 +267,45 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def map_with_prefetch(func, *iterables):
+    '''
+    Apply function to an task and prefetch the next task
+    '''
+    global_import_lock = False
+    if sys.version_info < (3, 6):
+        import imp
+        global_import_lock = imp.lock_held()
+
+    if global_import_lock:
+        for task in zip(*iterables):
+            yield func(*task)
+
+    elif ThreadPoolExecutor is not None:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = None
+            for task in zip(*iterables):
+                if future is None:
+                    future = executor.submit(func, *task)
+                else:
+                    result = future.result()
+                    future = executor.submit(func, *task)
+                    yield result
+            if future is not None:
+                yield future.result()
+    else:
+        def func_with_buf(_output_buf, *args):
+            _output_buf[0] = func(*args)
+        with call_in_background(func_with_buf) as f_prefetch:
+            buf0, buf1 = [None], [None]
+            for istep, task in enumerate(zip(*iterables)):
+                if istep == 0:
+                    f_prefetch(buf0, *task)
+                else:
+                    buf0, buf1 = buf1, buf0
+                    f_prefetch(buf0, *task)
+                    yield buf1[0]
+        if buf0[0] is not None:
+            yield buf0[0]
 
 def index_tril_to_pair(ij):
     '''Given tril-index ij, compute the pair indices (i,j) which satisfy
@@ -782,7 +820,12 @@ class call_in_background(object):
             handlers = self.handlers
             ntasks = len(self.fns)
 
-            if self.sync or imp.lock_held():
+            global_import_lock = False
+            if sys.version_info < (3, 6):
+                import imp
+                global_import_lock = imp.lock_held()
+
+            if self.sync or global_import_lock:
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python
@@ -867,8 +910,11 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         try:
             self.close()
-        except (AttributeError, ValueError):
-            #except ValueError:  # if close() is called twice
+        except AttributeError:  # close not defined in old h5py
+            pass
+        except ValueError:  # if close() is called twice
+            pass
+        except ImportError:  # exit program before de-referring the object
             pass
 
 def fingerprint(a):

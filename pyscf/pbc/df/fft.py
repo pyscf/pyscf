@@ -264,11 +264,6 @@ class FFTDF(lib.StreamObject):
     get_pp = get_pp
     get_nuc = get_nuc
 
-    # Note: Special exxdiv by default should not be used for an arbitrary
-    # input density matrix. When the df object was used with the molecular
-    # post-HF code, get_jk was often called with an incomplete DM (e.g. the
-    # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
-    # post-HF methods.
     def get_jk_e1(self, dm, kpts=None, kpts_band=None, exxdiv=None):
         from pyscf.pbc.df import fft_jk
         if kpts is None:
@@ -309,6 +304,11 @@ class FFTDF(lib.StreamObject):
         vk = fft_jk.get_k_e1_kpts(self, dm, kpts, kpts_band, exxdiv)
         return vk
 
+    # Note: Special exxdiv by default should not be used for an arbitrary
+    # input density matrix. When the df object was used with the molecular
+    # post-HF code, get_jk was often called with an incomplete DM (e.g. the
+    # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
+    # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         from pyscf.pbc.df import fft_jk

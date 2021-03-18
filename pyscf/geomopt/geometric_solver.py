@@ -27,7 +27,7 @@ from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsBasics
+from pyscf.grad.rhf import GradientsMixin
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -100,7 +100,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
            maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -119,7 +119,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsBasics):
+    elif isinstance(method, GradientsMixin):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -163,7 +163,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, constraints=None, callback=None,
              maxsteps=100, **kwargs):
     '''Optimize geometry with geomeTRIC library for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 

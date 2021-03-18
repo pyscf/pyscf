@@ -141,18 +141,29 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
 
-    def test_rsh_df(self):
-        mf = pbcdft.RKS(cell).density_fit()
-        mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.399571378419408, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.3987595548455523, 7)
+
+    def test_custom_rsh_df(self):
+        mf = pbcdft.RKS(cell).density_fit()
+        mf.xc = 'camb3lyp'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.303232164939132, 7)
+
+        mf.omega = .15
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
 
     def test_rsh_mdf(self):
         mf = pbcdft.RKS(cell).mix_density_fit()
         mf.xc = 'camb3lyp'
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.303225896642264, 7)
+
+        mf.omega = .15
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.398759319488945, 7)
 
     def test_rsh_aft_high_cost(self):
         from pyscf.pbc.df.aft import AFTDF
@@ -175,8 +186,9 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.omega = '0.7'
+        mf.exxdiv = None
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.4836476875900297, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4836596871145558, 7)
 
         mol = cell.to_mol()
         mf1 = mol.RKS().density_fit()

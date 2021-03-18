@@ -108,6 +108,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
+    '''Derivatives of Coulomb (J) AO matrix at sampled k-points.
+    '''
+
     cell = mydf.cell
     mesh = mydf.mesh
 
@@ -156,7 +159,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
         vj_kpts = np.zeros((3,nset,nband,nao,nao))
     else:
         vj_kpts = np.zeros((3,nset,nband,nao,nao), dtype=np.complex128)
-    rho = None
+
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band, deriv=1):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         for i in range(nset):
@@ -260,11 +263,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -299,7 +301,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
 def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
-               exxdiv=None):
+                  exxdiv=None):
+    '''Derivatives of exchange (K) AO matrix at sampled k-points.
+    '''
 
     cell = mydf.cell
     mesh = mydf.mesh
@@ -350,8 +354,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/3/ngrids/nao)))
     lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
                       max_memory, blksize)
-    ao1_dtype = np.result_type(*ao1_kpts)
-    ao2_dtype = np.result_type(*ao2_kpts)
+
     vR_dm = np.empty((3,nset,nao,ngrids), dtype=vk_kpts.dtype)
 
     t1 = (time.clock(), time.time())
@@ -372,11 +375,10 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:

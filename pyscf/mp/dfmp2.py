@@ -45,6 +45,11 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     naux = mp.with_df.get_naoaux()
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
+    if with_t2:
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
+    else:
+        t2 = None
+
     Lov = numpy.empty((naux, nocc*nvir))
     p1 = 0
     for istep, qov in enumerate(mp.loop_ao2mo(mo_coeff, nocc)):
@@ -52,7 +57,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         p0, p1 = p1, p1 + qov.shape[0]
         Lov[p0:p1] = qov
 
-    t2 = None
     emp2 = 0
 
     for i in range(nocc):
@@ -63,6 +67,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
         t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
         emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        if with_t2:
+            t2[i] = t2i
 
     return emp2, t2
 

@@ -48,7 +48,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     log = logger.new_logger(mf, verbose)
     if log.verbose >= logger.NOTE:
         nirrep = len(mol.irrep_id)
-        orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
+        orbsym = mf.get_orbsym(mo_coeff, ovlp_ao)
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
         log.note('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
@@ -170,7 +170,7 @@ class GHF(ghf.GHF):
         if self.mol.symmetry:
             occidx = mo_occ > 0
             viridx = ~occidx
-            orbsym = get_orbsym(self.mol, mo_coeff)
+            orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
             sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
             g[sym_forbid.ravel()] = 0
         return g
@@ -184,7 +184,7 @@ class GHF(ghf.GHF):
         if not mol.symmetry:
             return ghf.GHF.get_occ(self, mo_energy, mo_coeff)
 
-        orbsym = get_orbsym(mol, mo_coeff)
+        orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
         nelec_fix = 0
@@ -239,7 +239,7 @@ class GHF(ghf.GHF):
         # ordering of the symmetry labels when two orbitals are degenerated.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
-        orbsym = get_orbsym(self.mol, self.mo_coeff)
+        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ> 0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))
         self.mo_coeff = numpy.hstack((self.mo_coeff[:,self.mo_occ> 0].take(o_sort, axis=1),
@@ -268,6 +268,14 @@ class GHF(ghf.GHF):
         return hf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
     canonicalize = canonicalize
+
+    def get_orbsym(self, mo_coeff=None, s=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if s is None:
+            s = self.get_ovlp()
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
+    orbsym = property(get_orbsym)
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:

@@ -13,15 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyscf.pbc import scf, dft, gto, grad, df
+from pyscf.pbc import scf, dft, gto
 from pyscf.eph.rhf import solve_hmat, _freq_mass_weighted_vec
-from pyscf.eph.eph_fd import gen_moles
 import numpy as np
-from pyscf.lib import logger
-import copy
+import scipy
+from pyscf.lib import logger, param
 
-'''Electron-Phonon matrix for pbc from finite difference'''
-# Note, this code can only support single-kpoint mesh
+'''Electron-Phonon matrix from finite difference for Gamma Point'''
+# Note, the code now only return eph matrix at Gamma Point
 # cell relaxation needs to be performed before computing eph matrix
 
 def copy_mf(mf, cell):
@@ -35,7 +34,7 @@ def copy_mf(mf, cell):
     return mf1
 
 def run_mfs(mf, cells_a, cells_b):
-    '''perform a set of calculations on given two sets of cellcules'''
+    '''perform a set of calculations on given two sets of cell'''
     nconfigs = len(cells_a)
     dm0 = mf.make_rdm1()
     mflist = []
@@ -52,39 +51,33 @@ def run_mfs(mf, cells_a, cells_b):
     return mflist
 
 def gen_cells(cell, disp):
-    """From the given equilibrium cellcule, generate 3N cellcules with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
+    """From the given cell, generate 3N cells with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
     coords = cell.atom_coords()
+    if cell.unit[0].lower() == 'a':
+        coords = np.asarray(coords) * param.BOHR
+        disp_ = disp * param.BOHR
+    else:
+        disp_ = disp
     natoms = len(coords)
-    cell_a, cell_s, coords_a, coords_s = [],[],[],[]
+    cell_a, cell_s = [],[]
     for i in range(natoms):
         for x in range(3):
             new_coords_a, new_coords_s = coords.copy(), coords.copy()
-            new_coords_a[i][x] += disp
-            new_coords_s[i][x] -= disp
-            coords_a.append(new_coords_a)
-            coords_s.append(new_coords_s)
-    nconfigs = 3*natoms
-    for i in range(nconfigs):
-        atoma, atoms = [], []
-        for j in range(natoms):
-            atoma.append([cell.atom_symbol(j), coords_a[i][j]])
-            atoms.append([cell.atom_symbol(j), coords_s[i][j]])
-        cella = cell.set_geom_(atoma, inplace=False)
-        cells = cell.set_geom_(atoms, inplace=False)
-        cell_a.append(cella)
-        cell_s.append(cells)
+            new_coords_a[i][x] += disp_
+            new_coords_s[i][x] -= disp_
+            atoma = [[cell.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_a)]
+            atoms = [[cell.atom_symbol(j), coord] for (j, coord) in zip(range(natoms), new_coords_s)]
+            cell_a.append(cell.set_geom_(atoma, inplace=False))
+            cell_s.append(cell.set_geom_(atoms, inplace=False))
     return cell_a, cell_s
 
 def get_vmat(mf, mfset, disp):
     nconfigs = len(mfset)
     vmat=[]
     mygrad = mf.nuc_grad_method()
-
     veff  = mygrad.get_veff()
+    RESTRICTED = (veff.ndim==4)
     v1e = mygrad.get_hcore() - np.asarray(mf.cell.pbc_intor("int1e_ipkin", kpts=mf.kpts))
-    # veff[axis, spin, nkpts, nao, nao]
-    # v1e[nkpts, axis, nao, nao]
-    RESTRICTED = (v1e.ndim==veff.ndim)
     if RESTRICTED:
         vtmp = veff - v1e.transpose(1,0,2,3)
     else:
@@ -106,18 +99,19 @@ def get_vmat(mf, mfset, disp):
             vfull2 = mf2.get_veff() + mf2.get_hcore()[None] \
                    - np.asarray(mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts))[None]  # <u-|V-|v->
         vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
-        if vfull.ndim==3:
+        if RESTRICTED:
             vfull[:,p0:p1] -= vtmp[axis,:,p0:p1]
             vfull[:,:,p0:p1] -= vtmp[axis,:,p0:p1].transpose(0,2,1).conj()
         else:
             vfull[:,:,p0:p1] -= vtmp[axis,:,:,p0:p1]
             vfull[:,:,:,p0:p1] -= vtmp[axis,:,:,p0:p1].transpose(0,1,3,2).conj()
+
         vmat.append(vfull)
 
     vmat= np.asarray(vmat)
-    if vmat.ndim == 4:
+    if RESTRICTED:
         return vmat[:,0]
-    elif vmat.ndim==5:
+    else:
         return vmat[:,:,0]
 
 def run_hess(mfset, disp):
@@ -135,17 +129,15 @@ def run_hess(mfset, disp):
 
 
 def kernel(mf, disp=1e-4, mo_rep=False):
-    if hasattr(mf, 'xc'): mf.grids.build(with_non0tab=True)
     if not mf.converged: mf.kernel()
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)
     cell = mf.cell
-    cells_a, cells_b = gen_moles(cell, disp/2.0) # generate a bunch of cellcules with disp/2 on each cartesion coord
-    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cellcules
+    cells_a, cells_b = gen_cells(cell, disp/2.0) # generate a bunch of cells with disp/2 on each cartesion coord
+    mfset = run_mfs(mf, cells_a, cells_b) # run mean field calculations on all these cells
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
     omega, vec = solve_hmat(cell, hmat)
-
     mass = cell.atom_mass_list() * 1836.15
     vec = _freq_mass_weighted_vec(vec, omega, mass)
     if mo_rep:
@@ -154,7 +146,7 @@ def kernel(mf, disp=1e-4, mo_rep=False):
         else:
             vmat = np.einsum('xsuv,sup,svq->xspq', vmat, mo_coeff[:,0].conj(), mo_coeff[:,0])
 
-    if vmat.ndim == 3:
+    if RESTRICTED:
         mat = np.einsum('xJ,xpq->Jpq', vec, vmat)
     else:
         mat = np.einsum('xJ,xspq->sJpq', vec, vmat)
@@ -178,7 +170,8 @@ if __name__ == '__main__':
 
     kpts = cell.make_kpts([1,1,1])
     mf = dft.KRKS(cell, kpts)
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-8
     mf.kernel()
 
-    mat, omega = kernel(mf, disp=1e-4, mo_rep=True)
-    print("|Mat|_{max}",abs(mat).max())
+    vmat, omega = kernel(mf, mo_rep=True)

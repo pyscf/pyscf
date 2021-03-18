@@ -226,10 +226,11 @@ def run_standalone(fciqmcci, scf_obj, orbs=None, restart=None):
     fciqmcci.dump_flags(verbose=5)
 
     if fciqmcci.mol.symmetry:
-        if fciqmcci.groupname == 'Dooh':
-            logger.info(fciqmcci, 'Lower symmetry from Dooh to D2h')
-            raise RuntimeError('''Lower symmetry from Dooh to D2h''')
-        elif fciqmcci.groupname == 'Coov':
+        groupname = fciqmcci.groupname
+        if groupname in ('SO3', 'Dooh'):
+            logger.info(fciqmcci, 'Lower symmetry from %s to D2h', groupname)
+            raise RuntimeError('Lower symmetry from %s to D2h' % groupname)
+        elif groupname == 'Coov':
             logger.info(fciqmcci, 'Lower symmetry from Coov to C2v')
             raise RuntimeError('''Lower symmetry from Coov to C2v''')
         else:
@@ -244,13 +245,13 @@ def run_standalone(fciqmcci, scf_obj, orbs=None, restart=None):
                         fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
                         orbs[1]).tolist()
                 fciqmcci.orbsym = numpy.array(tmp_orblist)
-                orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
+                orbsym = [param.IRREP_ID_TABLE[groupname][i]+1 for
                           i in fciqmcci.orbsym]
             else:
                 fciqmcci.orbsym = pyscf.symm.label_orb_symm(fciqmcci.mol,
                         fciqmcci.mol.irrep_name, fciqmcci.mol.symm_orb,
                         orbs)
-                orbsym = [param.IRREP_ID_TABLE[fciqmcci.groupname][i]+1 for
+                orbsym = [param.IRREP_ID_TABLE[groupname][i]+1 for
                           i in fciqmcci.orbsym]
 #            pyscf.tools.fcidump.write_head(fout, nmo, nelec,
 #                                           fciqmcci.mol.spin, orbsym)
@@ -534,7 +535,7 @@ def execute_fciqmc(fciqmcci):
         logger.info(fciqmcci, 'Waiting for density matrices and output file '
                               'to be returned.')
         try:
-            if sys.version_info >= (3,)
+            if sys.version_info[0] >= 3:
                 raw_input = input
             raw_input("Press Enter to continue with calculation...")
         except:

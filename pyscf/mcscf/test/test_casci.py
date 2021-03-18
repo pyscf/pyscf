@@ -96,6 +96,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(float(abs(mo1-mo2).max()), 0, 9)
         self.assertAlmostEqual(ci1.ravel().dot(ci2.ravel()), 1, 9)
 
+        # Make sure that mc.mo_occ has been set and that the NOONs add to nelectron
+        mo_occ = getattr(mc1, "mo_occ", numpy.array([]))
+        self.assertNotEqual(mo_occ, numpy.array([]))
+        self.assertAlmostEqual(numpy.sum(mo_occ), mc1.mol.nelectron, 9)
+
     def test_multi_roots(self):
         mc1 = mcscf.CASCI(m, 4, 4)
         mc1.fcisolver.nroots = 2
@@ -227,6 +232,15 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(myci.fcisolver.mol is mol)
         self.assertTrue(myci.with_df.mol is mol)
 
+    def test_casci_SO3_symm(self):
+        mol = gto.M(atom='N', basis='ccpvdz', spin=3, symmetry=True)
+        mf = mol.RHF().newton().run()
+        mc = mf.CASSCF(4, 5)
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, -54.3884142370103, 9)
+
+        mc.wfnsym = 4
+        self.assertRaises(RuntimeError, mc.run)
 
 if __name__ == "__main__":
     print("Full Tests for CASCI")

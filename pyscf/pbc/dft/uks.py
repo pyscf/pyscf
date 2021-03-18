@@ -33,6 +33,7 @@ from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -119,8 +120,9 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
-    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN'):
-        pbcuhf.UHF.__init__(self, cell, kpt)
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        pbcuhf.UHF.__init__(self, cell, kpt, exxdiv=exxdiv)
         rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):

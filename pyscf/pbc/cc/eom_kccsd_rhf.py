@@ -715,7 +715,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
         # Transposing the l2 operator
         l2T = np.zeros_like(l2)
         for kj, ka in itertools.product(range(nkpts), repeat=2):
-            kb = kconserv[ka,kj,kshift]
+            kb = kconserv[kj,ka,kshift]
             l2T[kj,kb] = l2[kj,ka].transpose(0,2,1)
         l2 = (l2 + 2.*l2T)/3.
 

@@ -281,20 +281,14 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     dm1e = [molgrad.make_rdm1e(mo_energy[k], mo_coeff[k], mo_occ[k]) for k in range(nkpts)]
     return np.asarray(dm1e)
 
-class GradientsBasics(molgrad.GradientsBasics):
+class GradientsMixin(molgrad.GradientsMixin):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
     def __init__(self, method):
-        self.verbose = method.verbose
-        self.stdout = method.stdout
         self.cell = method.cell
-        self.base = method
         self.kpts = method.kpts
-        self.max_memory = self.cell.max_memory
-        self.atmlst = None
-        self.de = None
-        self._keys = set(self.__dict__.keys())
+        molgrad.GradientsMixin.__init__(self, method)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -380,7 +374,7 @@ def as_scanner(mf_grad):
     return SCF_GradScanner(mf_grad)
 
 
-class Gradients(GradientsBasics):
+class Gradients(GradientsMixin):
     '''Non-relativistic restricted Hartree-Fock gradients'''
 
     def get_veff(self, dm=None, kpts=None):

@@ -204,7 +204,7 @@ class KnownValues(unittest.TestCase):
         mycc = cc.ccsd.CCSD(mf)
         mycc.max_memory = 1
         mycc.conv_tol = 1e-10
-        ecc = mycc.kernel()
+        ecc = mycc.kernel()[0]
         self.assertAlmostEqual(ecc, -0.2133432312951, 8)
 
         lib.num_threads(current_nthreads)

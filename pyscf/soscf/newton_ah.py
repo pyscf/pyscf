@@ -278,6 +278,10 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
+def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
+                  with_symmetry=True):
+    return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e, with_symmetry)
+
 
 # Dual basis for gradients and hessian
 def project_mol(mol, dual_basis={}):
@@ -736,9 +740,12 @@ class _CIAH_SOSCF(object):
 
         if WITH_EX_EY_DEGENERACY:
             mol = self._scf.mol
-            if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+            if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                 orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-                _force_Ex_Ey_degeneracy_(dr, orbsym)
+                if mol.groupname == 'SO3':
+                    _force_SO3_degeneracy_(dr, orbsym)
+                else:
+                    _force_Ex_Ey_degeneracy_(dr, orbsym)
         return numpy.dot(u0, expmat(dr))
 
     def rotate_mo(self, mo_coeff, u, log=None):
@@ -807,10 +814,14 @@ def newton(mf):
 
                 if WITH_EX_EY_DEGENERACY:
                     mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-                        _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
-                        _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
+                        if mol.groupname == 'SO3':
+                            _force_SO3_degeneracy_(dr[0], orbsyma)
+                            _force_SO3_degeneracy_(dr[1], orbsymb)
+                        else:
+                            _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
+                            _force_Ex_Ey_degeneracy_(dr[1], orbsymb)
 
                 if isinstance(u0, int) and u0 == 1:
                     return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
@@ -855,9 +866,12 @@ def newton(mf):
 
                 if WITH_EX_EY_DEGENERACY:
                     mol = self._scf.mol
-                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                    if mol.symmetry and mol.groupname in ('SO3', 'Dooh', 'Coov'):
                         orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
-                        _force_Ex_Ey_degeneracy_(dr, orbsym)
+                        if mol.groupname == 'SO3':
+                            _force_SO3_degeneracy_(dr, orbsym)
+                        else:
+                            _force_Ex_Ey_degeneracy_(dr, orbsym)
                 return numpy.dot(u0, expmat(dr))
 
             def rotate_mo(self, mo_coeff, u, log=None):
@@ -868,8 +882,43 @@ def newton(mf):
                 return mo
         return SecondOrderGHF(mf)
 
-    elif isinstance(mf, scf.dhf.UHF):
-        raise RuntimeError('Not support Dirac-HF')
+    elif isinstance(mf, scf.dhf.RDHF):
+        class SecondOrderRDHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+
+            gen_g_hop = gen_g_hop_dhf
+
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+                nmo = mo_occ.size
+                nocc = numpy.count_nonzero(mo_occ)
+                nvir = nmo - nocc
+                dx = dx.reshape(nvir, nocc)
+                dx_aa = dx[::2,::2]
+                dr_aa = hf.unpack_uniq_var(dx_aa.ravel, mo_occ[::2])
+                u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
+                # Allows only the rotation within the up-up space and down-down space
+                u[::2,::2] = u[1::2,1::2] = expmat(dr_aa)
+                return numpy.dot(u0, u)
+
+            def rotate_mo(self, mo_coeff, u, log=None):
+                mo = numpy.dot(mo_coeff, u)
+                return mo
+        return SecondOrderRDHF(mf)
+
+    elif isinstance(mf, scf.dhf.DHF):
+        class SecondOrderDHF(_CIAH_SOSCF, mf.__class__):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+
+            gen_g_hop = gen_g_hop_dhf
+
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+                dr = hf.unpack_uniq_var(dx, mo_occ)
+                return numpy.dot(u0, expmat(dr))
+
+            def rotate_mo(self, mo_coeff, u, log=None):
+                mo = numpy.dot(mo_coeff, u)
+                return mo
+        return SecondOrderDHF(mf)
 
     else:
         class SecondOrderRHF(_CIAH_SOSCF, mf.__class__):
@@ -882,6 +931,25 @@ def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
 del(SVD_TOL)
+
+def _force_SO3_degeneracy_(dr, orbsym):
+    '''Force orbitals of same angular momentum to use the same rotation matrix'''
+    orbsym = numpy.asarray(orbsym)
+    orbsym_l = orbsym // 100
+    lmax = max(orbsym_l)
+
+    for l in range(lmax + 1):
+        idx_l = numpy.where(orbsym_l == l)[0]
+        nso_l = idx_l.size
+        if nso_l > 0:
+            degen = l * 2 + 1
+            nso_m = nso_l // degen
+            dr_l = dr[idx_l[:,None],idx_l].reshape(degen, nso_m, degen, nso_m)
+            dr_avg = numpy.einsum('ipiq->pq', dr_l) / degen
+            for m in range(degen):
+                dr_l[m,:,m,:] = dr_avg
+            dr[idx_l[:,None],idx_l] = dr_l.reshape(nso_l, nso_l)
+    return dr
 
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''

@@ -182,7 +182,7 @@ C    SP
 '''}
 mol.build()
 
-# Note the rule to uncontract basis also works here: If the basis string is
+# Note the rule to de-contract basis also works here: If the basis string is
 # prefixed with unc, the basis set will be uncontracted.
 mol.basis = {'H': gto.basis.load('sto3g', 'H'),
              'O': '''unc
@@ -196,6 +196,24 @@ C    SP
       0.2222899              0.70011547             0.39195739
 '''}
 mol.build()
+
+#
+# Simple arithmetic expressions can be specified in basis input
+#
+mol = gto.M(
+    atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+    basis = {'O': '''
+O    S
+    130.7093200*np.exp(.5)              0.15432897
+     23.8088610*np.exp(.5)              0.53532814
+      6.4436083*np.exp(.5)              0.44463454
+O    SP
+      5.0331513*2**.5          -0.09996723             0.15591627
+      1.1695961*2**.5           0.39951283             0.60768372
+      0.3803890*2**.5           0.70011547             0.39195739''',
+             'H': 'sto3g',
+            }
+)
 
 #
 # Multiple basis set can be combined and used as a union basis set

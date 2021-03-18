@@ -72,25 +72,25 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     else:
         naoaux = fswap['%s/0'%dataname].shape[1]
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nao_pair), 'f8')
-    def save(row0, row1, buf):
-        if comp == 1:
-            h5d_eri[row0:row1] = buf
-        else:
-            h5d_eri[:,row0:row1] = buf
 
     iolen = min(max(int(max_memory*.45e6/8/nao_pair), 28), naoaux)
     totstep = (naoaux+iolen-1)//iolen
-    bufs1 = numpy.empty((iolen, nao_pair))
-    bufs2 = numpy.empty_like(bufs1)
+    def load(row_slice):
+        row0, row1 = row_slice
+        return _load_from_h5g(fswap[dataname], row0, row1)
+
     ti0 = time1
-    with lib.call_in_background(save) as bsave:
-        for istep, (row0, row1) in enumerate(lib.prange(0, naoaux, iolen)):
-            nrow = row1 - row0
-            buf = _load_from_h5g(fswap[dataname], row0, row1, bufs1)
-            bufs1, bufs2 = bufs2, bufs1
-            bsave(row0, row1, buf)
-            ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
-                            (istep+1, totstep, row0, row1, nrow), *ti0)
+    slices = list(lib.prange(0, naoaux, iolen))
+    for istep, dat in enumerate(lib.map_with_prefetch(load, slices)):
+        row0, row1 = slices[istep]
+        nrow = row1 - row0
+        if comp == 1:
+            h5d_eri[row0:row1] = dat
+        else:
+            h5d_eri[:,row0:row1] = dat
+        dat = None
+        ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
+                        (istep+1, totstep, row0, row1, nrow), *ti0)
 
     fswap.close()
     feri.close()
@@ -98,9 +98,10 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     return erifile
 
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
-                 int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
-                 max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
-    '''3-center 2-electron DF tensor.
+                   int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
+                   max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
+    '''3-center 2-electron DF tensor. Similar to cholesky_eri while this
+    function stores DF tensor in blocks.
     '''
     assert(aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
@@ -150,16 +151,6 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
 
-    feri = _create_h5file(erifile, dataname)
-    def store(buf, label):
-        if comp == 1:
-            feri[label] = buf
-        else:
-            shape = (len(buf),) + buf[0].shape
-            fdat = feri.create_dataset(label, shape, buf[0].dtype.char)
-            for i, b in enumerate(buf):
-                fdat[i] = b
-
     def transform(b):
         if b.ndim == 3 and b.flags.f_contiguous:
             b = lib.transpose(b.T, axes=(0,2,1)).reshape(naoaux,-1)
@@ -173,23 +164,33 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
         else:
             return lib.dot(low.T, b)
 
-    with lib.call_in_background(store) as bstore:
-        for istep, sh_range in enumerate(shranges):
-            log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d', \
-                      istep+1, len(shranges), *sh_range)
-            bstart, bend, nrow = sh_range
-            shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
-            ints = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
-                                           aosym, ao_loc, cintopt, out=bufs1)
-            if comp == 1:
-                buf = transform(ints)
-            else:
-                buf = [transform(x) for x in ints]
-            bstore(buf, '%s/%d'%(dataname,istep))
-            buf = ints = None
-            time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
-    bufs1 = None
+    def process(sh_range):
+        bstart, bend, nrow = sh_range
+        shls_slice = (bstart, bend, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
+        ints = gto.moleintor.getints3c(int3c, atm, bas, env, shls_slice, comp,
+                                       aosym, ao_loc, cintopt, out=bufs1)
+        if comp == 1:
+            dat = transform(ints)
+        else:
+            dat = [transform(x) for x in ints]
+        return dat
 
+    feri = _create_h5file(erifile, dataname)
+    for istep, dat in enumerate(lib.map_with_prefetch(process, shranges)):
+        sh_range = shranges[istep]
+        label = '%s/%d'%(dataname,istep)
+        if comp == 1:
+            feri[label] = dat
+        else:
+            shape = (len(dat),) + dat[0].shape
+            fdat = feri.create_dataset(label, shape, dat[0].dtype.char)
+            for i, b in enumerate(dat):
+                fdat[i] = b
+        dat = None
+        log.debug('int3c2e [%d/%d], AO [%d:%d], nrow = %d',
+                  istep+1, len(shranges), *sh_range)
+        time1 = log.timer('gen CD eri [%d/%d]' % (istep+1,len(shranges)), *time1)
+    bufs1 = None
     feri.close()
     return erifile
 
@@ -229,31 +230,30 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
         h5d_eri = feri.create_dataset(dataname, (naoaux,nij_pair), 'f8')
     else:
         h5d_eri = feri.create_dataset(dataname, (comp,naoaux,nij_pair), 'f8')
-    def save(row0, row1, buf):
-        if comp == 1:
-            h5d_eri[row0:row1] = buf
-        else:
-            h5d_eri[:,row0:row1] = buf
+
+    def load(row_slice):
+        row0, row1 = row_slice
+        return _load_from_h5g(fswap[dataname], row0, row1)
 
     iolen = min(max(int(max_memory*.45e6/8/(nao_pair+nij_pair)), 28), naoaux)
     totstep = (naoaux+iolen-1)//iolen
     ti0 = time1
-    with lib.call_in_background(save) as bsave:
-        for istep, (row0, row1) in enumerate(lib.prange(0, naoaux, iolen)):
-            nrow = row1 - row0
-            log.debug('step 2 [%d/%d], [%d:%d], row = %d',
-                      istep+1, totstep, row0, row1, nrow)
-            buf = _load_from_h5g(fswap[dataname], row0, row1)
-            if comp == 1:
-                buf = _ao2mo.nr_e2(buf, moij, ijshape, aosym_as_nr_e2, ijmosym)
-                bsave(row0, row1, buf)
-            else:
-                buf = _ao2mo.nr_e2(buf.reshape(comp*nrow, nao_pair),
-                                    moij, ijshape, aosym_as_nr_e2, ijmosym)
-                bsave(row0, row1, buf.reshape(comp, nrow, nij_pair))
-            buf = None
-            ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
-                            (istep+1, totstep, row0, row1, nrow), *ti0)
+    slices = list(lib.prange(0, naoaux, iolen))
+    for istep, dat in enumerate(lib.map_with_prefetch(load, slices)):
+        row0, row1 = slices[istep]
+        nrow = row1 - row0
+        if comp == 1:
+            dat = _ao2mo.nr_e2(dat, moij, ijshape, aosym_as_nr_e2, ijmosym)
+            h5d_eri[row0:row1] = dat
+        else:
+            dat = _ao2mo.nr_e2(dat.reshape(comp*nrow, nao_pair),
+                               moij, ijshape, aosym_as_nr_e2, ijmosym)
+            h5d_eri[:,row0:row1] = dat.reshape(comp, nrow, nij_pair)
+        dat = None
+        log.debug('step 2 [%d/%d], [%d:%d], row = %d',
+                  istep+1, totstep, row0, row1, nrow)
+        ti0 = log.timer('step 2 [%d/%d], [%d:%d], row = %d'%
+                        (istep+1, totstep, row0, row1, nrow), *ti0)
 
     fswap.close()
     feri.close()

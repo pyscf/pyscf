@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ if sys.version_info < (2,7):
 else:
     import importlib
 from pyscf.gto.basis import parse_nwchem
+from pyscf.lib.exceptions import BasisNotFoundError
 from pyscf import __config__
 
 ALIAS = {
@@ -321,6 +322,16 @@ ALIAS = {
     'ccecpheaugccpvqz': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpheaugccpv5z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV5Z.dat'),
     'ccecpheaugccpv6z': join('ccecp-basis', 'ccECP_He_core', 'ccECP_aug-cc-pV6Z.dat'),
+# ccECP_reg
+    'ccecpreg'         : join('ccecp-basis', 'ccECP_reg', 'ccECP.dat'   ),
+    'ccecpregccpvdz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVDZ.dat'),
+    'ccecpregccpvtz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVTZ.dat'),
+    'ccecpregccpvqz'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pVQZ.dat'),
+    'ccecpregccpv5z'   : join('ccecp-basis', 'ccECP_reg', 'ccECP_cc-pV5Z.dat'),
+    'ccecpregaugccpvdz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVDZ.dat'),
+    'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
+    'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
+    'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
 }
 
 def _is_pople_basis(basis):
@@ -414,9 +425,11 @@ def _truncate(basis, contr_scheme, symb, split_name):
                                      segm[:][1:]]
                         contr_b.append([l] + save_segm)
                         n_saved += n_save
-            assert n_saved == n_keep, 'Only ' + str(n_saved) +\
-                ' l=' + str(l) + ' functions available for ' +\
-                symb + ' ' + split_name[0] + ', cannot truncate to ' + split_name[1]
+            assert n_saved == n_keep, ("@{} implies {} l={} function(s), but" +
+                                       "only {} in {}:{}").format(split_name[1],
+                                                                  contr_scheme[l],
+                                                                  l, n_saved, symb,
+                                                                  split_name[0])
     return contr_b
 
 optimize_contraction = parse_nwchem.optimize_contraction
@@ -440,40 +453,43 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
     symb = ''.join([i for i in symb if i.isalpha()])
+    if '@' in filename_or_basisname:
+        split_name = filename_or_basisname.split('@')
+        assert len(split_name) == 2
+        filename_or_basisname = split_name[0]
+        contr_scheme = _convert_contraction(split_name[1].lower())
+    else:
+        contr_scheme = 'Full'
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
-            return parse_nwchem.load(filename_or_basisname, symb, optimize)
-        except RuntimeError:
+            b = parse_nwchem.load(filename_or_basisname, symb, optimize)
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse(fin.read(), symb)
+                b =  parse_nwchem.parse(fin.read(), symb)
+        if contr_scheme != 'Full':
+            b = _truncate(b, contr_scheme, symb, split_name)
+        return b
 
     name = _format_basis_name(filename_or_basisname)
-    if '@' in name:
-        split_name = name.split('@')
-        assert len(split_name) == 2
-        name = split_name[0]
-        contr_scheme = _convert_contraction(split_name[1])
-    else:
-        contr_scheme = 'Full'
 
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
-        except KeyError:
+        except BasisNotFoundError:
             try:
                 return parse_nwchem.parse(filename_or_basisname)
             except IndexError:
-                raise KeyError('Invalid basis name %s' % filename_or_basisname)
+                raise BasisNotFoundError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise KeyError('Basis %s not found' % filename_or_basisname)
+            raise BasisNotFoundError(filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]
     elif _is_pople_basis(name):
         basmod = _parse_pople_basis(name, symb)
     else:
-        raise RuntimeError('Basis %s not found' % filename_or_basisname)
+        raise BasisNotFoundError(filename_or_basisname)
 
     if 'dat' in basmod:
         b = parse_nwchem.load(join(_BASIS_DIR, basmod), symb, optimize)
@@ -503,7 +519,7 @@ def load_ecp(filename_or_basisname, symb):
         # read basis from given file
         try:
             return parse_nwchem.load_ecp(filename_or_basisname, symb)
-        except RuntimeError:
+        except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_ecp(fin.read(), symb)
 

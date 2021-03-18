@@ -39,7 +39,7 @@ def eval_gto(mol, eval_name, coords,
             "GTOval_sph"          1       |AO>
             "GTOval_ip_sph"       3       nabla |AO>
             "GTOval_ig_sph"       3       (#C(0 1) g) |AO>
-            "GTOval_ipig_sph"     3       (#C(0 1) nabla g) |AO>
+            "GTOval_ipig_sph"     9       (#C(0 1) nabla g) |AO>
             "GTOval_cart"         1       |AO>
             "GTOval_ip_cart"      3       nabla |AO>
             "GTOval_ig_cart"      3       (#C(0 1) g)|AO>
@@ -158,7 +158,7 @@ _GTO_EVAL_FUNCTIONS = {
     'GTOval'                : (1, 1 ),
     'GTOval_ip'             : (3, 3 ),
     'GTOval_ig'             : (3, 3 ),
-    'GTOval_ipig'           : (3, 3 ),
+    'GTOval_ipig'           : (9, 9 ),
     'GTOval_deriv0'         : (1, 1 ),
     'GTOval_deriv1'         : (4, 4 ),
     'GTOval_deriv2'         : (10,10),

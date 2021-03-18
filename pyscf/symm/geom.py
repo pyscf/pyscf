@@ -43,6 +43,7 @@ import scipy.linalg
 from pyscf.gto import mole
 from pyscf.lib import norm
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm.param import OPERATOR_TABLE
 from pyscf import __config__
 
@@ -95,9 +96,15 @@ def householder(vec):
 
 def closest_axes(axes, ref):
     xcomp, ycomp, zcomp = numpy.einsum('ix,jx->ji', axes, ref)
-    z_id = numpy.argmax(abs(zcomp))
+    zmax = numpy.amax(abs(zcomp))
+    zmax_idx = numpy.where(abs(abs(zcomp)-zmax)<TOLERANCE)[0]
+    z_id = numpy.amax(zmax_idx)
+    #z_id = numpy.argmax(abs(zcomp))
     xcomp[z_id] = ycomp[z_id] = 0       # remove z
-    x_id = numpy.argmax(abs(xcomp))
+    xmax = numpy.amax(abs(xcomp))
+    xmax_idx = numpy.where(abs(abs(xcomp)-xmax)<TOLERANCE)[0]
+    x_id = numpy.amax(xmax_idx)
+    #x_id = numpy.argmax(abs(xcomp))
     ycomp[x_id] = 0                     # remove x
     y_id = numpy.argmax(abs(ycomp))
     return x_id, y_id, z_id
@@ -276,7 +283,7 @@ def get_subgroup(gpname, axes):
         return gpname, axes
     elif gpname in ('SO3',):
         #return 'D2h', alias_axes(axes, numpy.eye(3))
-        return 'Dooh', axes
+        return 'SO3', axes
     elif gpname in ('Dooh',):
         #return 'D2h', alias_axes(axes, numpy.eye(3))
         return 'Dooh', axes
@@ -292,10 +299,6 @@ def get_subgroup(gpname, axes):
     elif gpname in ('I',):
         return 'C1', axes
     elif gpname in ('Td', 'T', 'Th'):
-        #x,y,z = axes
-        #x = _normalize(x+y)
-        #y = numpy.cross(z, x)
-        #return 'C2v', numpy.array((x,y,z))
         return 'D2', alias_axes(axes, numpy.eye(3))
     elif re.search(r'S\d+', gpname):
         n = int(re.search(r'\d+', gpname).group(0))
@@ -352,26 +355,32 @@ def as_subgroup(topgroup, axes, subgroup=None):
 
     if isinstance(subgroup, (str, unicode)):
         subgroup = std_symb(subgroup)
-        if (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
+        if groupname == 'C2v' and subgroup == 'Cs':
+            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
+
+        elif (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
             subgroup in ('C2v', 'Cs')):
             # Special treatment for D2d, D4d, .... get_subgroup gives D2 by
             # default while C2v is also D2d's subgroup.
             groupname = 'C2v'
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[2], numpy.pi/4), axes)
 
-        if subgroup not in SUBGROUP[groupname]:
-            raise RuntimeError('%s not in Ablien subgroup of %s' %
-                               (subgroup, topgroup))
+        elif topgroup in ('Td', 'T', 'Th') and subgroup == 'C2v':
+            x, y, z = axes
+            x = _normalize(x+y)
+            y = numpy.cross(z, x)
+            axes = numpy.array((x,y,z))
 
-        if subgroup == 'Cs' and groupname == 'C2v':
-            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
+        elif subgroup not in SUBGROUP[groupname]:
+            raise PointGroupSymmetryError('%s not in Ablien subgroup of %s' %
+                                          (subgroup, topgroup))
 
         groupname = subgroup
     return groupname, axes
 
 def symm_ops(gpname, axes=None):
     if axes is not None:
-        raise RuntimeError('TODO: non-standard orientation')
+        raise PointGroupSymmetryError('TODO: non-standard orientation')
     op1 = numpy.eye(3)
     opi = -1
 
@@ -432,7 +441,7 @@ def symm_identical_atoms(gpname, atoms):
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
         if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
-            raise RuntimeError('Symmetry identical atoms not found')
+            raise PointGroupSymmetryError('Symmetry identical atoms not found')
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
@@ -478,7 +487,7 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
-class RotationAxisNotFound(RuntimeError):
+class RotationAxisNotFound(PointGroupSymmetryError):
     pass
 
 class SymmSys(object):

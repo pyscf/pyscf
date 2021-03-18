@@ -172,21 +172,45 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         else:
             Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
         Gblksize = min(Gblksize, ngrids, 16384)
+
+        def load(aux_slice):
+            col0, col1 = aux_slice
+            j3cR = []
+            j3cI = []
+            for k, idx in enumerate(adapted_ji_idx):
+                v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                v = fuse(numpy.vstack(v))
+                if is_zero(kpt) and cell.dimension == 3:
+                    for i in numpy.where(vbar != 0)[0]:
+                        v[i] -= vbar[i] * ovlp[k][col0:col1]
+                j3cR.append(numpy.asarray(v.real, order='C'))
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                    j3cI.append(None)
+                else:
+                    j3cI.append(numpy.asarray(v.imag, order='C'))
+                v = None
+            return j3cR, j3cI
+
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-        def pw_contract(istep, sh_range, j3cR, j3cI):
-            bstart, bend, ncol = sh_range
+        cols = [sh_range[2] for sh_range in shranges]
+        locs = numpy.append(0, numpy.cumsum(cols))
+        tasks = zip(locs[:-1], locs[1:])
+        for istep, (j3cR, j3cI) in enumerate(lib.map_with_prefetch(load, tasks)):
+            bstart, bend, ncol = shranges[istep]
+            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
+                       istep+1, len(shranges), bstart, bend, ncol)
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
             else:
                 shls_slice = (bstart, bend, 0, cell.nbas)
 
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                            b, gxyz[p0:p1], Gvbase, kpt,
-                                            adapted_kptjs, out=buf)
+                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                           b, gxyz[p0:p1], Gvbase, kpt,
+                                           adapted_kptjs, out=buf)
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -215,29 +239,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 # low-dimension systems
                 if j2c_negative is not None:
                     feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
+            j3cR = j3cI = None
 
-        with lib.call_in_background(pw_contract) as compute:
-            col1 = 0
-            for istep, sh_range in enumerate(shranges):
-                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
-                           istep+1, len(shranges), *sh_range)
-                bstart, bend, ncol = sh_range
-                col0, col1 = col1, col1+ncol
-                j3cR = []
-                j3cI = []
-                for k, idx in enumerate(adapted_ji_idx):
-                    v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
-                    v = fuse(numpy.vstack(v))
-                    if is_zero(kpt) and cell.dimension == 3:
-                        for i in numpy.where(vbar != 0)[0]:
-                            v[i] -= vbar[i] * ovlp[k][col0:col1]
-                    j3cR.append(numpy.asarray(v.real, order='C'))
-                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                        j3cI.append(None)
-                    else:
-                        j3cI.append(numpy.asarray(v.imag, order='C'))
-                    v = None
-                compute(istep, sh_range, j3cR, j3cI)
         for ji in adapted_ji_idx:
             del(fswap['j3c-junk/%d'%ji])
 
@@ -392,7 +395,24 @@ class MDF(df.DF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            cell = self.cell
+            # * AFT is computationally more efficient than MDF if the Coulomb
+            #   attenuation tends to the long-range role (i.e. small omega).
+            # * Note: changing to AFT integrator may cause small difference to
+            #   the MDF integrator. If a very strict MDF result is desired,
+            #   we can disable this trick by setting
+            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            # * The sparse mesh is not appropriate for low dimensional systems
+            #   with infinity vacuum since the ERI may require large mesh to
+            #   sample density in vacuum.
+            if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+                mydf = aft.AFTDF(cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:

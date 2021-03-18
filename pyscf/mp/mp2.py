@@ -188,10 +188,10 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += numpy.einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', l2i, t2i)
+        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - lib.einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - lib.einsum('iab,jba->ij', l2i, t2i)
     return -dm1occ, dm1vir
 
 

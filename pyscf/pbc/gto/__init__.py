@@ -19,10 +19,9 @@
 
 from pyscf.pbc.gto import cell
 from pyscf.pbc.gto import basis
-from pyscf.pbc.gto.basis import parse, load
+from pyscf.pbc.gto.basis import parse, load, parse_ecp, load_ecp
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.cell import *
 
-parse = basis.parse
-parsepp = pseudo.parse
-#import pyscf.pbc.gto.cell.cmd_args
+parse_pp = parsepp = pseudo.parse
+load_pp = loadpp = pseudo.load

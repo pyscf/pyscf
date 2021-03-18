@@ -37,7 +37,10 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
         return self
 
     get_veff = rks.get_veff
+    get_vsap = rks.get_vsap
     energy_elec = rks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     reset = rks.KohnShamDFT.reset
 
@@ -60,7 +63,10 @@ class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
         return self
 
     get_veff = uks.get_veff
+    get_vsap = rks.get_vsap
     energy_elec = uks.energy_elec
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     reset = rks.KohnShamDFT.reset
 

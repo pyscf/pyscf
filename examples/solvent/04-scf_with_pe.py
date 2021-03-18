@@ -7,15 +7,12 @@
 A simple example of using polarizable embedding model in the mean-field
 calculations. This example requires the cppe library
 
-https://github.com/maxscheurer/cppe
-arXiv:1804.03598
+GitHub:      https://github.com/maxscheurer/cppe
+Code:        10.5281/zenodo.3345696
+Publication: https://doi.org/10.1021/acs.jctc.9b00758
 
-The CPPE library needs to be built from sources (according to the CPPE document):
-
-mkdir build && cd build && cmake -DENABLE_PYTHON_INTERFACE=ON .. && make
-
-If successfully built, find the directory where the file cppe.*.so locates
-then put the directory in PYTHONPATH.
+The CPPE library can be installed via:
+pip install git+https://github.com/maxscheurer/cppe.git
 
 The potfile required by this example can be generated with the script
 04-pe_potfile_from_pyframe.py

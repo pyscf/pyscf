@@ -18,6 +18,8 @@
 
 '''
 Pipek-Mezey localization
+
+ref. JCTC 10, 642 (2014); DOI:10.1021/ct401016x
 '''
 
 import numpy
@@ -29,41 +31,85 @@ from pyscf.lo import orth
 from pyscf.lo import boys
 from pyscf import __config__
 
-
-def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
+def atomic_pops(mol, mo_coeff, method='meta_lowdin', mf=None):
     '''
     Kwargs:
         method : string
-            one of mulliken, lowdin, meta_lowdin
+            The atomic population projection scheme. It can be mulliken,
+            lowdin, meta_lowdin, iao, or becke
 
     Returns:
         A 3-index tensor [A,i,j] indicates the population of any orbital-pair
         density |i><j| for each species (atom in this case).  This tensor is
         used to construct the population and gradients etc.
-        
+
         You can customize the PM localization wrt other population metric,
         such as the charge of a site, the charge of a fragment (a group of
         atoms) by overwriting this tensor.  See also the example
         pyscf/examples/loc_orb/40-hubbard_model_PM_localization.py for the PM
         localization of site-based population for hubbard model.
     '''
+    method = method.lower().replace('_', '-')
+    nmo = mo_coeff.shape[1]
+    proj = numpy.empty((mol.natm,nmo,nmo))
+
     if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')
-    nmo = mo_coeff.shape[1]
-    proj = numpy.empty((mol.natm,nmo,nmo))
 
-    if method.lower() == 'mulliken':
+    if method == 'becke':
+        from pyscf.dft import gen_grid
+        if not (getattr(mf, 'grids', None) and getattr(mf, '_numint', None)):
+            # Call DFT to initialize grids and numint objects
+            mf = mol.RKS()
+        grids = mf.grids
+        ni = mf._numint
+
+        if not isinstance(grids, gen_grid.Grids):
+            raise NotImplementedError('PM becke scheme for PBC systems')
+
+        # The atom-wise Becke grids (without concatenated to a vector of grids)
+        coords, weights = grids.get_partition(mol, concat=False)
+
+        for i in range(mol.natm):
+            ao = ni.eval_ao(mol, coords[i], deriv=0)
+            aow = numpy.einsum('pi,p->pi', ao, weights[i])
+            charge_matrix = lib.dot(aow.conj().T, ao)
+            proj[i] = reduce(lib.dot, (mo_coeff.conj().T, charge_matrix, mo_coeff))
+
+    elif method == 'mulliken':
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             csc = reduce(numpy.dot, (mo_coeff[p0:p1].conj().T, s[p0:p1], mo_coeff))
             proj[i] = (csc + csc.conj().T) * .5
 
-    elif method.lower() in ('lowdin', 'meta_lowdin'):
-        c = orth.restore_ao_character(mol, 'ANO')
-        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, c, s=s)))
+    elif method in ('lowdin', 'meta-lowdin'):
+        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, 'ANO', s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
             proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].conj().T)
+
+    elif method in ('iao', 'ibo'):
+        from pyscf.lo import iao
+        assert mf is not None
+        # FIXME: How to handle UHF/UKS object?
+        orb_occ = mf.mo_coeff[:,mf.mo_occ>0]
+
+        iao_coeff = iao.iao(mol, orb_occ)
+        #
+        # IAO is generally not orthogonalized. For simplicity, we take Lowdin
+        # orthogonalization here. Other orthogonalization can be used. Results
+        # should be very closed to the Lowdin-orth orbitals
+        #
+        # PM with Mulliken population of non-orth IAOs can be found in
+        # ibo.PipekMezey function
+        #
+        iao_coeff = orth.vec_lowdin(iao_coeff, s)
+        csc = reduce(lib.dot, (mo_coeff.conj().T, s, iao_coeff))
+
+        iao_mol = iao.reference_mol(mol)
+        for i, (b0, b1, p0, p1) in enumerate(iao_mol.offset_nr_by_atom()):
+            proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].conj().T)
+
     else:
         raise KeyError('method = %s' % method)
 
@@ -71,8 +117,7 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
 
 
 class PipekMezey(boys.Boys):
-    '''
-    The Pipek-Mezey localization optimizer that maximizes the orbital
+    '''The Pipek-Mezey localization optimizer that maximizes the orbital
     population
 
     Args:
@@ -116,9 +161,16 @@ class PipekMezey(boys.Boys):
             to 'atomic', atomic orbitals will be used as initial guess.
             Default 'atomic'
         pop_method : str
-            How the orbital population is calculated. By default, meta-lowdin
-            population (JCTC, 10, 3784) is used. It can be set to 'mulliken',
-            or 'lowdin' for other population definition
+            How the orbital population is calculated, see JCTC 10, 642
+            (2014) for discussion. Options are:
+            - 'meta-lowdin' (default) as defined in JCTC 10, 3784 (2014)
+            - 'mulliken' original Pipek-Mezey scheme, JCP 90, 4916 (1989)
+            - 'lowdin' Lowdin charges, JCTC 10, 642 (2014)
+            - 'iao' or 'ibo' intrinsic atomic orbitals, JCTC 9, 4384 (2013)
+            - 'becke' Becke charges, JCTC 10, 642 (2014)
+            The IAO and Becke charges do not depend explicitly on the
+            basis set, and have a complete basis set limit [JCTC 10,
+            642 (2014)].
         exponent : int
             The power to define norm. It can be 2 or 4. Default 2.
 
@@ -134,9 +186,10 @@ class PipekMezey(boys.Boys):
     conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
     exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
 
-    def __init__(self, mol, mo_coeff=None):
+    def __init__(self, mol, mo_coeff=None, mf=None):
         boys.Boys.__init__(self, mol, mo_coeff)
-        self._keys = self._keys.union(['pop_method', 'exponent'])
+        self._scf = mf
+        self._keys = self._keys.union(['pop_method', 'exponent', '_scf'])
 
     def dump_flags(self, verbose=None):
         boys.Boys.dump_flags(self, verbose)
@@ -217,7 +270,12 @@ class PipekMezey(boys.Boys):
     def atomic_pops(self, mol, mo_coeff, method=None):
         if method is None:
             method = self.pop_method
-        return atomic_pops(mol, mo_coeff, method)
+
+        if method.lower() in ('iao', 'ibo') and self._scf is None:
+            logger.error(self, 'PM with IAO scheme should include an scf '
+                         'object when creating PM object.\n    PM(mol, mf=scf_object)')
+            raise ValueError('PM attribute method is not valid')
+        return atomic_pops(mol, mo_coeff, method, self._scf)
 
 PM = Pipek = PipekMezey
 

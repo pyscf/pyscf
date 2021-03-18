@@ -18,6 +18,7 @@ E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
 '''
 
 import time
+import copy
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -197,6 +198,16 @@ class GMP2(mp2.MP2):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.mp import dfgmp2
+        mymp = dfgmp2.DFGMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mymp.with_df = with_df
+        if mymp.with_df.auxbasis != auxbasis:
+            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df.auxbasis = auxbasis
+        return mymp
+
     def nuc_grad_method(self):
         raise NotImplementedError
 
@@ -249,7 +260,7 @@ class _PhysicistsERIs:
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
-            dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
+            dm = mp._scf.make_rdm1(mp_mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
@@ -268,7 +279,9 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     if callable(ao2mofn):
         orbo = eris.mo_coeff[:,:nocc]
         orbv = eris.mo_coeff[:,nocc:]
-        orbo = lib.tag_array(orbo, orbspin=orbspin)
+        if orbspin is not None:
+            orbo = lib.tag_array(orbo, orbspin=orbspin[:nocc])
+            orbv = lib.tag_array(orbv, orbspin=orbspin[nocc:])
         eri = ao2mofn((orbo,orbv,orbo,orbv)).reshape(nocc,nvir,nocc,nvir)
     else:
         orboa = eris.mo_coeff[:nao//2,:nocc]

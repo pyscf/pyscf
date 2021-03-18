@@ -63,11 +63,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         mf.dump_scf_summary(log)
 
         nirrep = len(mol.irrep_id)
-        orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
+        orbsym = mf.get_orbsym(mo_coeff, ovlp_ao)
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
         if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+            # TODO: check wave function symmetry
+            log.note('Wave-function symmetry = %s', mol.groupname)
         else:
             log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, wfnsym))
@@ -184,7 +185,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
                 c = numpy.dot(mo_coeff[:,idx], c)
                 mo[:,idx] = _symmetrize_canonicalization_(mf, e, c, s)
                 mo_e[idx] = e
-        orbsym = get_orbsym(mol, mo, s, False)
+        orbsym = mf.get_orbsym(mo, s)
 
     mo = lib.tag_array(mo, orbsym=orbsym)
     return mo_e, mo
@@ -289,7 +290,8 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                     mol.nelectron-fix_ne, ' '.join(float_irname))
     return fix_na, fix_nb, float_irname
 
-#TODO: force E1gx/E1gy ... use the same coefficients
+#TODO: force Dooh, Doov orbitals E1gx/E1gy ... using the same coefficients
+#TODO: force SO3 orbitals p+0,p-1,p+1, ... using the same coefficients
 def eig(mf, h, s):
     '''Solve generalized eigenvalue problem, for each irrep.  The
     eigenvalues and eigenvectors are not sorted to ascending order.
@@ -387,7 +389,7 @@ class SymAdaptedRHF(hf.RHF):
         if self.mol.symmetry:
             occidx = mo_occ > 0
             viridx = ~occidx
-            orbsym = get_orbsym(self.mol, mo_coeff)
+            orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
             sym_forbid = orbsym[viridx].reshape(-1,1) != orbsym[occidx]
             g[sym_forbid.ravel()] = 0
         return g
@@ -401,7 +403,7 @@ class SymAdaptedRHF(hf.RHF):
         if not mol.symmetry:
             return hf.RHF.get_occ(self, mo_energy, mo_coeff)
 
-        orbsym = get_orbsym(self.mol, mo_coeff)
+        orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
         nelec_fix = 0
@@ -457,7 +459,7 @@ class SymAdaptedRHF(hf.RHF):
         idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
                             idx[self.mo_occ==0][v_sort]))
         self.mo_energy = self.mo_energy[idx]
-        orbsym = get_orbsym(self.mol, self.mo_coeff)
+        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
         self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
         self.mo_occ = self.mo_occ[idx]
         if self.chkfile:
@@ -479,12 +481,12 @@ class SymAdaptedRHF(hf.RHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
-    def get_orbsym(self, mo_coeff=None):
+    def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        if mo_coeff is None:
-            raise RuntimeError('SCF object %s not initialized' % self)
-        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+        if s is None:
+            s = self.get_ovlp()
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
 
     get_wfnsym = get_wfnsym
@@ -574,7 +576,7 @@ class SymAdaptedROHF(rohf.ROHF):
             uniq_var_a = viridxa.reshape(-1,1) & occidxa
             uniq_var_b = viridxb.reshape(-1,1) & occidxb
 
-            orbsym = get_orbsym(self.mol, mo_coeff)
+            orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
             sym_forbid = orbsym.reshape(-1,1) != orbsym
             sym_forbid = sym_forbid[uniq_var_a | uniq_var_b]
             g[sym_forbid.ravel()] = 0
@@ -594,7 +596,7 @@ class SymAdaptedROHF(rohf.ROHF):
         nmo = mo_ea.size
         mo_occ = numpy.zeros(nmo)
 
-        orbsym = get_orbsym(self.mol, mo_coeff)
+        orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
 
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
         neleca_fix = 0
@@ -712,7 +714,7 @@ class SymAdaptedROHF(rohf.ROHF):
                                            mo_ea=mo_ea, mo_eb=mo_eb)
         else:
             self.mo_energy = self.mo_energy[idx]
-        orbsym = get_orbsym(self.mol, self.mo_coeff)
+        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
         self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
         self.mo_occ = self.mo_occ[idx]
         if self.chkfile:
@@ -738,17 +740,20 @@ class SymAdaptedROHF(rohf.ROHF):
             self.dump_scf_summary(log)
 
             nirrep = len(mol.irrep_id)
-            orbsym = get_orbsym(self.mol, mo_coeff)
+            orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
+            irreps = numpy.asarray(mol.irrep_id)
+            ndoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==2], axis=1)
+            nsoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==1], axis=1)
+
             wfnsym = 0
-            ndoccs = []
-            nsoccs = []
-            for k,ir in enumerate(mol.irrep_id):
-                ndoccs.append(sum(orbsym[mo_occ==2] == ir))
-                nsoccs.append(sum(orbsym[mo_occ==1] == ir))
-                if nsoccs[k] % 2 == 1:
-                    wfnsym ^= ir
+            # wfn symmetry is determined by the odd number of electrons in each irrep
+            for k in numpy.where(nsoccs % 2 == 1)[0]:
+                ir_in_d2h = mol.irrep_id[k] % 10  # convert to D2h irreps
+                wfnsym ^= ir_in_d2h
+
             if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+                # TODO: check wave function symmetry
+                log.note('Wave-function symmetry = %s', mol.groupname)
             else:
                 log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))
@@ -811,7 +816,7 @@ class SymAdaptedROHF(rohf.ROHF):
         dip = self.dip_moment(mol, dm, verbose=log)
         return pop_and_charge, dip
 
-    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
+    def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
         from pyscf.scf import uhf_symm
         if mol is None: mol = self.mol
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -821,7 +826,9 @@ class SymAdaptedROHF(rohf.ROHF):
         if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
             mo_occ = (numpy.array(mo_occ>0, dtype=numpy.double),
                       numpy.array(mo_occ==2, dtype=numpy.double))
-        return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
+        if s is None:
+            s = self.get_ovlp()
+        return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
@@ -833,12 +840,12 @@ class SymAdaptedROHF(rohf.ROHF):
         mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
 
-    def get_orbsym(self, mo_coeff=None):
+    def get_orbsym(self, mo_coeff=None, s=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
-        if mo_coeff is None:
-            raise RuntimeError('SCF object %s not initialized' % self)
-        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+        if s is None:
+            s = self.get_ovlp()
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
 
     get_wfnsym = get_wfnsym

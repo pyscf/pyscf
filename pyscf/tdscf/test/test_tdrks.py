@@ -22,6 +22,7 @@ import copy
 from pyscf import lib, gto, scf, dft
 from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
+from pyscf.data import nist
 
 mol = gto.Mole()
 mol.verbose = 5
@@ -376,6 +377,23 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(td._scf.mol is mol1)
         self.assertTrue(td._scf._scf.mol is mol1)
 
+    def test_custom_rsh(self):
+        mol = gto.M(atom='H 0 0 0.6; H 0 0 0', basis = "6-31g")
+        mf = dft.RKS(mol)
+        mf._numint.libxc = dft.xcfun
+        mf.xc = "camb3lyp"
+        mf.omega = 0.2
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -1.143272159913611, 8)
+
+        e_td = mf.TDDFT().kernel()[0]
+        self.assertAlmostEqual(abs(e_td*nist.HARTREE2EV - [16.14837289, 28.01968627, 49.00854076]).max(), 0, 4)
+
+    def test_symmetry_init_guess(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        td = mol.RHF.run().TDA().run(nstates=1)
+        self.assertAlmostEqual(td.e[0], 0.22349707455528, 7)
+        # TODO: verify symmetry of td.x == A1u
 
 if __name__ == "__main__":
     print("Full Tests for TD-RKS")

@@ -18,6 +18,7 @@
 
 import os
 from pyscf.gto import basis as _mol_basis
+from pyscf.gto.basis import parse_ecp, load_ecp
 from pyscf.pbc.gto.basis import parse_cp2k
 from pyscf import __config__
 
