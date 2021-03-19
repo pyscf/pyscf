@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
     def test_vbar(self):
         auxcell = df.df.make_modrho_basis(cell, 'ccpvdz', 1.)
         vbar = mdf.MDF(cell).auxbar(auxcell)
-        self.assertAlmostEqual(lib.fp(vbar), -0.00438699039629, 9)
+        self.assertAlmostEqual(lib.fp(vbar), -0.0025657576639180916, 9)
 
     def test_get_eri_gamma_high_cost(self):
         odf = mdf.MDF(cell)
