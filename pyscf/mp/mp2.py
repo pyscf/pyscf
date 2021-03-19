@@ -76,15 +76,14 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 
 # Iteratively solve MP2 if non-canonical HF is provided
-def _iterative_kernel(mp, eris, verbose=None, diis=True):
+def _iterative_kernel(mp, eris, verbose=None):
     cput1 = cput0 = (time.clock(), time.time())
     log = logger.new_logger(mp, verbose)
 
     emp2, t2 = mp.init_amps(eris=eris)
     log.info('Init E(MP2) = %.15g', emp2)
 
-    if diis:
-        adiis = lib.diis.DIIS(mp)
+    adiis = lib.diis.DIIS(mp)
 
     conv = False
     for istep in range(mp.max_cycle):
@@ -93,8 +92,7 @@ def _iterative_kernel(mp, eris, verbose=None, diis=True):
         if isinstance(t2new, numpy.ndarray):
             normt = numpy.linalg.norm(t2new - t2)
             t2 = None
-            if diis:
-                t2new = adiis.update(t2new)
+            t2new = adiis.update(t2new)
         else: # UMP2
             normt = numpy.linalg.norm([numpy.linalg.norm(t2new[i] - t2[i])
                                        for i in range(3)])
@@ -194,11 +192,10 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - einsum('iab,jba->ij', l2i, t2i)
-
+        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - lib.einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - lib.einsum('iab,jba->ij', l2i, t2i)
     return -dm1occ, dm1vir
 
 
@@ -220,7 +217,6 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     n,v = numpy.linalg.eigh(dm[nocc:,nocc:])
     idx = numpy.argsort(n)[::-1]
     n,v = n[idx], v[:,idx]
-    #print("FNO eigenvalues:\n%s" % n)
 
     if nvir_act is None:
         if pct_occ is None:
@@ -650,15 +646,12 @@ class _ChemistsERIs:
             self.fock = numpy.diag(self.mo_energy)
             self.e_hf = mp._scf.e_tot
         else:
-            #t0 = default_timer()
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
-            #print("Time for _common_init: %f" % (default_timer() - t0))
-
         return self
 
     def _direct_init_(self, mp, mo_coeff, mo_energy, fock, e_hf):

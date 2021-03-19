@@ -51,7 +51,7 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
         _std_symbol_without_ghost
 
-from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 import warnings
 
 # For code compatibility in python-2 and python-3
@@ -535,19 +535,19 @@ def to_uncontracted_cartesian_basis(mol):
         ncart = (l+1)*(l+2)//2
         es = mol.bas_exp(ib)
         cs = mol._libcint_ctr_coeff(ib)
-        np, nc = cs.shape
+        nprim = cs.shape[0]
         norm = gto_norm(l, es)
         c = numpy.einsum('pi,p,xm->pxim', cs, 1./norm, c2s[l])
-        contr_coeff.append(c.reshape(np*ncart,-1))
+        contr_coeff.append(c.reshape(nprim*ncart,-1))
 
         pexp = mol._bas[ib,PTR_EXP]
         pc = mol._bas[ib,PTR_COEFF]
-        bs = numpy.empty((np,8), dtype=numpy.int32)
+        bs = numpy.empty((nprim,8), dtype=numpy.int32)
         bs[:] = mol._bas[ib]
         bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
-        bs[:,PTR_EXP] = numpy.arange(pexp, pexp+np)
-        bs[:,PTR_COEFF] = numpy.arange(pc, pc+np)
-        _env[pc:pc+np] = norm
+        bs[:,PTR_EXP] = numpy.arange(pexp, pexp+nprim)
+        bs[:,PTR_COEFF] = numpy.arange(pc, pc+nprim)
+        _env[pc:pc+nprim] = norm
         _bas.append(bs)
 
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
@@ -815,8 +815,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
+        cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
         if NORMALIZE_GTO:
-            cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
             cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
@@ -1334,15 +1334,6 @@ def energy_nuc(mol, charges=None, coords=None):
     if charges is None: charges = mol.atom_charges()
     if len(charges) <= 1:
         return 0
-    #e = 0
-    #for j in range(len(mol._atm)):
-    #    q2 = charges[j]
-    #    r2 = coords[j]
-    #    for i in range(j):
-    #        q1 = charges[i]
-    #        r1 = coords[i]
-    #        r = numpy.linalg.norm(r1-r2)
-    #        e += q1 * q2 / r
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
@@ -2410,15 +2401,13 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            self.groupname, axes = symm.subgroup(self.symmetry, axes)
-            prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
-            if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
-                self.topgroup = self.symmetry
-            else:
-                raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                     'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
-                                     (self.symmetry, self.topgroup,
-                                      '\n'.join([str(a) for a in prop_atoms])))
+            try:
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry)
+            except PointGroupSymmetryError:
+                raise PointGroupSymmetryError(
+                    'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                    (self.symmetry, self.topgroup))
         else:
             self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                     self.symmetry_subgroup)
@@ -2864,11 +2853,14 @@ class Mole(lib.StreamObject):
             mol.build(False, False)
 
         if mol.verbose >= logger.INFO:
-            logger.info(mol, 'New geometry (unit %s)', unit)
-            coords = mol.atom_coords()
-            for ia in range(mol.natm):
-                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
-                            ia+1, mol.atom_symbol(ia), *coords[ia])
+            logger.info(mol, 'New geometry')
+            for ia, atom in enumerate(mol._atom):
+                coorda = tuple([x * param.BOHR for x in atom[1]])
+                coordb = tuple([x for x in atom[1]])
+                coords = coorda + coordb
+                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
+                            '%16.12f %16.12f %16.12f Bohr\n',
+                            ia+1, mol.atom_symbol(ia), *coords)
         return mol
 
     def update(self, chkfile):

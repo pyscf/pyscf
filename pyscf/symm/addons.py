@@ -21,6 +21,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import basis
 from pyscf.symm import param
 from pyscf import __config__
@@ -280,7 +281,7 @@ def irrep_id2name(gpname, irrep_id):
         return param.CHARACTER_TABLE[gpname][irrep_id_in_d2h][0]
 
 def irrep_name(pgname, irrep_id):
-    raise RuntimeError('This function was obsoleted. Use irrep_id2name')
+    raise PointGroupSymmetryError('This function was obsoleted. Use irrep_id2name')
 
 def route(target, nelec, orbsym):
     '''Pick orbitals to form a determinant which has the right symmetry.
