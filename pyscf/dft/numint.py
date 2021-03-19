@@ -622,8 +622,8 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
        ao.ctypes.data_as(ctypes.c_void_p),
        dm.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nao), ctypes.c_int(dm.shape[1]),
-       ctypes.c_int(ngrids), pnbas,
-       pnon0tab, pshls_slice, ctypes.c_int(nbas))
+       ctypes.c_int(ngrids), ctypes.c_int(nbas),
+       pnon0tab, pshls_slice, pao_loc)
     return vm
 
 def _scale_ao(ao, wv, out=None):
