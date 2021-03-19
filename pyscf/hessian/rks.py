@@ -46,6 +46,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     if atmlst is None: atmlst = range(mol.natm)
 
     nao, nmo = mo_coeff.shape
+    nbas = mol.nbas
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
 
@@ -78,7 +79,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
         veff = vxc[ia]
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
@@ -126,10 +127,11 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     h1ao = _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
         if abs(hyb) > 1e-10:
             vj1, vj2, vk1, vk2 = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
@@ -184,9 +186,10 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
         grids.build(with_non0tab=True)
 
     nao, nmo = mo_coeff.shape
+    nbas = mol.nbas
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
-    shls_slice = (0, mol.nbas)
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((6,nao,nao))
@@ -287,8 +290,9 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff.shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -305,7 +309,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             aow = numpy.einsum('xpi,p->xpi', ao[1:4], weight*vrho)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc, nbas)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
                 # *2 for \nabla|ket> in rho1
@@ -330,7 +334,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             aow = rks_grad._make_dR_dao_w(ao, wv)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc, nbas)
                       for i in range(4)]
             for ia in range(mol.natm):
                 wv = dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
@@ -372,8 +376,9 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff.shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -387,7 +392,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
             vrho = vxc[0]
             frr = fxc[0]
-            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc, nbas)
             aow1 = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
@@ -412,7 +417,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             wv = numint._rks_gga_wv0(rho, vxc, weight)
             rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
 
-            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc, nbas)
                       for i in range(4)]
             for ia in range(mol.natm):
                 wv = dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)

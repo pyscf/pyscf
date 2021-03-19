@@ -43,7 +43,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    nbas = mol.nbas
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     vmat = np.zeros((mol.natm,3,nao,nao))
@@ -56,7 +57,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
             vrho = vxc[0]
             frr = fxc[0]
-            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = numint._dot_ao_dm(mol, ao[0], dm0, mask, shls_slice, ao_loc, nbas)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
                 rho1 = np.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0[:,p0:p1])
@@ -77,7 +78,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
             wv = numint._rks_gga_wv0(rho, vxc, weight)
             #rks_grad._gga_grad_sum_(v_ip, mol, ao, wv, mask, ao_loc)
-            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
+            ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc, nbas)
                       for i in range(4)]
             for ia in range(mol.natm):
                 wv = dR_rho1 = rks_hess._make_dR_rho1(ao, ao_dm0, ia, aoslices)
@@ -108,6 +109,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
     vind = rhf_eph.rhf_deriv_generator(mf, mf.mo_coeff, mf.mo_occ)
     mocc = mf.mo_coeff[:,mf.mo_occ>0]
@@ -123,7 +125,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         h1 = vnuc_deriv(ia)
         v1 = vind(mo1[ia])
         shl0, shl1, p0, p1 = aoslices[ia]
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
 
         if abs(hyb)>1e-10:
             vj1, vk1 = \

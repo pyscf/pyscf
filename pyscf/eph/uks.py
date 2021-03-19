@@ -43,8 +43,9 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff[0].shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0a, dm0b = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -61,8 +62,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vrho = vxc[0]
             u_u, u_d, d_d = fxc[0].T
 
-            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc)
-            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc, nbas)
+            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc, nbas)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
 # First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
@@ -94,9 +95,9 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
             wva, wvb = numint._uks_gga_wv0((rhoa,rhob), vxc, weight)
 
-            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc)
+            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
-            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
             for ia in range(mol.natm):
                 wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
@@ -135,6 +136,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     omg, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     vnuc_deriv = ephobj.vnuc_generator(mol)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
 
     mo_coeff, mo_occ = mf.mo_coeff, mf.mo_occ
@@ -157,7 +159,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         moia = np.hstack((mo1a[ia], mo1b[ia]))
         v1 = vind(moia)
         shl0, shl1, p0, p1 = aoslices[ia]
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
         if abs(hyb)>1e-10:
             vja, vjb, vka, vkb = \
                     rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',

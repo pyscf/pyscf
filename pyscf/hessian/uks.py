@@ -77,6 +77,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     vk1a = vk1b = None
     t1 = log.timer_debug1('contracting int2e_ipip1', *t1)
 
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
     vxca, vxcb = _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory)
     for i0, ia in enumerate(atmlst):
@@ -84,7 +85,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
         veffa = vxca[ia]
         veffb = vxcb[ia]
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
                 vk1a, vk1b, vk2a, vk2b = \
@@ -142,10 +143,11 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     h1aoa, h1aob = _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-        shls_slice = (shl0, shl1) + (0, mol.nbas)*3
+        shls_slice = (shl0, shl1) + (0, nbas)*3
         if abs(hyb) > 1e-10:
             vj1a, vj1b, vj2a, vj2b, vk1a, vk1b, vk2a, vk2b = \
                     _get_jk(mol, 'int2e_ip1', 3, 's2kl',
@@ -217,7 +219,8 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff[0].shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
-    shls_slice = (0, mol.nbas)
+    nbas = mol.nbas
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
 
     vmata = numpy.zeros((6,nao,nao))
@@ -295,7 +298,8 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    nbas = mol.nbas
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0a, dm0b = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -318,8 +322,8 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             aow = numpy.einsum('xpi,p->xpi', ao[1:4], weight*vrho[:,1])
             rks_hess._d1d2_dot_(ipipb, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc)
-            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc, nbas)
+            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc, nbas)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
                 # *2 for \nabla|ket> in rho1
@@ -357,9 +361,9 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             aow = rks_grad._make_dR_dao_w(ao, wvb)
             rks_hess._d1d2_dot_(ipipb, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc)
+            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
-            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
             for ia in range(mol.natm):
                 wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
@@ -412,8 +416,9 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     nao, nmo = mo_coeff[0].shape
     ni = mf._numint
     xctype = ni._xc_type(mf.xc)
+    nbas = mol.nbas
     aoslices = mol.aoslice_by_atom()
-    shls_slice = (0, mol.nbas)
+    shls_slice = (0, nbas)
     ao_loc = mol.ao_loc_nr()
     dm0a, dm0b = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -430,8 +435,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             vrho = vxc[0]
             u_u, u_d, d_d = fxc[0].T
 
-            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc)
-            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc, nbas)
+            ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc, nbas)
             aow1a = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,0])
             aow1b = numpy.einsum('xpi,p->xpi', ao[1:], weight*vrho[:,1])
             for ia in range(mol.natm):
@@ -471,9 +476,9 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             rks_grad._gga_grad_sum_(vipa, mol, ao, wva, mask, ao_loc)
             rks_grad._gga_grad_sum_(vipb, mol, ao, wvb, mask, ao_loc)
 
-            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc)
+            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
-            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc)
+            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc, nbas)
                        for i in range(4)]
             for ia in range(mol.natm):
                 wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
