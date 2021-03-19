@@ -405,10 +405,11 @@ class KnownValues(unittest.TestCase):
             es = cell.bas_exp(ib)
             es1 = cell1.bas_exp(ib)
             ptr = cell._bas[ib, gto.mole.PTR_COEFF]
+            ptr1 = cell1._bas[ib, gto.mole.PTR_COEFF]
             cs = cell._env[ptr:ptr+nprim*nc]
-            cs1 = cell1._env[ptr:ptr+nprim*nc]
-            self.assertTrue(abs(es - es1).max() < 1e-15)
-            self.assertTrue(abs(cs - cs1).max() < 1e-15)
+            cs1 = cell1._env[ptr1:ptr1+nprim*nc]
+            self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
+            self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
 
 
 if __name__ == '__main__':
