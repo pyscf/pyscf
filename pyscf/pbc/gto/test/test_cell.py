@@ -384,6 +384,30 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.nao_nr(), 21) # 4 + 2 + 2 + 13
         self.assertTrue(len(cell._pseudo) == 1)  # only O in ecp
 
+    def test_exp_to_discard(self):
+        cell = pgto.Cell(
+            atom = 'Li 0 0 0; Li 1.5 1.5 1.5',
+            a = np.eye(3) * 3,
+            basis = "gth-dzvp",
+            exp_to_discard = .1
+        )
+        cell1 =  pgto.Cell(
+            atom = 'Li@1 0 0 0; Li@2 1.5 1.5 1.5',
+            a = np.eye(3) * 3,
+            basis = "gth-dzvp",
+            exp_to_discard = .1
+        )
+        for ib in range(len(cell._bas)):
+            nprim = cell.bas_nprim(ib)
+            nc = cell.bas_nctr(ib)
+            es = cell.bas_exp(ib)
+            es1 = cell1.bas_exp(ib)
+            ptr = cell._bas[ib,mole.PTR_COEFF]
+            cs = cell._env[ptr:ptr+nprim*nc]
+            cs1 = cell1._env[ptr:ptr+nprim*nc]
+            self.assertTrue(abs(es - es1).max() < 1e-15)
+            self.assertTrue(abs(cs - cs1).max() < 1e-15)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
