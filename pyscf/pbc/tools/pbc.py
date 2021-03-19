@@ -513,6 +513,7 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
 
 
 def super_cell(cell, ncopy, update_mesh="legacy", update_ewald=False):
+#def super_cell(cell, ncopy, update_mesh=True, update_ewald=True):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
     Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.

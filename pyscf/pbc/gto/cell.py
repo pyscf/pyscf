@@ -718,8 +718,6 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
-
-    print("EWALD PARAMS FOR prec=%.e mesh=%r : %e %e" % (precision, mesh, ew_eta, ew_cut))
     return ew_eta, ew_cut
 
 def _cut_mesh_for_ewald(cell, mesh):
@@ -1187,15 +1185,6 @@ class Cell(mole.Mole):
         mf.run()
         return method
 
-    #def supercell(self, ncopy):
-    #    a = self.lattice_vectors()
-    #    Ts = lib.cartesian_prod((np.arange(ncopy[0]), np.arange(ncopy[1]), np.arange(ncopy[2])))
-    #    Ls = np.dot(Ts, a)
-    #    self.a = np.einsum('i,ij->ij', ncopy, a)
-    #    symbs = [atom[0] for atom in self.atom] * nimgs
-    #    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    #    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
-
     tot_electrons = tot_electrons
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
@@ -1334,6 +1323,7 @@ class Cell(mole.Mole):
             nprim_drop = 0
             nctr_drop = 0
             _env = self._env.copy()
+            #_env = self._env
             for ib in range(len(self._bas)):
                 l = self.bas_angular(ib)
                 nprim = self.bas_nprim(ib)
@@ -1399,7 +1389,6 @@ class Cell(mole.Mole):
         if self.mesh is None or self._mesh_from_build:
             if self.ke_cutoff is None:
                 ke_cutoff = estimate_ke_cutoff(self, self.precision)
-                print("Estimate ke_cutoff= %.6e" % ke_cutoff)
             else:
                 ke_cutoff = self.ke_cutoff
             self._mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)

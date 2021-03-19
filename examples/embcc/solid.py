@@ -8,6 +8,7 @@ from mpi4py import MPI
 # Internal
 import pyscf
 import pyscf.pbc
+import pyscf.pbc.dft
 import pyscf.pbc.tools
 import pyscf.pbc.mp
 
@@ -88,6 +89,8 @@ def get_arguments():
     parser.add_argument("--power1-vir-bath-tol", type=float, default=False)
     parser.add_argument("--local-occ-bath-tol", type=float, default=False)
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
+    parser.add_argument("--run-second-cell", action="store_true")
+    parser.add_argument("--lda", action="store_true")
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -181,15 +184,17 @@ def make_perovskite(a, atoms):
     if args.supercell_in is not None:
         atom = []
         ncopy = args.supercell_in
+        nr = 0
         for x in range(ncopy[0]):
             for y in range(ncopy[1]):
                 for z in range(ncopy[2]):
                     shift = x*amat[0] + y*amat[1] + z*amat[2]
-                    atom.append((atoms[0], coords[0]+shift))
-                    atom.append((atoms[1], coords[1]+shift))
-                    atom.append((atoms[2], coords[2]+shift))
-                    atom.append((atoms[2], coords[3]+shift))
-                    atom.append((atoms[2], coords[4]+shift))
+                    atom.append((atoms[0]+str(nr),      coords[0]+shift))
+                    atom.append((atoms[1]+str(nr),      coords[1]+shift))
+                    atom.append((atoms[2]+str(nr)+"@1", coords[2]+shift))
+                    atom.append((atoms[2]+str(nr)+"@2", coords[3]+shift))
+                    atom.append((atoms[2]+str(nr)+"@3", coords[4]+shift))
+                    nr += 1
 
         amat = np.einsum("i,ij->ij", ncopy, amat)
 
@@ -234,10 +239,16 @@ def make_cell(a, args):
 def run_mf(a, cell, args):
     if args.k_points is None or np.product(args.k_points) == 1:
         kpts = cell.make_kpts([1, 1, 1])
-        mf = pyscf.pbc.scf.RHF(cell)
+        if args.lda:
+            mf = pyscf.pbc.dft.RKS(cell)
+        else:
+            mf = pyscf.pbc.scf.RHF(cell)
     else:
         kpts = cell.make_kpts(args.k_points)
-        mf = pyscf.pbc.scf.KRHF(cell, kpts)
+        if args.lda:
+            mf = pyscf.pbc.dft.KRKS(cell, kpts)
+        else:
+            mf = pyscf.pbc.dft.KRHF(cell, kpts)
     if args.exxdiv_none:
         mf.exxdiv = None
     # Load SCF from checkpoint file
@@ -435,11 +446,33 @@ for i, a in enumerate(args.lattice_consts):
             if args.bath_multiplier_per_fragment is not None:
                 ccx.make_atom_cluster(0, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[0]*btol)
                 ccx.make_atom_cluster(1, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[1]*btol)
-                ccx.make_atom_cluster(2, symmetry_factor=3*ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                #ccx.make_atom_cluster(2, symmetry_factor=3*ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                ccx.make_atom_cluster(2, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                ccx.make_atom_cluster(3, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                ccx.make_atom_cluster(4, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                if args.run_second_cell:
+                    ccx.make_atom_cluster(5, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[0]*btol)
+                    ccx.make_atom_cluster(6, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[1]*btol)
+                    #ccx.make_atom_cluster(2, symmetry_factor=3*ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                    ccx.make_atom_cluster(7, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                    ccx.make_atom_cluster(8, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+                    ccx.make_atom_cluster(9, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
+
             else:
                 ccx.make_atom_cluster(0, symmetry_factor=ncells)
                 ccx.make_atom_cluster(1, symmetry_factor=ncells)
-                ccx.make_atom_cluster(2, symmetry_factor=3*ncells)
+                #ccx.make_atom_cluster(2, symmetry_factor=3*ncells)
+                ccx.make_atom_cluster(2, symmetry_factor=ncells)
+                ccx.make_atom_cluster(3, symmetry_factor=ncells)
+                ccx.make_atom_cluster(4, symmetry_factor=ncells)
+                if args.run_second_cell:
+                    ccx.make_atom_cluster(5, symmetry_factor=ncells)
+                    ccx.make_atom_cluster(6, symmetry_factor=ncells)
+                    #ccx.make_atom_cluster(2, symmetry_factor=3*ncells)
+                    ccx.make_atom_cluster(7, symmetry_factor=ncells)
+                    ccx.make_atom_cluster(8, symmetry_factor=ncells)
+                    ccx.make_atom_cluster(9, symmetry_factor=ncells)
+
 
         ccx.kernel()
 
