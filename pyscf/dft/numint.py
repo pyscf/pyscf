@@ -610,11 +610,12 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
         dm = numpy.asarray(dm, numpy.complex128)
 
     if non0tab is None or shls_slice is None or ao_loc is None:
-        pnon0tab = pshls_slice = pao_loc = lib.c_null_ptr()
+        pnon0tab = pshls_slice = pao_loc = pnbas = lib.c_null_ptr()
     else:
         pnon0tab    = non0tab.ctypes.data_as(ctypes.c_void_p)
         pshls_slice = (ctypes.c_int*2)(*shls_slice)
         pao_loc     = ao_loc.ctypes.data_as(ctypes.c_void_p)
+        pnbas       = ctypes.c_int(nbas)
 
     vm = numpy.ndarray((ngrids,dm.shape[1]), dtype=ao.dtype, order='F', buffer=out)
     dm = numpy.asarray(dm, order='C')
@@ -622,7 +623,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
        ao.ctypes.data_as(ctypes.c_void_p),
        dm.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nao), ctypes.c_int(dm.shape[1]),
-       ctypes.c_int(ngrids), ctypes.c_int(nbas),
+       ctypes.c_int(ngrids), pnbas,
        pnon0tab, pshls_slice, pao_loc)
     return vm
 
