@@ -391,18 +391,20 @@ class KnownValues(unittest.TestCase):
             basis = "gth-dzvp",
             exp_to_discard = .1
         )
+        cell.build()
         cell1 =  pgto.Cell(
             atom = 'Li@1 0 0 0; Li@2 1.5 1.5 1.5',
             a = np.eye(3) * 3,
             basis = "gth-dzvp",
             exp_to_discard = .1
         )
+        cell1.build()
         for ib in range(len(cell._bas)):
             nprim = cell.bas_nprim(ib)
             nc = cell.bas_nctr(ib)
             es = cell.bas_exp(ib)
             es1 = cell1.bas_exp(ib)
-            ptr = cell._bas[ib,mole.PTR_COEFF]
+            ptr = cell._bas[ib, gto.mole.PTR_COEFF]
             cs = cell._env[ptr:ptr+nprim*nc]
             cs1 = cell1._env[ptr:ptr+nprim*nc]
             self.assertTrue(abs(es - es1).max() < 1e-15)
