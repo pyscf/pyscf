@@ -438,7 +438,6 @@ def precompute_exx(cell, kpts):
 
 
 def madelung(cell, kpts):
-    print("CALC MADEL")
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = copy.copy(cell)
     ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
@@ -547,7 +546,6 @@ def super_cell(cell, ncopy, update_mesh="legacy", update_ewald=False):
         if supcell.ke_cutoff is None:
             from pyscf.pbc.gto import estimate_ke_cutoff
             ke_cutoff = estimate_ke_cutoff(supcell, supcell.precision)
-            print("Estimate ke_cutoff= %.6e" % ke_cutoff)
         else:
             ke_cutoff = supcell.ke_cutoff
         supcell._mesh = pbctools.cutoff_to_mesh(supcell.a, ke_cutoff)
@@ -557,7 +555,6 @@ def super_cell(cell, ncopy, update_mesh="legacy", update_ewald=False):
                                  ncopy[2]*cell.mesh[2]])
     if update_ewald:
         supcell._ew_eta, supcell._ew_cut = supcell.get_ewald_params(supcell.precision, supcell.mesh)
-        print("Settings ewald parameters to %e %e" % (supcell._ew_eta, supcell._ew_cut))
 
     return supcell
 

@@ -1333,6 +1333,7 @@ class Cell(mole.Mole):
             steep_shls = []
             nprim_drop = 0
             nctr_drop = 0
+            _env = self._env.copy()
             for ib in range(len(self._bas)):
                 l = self.bas_angular(ib)
                 nprim = self.bas_nprim(ib)
@@ -1357,11 +1358,12 @@ class Cell(mole.Mole):
                     nctr_drop = nc_old - nc + nctr_drop
                     if cs.size > 0:
                         pe = self._bas[ib,mole.PTR_EXP]
-                        self._env[pe:pe+nprim] = es
+                        _env[pe:pe+nprim] = es
                         cs = mole._nomalize_contracted_ao(l, es, cs)
-                        self._env[ptr:ptr+nprim*nc] = cs.T.reshape(-1)
+                        _env[ptr:ptr+nprim*nc] = cs.T.reshape(-1)
                 if nprim > 0:
                     steep_shls.append(ib)
+            self._env = _env
             self._bas = np.asarray(self._bas[steep_shls], order='C')
             logger.info(self, 'Discarded %d diffused primitive functions, '
                         '%d contracted functions', nprim_drop, nctr_drop)

@@ -171,16 +171,11 @@ def make_perovskite(a, atoms):
                 [a/2,   a/2,    0]
                 ])
     atom = [
-        #("%s %f %f %f" % (atoms[0], coords[0])),
-        #("%s %f %f %f" % (atoms[1], coords[1])),
-        #("%s %f %f %f" % (atoms[2], coords[2])),
-        #("%s %f %f %f" % (atoms[2], coords[3])),
-        #("%s %f %f %f" % (atoms[2], coords[4])),
         (atoms[0], coords[0]),
         (atoms[1], coords[1]),
-        (atoms[2], coords[2]),
-        (atoms[2], coords[3]),
-        (atoms[2], coords[4]),
+        (atoms[2]+"@1", coords[2]),
+        (atoms[2]+"@2", coords[3]),
+        (atoms[2]+"@3", coords[4]),
         ]
 
     if args.supercell_in is not None:
@@ -190,20 +185,13 @@ def make_perovskite(a, atoms):
             for y in range(ncopy[1]):
                 for z in range(ncopy[2]):
                     shift = x*amat[0] + y*amat[1] + z*amat[2]
-                    #atom.append("%s %f %f %f" % (atoms[0], coords[0]+shift))
-                    #atom.append("%s %f %f %f" % (atoms[1], coords[1]+shift))
-                    #atom.append("%s %f %f %f" % (atoms[2], coords[2]+shift))
-                    #atom.append("%s %f %f %f" % (atoms[2], coords[3]+shift))
-                    #atom.append("%s %f %f %f" % (atoms[2], coords[4]+shift))
                     atom.append((atoms[0], coords[0]+shift))
                     atom.append((atoms[1], coords[1]+shift))
                     atom.append((atoms[2], coords[2]+shift))
                     atom.append((atoms[2], coords[3]+shift))
                     atom.append((atoms[2], coords[4]+shift))
 
-
         amat = np.einsum("i,ij->ij", ncopy, amat)
-
 
     return amat, atom
 
@@ -235,13 +223,11 @@ def make_cell(a, args):
         cell.ecp = args.ecp
     if args.exp_to_discard:
         cell.exp_to_discard = args.exp_to_discard
-    print("BEFORE BUILD")
     cell.build()
-    print("AFTER BUILD")
     if args.supercell and not np.all(args.supercell == 1):
-        #cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
+        cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
         #cell = pyscf.pbc.tools.super_cell(cell, args.supercell, update_mesh=False)
-        cell = pyscf.pbc.tools.super_cell(cell, args.supercell, update_mesh=True, update_ewald=True)
+        #cell = pyscf.pbc.tools.super_cell(cell, args.supercell, update_mesh=True, update_ewald=True)
 
     return cell
 
@@ -402,7 +388,7 @@ for i, a in enumerate(args.lattice_consts):
 
     #log.info("Nuclear energy= %.8g", mf.energy_nuc())
 
-    np.savetxt("mo-energies-%.2f.txt", mf.mo_energy)
+    np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
 
     # Canonical full system MP2
     if args.do_mp2:
