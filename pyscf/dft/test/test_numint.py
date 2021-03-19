@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
         nao = ao.shape[1]
         v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc, h4.nbas)
-        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None, None)
+        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None, h4.nbas)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_dot_ao_dm_high_cost(self):
