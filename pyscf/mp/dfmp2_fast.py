@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Peter Pinski (HQS Quantum Simulations)
+# Author: Peter Pinski, HQS Quantum Simulations
 
 '''
 native implementation of DF-MP2/RI-MP2 with an RHF reference
@@ -128,22 +128,21 @@ class DFMP2(lib.StreamObject):
         if not self._intsfile:
             self.calculate_integrals()
 
-        self.rdm1_mo = np.zeros((self.nmo, self.nmo))
-
-        # Set the RHF density matrix for the frozen orbitals if applicable.
+        # Calculate the unrelaxed 1-RDM.
         nfrz = self.nfrozen
-        if nfrz > 0:
-            self.rdm1_mo[:nfrz, :nfrz] = 2.0 * np.eye(nfrz)
-
-        # Now calculate the unrelaxed 1-RDM.
         no = self.nocc - nfrz
         emo = self.mo_energy[nfrz:]
         logger = lib.logger.new_logger(self)
+        self.rdm1_mo = np.zeros((self.nmo, self.nmo))
         self.rdm1_mo[nfrz:, nfrz:] = \
             rdm1_rhf_unrelaxed(self._intsfile, no, emo, self.max_memory, logger)
 
+        # Set the RHF density matrix for the frozen orbitals if applicable.
+        if nfrz > 0:
+            self.rdm1_mo[:nfrz, :nfrz] = 2.0 * np.eye(nfrz)
+
         if ao_repr:
-            return np.linalg.multi_dot([self.mo_coeff.T, self.rdm1_mo, self.mo_coeff])
+            return np.linalg.multi_dot([self.mo_coeff, self.rdm1_mo, self.mo_coeff.T])
         else:
             return self.rdm1_mo
 
@@ -175,13 +174,20 @@ class DFMP2(lib.StreamObject):
         self._intsfile = ints3c_cholesky(self.mol, self.auxmol, moc_occ, moc_virt, \
             self.max_memory, logger)
 
+    def delete(self):
+        '''
+        Delete the temporary file(s).
+        '''
+        if self._intsfile:
+            self._intsfile.delete()
+        self._intsfile = None
+
     # The class can be used with a context manager (with ... as ...:).
     def __enter__(self):
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        if self._intsfile:
-            self._intsfile.delete()
+        self.delete()
 
     def kernel(self):
         '''
@@ -189,6 +195,9 @@ class DFMP2(lib.StreamObject):
         Does not need to be called to calculate the 1-RDM only.
         '''
         return self.calculate_energy()
+
+
+RDFMP2 = DFMP2
 
 
 class hdf5TempFile:
@@ -298,7 +307,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     nauxfcns = auxmol.nao
 
     logger.info('')
-    logger.info('*** RI integral transformation')
+    logger.info('*** DF integral transformation')
     logger.info('    MO dimensions: {0:d} x {1:d}'.format(nmo1, nmo2))
     logger.info('    Aux functions: {0:d}'.format(nauxfcns))
 
@@ -363,8 +372,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
             for i in range(istart, iend):
                 ints_cholesky[i, :, :] = scipy.linalg.solve_triangular(L, intsbuf[:, i-istart, :], lower=True)
 
-    logger.info('*** RI transformation finished')
-
+    logger.info('*** DF transformation finished')
     return intsfile
 
 
@@ -437,6 +445,7 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
     '''
     nmo = len(mo_energy)
     nvirt = nmo - nocc
+
     logger.info('')
     logger.info('*** Unrelaxed one-particle density matrix for DF-MP2')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
@@ -467,7 +476,7 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
 
         # For each occupied orbital i, all amplitudes are calculated once and stored on disk.
         # The occupied 1-RDM contribution is calculated in a batched algorithm.
-        # More memory -> more effocient I/O.
+        # More memory -> more efficient I/O.
         # The virtual contribution to the 1-RDM is calculated in memory.
         ints = h5ints['ints_cholesky']
         tiset = h5amplitudes.create_dataset('amplitudes', (nocc, nvirt, nvirt), dtype='f8')
