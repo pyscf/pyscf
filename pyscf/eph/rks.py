@@ -156,10 +156,27 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(rks_hess.Hessian):
+    '''EPH for restricted DFT
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
+    '''
     def __init__(self, scf_method, **kwargs):
         rks_hess.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY = kwargs.pop("CUTOFF_FREQUENCY", rhf_eph.CUTOFF_FREQUENCY)
-        self.KEEP_IMAG_FREQUENCY = kwargs.pop("KEEP_IMAG_FREQUENCY", rhf_eph.KEEP_IMAG_FREQUENCY)
+        self.cutoff_frequency = kwargs.pop("CUTOFF_FREQUENCY", rhf_eph.CUTOFF_FREQUENCY)
+        self.keep_imag_frequency = kwargs.pop("KEEP_IMAG_FREQUENCY", rhf_eph.KEEP_IMAG_FREQUENCY)
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph

@@ -47,7 +47,7 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     ephobj.eph = ephobj.get_eph(ephobj.chkfile, omega, vec, mo_rep)
     return ephobj.eph, ephobj.omega
 
-def solve_hmat(mol, hmat, CUTOFF_FREQUENCY=CUTOFF_FREQUENCY, KEEP_IMAG_FREQUENCY=False):
+def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
     log = logger.new_logger(mol, mol.verbose)
     mass = mol.atom_mass_list() * 1836.15
     natom = len(mass)
@@ -68,19 +68,19 @@ def solve_hmat(mol, hmat, CUTOFF_FREQUENCY=CUTOFF_FREQUENCY, KEEP_IMAG_FREQUENCY
         if abs(omega.imag) < IMAG_CUTOFF_FREQUENCY:
             w_au[i] = w_au[i].real
             w_cm[i] = w_cm[i].real
-            if omega.real > CUTOFF_FREQUENCY:
+            if omega.real > cutoff_frequency:
                 log.info("Mode %i Omega=%.4f", i, omega.real)
             else:
                 log.info("Mode %i Omega=%.4f, mode filtered", i, omega.real)
         else:
             log.info("Mode %i Omega=%.4fj, imaginary mode", i, omega.imag)
     if KEEP_IMAG_FREQUENCY:
-        idx_real = np.where(w_cm.real>CUTOFF_FREQUENCY)[0]
+        idx_real = np.where(w_cm.real>cutoff_frequency)[0]
         idx_imag = np.where(abs(w_cm.imag)>IMAG_CUTOFF_FREQUENCY)[0]
         idx = np.concatenate([idx_real, idx_imag])
     else:
         w_au = w_au.real
-        idx = np.where(w_cm.real>CUTOFF_FREQUENCY)[0]
+        idx = np.where(w_cm.real>cutoff_frequency)[0]
     w_new = w_au[idx]
     c_new = c[:,idx]
     log.info('****Remaining Eigenmodes(cm-1)****')
@@ -99,7 +99,7 @@ def get_mode(ephobj, mol=None, de=None):
             de = ephobj.hess_elec() + ephobj.hess_nuc()
         else:
             de = ephobj.de
-    return solve_hmat(mol, de, ephobj.CUTOFF_FREQUENCY, ephobj.KEEP_IMAG_FREQUENCY)
+    return solve_hmat(mol, de, ephobj.cutoff_frequency, ephobj.keep_imag_frequency)
 
 
 def rhf_deriv_generator(mf, mo_coeff, mo_occ):
@@ -178,10 +178,28 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(rhf.Hessian):
+    '''EPH for restricted Hartree Fock
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
+    '''
+
     def __init__(self, scf_method, **kwargs):
         rhf.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY = kwargs.pop("CUTOFF_FREQUENCY", CUTOFF_FREQUENCY)
-        self.KEEP_IMAG_FREQUENCY = kwargs.pop("KEEP_IMAG_FREQUENCY", KEEP_IMAG_FREQUENCY)
+        self.cutoff_frequency = kwargs.pop("CUTOFF_FREQUENCY", CUTOFF_FREQUENCY)
+        self.keep_imag_frequency = kwargs.pop("KEEP_IMAG_FREQUENCY", KEEP_IMAG_FREQUENCY)
 
     get_mode = get_mode
     get_eph = get_eph
