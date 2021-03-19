@@ -39,6 +39,8 @@ OCCDROP = getattr(__config__, 'dft_numint_OCCDROP', 1e-12)
 # If the number of AOs in the system is less than this value, all tensors are
 # treated as dense quantities and contracted by dgemm directly.
 SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
+# enfore use of numpy dot function
+ENFORCE_NUMPY = getattr(__config__, 'dft_numint_ENFORCE_NUMPY', False)
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -102,7 +104,7 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
 #TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, nbas=None, ao_loc=None, idx=None, verbose=None):
     r'''Calculate the electron density for LDA functional, and the density
     derivatives for GGA functional.
 
@@ -145,6 +147,13 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose
     >>> dm = dm + dm.T
     >>> rho, dx_rho, dy_rho, dz_rho = eval_rho(mol, ao, dm, xctype='LDA')
     '''
+    if mol is None:
+        assert nbas is not None
+        assert ao_loc is not None
+    else:
+        nbas = mol.nbas
+        ao_loc = mol.ao_loc_nr()
+
     xctype = xctype.upper()
     if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
@@ -152,22 +161,21 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose
         ngrids, nao = ao[0].shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                              dtype=numpy.uint8)
     if not hermi:
         # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
         # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
         dm = (dm + dm.conj().T) * .5
 
-    shls_slice = (0, mol.nbas)
-    ao_loc = mol.ao_loc_nr()
+    shls_slice = (0, nbas)
     if xctype == 'LDA' or xctype == 'HF':
-        c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
+        c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas)
         #:rho = numpy.einsum('pi,pi->p', ao, c0)
         rho = _contract_rho(ao, c0, idx)
     elif xctype in ('GGA', 'NLC'):
         rho = numpy.empty((4,ngrids))
-        c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
+        c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc, nbas)
         #:rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
         rho[0] = _contract_rho(c0, ao[0], idx)
         for i in range(1, 4):
@@ -179,14 +187,14 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, idx=None, verbose
     else: # meta-GGA
         # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
         rho = numpy.empty((6,ngrids))
-        c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
+        c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc, nbas)
         #:rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
         rho[0] = _contract_rho(ao[0], c0, idx)
         rho[5] = 0
         for i in range(1, 4):
             #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i]) * 2 # *2 for +c.c.
             rho[i] = _contract_rho(c0, ao[i], idx) * 2
-            c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
+            c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc, nbas)
             #:rho[5] += numpy.einsum('pi,pi->p', c1, ao[i])
             rho[5] += _contract_rho(c1, ao[i], idx)
         XX, YY, ZZ = 4, 7, 9
@@ -233,6 +241,13 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA', idx=None, v
         if xctype = GGA;  (6,N) array for meta-GGA, where last two rows are
         \nabla^2 rho and tau = 1/2(\nabla f)^2
     '''
+    if mol is None:
+        assert nbas is not None
+        assert ao_loc is not None
+    else:
+        nbas = mol.nbas
+        ao_loc = mol.ao_loc_nr()
+
     xctype = xctype.upper()
     if xctype == 'LDA' or xctype == 'HF':
         ngrids, nao = ao.shape
@@ -240,42 +255,41 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA', idx=None, v
         ngrids, nao = ao[0].shape
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                              dtype=numpy.uint8)
-    shls_slice = (0, mol.nbas)
-    ao_loc = mol.ao_loc_nr()
+    shls_slice = (0, nbas)
     pos = mo_occ > OCCDROP
     if pos.sum() > 0:
         cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
         if xctype == 'LDA' or xctype == 'HF':
-            c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc, nbas)
             #:rho = numpy.einsum('pi,pi->p', c0, c0)
             rho = _contract_rho(c0, c0, idx)
         elif xctype in ('GGA', 'NLC'):
             rho = numpy.empty((4,ngrids))
-            c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc, nbas)
             #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
             rho[0] = _contract_rho(c0, c0, idx)
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
+                c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc, nbas)
                 #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 rho[i] = _contract_rho(c0, c1, idx) * 2
         else: # meta-GGA
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
             rho = numpy.empty((6,ngrids))
-            c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc, nbas)
             #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
             rho[0] = _contract_rho(c0, c0, idx)
             rho[5] = 0
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
+                c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc, nbas)
                 #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 #:rho[5] += numpy.einsum('pi,pi->p', c1, c1)
                 rho[i] = _contract_rho(c0, c1, idx) * 2
                 rho[5] += _contract_rho(c1, c1, idx)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
-            c1 = _dot_ao_dm(mol, ao2, cpos, non0tab, shls_slice, ao_loc)
+            c1 = _dot_ao_dm(mol, ao2, cpos, non0tab, shls_slice, ao_loc, nbas)
             #:rho[4] = numpy.einsum('pi,pi->p', c0, c1)
             rho[4] = _contract_rho(c0, c1, idx)
             rho[4] += rho[5]
@@ -294,31 +308,31 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA', idx=None, v
     if neg.sum() > 0:
         cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
         if xctype == 'LDA' or xctype == 'HF':
-            c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc, nbas)
             #:rho -= numpy.einsum('pi,pi->p', c0, c0)
             rho -= _contract_rho(c0, c0, idx)
         elif xctype == 'GGA':
-            c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc, nbas)
             #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
             rho[0] -= _contract_rho(c0, c0, idx)
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
+                c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc, nbas)
                 #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 rho[i] -= _contract_rho(c0, c1, idx) * 2 # *2 for +c.c.
         else:
-            c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
+            c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc, nbas)
             #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
             rho[0] -= _contract_rho(c0, c0, idx)
             rho5 = 0
             for i in range(1, 4):
-                c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
+                c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc, nbas)
                 #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
                 #:rho5 += numpy.einsum('pi,pi->p', c1, c1)
                 rho[i] -= _contract_rho(c0, c1, idx) * 2 # *2 for +c.c.
                 rho5 += _contract_rho(c1, c1, idx)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
-            c1 = _dot_ao_dm(mol, ao2, cneg, non0tab, shls_slice, ao_loc)
+            c1 = _dot_ao_dm(mol, ao2, cneg, non0tab, shls_slice, ao_loc, nbas)
             #:rho[4] -= numpy.einsum('pi,pi->p', c0, c1) * 2
             rho[4] -= _contract_rho(c0, c1, idx) * 2
             rho[4] -= rho5 * 2
@@ -578,8 +592,10 @@ def _dot_ao_ao(mol, ao1, ao2, non0tab, shls_slice, ao_loc, hermi=0):
        pnon0tab, pshls_slice, pao_loc)
     return vv
 
-def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
+def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
     '''return numpy.dot(ao, dm)'''
+    if ENFORCE_NUMPY:
+        return numpy.dot(ao, dm)
     ngrids, nao = ao.shape
     if nao < SWITCH_SIZE:
         return lib.dot(dm.T, ao.T).T
@@ -606,7 +622,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
        ao.ctypes.data_as(ctypes.c_void_p),
        dm.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nao), ctypes.c_int(dm.shape[1]),
-       ctypes.c_int(ngrids), ctypes.c_int(mol.nbas),
+       ctypes.c_int(ngrids), ctypes.c_int(nbas),
        pnon0tab, pshls_slice, pao_loc)
     return vm
 

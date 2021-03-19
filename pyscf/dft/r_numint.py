@@ -58,13 +58,13 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
     else:
         return aoLa, aoLb
 
-def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
+def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
     aoa, aob = ao
-    out = _dot_ao_dm(mol, aoa, dm, non0tab, shls_slice, ao_loc, out=out)
+    out = _dot_ao_dm(mol, aoa, dm, non0tab, shls_slice, ao_loc, nbas, out=out)
     rhoaa = numpy.einsum('pi,pi->p', aoa.real, out.real)
     rhoaa+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
     rhoba = numpy.einsum('pi,pi->p', aob, out.conj())
-    out = _dot_ao_dm(mol, aob, dm, non0tab, shls_slice, ao_loc, out=out)
+    out = _dot_ao_dm(mol, aob, dm, non0tab, shls_slice, ao_loc, nbas, out=out)
     rhoab = numpy.einsum('pi,pi->p', aoa, out.conj())
     rhobb = numpy.einsum('pi,pi->p', aob.real, out.real)
     rhobb+= numpy.einsum('pi,pi->p', aob.imag, out.imag)
@@ -90,9 +90,10 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
                              dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
+    nbas = mol.nbas
 
     if xctype == 'LDA':
-        tmp = _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc)
+        tmp = _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas)
         rho, m = _rho2x2_to_rho_m(tmp)
     elif xctype == 'GGA':
         raise NotImplementedError
