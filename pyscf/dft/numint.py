@@ -610,7 +610,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, nbas, out=None):
         dm = numpy.asarray(dm, numpy.complex128)
 
     if non0tab is None or shls_slice is None or ao_loc is None:
-        pnon0tab = pshls_slice = pao_loc = pnbas = lib.c_null_ptr()
+        pnon0tab = pshls_slice = pao_loc = lib.c_null_ptr()
     else:
         pnon0tab    = non0tab.ctypes.data_as(ctypes.c_void_p)
         pshls_slice = (ctypes.c_int*2)(*shls_slice)
