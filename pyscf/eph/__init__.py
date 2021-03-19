@@ -1,3 +1,14 @@
+'''
+First order electron phonon matrix
+==================================
+Simple usage::
+    >>> from pyscf import gto, dft, eph
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 2.100825', basis='def2-svp', verbose=4, unit="bohr")
+    >>> mf = dft.RKS(mol, xc='pbe,pbe')
+    >>> mf.run()
+    >>> myeph = eph.EPH(mf)
+    >>> mat, omega = myeph.kernel()
+'''
 from pyscf.eph import rhf
 from pyscf.eph import uhf
 from pyscf.eph import rks
