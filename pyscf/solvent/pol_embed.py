@@ -17,6 +17,7 @@
 #
 
 '''
+Interface to CPPE, a library of polarizable embedding solvent model.
 This interface requires the cppe library
 
 GitHub:      https://github.com/maxscheurer/cppe
@@ -24,10 +25,22 @@ Code:        10.5281/zenodo.3345696
 Publication: https://doi.org/10.1021/acs.jctc.9b00758
 
 The CPPE library can be installed via:
-pip install cppe
+        pip install cppe
+or
+        pip install git+https://github.com/maxscheurer/cppe.git
 
 The potential file required by CPPE library needs to be generated from the
 PyFraME library  https://gitlab.com/FraME-projects/PyFraME
+
+References:
+
+  [1] Olsen, J. M., Aidas, K., & Kongsted, J. (2010). Excited States in Solution
+  through Polarizable Embedding. J. Chem. Theory Comput., 6 (12), 3721-3734.
+  https://doi.org/10.1021/ct1003803
+
+  [2] Olsen, J. M. H., & Kongsted, J. (2011). Molecular Properties through
+  Polarizable Embedding. Advances in Quantum Chemistry (Vol. 61).
+  https://doi.org/10.1016/B978-0-12-386013-2.00003-6
 '''
 
 import sys
@@ -136,7 +149,7 @@ def _get_element_row(symbol):
         element_row = 2
     else:
         raise NotImplementedError("PE(ECP) only implemented for first, "
-                                    "second, and third row elements")
+                                  "second, and third row elements")
     return element_row
 
 
