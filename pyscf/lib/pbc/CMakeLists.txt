@@ -13,6 +13,7 @@
 # limitations under the License.
 
 add_library(pbc SHARED ft_ao.c fill_ints.c optimizer.c grid_ao.c nr_direct.c)
+add_dependencies(pbc cgto cvhf)
 
 set_target_properties(pbc PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
