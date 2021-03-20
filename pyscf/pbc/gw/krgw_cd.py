@@ -52,7 +52,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert (frozen == 0)
 
     if orbs is None:
         orbs = range(gw.nmo)
@@ -638,7 +642,7 @@ class KRGWCD(lib.StreamObject):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         log.info('GW nocc = %d, nvir = %d, nkpts = %d', nocc, nvir, nkpts)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'GW finite size corrections = %s', self.fc)
