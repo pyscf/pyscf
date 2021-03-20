@@ -235,7 +235,7 @@ class TestPolEmbed(unittest.TestCase):
 
         eref, vref = _exec_cppe(pe, dm[0], elec_only=True)
         e, v = pe._exec_cppe(dm, elec_only=True)
-        self.assertAlmostEqual(eref, e[0], 9)
+        self.assertAlmostEqual(eref, e[0], 10)
         self.assertAlmostEqual(abs(vref - v[0]).max(), 0, 10)
 
     def test_pol_embed_scf(self):
