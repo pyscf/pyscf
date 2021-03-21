@@ -14,7 +14,6 @@ nosetests pyscf/ -v --with-timer --with-cov --cov-report xml --cov-report term -
     -e h2o_vdz \
     -e test_mc2step_4o4e \
     -e test_ks_noimport \
-    -e test_jk_single_kpt \
     -e test_jk_hermi0 \
     -e test_j_kpts \
     -e test_k_kpts \
