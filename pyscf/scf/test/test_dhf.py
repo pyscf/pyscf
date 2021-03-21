@@ -105,8 +105,11 @@ class KnownValues(unittest.TestCase):
             mf = scf.dhf.RHF(mol)
             mf.with_ssss = False
             mf.conv_tol_grad = 1e-5
-            self.assertAlmostEqual(mf.scf(), -76.038524807447857, 8)
-            mol.stdout.close()
+            self.assertAlmostEqual(mf.kernel(), -76.03852477545016, 8)
+
+            mf.ssss_approx = None
+            mf.conv_tol_grad = 1e-5
+            self.assertAlmostEqual(mf.kernel(), -76.03852480744785, 8)
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -210,6 +213,20 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(vk0, vk1))
+
+#    def test_breit(self):
+#        mol = gto.M(atom='Cl',
+#                    basis={'Cl': gto.parse('''
+#                                           Cl  S 5.5    1.0
+#                                           Cl  P 9.053563477       1.0''')},
+#                    charge=9)
+#        mf = mol.DHF().set(with_breit=True)
+#        mf.run()
+#        self.assertTrue(mf.e_tot, -234.888983310961, 8)
+#
+#        mf.with_ssss = False
+#        mf.run()
+#        self.assertTrue(mf.e_tot, -234.888999687936, 8)
 
     def test_breit_high_cost(self):
         erig = _fill_gaunt(h4, h4.intor('int2e_breit_ssp1ssp2_spinor', comp=1))
