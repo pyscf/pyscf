@@ -17,7 +17,8 @@
 #
 
 '''
-Spin-restricted G0W0-CD QP eigenvalues
+Spin-restricted G0W0 approximation with contour deformation
+
 This implementation has the same scaling (N^4) as GW-AC, more robust but slower.
 GW-CD is particularly recommended for accurate core and high-energy states.
 
@@ -54,7 +55,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    assert(gw.frozen == 0 or gw.frozen is None)
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -70,7 +71,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     nvir = nmo-nocc
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df: #and gw.frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -256,7 +257,7 @@ class GWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -265,9 +266,8 @@ class GWCD(lib.StreamObject):
 
         self.frozen = frozen
         #TODO: implement frozen orbs
-        if self.frozen > 0:
+        if self.frozen is not None:
             raise NotImplementedError
-        self.frozen = 0
 
         # DF-GW must use density fitting integrals
         if getattr(mf, 'with_df', None):
@@ -298,8 +298,6 @@ class GWCD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
-            log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
 
@@ -384,7 +382,7 @@ if __name__ == '__main__':
 
     gw = GWCD(mf)
     gw.kernel(orbs=range(0,nocc+3))
-    print gw.mo_energy
+    print(gw.mo_energy)
     assert(abs(gw.mo_energy[nocc-1]--0.41284735)<1e-5)
     assert(abs(gw.mo_energy[nocc]-0.16574524)<1e-5)
     assert(abs(gw.mo_energy[0]--19.53387986)<1e-5)
