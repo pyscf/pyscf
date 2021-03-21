@@ -14,6 +14,7 @@
 
 add_library(cc SHARED
   ccsd_pack.c ccsd_grad.c ccsd_t.c uccsd_t.c)
+add_dependencies(cc np_helper ao2mo)
 
 set_target_properties(cc PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

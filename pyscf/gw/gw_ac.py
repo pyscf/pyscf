@@ -56,16 +56,21 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+
     # only support frozen core
-    assert (isinstance(gw.frozen, int))
-    assert (gw.frozen < gw.nocc)
+    assert (isinstance(frozen, int))
+    assert (frozen < gw.nocc)
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
     if orbs is None:
         orbs = range(gw.nmo)
     else:
-        orbs = [x - gw.frozen for x in orbs]
+        orbs = [x - frozen for x in orbs]
         if orbs[0] < 0:
             logger.warn(gw, 'GW orbs must be larger than frozen core!')
             raise RuntimeError
@@ -79,7 +84,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     nvir = nmo-nocc
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df and frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -119,7 +124,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                 dsigma = pade_thiele(ep-ef+de, omega_fit[p-orbs[0]], coeff[:,p-orbs[0]]).real - sigmaR.real
             zn = 1.0/(1.0-dsigma/de)
             e = ep + zn*(sigmaR.real + vk[p,p] - v_mf[p,p])
-            mo_energy[p+gw.frozen] = e
+            mo_energy[p+frozen] = e
         else:
             # self-consistently solve QP equation
             def quasiparticle(omega):
@@ -130,7 +135,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                 return omega - mf_mo_energy[p] - (sigmaR.real + vk[p,p] - v_mf[p,p])
             try:
                 e = newton(quasiparticle, mf_mo_energy[p], tol=1e-6, maxiter=100)
-                mo_energy[p+gw.frozen] = e
+                mo_energy[p+frozen] = e
             except RuntimeError:
                 conv = False
 
@@ -332,7 +337,7 @@ class GWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_gw_GW_ac', 'pade')
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -369,7 +374,7 @@ class GWAC(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
