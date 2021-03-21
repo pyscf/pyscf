@@ -18,7 +18,8 @@ cell.build(
               H 3.37013733 3.37013733 3.37013733''',
     basis = 'gth-dzvp',
     pseudo = 'gth-pade',
-    verbose = 5,
+    verbose = 7,
+    output = '/dev/null',
     charge = 0,
     spin = None)
 cell.spin = 3

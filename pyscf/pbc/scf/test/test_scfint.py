@@ -59,10 +59,6 @@ def make_cell2(L, n):
 numpy.random.seed(1)
 k = numpy.random.random(3)
 
-def finger(mat):
-    w = numpy.cos(numpy.arange(mat.size))
-    return numpy.dot(mat.ravel(), w)
-
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
@@ -95,7 +91,7 @@ class KnowValues(unittest.TestCase):
         s0 = get_ovlp(cell)
         s1 = scfint.get_ovlp(cell)
         self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
-        self.assertAlmostEqual(finger(s1), 1.3229918679678208, 10)
+        self.assertAlmostEqual(lib.fp(s1), 1.3229918679678208, 10)
 
         s0 = get_ovlp(cell, kpt=k)
         s1 = scfint.get_ovlp(cell, kpt=k)
