@@ -54,16 +54,12 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-<<<<<<< HEAD
     if gw.frozen is None:
         frozen = 0
     else:
         frozen = gw.frozen
 
     assert frozen == 0
-=======
-    assert(gw.frozen == 0 or gw.frozen is None)
->>>>>>> 08000066994885cc51a0bec88cbf200325902bf0
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -78,11 +74,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     nmo = gw.nmo
 
     # v_hf from DFT/HF density
-<<<<<<< HEAD
-    if vhf_df and frozen == 0:
-=======
-    if vhf_df: #and gw.frozen == 0:
->>>>>>> 08000066994885cc51a0bec88cbf200325902bf0
+    if vhf_df: # and frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -308,11 +300,8 @@ class GWCD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-<<<<<<< HEAD
         if self.frozen is not None:
-            log.info('frozen orbitals %s', str(self.frozen))
-=======
->>>>>>> 08000066994885cc51a0bec88cbf200325902bf0
+            log.info('frozen = %s', self.frozen)
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
 
