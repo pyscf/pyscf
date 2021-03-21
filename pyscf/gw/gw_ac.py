@@ -17,7 +17,7 @@
 #
 
 '''
-Spin-restricted G0W0-AC QP eigenvalues
+Spin-restricted G0W0 approximation with analytic continuation
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
 GW-AC is recommended for valence states only, and is inaccuarate for core states.
@@ -315,7 +315,7 @@ def AC_pade_thiele_diag(sigma, omega):
     omega2 = omega[:,(idx[-1]+4)::4].copy()
     omega = np.hstack((omega1,omega2))
     norbs, nw = sigma.shape
-    npade = nw/2
+    npade = nw // 2
     coeff = np.zeros((npade*2,norbs),dtype=np.complex128)
     for p in range(norbs):
         coeff[:,p] = thiele(sigma[p,:npade*2], omega[p,:npade*2])
