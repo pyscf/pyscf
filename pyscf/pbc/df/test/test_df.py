@@ -16,7 +16,7 @@ import unittest
 import numpy
 from pyscf import lib
 import pyscf.pbc
-from pyscf import ao2mo
+from pyscf import ao2mo, gto
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import df
@@ -122,6 +122,30 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.0006633634465733618, 9)
         self.assertAlmostEqual(lib.fp(eri0123), 0.9693314315640165-0.33152709566516436j, 9)
 
+    def test_modrho_basis(self):
+        cell = pgto.Cell(
+            atom = 'Li 0 0 0; Li 1.5 1.5 1.5',
+            a = numpy.eye(3) * 3,
+        )
+        cell.build()
+        cell1 =  pgto.Cell(
+            atom = 'Li1 0 0 0; Li2 1.5 1.5 1.5',
+            a = numpy.eye(3) * 3,
+        )
+        cell1.build()
+        auxcell = df.make_modrho_basis(cell, auxbasis='ccpvdz', drop_eta=.1)
+        auxcell1 = df.make_modrho_basis(cell1, auxbasis='ccpvdz', drop_eta=.1)
+        for ib in range(len(auxcell._bas)):
+            nprim = auxcell.bas_nprim(ib)
+            nc = auxcell.bas_nctr(ib)
+            es = auxcell.bas_exp(ib)
+            es1 = auxcell1.bas_exp(ib)
+            ptr = auxcell._bas[ib, gto.mole.PTR_COEFF]
+            ptr1 = auxcell1._bas[ib, gto.mole.PTR_COEFF]
+            cs = auxcell._env[ptr:ptr+nprim*nc]
+            cs1 = auxcell1._env[ptr1:ptr1+nprim*nc]
+            self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
+            self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
 
 
 if __name__ == '__main__':
