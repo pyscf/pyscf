@@ -624,10 +624,10 @@ class SCF(mol_hf.SCF):
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
         elif self.rsjk:
-            vj, vk = self.rsjk.get_jk(dm, hermi, kpt, kpts_band,
+            vj, vk = self.rsjk.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
                                       with_j, with_k, omega, exxdiv=self.exxdiv)
         else:
-            vj, vk = self.with_df.get_jk(dm, hermi, kpt, kpts_band,
+            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
                                          with_j, with_k, omega, exxdiv=self.exxdiv)
 
         if with_j:
