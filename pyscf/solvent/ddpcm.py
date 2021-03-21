@@ -84,12 +84,12 @@ from pyscf import mcscf
 from pyscf import mp, ci, cc
 from pyscf import tdscf
 scf.hf.SCF.ddPCM    = scf.hf.SCF.DDPCM    = ddpcm_for_scf
-mcscf.casci.ddPCM   = mcscf.casci.DDPCM   = ddpcm_for_casci
-mcscf.mc1step.ddPCM = mcscf.mc1step.DDPCM = ddpcm_for_casscf
 mp.mp2.MP2.ddPCM    = mp.mp2.MP2.DDPCM    = ddpcm_for_post_scf
 ci.cisd.CISD.ddPCM  = ci.cisd.CISD.DDPCM  = ddpcm_for_post_scf
 cc.ccsd.CCSD.ddPCM  = cc.ccsd.CCSD.DDPCM  = ddpcm_for_post_scf
 tdscf.rhf.TDA.ddPCM = tdscf.rhf.TDA.DDPCM = ddpcm_for_tdscf
+mcscf.casci.CASCI.ddPCM = mcscf.casci.CASCI.DDPCM = ddpcm_for_casci
+mcscf.mc1step.CASSCF.ddPCM = mcscf.mc1step.CASSCF.DDPCM = ddpcm_for_casscf
 
 def gen_ddpcm_solver(pcmobj, verbose=None):
     mol = pcmobj.mol
