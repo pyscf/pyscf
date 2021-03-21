@@ -68,10 +68,69 @@ mol = gto.M(atom='''
             ''', basis='sto3g', verbose=7,
             output='/dev/null')
 
+potf2 = tempfile.NamedTemporaryFile()
+potf2.write(b'''! water molecule + a large, positive charge to force electron spill-out
+@COORDINATES
+4
+AA
+O     21.41500000    20.20300000    28.46300000        1
+H     20.84000000    20.66500000    29.07300000        2
+H     22.26700000    20.19000000    28.89900000        3
+X     21.41500000    20.20300000    28.46300000        4
+@MULTIPOLES
+ORDER 0
+4
+1       -0.68195912
+2        0.34097956
+3        0.34097956
+4        8.00000000
+ORDER 1
+4
+1        0.07364864     0.11937993     0.27811003
+2        0.13201293    -0.10341957    -0.13476149
+3       -0.19289612     0.00473166    -0.09514399
+4        0 0 0
+ORDER 2
+4
+1       -3.33216702    -0.28299356    -0.01420064    -4.16411766     0.21213644    -3.93180619
+2       -0.26788067    -0.15634676    -0.21817674    -0.30867972     0.17884149    -0.20228345
+3       -0.01617821     0.00575875     0.24171375    -0.44448719    -0.00422271    -0.31817844
+4         0 0 0 0 0 0
+@POLARIZABILITIES
+ORDER 1 1
+4
+1        2.98942355    -0.37779481     0.04141173     1.82815813     0.40319255     2.35026343
+2        1.31859676    -0.60024842    -0.89358696     1.20607500     0.56785158     1.40652272
+3        2.28090986     0.01949959     0.86466278     0.68674835    -0.13216306     0.96339257
+4        0 0 0 0 0 0
+EXCLISTS
+4 4
+1       2    3    4
+2       1    3    4
+3       1    2    4
+4       1    2    3''')
+potf2.flush()
+potfile2 = potf2.name
+
+mol2 = gto.M(
+    atom="""
+    O     22.931000    21.390000    23.466000
+    C     22.287000    21.712000    22.485000
+    N     22.832000    22.453000    21.486000
+    H     21.242000    21.408000    22.312000
+    H     23.729000    22.867000    21.735000
+    H     22.234000    23.026000    20.883000
+    """,
+    basis="3-21++G",
+    verbose=7,
+    output='/dev/null'
+)
+
+
 def tearDownModule():
-    global potf, mol
+    global potf, potf2, mol, mol2
     mol.stdout.close()
-    del potf, mol
+    del potf, potf2, mol, mol2
 
 
 def _compute_multipole_potential_integrals(pe, site, order, moments):
@@ -216,6 +275,11 @@ class TestPolEmbed(unittest.TestCase):
         mf = solvent.PE(mol.RHF(), pe).run(conv_tol=1e-10)
         self.assertAlmostEqual(mf.e_tot, -112.35232445743728, 9)
         self.assertAlmostEqual(mf.with_solvent.e, 0.00020182314249546455, 9)
+    
+    def test_pe_scf_ecp(self):
+        pe = solvent.PE(mol2, {"potfile": potfile2, "ecp": True})
+        mf = solvent.PE(mol2.RHF(), pe).run(conv_tol=1e-10)
+        self.assertAlmostEqual(mf.e_tot, -168.147494986446, 8)
 
     def test_as_scanner(self):
         mf_scanner = solvent.PE(scf.RHF(mol), potfile).as_scanner()
