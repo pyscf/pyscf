@@ -30,6 +30,11 @@ cell.atom = [['He', (L/2.,L/2.,L/2.)]]
 cell.basis = { 'He': [[0, (1.0, 1.0)]] }
 cell.build()
 
+
+def tearDownModule():
+    global cell
+    del cell
+
 class KnowValues(unittest.TestCase):
     def test_band(self):
         mf = scf.RHF(cell).run()

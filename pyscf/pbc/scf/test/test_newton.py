@@ -42,6 +42,12 @@ cell.verbose = 5
 cell.output = '/dev/null'
 cell.build()
 
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
+
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         mf = scf.RHF(cell)
