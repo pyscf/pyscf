@@ -34,9 +34,14 @@ pseudo = "gth-pade"
 ke_cutoff = 100
 cell = pbcgto.Cell(atom=atom, a=a, basis=basis, pseudo=pseudo,
                    ke_cutoff=ke_cutoff)
-cell.verbose = 5
+cell.verbose = 4
 cell.output = '/dev/null'
 cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
 
 def run_kcell(cell, nk):
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
@@ -48,7 +53,22 @@ def run_kcell(cell, nk):
     return ekpt, mp.e_corr
 
 class KnownValues(unittest.TestCase):
-    def test_222(self):
+    def test_221(self):
+        cell1 = cell.copy()
+        cell1.basis = 'gth-dzv'
+        cell1.build()
+
+        nk = [2, 2, 1]
+        abs_kpts = cell1.make_kpts(nk, wrap_around=True)
+        kmf = pbcscf.KRHF(cell1, abs_kpts)
+        kmf = remove_linear_dep_(kmf, threshold=1e-4, lindep=1e-6)
+        ekpt = kmf.scf()
+        mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
+
+        self.assertAlmostEqual(ekpt,      -10.835614361742607, 8)
+        self.assertAlmostEqual(mp.e_corr, -0.1522294774708119, 8)
+
+    def test_222_high_cost(self):
         nk = (2, 2, 2)
         escf, emp = run_kcell(cell,nk)
         self.assertAlmostEqual(escf, -11.0152342492995, 9)
