@@ -55,8 +55,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(kmf.mo_coeff[0]-mo_i[0]).max(), 0, 9)
 
         hop2, hdiag2 = stability._gen_hop_rhf_external(kmf)
-        self.assertAlmostEqual(lib.finger(hdiag2), 18.528134783454508, 7)
-        self.assertAlmostEqual(lib.finger(hop2(hdiag2)), 108.99683506471919, 5)
+        self.assertAlmostEqual(lib.fp(hdiag2), 18.528134783454508, 7)
+        self.assertAlmostEqual(lib.fp(hop2(hdiag2)), 108.99683506471919, 5)
 
     def test_uhf_stability(self):
         umf = pscf.UHF(cell, exxdiv='ewald').run(conv_tol=1e-12)
@@ -71,8 +71,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(kumf.mo_coeff[1][0]-mo_i[1][0]).max(), 0, 9)
 
         hop2, hdiag2 = stability._gen_hop_uhf_external(kumf)
-        self.assertAlmostEqual(lib.finger(hdiag2), 10.977759629315884, 7)
-        self.assertAlmostEqual(lib.finger(hop2(hdiag2)), 86.425042652868, 5)
+        self.assertAlmostEqual(lib.fp(hdiag2), 10.977759629315884, 7)
+        self.assertAlmostEqual(lib.fp(hop2(hdiag2)), 86.425042652868, 5)
 
     def test_rotate_mo(self):
         numpy.random.seed(4)
@@ -86,9 +86,9 @@ class KnownValues(unittest.TestCase):
         mo_occ = [occarray(8, 3), occarray(7, 3), occarray(8, 2)]
         dx = numpy.random.random(15+12+12)
         mo1 = stability._rotate_mo(mo_coeff, mo_occ, dx)
-        self.assertAlmostEqual(lib.finger(mo1[0]), 1.1090134286653903, 12)
-        self.assertAlmostEqual(lib.finger(mo1[1]), 1.0665953580532537, 12)
-        self.assertAlmostEqual(lib.finger(mo1[2]), -5.008202013953201, 12)
+        self.assertAlmostEqual(lib.fp(mo1[0]), 1.1090134286653903, 12)
+        self.assertAlmostEqual(lib.fp(mo1[1]), 1.0665953580532537, 12)
+        self.assertAlmostEqual(lib.fp(mo1[2]), -5.008202013953201, 12)
 
 if __name__ == "__main__":
     print("Full Tests for stability")
