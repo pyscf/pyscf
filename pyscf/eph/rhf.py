@@ -27,8 +27,8 @@ from pyscf.hessian import rhf
 from pyscf.lib import logger, chkfile
 from pyscf.scf._response_functions import _gen_rhf_response
 from pyscf import __config__
+from pyscf.data.nist import HARTREE2WAVENUMBER
 
-AU_TO_CM = 2.19475 * 1e5
 CUTOFF_FREQUENCY = getattr(__config__, 'eph_cutoff_frequency', 80)  # 80 cm-1
 KEEP_IMAG_FREQUENCY = getattr(__config__, 'eph_keep_imaginary_frequency', False)
 IMAG_CUTOFF_FREQUENCY = getattr(__config__, 'eph_imag_cutoff_frequency', 1e-4)
@@ -62,7 +62,7 @@ def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency
     w = w[idx]
     c = c[:,idx]
     w_au = w**0.5
-    w_cm = w_au * AU_TO_CM
+    w_cm = w_au * HARTREE2WAVENUMBER
     log.info('****Eigenmodes(cm-1)****')
     for i, omega in enumerate(w_cm):
         if abs(omega.imag) < IMAG_CUTOFF_FREQUENCY:
@@ -196,10 +196,11 @@ class EPH(rhf.Hessian):
             Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
     '''
 
-    def __init__(self, scf_method, **kwargs):
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         rhf.Hessian.__init__(self, scf_method)
-        self.cutoff_frequency = kwargs.pop("CUTOFF_FREQUENCY", CUTOFF_FREQUENCY)
-        self.keep_imag_frequency = kwargs.pop("KEEP_IMAG_FREQUENCY", KEEP_IMAG_FREQUENCY)
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = get_mode
     get_eph = get_eph

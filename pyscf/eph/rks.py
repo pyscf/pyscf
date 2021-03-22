@@ -28,6 +28,9 @@ from pyscf.dft import numint
 from pyscf.eph import rhf as rhf_eph
 from pyscf import lib
 
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
+
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     """" This functions is slightly different from hessian.rks._get_vxc_deriv1 in that <\nabla u|Vxc|v> is removed"""
     mol = hessobj.mol
@@ -173,10 +176,11 @@ class EPH(rks_hess.Hessian):
         eph : numpy.ndarray
             Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
     '''
-    def __init__(self, scf_method, **kwargs):
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         rks_hess.Hessian.__init__(self, scf_method)
-        self.cutoff_frequency = kwargs.pop("CUTOFF_FREQUENCY", rhf_eph.CUTOFF_FREQUENCY)
-        self.keep_imag_frequency = kwargs.pop("KEEP_IMAG_FREQUENCY", rhf_eph.KEEP_IMAG_FREQUENCY)
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph

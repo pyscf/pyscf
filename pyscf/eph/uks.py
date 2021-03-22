@@ -30,6 +30,9 @@ from pyscf.eph import rhf as rhf_eph
 from pyscf.eph.uhf import uhf_deriv_generator
 from pyscf import lib
 
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
+
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
     mf = hessobj.base
@@ -220,10 +223,11 @@ class EPH(uks_hess.Hessian):
             Electron phonon matrix eph[spin,j,a,b] (j in nmodes, a,b in norbs)
     '''
 
-    def __init__(self, scf_method, **kwargs):
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         uks_hess.Hessian.__init__(self, scf_method)
-        self.cutoff_frequency = kwargs.pop("CUTOFF_FREQUENCY", rhf_eph.CUTOFF_FREQUENCY)
-        self.keep_imag_frequency = kwargs.pop("KEEP_IMAG_FREQUENCY", rhf_eph.KEEP_IMAG_FREQUENCY)
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph
