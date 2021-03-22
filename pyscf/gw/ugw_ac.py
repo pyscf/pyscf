@@ -56,6 +56,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
+    mol = gw.mol
     if gw.frozen is None:
         frozen = 0
     else:
@@ -83,7 +84,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     vj = mf.get_j()
     v_mf[0] = v_mf[0] - (vj[0] + vj[1])
     v_mf[1] = v_mf[1] - (vj[0] + vj[1])
-    v_mf_frz = np.zeros((2, nmo-frozen, nmo-frozen))
+    v_mf_frz = np.zeros((2, nmoa-frozen, nmob-frozen))
     for s in range(2):
         v_mf_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, v_mf[s], mo_coeff[s]))
     v_mf = v_mf_frz
@@ -97,12 +98,12 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     else:
         # exact vk without density fitting
         dm = mf.make_rdm1()
-        uhf = scf.UHF(gw.mol)
-        vk = uhf.get_veff(gw.mol,dm)
-        vj = uhf.get_j(gw.mol,dm)
+        uhf = scf.UHF(mol)
+        vk = uhf.get_veff(mol, dm)
+        vj = uhf.get_j(mol, dm)
         vk[0] = vk[0] - (vj[0] + vj[1])
         vk[1] = vk[1] - (vj[0] + vj[1])
-        vk_frz = np.zeros((2, nmo-frozen, nmo-frozen))
+        vk_frz = np.zeros((2, nmoa-frozen, nmob-frozen))
         for s in range(2):
             vk_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, vk[s], mo_coeff[s]))
         vk = vk_frz
@@ -361,7 +362,7 @@ def AC_pade_thiele_diag(sigma, omega):
     omega2 = omega[:,(idx[-1]+4)::4].copy()
     omega = np.hstack((omega1,omega2))
     norbs, nw = sigma.shape
-    npade = nw/2
+    npade = nw // 2
     coeff = np.zeros((npade*2,norbs),dtype=np.complex128)
     for p in range(norbs):
         coeff[:,p] = thiele(sigma[p,:npade*2], omega[p,:npade*2])
@@ -459,9 +460,9 @@ class UGWAC(lib.StreamObject):
             mo_energy: GW quasiparticle energy
         """
         if mo_coeff is None:
-            mo_coeff = _mo_without_core(gw, gw._scf.mo_coeff)
+            mo_coeff = _mo_without_core(self, self._scf.mo_coeff)
         if mo_energy is None:
-            mo_energy = _mo_energy_without_core(gw, gw._scf.mo_energy)
+            mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
         cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
