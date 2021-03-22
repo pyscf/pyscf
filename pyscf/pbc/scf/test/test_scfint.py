@@ -19,6 +19,7 @@
 import unittest
 import numpy
 import numpy as np
+from pyscf import lib
 from pyscf.pbc.scf import scfint
 from pyscf.pbc import gto as pbcgto
 import pyscf.pbc.dft as pdft

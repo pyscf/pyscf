@@ -52,8 +52,8 @@ class KnownValues(unittest.TestCase):
         mol.output = '/dev/null'
         mol.atom = [
             ['O' , (0. , 0.     , 0.)],
-            ['H' , (0. , -0.757 , 0.586)],
-            ['H' , (0. , 0.757 , 0.586)]]
+            ['H' , (0. , -0.757 , 0.587)],
+            ['H' , (0. , 0.757 , 0.587)]]
         mol.basis = 'cc-pvdz'
         mol.build()
 
@@ -64,14 +64,15 @@ class KnownValues(unittest.TestCase):
         nocc = mol.nelectron // 2
         nvir = mf.mo_energy.size - nocc
         td = tdscf.dRPA(mf)
-        td.nstates = nocc * nvir
+        td.nstates = min(100, nocc*nvir)
         td.kernel()
 
         gw_obj = gw_exact.GW(mf, td, frozen=0)
+        gw_obj.kernel()
         gw_obj.linearized = True
         gw_obj.kernel(orbs=[nocc-1,nocc])
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.44684106, 7)
-        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.17292032, 7)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc]  ,  0.17292032, 7)
 
 
 if __name__ == "__main__":
