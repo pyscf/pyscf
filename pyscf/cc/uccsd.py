@@ -1089,7 +1089,7 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     tau1ab += t2ab
     return tau1ab
 
-def _fp(nocc, nmo):
+def _flops(nocc, nmo):
     nocca, noccb = nocc
     nmoa, nmob = nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb

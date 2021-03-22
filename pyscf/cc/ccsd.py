@@ -992,7 +992,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.__class__ == CCSD):
             nocc = self.nocc
             nvir = self.nmo - self.nocc
-            flops = _fp(nocc, nvir)
+            flops = _flops(nocc, nvir)
             log.debug1('total FLOPs %s', flops)
         return self
 
@@ -1539,7 +1539,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
-def _fp(nocc, nvir):
+def _flops(nocc, nvir):
     '''Total float points'''
     return (nocc**3*nvir**2*2 + nocc**2*nvir**3*2 +     # Ftilde
             nocc**4*nvir*2 * 2 + nocc**4*nvir**2*2 +    # Wijkl
