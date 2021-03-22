@@ -43,8 +43,8 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
     name = agf2.__class__.__name__
 
     if eri is None: eri = agf2.ao2mo()
-    if gf is None: gf = self.gf
-    if se is None: se = self.se
+    if gf is None: gf = agf2.gf
+    if se is None: se = agf2.se
     if verbose is None: verbose = agf2.verbose
 
     if gf is None:
