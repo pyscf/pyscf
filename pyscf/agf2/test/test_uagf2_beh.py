@@ -101,6 +101,7 @@ class KnownValues(unittest.TestCase):
         # test the frozen implementation with outcore QMOs
         mf = scf.UHF(self.mol)
         mf.conv_tol = self.mf.conv_tol
+        mf.incore_complete = True
         mf.run()
         gf2 = agf2.UAGF2(mf)
         gf2.conv_tol = 1e-7
