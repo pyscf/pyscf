@@ -25,10 +25,10 @@ def get_arguments():
     """Get arguments from command line."""
     parser = argparse.ArgumentParser(allow_abbrev=False)
     # System
-    parser.add_argument("--system", choices=["diamond", "hBN", "perovskite"], default="diamond")
+    parser.add_argument("--system", choices=["diamond", "graphene", "perovskite"], default="diamond")
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzv")
-    parser.add_argument("--pseudopot")
+    parser.add_argument("--pseudopot", default="gth-pade")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--supercell-in", type=int, nargs=3)
@@ -90,7 +90,8 @@ def get_arguments():
     parser.add_argument("--local-occ-bath-tol", type=float, default=False)
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
     parser.add_argument("--run-second-cell", action="store_true")
-    parser.add_argument("--lda", action="store_true")
+    parser.add_argument("--dft")
+    parser.add_argument("--test-mode", action="store_true")
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -99,18 +100,17 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C"],
                 "ndim" : 3,
-                "pseudopot" : "gth-pade",
                 #"lattice_consts" : np.arange(3.55, 3.62+1e-12, 0.01),
                 "lattice_consts" : np.arange(3.4, 3.8+1e-12, 0.1),
                 # For 2x2x2:
                 #"lattice_consts" : np.arange(3.61, 3.68+1e-12, 0.01),
                 }
-    elif args.system == "hBN":
+    elif args.system == "graphene":
         defaults = {
-                "atoms" : ["B", "N"],
+                "atoms" : ["C", "C"],
                 "ndim" : 2,
-                "pseudopot" : "gth-pade",
-                "lattice_consts" : np.arange(2.44, 2.56+1e-12, 0.02),
+                "lattice_consts" : np.arange(2.35, 2.55+1e-12, 0.5),
+                #"lattice_consts" : np.arange(2.44, 2.56+1e-12, 0.02),
                 "vacuum_size" : 20.0
                 }
     elif args.system == "perovskite":
@@ -151,7 +151,7 @@ def make_diamond(a, atoms):
     atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
-def make_hBN(a, c, atoms):
+def make_graphene(a, c, atoms):
     amat = np.asarray([
             [a, 0, 0],
             [a/2, a*np.sqrt(3.0)/2, 0],
@@ -206,8 +206,8 @@ def make_cell(a, args):
     if args.system == "diamond":
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
         cell.natom_prim = 2
-    if args.system == "hBN":
-        cell.a, cell.atom = make_hBN(a, c=args.vacuum_size, atoms=args.atoms)
+    if args.system == "graphene":
+        cell.a, cell.atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
         cell.natom_prim = 2
     elif args.system == "perovskite":
         cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
@@ -239,16 +239,16 @@ def make_cell(a, args):
 def run_mf(a, cell, args):
     if args.k_points is None or np.product(args.k_points) == 1:
         kpts = cell.make_kpts([1, 1, 1])
-        if args.lda:
+        if args.dft:
             mf = pyscf.pbc.dft.RKS(cell)
         else:
             mf = pyscf.pbc.scf.RHF(cell)
     else:
         kpts = cell.make_kpts(args.k_points)
-        if args.lda:
+        if args.dft:
             mf = pyscf.pbc.dft.KRKS(cell, kpts)
         else:
-            mf = pyscf.pbc.dft.KRHF(cell, kpts)
+            mf = pyscf.pbc.scf.KRHF(cell, kpts)
     if args.exxdiv_none:
         mf.exxdiv = None
     # Load SCF from checkpoint file
@@ -390,7 +390,7 @@ for i, a in enumerate(args.lattice_consts):
             log.info("Loading unfolded GDF from file %s...", fname)
             mf.with_df._cderi = fname
         else:
-            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=(not args.test_mode))
         log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
         #ncells = np.product(args.k_points)
     else:
@@ -438,7 +438,7 @@ for i, a in enumerate(args.lattice_consts):
         # Define atomic fragments, first argument is atom label or index
         if args.system == "diamond":
             ccx.make_atom_cluster(0, symmetry_factor=natom)
-        elif args.system == "hBN":
+        elif args.system == "graphene":
             ccx.make_atom_cluster(0, symmetry_factor=ncells, **kwargs)
             ccx.make_atom_cluster(1, symmetry_factor=ncells, **kwargs)
         elif args.system == "perovskite":

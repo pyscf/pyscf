@@ -151,6 +151,7 @@ class EmbCC:
                 "orthogonal_mo_tol" : False,
                 "popfile" : "population",       # Filename for population analysis
                 "eomfile" : "eom",              # Filename for EOM-CCSD states
+                "orbfile" : "orbitals",         # Filename for orbital coefficients
                 }
         for key, val in default_opts.items():
             setattr(self.opts, key, kwargs.pop(key, val))
@@ -228,7 +229,28 @@ class EmbCC:
         if self.local_orbital_type in ("IAO", "LAO"):
             self.init_fragments()
 
-        # Population analysis
+        if self.opts.orbfile:
+            filename = "%s.txt" % self.opts.orbfile
+            tstamp = datetime.now()
+            nfo = self.C_ao.shape[-1]
+            #ao_labels = ["-".join(x) for x in self.mol.ao_labels(None)]
+            ao_labels = ["-".join([str(xi) for xi in x]) for x in self.mol.ao_labels(None)]
+            iao_labels = ["-".join([str(xi) for xi in x]) for x in self.iao_labels]
+            #iao_labels = ["-".join(x) for x in self.iao_labels]
+            log.info("[%s] Writing fragment orbitals to file \"%s\"", tstamp, filename)
+            with open(filename, "a") as f:
+                f.write("[%s] Fragment Orbitals\n" % tstamp)
+                f.write("*%s*******************\n" % (26*"*"))
+                # Header
+                fmtline = "%20s" + nfo*"   %20s" + "\n"
+                f.write(fmtline % ("AO", *iao_labels))
+                fmtline = "%20s" + nfo*"   %+20.8e" + "\n"
+                # Loop over AO
+                for i in range(self.C_ao.shape[0]):
+                    f.write(fmtline % (ao_labels[i], *self.C_ao[i]))
+
+
+        # Mean-field population analysis
         self.lo = pyscf.lo.orth_ao(self.mol, "lowdin")
         self.pop_mf, self.pop_mf_chg = self.pop_analysis()
 

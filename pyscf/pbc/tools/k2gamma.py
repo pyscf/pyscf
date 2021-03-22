@@ -134,8 +134,11 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     # transformation that makes the transformed MOs real.
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
     degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-    cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
-    print("Imaginary part in non-degenerate MO coefficients= %5.2e" % cimag_nondegen)
+
+    if np.any(~degen_mask):
+        cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
+        print("Imaginary part in non-degenerate MO coefficients= %5.2e" % cimag_nondegen)
+
     # Only fock can deal with significant imaginary parts outside of imaginary subspaces:
     if degen_method == "dm" and cimag_nondegen >= 1e-4:
         degen_method = "fock"
