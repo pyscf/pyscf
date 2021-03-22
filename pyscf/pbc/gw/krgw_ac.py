@@ -54,7 +54,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert (frozen == 0)
 
     if orbs is None:
         orbs = range(gw.nmo)
@@ -81,7 +85,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         exxdiv = None
     rhf = scf.KRHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     rhf.with_df = gw.with_df
-    rhf.with_df._cderi = gw.with_df._cderi
+    if getattr(gw.with_df, '_cderi', None) is None:
+        raise RuntimeError('Found incompatible integral scheme %s.'
+                           'KGWAC can be only used with GDF integrals' %
+                           gw.with_df.__class__)
+
     vk = rhf.get_veff(gw.mol,dm_kpts=dm) - rhf.get_j(gw.mol,dm_kpts=dm)
     for k in range(nkpts):
         vk[k] = reduce(numpy.dot, (mo_coeff[k].T.conj(), vk[k], mo_coeff[k]))
@@ -515,7 +523,7 @@ def AC_pade_thiele_diag(sigma, omega):
     omega2 = omega[:,(idx[-1]+4)::4].copy()
     omega = np.hstack((omega1,omega2))
     norbs, nw = sigma.shape
-    npade = nw/2
+    npade = nw // 2
     coeff = np.zeros((npade*2,norbs),dtype=np.complex128)
     for p in range(norbs):
         coeff[:,p] = thiele(sigma[p,:npade*2], omega[p,:npade*2])
@@ -573,7 +581,7 @@ class KRGWAC(lib.StreamObject):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         log.info('GW nocc = %d, nvir = %d, nkpts = %d', nocc, nvir, nkpts)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)

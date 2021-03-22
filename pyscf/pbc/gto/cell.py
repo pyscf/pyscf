@@ -1323,7 +1323,6 @@ class Cell(mole.Mole):
             nprim_drop = 0
             nctr_drop = 0
             _env = self._env.copy()
-            #_env = self._env
             for ib in range(len(self._bas)):
                 l = self.bas_angular(ib)
                 nprim = self.bas_nprim(ib)

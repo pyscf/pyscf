@@ -290,12 +290,12 @@ from pyscf import mcscf
 from pyscf import mp, ci, cc
 from pyscf import tdscf
 scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
-mcscf.casci.ddCOSMO   = mcscf.casci.DDCOSMO   = ddcosmo_for_casci
-mcscf.mc1step.ddCOSMO = mcscf.mc1step.DDCOSMO = ddcosmo_for_casscf
 mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
 ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
 cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
 tdscf.rhf.TDA.ddCOSMO = tdscf.rhf.TDA.DDCOSMO = ddcosmo_for_tdscf
+mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
+mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf
 
 
 # Keep gen_ddcosmo_solver for backward compatibility
