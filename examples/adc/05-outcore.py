@@ -23,10 +23,10 @@ myadc = adc.ADC(mf)
 #IP-RADC(2) for 1 root
 myadc.max_memory = 1
 myadc.verbose = 6
-eip,vip,pip = myadc.kernel()
+eip,vip,pip,xip = myadc.kernel()
 
 #EA-RADC(3) for 3 roots
 myadc.max_memory = 20
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
-eea,vea,pea = myadc.kernel(nroots = 3)
+eea,vea,pea,xea = myadc.kernel(nroots = 3)

@@ -58,26 +58,26 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     else:
         dm = dm0
 
-    mf._coulomb_now = 'LLLL'
-    if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
+    mf._coulomb_level = 'LLLL'
+    if dm0 is None and mf._coulomb_level.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback,
                             conv_check=False)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        mf._coulomb_now = 'SSLL'
+        mf._coulomb_level = 'SSLL'
 
     if mf.with_ssss:
-        if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' or
-                            mf._coulomb_now.upper() == 'LLSS'):
+        if dm0 is None and (mf._coulomb_level.upper() == 'SSLL' or
+                            mf._coulomb_level.upper() == 'LLSS'):
             scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                     = hf.kernel(mf, 1e-3, 1e-1,
                                 dump_chk, dm0=dm, callback=callback,
                                 conv_check=False)
             dm = mf.make_rdm1(mo_coeff, mo_occ)
-        mf._coulomb_now = 'SSSS'
+        mf._coulomb_level = 'SSSS'
     else:
-        mf._coulomb_now = 'SSLL'
+        mf._coulomb_level = 'SSLL'
 
     return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
                      callback=callback, conv_check=conv_check)
@@ -106,7 +106,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     e_coul = numpy.einsum('ij,ji->', vhf, dm).real * .5
     logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
 
-    if not mf.with_ssss:
+    if not mf.with_ssss and mf.ssss_approx == 'Visscher':
         # Visscher point charge corrections for small component, TCA, 98, 68
         # Note there is a small difference to Visscher's work. The model
         # charges in Visscher's work are obtained from atomic calculations.
@@ -406,7 +406,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 class DHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for Dirac-Hartree-Fock
-        with_ssss : bool, for Dirac-Hartree-Fock only
+        with_ssss : bool or string, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
             Default is False.
@@ -428,19 +428,23 @@ class DHF(hf.SCF):
     with_ssss = getattr(__config__, 'scf_dhf_SCF_with_ssss', True)
     with_gaunt = getattr(__config__, 'scf_dhf_SCF_with_gaunt', False)
     with_breit = getattr(__config__, 'scf_dhf_SCF_with_breit', False)
+    # corrections for small component when with_ssss is set to False
+    ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
-                           'with_breit', 'opt'))
+                           'with_breit', 'ssss_approx', 'opt'))
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
         log = logger.new_logger(self, verbose)
         log.info('with_ssss %s, with_gaunt %s, with_breit %s',
                  self.with_ssss, self.with_gaunt, self.with_breit)
+        if self.with_ssss:
+            log.info('ssss_approx: %s', self.ssss_approx)
         log.info('light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
@@ -484,7 +488,9 @@ class DHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.opt = None
+        if self.direct_scf:
+            self.opt = self.init_direct_scf(mol)
+        return self
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -542,6 +548,8 @@ class DHF(hf.SCF):
             opt_ssll.direct_scf_tol = self.direct_scf_tol
             set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
             nbas = mol.nbas
+            # The second parts of q_cond corresponds to ssss integrals. They
+            # need to be scaled by the factor (1/2c)^2
             q_cond = opt_ssll.get_q_cond(shape=(2, nbas, nbas))
             q_cond[1] *= c1**2
 
@@ -559,16 +567,18 @@ class DHF(hf.SCF):
             self.opt = self.init_direct_scf(mol)
         opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
 
-        vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
+        vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_level,
                                 opt_llll, opt_ssll, opt_ssss, omega, log)
 
         if self.with_breit:
-            if 'SSSS' in self._coulomb_now.upper():
+            if ('SSSS' in self._coulomb_level.upper() or
+                # for the case both with_breit and with_ssss are set
+                (not self.with_ssss and 'SSLL' in self._coulomb_level.upper())):
                 vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
                 log.debug('Add Breit term')
                 vj += vj1
                 vk += vk1
-        elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
+        elif self.with_gaunt and 'SS' in self._coulomb_level.upper():
             log.debug('Add Gaunt term')
             vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
@@ -641,7 +651,7 @@ class DHF(hf.SCF):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 

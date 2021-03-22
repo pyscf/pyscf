@@ -466,9 +466,9 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
+        if dm_kpts is None:
+            dm_kpts = self.make_rdm1()
         if self.rsjk and self.direct_scf:
-            if dm_kpts is None:
-                dm_kpts = self.make_rdm1()
             ddm = dm_kpts - dm_last
             vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
             vhf = vj[0] + vj[1] - vk

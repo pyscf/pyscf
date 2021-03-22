@@ -455,6 +455,8 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             if priority.lower () == 'active': ridx = ridx[::-1,:]
             elif not priority.lower () == 'core':
                 raise RuntimeError ("Invalid priority keyword: string must be either 'active' or 'core'")
+            # Edge case: ncore == 0 or ncas == 0 -> remove zero rows from ridx
+            ridx = ridx[ridx.sum (1).astype (bool)]
         else:
             ridx = numpy.zeros ((len (priority), nmo), dtype=numpy.bool_)
             for row, idx in zip (ridx, priority):

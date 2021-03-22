@@ -22,7 +22,7 @@ import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.parameters as param
-from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 
 mol0 = gto.Mole()
 mol0.atom = [
@@ -127,7 +127,7 @@ C    SP
         atmgroup = gto.mole.atom_types(atoms, basis)
         self.assertEqual(atmgroup, {'H2': [2], 'H3': [3], 'H0': [0], 'H1': [1]})
 
-    def test_given_symmetry(self):
+    def test_input_symmetry(self):
         mol = gto.M(atom='H 0 0 -1; H 0 0 1', symmetry='D2h')
         self.assertEqual(mol.irrep_id, [0, 5])
         mol = gto.M(atom='H 0 0 -1; H 0 0 1', symmetry='D2')
@@ -669,7 +669,7 @@ O    SP
 
         mol1.set_f12_zeta(2.)
 
-    def test_input_symmetry(self):
+    def test_input_symmetry1(self):
         mol1 = gto.Mole()
         mol1.atom = 'H 1 1 1; H -1 -1 1; H 1 -1 -1; H -1 1 -1'
         mol1.unit = 'B'
@@ -679,7 +679,6 @@ O    SP
         mol1.build()
         self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 3.4708548731841296, 9)
 
-        mol1 = gto.Mole()
         mol1 = gto.Mole()
         mol1.atom = 'H 0 0 -1; H 0 0 1'
         mol1.cart = True
@@ -707,7 +706,7 @@ O    SP
 
         mol1.atom = 'H 1 0 -1; H 0 0 1; He 0 0 2'
         mol1.symmetry = 'Coov'
-        self.assertRaises(RuntimeWarning, mol1.build)
+        self.assertRaises(PointGroupSymmetryError, mol1.build)
 
         mol1.atom = '''
         C 0. 0. 0.7264
@@ -720,6 +719,14 @@ O    SP
         mol1.symmetry_subgroup = 'C2v'
         mol1.build()
         self.assertAlmostEqual(lib.fp(mol1.atom_coords()), 2.9413856643164618, 9)
+
+        mol1 = gto.Mole()
+        mol1.atom = [
+            ["O" , (0. , 0.     , 0.)],
+            ["H" , (0. , -0.757 , 0.587)],
+            ["H" , (0. , 0.757  , 0.587)]]
+        mol1.symmetry = "C3"
+        self.assertRaises(PointGroupSymmetryError, mol1.build)
 
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],

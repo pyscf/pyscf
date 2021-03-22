@@ -802,6 +802,30 @@ H   2.041481  -0.080642  -0.024174''')
         g, ax = symm.as_subgroup('C6', axes)
         self.assertEqual(g, 'C2')
 
+        g, ax = symm.as_subgroup('Dooh', axes, 'D2h')
+        self.assertEqual(g, 'D2h')
+        g, ax = symm.as_subgroup('Dooh', axes, 'D2')
+        self.assertEqual(g, 'D2')
+        g, ax = symm.as_subgroup('Dooh', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+
+        g, ax = symm.as_subgroup('Coov', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+        g, ax = symm.as_subgroup('Coov', axes, 'C2')
+        self.assertEqual(g, 'C2')
+
+        g, ax = symm.as_subgroup('SO3', axes, 'D2h')
+        self.assertEqual(g, 'D2h')
+        g, ax = symm.as_subgroup('SO3', axes, 'D2')
+        self.assertEqual(g, 'D2')
+        g, ax = symm.as_subgroup('SO3', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+
+        g, ax = symm.as_subgroup('SO3', axes, 'Dooh')
+        self.assertEqual(g, 'Dooh')
+        g, ax = symm.as_subgroup('SO3', axes, 'Coov')
+        self.assertEqual(g, 'Coov')
+
     def test_ghost(self):
         atoms = [
             ['Fe'  , ( 0.0,   0.0,   0.0)],

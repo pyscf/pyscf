@@ -80,7 +80,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         exxdiv = None
     rhf = scf.KRHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     rhf.with_df = gw.with_df
-    rhf.with_df._cderi = gw.with_df._cderi
+    if getattr(gw.with_df, '_cderi', None) is None:
+        raise RuntimeError('Found incompatible integral scheme %s.'
+                           'KGWCD can be only used with GDF integrals' %
+                           gw.with_df.__class__)
+
     vk = rhf.get_veff(gw.mol,dm_kpts=dm) - rhf.get_j(gw.mol,dm_kpts=dm)
     for k in range(nkpts):
         vk[k] = reduce(numpy.dot, (mo_coeff[k].T.conj(), vk[k], mo_coeff[k]))

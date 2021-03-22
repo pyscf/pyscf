@@ -31,7 +31,7 @@ myadc.kernel_gs()
 mf = scf.RHF(mol).density_fit('aug-cc-pvdz-jkfit').run()
 myadc = adc.ADC(mf).density_fit('aug-cc-pvdz-ri')
 myadc.verbose = 6
-eip,vip,pip = myadc.kernel()
+eip,vip,pip,xip = myadc.kernel()
 
 # Alternate way to compute DF-ADC 
 
@@ -41,4 +41,8 @@ myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
 myadc.verbose = 6
 myadc.method = "adc(3)"
 myadc.method_type = "ea"
-eea,vea,pea = myadc.kernel(nroots = 3)
+eea,vea,pea,xea = myadc.kernel(nroots = 3)
+
+# Compute properties
+myadc.compute_properties = True
+myadc.analyze()

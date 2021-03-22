@@ -52,7 +52,7 @@ from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
         _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom, \
         _std_symbol_without_ghost
 
-from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 import warnings
 
 # For code compatibility in python-2 and python-3
@@ -305,7 +305,7 @@ def format_atom(atoms, origin=0, axes=None,
             (A, a, Angstrom, angstrom, Ang, ang), the coordinates are in the
             unit of angstrom;  If a number is given, the number are considered
             as the Bohr value (in angstrom), which should be around 0.53.
-            Set unit=1 if wishing to reserve the unit of the coordinates.
+            Set unit=1 if wishing to preserve the unit of the coordinates.
 
     Returns:
         "atoms" in the internal format. The internal format is
@@ -816,8 +816,8 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
+        cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
         if NORMALIZE_GTO:
-            cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
             cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
@@ -2232,18 +2232,24 @@ class Mole(lib.StreamObject):
 
     pack = pack
 
+    @classmethod
     @lib.with_doc(unpack.__doc__)
-    def unpack(self, moldic):
+    def unpack(cls, moldic):
         return unpack(moldic)
+
+    @lib.with_doc(unpack.__doc__)
     def unpack_(self, moldic):
         self.__dict__.update(moldic)
         return self
 
     dumps = dumps
 
+    @classmethod
     @lib.with_doc(loads.__doc__)
-    def loads(self, molstr):
+    def loads(cls, molstr):
         return loads(molstr)
+
+    @lib.with_doc(loads.__doc__)
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self
@@ -2400,15 +2406,13 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            self.groupname, axes = symm.subgroup(self.symmetry, axes)
-            prop_atoms = self.format_atom(self._atom, orig, axes, 'Bohr')
-            if symm.check_given_symm(self.groupname, prop_atoms, self._basis):
-                self.topgroup = self.symmetry
-            else:
-                raise RuntimeWarning('Unable to identify input symmetry %s.\n'
-                                     'Try symmetry="%s" with geometry (unit="Bohr")\n%s' %
-                                     (self.symmetry, self.topgroup,
-                                      '\n'.join([str(a) for a in prop_atoms])))
+            try:
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry)
+            except PointGroupSymmetryError:
+                raise PointGroupSymmetryError(
+                    'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                    (self.symmetry, self.topgroup))
         else:
             self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                     self.symmetry_subgroup)
@@ -2842,9 +2846,10 @@ class Mole(lib.StreamObject):
             for ia, atom in enumerate(mol._atom):
                 coorda = tuple([x * param.BOHR for x in atom[1]])
                 coordb = tuple([x for x in atom[1]])
+                coords = coorda + coordb
                 logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f AA  '
                             '%16.12f %16.12f %16.12f Bohr\n',
-                            ia+1, mol.atom_symbol(ia), *coorda, *coordb)
+                            ia+1, mol.atom_symbol(ia), *coords)
         return mol
 
     def update(self, chkfile):

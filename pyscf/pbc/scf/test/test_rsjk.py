@@ -34,6 +34,11 @@ cell1 = Cell().build(
                           [0.15, .2, .8]],
                       [1, [0.8, 1]],]})
 
+
+def tearDownModule():
+    global cell, cell1
+    del cell, cell1
+
 class KnowValues(unittest.TestCase):
     def test_get_jk(self):
         kpts = cell.make_kpts([3,1,1])
@@ -71,6 +76,40 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
 
         vj, vk = jk_builder.get_jk(dm, hermi=0, kpts=kpts, exxdiv=mf.exxdiv, with_j=False)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        vj, vk = mf.jk_method('RS').get_jk(cell, dm)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        mf = cell.KUHF(kpts=kpts)
+        jref, kref = mf.get_jk(cell, np.array([dm, dm]))
+        vj, vk = mf.jk_method('RS').get_jk(cell, np.array([dm, dm]))
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        mf = cell.KROHF(kpts=kpts)
+        jref, kref = mf.get_jk(cell, dm)
+        vj, vk = mf.jk_method('RS').get_jk(cell, dm)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        mf = cell.RHF(kpt=kpts[0])
+        jref, kref = mf.get_jk(cell, dm[0])
+        vj, vk = mf.jk_method('RS').get_jk(cell, dm[0])
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        mf = cell.UHF(kpt=kpts[0])
+        jref, kref = mf.get_jk(cell, dm[[0,0]])
+        vj, vk = mf.jk_method('RS').get_jk(cell, dm[[0,0]])
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+
+        mf = cell.ROHF(kpt=kpts[0])
+        jref, kref = mf.get_jk(cell, dm[0])
+        vj, vk = mf.jk_method('RS').get_jk(cell, dm[0])
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
 
     def test_get_jk_high_cost(self):

@@ -336,7 +336,8 @@ class X2C_UHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.opt = None
+        if self.direct_scf:
+            self.opt = self.init_direct_scf(mol)
         return self
 
     def dump_flags(self, verbose=None):
