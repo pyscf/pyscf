@@ -375,7 +375,7 @@ class GWAC(lib.StreamObject):
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen is not None:
-            log.info('frozen orbitals %s', str(self.frozen))
+            log.info('frozen = %s', self.frozen)
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
         return self
