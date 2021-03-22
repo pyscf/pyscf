@@ -14,6 +14,7 @@
 
 add_library(agf2 SHARED
   ragf2.c uagf2.c)
+add_dependencies(agf2 cvhf)
 
 set_target_properties(agf2 PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

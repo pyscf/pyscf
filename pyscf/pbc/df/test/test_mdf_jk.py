@@ -40,16 +40,49 @@ cell.max_memory = 0
 cell.rcut = 28.3
 cell.build()
 
+cell0 = pgto.Cell()
+cell0.a = numpy.eye(3) * L
+cell0.atom = '''C    3.    2.       3.
+                C    1.    1.       1.'''
+cell0.basis = 'sto-3g'
+cell0.verbose = 0
+cell0.build()
+
 mf0 = pscf.RHF(cell)
 mf0.exxdiv = None
 
 def tearDownModule():
-    global cell, mf0
-    del cell, mf0
+    global cell, cell0, mf0
+    del cell, cell0, mf0
 
 
 class KnownValues(unittest.TestCase):
     def test_jk_single_kpt(self):
+        mf = cell0.RHF().mix_density_fit(auxbasis='weigend')
+        mf.with_df.mesh = [n, n, n]
+        mf.with_df.eta = 0.3
+        dm = mf.get_init_guess()
+        vj, vk = mf.get_jk(cell0, dm)
+        ej1 = numpy.einsum('ij,ji->', vj, dm)
+        ek1 = numpy.einsum('ij,ji->', vk, dm)
+        j_ref = 50.52980612772263  # rsjk result
+        k_ref = 38.84221371860046  # rsjk result
+        self.assertAlmostEqual(ej1, j_ref, 2)
+        self.assertAlmostEqual(ek1, k_ref, 2)
+        self.assertAlmostEqual(ej1, 50.52819501637896, 8)
+        self.assertAlmostEqual(ek1, 38.83943428046173, 8)
+
+        numpy.random.seed(12)
+        nao = cell0.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        vj1, vk1 = mf.get_jk(cell0, dm, hermi=0)
+        ej1 = numpy.einsum('ij,ji->', vj1, dm)
+        ek1 = numpy.einsum('ij,ji->', vk1, dm)
+        self.assertAlmostEqual(ej1, 25.81378242361819, 8)
+        self.assertAlmostEqual(ek1, 72.6092971275962 , 8)
+
+    def test_jk_single_kpt_high_cost(self):
         mf = mdf_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
         mf.with_df.mesh = [11]*3
         mf.with_df.eta = 0.3
@@ -83,8 +116,23 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, 241.29955504573206+0j, 8)
         self.assertAlmostEqual(ek1, 691.76854602384913+0j, 8)
 
-
     def test_jk_hermi0(self):
+        numpy.random.seed(12)
+        nao = cell0.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        dm[:2,-3:] *= .5
+        jkdf = mdf.MDF(cell0).set(auxbasis='weigend')
+        jkdf.linear_dep_threshold = 1e-7
+        jkdf.mesh = (11,)*3
+        jkdf.eta = 0.3
+        vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
+        ej0 = numpy.einsum('ij,ji->', vj0, dm)
+        ek0 = numpy.einsum('ij,ji->', vk0, dm)
+        self.assertAlmostEqual(ej0, 25.77582611607388 , 8)
+        self.assertAlmostEqual(ek0, 30.814555613338555, 8)
+
+    def test_jk_hermi0_high_cost(self):
         numpy.random.seed(12)
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
@@ -102,6 +150,23 @@ class KnownValues(unittest.TestCase):
 
     def test_j_kpts(self):
         numpy.random.seed(1)
+        nao = cell0.nao_nr()
+        dm = numpy.random.random((4,nao,nao))
+        dm = dm + dm.transpose(0,2,1)
+        mydf = mdf.MDF(cell0).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
+        mydf.kpts = numpy.random.random((4,3))
+        mydf.mesh = numpy.asarray((11,)*3)
+        mydf.eta = 0.3
+        mydf.auxbasis = 'weigend'
+        vj = mdf_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
+        self.assertAlmostEqual(lib.fp(vj[0]), (7.240247126035314-0.0010092876216366933j), 9)
+        self.assertAlmostEqual(lib.fp(vj[1]), (7.248775589325954-0.0015611883008615822j), 9)
+        self.assertAlmostEqual(lib.fp(vj[2]), (7.241230472941957-0.002515541792204466j) , 9)
+        self.assertAlmostEqual(lib.fp(vj[3]), (7.240398079284901+0.0014737107502212023j), 9)
+
+    def test_j_kpts_high_cost(self):
+        numpy.random.seed(1)
         nao = cell.nao_nr()
         dm = numpy.random.random((4,nao,nao))
         dm = dm + dm.transpose(0,2,1)
@@ -118,6 +183,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj[3]), (0.5435189277058412 +0.008843567739405876j), 9)
 
     def test_k_kpts(self):
+        numpy.random.seed(1)
+        nao = cell0.nao_nr()
+        dm = numpy.random.random((4,nao,nao))
+        dm = dm + dm.transpose(0,2,1)
+        mydf = mdf.MDF(cell0).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
+        mydf.kpts = numpy.random.random((4,3))
+        mydf.mesh = numpy.asarray((11,)*3)
+        mydf.eta = 0.3
+        mydf.exxdiv = None
+        mydf.auxbasis = 'weigend'
+        vk = mdf_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
+        self.assertAlmostEqual(lib.fp(vk[0]), (4.831240836863933-0.12373190618477338j) , 9)
+        self.assertAlmostEqual(lib.fp(vk[1]), (4.783417745841964-0.005852945569928365j), 9)
+        self.assertAlmostEqual(lib.fp(vk[2]), (4.82403824304899+0.002483686050043201j) , 9)
+        self.assertAlmostEqual(lib.fp(vk[3]), (4.8340892190932525+0.020822434708267664j), 9)
+
+    def test_k_kpts_high_cost(self):
         numpy.random.seed(1)
         nao = cell.nao_nr()
         dm = numpy.random.random((4,nao,nao))

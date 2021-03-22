@@ -56,21 +56,25 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
+    mol = gw.mol
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+
     # only support frozen core
-    assert (isinstance(gw.frozen, int))
+    assert (isinstance(frozen, int))
 
     nocca, noccb = gw.nocc
     nmoa, nmob = gw.nmo
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
-    assert (gw.frozen < nocca and gw.frozen < noccb)
+    assert (frozen < nocca and frozen < noccb)
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
     if orbs is None:
         orbs = range(nmoa)
     else:
-        orbs = [x - gw.frozen for x in orbs]
+        orbs = [x - frozen for x in orbs]
         if orbs[0] < 0:
             logger.warn(gw, 'GW orbs must be larger than frozen core!')
             raise RuntimeError
@@ -80,13 +84,13 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     vj = mf.get_j()
     v_mf[0] = v_mf[0] - (vj[0] + vj[1])
     v_mf[1] = v_mf[1] - (vj[0] + vj[1])
-    v_mf_frz = np.zeros((2, nmo-gw.frozen, nmo-gw.frozen))
+    v_mf_frz = np.zeros((2, nmoa-frozen, nmob-frozen))
     for s in range(2):
         v_mf_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, v_mf[s], mo_coeff[s]))
     v_mf = v_mf_frz
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df and frozen == 0:
         # density fitting vk
         vk = np.zeros_like(v_mf)
         vk[0] = -einsum('Lni,Lim->nm',Lpq[0,:,:,:nocca],Lpq[0,:,:nocca,:])
@@ -94,12 +98,12 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     else:
         # exact vk without density fitting
         dm = mf.make_rdm1()
-        uhf = scf.UHF(gw.mol)
-        vk = uhf.get_veff(gw.mol,dm)
-        vj = uhf.get_j(gw.mol,dm)
+        uhf = scf.UHF(mol)
+        vk = uhf.get_veff(mol, dm)
+        vj = uhf.get_j(mol, dm)
         vk[0] = vk[0] - (vj[0] + vj[1])
         vk[1] = vk[1] - (vj[0] + vj[1])
-        vk_frz = np.zeros((2, nmo-gw.frozen, nmo-gw.frozen))
+        vk_frz = np.zeros((2, nmoa-frozen, nmob-frozen))
         for s in range(2):
             vk_frz[s] = reduce(numpy.dot, (mo_coeff[s].T, vk[s], mo_coeff[s]))
         vk = vk_frz
@@ -141,7 +145,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                     dsigma = pade_thiele(ep-ef+de, omega_fit[s,p-orbs[0]], coeff[s,:,p-orbs[0]]).real - sigmaR.real
                 zn = 1.0/(1.0-dsigma/de)
                 e = ep + zn*(sigmaR.real + vk[s,p,p] - v_mf[s,p,p])
-                mo_energy[s,p+gw.frozen] = e
+                mo_energy[s,p+frozen] = e
             else:
                 # self-consistently solve QP equation
                 def quasiparticle(omega):
@@ -152,7 +156,7 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
                     return omega - mf_mo_energy[s][p] - (sigmaR.real + vk[s,p,p] - v_mf[s,p,p])
                 try:
                     e = newton(quasiparticle, mf_mo_energy[s][p], tol=1e-6, maxiter=100)
-                    mo_energy[s,p+gw.frozen] = e
+                    mo_energy[s,p+frozen] = e
                 except RuntimeError:
                     conv = False
     mo_coeff = gw._scf.mo_coeff
@@ -356,7 +360,7 @@ def AC_pade_thiele_diag(sigma, omega):
     omega2 = omega[:,(idx[-1]+4)::4].copy()
     omega = np.hstack((omega1,omega2))
     norbs, nw = sigma.shape
-    npade = nw/2
+    npade = nw // 2
     coeff = np.zeros((npade*2,norbs),dtype=np.complex128)
     for p in range(norbs):
         coeff[:,p] = thiele(sigma[p,:npade*2], omega[p,:npade*2])
@@ -379,7 +383,7 @@ class UGWAC(lib.StreamObject):
     # Analytic continuation: pade or twopole
     ac = getattr(__config__, 'gw_ugw_UGW_ac', 'pade')
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -420,7 +424,7 @@ class UGWAC(lib.StreamObject):
         nvirb = nmob - noccb
         log.info('GW (nocca, noccb) = (%d, %d), (nvira, nvirb) = (%d, %d)',
                  nocca, noccb, nvira, nvirb)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
@@ -454,9 +458,9 @@ class UGWAC(lib.StreamObject):
             mo_energy: GW quasiparticle energy
         """
         if mo_coeff is None:
-            mo_coeff = _mo_without_core(gw, gw._scf.mo_coeff)
+            mo_coeff = _mo_without_core(self, self._scf.mo_coeff)
         if mo_energy is None:
-            mo_energy = _mo_energy_without_core(gw, gw._scf.mo_energy)
+            mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
         cput0 = (time.clock(), time.time())
         self.dump_flags()
