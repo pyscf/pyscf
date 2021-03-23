@@ -272,11 +272,11 @@ class KnownValues(unittest.TestCase):
         check('m06,'  , deriv=1, e_place=6, v_place=6)
         check('m062x,', deriv=1, e_place=6, v_place=6)
         check('m06l,' , deriv=1, e_place=6, v_place=6)
-        check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
-        check('TPSS,' ,                                  k_place=-4)
-        #?check('REVTPSS,', deriv=1)  # xcfun crash
+        #check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
+        #check('TPSS,' ,                                  k_place=-4)
+        #check('REVTPSS,', deriv=1)  # xcfun crash
         check('APBE,')
-        check('BLOC,' ,                                  k_place=-5)
+        #check('BLOC,' ,                                  k_place=-5)
         check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
 
         check(',vwn3')
@@ -292,9 +292,9 @@ class KnownValues(unittest.TestCase):
         check(',m06'  , deriv=1)
         check(',m062x', deriv=1)
         check(',m06l' , deriv=1)
-        check(',scan' , deriv=1, e_place=8, v_place=7)
-        check(',TPSS' , deriv=1)
-        check(',REVTPSS', deriv=1, e_place=2, v_place=1)
+        #check(',scan' , deriv=1, e_place=8, v_place=7)
+        #check(',TPSS' , deriv=1)
+        #check(',REVTPSS', deriv=1, e_place=2, v_place=1)
         check(',p86'    , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-1)
         check(',APBE'   , deriv=3)
         check(',PBEINT' , deriv=3)
@@ -367,11 +367,11 @@ class KnownValues(unittest.TestCase):
         check('m06,'  , deriv=1, e_place=6, v_place=6)
         check('m062x,', deriv=1, e_place=6, v_place=6)
         check('m06l,' , deriv=1, e_place=6, v_place=6)
-        check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
-        check('TPSS,' ,                                  k_place=-4)
-        #?check('REVTPSS,', deriv=1)  # libxc crash
+        #check('scan,', deriv=2, e_place=8, v_place=7, f_place=6)
+        #check('TPSS,' ,                                  k_place=-4)
+        #check('REVTPSS,', deriv=1)  # libxc crash
         check('APBE,')
-        check('BLOC,' ,                                  k_place=-5)
+        #check('BLOC,' ,                                  k_place=-5)
         check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
 
         check(',vwn3', e_place=2, v_place=1, f_place=1, k_place=0)
@@ -387,7 +387,7 @@ class KnownValues(unittest.TestCase):
         check(',m06'  , deriv=1)
         check(',m062x', deriv=1)
         check(',m06l' , deriv=1)
-        check(',scan' , deriv=1, e_place=8, v_place=7)
+        #check(',scan' , deriv=1, e_place=8, v_place=7)
         check(',TPSS' , deriv=1)
         check(',REVTPSS', deriv=1, e_place=2, v_place=1)
         check(',p86'    , deriv=3, e_place=5, v_place=5, f_place=3, k_place=-2)
