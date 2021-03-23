@@ -786,7 +786,7 @@ XC_ALIAS = {
     'MVSH'              : 'MVSH,REGTPSS',
     'SOGGA11'           : 'SOGGA11,SOGGA11',
     'SOGGA11_X'         : 'SOGGA11_X,SOGGA11_X',
-    'KT1'               : 'GGA_XC_KT1',
+    'KT1'               : 'KT1,VWN',
     'KT2'               : 'GGA_XC_KT2',
     'KT3'               : 'GGA_XC_KT3',
     'DLDF'              : 'DLDF,DLDF',
