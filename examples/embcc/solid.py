@@ -160,7 +160,23 @@ def make_graphene(a, c, atoms):
         [2.0, 2.0, 3.0],
         [4.0, 4.0, 3.0]])/6
     coords = np.dot(coords_internal, amat)
-    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+
+    if args.supercell_in is None:
+        atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+    else:
+        atom = []
+        ncopy = args.supercell_in
+        nr = 0
+        for x in range(ncopy[0]):
+            for y in range(ncopy[1]):
+                for z in range(ncopy[2]):
+                    shift = x*amat[0] + y*amat[1] + z*amat[2]
+                    atom.append((atoms[0]+str(nr), coords[0]+shift))
+                    atom.append((atoms[1]+str(nr), coords[1]+shift))
+                    nr += 1
+
+        amat = np.einsum("i,ij->ij", ncopy, amat)
+
     return amat, atom
 
 def make_perovskite(a, atoms):
@@ -349,6 +365,7 @@ def run_mf(a, cell, args):
             assert stable
     log.info("HF converged: %r", mf.converged)
     log.info("HF energy: %.8e", mf.e_tot)
+    assert(mf.converged)
 
     # Check orthogonality
     if hasattr(mf, "kpts"):

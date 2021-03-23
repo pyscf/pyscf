@@ -138,6 +138,9 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     if np.any(~degen_mask):
         cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
         print("Imaginary part in non-degenerate MO coefficients= %5.2e" % cimag_nondegen)
+    else:
+        cimag_nondegen = 0.0
+        print("No non-degenerate MOs found")
 
     # Only fock can deal with significant imaginary parts outside of imaginary subspaces:
     if degen_method == "dm" and cimag_nondegen >= 1e-4:

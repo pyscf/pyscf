@@ -63,58 +63,6 @@ LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
-#def _choleksy(a):
-#    l = scipy.linalg.cholesky(a, lower=True)
-#    ll = np.dot(l, l.T.conj())
-#    log.info("Error in CD: %.2e", abs(ll-a).max())
-#    return l
-
-def _cholesky(a, shifted_chol=False, iterate_chol=True, maxiter=20, cond_tol=10, **kwargs):
-    np = numpy
-
-    eps = np.finfo(a.dtype).eps
-
-    n = a.shape[0]
-    if shifted_chol:
-        # https://arxiv.org/pdf/1809.11085.pdf
-        size_fac = (n*(n+(n//2)**3) + n*(n+1))
-        shift = eps * 11 * np.trace(a) * size_fac
-    else:
-        shift = 0
-
-    #chol = lambda x: np.linalg.cholesky(x).T.conj()
-    chol = lambda x: scipy.linalg.cholesky(x, **kwargs).T.conj()
-    #chol = lambda x: np.linalg.cholesky(x)#.T.conj()
-
-    bi = chol(a + shift*np.eye(n))
-    #binv = np.linalg.inv(bi)
-
-    if iterate_chol:
-        k = 0
-        x_next = a
-        bi0 = bi.copy()
-        for k in range(1, maxiter+1):
-            cn = np.linalg.cond(x_next)
-            err = abs(np.dot(bi.T.conj(), bi)-a).max()
-            delta = np.linalg.norm(bi-bi0)
-            bi0 = bi.copy()
-            print("Iteration= %d condition number= %.2e delta=%.2e err= %.5e" % (k, cn, delta, err))
-            if cn <= cond_tol:
-                break
-
-            binv = np.linalg.inv(bi)
-            x_next = np.dot(np.dot(binv.T.conj(), a), binv)
-            b_next = chol(x_next)
-            bi = np.dot(b_next, bi)
-
-    bi = bi.T.conj()
-
-    # Choleksky error
-    print("Error in CD: %.2e" % abs(np.dot(bi, bi.T.conj())-a).max())
-
-    return bi
-
-
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     auxcell = addons.make_auxmol(cell, auxbasis)
 
@@ -287,31 +235,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             if mydf.force_eig:
                 raise scipy.linalg.LinAlgError
 
-                #w, v = scipy.linalg.eigh(j2c)
-                #log.info('DF metric linear dependency for kpt %s', uniq_kptji_id)
-                #log.info('cond = %.4g, drop %d bfns',
-                #      w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-                #log.info("Smallest/largest eigenvalue= %e / %e", w[0], w[-1])
-                #mask = (w>=mydf.linear_dep_threshold)
-                #v, w = v[:,mask], w[mask]
-                #j2c2 = numpy.einsum("ai,i,bi->ab", v.conj(), w, v)
-                #log.info("Difference to original j2c= %.2e", abs(j2c2-j2c).max())
-                #j2c2 = numpy.einsum("ai,i,bi->ab", v, w, v.conj())
-                #log.info("Difference to original j2c= %.2e", abs(j2c2-j2c).max())
-                #j2c = j2c2
-
             l = scipy.linalg.cholesky(j2c, lower=True)
             log.info("Error in Cholesky decomposition= %.2e", abs(numpy.dot(l, l.T.conj())-j2c).max())
             j2c = l
-
-            # Invert l
-            np = numpy
-            x = scipy.linalg.solve_triangular(l, np.identity(l.shape[-1]), lower=True)
-            errnorm = np.linalg.norm(np.dot(l, x)-np.eye(l.shape[-1]))
-            errmax = abs(np.dot(l, x)-np.eye(l.shape[-1])).max()
-            log.info("Error in inversion: norm= %.2e max= %.2e", errnorm, errmax)
-
-            #j2c = _cholesky(j2c, lower=True)
 
             j2ctag = 'CD'
         except scipy.linalg.LinAlgError:
@@ -322,23 +248,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             #log.error(msg)
             #raise scipy.linalg.LinAlgError('\n'.join([str(e), msg]))
             w, v = scipy.linalg.eigh(j2c)
-            log.info('DF metric linear dependency for kpt %s', uniq_kptji_id)
-            log.info('cond = %.4g, drop %d bfns',
+            log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
+            log.debug('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
             log.info("Smallest/largest eigenvalue= %e / %e", w[0], w[-1])
-            # OLD
-            #if False:
-            if True:
-                log.info("DISCARDING")
-                v1 = v[:,w>mydf.linear_dep_threshold].conj().T
-                v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-            # Set element to zero instead of removing them
-            else:
-                log.info("SETTING ZERO")
-                v1 = v.conj().T / numpy.sqrt(numpy.fmax(w, 1e-14)).reshape(-1,1)
-                mask = (w<=mydf.linear_dep_threshold)
-                v1[mask] = 0.0
-
+            v1 = v[:,w>mydf.linear_dep_threshold].conj().T
+            v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v1
             if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
                 idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
@@ -348,7 +263,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
 
-    feri = h5py.File(cderi_file, 'w', driver=h5_driver, **h5_kw)
+    feri = h5py.File(cderi_file, 'w')
     feri['j3c-kptij'] = kptij_lst
     nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id, cholesky_j2c):
@@ -521,11 +436,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         done[uniq_kptji_ids] = True
 
     print("Time make_kpt= %.3f" % (default_timer()-time_0))
-
-    if cell.incore_anyway:
-        return feri
-    else:
-        feri.close()
+    feri.close()
 
 
 class GDF(aft.AFTDF):
@@ -658,6 +569,10 @@ class GDF(aft.AFTDF):
         self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
                                          self.exp_to_discard)
 
+        # Remove duplicated k-points. Duplicated kpts may lead to a buffer
+        # located in incore.wrap_int3c larger than necessary. Integral code
+        # only fills necessary part of the buffer, leaving some space in the
+        # buffer unfilled.
         uniq_idx = unique(self.kpts)[1]
         kpts = numpy.asarray(self.kpts)[uniq_idx]
         if self.kpts_band is None:
@@ -691,9 +606,7 @@ class GDF(aft.AFTDF):
                                 cderi)
             self._cderi = cderi
             t1 = (time.clock(), time.time())
-            out = self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
-            if self.cell.incore_anyway:
-                self._cderi = out
+            self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
 
@@ -999,10 +912,7 @@ class _load3c(object):
         self.ignore_key_error = ignore_key_error
 
     def __enter__(self):
-        if isinstance(self.cderi, str):
-            self.feri = h5py.File(self.cderi, 'r')
-        else:
-            self.feri = self.cderi
+        self.feri = h5py.File(self.cderi, 'r')
         if self.label not in self.feri:
             # Return a size-0 array to skip the loop in sr_loop
             if self.ignore_key_error:
@@ -1016,8 +926,7 @@ class _load3c(object):
                         self.ignore_key_error)
 
     def __exit__(self, type, value, traceback):
-        if isinstance(self.cderi, str):
-            self.feri.close()
+        self.feri.close()
 
 def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
     k_id = member(kpti_kptj, kptij_lst)
