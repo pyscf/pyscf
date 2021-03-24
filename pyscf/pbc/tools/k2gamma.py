@@ -145,7 +145,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     # Only fock can deal with significant imaginary parts outside of imaginary subspaces:
     if degen_method == "dm" and cimag_nondegen >= 1e-4:
         degen_method = "fock"
-        print("Significant imaginary parts - changing degen_method to %s", degen_method)
+        print("Significant imaginary parts - changing degen_method to %s" % degen_method)
 
     if degen_method == "fock":
         if np.any(E_k_degen):

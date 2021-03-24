@@ -51,7 +51,7 @@ def get_arguments():
     parser.add_argument("--exxdiv-none", action="store_true")
 
     # MP
-    parser.add_argument("--do-mp2", action="store_true")
+    parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
 
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
@@ -109,7 +109,7 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C"],
                 "ndim" : 2,
-                "lattice_consts" : np.arange(2.35, 2.55+1e-12, 0.5),
+                "lattice_consts" : np.arange(2.35, 2.55+1e-12, 0.05),
                 #"lattice_consts" : np.arange(2.44, 2.56+1e-12, 0.02),
                 "vacuum_size" : 20.0
                 }
@@ -221,13 +221,13 @@ def make_cell(a, args):
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
-        cell.natom_prim = 2
+        cell._natom_prim = 2
     if args.system == "graphene":
         cell.a, cell.atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
-        cell.natom_prim = 2
+        cell._natom_prim = 2
     elif args.system == "perovskite":
         cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
-        cell.natom_prim = 5
+        cell._natom_prim = 5
     cell.dimension = args.ndim
     cell.precision = args.precision
 
@@ -376,8 +376,16 @@ def run_mf(a, cell, args):
             err = abs(csc-np.eye(c.shape[-1])).max()
             if err > 1e-9:
                 log.error("MOs not orthogonal at k-point %d. Error= %.2e", ik, err)
+    else:
+        s = mf.get_ovlp()
+        c = mf.mo_coeff
+        csc = np.linalg.multi_dot((c.T.conj(), s, c))
+        err = abs(csc-np.eye(c.shape[-1])).max()
+        if err > 1e-9:
+            log.error("MOs not orthogonal. Error= %.2e", err)
 
     return mf
+
 
 args = get_arguments()
 
@@ -419,19 +427,19 @@ for i, a in enumerate(args.lattice_consts):
     np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
 
     # Canonical full system MP2
-    if args.do_mp2:
+    if args.canonical_mp2:
         t0 = MPI.Wtime()
         mp2 = pyscf.pbc.mp.MP2(mf)
         mp2.kernel()
-        log.info("Time for MP2: %.3f s", (MPI.Wtime()-t0))
-        log.info("MP2 E(corr)= %.8g", mp2.e_corr)
+        log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
+        log.info("Time for canonical MP2: %.3f s", (MPI.Wtime()-t0))
 
     natom = mf.mol.natm
-    ncells = natom / cell.natom_prim
+    ncells = natom / cell._natom_prim
     eref = natom if (args.energy_per == "atom") else ncells
 
     energies = { "hf" : [mf.e_tot / eref], "ccsd" : [], "ccsd-dmp2" : [] }
-    if args.do_mp2:
+    if args.canonical_mp2:
         energies["mp2"] = [mp2.e_tot / eref]
     if args.solver == "CCSD(T)":
         energies["ccsdt"] = []
@@ -504,7 +512,9 @@ for i, a in enumerate(args.lattice_consts):
     if MPI_rank == 0:
         for key, val in energies.items():
             if val:
-                with open("%s.txt" % key, "a") as f:
+                fname = "%s.txt" % key
+                log.info("Writing to file %s", fname)
+                with open(fname, "a") as f:
                     f.write(("%6.3f" + len(val)*"  %+16.12e" + "\n") % (a, *val))
 
     log.changeIndentLevel(-1)

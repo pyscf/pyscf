@@ -1,4 +1,5 @@
 import logging
+import ctypes
 from timeit import default_timer as timer
 
 import numpy as np
@@ -31,7 +32,22 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True):
         mf_sc = mf_sc.density_fit()
         # Store integrals in memory
         if unfold_j3c:
-            mf_sc.with_df._cderi = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
+            #j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts, version="python")
+            j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
+            mf_sc.with_df._cderi = j3c
+
+            #j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts, compact=True, version="C")
+            #j3c2 = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts, compact=True, version="python")
+
+            #j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts, compact=False, version="C")
+            #j3c2 = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts, compact=False, version="python")
+
+            #log.info("ERROR in j3c: %.2e", abs(j3c - j3c2).max())
+            ##eri = einsum("Lij,Lkl->ijkl", j3c, j3c)
+            ##eri2 = einsum("Lij,Lkl->ijkl", j3c2, j3c2)
+            ##log.info("ERROR in eri: %.2e", abs(eri - eri2).max())
+            #assert np.allclose(j3c, j3c2)
+            #1/0
 
     return mf_sc
 
@@ -284,7 +300,8 @@ def k2gamma_4c2e(cell, gdf, kpts):
         log.warning("WARNING: Large imaginary part in unfolded 4c2e integrals= %.2e !", maximag)
     return eri_sc.real
 
-def k2gamma_3c2e(cell, gdf, kpts, compact=True):
+#def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, ccode=False):
+def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
     """Unfold 3c2e integrals from a k-point sampled GDF to the supercell."""
     nao = cell.nao_nr()
     nk = len(kpts)
@@ -294,37 +311,87 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True):
     scell, phase = k2gamma.get_phase(cell, kpts)
     phase = phase.T.copy()  # (R,k) -> (k,R)
     kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
-    if compact:
-        ncomp = nk*nao*(nk*nao+1)//2
-        mem = nk*naux*ncomp * 16
-        log.info("Size of 3c-integrals= %s", memory_string(mem))
-        j3c_sc = np.zeros((nk, naux, ncomp), dtype=np.complex)
-    else:
-        mem = nk*naux*nk**2*nao**2 * 16
-        log.info("Size of 3c-integrals= %s", memory_string(mem))
-        j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
-    log.info("Actual size of 3c-integrals= %s", memory_string(j3c_sc))
 
-    for i in range(nk):
-        for j in range(nk):
-            l = kconserv[i,j]
-            kij = (kpts[i], kpts[j])
-            j3c_kij = load_j3c(cell, gdf, kij)
-            tmp = einsum("Lij,a,b->Laibj", j3c_kij, phase[i], phase[j].conj()).reshape(naux, nk*nao, nk*nao)
-            if compact:
-                j3c_sc[l] += pyscf.lib.pack_tril(tmp)
-            else:
-                j3c_sc[l] += tmp
+    if version == "python":
 
-    # Rotate auxiliary dimension to yield real integrals
-    j3c_sc = einsum("k...,kR->R...", j3c_sc, phase)
-    maximag = abs(j3c_sc.imag).max()
-    log.info("Max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
-    if maximag > 1e-4:
-        log.error("ERROR: Large imaginary part in unfolded 3c2e integrals!!!")
-    elif maximag > 1e-8:
-        log.warning("WARNING: Large imaginary part in unfolded 3c2e integrals!")
-    j3c_sc = j3c_sc.real / np.sqrt(nk)
+        if compact:
+            ncomp = nk*nao*(nk*nao+1)//2
+            j3c_sc = np.zeros((nk, naux, ncomp), dtype=np.complex)
+        else:
+            j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
+        log.info("Size of 3c-integrals= %s", memory_string(j3c_sc))
+
+        t0 = timer()
+        for ki in range(nk):
+            jmax = (ki+1) if use_ksymm else nk
+            for kj in range(jmax):
+                j3c_ij = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                j3c_ij = einsum("Lab,i,j->Liajb", j3c_ij, phase[ki], phase[kj].conj()).reshape(naux, nk*nao, nk*nao)
+                kl = kconserv[ki,kj]
+                if compact:
+                    j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
+                else:
+                    j3c_sc[kl] += j3c_ij
+
+                if use_ksymm and kj < ki:
+                    j3c_ij = j3c_ij.transpose(0, 2, 1)
+                    kl = kconserv[kj,ki]
+                    if compact:
+                        j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
+                    else:
+                        j3c_sc[kl] += j3c_ij
+        log.info("Time for unfolding AO basis= %.2g s", (timer()-t0))
+
+        # Rotate auxiliary dimension to yield real integrals
+        t0 = timer()
+        j3c_sc = einsum("k...,kR->R...", j3c_sc, phase)
+        log.info("Time for unfolding auxiliary basis= %.2g s", (timer()-t0))
+
+        maximag = abs(j3c_sc.imag).max()
+        log.info("Max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
+        if maximag > 1e-4:
+            log.error("ERROR: Large imaginary part in unfolded 3c2e integrals!!!")
+        elif maximag > 1e-8:
+            log.warning("WARNING: Large imaginary part in unfolded 3c2e integrals!")
+        j3c_sc = j3c_sc.real
+
+    elif version == "C":
+        # Precompute all j3c_kpts
+        t0 = timer()
+        j3c_kpts = np.zeros((naux, nao, nao, nk, nk), dtype=np.complex)
+        for ki in range(nk):
+            kjmax = (ki+1) if use_ksymm else nk
+            for kj in range(kjmax):
+                j3c_kpts[...,ki,kj] = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                if use_ksymm and kj < ki:
+                    # Transpose AO indices
+                    j3c_kpts[...,kj,ki] = j3c_kpts[...,ki,kj].transpose(0,2,1).conj()
+        log.info("Time to precompute k-sampled j3c= %.2g s", (timer()-t0))
+
+        if compact:
+            ncomp = nk*nao*(nk*nao+1)//2
+            j3c_sc = np.zeros((nk, naux, ncomp))
+        else:
+            j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao))
+        log.info("Size of 3c-integrals= %s", memory_string(j3c_sc))
+
+        t0 = timer()
+        libpbc = pyscf.lib.load_library("libpbc")
+        ierr = libpbc.j3c_k2gamma(
+                ctypes.c_int64(nk),
+                ctypes.c_int64(nao),
+                ctypes.c_int64(naux),
+                kconserv.ctypes.data_as(ctypes.c_void_p),
+                phase.ctypes.data_as(ctypes.c_void_p),
+                j3c_kpts.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_bool(compact),
+                # Out
+                j3c_sc.ctypes.data_as(ctypes.c_void_p),
+                )
+        assert (ierr == 0)
+        log.info("Time for unfolding in C= %.2g s", (timer()-t0))
+
+    j3c_sc = j3c_sc / np.sqrt(nk)
 
     if compact:
         j3c_sc = j3c_sc.reshape(nk*naux, ncomp)
@@ -340,13 +407,26 @@ def load_j3c(cell, gdf, kij, compact=False):
     if gdf.auxcell is None:
         gdf.build(with_j3c=False)
     naux = gdf.auxcell.nao_nr()
-    j3c_kij = np.zeros((naux, nao, nao), dtype=np.complex)
+    if compact:
+        # Untested code, raise error to be on safe side
+        raise NotImplementedError
+        ncomp = nao*(nao+1)//2
+        j3c_kij = np.zeros((naux, ncomp), dtype=np.complex)
+    else:
+        j3c_kij = np.zeros((naux, nao, nao), dtype=np.complex)
 
+    blkstart = 0
     for lr, li, sign in gdf.sr_loop(kij, compact=compact):
         assert (sign == 1)
-        nauxk = lr.shape[0]
-        assert nauxk <= naux
-        j3c_kij[:nauxk] += (lr+1j*li).reshape(nauxk, nao, nao)
+        blksize = lr.shape[0]
+        blk = np.s_[blkstart:blkstart+blksize]
+        if compact:
+            j3c_kij[blk] += (lr+1j*li)#.reshape(blksize, ncomp)
+        else:
+            j3c_kij[blk] += (lr+1j*li).reshape(blksize, nao, nao)
+        blkstart += blksize
+
+    assert (blkstart <= naux)
 
     return j3c_kij
 

@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <complex.h>
 #include <math.h>
 #include <assert.h>
-
+#include <omp.h>
+#include <cblas.h>
 
 void make_tril_indices(size_t n, size_t *tril_indices)
 {
@@ -20,96 +22,121 @@ void make_tril_indices(size_t n, size_t *tril_indices)
             } else {
                 tril_indices[ij] = -1;
             }
-            //printf("i=%ld j=%ld ij=%ld idx=%ld\n", i, j, ij, idx);
         }
     }
     assert (idx == n*(n+1)/2);
 }
 
-void j3c_k2gamma(
+
+int64_t j3c_k2gamma(
         /* In */
         int64_t nk,                 // Number of k-points
         int64_t nao,                // Number of AOs
         int64_t naux,               // Size of auxiliary basis
         int64_t *kconserv,          // Momentum conserving k-point for each ki,kj
         double complex *phase,      // As returned from k2gamma.get_phase
-        double complex *j3c_k,      // k-point sampled 3c-integrals (naux, nk, nao, nk, nao)
+        double complex *j3c_kpts,   // k-point sampled 3c-integrals (naux, nao, nao, nk, nk)
+        bool compact,               // compact
         /* Out */
-        double complex *j3c)        // (nk*naux, (nk*nao)*(nk*nao+1)/2)
+        double *j3c)                // (nk*naux, (nk*nao)*(nk*nao+1)/2)
 {
     int64_t ierr = 0;
-    int64_t ki, kj, kij, kl, kl2;
-    int64_t ri, rj, l, a, b, ab;
-    int64_t Ria, Rjb;
-    int64_t idx = 0;
-    const int64_t nao2 = nao*nao;
-    const int64_t nk2 = nk*nk;
-    const int64_t ncomp = nk*nao * (nk*nao+1) / 2;
-    const size_t tmpsize = naux*nk2*nao2;
-    //const size_t tmpsize = naux*nk2*nao2;
-    //double complex *tmp = calloc(tmpsize, sizeof(double complex));
-    double complex tmp = 0.0;
-    size_t *tril_indices = malloc(nk2*nao2 * sizeof(size_t));
-    make_tril_indices(nk*nao, tril_indices);
+    const size_t N = nao;
+    const size_t K = nk;
+    const size_t N2 = N*N;
+    const size_t K2 = K*K;
+    const size_t KN = K*N;
+    const size_t KN2 = K*N2;
+    const size_t K2N = K2*N;
+    const size_t K2N2 = K2*N2;
+    const size_t K3N2 = K*K2*N2;
+    const size_t NCOMP = (N*K)*(N*K+1)/2;
 
-    printf("Starting C...\n");
-    printf("nk= %ld naux= %ld nao= %ld ncomp= %ld\n", nk, naux, nao, ncomp);
-    printf("kconserv= %ld %ld ... %ld\n", kconserv[0], kconserv[1], kconserv[nk2-1]);
-    printf("First/last element of j3c_k.real C= %e %e %e \n", creal(j3c_k[0]), creal(j3c_k[1]), creal(j3c_k[tmpsize-1]));
-    printf("First/last element of j3c_k.imag C= %e %e %e \n", cimag(j3c_k[0]), cimag(j3c_k[1]), cimag(j3c_k[tmpsize-1]));
+    const double complex Z0 = 0.0;
+    const double complex Z1 = 1.0;
+    const double IMAG_TOL = 1e-7;
 
-    for (kij = 0, ki = 0; ki < nk; ki++) {
-    //for (kj = 0; kj <= ki; kj++, kij++) {
-    for (kj = 0; kj < nk; kj++, kij++) {
-        //memset(tmp, 0, tmpsize * sizeof(double complex));
-        kl = kconserv[ki*nk + kj];
-        printf("ki= %ld kj= %ld -> kl= %ld\n", ki, kj, kl);
-        for (ri = 0; ri < nk; ri++) {
-        for (rj = 0; rj < nk; rj++) {
-            //printf("ri= %ld rj= %ld\n", ri, rj);
-            for (ab = 0, a = 0; a < nao; a++) {
-            for (b = 0; b < nao; b++, ab++) {
-            //printf("a= %ld b= %ld\n", a, b);
-                for (l = 0; l < naux; l++) {
-                    //printf("l= %ld\n", l);
-                    //tmp[l*nk2*nao2 + ri*nk*nao2 + rj*nao2 + ab] +=
-                    //printf("MARK 1\n");
-                    assert(l*nk2*nao2 + ki*nk*nao2 + a*nk*nao + kj*nao + b < tmpsize);
-                    tmp = j3c_k[l*nk2*nao2 + ki*nk*nao2 + a*nk*nao + kj*nao + b] * phase[ri*nk + ki] * conj(phase[rj*nk + kj]);
-                    //printf("MARK 2\n");
+    // Precompute phase.conj() for speedup (avoid using CblasConjNoTrans, not BLAS standard, OpenBLAS specific)
+    size_t i;
+    double complex *phase_cc = malloc(K2 * sizeof(double complex));
+    for (i = 0; i < K2; i++) {
+        phase_cc[i] = conj(phase[i]);
+    }
 
-                    Ria = ri*nao + a;
-                    Rjb = rj*nao + b;
-                    idx = tril_indices[Ria*nk*nao + Rjb];
-                    assert (idx < ncomp);
-                    //printf("MARK 3\n");
-                    //if (a <= b) {
-                    if (Ria <= Rjb) {
-                        assert (idx != -1);
-                        //j3c[kl*tmpsize + l*nk2*nao2 + ri*nk*nao2 + a*nk*nao + rj*nao + b] += tmp;
-                        assert (kl*naux*ncomp + l*ncomp + idx < nk*naux*ncomp);
-                        //j3c[kl*naux*ncomp + l*ncomp + idx] += tmp;
-                        //idx++;
-                    } else {
-                        assert (idx == -1);
-                    }
-                    //printf("MARK 4\n");
-                    //printf("MARK 3\n");
-                    //if (ki < kj) {
-                    //    kl2 = kconserv[kj*nk + ki];
-                    //    j3c[kl2*tmpsize + l*nk2*nao2 + rj*nk*nao2 + b*nk*nao + ri*nao + a] += tmp;
-                    //}
-                    //printf("MARK 4\n");
+#pragma omp parallel private(i)
+    {
+    size_t l, a, b, ab;
+    size_t ki, kj, kk;
+    size_t ri, rj, rk;
+    size_t fullidx, trilidx;
+    double rtmp = 0.0;
+    double complex *work1 = malloc(K3N2 * sizeof(double complex));
+    double complex *work2 = malloc(K3N2 * sizeof(double complex));
+
+#pragma omp for reduction(+:ierr)
+    for (l = 0; l < naux; l++) {
+
+        memset(work1, 0, K3N2 * sizeof(double complex));
+
+        // Copy j3c_kpts(L,a,b,ki,kj) -> work1(kk,L,a,b,ki,kj)
+        for (ki = 0; ki < nk; ki++) {
+        for (kj = 0; kj < nk; kj++) {
+            kk = kconserv[ki*K + kj];
+        for (ab = 0; ab < N2; ab++) {
+            work1[kk*K2N2 + ab*K2 + ki*K+kj] = j3c_kpts[l*K2N2 + ab*K2 + ki*K + kj];
+        }}}
+
+
+        // FT kj -> rj
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase, K, &Z0, work2, K);
+
+        // Reorder work2(kk,a,b,ki,rj) -> work1(kk,a,b,rj,ki)
+        for (i = 0; i < KN2; i++) {
+        for (ki = 0; ki < K; ki++) {
+        for (rj = 0; rj < K; rj++) {
+            work1[i*K2 + rj*K + ki] = work2[i*K2 + ki*K + rj];
+        }}}
+
+        // FT ki -> ri
+        //cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjNoTrans, nk2*nao2, nk, nk, &Z1, work, nk, phase, nk, &Z0, work2, nk);
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase_cc, K, &Z0, work2, K);
+
+        // FT kk -> rk
+        cblas_zgemm(CblasRowMajor, CblasTrans, CblasNoTrans, K, K2N2, K, &Z1, phase, K, work2, K2N2, &Z0, work1, K2N2);
+
+        // Reorder work1(rk,a,b,rj,ri) -> j3c(rk,l,ri,a,rj,b)
+        for (rk = 0; rk < K; rk++) {
+            trilidx = fullidx = 0;
+        for (ri = 0; ri < K; ri++) {
+        for (a = 0; a < N; a++) {
+        for (rj = 0; rj < K; rj++) {
+        for (b = 0; b < N; b++, fullidx++) {
+            i = rk*K2N2 + a*K2N + b*K2 + rj*K + ri;
+            rtmp = fabs(cimag(work1[i]));
+            if (rtmp > IMAG_TOL) {
+                if (ierr == 0) {
+                    printf("ERROR: signficant imaginary part= %.2e !\n", rtmp);
+                    ierr = 1;
                 }
-            }}
-        }}
-    }}
+            }
 
-    //free(tmp);
-    printf("First/last element of j3c.real in C= %e %e %e \n", creal(j3c[0]), creal(j3c[1]), creal(j3c[nk*naux*ncomp-1]));
-    printf("First/last element of j3c.imag in C= %e %e %e \n", cimag(j3c[0]), cimag(j3c[1]), cimag(j3c[nk*naux*ncomp-1]));
-    printf("Freeing...\n");
-    free(tril_indices);
-    printf("Return to Python...\n");
-    //return ierr;
+            // Fill all
+            if (!compact) {
+                j3c[rk*naux*K2N2 + l*K2N2 + fullidx] = creal(work1[i]);
+            }
+            //Only fill lower triangular
+            else if (ri*N+a >= rj*N+b) {
+                j3c[rk*naux*NCOMP + l*NCOMP + trilidx++] = creal(work1[i]);
+            }
+
+        }}}}}
+    }
+
+    free(work1);
+    free(work2);
+    }
+
+    free(phase_cc);
+
+    return ierr;
 }
