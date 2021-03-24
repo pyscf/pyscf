@@ -358,15 +358,17 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
     elif version == "C":
         # Precompute all j3c_kpts
         t0 = timer()
+        log.info("Loading k-point sampled 3c-integrals into memory...")
         j3c_kpts = np.zeros((naux, nao, nao, nk, nk), dtype=np.complex)
         for ki in range(nk):
             kjmax = (ki+1) if use_ksymm else nk
             for kj in range(kjmax):
                 j3c_kpts[...,ki,kj] = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                log.debug("* ki= %3d kj= %3d done", ki, kj)
                 if use_ksymm and kj < ki:
                     # Transpose AO indices
                     j3c_kpts[...,kj,ki] = j3c_kpts[...,ki,kj].transpose(0,2,1).conj()
-        log.info("Time to precompute k-sampled j3c= %.2g s", (timer()-t0))
+        log.info("Time to load k-sampled j3c= %.2g s", (timer()-t0))
 
         if compact:
             ncomp = nk*nao*(nk*nao+1)//2
