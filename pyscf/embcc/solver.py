@@ -327,18 +327,20 @@ class ClusterSolver:
     def print_t_diagnostic(self):
         log.info("Diagnostic")
         log.info("**********")
-        dg_t1 = self._solver.get_t1_diagnostic()
-        dg_d1 = self._solver.get_d1_diagnostic()
-        dg_d2 = self._solver.get_d2_diagnostic()
-        log.info("  (T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
-        log.info("  (good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
-        dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
-        dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
-        dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
-        fmtstr = "  * %2s=%6g (%s)"
-        log.info(fmtstr, "T1", dg_t1, dg_t1_msg)
-        log.info(fmtstr, "D1", dg_d1, dg_d1_msg)
-        log.info(fmtstr, "D2", dg_d2, dg_d2_msg)
-        if dg_t1 > 0.02 or dg_d1 > 0.05 or dg_d2 > 0.18:
-            log.warning("  WARNING: some diagnostic(s) indicate CCSD may not be adequate.")
-
+        try:
+            dg_t1 = self._solver.get_t1_diagnostic()
+            dg_d1 = self._solver.get_d1_diagnostic()
+            dg_d2 = self._solver.get_d2_diagnostic()
+            log.info("  (T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
+            log.info("  (good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
+            dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
+            dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
+            dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
+            fmtstr = "  * %2s=%6g (%s)"
+            log.info(fmtstr, "T1", dg_t1, dg_t1_msg)
+            log.info(fmtstr, "D1", dg_d1, dg_d1_msg)
+            log.info(fmtstr, "D2", dg_d2, dg_d2_msg)
+            if dg_t1 > 0.02 or dg_d1 > 0.05 or dg_d2 > 0.18:
+                log.warning("  WARNING: some diagnostic(s) indicate CCSD may not be adequate.")
+        except Exception as e:
+            log.error("ERROR in T-diagnostic: %s", e)
