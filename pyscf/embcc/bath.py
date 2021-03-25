@@ -2,7 +2,7 @@
 
 import logging
 import numpy as np
-from mpi4py import MPI
+from timeit import default_timer as timer
 
 import pyscf
 import pyscf.mp
@@ -588,7 +588,7 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     mp2 = cls(self.mf, mo_coeff=c_all, frozen=frozen)
 
     # Integral transformation
-    t0 = MPI.Wtime()
+    t0 = timer()
     if eris is None:
         # For PBC [direct_init to avoid expensive Fock rebuild]
         if self.use_pbc:
@@ -624,14 +624,14 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         #eris2 = mp2.ao2mo(direct_init=True, mo_energy=np.hstack((eo, ev)))
         #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
         #assert np.allclose(eris.ovov, eris2.ovov)
-    t = (MPI.Wtime() - t0)
+    t = (timer() - t0)
     if t > 1:
         log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
     assert (eris.ovov is not None)
 
-    t0 = MPI.Wtime()
+    t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
-    t = (MPI.Wtime() - t0)
+    t = (timer() - t0)
     if t > 10:
         log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
     e_mp2_full *= self.symmetry_factor
@@ -764,7 +764,7 @@ def run_mp2_general(self, c_occ, c_vir, c_occ2=None, c_vir2=None, eris=None, can
         # Does not work for DF at the moment...
         #assert (eris.ovov is not None)
         # TEST
-        t0 = MPI.Wtime()
+        t0 = timer()
         if getattr(self.mf, "with_df", False):
             g_ovov = self.mf.with_df.ao2mo(reorder(coeffs))
         elif self.mf._eri is not None:
@@ -775,7 +775,7 @@ def run_mp2_general(self, c_occ, c_vir, c_occ2=None, c_vir2=None, eris=None, can
             g_ovov = pyscf.ao2mo.general(self.mol, reorder(coeffs))
 
         g_ovov = g_ovov.reshape(reorder(sizes))
-        time_ao2mo = MPI.Wtime() - t0
+        time_ao2mo = timer() - t0
         log.debug("Time for AO->MO transformation of ERIs: %s", get_time_string(time_ao2mo))
     # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
     else:

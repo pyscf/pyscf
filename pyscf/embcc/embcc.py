@@ -6,7 +6,18 @@ from datetime import datetime
 import numpy as np
 import scipy
 import scipy.linalg
-from mpi4py import MPI
+
+try:
+    from mpi4py import MPI
+    MPI_comm = MPI.COMM_WORLD
+    MPI_rank = MPI_comm.Get_rank()
+    MPI_size = MPI_comm.Get_size()
+    timer = MPI.Wtime
+except ModuleNotFoundError:
+    MPI = False
+    MPI_rank = 1
+    MPI_size = 1
+    from timeit import default_timer as timer
 
 import pyscf
 import pyscf.lo
@@ -21,9 +32,6 @@ __all__ = [
         #"VALID_SOLVERS"
         ]
 
-MPI_comm = MPI.COMM_WORLD
-MPI_rank = MPI_comm.Get_rank()
-MPI_size = MPI_comm.Get_size()
 
 log = logging.getLogger(__name__)
 
@@ -204,9 +212,9 @@ class EmbCC:
         # However, what about MP2 & CCSD(T)?)
         recalc_fock = False
         if recalc_fock:
-            t0 = MPI.Wtime()
+            t0 = timer()
             self._fock = self.mf.get_fock()
-            log.debug("Time for Fock matrix: %s", get_time_string(MPI.Wtime()-t0))
+            log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
         else:
             cs = np.dot(self.mo_coeff.T, self.get_ovlp())
             #log.debug("SHAPES: %r %r %r %r", list(self.mo_coeff.shape), list(self.get_ovlp().shape), list(cs.shape), list(self.mo_energy.shape))
@@ -278,7 +286,7 @@ class EmbCC:
             #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment")
             create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment", filetype="cube")
 
-            t0 = MPI.Wtime()
+            t0 = timer()
             if self.localize_fragment in ("BF", "ER", "PM"):
                 #locfunc = getattr(pyscf.lo, self.localize_fragment)
                 localizer = getattr(pyscf.lo, self.localize_fragment)(self.mol)
@@ -292,7 +300,7 @@ class EmbCC:
                 C_loc = localize_ao(self.mol, self.C_ao, centers)
 
             #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
-            log.debug("Time for orbital localization: %s", get_time_string(MPI.Wtime()-t0))
+            log.debug("Time for orbital localization: %s", get_time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
             chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
@@ -907,8 +915,8 @@ class EmbCC:
 
     def kernel(self, **kwargs):
 
-        MPI_comm.Barrier()
-        t_start = MPI.Wtime()
+        if MPI: MPI_comm.Barrier()
+        t_start = timer()
 
         if not self.clusters:
             raise ValueError("No clusters defined for calculation.")
@@ -960,9 +968,9 @@ class EmbCC:
         if MPI_rank == 0:
             self.print_results(results)
 
-        MPI_comm.Barrier()
+        if MPI: MPI_comm.Barrier()
         #log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
-        t_tot = (MPI.Wtime() - t_start)
+        t_tot = (timer() - t_start)
         log.info("Total wall time [s]: %.5g (%s)", t_tot, get_time_string(t_tot))
 
         if self.maxiter > 1:
@@ -999,12 +1007,10 @@ class EmbCC:
                 if MPI_rank == 0:
                     self.print_results(results)
 
-                MPI_comm.Barrier()
-                log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
+                if MPI: MPI_comm.Barrier()
+                log.info("Total wall time for EmbCC: %s", get_time_string(timer()-t_start))
 
         log.info("All done.")
-
-
 
     # Alias for kernel
     run = kernel
@@ -1015,13 +1021,18 @@ class EmbCC:
         #log.debug("Collecting attributes %r from all clusters", (attributes,))
         clusters = self.clusters
 
-        def mpi_reduce(attr, op=MPI.SUM, root=0):
-            res = MPI_comm.reduce(np.asarray([getattr(x, attr) for x in clusters]), op=op, root=root)
-            return res
+        if MPI:
+            def reduce_cluster(attr, op=MPI.SUM, root=0):
+                res = MPI_comm.reduce(np.asarray([getattr(x, attr) for x in clusters]), op=op, root=root)
+                return res
+        else:
+            def reduce_cluster(attr, op=np.sum):
+                res = op(np.asarray([getattr(x, attr) for x in clusters]))
+                return res
 
         results = {}
         for attr in attributes:
-            results[attr] = mpi_reduce(attr)
+            results[attr] = reduce_cluster(attr)
 
         return results
 

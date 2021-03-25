@@ -4,11 +4,14 @@ Author: Max Nusspickel
 
 import logging
 import os
-from mpi4py import MPI
 
-MPI_comm = MPI.COMM_WORLD
-MPI_rank = MPI_comm.Get_rank()
-MPI_size = MPI_comm.Get_size()
+try:
+    from mpi4py import MPI
+    MPI_comm = MPI.COMM_WORLD
+    MPI_rank = MPI_comm.Get_rank()
+    MPI_size = MPI_comm.Get_size()
+except ModuleNotFoundError:
+    MPI = False
 
 # Logging
 # =======
@@ -19,14 +22,15 @@ def get_unique_name(basename):
     while os.path.isfile(name):
         idx += 1
         name = basename + ".%d" % idx
-    MPI_comm.Barrier()
+    if MPI:
+        MPI_comm.Barrier()
     return name
 
 logname = "embcc.log"
 #logname = get_unique_name("embcc.log")
 loglevel = logging.DEBUG if __debug__ else logging.INFO
 # Append MPI rank
-if MPI_rank > 0:
+if MPI and MPI_rank > 0:
     logname += ".mpi%d" % MPI_rank
 #logformat = "[{levelname:^8s}] {message:s}"
 #logformat = "[{levelname:s}] {message:s}"

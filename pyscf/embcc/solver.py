@@ -1,7 +1,6 @@
 import logging
 import numpy as np
-
-from mpi4py import MPI
+from timeit import default_timer as timer
 
 import pyscf
 import pyscf.lo
@@ -82,7 +81,7 @@ class ClusterSolver:
         mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.frozen)
         self._solver = mp2
 
-        t0 = MPI.Wtime()
+        t0 = timer()
         if self.pbc:
             mo_act = self.mo_coeff[:,self.active]
             f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
@@ -92,7 +91,7 @@ class ClusterSolver:
         else:
             eris = mp2.ao2mo()
         self._eris = eris
-        t = (MPI.Wtime()-t0)
+        t = (timer()-t0)
         log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
 
         self.e_corr, self.c2 = mp2.kernel(eris=eris, hf_reference=True)
@@ -105,17 +104,17 @@ class ClusterSolver:
         self._solver = ci
 
         # Integral transformation
-        t0 = MPI.Wtime()
+        t0 = timer()
         eris = ci.ao2mo()
         self._eris = eris
-        t = (MPI.Wtime()-t0)
+        t = (timer()-t0)
         log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
 
-        t0 = MPI.Wtime()
+        t0 = timer()
         log.info("Running CISD...")
         ci.kernel(eris=eris)
         log.info("CISD done. converged: %r", ci.converged)
-        t = (MPI.Wtime()-t0)
+        t = (timer()-t0)
         log.debug("Time for CISD [s]: %.3f (%s)", t, get_time_string(t))
 
         self.converged = ci.converged
@@ -132,7 +131,7 @@ class ClusterSolver:
         self._solver = cc
 
         # Integral transformation
-        t0 = MPI.Wtime()
+        t0 = timer()
         if self.pbc:
             mo_act = self.mo_coeff[:,self.active]
             f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
@@ -143,14 +142,14 @@ class ClusterSolver:
         else:
             eris = cc.ao2mo()
         self._eris = eris
-        t = (MPI.Wtime()-t0)
+        t = (timer()-t0)
         log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
 
-        t0 = MPI.Wtime()
+        t0 = timer()
         log.info("Running CCSD...")
         cc.kernel(eris=eris)
         log.info("CCSD done. converged: %r", cc.converged)
-        t = (MPI.Wtime()-t0)
+        t = (timer()-t0)
         log.info("Time for CCSD: %.3f (%s)", t, get_time_string(t))
 
         self.converged = cc.converged
@@ -161,13 +160,13 @@ class ClusterSolver:
         self.c2 = cc.t2 + einsum("ia,jb->ijab", cc.t1, cc.t1)
 
         if self.cluster.opts.make_rdm1:
-            t0 = MPI.Wtime()
+            t0 = timer()
             log.info("Making RDM1...")
             self.dm1 = cc.make_rdm1(eris=eris, ao_repr=True)
             log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
             if not cc.converged_lambda:
                 log.warning("WARNING: Solution of lambda equation not converged!")
-            t = (MPI.Wtime()-t0)
+            t = (timer()-t0)
             log.info("Time for RDM1: %.3f (%s)", t, get_time_string(t))
 
         #def eom_ccsd(kind, nroots=3, sort_weight=True, r1_min=0.01):
@@ -176,9 +175,9 @@ class ClusterSolver:
             assert kind in ("IP", "EA")
             log.info("Running %s-EOM-CCSD (nroots=%d)...", kind, nroots)
             eom_funcs = {"IP" : cc.ipccsd , "EA" : cc.eaccsd}
-            t0 = MPI.Wtime()
+            t0 = timer()
             e, c = eom_funcs[kind](nroots=nroots, eris=eris)
-            t = (MPI.Wtime()-t0)
+            t = (timer()-t0)
             log.info("Time for %s-EOM-CCSD: %.3f (%s)", kind, t, get_time_string(t))
             if nroots == 1:
                 e, c = [e], [c]
