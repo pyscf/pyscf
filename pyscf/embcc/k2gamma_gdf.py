@@ -123,6 +123,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
         t0 = timer()
         log.info("Loading k-point sampled 3c-integrals into memory...")
         j3c_kpts = np.zeros((naux, nao, nao, nk, nk), dtype=np.complex)
+        log.info("Size of primitive cell 3c-integrals= %s", memory_string(j3c_kpts))
         for ki in range(nk):
             kjmax = (ki+1) if use_ksymm else nk
             for kj in range(kjmax):
@@ -137,7 +138,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
             j3c_sc = np.zeros((nk, naux, ncomp))
         else:
             j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao))
-        log.info("Size of 3c-integrals= %s", memory_string(j3c_sc))
+        log.info("Size of supercell 3c-integrals= %s", memory_string(j3c_sc))
 
         t0 = timer()
         libpbc = pyscf.lib.load_library("libpbc")
