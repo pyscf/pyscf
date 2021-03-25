@@ -23,7 +23,7 @@ try:
     from mpi4py import MPI
     MPI_comm = MPI.COMM_WORLD
     MPI_rank = MPI_comm.Get_rank()
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     MPI = False
 
 #base_output = "pyscf.log"

@@ -19,12 +19,12 @@ log = logging.getLogger(__name__)
 
 try:
     from mpi4py import MPI
-    log.debug("mpi4py found. MPI rank/size= %3d / %3d", MPI_rank, MPI_size)
     MPI_comm = MPI.COMM_WORLD
     MPI_rank = MPI_comm.Get_rank()
     MPI_size = MPI_comm.Get_size()
+    log.debug("mpi4py found. MPI rank/size= %3d / %3d", MPI_rank, MPI_size)
     timer = MPI.Wtime
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     log.debug("mpi4py not found.")
     MPI = False
     MPI_rank = 1
