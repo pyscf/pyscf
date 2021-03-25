@@ -594,6 +594,9 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._atm = np.asarray(_atm, dtype=np.int32)
     supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
     supcell._env = _env
+
+    # Update Ewald parameters
+    supcell._ew_eta, supcell._ew_cut = supcell.get_ewald_params(supcell.precision, supcell.mesh)
     return supcell
 
 
