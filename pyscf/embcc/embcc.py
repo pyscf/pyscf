@@ -996,9 +996,7 @@ class EmbCC:
 
                 self.e_corr = sum(results["e_corr"])
                 self.e_delta_mp2 = sum(results["e_delta_mp2"])
-
                 self.e_corr_full = sum(results["e_corr_full"])
-
                 self.e_corr_v = sum(results["e_corr_v"])
                 self.e_corr_d = sum(results["e_corr_d"])
 
@@ -1024,8 +1022,8 @@ class EmbCC:
                 res = MPI_comm.reduce(np.asarray([getattr(x, attr) for x in clusters]), op=op, root=root)
                 return res
         else:
-            def reduce_cluster(attr, op=np.sum):
-                res = op(np.asarray([getattr(x, attr) for x in clusters]))
+            def reduce_cluster(attr):
+                res = np.asarray([getattr(x, attr) for x in clusters])
                 return res
 
         results = {}
