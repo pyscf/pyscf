@@ -439,7 +439,7 @@ def Sijr(mc, dms, eris, verbose=None):
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
     h += h.transpose(0, 2, 1)
-    h[:, ci_diag[1], ci_diag[1]] *= 0.5
+    h[:, ci_diag[0], ci_diag[1]] *= 0.5
 
     diff = mc.mo_energy[nocc:,None,None] - mc.mo_energy[None,:ncore,None] - mc.mo_energy[None,None,:ncore]
 
