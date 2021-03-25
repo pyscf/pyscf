@@ -426,14 +426,27 @@ def Sijr(mc, dms, eris, verbose=None):
         hdm1 = make_hdm1(dm1)
 
     a3 = make_a3(h1e,h2e,dm1,dm2,hdm1)
+    # We sum norm and h only over i <= j (or j <= i instead).
+    # See Eq. (13) and (A2) in https://doi.org/10.1063/1.1515317
+    # This implementation is still somewhat wasteful in terms of memory,
+    # as we only need about half of norm and h in the end.
+    ci_diag = numpy.diag_indices(ncore)
+    ci_triu = numpy.triu_indices(ncore)
     norm = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,hdm1)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,hdm1)
+    norm += norm.transpose(0, 2, 1)
+    norm[:, ci_diag[0], ci_diag[1]] *= 0.5
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
+    h += h.transpose(0, 2, 1)
+    h[:, ci_diag[1], ci_diag[1]] *= 0.5
 
     diff = mc.mo_energy[nocc:,None,None] - mc.mo_energy[None,:ncore,None] - mc.mo_energy[None,None,:ncore]
 
-    return _norm_to_energy(norm, h, diff)
+    norm_tri = norm[:, ci_triu[0], ci_triu[1]]
+    h_tri = h[:, ci_triu[0], ci_triu[1]]
+    diff_tri = diff[:, ci_triu[0], ci_triu[1]]
+    return _norm_to_energy(norm_tri, h_tri, diff_tri)
 
 def Srsi(mc, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
@@ -443,6 +456,7 @@ def Srsi(mc, dms, eris, verbose=None):
     ncore = mo_core.shape[1]
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
+    nvirt = mo_virt.shape[1]
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
         h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
@@ -454,12 +468,22 @@ def Srsi(mc, dms, eris, verbose=None):
         h2e_v = eris['pacv'][nocc:].transpose(3,0,2,1)
 
     k27 = make_k27(h1e,h2e,dm1,dm2)
+    # We sum norm and h only over r <= s.
+    # See Eq. (12) and (26) in https://doi.org/10.1063/1.1515317
+    # This implementation is still somewhat wasteful in terms of memory,
+    # as we only need about half of norm and h in the end.
+    vi_diag = numpy.diag_indices(nvirt)
+    vi_triu = numpy.triu_indices(nvirt)
     norm = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,dm1)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
+    norm += norm.transpose(1, 0, 2)
+    norm[vi_diag] *= 0.5
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
+    h += h.transpose(1, 0, 2)
+    h[vi_diag] *= 0.5
     diff = mc.mo_energy[nocc:,None,None] + mc.mo_energy[None,nocc:,None] - mc.mo_energy[None,None,:ncore]
-    return _norm_to_energy(norm, h, diff)
+    return _norm_to_energy(norm[vi_triu], h[vi_triu], diff[vi_triu])
 
 def Srs(mc, dms, eris=None, verbose=None):
     #Subspace S_rs^{(-2)}
