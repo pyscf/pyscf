@@ -12,6 +12,8 @@ try:
     MPI_size = MPI_comm.Get_size()
 except ModuleNotFoundError:
     MPI = False
+    MPI_rank = 0
+    MPI_size = 1
 
 # Logging
 # =======
@@ -22,15 +24,14 @@ def get_unique_name(basename):
     while os.path.isfile(name):
         idx += 1
         name = basename + ".%d" % idx
-    if MPI:
-        MPI_comm.Barrier()
+    if MPI: MPI_comm.Barrier()
     return name
 
 logname = "embcc.log"
 #logname = get_unique_name("embcc.log")
 loglevel = logging.DEBUG if __debug__ else logging.INFO
 # Append MPI rank
-if MPI and MPI_rank > 0:
+if MPI_rank > 0:
     logname += ".mpi%d" % MPI_rank
 #logformat = "[{levelname:^8s}] {message:s}"
 #logformat = "[{levelname:s}] {message:s}"

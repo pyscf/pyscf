@@ -4,7 +4,6 @@ import argparse
 import os.path
 # External
 import numpy as np
-from mpi4py import MPI
 # Internal
 import pyscf
 import pyscf.pbc
@@ -15,9 +14,17 @@ import pyscf.pbc.mp
 import pyscf.embcc
 import pyscf.embcc.k2gamma_gdf
 
-MPI_comm = MPI.COMM_WORLD
-MPI_rank = MPI_comm.Get_rank()
-MPI_size = MPI_comm.Get_size()
+try:
+    from mpi4py import MPI
+    MPI_comm = MPI.COMM_WORLD
+    MPI_rank = MPI_comm.Get_rank()
+    MPI_size = MPI_comm.Get_size()
+    timer = MPI.Wtime
+except (ImportError, ModuleNotFoundError) as e:
+    MPI = False
+    MPI_rank = 0
+    MPI_size = 1
+    from timeit import default_timer as timer
 
 log = pyscf.embcc.log
 
@@ -333,9 +340,9 @@ def run_mf(a, cell, args):
                 df._cderi_to_save = fname
                 log.info("Saving GDF to file %s...", fname)
             log.info("Building GDF...")
-            t0 = MPI.Wtime()
+            t0 = timer()
             df.build()
-            log.info("Time for GDF build: %.3f s", (MPI.Wtime()-t0))
+            log.info("Time for GDF build: %.3f s", (timer()-t0))
 
     # Calculate SCF
     if not load_scf_ok:
@@ -354,14 +361,14 @@ def run_mf(a, cell, args):
         else:
             dm0 = None
 
-        t0 = MPI.Wtime()
+        t0 = timer()
         mf.kernel(dm0=dm0)
-        log.info("Time for HF: %.3f s", (MPI.Wtime()-t0))
+        log.info("Time for HF: %.3f s", (timer()-t0))
         if args.hf_stability_check:
-            t0 = MPI.Wtime()
+            t0 = timer()
             mo_stab = mf.stability()[0]
             stable = np.allclose(mo_stab, mf.mo_coeff)
-            log.info("Time for HF stability check: %.3f s", (MPI.Wtime()-t0))
+            log.info("Time for HF stability check: %.3f s", (timer()-t0))
             assert stable
     log.info("HF converged: %r", mf.converged)
     log.info("HF energy: %.8e", mf.e_tot)
@@ -408,7 +415,7 @@ for i, a in enumerate(args.lattice_consts):
     # k-point to supercell gamma point
     if args.k_points is not None and np.product(args.k_points) > 1:
         log.info("k2gamma...")
-        t0 = MPI.Wtime()
+        t0 = timer()
         if args.load_gdf and args.load_gdf_unfolded:
             mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=False)
             fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
@@ -416,7 +423,7 @@ for i, a in enumerate(args.lattice_consts):
             mf.with_df._cderi = fname
         else:
             mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=(not args.test_mode))
-        log.info("Time for k2gamma: %.3f s", (MPI.Wtime()-t0))
+        log.info("Time for k2gamma: %.3f s", (timer()-t0))
         #ncells = np.product(args.k_points)
     else:
         mf._eri = None
@@ -428,11 +435,11 @@ for i, a in enumerate(args.lattice_consts):
 
     # Canonical full system MP2
     if args.canonical_mp2:
-        t0 = MPI.Wtime()
+        t0 = timer()
         mp2 = pyscf.pbc.mp.MP2(mf)
         mp2.kernel()
         log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
-        log.info("Time for canonical MP2: %.3f s", (MPI.Wtime()-t0))
+        log.info("Time for canonical MP2: %.3f s", (timer()-t0))
 
     natom = mf.mol.natm
     ncells = natom / cell._natom_prim

@@ -25,10 +25,10 @@ try:
     log.debug("mpi4py found. MPI rank/size= %3d / %3d", MPI_rank, MPI_size)
     timer = MPI.Wtime
 except (ImportError, ModuleNotFoundError):
-    log.debug("mpi4py not found.")
     MPI = False
-    MPI_rank = 1
+    MPI_rank = 0
     MPI_size = 1
+    log.debug("mpi4py not found.")
     from timeit import default_timer as timer
 
 __all__ = ["EmbCC",]
