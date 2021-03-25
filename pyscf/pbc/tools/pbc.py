@@ -596,7 +596,8 @@ def _build_supcell_(supcell, cell, Ls):
     supcell._env = _env
 
     # Update Ewald parameters
-    supcell._ew_eta, supcell._ew_cut = supcell.get_ewald_params(supcell.precision, supcell.mesh)
+    if hasattr(supcell, "_ew_eta"):
+        supcell._ew_eta, supcell._ew_cut = supcell.get_ewald_params(supcell.precision, supcell.mesh)
     return supcell
 
 
