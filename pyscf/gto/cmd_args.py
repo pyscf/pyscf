@@ -18,10 +18,13 @@
 import sys
 import os
 import pyscf.lib.logger
-from mpi4py import MPI
 
-MPI_comm = MPI.COMM_WORLD
-MPI_rank = MPI_comm.Get_rank()
+try:
+    from mpi4py import MPI
+    MPI_comm = MPI.COMM_WORLD
+    MPI_rank = MPI_comm.Get_rank()
+except ModuleNotFoundError:
+    MPI = False
 
 #base_output = "pyscf.log"
 #default_output = base_output
@@ -58,7 +61,7 @@ if sys.version_info >= (2,7):
         (opts, args_left) = parser.parse_known_args()
 
         # Append MPI rank to output file
-        if opts.output is not None and MPI_rank > 0:
+        if MPI and opts.output is not None and MPI_rank > 0:
             logname, ext = opts.output.rsplit(".", 1)
             opts.output = logname + (".mpi%d" % MPI_rank)
             if ext:
