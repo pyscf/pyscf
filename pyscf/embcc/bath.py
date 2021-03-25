@@ -525,10 +525,7 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
 #    return e_mp2, eris, Doo, Dvv, T2
 
 
-def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True, eris=None,
-        #local_dm=True):
-        #local_dm="semi"):
-        local_dm=False):
+def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True, eris=None, local_dm=False):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
 
     Parameters
@@ -631,6 +628,7 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
 
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
+    log.info("Min(|T2|)= %.2e Max(|T2|)= %.2e", abs(t2).min(), abs(t2).max())
     t = (timer() - t0)
     if t > 10:
         log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
@@ -667,6 +665,8 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Calculate local energy
     # Project first occupied index onto local space
     _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
+    log.info("Min(|pT2|)= %.2e Max(|pT2|)= %.2e", abs(t2loc).min(), abs(t2loc).max())
+
     e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
     log.debug("Local MP2 energy= %12.8g htr", e_mp2)
 
