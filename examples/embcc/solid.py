@@ -116,7 +116,7 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C"],
                 "ndim" : 2,
-                "lattice_consts" : np.arange(2.35, 2.55+1e-12, 0.05),
+                "lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
                 #"lattice_consts" : np.arange(2.44, 2.56+1e-12, 0.02),
                 "vacuum_size" : 20.0
                 }

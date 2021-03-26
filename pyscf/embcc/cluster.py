@@ -169,8 +169,7 @@ class Cluster:
 
         self.opts = Options()
         self.opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
-        self.opts.ip_eom = self.base.opts.get("ip_eom", False)
-        self.opts.ea_eom = self.base.opts.get("ea_eom", False)
+        self.opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
 
         #self.project_type = kwargs.get("project_type", "first-occ")
 
@@ -891,9 +890,9 @@ class Cluster:
         if self.opts.make_rdm1 and csolver.dm1 is not None:
             self.pop_analysis(csolver.dm1)
         # EOM analysis
-        if self.opts.ip_eom:
+        if self.opts.eom_ccsd in (True, "IP"):
             self.eom_analysis(csolver, "IP")
-        if self.opts.ea_eom:
+        if self.opts.eom_ccsd in (True, "EA"):
             self.eom_analysis(csolver, "EA")
 
         log.changeIndentLevel(-1)

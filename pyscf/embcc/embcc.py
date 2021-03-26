@@ -98,6 +98,12 @@ class EmbCC:
         dmet_bath_tol : float, optional
             Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_bath_tol`,
             or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
+
+
+        make_rdm1 : [True, False]
+            Calculate RDM1 in cluster.
+        eom_ccsd : [True, False, "IP", "EA"]
+            Default: False.
         """
 
         log.info("INITIALIZING EmbCC")
@@ -151,8 +157,9 @@ class EmbCC:
         self.opts = Options()
         default_opts = {
                 "make_rdm1" : False,
-                "ip_eom" : False,
-                "ea_eom" : False,
+                "eom_ccsd" : False,
+                #"ip_eom" : False,
+                #"ea_eom" : False,
                 #"orthogonal_mo_tol" : 1e-8,
                 "orthogonal_mo_tol" : False,
                 "popfile" : "population",       # Filename for population analysis

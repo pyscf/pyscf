@@ -209,10 +209,9 @@ class ClusterSolver:
 
             #return e, c
 
-        if self.cluster.opts.ip_eom:
+        if self.cluster.opts.eom_ccsd in (True, "IP"):
             self.ip_energy, self.ip_coeff = eom_ccsd("IP")
-
-        if self.cluster.opts.ea_eom:
+        if self.cluster.opts.eom_ccsd in (True, "EA"):
             self.ea_energy, self.ea_coeff = eom_ccsd("EA")
 
     #def run_fci(self):

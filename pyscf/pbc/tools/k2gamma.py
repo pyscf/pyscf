@@ -156,12 +156,16 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
                 assert(abs(f.imag).max() < 1e-4)
 
                 e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
+                print("Max error of MO energies= %.2e" % abs(E_g[degen_mask]-shift-e).max())
+                #E_g[degen_mask] = e+shift
                 C_gamma = C_gamma.real
                 C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
             else:
                 f = np.dot(C_gamma * E_g, C_gamma.conj().T)
                 assert(abs(f.imag).max() < 1e-4)
                 e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
+                print("Max error of MO energies= %.2e" % abs(E_g-e).max())
+                #E_g = e
     # Degeneracy treatment based on DM
     elif degen_method == "dm":
         assert cimag_nondegen < 1e-4
