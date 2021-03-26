@@ -168,7 +168,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE, fciRestart=None):
+             follow_state=FOLLOW_STATE):
     r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -258,7 +258,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE, tol_residual=None, fciRestart=None):
+             follow_state=FOLLOW_STATE, tol_residual=None):
     r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
