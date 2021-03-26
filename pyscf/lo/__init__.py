@@ -22,3 +22,4 @@ from pyscf.lo.nao import set_atom_conf
 from pyscf.lo.boys import Boys, BF
 from pyscf.lo.edmiston import EdmistonRuedenberg, ER
 from pyscf.lo.pipek import PipekMezey, PM
+from pyscf.lo.cholesky import cholesky_mos
