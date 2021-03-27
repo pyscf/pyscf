@@ -19,16 +19,19 @@
 '''
 Analytical electron-phonon matrix for restricted hartree fock
 '''
-import numpy as np
-from pyscf.hessian import rhf
-from pyscf.lib import logger
-import time
-from pyscf import lib
-import scipy
-from pyscf.scf._response_functions import _gen_rhf_response
 
-AU_TO_CM = 2.19475 * 1e5
-CUTOFF_FREQUENCY = 80
+import time
+import numpy as np
+import scipy
+from pyscf.hessian import rhf
+from pyscf.lib import logger, chkfile
+from pyscf.scf._response_functions import _gen_rhf_response
+from pyscf import __config__
+from pyscf.data.nist import HARTREE2WAVENUMBER
+
+CUTOFF_FREQUENCY = getattr(__config__, 'eph_cutoff_frequency', 80)  # 80 cm-1
+KEEP_IMAG_FREQUENCY = getattr(__config__, 'eph_keep_imaginary_frequency', False)
+IMAG_CUTOFF_FREQUENCY = getattr(__config__, 'eph_imag_cutoff_frequency', 1e-4)
 
 def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     cput0 = (time.clock(), time.time())
@@ -44,7 +47,7 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     ephobj.eph = ephobj.get_eph(ephobj.chkfile, omega, vec, mo_rep)
     return ephobj.eph, ephobj.omega
 
-def solve_hmat(mol, hmat, CUTOFF_FREQUENCY=CUTOFF_FREQUENCY):
+def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
     log = logger.new_logger(mol, mol.verbose)
     mass = mol.atom_mass_list() * 1836.15
     natom = len(mass)
@@ -55,24 +58,37 @@ def solve_hmat(mol, hmat, CUTOFF_FREQUENCY=CUTOFF_FREQUENCY):
     forcemat = h.transpose(0,2,1,3).reshape(natom*3, natom*3)
     forcemat[abs(forcemat)<1e-12]=0 #improve stability
     w, c = scipy.linalg.eig(forcemat)
-    idx = np.argsort(w)[::-1] # sort the mode of the frequency
+    idx = np.argsort(w.real)[::-1] # sort the mode of the frequency
     w = w[idx]
     c = c[:,idx]
     w_au = w**0.5
-    w_au = w_au.real
-    w_cm = w_au * AU_TO_CM
+    w_cm = w_au * HARTREE2WAVENUMBER
     log.info('****Eigenmodes(cm-1)****')
     for i, omega in enumerate(w_cm):
-        if omega > CUTOFF_FREQUENCY:
-            log.info("Mode %i Omega=%.3f", i, omega)
+        if abs(omega.imag) < IMAG_CUTOFF_FREQUENCY:
+            w_au[i] = w_au[i].real
+            w_cm[i] = w_cm[i].real
+            if omega.real > cutoff_frequency:
+                log.info("Mode %i Omega=%.4f", i, omega.real)
+            else:
+                log.info("Mode %i Omega=%.4f, mode filtered", i, omega.real)
         else:
-            log.info("Mode %i Omega=%.3f, Mode filtered out", i, omega)
-    idx = np.where(w_cm>CUTOFF_FREQUENCY)[0]
+            log.info("Mode %i Omega=%.4fj, imaginary mode", i, omega.imag)
+    if KEEP_IMAG_FREQUENCY:
+        idx_real = np.where(w_cm.real>cutoff_frequency)[0]
+        idx_imag = np.where(abs(w_cm.imag)>IMAG_CUTOFF_FREQUENCY)[0]
+        idx = np.concatenate([idx_real, idx_imag])
+    else:
+        w_au = w_au.real
+        idx = np.where(w_cm.real>cutoff_frequency)[0]
     w_new = w_au[idx]
     c_new = c[:,idx]
     log.info('****Remaining Eigenmodes(cm-1)****')
     for i, omega in enumerate(w_cm[idx]):
-        log.info("Mode %i Omega=%.3f", i, omega)
+        if omega.imag == 0:
+            log.info("Mode %i Omega=%.4f", i, omega.real)
+        else:
+            log.info("Mode %i Omega=%.4fj", i, omega.imag)
     return w_new, c_new
 
 
@@ -83,7 +99,7 @@ def get_mode(ephobj, mol=None, de=None):
             de = ephobj.hess_elec() + ephobj.hess_nuc()
         else:
             de = ephobj.de
-    return solve_hmat(mol, de, ephobj.CUTOFF_FREQUENCY)
+    return solve_hmat(mol, de, ephobj.cutoff_frequency, ephobj.keep_imag_frequency)
 
 
 def rhf_deriv_generator(mf, mo_coeff, mo_occ):
@@ -113,9 +129,19 @@ def vnuc_generator(ephobj, mol):
         return vrinv + vrinv.transpose(0,2,1)
     return vnuc_deriv
 
+def _freq_mass_weighted_vec(vec, omega, mass):
+    nmodes, natoms = len(omega), len(mass)
+    dtype = np.result_type(omega, vec)
+    vec = vec.reshape(natoms,3,nmodes).astype(dtype)
+    for i in range(natoms):
+        for j in range(nmodes):
+            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
+    vec = vec.reshape(3*natoms,nmodes)
+    return vec
+
 def get_eph(ephobj, mo1, omega, vec, mo_rep):
     if isinstance(mo1, str):
-        mo1 = lib.chkfile.load(mo1, 'scf_mo1')
+        mo1 = chkfile.load(mo1, 'scf_mo1')
         mo1 = dict([(int(k), mo1[k]) for k in mo1])
 
     mol = ephobj.mol
@@ -144,12 +170,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         vcore.append(vtot)
     vcore = np.asarray(vcore).reshape(-1,nao,nao)
     mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    vec = _freq_mass_weighted_vec(vec, omega, mass)
     mat = np.einsum('xJ,xuv->Juv', vec, vcore)
     if mo_rep:
         mat = np.einsum('Juv,up,vq->Jpq', mat, mf.mo_coeff.conj(), mf.mo_coeff, optimize=True)
@@ -157,9 +178,29 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(rhf.Hessian):
-    def __init__(self, scf_method):
+    '''EPH for restricted Hartree Fock
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
+    '''
+
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         rhf.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY=CUTOFF_FREQUENCY
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = get_mode
     get_eph = get_eph
