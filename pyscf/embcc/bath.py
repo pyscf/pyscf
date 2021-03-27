@@ -628,7 +628,8 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
 
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
-    log.info("Min(|T2|)= %.2e Max(|T2|)= %.2e", abs(t2).min(), abs(t2).max())
+    if t2.size > 0:
+        log.debug("Min(|T2|)= %.2e Max(|T2|)= %.2e", abs(t2).min(), abs(t2).max())
     t = (timer() - t0)
     if t > 10:
         log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
@@ -665,7 +666,8 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Calculate local energy
     # Project first occupied index onto local space
     _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
-    log.info("Min(|pT2|)= %.2e Max(|pT2|)= %.2e", abs(t2loc).min(), abs(t2loc).max())
+    if t2loc.size > 0:
+        log.info("Min(|pT2|)= %.2e Max(|pT2|)= %.2e", abs(t2loc).min(), abs(t2loc).max())
 
     e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
     log.debug("Local MP2 energy= %12.8g htr", e_mp2)

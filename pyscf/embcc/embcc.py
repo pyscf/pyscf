@@ -75,7 +75,8 @@ class EmbCC:
             bath_tol=None,
             bath_tol_per_electron=False,
             bath_energy_tol=1e-3,
-            minao="minao",
+            #minao="minao",
+            minao=None,
             use_ref_orbitals_dmet=True,
             use_ref_orbitals_bath=False,
             mp2_correction=True,
@@ -112,7 +113,6 @@ class EmbCC:
 
         # --- Check input
         if not mf.converged:
-            #raise ValueError("Mean-field calculation not converged.")
             log.warning("Mean-field calculation not converged.")
 
         # Local orbital types:
@@ -147,7 +147,21 @@ class EmbCC:
         self.max_memory = self.mf.max_memory
 
         self.local_orbital_type = local_type
+
+        # Minimal basis for IAO
+        default_minao = {
+                "gth-dzv" : "gth-szv",
+                "gth-dzvp" : "gth-szv",
+                "gth-tzvp" : "gth-szv",
+                "gth-tzv2p" : "gth-szv",
+                }
+        if minao is None:
+            log.warning("No minimal basis for IAOs specified.")
+            minao = default_minao.get(self.mol.basis, "minao")
+            log.info("Computational basis= %s -> using minimal basis= %s", self.mol.basis, minao)
         self.minao = minao
+        log.info("Computational basis= %s", self.mol.basis)
+        log.info("Minimal basis=       %s", self.minao)
 
         self.maxiter = maxiter
         self.energy_part = energy_part
@@ -163,7 +177,7 @@ class EmbCC:
                 #"orthogonal_mo_tol" : 1e-8,
                 "orthogonal_mo_tol" : False,
                 "popfile" : "population",       # Filename for population analysis
-                "eomfile" : "eom",              # Filename for EOM-CCSD states
+                "eomfile" : "ccsd-eom",              # Filename for EOM-CCSD states
                 "orbfile" : "orbitals",         # Filename for orbital coefficients
                 }
         for key, val in default_opts.items():
@@ -242,30 +256,6 @@ class EmbCC:
         if self.local_orbital_type in ("IAO", "LAO"):
             self.init_fragments()
 
-        if self.opts.orbfile:
-            filename = "%s.txt" % self.opts.orbfile
-            tstamp = datetime.now()
-            nfo = self.C_ao.shape[-1]
-            #ao_labels = ["-".join(x) for x in self.mol.ao_labels(None)]
-            ao_labels = ["-".join([str(xi) for xi in x]) for x in self.mol.ao_labels(None)]
-            iao_labels = ["-".join([str(xi) for xi in x]) for x in self.iao_labels]
-            #iao_labels = ["-".join(x) for x in self.iao_labels]
-            log.info("[%s] Writing fragment orbitals to file \"%s\"", tstamp, filename)
-            with open(filename, "a") as f:
-                f.write("[%s] Fragment Orbitals\n" % tstamp)
-                f.write("*%s*******************\n" % (26*"*"))
-                # Header
-                fmtline = "%20s" + nfo*"   %20s" + "\n"
-                f.write(fmtline % ("AO", *iao_labels))
-                fmtline = "%20s" + nfo*"   %+20.8e" + "\n"
-                # Loop over AO
-                for i in range(self.C_ao.shape[0]):
-                    f.write(fmtline % (ao_labels[i], *self.C_ao[i]))
-
-
-        # Mean-field population analysis
-        self.lo = pyscf.lo.orth_ao(self.mol, "lowdin")
-        self.pop_mf, self.pop_mf_chg = self.pop_analysis()
 
         log.changeIndentLevel(-1)
 
@@ -893,27 +883,27 @@ class EmbCC:
         return C_lao, lao_labels
 
     def pop_analysis(self, filename=None, mode="a"):
-        if filename is None:
+        if filename is None and self.opts.popfile:
             filename = "%s.txt" % self.opts.popfile
         mo = np.linalg.solve(self.lo, self.mf.mo_coeff)
         dm = self.mf.make_rdm1(mo, self.mf.mo_occ)
         pop, chg = self.mf.mulliken_pop(dm=dm, s=np.eye(dm.shape[-1]))
 
-        tstamp = datetime.now()
-
-        log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
-        with open(filename, mode) as f:
-            f.write("[%s] Mean-field population analysis\n" % tstamp)
-            f.write("*%s********************************\n" % (26*"*"))
-            # per orbital
-            for i, s in enumerate(self.mol.ao_labels()):
-                f.write("  * MF population of OrthAO %4d %-16s = %10.5f\n" % (i, s, pop[i]))
-            # per atom
-            f.write("[%s] Mean-field atomic charges\n" % tstamp)
-            f.write("*%s***************************\n" % (26*"*"))
-            for ia in range(self.mol.natm):
-                symb = self.mol.atom_symbol(ia)
-                f.write("  * MF charge at atom %3d %-3s = %10.5f\n" % (ia, symb, chg[ia]))
+        if filename:
+            tstamp = datetime.now()
+            log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
+            with open(filename, mode) as f:
+                f.write("[%s] Mean-field population analysis\n" % tstamp)
+                f.write("*%s********************************\n" % (26*"*"))
+                # per orbital
+                for i, s in enumerate(self.mol.ao_labels()):
+                    f.write("  * MF population of OrthAO %4d %-16s = %10.5f\n" % (i, s, pop[i]))
+                # per atom
+                f.write("[%s] Mean-field atomic charges\n" % tstamp)
+                f.write("*%s***************************\n" % (26*"*"))
+                for ia in range(self.mol.natm):
+                    symb = self.mol.atom_symbol(ia)
+                    f.write("  * MF charge at atom %3d %-3s = %10.5f\n" % (ia, symb, chg[ia]))
 
         return pop, chg
 
@@ -925,6 +915,30 @@ class EmbCC:
 
         if not self.clusters:
             raise ValueError("No clusters defined for calculation.")
+
+        if self.opts.orbfile:
+            filename = "%s.txt" % self.opts.orbfile
+            tstamp = datetime.now()
+            nfo = self.C_ao.shape[-1]
+            #ao_labels = ["-".join(x) for x in self.mol.ao_labels(None)]
+            ao_labels = ["-".join([str(xi) for xi in x]) for x in self.mol.ao_labels(None)]
+            iao_labels = ["-".join([str(xi) for xi in x]) for x in self.iao_labels]
+            #iao_labels = ["-".join(x) for x in self.iao_labels]
+            log.info("[%s] Writing fragment orbitals to file \"%s\"", tstamp, filename)
+            with open(filename, "a") as f:
+                f.write("[%s] Fragment Orbitals\n" % tstamp)
+                f.write("*%s*******************\n" % (26*"*"))
+                # Header
+                fmtline = "%20s" + nfo*"   %20s" + "\n"
+                f.write(fmtline % ("AO", *iao_labels))
+                fmtline = "%20s" + nfo*"   %+20.8e" + "\n"
+                # Loop over AO
+                for i in range(self.C_ao.shape[0]):
+                    f.write(fmtline % (ao_labels[i], *self.C_ao[i]))
+
+        # Mean-field population analysis
+        self.lo = pyscf.lo.orth_ao(self.mol, "lowdin")
+        self.pop_mf, self.pop_mf_chg = self.pop_analysis()
 
         nelec_frags = sum([x.symmetry_factor*x.nelec_mf_frag for x in self.clusters])
         log.info("Total number of mean-field electrons over all fragments= %.8f", nelec_frags)
