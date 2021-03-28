@@ -234,8 +234,10 @@ class KnownValues(unittest.TestCase):
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
               numpy.array([.8, 1., 0., 0., 0., 0.1050]).reshape(-1,1))
-        test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
-                                 0.00000000, -0.00444560, 3.45640232, 4.4349756])
+        #test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
+        #                         0.00000000, -0.00444560, 3.45640232, 4.4349756])  # libxc-4.3.4
+        test_ref = numpy.array([-1.57730394, -2.12127045,-2.11297165,-0.00315462,
+                                 0.00000000, -0.00446935, 3.45640232, 4.42563831])  # libxc-5.1.2
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho, 1, deriv=1)
         self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
@@ -273,9 +275,9 @@ class KnownValues(unittest.TestCase):
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
-        self.assertTrue(not dft.libxc.test_deriv_order('m05', 2, raise_error=False))
-        self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'camb3lyp', 3, True)
-        #self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'pbe0', 3, True)
+        self.assertTrue(dft.libxc.test_deriv_order('m05', 2, raise_error=False))
+        self.assertTrue(dft.libxc.test_deriv_order('camb3lyp', 3, True))
+        self.assertTrue(dft.libxc.test_deriv_order('pbe0', 3, True))
         self.assertRaises(KeyError, dft.libxc.test_deriv_order, 'OL2', 3, True)
 
     def test_xc_type(self):
@@ -290,5 +292,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Test libxc")
     unittest.main()
-
-

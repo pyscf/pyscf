@@ -131,7 +131,7 @@ XC = XC_CODES = {
 'BPW91'         : 'B88 + PW91C',
 'BPW92'         : 'B88 + PW92C',
 'OLYP'          : '2.4832*SLATER - 1.43169*OPTX + LYP',  # CPL, 341, 319
-'KT1'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
+'KT1X'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
 'KT2XC'         : '1.07173*SLATER - .006*KTX + 0.576727*VWN5',  # Keal-Tozer 2, JCP, 119, 3015
 'KT3XC'         : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409',  # Keal-Tozer 3, JCP, 121, 5654
 # == '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',
@@ -202,7 +202,7 @@ XC_ALIAS = {
 #    'MVSH'              : 'MVSH,REGTPSS',
 #    'SOGGA11'           : 'SOGGA11,SOGGA11',
 #    'SOGGA11-X'         : 'SOGGA11X,SOGGA11X',
-    'KT1'               : 'KT1,VWN',
+    'KT1'               : 'KT1X,VWN',
 #    'DLDF'              : 'DLDF,DLDF',
 #    'GAM'               : 'GAM,GAM',
     'M06-L'             : 'M06L,M06L',
