@@ -1,0 +1,29 @@
+name: Create release
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'pyscf/__init__.py'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Release Info
+        run: ./.github/workflows/release_info.sh
+        id: release_info
+      - name: Create Release
+        if: ${{ steps.release_info.outputs.version_tag }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ steps.release_info.outputs.version_tag }}
+          release_name: Release ${{ steps.release_info.outputs.version_tag }}
+          body_path: RELEASE.md
+          # draft: true
+
