@@ -128,7 +128,7 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
     if mo_occ is None: mo_occ = agf2.mo_occ
 
     if isinstance(gf, (tuple, list)):
-        if frozen != None:
+        if frozen is not None:
             if isinstance(frozen, int) or isinstance(frozen[0], int):
                 frozen = [frozen, frozen]
 

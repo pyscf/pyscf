@@ -1127,7 +1127,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
 
         buf = lib.einsum('xpja,pi->xija', buf, ci)
         eri.feri['qmo'][q0:q1] = np.asarray(buf, order='C')
-        
+
     log.timer('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']
