@@ -24,8 +24,8 @@ from pyscf.pbc.prop.efg import EFG
 from pyscf.gto import PTR_COORD
 
 def ewald_deriv1(cell, atm_id):
-    ew_eta = cell.ew_eta
-    ew_cut = cell.ew_cut*4
+    ew_eta, ew_cut = cell.get_ewald_params()
+    ew_cut *= 4
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
@@ -53,8 +53,7 @@ def ewald_deriv1(cell, atm_id):
     return ewovrl + ewg
 
 def ewald_deriv2(cell, atm_id):
-    ew_eta = cell.ew_eta
-    ew_cut = cell.ew_cut
+    ew_eta, ew_cut = cell.get_ewald_params()
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)

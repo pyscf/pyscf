@@ -190,8 +190,6 @@ def pack(cell):
     cldic['exp_to_discard'] = cell.exp_to_discard
     cldic['_mesh'] = cell._mesh
     cldic['_rcut'] = cell._rcut
-    cldic['_ew_eta'] = cell._ew_eta
-    cldic['_ew_cut'] = cell._ew_cut
     cldic['dimension'] = cell.dimension
     cldic['low_dim_ft_type'] = cell.low_dim_ft_type
     return cldic
@@ -323,8 +321,6 @@ def conc_cell(cell1, cell2):
     cell3.precision = min(cell1.precision, cell2.precision)
     cell3.dimension = max(cell1.dimension, cell2.dimension)
     cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
-    cell3.ew_eta = min(cell1.ew_eta, cell2.ew_eta)
-    cell3.ew_cut = max(cell1.ew_cut, cell2.ew_cut)
     cell3.rcut = max(cell1.rcut, cell2.rcut)
 
     cell3._pseudo.update(cell1._pseudo)
@@ -681,7 +677,7 @@ def get_SI(cell, Gv=None):
         SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
-def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
+def get_ewald_params(cell, precision=None, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
     eta^2 is the exponent coefficient of the model Gaussian charge for nucleus
     at R:  \frac{eta^3}{pi^1.5} e^{-eta^2 (r-R)^2}
@@ -703,6 +699,8 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     '''
     if cell.natm == 0:
         return 0, 0
+    if precision is None:
+        precision = cell.precision
     elif (cell.dimension < 2 or
           (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
@@ -752,8 +750,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.natm == 0:
         return 0
 
-    if ew_eta is None: ew_eta = cell.ew_eta
-    if ew_cut is None: ew_cut = cell.ew_cut
+    if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
+    if ew_cut is None: ew_cut = cell.get_ewald_params()[1]
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
@@ -1038,11 +1036,6 @@ class Cell(mole.Mole):
             (analytic_2d_1). Unless explicitly specified, analytic_2d_1 is
             used for 2D system and inf_vacuum is assumed for 1D and 0D.
 
-        ** Following attributes (for experts) are automatically generated. **
-
-        ew_eta, ew_cut : float
-            The Ewald 'eta' and 'cut' parameters.  See :func:`get_ewald_params`
-
     (See other attributes in :class:`Mole`)
 
     Examples:
@@ -1072,8 +1065,6 @@ class Cell(mole.Mole):
 ##################################################
 # These attributes are initialized by build function if not given
         self.mesh = None
-        self.ew_eta = None
-        self.ew_cut = None
         self.rcut = None
 
 ##################################################
@@ -1100,19 +1091,21 @@ class Cell(mole.Mole):
 
     @property
     def ew_eta(self):
-        return self._ew_eta
-    @ew_eta.setter
-    def ew_eta(self, val):
-        self._ew_eta = val
-        self._ew_from_build = False
+        warnings.warn("cell.ew_eta is deprecated. Use function get_ewald_params instead.")
+        return self.get_ewald_params()[0]
 
     @property
     def ew_cut(self):
-        return self._ew_cut
+        warnings.warn("cell.ew_cut is deprecated. Use function get_ewald_params instead.")
+        return self.get_ewald_params()[1]
+
+    @ew_eta.setter
+    def ew_eta(self, val):
+        warnings.warn("ew_eta is no longer stored in the cell object. Setting it has no effect")
+
     @ew_cut.setter
     def ew_cut(self, val):
-        self._ew_cut = val
-        self._ew_from_build = False
+        warnings.warn("ew_cut is no longer stored in the cell object. Setting it has no effect")
 
     if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
 # nelec method defined in Mole class raises error when the attributes .spin
@@ -1190,9 +1183,8 @@ class Cell(mole.Mole):
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
-              ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None, rcut= None, ecp=None, low_dim_ft_type=None,
-              *args, **kwargs):
+              pseudo=None, basis=None, h=None, dimension=None, rcut= None,
+              ecp=None, low_dim_ft_type=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1216,9 +1208,6 @@ class Cell(mole.Mole):
                 Cutoff radius (unit Bohr) in lattice summation to produce
                 periodicity. The value can be estimated based on the required
                 precision.  It's recommended NOT making changes to this value.
-            ew_eta, ew_cut : float
-                Parameters eta and cut to converge Ewald summation.
-                See :func:`get_ewald_params`
             pseudo : dict or str
                 To define pseudopotential.
             ecp : dict or str
@@ -1238,8 +1227,6 @@ class Cell(mole.Mole):
         if a is not None: self.a = a
         if mesh is not None: self.mesh = mesh
         if nimgs is not None: self.nimgs = nimgs
-        if ew_eta is not None: self.ew_eta = ew_eta
-        if ew_cut is not None: self.ew_cut = ew_cut
         if pseudo is not None: self.pseudo = pseudo
         if basis is not None: self.basis = basis
         if dimension is not None: self.dimension = dimension
@@ -1402,10 +1389,6 @@ class Cell(mole.Mole):
             # system, cell.mesh was initialized to 0.
             self._mesh[self._mesh == 0] = 30
 
-        if self.ew_eta is None or self.ew_cut is None or self._ew_from_build:
-            self._ew_eta, self._ew_cut = self.get_ewald_params(self.precision, self.mesh)
-            self._ew_from_build = True
-
         if dump_input and not _built and self.verbose > logger.NOTE:
             self.dump_input()
             logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
@@ -1429,9 +1412,6 @@ class Cell(mole.Mole):
                             self.mesh, np.prod(self.mesh))
                 Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
                 logger.info(self, '    = ke_cutoff %s', Ecut)
-            logger.info(self, 'ew_eta = %g', self.ew_eta)
-            logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
-                        self.get_bounding_sphere(self.ew_cut))
         return self
     kernel = build
 
