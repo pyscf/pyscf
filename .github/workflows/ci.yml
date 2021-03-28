@@ -10,12 +10,14 @@
 #
 name: CI
 
-on:
-  workflow_run:
-    workflows:
-      - Lint
-    types:
-      - completed
+#FIXME: workflow dependency not working on non-default branch?
+#on:
+#  workflow_run:
+#    workflows:
+#      - Lint
+#    types:
+#      - completed
+on: [push, pull_request]
 
 jobs:
   build:

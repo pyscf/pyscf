@@ -695,6 +695,7 @@ del(_xc_key_without_underscore)
 # alias
 #
 XC_CODES.update({
+    'GGA_C_BCGP'    : 'GGA_C_ACGGA',
     'LDA'           : 1 ,
     'SLATER'        : 1 ,
     'VWN3'          : 8,
