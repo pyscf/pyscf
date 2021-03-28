@@ -68,7 +68,7 @@ def get_arguments():
     parser.add_argument("--gdf-exp-to-discard", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
-    parser.add_argument("--save-gdf", help="Save primitive cell GDF", default="gdf-%.2f.h5")
+    parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
     parser.add_argument("--load-gdf-unfolded", action="store_true")
     parser.add_argument("--gdf-force-eig", action="store_true")
@@ -76,9 +76,6 @@ def get_arguments():
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
-    #parser.add_argument("--make-rdm1", action="store_true")
-    #parser.add_argument("--ip-eom", action="store_true")
-    #parser.add_argument("--ea-eom", action="store_true")
     parser.add_argument("--opts", nargs="*", default=[])
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")

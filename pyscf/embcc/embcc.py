@@ -170,15 +170,15 @@ class EmbCC:
         # TODO: Change other options to here
         self.opts = Options()
         default_opts = {
-                "make_rdm1" : False,
-                "eom_ccsd" : False,
-                #"ip_eom" : False,
-                #"ea_eom" : False,
                 #"orthogonal_mo_tol" : 1e-8,
-                "orthogonal_mo_tol" : False,
-                "popfile" : "population",       # Filename for population analysis
-                "eomfile" : "ccsd-eom",              # Filename for EOM-CCSD states
                 "orbfile" : "orbitals",         # Filename for orbital coefficients
+                "orthogonal_mo_tol" : False,
+                # Population analysis
+                "make_rdm1" : False,
+                "popfile" : "population",       # Filename for population analysis
+                # EOM-CCSD
+                "eom_ccsd" : False,
+                "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
                 }
         for key, val in default_opts.items():
             setattr(self.opts, key, kwargs.pop(key, val))

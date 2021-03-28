@@ -953,8 +953,9 @@ class Cluster:
         eris = csolver._eris
         cc = csolver._solver
 
+        log.info("EOM-CCSD %s energies= %r", kind, e[:5].tolist())
         tstamp = datetime.now()
-        log.info("[%s] Writing cluster %s-EOM analysis to file \"%s\"", tstamp, kind, filename)
+        log.info("[%s] Writing detailed cluster %s-EOM analysis to file \"%s\"", tstamp, kind, filename)
 
         with open(filename, mode) as f:
             f.write("[%s] %s-EOM analysis\n" % (tstamp, kind))
