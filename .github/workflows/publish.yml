@@ -1,12 +1,12 @@
 name: Publish
 
 on:
-  push:
-    branches:
-      - master
-  #    - 2.0
-    tags:
-      - v2.*
+  #push:
+  #  branches:
+  #    - master
+  ##    - 2.0
+  #  tags:
+  #    - v2.*
   release:
     types:
       published
