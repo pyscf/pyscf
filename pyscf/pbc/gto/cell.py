@@ -697,10 +697,10 @@ def get_ewald_params(cell, precision=None, mesh=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if cell.natm == 0:
-        return 0, 0
     if precision is None:
         precision = cell.precision
+    if cell.natm == 0:
+        return 0, 0
     elif (cell.dimension < 2 or
           (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
