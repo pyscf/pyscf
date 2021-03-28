@@ -113,7 +113,7 @@ def so_by_shell(mol, shls):
     mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
     mol._env[AS_NECPBAS] = len(mol._ecpbas)
     buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
-    cache = numpy.empty(buf.size*48)
+    cache = numpy.empty(buf.size*48+100000)
     fn = libecp.ECPso_spinor
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(di, dj),
