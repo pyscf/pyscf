@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+import numpy as np
 from pyscf.pbc import scf, dft, gto
 from pyscf.eph.rhf import solve_hmat, _freq_mass_weighted_vec
-import numpy as np
-import scipy
 from pyscf.lib import logger, param
+from pyscf.data.nist import MP_ME
 
 '''Electron-Phonon matrix from finite difference for Gamma Point'''
 # Note, the code now only return eph matrix at Gamma Point
@@ -141,7 +142,7 @@ def kernel(mf, disp=1e-4, mo_rep=False):
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
     omega, vec = solve_hmat(cell, hmat)
-    mass = cell.atom_mass_list() * 1836.15
+    mass = cell.atom_mass_list() * MP_ME
     vec = _freq_mass_weighted_vec(vec, omega, mass)
     if mo_rep:
         if RESTRICTED:
