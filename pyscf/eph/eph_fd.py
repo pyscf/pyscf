@@ -25,6 +25,7 @@ import numpy as np
 from pyscf import scf, dft, gto, hessian
 from pyscf.eph import rhf as rhf_eph
 from pyscf.lib import logger
+from pyscf.data.nist import MP_ME
 
 CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
 KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
@@ -95,7 +96,7 @@ def kernel(mf, disp=1e-4, mo_rep=False, cutoff_frequency=CUTOFF_FREQUENCY, keep_
     RESTRICTED = (mf.mo_coeff.ndim==2)
     mol = mf.mol
     omega, vec = get_mode(mf, cutoff_frequency, keep_imag_frequency)
-    mass = mol.atom_mass_list() * 1836.15
+    mass = mol.atom_mass_list() * MP_ME
     vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesion coord
     mfset = run_mfs(mf, mols_a, mols_b) # run mean field calculations on all these molecules

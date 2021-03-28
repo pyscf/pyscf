@@ -20,11 +20,12 @@
 Analytical electron-phonon matrix for unrestricted hartree fock
 '''
 import numpy as np
+from pyscf import lib
 from pyscf.eph import rhf as rhf_eph
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.scf._response_functions import _gen_uhf_response
-from pyscf import lib
+from pyscf.data.nist import MP_ME
 
 CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
 KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
@@ -98,7 +99,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     vcorea = np.asarray(vcorea).reshape(-1,nao,nao)
     vcoreb = np.asarray(vcoreb).reshape(-1,nao,nao)
 
-    mass = mol.atom_mass_list() * 1836.15
+    mass = mol.atom_mass_list() * MP_ME
     vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mata = np.einsum('xJ,xuv->Juv', vec, vcorea)
     matb = np.einsum('xJ,xuv->Juv', vec, vcoreb)

@@ -27,7 +27,7 @@ from pyscf.hessian import rhf
 from pyscf.lib import logger, chkfile
 from pyscf.scf._response_functions import _gen_rhf_response
 from pyscf import __config__
-from pyscf.data.nist import HARTREE2WAVENUMBER
+from pyscf.data.nist import HARTREE2WAVENUMBER, MP_ME
 
 CUTOFF_FREQUENCY = getattr(__config__, 'eph_cutoff_frequency', 80)  # 80 cm-1
 KEEP_IMAG_FREQUENCY = getattr(__config__, 'eph_keep_imaginary_frequency', False)
@@ -49,7 +49,7 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
 
 def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
     log = logger.new_logger(mol, mol.verbose)
-    mass = mol.atom_mass_list() * 1836.15
+    mass = mol.atom_mass_list() * MP_ME
     natom = len(mass)
     h = np.empty_like(hmat) #[atom, axis, atom, axis]
     for i in range(natom):
@@ -169,7 +169,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         vtot = h1 + v1 + vhf + vhf.transpose(0,2,1)
         vcore.append(vtot)
     vcore = np.asarray(vcore).reshape(-1,nao,nao)
-    mass = mol.atom_mass_list() * 1836.15
+    mass = mol.atom_mass_list() * MP_ME
     vec = _freq_mass_weighted_vec(vec, omega, mass)
     mat = np.einsum('xJ,xuv->Juv', vec, vcore)
     if mo_rep:
