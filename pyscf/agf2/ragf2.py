@@ -1108,20 +1108,26 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     log.debug1('blksize (ragf2._make_qmo_eris_outcore) = %d', blksize)
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
+    q1 = 0
     for p0, p1 in lib.prange(0, nmo, blksize):
+        if not np.any(mask[p0:p1]):
+            # block is fully frozen
+            continue
+
         inds = np.arange(p0, p1)[mask[p0:p1]]
+        q0, q1 = q1, q1 + len(inds)
         idx = list(np.concatenate(tril2sq[inds]))
 
         buf = eri.eri[idx] # (blk, nmo, npair)
-        buf = buf.reshape((len(inds))*nmo, -1) # (blk*nmo, npair)
+        buf = buf.reshape((q1-q0)*nmo, -1) # (blk*nmo, npair)
 
         jasym, nja, cja, sja = ao2mo.incore._conc_mos(cj, ca, compact=True)
         buf = ao2mo._ao2mo.nr_e2(buf, cja, sja, 's2kl', 's1')
-        buf = buf.reshape(len(inds), nmo, nj, na)
+        buf = buf.reshape(q1-q0, nmo, nj, na)
 
         buf = lib.einsum('xpja,pi->xija', buf, ci)
-        eri.feri['qmo'][inds] = np.asarray(buf, order='C')
-
+        eri.feri['qmo'][q0:q1] = np.asarray(buf, order='C')
+        
     log.timer('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']

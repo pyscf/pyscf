@@ -521,6 +521,7 @@ class KnownValues(unittest.TestCase):
         rs, ws = radi.gauss_chebyshev(99)
         ur0 = rad_part(mol, mol._ecpbas, rs)
         ur1 = numpy.empty_like(ur0)
+        cache = numpy.empty(100000)
         libecp.ECPrad_part(ur1.ctypes.data_as(ctypes.c_void_p),
                            rs.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(0), ctypes.c_int(len(rs)), ctypes.c_int(1),
@@ -529,19 +530,21 @@ class KnownValues(unittest.TestCase):
                            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                            mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                            mol._env.ctypes.data_as(ctypes.c_void_p),
-                           lib.c_null_ptr())
+                           lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
         self.assertTrue(numpy.allclose(ur0, ur1))
 
     def test_type2_ang_part(self):
         numpy.random.seed(3)
         rca = numpy.random.random(3)
+        cache = numpy.empty(100000)
         def type2_facs_ang(li, lc):
             i_fac_cache = cache_fac(li, rca)
             facs0 = facs_ang(type2_ang_part(li, lc, -rca), li, lc, i_fac_cache)
             facs1 = numpy.empty_like(facs0)
             libecp.type2_facs_ang(facs1.ctypes.data_as(ctypes.c_void_p),
                                   ctypes.c_int(li), ctypes.c_int(lc),
-                                  rca.ctypes.data_as(ctypes.c_void_p))
+                                  rca.ctypes.data_as(ctypes.c_void_p),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for li in range(6):
             for lc in range(5):
@@ -550,6 +553,7 @@ class KnownValues(unittest.TestCase):
     def test_type2_rad_part(self):
         rc = .8712
         rs, ws = radi.gauss_chebyshev(99)
+        cache = numpy.empty(100000)
         def type2_facs_rad(ish, lc):
             facs0 = facs_rad(mol, ish, lc, rc, rs).transpose(0,2,1).copy()
             facs1 = numpy.empty_like(facs0)
@@ -560,13 +564,15 @@ class KnownValues(unittest.TestCase):
                                   ctypes.c_int(len(rs)), ctypes.c_int(1),
                                   mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                   mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                  mol._env.ctypes.data_as(ctypes.c_void_p))
+                                  mol._env.ctypes.data_as(ctypes.c_void_p),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for ish in range(mol.nbas):
             for lc in range(5):
                 type2_facs_rad(ish, lc)
 
     def test_type2(self):
+        cache = numpy.empty(100000)
         def gen_type2(shls):
             di = (mol.bas_angular(shls[0])*2+1) * mol.bas_nctr(shls[0])
             dj = (mol.bas_angular(shls[1])*2+1) * mol.bas_nctr(shls[1])
@@ -577,7 +583,6 @@ class KnownValues(unittest.TestCase):
                     continue
                 mat0 += type2_by_shell(mol, shls, ia, ecpbas)
             mat1 = numpy.empty(mat0.shape, order='F')
-            cache = numpy.empty(100000)
             libecp.ECPtype2_sph(mat1.ctypes.data_as(ctypes.c_void_p),
                                 (ctypes.c_int*2)(*shls),
                                 mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
@@ -598,12 +603,14 @@ class KnownValues(unittest.TestCase):
     def test_type1_state_fac(self):
         numpy.random.seed(3)
         ri = numpy.random.random(3) - .5
+        cache = numpy.empty(100000)
         def tfacs(li):
             facs0 = type1_cache_fac(li, ri)
             facs1 = numpy.zeros_like(facs0)
             libecp.type1_static_facs(facs1.ctypes.data_as(ctypes.c_void_p),
                                      ctypes.c_int(li),
-                                     ri.ctypes.data_as(ctypes.c_void_p))
+                                     ri.ctypes.data_as(ctypes.c_void_p),
+                                     cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for l in range(6):
             tfacs(l)
@@ -628,6 +635,7 @@ class KnownValues(unittest.TestCase):
         aij = .792
         rs, ws = radi.gauss_chebyshev(99)
         ur = rad_part(mol, mol._ecpbas, rs) * ws
+        cache = numpy.empty(100000)
         def gen_type1_rad(li):
             rad_all0 = type1_rad_part(li, k, aij, ur, rs)
             rad_all1 = numpy.zeros_like(rad_all0)
@@ -636,7 +644,8 @@ class KnownValues(unittest.TestCase):
                                   ctypes.c_double(k), ctypes.c_double(aij),
                                   ur.ctypes.data_as(ctypes.c_void_p),
                                   rs.ctypes.data_as(ctypes.c_void_p),
-                                  ctypes.c_int(len(rs)), ctypes.c_int(1))
+                                  ctypes.c_int(len(rs)), ctypes.c_int(1),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(rad_all0, rad_all1))
         for l in range(13):
             gen_type1_rad(l)
@@ -709,7 +718,7 @@ Na F
                                ui.conj(), uj)
             self.assertAlmostEqual(abs(ref-mat0).max(), 0, 12)
 
-            mat2 = gto.ecp.so_by_shell(mol, shls)
+            mat2 = .5 * gto.ecp.so_by_shell(mol, shls)
             self.assertTrue(numpy.allclose(ref, mat2, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
