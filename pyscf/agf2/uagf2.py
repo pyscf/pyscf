@@ -951,31 +951,37 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
         log.debug1('blksize (uagf2._make_qmo_eris_outcore) = %d', blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmoa)
+        q1 = 0
         for p0, p1 in lib.prange(0, nmoa, blksize):
+            if not np.any(mask[0][p0:p1]):
+                # block is fully frozen
+                continue
+
             inds = np.arange(p0, p1)[mask[0][p0:p1]]
+            q0, q1 = q1, q1 + len(inds)
             idx = list(np.concatenate(tril2sq[inds]))
 
             # aa
             buf = eri.eri_aa[idx] # (blk, nmoa, npaira)
-            buf = buf.reshape((len(inds))*nmoa, -1) # (blk*nmoa, npaira)
+            buf = buf.reshape((q1-q0)*nmoa, -1) # (blk*nmoa, npaira)
 
             jasym_aa, nja_aa, cja_aa, sja_aa = ao2mo.incore._conc_mos(cja, caa)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_aa, sja_aa, 's2kl', 's1')
-            buf = buf.reshape(len(inds), nmoa, nja, naa)
+            buf = buf.reshape(q1-q0, nmoa, nja, naa)
 
             buf = lib.einsum('xpja,pi->xija', buf, cia)
-            eri.feri['qmo/aa'][inds] = np.asarray(buf, order='C')
+            eri.feri['qmo/aa'][q0:q1] = np.asarray(buf, order='C')
 
             # ab
             buf = eri.eri_ab[idx] # (blk, nmoa, npairb)
-            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmoa, npairb)
+            buf = buf.reshape((q1-q0)*nmob, -1) # (blk*nmoa, npairb)
 
             jasym_ab, nja_ab, cja_ab, sja_ab = ao2mo.incore._conc_mos(cjb, cab)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_ab, sja_ab, 's2kl', 's1')
-            buf = buf.reshape(len(inds), nmoa, njb, nab)
+            buf = buf.reshape(q1-q0, nmoa, njb, nab)
 
             buf = lib.einsum('xpja,pi->xija', buf, cia)
-            eri.feri['qmo/ab'][inds] = np.asarray(buf, order='C')
+            eri.feri['qmo/ab'][q0:q1] = np.asarray(buf, order='C')
 
     if spin is None or spin == 1:
         eri.feri.create_dataset('qmo/ba', (nmob-frozenb, nib, nja, naa), 'f8')
@@ -988,31 +994,37 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs_a, coeffs_b, spin=None):
         log.debug1('blksize (uagf2._make_qmo_eris_outcore) = %d', blksize)
 
         tril2sq = lib.square_mat_in_trilu_indices(nmob)
+        q1 = 0
         for p0, p1 in lib.prange(0, nmob, blksize):
+            if not np.any(mask[1][p0:p1]):
+                # block is fully frozen
+                continue
+
             inds = np.arange(p0, p1)[mask[1][p0:p1]]
+            q0, q1 = q1, q1 + len(inds)
             idx = list(np.concatenate(tril2sq[inds]))
 
             # ba
             buf = eri.eri_ba[idx] # (blk, nmob, npaira)
-            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmob, npaira)
+            buf = buf.reshape((q1-q0)*nmob, -1) # (blk*nmob, npaira)
 
             jasym_ba, nja_ba, cja_ba, sja_ba = ao2mo.incore._conc_mos(cja, caa)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_ba, sja_ba, 's2kl', 's1')
-            buf = buf.reshape(len(inds), nmob, nja, naa)
+            buf = buf.reshape(q1-q0, nmob, nja, naa)
 
             buf = lib.einsum('xpja,pi->xija', buf, cib)
-            eri.feri['qmo/ba'][inds] = np.asarray(buf, order='C')
+            eri.feri['qmo/ba'][q0:q1] = np.asarray(buf, order='C')
 
             # bb
             buf = eri.eri_bb[idx] # (blk, nmob, npairb)
-            buf = buf.reshape((len(inds))*nmob, -1) # (blk*nmob, npairb)
+            buf = buf.reshape((q1-q0)*nmob, -1) # (blk*nmob, npairb)
 
             jasym_bb, nja_bb, cja_bb, sja_bb = ao2mo.incore._conc_mos(cjb, cab)
             buf = ao2mo._ao2mo.nr_e2(buf, cja_bb, sja_bb, 's2kl', 's1')
-            buf = buf.reshape(len(inds), nmob, njb, nab)
+            buf = buf.reshape(q1-q0, nmob, njb, nab)
 
             buf = lib.einsum('xpja,pi->xija', buf, cib)
-            eri.feri['qmo/bb'][inds] = np.asarray(buf, order='C')
+            eri.feri['qmo/bb'][q0:q1] = np.asarray(buf, order='C')
 
     if spin is None:
         qeri = ((eri.feri['qmo/aa'], eri.feri['qmo/ab']),

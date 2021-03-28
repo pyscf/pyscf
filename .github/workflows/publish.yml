@@ -4,7 +4,7 @@ on:
   #push:
   #  branches:
   #    - master
-  #    - 2.0
+  ##    - 2.0
   #  tags:
   #    - v2.*
   release:

@@ -147,7 +147,7 @@ def update_amps(mp, t2, eris):
 
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira).conj() * .5
     eris_OVOV = numpy.asarray(eris.OVOV).reshape(noccb,nvirb,noccb,nvirb).conj() * .5
-    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb).conj()
+    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb).conj().copy()
     u2aa = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
     u2bb = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
     u2ab = eris_ovOV.transpose(0,2,1,3)
