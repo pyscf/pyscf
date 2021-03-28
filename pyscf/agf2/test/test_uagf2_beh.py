@@ -97,6 +97,51 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_ea,          0.03781071654337435  , 6)
         self.assertAlmostEqual(v_ea,          0.9740024912068087   , 6)
 
+    def test_uagf2_frozen_outcore(self):
+        # test the frozen implementation with outcore QMOs
+        mf = scf.UHF(self.mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf.incore_complete = True
+        mf.run()
+        gf2 = agf2.UAGF2(mf)
+        gf2.conv_tol = 1e-7
+        gf2.frozen = [[1], []]
+        eri = gf2.ao2mo()
+        gf2.max_memory = 1
+        gf2.incore_complete = False
+        gf2.run(eri=eri)
+        e_ip, v_ip = gf2.ipagf2(nroots=1)
+        e_ea, v_ea = gf2.eaagf2(nroots=1)
+        v_ip = np.linalg.norm(v_ip)**2
+        v_ea = np.linalg.norm(v_ea)**2
+        self.assertAlmostEqual(gf2.e_1b, -15.074739470012476  , 6)
+        self.assertAlmostEqual(gf2.e_2b, -0.02869128199243178 , 6)
+        self.assertAlmostEqual(e_ip,     0.30429793411749156  , 6)
+        self.assertAlmostEqual(v_ip,     0.994829573647208    , 6)
+        self.assertAlmostEqual(e_ea,     -0.006073553177668935, 6)
+        self.assertAlmostEqual(v_ea,     0.8287871847529051   , 6)
+
+    def test_uagf2_frozen_fully_outcore(self):
+        # test the frozen implementation with outcore MOs and QMOs
+        mf = scf.UHF(self.mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf.max_memory = 1
+        mf.run()
+        gf2 = agf2.UAGF2(mf)
+        gf2.conv_tol = 1e-7
+        gf2.frozen = [[1], []]
+        gf2.run()
+        e_ip, v_ip = gf2.ipagf2(nroots=1)
+        e_ea, v_ea = gf2.eaagf2(nroots=1)
+        v_ip = np.linalg.norm(v_ip)**2
+        v_ea = np.linalg.norm(v_ea)**2
+        self.assertAlmostEqual(gf2.e_1b, -15.074739470012476  , 6)
+        self.assertAlmostEqual(gf2.e_2b, -0.02869128199243178 , 6)
+        self.assertAlmostEqual(e_ip,     0.30429793411749156  , 6)
+        self.assertAlmostEqual(v_ip,     0.994829573647208    , 6)
+        self.assertAlmostEqual(e_ea,     -0.006073553177668935, 6)
+        self.assertAlmostEqual(v_ea,     0.8287871847529051   , 6)
+
 
 if __name__ == '__main__':
     print('UAGF2 calculations for BeH')

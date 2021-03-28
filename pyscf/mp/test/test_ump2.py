@@ -262,7 +262,7 @@ class KnownValues(unittest.TestCase):
     def test_non_canonical_mp2(self):
         mf = scf.UHF(mol).run(max_cycle=1)
         pt = mp.MP2(mf)
-        self.assertAlmostEqual(pt.kernel()[0], -0.044255887860725873, 7)
+        self.assertAlmostEqual(pt.kernel()[0], -0.171693954168, 7)
 
 
 

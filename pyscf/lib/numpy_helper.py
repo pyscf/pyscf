@@ -131,7 +131,7 @@ def _contract(subscripts, *tensors, **kwargs):
     # Find the shared indices being summed over
     shared_idxAB = uniq_idxA.intersection(uniq_idxB)
 
-    if (not shared_idxAB == 0 or  # Indices must overlap
+    if ((not shared_idxAB) or  # Indices must overlap
         # one operand is a subset of the other one (e.g. 'ijkl,jk->il')
         uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
         # repeated indices (e.g. 'iijk,kl->jl')
