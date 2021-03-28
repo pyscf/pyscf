@@ -28,6 +28,9 @@ from pyscf.dft import numint
 from pyscf.eph import rhf as rhf_eph
 from pyscf import lib
 
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
+
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     """" This functions is slightly different from hessian.rks._get_vxc_deriv1 in that <\nabla u|Vxc|v> is removed"""
     mol = hessobj.mol
@@ -147,12 +150,7 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         vcore.append(vtot)
     vcore = np.asarray(vcore).reshape(-1,nao,nao)
     mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mat = np.einsum('xJ,xuv->Juv', vec, vcore, optimize=True)
     if mo_rep:
         mat = np.einsum('Juv,up,vq->Jpq', mat, mf.mo_coeff.conj(), mf.mo_coeff, optimize=True)
@@ -160,9 +158,28 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(rks_hess.Hessian):
-    def __init__(self, scf_method):
+    '''EPH for restricted DFT
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[j,a,b] (j in nmodes, a,b in norbs)
+    '''
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         rks_hess.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY=80
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph
