@@ -67,6 +67,15 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
 
+    if isinstance(casscf, _DFCASSCF):
+        if casscf.with_df is None:
+            casscf.with_df = with_df
+        elif getattr(casscf.with_df, 'auxbasis', None) != auxbasis:
+            #logger.warn(casscf, 'DF might have been initialized twice.')
+            casscf = copy.copy(casscf)
+            casscf.with_df = with_df
+        return casscf
+
     class DFCASSCF(_DFCASSCF, casscf_class):
         def __init__(self):
             self.__dict__.update(casscf.__dict__)
