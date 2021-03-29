@@ -13,29 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyscf.pbc import scf, dft, gto
-from pyscf.eph.rhf import solve_hmat
+
 import numpy as np
-import scipy
+from pyscf.pbc import scf, dft, gto
+from pyscf.eph.rhf import solve_hmat, _freq_mass_weighted_vec
 from pyscf.lib import logger, param
+from pyscf.data.nist import MP_ME
 
 '''Electron-Phonon matrix from finite difference for Gamma Point'''
 # Note, the code now only return eph matrix at Gamma Point
 # cell relaxation needs to be performed before computing eph matrix
 
-AU_TO_CM = 2.19475 * 1e5
-CUTOFF_FREQUENCY = 80
-
 def copy_mf(mf, cell):
-    if mf.__class__.__name__ == 'KRHF':
-        mf1 = scf.KRHF(cell)
-    elif mf.__class__.__name__ == 'KUHF':
-        mf1 = scf.KUHF(cell)
-    elif mf.__class__.__name__ == 'KRKS':
-        mf1 = dft.KRKS(cell)
-        mf1.xc = mf.xc
-    elif mf.__class__.__name__ == 'KUKS':
-        mf1 = dft.KUKS(cell)
+    mf1 = mf.__class__(cell)
+    if hasattr(mf, 'xc'):
         mf1.xc = mf.xc
     mf1.kpts = mf.kpts
     mf1.exxdiv = getattr(mf, 'exxdiv', None)
@@ -98,8 +89,16 @@ def get_vmat(mf, mfset, disp):
         atmid, axis = np.divmod(i, 3)
         p0, p1 = aoslice[atmid][2:]
         mf1, mf2 = mfset[i]
-        vfull1 = mf1.get_veff() + mf1.get_hcore() - mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts)  # <u+|V+|v+>
-        vfull2 = mf2.get_veff() + mf2.get_hcore() - mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts)  # <u-|V-|v->
+        if RESTRICTED:
+            vfull1 = mf1.get_veff() + mf1.get_hcore() \
+                   - np.asarray(mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts))  # <u+|V+|v+>
+            vfull2 = mf2.get_veff() + mf2.get_hcore() \
+                   - np.asarray(mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts))  # <u-|V-|v->
+        else:
+            vfull1 = mf1.get_veff() + mf1.get_hcore()[None] \
+                   - np.asarray(mf1.cell.pbc_intor('int1e_kin', kpts=mf1.kpts))[None]  # <u+|V+|v+>
+            vfull2 = mf2.get_veff() + mf2.get_hcore()[None] \
+                   - np.asarray(mf2.cell.pbc_intor('int1e_kin', kpts=mf2.kpts))[None]  # <u-|V-|v->
         vfull = (vfull1 - vfull2)/disp  # (<p+|V+|q+>-<p-|V-|q->)/dR
         if RESTRICTED:
             vfull[:,p0:p1] -= vtmp[axis,:,p0:p1]
@@ -130,7 +129,7 @@ def run_hess(mfset, disp):
     return hess
 
 
-def kernel(mf, disp=1e-5, mo_rep=False):
+def kernel(mf, disp=1e-4, mo_rep=False):
     if not mf.converged: mf.kernel()
     mo_coeff = np.asarray(mf.mo_coeff)
     RESTRICTED= (mo_coeff.ndim==3)
@@ -140,13 +139,8 @@ def kernel(mf, disp=1e-5, mo_rep=False):
     vmat = get_vmat(mf, mfset, disp) # extracting <u|dV|v>/dR
     hmat = run_hess(mfset, disp)
     omega, vec = solve_hmat(cell, hmat)
-    mass = cell.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    mass = cell.atom_mass_list() * MP_ME
+    vec = _freq_mass_weighted_vec(vec, omega, mass)
     if mo_rep:
         if RESTRICTED:
             vmat = np.einsum('xuv,up,vq->xpq', vmat, mo_coeff[0].conj(), mo_coeff[0])

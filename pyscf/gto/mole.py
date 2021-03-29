@@ -304,7 +304,7 @@ def format_atom(atoms, origin=0, axes=None,
             (A, a, Angstrom, angstrom, Ang, ang), the coordinates are in the
             unit of angstrom;  If a number is given, the number are considered
             as the Bohr value (in angstrom), which should be around 0.53.
-            Set unit=1 if wishing to reserve the unit of the coordinates.
+            Set unit=1 if wishing to preserve the unit of the coordinates.
 
     Returns:
         "atoms" in the internal format. The internal format is

@@ -18,7 +18,7 @@
 #
 
 '''
-G0W0 approximation
+Spin-restricted G0W0 approximation with exact frequency integration
 '''
 
 import time
@@ -132,7 +132,7 @@ def get_g(omega, mo_energy, mo_occ, eta):
     return 1.0/(omega - mo_energy + 1j*eta*sgn)
 
 
-class GW(lib.StreamObject):
+class GWExact(lib.StreamObject):
     '''non-relativistic restricted GW
 
     Saved results
@@ -146,7 +146,7 @@ class GW(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    def __init__(self, mf, tdmf, frozen=None):
+    def __init__(self, mf, frozen=None, tdmf=None):
         self.mol = mf.mol
         self._scf = mf
         self._tdscf = tdmf
@@ -176,7 +176,7 @@ class GW(lib.StreamObject):
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen is not None:
-            log.info('frozen orbitals %s', str(self.frozen))
+            log.info('frozen = %s', self.frozen)
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
 
@@ -214,6 +214,13 @@ class GW(lib.StreamObject):
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
+        if self._tdscf is None:
+            from pyscf import tdscf
+            self._tdscf = tdscf.dRPA(self._scf)
+            nocc, nvir = self.nocc, self.nmo-self.nocc
+            self._tdscf.nstates = nocc*nvir
+            self._tdscf.verbose = 0
+            self._tdscf.kernel()
         if td_e is None:
             td_e = self._tdscf.e
         if td_xy is None:
@@ -368,7 +375,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, tddft
+    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 5
     mol.atom = [
@@ -382,15 +389,7 @@ if __name__ == '__main__':
     mf.xc = 'hf'
     mf.kernel()
 
-    nocc = mol.nelectron//2
-    nmo = mf.mo_energy.size
-    nvir = nmo-nocc
-
-    td = tddft.dRPA(mf)
-    td.nstates = min(100, nocc*nvir)
-    td.kernel()
-
-    gw = GW(mf, td)
+    gw = GWExact(mf)
     gw.kernel()
     print(gw.mo_energy)
 # [-20.10555946  -1.2264067   -0.68160939  -0.53066326  -0.44679868
@@ -398,6 +397,8 @@ if __name__ == '__main__':
 #   1.1508353    1.19081928   1.40406947   1.43593681   1.63324734
 #   1.81839838   1.86943727   2.37827782   2.48829939   3.26028229
 #   3.3247595    3.4958492    3.77735135   4.14572189]
+
+    nocc = mol.nelectron//2
 
     gw.linearized = True
     gw.kernel(orbs=[nocc-1,nocc])

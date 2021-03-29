@@ -17,7 +17,8 @@
 #
 
 '''
-Spin-unrestricted G0W0-AC QP eigenvalues
+Spin-unrestricted G0W0 approximation with analytic continuation
+
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
 GW-AC is recommended for valence states only, and is inaccuarate for core states.
@@ -62,11 +63,11 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
     else:
         frozen = gw.frozen
 
-    # only support frozen core
     assert (isinstance(frozen, int))
 
     nocca, noccb = gw.nocc
     nmoa, nmob = gw.nmo
+    # only support frozen core
     assert (frozen < nocca and frozen < noccb)
 
     if Lpq is None:
