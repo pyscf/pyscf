@@ -28,6 +28,7 @@ from pyscf.mcscf import casci
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
+from pyscf.mcscf.addons import StateAverageMCSCFSolver
 from pyscf import ao2mo
 from pyscf import gto
 from pyscf import scf
@@ -435,8 +436,20 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         max_offdiag_u = numpy.abs(numpy.triu(u, 1)).max()
         if max_offdiag_u < casscf.small_rot_tol:
             small_rot = True
+            log.debug('Small orbital rotation, restart CI if supported by solver')
         else:
             small_rot = False
+        if not isinstance(casscf, StateAverageMCSCFSolver):
+            if not isinstance(fcivec, numpy.ndarray):
+                fcivec = small_rot
+        else:
+            newvecs = []
+            for subvec in fcivec:
+                if not isinstance(subvec, numpy.ndarray):
+                    newvecs.append(small_rot)
+                else:
+                    newvecs.append(subvec)
+            fcivec = newvecs
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
@@ -848,13 +861,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        if envs is not None and 'small_rot' in envs:
-            small_rot = envs['small_rot']
-            if small_rot:
-                log.info('Small orbital rotation, restart CI if supported by solver')
-        else:
-            small_rot = None
-        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log, fciRestart=small_rot)
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
         if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'

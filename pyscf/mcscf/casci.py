@@ -497,7 +497,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, ci, mo_energy
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, fciRestart=None):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''CASCI solver
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
@@ -526,7 +526,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, fciRestart=None)
     e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
                                            max_memory=max_memory,
-                                           ecore=energy_core, fciRestart=fciRestart)
+                                           ecore=energy_core)
 
     t1 = log.timer('FCI solver', *t1)
     e_cas = e_tot - energy_core
