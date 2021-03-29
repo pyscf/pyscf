@@ -36,6 +36,8 @@ _itrf = lib.load_library('libxc_itrf')
 _itrf.LIBXC_is_lda.restype = ctypes.c_int
 _itrf.LIBXC_is_gga.restype = ctypes.c_int
 _itrf.LIBXC_is_meta_gga.restype = ctypes.c_int
+_itrf.LIBXC_needs_laplacian.restype = ctypes.c_int
+_itrf.LIBXC_needs_laplacian.argtypes = [ctypes.c_int]
 _itrf.LIBXC_is_hybrid.restype = ctypes.c_int
 _itrf.LIBXC_is_cam_rsh.restype = ctypes.c_int
 _itrf.LIBXC_max_deriv_order.restype = ctypes.c_int
@@ -879,6 +881,9 @@ def is_meta_gga(xc_code):
 def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
+def needs_laplacian(xc_code):
+    return _itrf.LIBXC_needs_laplacian(xc_code) != 0
+
 def is_nlc(xc_code):
     return '__VV10' in xc_code.upper()
 
@@ -1380,9 +1385,6 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
     return _eval_xc(hyb, fn_facs, rho, spin, relativity, deriv, verbose)
 
 
-SINGULAR_IDS = set((131,  # LYP functions
-                    402, 404, 411, 416, 419,   # hybrid LYP functions
-                    74 , 75 , 226, 227))       # M11L and MN12L functional
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv <= 3)
     if spin == 0:
@@ -1415,6 +1417,9 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         warnings.warn('Libxc functionals %s may have discrepancy to xcfun '
                       'library.\n' % problem_xc)
 
+    if any([needs_laplacian(fid) for fid in fn_ids]):
+        raise NotImplementedError('laplacian in meta-GGA method')
+
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
         all((is_lda(x) for x in fn_ids))):
@@ -1434,13 +1439,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 1:
-        non0idx = (rho_u[0] > 1e-10) & (rho_d[0] > 1e-10)
-        rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
-        rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
-        outbuf = numpy.zeros((outlen,non0idx.sum()))
-    else:
-        outbuf = numpy.zeros((outlen,ngrids))
+    outbuf = numpy.zeros((outlen,ngrids))
 
     _itrf.LIBXC_eval_xc(ctypes.c_int(n),
                         (ctypes.c_int*n)(*fn_ids),
