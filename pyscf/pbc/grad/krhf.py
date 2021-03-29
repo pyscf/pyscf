@@ -212,7 +212,7 @@ def grad_nuc(cell, atmlst):
     '''
     Derivatives of nuclear repulsion energy wrt nuclear coordinates
     '''
-    ew_eta = cell.ew_eta
+    ew_eta = cell.get_ewald_params()[0]
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls()
