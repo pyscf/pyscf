@@ -234,6 +234,7 @@ class Cluster:
 
         self.iteration = 0
 
+        # Output values
         self.converged = False
         self.e_corr = 0.0
         self.e_pert_t = 0.0
@@ -247,6 +248,10 @@ class Cluster:
         self.e_corr_d = 0.0
 
         self.e_dmet = 0.0
+
+        # For EMO-CCSD
+        self.eom_ip_energy = None
+        self.eom_ea_energy = None
 
     #@property
     #def nlocal(self):
@@ -891,9 +896,9 @@ class Cluster:
             self.pop_analysis(csolver.dm1)
         # EOM analysis
         if self.opts.eom_ccsd in (True, "IP"):
-            self.eom_analysis(csolver, "IP")
+            self.eom_ip_energy, _ = self.eom_analysis(csolver, "IP")
         if self.opts.eom_ccsd in (True, "EA"):
-            self.eom_analysis(csolver, "EA")
+            self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
 
         log.changeIndentLevel(-1)
 
@@ -964,7 +969,7 @@ class Cluster:
             for root in range(nroots):
                 r1 = c[root][:cc.nocc]
                 qp = np.linalg.norm(r1)**2
-                f.write("  %s-EOM-CCSD root= %2d , energy= %+.8g , QP-weight= %.5g\n" %
+                f.write("  %s-EOM-CCSD root= %2d , energy= %+16.8g , QP-weight= %10.5g\n" %
                         (kind, root, e[root], qp))
                 if qp < 0.0 or qp > 1.0:
                     log.error("Error: QP-weight not between 0 and 1!")
