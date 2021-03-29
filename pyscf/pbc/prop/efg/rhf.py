@@ -92,8 +92,7 @@ EFG = kernel
 
 
 def _get_quad_nuc(cell, atm_id):
-    ew_eta = cell.ew_eta
-    ew_cut = cell.ew_cut
+    ew_eta, ew_cut = cell.get_ewald_params()
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)

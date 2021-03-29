@@ -44,7 +44,7 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc2(self):
   
         myadc.method_type = "ea"
-        e,v,p = myadc.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc2_oneroot(self):
   
         myadc.method_type = "ea"
-        e,v,p = myadc.kernel()
+        e,v,p,x = myadc.kernel()
 
         self.assertAlmostEqual(e[0], 0.09617819142992463, 6)
 
@@ -70,7 +70,7 @@ class KnownValues(unittest.TestCase):
   
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
-        e,v,p = myadc.kernel(nroots=4)
+        e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.0953065329249756, 6)
         self.assertAlmostEqual(e[1], 0.09530653311160658, 6)
@@ -89,7 +89,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
         myadc.method_type = "ea"
-        e,v,p = myadc.ea_adc(nroots=3)
+        e,v,p,x,adc_es = myadc.ea_adc(nroots=3)
+        myadc.analyze()
 
         self.assertAlmostEqual(e[0], 0.09836545519294707, 6)
         self.assertAlmostEqual(e[1], 0.09836545535648182, 6)

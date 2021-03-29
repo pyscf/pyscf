@@ -443,7 +443,7 @@ class DHF(hf.SCF):
         log = logger.new_logger(self, verbose)
         log.info('with_ssss %s, with_gaunt %s, with_breit %s',
                  self.with_ssss, self.with_gaunt, self.with_breit)
-        if self.with_ssss:
+        if not self.with_ssss:
             log.info('ssss_approx: %s', self.ssss_approx)
         log.info('light speed = %s', lib.param.LIGHT_SPEED)
         return self

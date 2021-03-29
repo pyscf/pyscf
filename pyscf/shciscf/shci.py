@@ -551,8 +551,7 @@ class SHCI(pyscf.lib.StreamObject):
             link_index=None,
             bypass=False,
             cumulantE4=False,
-            **kwargs,
-    ):
+            **kwargs):
         import os
 
         if self.has_threepdm == False:
@@ -644,8 +643,7 @@ class SHCI(pyscf.lib.StreamObject):
             filetype="binary",
             link_index=None,
             bypass=False,
-            **kwargs,
-    ):
+            **kwargs):
         import os
 
         if self.has_fourpdm == False:
@@ -1087,9 +1085,9 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
 
     f.write("nroots %r\n" % SHCI.nroots)
     if SHCI.mol.symmetry and SHCI.mol.groupname:
-        f.write(f"pointGroup {SHCI.mol.groupname.lower()}\n")
+        f.write("pointGroup %s\n" %SHCI.mol.groupname.lower())
     if hasattr(SHCI, "wfnsym"):
-        f.write(f"irrep {SHCI.wfnsym}\n")
+        f.write("irrep %i\n"%SHCI.wfnsym)
 
     # Variational Keyword Section
     f.write("\n#variational\n")
