@@ -40,6 +40,8 @@ from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
+from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 
@@ -497,6 +499,9 @@ class SCF(mol_hf.SCF):
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
+        # Range separation JK builder
+        self.rsjk = None
+
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.conv_tol = cell.precision * 10
@@ -511,12 +516,20 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        self.with_df.kpts = np.reshape(x, (-1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
         if 'kpt' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpt')
+
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == self.kpt):
+                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
+            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -595,6 +608,8 @@ class SCF(mol_hf.SCF):
         nao = dm.shape[-1]
 
         if (not omega and kpts_band is None and
+            # TODO: generate AO integrals with rsjk algorithm
+            not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
@@ -608,10 +623,12 @@ class SCF(mol_hf.SCF):
                 # G=0 is not inculded in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
+        elif self.rsjk:
+            vj, vk = self.rsjk.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                      with_j, with_k, omega, exxdiv=self.exxdiv)
         else:
-            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                         kpt, kpts_band, with_j, with_k, omega,
-                                         exxdiv=self.exxdiv)
+            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                         with_j, with_k, omega, exxdiv=self.exxdiv)
 
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)
@@ -648,8 +665,16 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        return vj - vk * .5
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+        return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
                       **kwargs):
@@ -754,6 +779,44 @@ class SCF(mol_hf.SCF):
 
     def nuc_grad_method(self, *args, **kwargs):
         raise NotImplementedError
+
+    def jk_method(self, J='FFTDF', K=None):
+        '''
+        Set up the schemes to evaluate Coulomb and exchange matrix
+
+        FFTDF: planewave density fitting using Fast Fourier Transform
+        AFTDF: planewave density fitting using analytic Fourier Transform
+        GDF: Gaussian density fitting
+        MDF: Gaussian and planewave mix density fitting
+        RS: range-separation JK builder
+        RSDF: range-separation density fitting
+        '''
+        if K is None:
+            K = J
+
+        if J != K:
+            raise NotImplementedError('J != K')
+
+        if 'DF' in J or 'DF' in K:
+            if 'DF' in J and 'DF' in K:
+                assert J == K
+            else:
+                df_method = J if 'DF' in J else K
+                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+
+        if 'RS' in J or 'RS' in K:
+            if not gamma_point(self.kpt):
+                raise NotImplementedError('Single k-point must be gamma point')
+            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpt)
+            self.rsjk.verbose = self.verbose
+
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpt)
+
+        nuc = self.with_df.__class__.__name__
+        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
+        return self
 
 
 class RHF(SCF, mol_hf.RHF):

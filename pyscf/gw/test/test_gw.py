@@ -3,9 +3,7 @@
 import unittest
 import numpy
 from pyscf import lib, gto, scf, dft, tdscf
-from pyscf.gw import gw_ac
-from pyscf.gw import gw_cd
-from pyscf.gw import gw as gw_exact
+from pyscf import gw
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -29,8 +27,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_gwac_pade(self):
         nocc = mol.nelectron//2
-        #gw_obj = gw.GW(mf, freq_int='ac', frozen=0)
-        gw_obj = gw_ac.GWAC(mf, frozen=0)
+        gw_obj = gw.GW(mf, freq_int='ac', frozen=0)
         gw_obj.linearized = False
         gw_obj.ac = 'pade'
         gw_obj.kernel(orbs=range(nocc-3, nocc+3))
@@ -39,7 +36,7 @@ class KnownValues(unittest.TestCase):
 
     def test_gwcd(self):
         nocc = mol.nelectron//2
-        gw_obj = gw_cd.GWCD(mf, frozen=0)
+        gw_obj = gw.GW(mf, freq_int='cd', frozen=0)
         gw_obj.linearized = False
         gw_obj.kernel(orbs=range(0, nocc+3))
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.41284735, 5)
@@ -67,7 +64,7 @@ class KnownValues(unittest.TestCase):
         td.nstates = min(100, nocc*nvir)
         td.kernel()
 
-        gw_obj = gw_exact.GW(mf, td, frozen=0)
+        gw_obj = gw.GW(mf, freq_int='exact', frozen=0)
         gw_obj.kernel()
         gw_obj.linearized = True
         gw_obj.kernel(orbs=[nocc-1,nocc])

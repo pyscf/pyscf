@@ -17,7 +17,7 @@
 #
 
 '''
-Spin-restricted G0W0-AC QP eigenvalues
+Spin-restricted G0W0 approximation with analytic continuation
 This implementation has N^4 scaling, and is faster than GW-CD (N^4)
 and analytic GW (N^6) methods.
 GW-AC is recommended for valence states only, and is inaccuarate for core states.
@@ -375,7 +375,7 @@ class GWAC(lib.StreamObject):
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
         if self.frozen is not None:
-            log.info('frozen orbitals %s', str(self.frozen))
+            log.info('frozen = %s', self.frozen)
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
         return self

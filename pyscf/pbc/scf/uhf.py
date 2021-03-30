@@ -159,8 +159,15 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):

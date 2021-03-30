@@ -380,7 +380,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     else:
         if getattr(kpts_band, 'ndim', None) == 1:
             v_kpts = v_kpts[:,0]
-# A temporary solution for issue 242. Looking for better way to sort out the
+# A temporary solution for issue 242. Looking for better ways to sort out the
 # dimension of the output
 # dm_kpts.shape     kpts.shape     nset
 # (Nao,Nao)         (1 ,3)         None
