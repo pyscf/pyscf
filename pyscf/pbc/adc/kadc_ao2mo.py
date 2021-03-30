@@ -86,6 +86,7 @@ def transform_integrals_incore(myadc):
 
      if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
           eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
+          #eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts)
            
      return eris
 
