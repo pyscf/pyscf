@@ -18,7 +18,9 @@
 
 '''
 Localized molecular orbitals via Cholesky factorization.
-Non-iterative procedure for moderately-well localized orbitals.
+The orbitals are usually less well localized than with Boys, Pipek-Mezey, etc.
+On the other hand, the procedure is non-iterative and the result unique,
+except for degeneracies.
 
 F. Aquilante, T.B. Pedersen, J. Chem. Phys. 125, 174101 (2006)
 https://doi.org/10.1063/1.2360264
@@ -26,7 +28,7 @@ https://doi.org/10.1063/1.2360264
 
 
 import numpy as np
-from scipy.linalg import lapack
+from math import sqrt
 
 
 def cholesky_mos(mo_coeff):
@@ -43,27 +45,71 @@ def cholesky_mos(mo_coeff):
     assert(mo_coeff.ndim == 2)
     nao, nmo = mo_coeff.shape
 
-    # A density matrix-like quantity.
+    # Factorization of a density matrix-like quantity.
     D = np.dot(mo_coeff, mo_coeff.T)
-
-    # Numpy/scipy does not appear to have a more convenient interface for
-    # pivoted Cholesky factorization.
-    L, piv, rank, info = lapack.dpstrf(D, lower=True)
-    if info < 0:
-        raise RuntimeError('Pivoted Cholesky factorization failed.')
-
-    # Only the lower triangle of L contains useful content.
-    # Remove everything above the main diagonal.
-    L[np.triu_indices(nao, k=1)] = 0
+    L, piv, rank = _pivoted_cholesky(D)
+    if rank < nmo:
+        raise RuntimeError('rank of matrix lower than the number of orbitals')
     
     # Permute L back to the original order of the AOs.
-    P = np.zeros((nao, nao))
-    for i in range(nao):
-        P[piv[i]-1, i] = 1
     # Superfluous columns are cropped out.
+    P = np.zeros((nao, nao))
+    P[piv, np.arange(nao)] = 1
     mo_loc = np.dot(P, L[:, :nmo])
 
     return mo_loc
+
+
+# Numpy/scipy does not seem to have a convenient interface for
+# pivoted Cholesky factorization. Newer versions of scipy (>=1.4) provide
+# access to the raw lapack function. In older versions we cannot even use that.
+try:
+    from scipy.linalg.lapack import dpstrf
+    def _pivoted_cholesky(A):
+        N = A.shape[0]
+        assert(A.shape == (N, N))
+        L, piv, rank, info = dpstrf(A, lower=True)
+        if info < 0:
+            raise RuntimeError('Pivoted Cholesky factorization failed.')
+        L[np.triu_indices(N, k=1)] = 0
+        return L, piv-1, rank
+except ImportError:
+    def _pivoted_cholesky(A):
+        return _pivoted_cholesky_python(A)
+
+
+def _pivoted_cholesky_python(A, tol=0.0):
+    '''
+    Pedestrian implementation of Cholesky factorization with full column pivoting.
+    The LAPACK version should be used instead whenever possible!
+
+    Args:
+        A : the positive semidefinite matrix to be factorized
+        tol : stopping tolerance
+    
+    Returns:
+        the lower factorized matrix L, the permutation vector
+    '''
+    N = A.shape[0]
+    assert(A.shape == (N, N))
+
+    L = np.zeros((N, N))
+    piv = np.arange(N)
+    rank = 0
+    D = np.diag(A).copy()
+    for k in range(N):
+        s = k + np.argmax(D[k:])
+        piv[k], piv[s] = piv[s], piv[k]
+        D[k], D[s] = D[s], D[k]
+        L[[k, s], :] = L[[s, k], :]
+        if D[k] <= tol:
+            break
+        rank += 1
+        L[k, k] = sqrt(D[k])
+        L[k+1:, k] = (A[piv[k+1:], piv[k]] - np.dot(L[k+1:, :k], L[k, :k])) / L[k, k]
+        D[k+1:] -= L[k+1:, k] ** 2
+
+    return L, piv, rank
 
 
 if __name__ == "__main__":
