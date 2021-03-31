@@ -6438,7 +6438,7 @@ void ECPdel_optimizer(ECPOpt **opt)
 /*
  * <i| l U(r)|j>
  * H^{SO} integrals in spinor basis can be evaluated
- *      .5 * einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
+ *      -1j * einsum('sxy,spq,xpi,yqj->ij', .5 * pauli_matrix, so_cart, ui.conj(), uj)
  */
 int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
                int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
