@@ -1985,6 +1985,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 #                a += k
 #
 #            s[s1:f1] += temp_singles
+
             temp = np.zeros_like(r2)
             temp =  lib.einsum('jlab,ajk->blk',t2_1,r2,optimize=True)
             temp -= lib.einsum('jlab,akj->blk',t2_1,r2,optimize=True)
@@ -2010,43 +2011,43 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
             temp = np.zeros_like(r2)
             temp = -lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
-##            temp += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
-##            temp += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
-##            temp -= lib.einsum('lkab,ajk->blj',t2_1,r2,optimize=True)
-##            temp -= lib.einsum('lkba,akj->blj',t2_1,r2,optimize=True)
-##
-##            temp_1 = np.zeros_like(r2)
-##            temp_1  = -lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
-##            temp_1 += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
-##            temp_1 -= lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
-##            temp_1 += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
-##
-##            temp_2 = -lib.einsum('klba,ajk->blj',t2_1,r2,optimize=True)
-##
+            temp += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
+            temp += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
+            temp -= lib.einsum('lkab,ajk->blj',t2_1,r2,optimize=True)
+            temp -= lib.einsum('lkba,akj->blj',t2_1,r2,optimize=True)
+
+            temp_1 = np.zeros_like(r2)
+            temp_1  = -2 * lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
+            temp_1 += lib.einsum('klab,ajk->blj',t2_1,r2,optimize=True)
+            #temp_1 -= lib.einsum('klab,akj->blj',t2_1,r2,optimize=True)
+            temp_1 += lib.einsum('lkab,akj->blj',t2_1,r2,optimize=True)
+
+            temp_2 = -lib.einsum('klba,ajk->blj',t2_1,r2,optimize=True)
+
             s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp,eris_ovoo,optimize=True)
-##            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp,eris_ovoo,optimize=True)
-##            s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp_1,eris_ovoo,optimize=True)
-##            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp_2,eris_ovoo,optimize=True)
-##            
-##            del temp
-##            del temp_1
-##            del temp_2
-##
-##            temp_1  = lib.einsum('i,lbik->kbl',r1,eris_ovoo)
+            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp,eris_ovoo,optimize=True)
+            s[s1:f1] -= 0.5*lib.einsum('blj,lbij->i',temp_1,eris_ovoo,optimize=True)
+            s[s1:f1] += 0.5*lib.einsum('blj,iblj->i',temp_2,eris_ovoo,optimize=True)
+            
+            del temp
+            del temp_1
+            del temp_2
+
+            temp_1  = lib.einsum('i,lbik->kbl',r1,eris_ovoo)
 ##            temp_1  -= lib.einsum('i,iblk->kbl',r1,eris_ovoo)
 ##            temp_2  = lib.einsum('i,lbik->kbl',r1,eris_ovoo)
 ##
-##            temp  = lib.einsum('kbl,ljba->ajk',temp_1,t2_1,optimize=True)
+            temp  = lib.einsum('kbl,ljba->ajk',temp_1,t2_1,optimize=True)
 ##            temp += lib.einsum('kbl,jlab->ajk',temp_2,t2_1,optimize=True)
 ##            temp -= lib.einsum('kbl,ljab->ajk',temp_2,t2_1,optimize=True)
-##            s[s2:f2] += temp.reshape(-1)
+            s[s2:f2] += temp.reshape(-1)
 ##
 ##            temp  = -lib.einsum('i,iblj->jbl',r1,eris_ovoo,optimize=True)
 ##            temp_1 = -lib.einsum('jbl,klba->ajk',temp,t2_1,optimize=True)
 ##            s[s2:f2] -= temp_1.reshape(-1)
 ##
-##            del temp
-##            del temp_1
+            del temp
+            del temp_1
 ##            del temp_2
 ##            del t2_1
 
