@@ -63,8 +63,9 @@ def test_helium():
 
     kcc = pyscf.embcc.EmbCC(kmf, bath_tol=1e-4)
     kcc.opts.popfile = None
-    kcc.opts.orbfile = None
     kcc.opts.eom_ccsd = True
+    kcc.opts.prim_mp2_bath_tol_occ = 1e-3
+    kcc.opts.prim_mp2_bath_tol_vir = 1e-3
     kcc.make_atom_cluster(0, symmetry_factor=2)
     kcc.kernel()
     print("K-CCSD E= %16.8g" % kcc.e_tot)
@@ -78,8 +79,9 @@ def test_helium():
 
     scc = pyscf.embcc.EmbCC(smf, bath_tol=1e-4)
     scc.opts.popfile = None
-    scc.opts.orbfile = None
     scc.opts.eom_ccsd = True
+    scc.opts.prim_mp2_bath_tol_occ = 1e-3
+    scc.opts.prim_mp2_bath_tol_vir = 1e-3
     scc.make_atom_cluster(0, symmetry_factor=2)
     scc.kernel()
     print("SC-CCSD E= %16.8g" % scc.e_tot)
@@ -124,7 +126,7 @@ def test_diamond():
 
 def run_test():
     test_helium()
-    test_diamond()
+    #test_diamond()
 
 if __name__ == "__main__":
     run_test()

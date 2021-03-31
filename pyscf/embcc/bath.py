@@ -930,7 +930,7 @@ def make_mp2_bath(self,
         #c_occenv=None, c_virenv=None,
         c_occenv, c_virenv,
         eigref=None,
-        nbath=None, tol=None, energy_tol=None):
+        nbath=None, tol=None, energy_tol=None, mp2_correction=None):
     """Select occupied or virtual bath space from MP2 natural orbitals.
 
     The natural orbitals are calculated only including the local virtual (occupied)
@@ -977,6 +977,8 @@ def make_mp2_bath(self,
         raise ValueError("nbath, tol, and energy_tol are None.")
     if kind not in ("occ", "vir"):
         raise ValueError("Unknown kind: %s", kind)
+    if mp2_correction is None: mp2_correction = self.mp2_correction[0 if kind == "occ" else 1]
+
     kindname = {"occ": "occupied", "vir" : "virtual"}
     kind = kindname[kind]
 
@@ -1158,13 +1160,9 @@ def make_mp2_bath(self,
     if nbath < nenv:
         log.info("  * %3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
                 nenv-nbath, max(dm_occ[nbath:]), min(dm_occ[nbath:]), np.mean(dm_occ[nbath:]))
-    #log.debug("All:\n%r", dm_occ)
 
-    # Delta MP2 correction
-    kind2int = {"occupied" : 0, "virtual" : 1}
-    #if self.mp2_correction and C_env.shape[-1] > 0:
-    # No correction if all natural orbitals are already included (0 environment orbitals)
-    if self.mp2_correction[kind2int[kind]] and c_env.shape[-1] > 0:
+    # Delta MP2 correction - no correction if all natural orbitals are already included (0 environment orbitals)
+    if mp2_correction and c_env.shape[-1] > 0:
         if e_delta_mp2 is None:
             if kind == "occupied":
                 co_act = np.hstack((c_occclst, c_bath))

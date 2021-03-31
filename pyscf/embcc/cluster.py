@@ -168,6 +168,8 @@ class Cluster:
         #self.make_rdm1 = kwargs.get("make_rdm1", False)     # Calculate RDM1 in cluster?
 
         self.opts = Options()
+        self.opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
+        self.opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
         self.opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
         self.opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
 
@@ -721,6 +723,29 @@ class Cluster:
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
+
+        # Primary MP2 bath orbitals
+        if True:
+            if self.opts.prim_mp2_bath_tol_occ:
+                log.info("Adding primary occupied MP2 bath orbitals")
+                C_add_o, C_rest_o, *_ = self.make_mp2_bath(C_occclst, C_virclst, "occ",
+                        c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
+                        mp2_correction=False)
+            if self.opts.prim_mp2_bath_tol_vir:
+                log.info("Adding primary virtual MP2 bath orbitals")
+                C_add_v, C_rest_v, *_ = self.make_mp2_bath(C_occclst, C_virclst, "vir",
+                        c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
+                        mp2_correction=False)
+            # Combine
+            if self.opts.prim_mp2_bath_tol_occ:
+                C_bath = np.hstack((C_add_o, C_bath))
+                C_occenv = C_rest_o
+            if self.opts.prim_mp2_bath_tol_vir:
+                C_bath = np.hstack((C_bath, C_add_v))
+                C_virenv = C_rest_v
+
+            # Re-diagonalize cluster DM to separate cluster occupied and virtual
+            C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
 
         self.C_bath = C_bath
 

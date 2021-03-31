@@ -1415,33 +1415,6 @@ class Cell(mole.Mole):
         return self
     kernel = build
 
-    def info(self):
-        _a = self.lattice_vectors()
-        logger.info(self, 'lattice vectors  a1 [%.9f, %.9f, %.9f]', *_a[0])
-        logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
-        logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
-        logger.info(self, 'dimension = %s', self.dimension)
-        logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
-        logger.info(self, 'Cell volume = %g', self.vol)
-        if self.exp_to_discard is not None:
-            logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
-        logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
-        logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
-        logger.info(self, 'precision = %g', self.precision)
-        logger.info(self, 'pseudo = %s', self.pseudo)
-        #if ke_cutoff is not None:
-        #    logger.info(self, 'ke_cutoff = %s', ke_cutoff)
-        #    logger.info(self, '    = %s mesh (%d PWs)',
-        #                self.mesh, np.prod(self.mesh))
-        #else:
-        logger.info(self, 'mesh = %s (%d PWs)',
-                    self.mesh, np.prod(self.mesh))
-        Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
-        logger.info(self, '    = ke_cutoff %s', Ecut)
-        logger.info(self, 'ew_eta = %g', self.ew_eta)
-        logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
-                    self.get_bounding_sphere(self.ew_cut))
-
     @property
     def h(self):
         return np.asarray(self.a).T

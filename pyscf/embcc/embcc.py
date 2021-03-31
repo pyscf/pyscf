@@ -170,8 +170,11 @@ class EmbCC:
         # TODO: Change other options to here
         self.opts = Options()
         default_opts = {
+                # Bath settings
+                "prim_mp2_bath_tol_occ" : False,
+                "prim_mp2_bath_tol_vir" : False,
                 #"orthogonal_mo_tol" : 1e-8,
-                "orbfile" : "orbitals",         # Filename for orbital coefficients
+                "orbfile" : None,         # Filename for orbital coefficients
                 "orthogonal_mo_tol" : False,
                 # Population analysis
                 "make_rdm1" : False,

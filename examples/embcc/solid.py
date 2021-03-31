@@ -93,6 +93,8 @@ def get_arguments():
     parser.add_argument("--power1-vir-bath-tol", type=float, default=False)
     parser.add_argument("--local-occ-bath-tol", type=float, default=False)
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
+    parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
+    parser.add_argument("--prim-mp2-bath-tol-vir", type=float, default=False)
     parser.add_argument("--run-second-cell", action="store_true")
     parser.add_argument("--dft")
     parser.add_argument("--test-mode", action="store_true")
@@ -455,6 +457,10 @@ for i, a in enumerate(args.lattice_consts):
     for j, btol in enumerate(args.bath_tol):
 
         kwargs = {opt : True for opt in args.opts}
+        if args.prim_mp2_bath_tol_occ:
+            kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
+        if args.prim_mp2_bath_tol_vir:
+            kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
 
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
             bath_type=args.bath_type, bath_tol=btol,
@@ -462,7 +468,6 @@ for i, a in enumerate(args.lattice_consts):
             power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
             **kwargs
             )
-        #ccx.make_rdm1 = True
 
         # Define atomic fragments, first argument is atom label or index
         if args.system == "diamond":
