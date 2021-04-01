@@ -395,6 +395,19 @@ int LIBXC_is_meta_gga(int xc_id)
         return mgga;
 }
 
+int LIBXC_needs_laplacian(int xc_id)
+{
+        xc_func_type func;
+        int lapl;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        lapl = func.info->flags & XC_FLAGS_NEEDS_LAPLACIAN ? 1 : 0;
+        xc_func_end(&func);
+        return lapl;
+}
+
 int LIBXC_is_hybrid(int xc_id)
 {
         xc_func_type func;
