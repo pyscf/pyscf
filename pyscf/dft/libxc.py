@@ -1450,10 +1450,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                         rho_u.ctypes.data_as(ctypes.c_void_p),
                         rho_d.ctypes.data_as(ctypes.c_void_p),
                         outbuf.ctypes.data_as(ctypes.c_void_p))
-    if outbuf.shape[1] != ngrids:
-        out = numpy.zeros((outlen,ngrids))
-        out[:,non0idx] = outbuf
-        outbuf = out
 
     exc = outbuf[0]
     vxc = fxc = kxc = None
