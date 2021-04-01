@@ -28,7 +28,9 @@ https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 from functools import reduce
 import numpy as np
 import scipy.linalg
+import scipy.optimize
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc import scf
 
@@ -105,8 +107,52 @@ def translation_map(nk):
                        dtype=int, buffer=np.append(idx.ravel(), 0))
     return t_map
 
+def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
+    """Applies a phase factor to each MO, minimizing the norm of the imaginary part.
+
+    Typically, this should reduce the imaginary part of a non-degenerate, Gamma point orbital to zero.
+    However, for degenerate subspaces, addition treatment is generally required.
+    """
+
+    # Output orbitals
+    mo_coeff_rot = mo_coeff.copy()
+
+    def _imag_norm(arg, mo):
+        mo_rot = mo*np.exp(1j*arg)
+        norm = np.linalg.norm(mo_rot.imag)
+        return norm
+
+    for mo, mo_e in enumerate(mo_energy):
+        # Check if MO is degnerate
+        if mo == 0:
+            degen = (abs(mo_e - mo_energy[mo+1]) < degen_tol)
+        elif mo == (len(mo_energy)-1):
+            degen = (abs(mo_e - mo_energy[mo-1]) < degen_tol)
+        else:
+            degen = (abs(mo_e - mo_energy[mo-1]) < degen_tol) or (abs(mo_e - mo_energy[mo+1]) < degen_tol)
+
+        mo_c = mo_coeff[:,mo]
+
+        arg0 = 0.0
+        fun0 = _imag_norm(arg0, mo_c)
+        rotated = False
+        if abs(mo_c.imag).max() > 1e-10:
+            res = scipy.optimize.minimize(_imag_norm, arg0, args=(mo_c,))
+            arg, fun = res.x, res.fun
+
+            if fun < fun0:
+                mo_coeff_rot[:,mo] = mo_c*np.exp(1j*arg)
+                rotated = True
+
+        if rotated:
+            logger.debug(cell, "MO %3d at E=%+12.8e: degenerate= %5r imag=%.2e -> %.2e (arg= %.5f)", mo, mo_e, degen, fun0, fun, arg)
+        else:
+            logger.debug(cell, "MO %3d at E=%+12.8e: degenerate= %5r imag=%.2e", mo, mo_e, degen, fun0)
+
+    return mo_coeff_rot
+
 def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", degen_tol=1e-3):
-    print("starting mo_k2gamma")
+    logger.debug(cell, "starting mo_k2gamma")
     scell, phase = get_phase(cell, kpts, kmesh)
 
     E_g = np.hstack(mo_energy)
@@ -126,21 +172,26 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     #assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
     #           - np.eye(Nmo*Nk)).max() < 1e-5)
     ortherr = abs(np.linalg.multi_dot((C_gamma.conj().T, s, C_gamma)) - np.eye(Nmo*Nk)).max()
-    print("Orthogonality error= %.2e" % ortherr)
+    logger.debug(cell, "Orthogonality error= %.2e" % ortherr)
     assert ortherr < 1e-5
 
     # For degenerated MOs, the transformed orbitals in super cell may not be
     # real. Construct a sub Fock matrix in super-cell to find a proper
     # transformation that makes the transformed MOs real.
-    E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
+    E_k_degen = abs(E_g[1:] - E_g[:-1]) < degen_tol
     degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
+    print("degen_mask: %r", degen_mask)
+
+    C_gamma = rotate_mo_to_real(cell, E_g, C_gamma, degen_tol=degen_tol)
 
     if np.any(~degen_mask):
         cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
-        print("Imaginary part in non-degenerate MO coefficients= %5.2e" % cimag_nondegen)
+        logger.debug(cell, "Imaginary part in non-degenerate MO coefficients= %5.2e" % cimag_nondegen)
     else:
         cimag_nondegen = 0.0
-        print("No non-degenerate MOs found")
+        logger.debug(cell, "No non-degenerate MOs found")
+
+    #1/0
 
     # Only fock can deal with significant imaginary parts outside of imaginary subspaces:
     if degen_method == "dm" and cimag_nondegen >= 1e-4:

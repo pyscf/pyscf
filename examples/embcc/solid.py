@@ -86,7 +86,7 @@ def get_arguments():
             help="""Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.
             If negative, the bath is extended until it contains 100*(1-|tol|)% of all electrons/holes of the environment
             on the MP2 level.""")
-    parser.add_argument("--bath-multiplier-per-fragment", type=float, nargs="*", help="Adjust the bath tolerance per fragment.")
+    parser.add_argument("--bath-tol-fragment-weight", type=float, nargs="*", help="Adjust the bath tolerance per fragment.")
     parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other type of bath orbitals (pre MP2-natorb)
     parser.add_argument("--power1-occ-bath-tol", type=float, default=False)
@@ -95,9 +95,7 @@ def get_arguments():
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
     parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
     parser.add_argument("--prim-mp2-bath-tol-vir", type=float, default=False)
-    parser.add_argument("--run-second-cell", action="store_true")
     parser.add_argument("--dft")
-    parser.add_argument("--test-mode", action="store_true")
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -187,7 +185,6 @@ def make_graphene(a, c, atoms):
 
 def make_perovskite(a, atoms):
     amat = a * np.eye(3)
-
     coords = np.asarray([
                 [0,     0,      0],
                 [a/2,   a/2,    a/2],
@@ -195,14 +192,6 @@ def make_perovskite(a, atoms):
                 [a/2,   0,      a/2],
                 [a/2,   a/2,    0]
                 ])
-    atom = [
-        (atoms[0], coords[0]),
-        (atoms[1], coords[1]),
-        (atoms[2]+"@1", coords[2]),
-        (atoms[2]+"@2", coords[3]),
-        (atoms[2]+"@3", coords[4]),
-        ]
-
     if args.supercell_in is not None:
         atom = []
         ncopy = args.supercell_in
@@ -219,6 +208,15 @@ def make_perovskite(a, atoms):
                     nr += 1
 
         amat = np.einsum("i,ij->ij", ncopy, amat)
+
+    else:
+        atom = [
+            (atoms[0], coords[0]),
+            (atoms[1], coords[1]),
+            (atoms[2]+"@1", coords[2]),
+            (atoms[2]+"@2", coords[3]),
+            (atoms[2]+"@3", coords[4]),
+            ]
 
     return amat, atom
 
@@ -405,7 +403,6 @@ for i, a in enumerate(args.lattice_consts):
 
     # Setup cell
     cell = make_cell(a, args)
-    cell.info()
 
     # Mean-field
     mf = run_mf(a, cell, args)
@@ -421,32 +418,31 @@ for i, a in enumerate(args.lattice_consts):
             log.info("Loading unfolded GDF from file %s...", fname)
             mf.with_df._cderi = fname
         else:
-            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=(not args.test_mode))
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
         log.info("Time for k2gamma: %.3f s", (timer()-t0))
-        #ncells = np.product(args.k_points)
     else:
         mf._eri = None
-        #ncells = np.product(args.supercell) if args.supercell else 1
-
-    #log.info("Nuclear energy= %.8g", mf.energy_nuc())
 
     np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
-
-    # Canonical full system MP2
-    if args.canonical_mp2:
-        t0 = timer()
-        mp2 = pyscf.pbc.mp.MP2(mf)
-        mp2.kernel()
-        log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
-        log.info("Time for canonical MP2: %.3f s", (timer()-t0))
 
     natom = mf.mol.natm
     ncells = natom / cell._natom_prim
     eref = natom if (args.energy_per == "atom") else ncells
 
     energies = { "hf" : [mf.e_tot / eref], "ccsd" : [], "ccsd-dmp2" : [] }
+
+    # Canonical full system MP2
     if args.canonical_mp2:
-        energies["mp2"] = [mp2.e_tot / eref]
+        try:
+            t0 = timer()
+            mp2 = pyscf.pbc.mp.MP2(mf)
+            mp2.kernel()
+            log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
+            log.info("Time for canonical MP2: %.3f s", (timer()-t0))
+            energies["mp2"] = [mp2.e_tot / eref]
+        except Exception as e:
+            log.error("Error in canonical MP2 calculation: %s", e)
+
     if args.solver == "CCSD(T)":
         energies["ccsdt"] = []
         energies["ccsdt-dmp2"] = []
@@ -469,44 +465,21 @@ for i, a in enumerate(args.lattice_consts):
             **kwargs
             )
 
-        # Define atomic fragments, first argument is atom label or index
+        # Define atomic fragments, first argument is atom index
         if args.system == "diamond":
             ccx.make_atom_cluster(0, symmetry_factor=natom)
         elif args.system == "graphene":
-            ccx.make_atom_cluster(0, symmetry_factor=ncells, **kwargs)
-            ccx.make_atom_cluster(1, symmetry_factor=ncells, **kwargs)
+            for ix in range(2):
+                ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
         elif args.system == "perovskite":
+            weights = args.bath_tol_fragment_weight
             # Overwrites ccx.bath_tol per cluster
-            if args.bath_multiplier_per_fragment is not None:
-                ccx.make_atom_cluster(0, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[0]*btol)
-                ccx.make_atom_cluster(1, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[1]*btol)
-                #ccx.make_atom_cluster(2, symmetry_factor=3*ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                ccx.make_atom_cluster(2, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                ccx.make_atom_cluster(3, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                ccx.make_atom_cluster(4, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                if args.run_second_cell:
-                    ccx.make_atom_cluster(5, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[0]*btol)
-                    ccx.make_atom_cluster(6, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[1]*btol)
-                    #ccx.make_atom_cluster(2, symmetry_factor=3*ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                    ccx.make_atom_cluster(7, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                    ccx.make_atom_cluster(8, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-                    ccx.make_atom_cluster(9, symmetry_factor=ncells, bath_tol=args.bath_multiplier_per_fragment[2]*btol)
-
+            if weights is not None:
+                for ix in range(5):
+                    ccx.make_atom_cluster(ix, symmetry_factor=ncells, bath_tol=weights[ix]*btol)
             else:
-                ccx.make_atom_cluster(0, symmetry_factor=ncells)
-                ccx.make_atom_cluster(1, symmetry_factor=ncells)
-                #ccx.make_atom_cluster(2, symmetry_factor=3*ncells)
-                ccx.make_atom_cluster(2, symmetry_factor=ncells)
-                ccx.make_atom_cluster(3, symmetry_factor=ncells)
-                ccx.make_atom_cluster(4, symmetry_factor=ncells)
-                if args.run_second_cell:
-                    ccx.make_atom_cluster(5, symmetry_factor=ncells)
-                    ccx.make_atom_cluster(6, symmetry_factor=ncells)
-                    #ccx.make_atom_cluster(2, symmetry_factor=3*ncells)
-                    ccx.make_atom_cluster(7, symmetry_factor=ncells)
-                    ccx.make_atom_cluster(8, symmetry_factor=ncells)
-                    ccx.make_atom_cluster(9, symmetry_factor=ncells)
-
+                for ix in range(5):
+                    ccx.make_atom_cluster(ix, symmetry_factor=ncells)
 
         ccx.kernel()
 

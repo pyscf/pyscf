@@ -40,13 +40,13 @@ def memory_string(b, fmt=".2f"):
         b = b.nbytes
     if b < 1e3:
         mem = "B"
-    if b < 1e6:
+    elif b < 1e6:
         b /= 1e3
         mem = "kB"
-    if b < 1e9:
+    elif b < 1e9:
         b /= 1e6
         mem = "MB"
-    if b < 1e12:
+    elif b < 1e12:
         b /= 1e9
         mem = "GB"
     else:

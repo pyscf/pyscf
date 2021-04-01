@@ -3,6 +3,7 @@ import ctypes
 from timeit import default_timer as timer
 
 import numpy as np
+import h5py
 
 import pyscf.pbc
 import pyscf.lib
@@ -19,7 +20,10 @@ __all__ = ["k2gamma_gdf", "k2gamma_4c2e", "k2gamma_3c2e"]
 
 log = logging.getLogger(__name__)
 
-def k2gamma_gdf(mf, kpts, unfold_j3c=True):
+#DEFAULT_3C2E_VERSION = "python"
+DEFAULT_3C2E_VERSION = "C"
+
+def k2gamma_gdf(mf, kpts, unfold_j3c=True, cderi_file=None):
     """kpts is the mesh!"""
     mf_sc = k2gamma.k2gamma(mf, kpts)
     ncells = np.product(kpts)
@@ -30,10 +34,21 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True):
     # k2gamma GDF
     if isinstance(mf.with_df, pyscf.pbc.df.GDF):
         mf_sc = mf_sc.density_fit()
+        df = mf_sc.with_df
         # Store integrals in memory
         if unfold_j3c:
+
             j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
-            mf_sc.with_df._cderi = j3c
+
+            if cderi_file:
+                df._cderi = cderi_file
+                with h5py.File(cderi_file, 'w') as f:
+                    G = np.zeros((3,))
+                    kptij_lst = np.asarray([(G, G)])
+                    f["j3c-kptij"] = kptij_lst
+                    f["j3c/0/0"] = j3c
+            else:
+                df._cderi = j3c
 
     return mf_sc
 
@@ -64,7 +79,7 @@ def k2gamma_4c2e(cell, gdf, kpts):
         log.warning("WARNING: Large imaginary part in unfolded 4c2e integrals= %.2e !", maximag)
     return eri_sc.real
 
-def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
+def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_3C2E_VERSION):
     """Unfold 3c2e integrals from a k-point sampled GDF to the supercell."""
     nao = cell.nao_nr()
     nk = len(kpts)
@@ -82,14 +97,14 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
             j3c_sc = np.zeros((nk, naux, ncomp), dtype=np.complex)
         else:
             j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
-        log.info("Size of 3c-integrals= %s", memory_string(j3c_sc))
+        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c_sc.shape), memory_string(j3c_sc))
 
         t0 = timer()
         for ki in range(nk):
             jmax = (ki+1) if use_ksymm else nk
             for kj in range(jmax):
-                j3c_ij = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
-                j3c_ij = einsum("Lab,i,j->Liajb", j3c_ij, phase[ki], phase[kj].conj()).reshape(naux, nk*nao, nk*nao)
+                j3c_kpts = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                j3c_ij = einsum("Lab,i,j->Liajb", j3c_kpts, phase[ki], phase[kj].conj()).reshape(naux, nk*nao, nk*nao)
                 kl = kconserv[ki,kj]
                 if compact:
                     j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
@@ -97,7 +112,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
                     j3c_sc[kl] += j3c_ij
 
                 if use_ksymm and kj < ki:
-                    j3c_ij = j3c_ij.transpose(0, 2, 1)
+                    j3c_ij = j3c_ij.transpose(0, 2, 1).conj()
                     kl = kconserv[kj,ki]
                     if compact:
                         j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
@@ -138,7 +153,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
             j3c_sc = np.zeros((nk, naux, ncomp))
         else:
             j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao))
-        log.info("Size of supercell 3c-integrals= %s", memory_string(j3c_sc))
+        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c_sc.shape), memory_string(j3c_sc))
 
         t0 = timer()
         libpbc = pyscf.lib.load_library("libpbc")
@@ -156,6 +171,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version="C"):
         assert (ierr == 0)
         log.info("Time for unfolding in C= %.2g s", (timer()-t0))
 
+    # Normalize
     j3c_sc = j3c_sc / np.sqrt(nk)
 
     if compact:

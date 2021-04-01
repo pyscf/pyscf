@@ -56,7 +56,7 @@ int64_t j3c_k2gamma(
     const double complex Z1 = 1.0;
     const double IMAG_TOL = 1e-7;
 
-    // Precompute phase.conj() for speedup (avoid using CblasConjNoTrans, not BLAS standard, OpenBLAS specific)
+    // Precompute phase.conj() (avoid using CblasConjNoTrans, not BLAS standard, OpenBLAS specific)
     size_t i;
     double complex *phase_cc = malloc(K2 * sizeof(double complex));
     for (i = 0; i < K2; i++) {
@@ -68,7 +68,7 @@ int64_t j3c_k2gamma(
     size_t l, a, b, ab;
     size_t ki, kj, kk;
     size_t ri, rj, rk;
-    size_t fullidx, trilidx;
+    size_t idx;
     double rtmp = 0.0;
     double complex *work1 = malloc(K3N2 * sizeof(double complex));
     double complex *work2 = malloc(K3N2 * sizeof(double complex));
@@ -88,7 +88,7 @@ int64_t j3c_k2gamma(
 
 
         // FT kj -> rj
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase, K, &Z0, work2, K);
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase_cc, K, &Z0, work2, K);
 
         // Reorder work2(kk,a,b,ki,rj) -> work1(kk,a,b,rj,ki)
         for (i = 0; i < KN2; i++) {
@@ -98,21 +98,21 @@ int64_t j3c_k2gamma(
         }}}
 
         // FT ki -> ri
-        //cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjNoTrans, nk2*nao2, nk, nk, &Z1, work, nk, phase, nk, &Z0, work2, nk);
-        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase_cc, K, &Z0, work2, K);
+        cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, K2N2, K, K, &Z1, work1, K, phase, K, &Z0, work2, K);
 
         // FT kk -> rk
         cblas_zgemm(CblasRowMajor, CblasTrans, CblasNoTrans, K, K2N2, K, &Z1, phase, K, work2, K2N2, &Z0, work1, K2N2);
 
         // Reorder work1(rk,a,b,rj,ri) -> j3c(rk,l,ri,a,rj,b)
         for (rk = 0; rk < K; rk++) {
-            trilidx = fullidx = 0;
+            idx = 0;
         for (ri = 0; ri < K; ri++) {
         for (a = 0; a < N; a++) {
         for (rj = 0; rj < K; rj++) {
-        for (b = 0; b < N; b++, fullidx++) {
+        for (b = 0; b < N; b++) {
             i = rk*K2N2 + a*K2N + b*K2 + rj*K + ri;
             rtmp = fabs(cimag(work1[i]));
+            //printf("imaginary part = %.2e\n", rtmp);
             if (rtmp > IMAG_TOL) {
                 if (ierr == 0) {
                     printf("ERROR: signficant imaginary part= %.2e !\n", rtmp);
@@ -122,11 +122,11 @@ int64_t j3c_k2gamma(
 
             // Fill all
             if (!compact) {
-                j3c[rk*naux*K2N2 + l*K2N2 + fullidx] = creal(work1[i]);
+                j3c[rk*naux*K2N2 + l*K2N2 + idx++] = creal(work1[i]);
             }
             //Only fill lower triangular
             else if (ri*N+a >= rj*N+b) {
-                j3c[rk*naux*NCOMP + l*NCOMP + trilidx++] = creal(work1[i]);
+                j3c[rk*naux*NCOMP + l*NCOMP + idx++] = creal(work1[i]);
             }
 
         }}}}}

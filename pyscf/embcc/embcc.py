@@ -182,6 +182,8 @@ class EmbCC:
                 # EOM-CCSD
                 "eom_ccsd" : False,
                 "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
+                # Other
+                "strict" : False,               # Stop if cluster not converged
                 }
         for key, val in default_opts.items():
             setattr(self.opts, key, kwargs.pop(key, val))
@@ -973,7 +975,8 @@ class EmbCC:
             for i, x in enumerate(self.clusters):
                 if not results["converged"][i]:
                     log.critical("%3d %s solver= %s", x.id, x.name, x.solver)
-            #raise RuntimeError("Not all cluster converged")
+            if self.opts.strict:
+                raise RuntimeError("Not all cluster converged")
 
         self.e_corr = sum(results["e_corr"])
         self.e_pert_t = sum(results["e_pert_t"])
