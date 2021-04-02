@@ -883,10 +883,10 @@ class SHCI(pyscf.lib.StreamObject):
             roots = 0
         else:
             roots = range(self.nroots)
-       if self.verbose >= logger.DEBUG1:
+        if self.verbose >= logger.DEBUG1:
             logger.debug1(self, 'SHCI kernel, fciRestart, self.restart, self._restart: %s %s %s',
                           fciRestart, self.restart, self._restart)
-         if fciRestart is None:
+        if fciRestart is None:
             fciRestart = self.restart or self._restart or (kwargs["ci0"] is True)
         if fciRestart:
             logger.info(self, 'Do FCI restart')
