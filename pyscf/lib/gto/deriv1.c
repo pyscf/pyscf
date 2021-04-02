@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <complex.h>
 #include "grid_ao_drv.h"
@@ -239,8 +238,10 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
         }
 
-        memset(ectr   , 0, sizeof(double)*nctr*BLKSIZE);
-        memset(ectr_2a, 0, sizeof(double)*nctr*BLKSIZE);
+        for (i = 0; i < nctr * BLKSIZE; i++) {
+                ectr   [i] = 0;
+                ectr_2a[i] = 0;
+        }
         // -2 alpha_i C_ij exp(-alpha_i r_k^2)
         for (i = 0; i < nctr; i++) {
         for (j = 0; j < nprim; j++) {

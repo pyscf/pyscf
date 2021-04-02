@@ -16,7 +16,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
-#include <string.h>
+#include "stdlib.h"
 #include <complex.h>
 #include "config.h"
 #include "np_helper.h"
@@ -74,7 +74,7 @@ void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
 {
         int i;
         size_t idx = (size_t)row_id * (row_id + 1) / 2;
-        memcpy(row, tril+idx, sizeof(double)*row_id);
+        NPdcopy(row, tril+idx, row_id);
         for (i = row_id; i < ndim; i++) {
                 idx += i;
                 row[i] = tril[idx];

@@ -18,8 +18,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include "nr_direct.h"
+#include "np_helper/np_helper.h"
 
 #define ASSERT(expr, msg) \
         if (!(expr)) { fprintf(stderr, "Fail at %s\n", msg); exit(1); }
@@ -100,7 +100,7 @@ static void JKOperator_sanity_check_s8(int *shls_slice)
         if (*_poutptr == NOVALUE) { \
                 *_poutptr = out->stack_size; \
                 out->stack_size += d##i##j * ncomp; \
-                memset(out->data+*_poutptr, 0, sizeof(double)*d##i##j*ncomp); \
+                NPdset0(out->data+*_poutptr, d##i##j*ncomp); \
         } \
         double *v = out->data + *_poutptr;
 #define DECLARE(v, i, j) \

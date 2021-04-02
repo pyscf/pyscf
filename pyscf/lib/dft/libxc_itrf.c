@@ -22,7 +22,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <xc.h>
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
@@ -706,7 +705,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
 
         int outlen = xc_output_length(nvar, deriv);
         // output buffer is zeroed in the Python caller
-        //memset(output, 0, sizeof(double) * np*outlen);
+        //NPdset0(output, np*outlen);
 
         double *ebuf = malloc(sizeof(double) * np);
         double *vbuf = NULL;

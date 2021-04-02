@@ -55,3 +55,7 @@ void NPomp_dsum_reduce_inplace(double **vec, size_t count);
 void NPomp_dprod_reduce_inplace(double **vec, size_t count);
 void NPomp_zsum_reduce_inplace(double complex **vec, size_t count);
 void NPomp_zprod_reduce_inplace(double complex **vec, size_t count);
+void NPdset0(double *p, size_t n);
+void NPzset0(double complex *p, size_t n);
+void NPdcopy(double *out, double *in, size_t n);
+void NPzcopy(double complex *out, double complex *in, size_t n);

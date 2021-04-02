@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <math.h>
 #include "config.h"
 #include <assert.h>
@@ -338,7 +337,7 @@ static void ctr_bbaa_kern(double *eri, double *ci0, double *ci1,
         double *t1  = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         dgemm_(&TRANS_N, &TRANS_N, &bcount, &nnorb, &nnorb,
@@ -389,7 +388,7 @@ static void ctr_aaaa_kern(double *eri, double *ci0, double *ci1,
         double *t1  = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         dgemm_(&TRANS_N, &TRANS_N, &bcount, &nnorb, &nnorb,
@@ -415,7 +414,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, na*blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < inter_na; strk++) {
                         ctr_aaaa_kern(eri, ci0, ci1, ci1buf, t1buf,
@@ -481,7 +480,7 @@ void SCIrdm2kern_aaaa(double *rdm2, double *bra, double *ket, double *buf,
         const double DN1 = -1;
         const int nnorb = norb * norb;
 
-        memset(buf, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(buf, nnorb*bcount);
         SCIrdm2_a_t1ci(ket, buf, bcount, stra_id, strb_id,
                        norb, nb, nlinka, clink_indexa);
         dgemm_(&TRANS_T, &TRANS_N, &nnorb, &nnorb, &bcount,
@@ -494,7 +493,7 @@ void SCIrdm2_aaaa(void (*dm2kernel)(), double *rdm2, double *bra, double *ket,
 {
         const int nnorb = norb * norb;
         double *pdm2;
-        memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
+        NPdset0(rdm2, nnorb*nnorb);
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * inter_na);
         FCIcompress_link(clinka, link_indexa, norb, inter_na, nlinka);
@@ -526,7 +525,7 @@ void SCIrdm2_aaaa(void (*dm2kernel)(), double *rdm2, double *bra, double *ket,
         int shape[] = {norb, nnorb, norb};
         pdm2 = malloc(sizeof(double) * nnorb*nnorb);
         NPdtranspose_021(shape, rdm2, pdm2);
-        memcpy(rdm2, pdm2, sizeof(double) * nnorb*nnorb);
+        NPdcopy(rdm2, pdm2, nnorb*nnorb);
         free(pdm2);
 }
 
@@ -551,7 +550,7 @@ static void ctr_bbaa_symm(double *eri, double *ci0, double *ci1,
         double *t1  = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         for (ir = 0, p0 = 0; ir < totirrep; ir++) {
@@ -610,7 +609,7 @@ static void ctr_aaaa_symm(double *eri, double *ci0, double *ci1,
         double *t1  = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         for (ir = 0, p0 = 0; ir < totirrep; ir++) {
@@ -641,7 +640,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, na*blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < inter_na; strk++) {
                         ctr_aaaa_symm(eri, ci0, ci1, ci1buf, t1buf,

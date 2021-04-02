@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <complex.h>
 //#include <omp.h>
 #include "config.h"
@@ -275,5 +274,37 @@ void NPzgemm(const char trans_a, const char trans_b,
                         }
                 }
 }
+        }
+}
+
+void NPdset0(double *p, size_t n)
+{
+        size_t i;
+        for (i = 0; i < n; i++) {
+                p[i] = 0;
+        }
+}
+
+void NPzset0(double complex *p, size_t n)
+{
+        size_t i;
+        for (i = 0; i < n; i++) {
+                p[i] = 0;
+        }
+}
+
+void NPdcopy(double *out, double *in, size_t n)
+{
+        size_t i;
+        for (i = 0; i < n; i++) {
+                out[i] = in[i];
+        }
+}
+
+void NPzcopy(double complex *out, double complex *in, size_t n)
+{
+        size_t i;
+        for (i = 0; i < n; i++) {
+                out[i] = in[i];
         }
 }

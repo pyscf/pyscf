@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <complex.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -139,7 +138,7 @@ void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
                    unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(vv, 0, sizeof(double complex) * nao * nao);
+        NPzset0(vv, nao * nao);
 
 #pragma omp parallel
 {
