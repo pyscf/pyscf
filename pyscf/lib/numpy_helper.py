@@ -283,7 +283,7 @@ def pack_tril(mat, axis=-1, out=None):
         out = numpy.ndarray(shape, mat.dtype, buffer=out)
         if mat.dtype == numpy.double:
             fn = _np_helper.NPdpack_tril_2d
-        elif mat.dtype == numpy.complex:
+        elif mat.dtype == numpy.complex128:
             fn = _np_helper.NPzpack_tril_2d
         else:
             out[:] = mat[numpy.tril_indices(nd)]
@@ -338,7 +338,7 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if (tril.dtype != numpy.double and tril.dtype != numpy.complex):
+    if (tril.dtype != numpy.double and tril.dtype != numpy.complex128):
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         idx, idy = numpy.tril_indices(nd)
         if filltriu == ANTIHERMI:
@@ -399,7 +399,7 @@ def unpack_row(tril, row_id):
     mat = numpy.empty(nd, tril.dtype)
     if tril.dtype == numpy.double:
         fn = _np_helper.NPdunpack_row
-    elif tril.dtype == numpy.complex:
+    elif tril.dtype == numpy.complex128:
         fn = _np_helper.NPzunpack_row
     else:
         p0 = row_id*(row_id+1)//2
@@ -449,7 +449,7 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
 
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
-    elif mat.dtype == numpy.complex:
+    elif mat.dtype == numpy.complex128:
         fn = _np_helper.NPzhermi_triu
     else:
         raise NotImplementedError
@@ -493,7 +493,7 @@ def take_2d(a, idx, idy, out=None):
     idy = numpy.asarray(idy, dtype=numpy.int32)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtake_2d
-    elif a.dtype == numpy.complex:
+    elif a.dtype == numpy.complex128:
         fn = _np_helper.NPztake_2d
     else:
         return a[idx[:,None],idy]
@@ -523,7 +523,7 @@ def takebak_2d(out, a, idx, idy, thread_safe=True):
         a = a.astype(out.dtype)
     if out.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif out.dtype == numpy.complex:
+    elif out.dtype == numpy.complex128:
         fn = _np_helper.NPztakebak_2d
     else:
         if thread_safe:
@@ -565,7 +565,7 @@ def transpose(a, axes=None, inplace=False, out=None):
         return a
 
     if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+        or (a.dtype != numpy.double and a.dtype != numpy.complex128)):
         if a.ndim == 2:
             arow, acol = a.shape
             out = numpy.empty((acol,arow), a.dtype)
@@ -631,7 +631,7 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
     if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+        or (a.dtype != numpy.double and a.dtype != numpy.complex128)):
         if a.ndim == 2:
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):
