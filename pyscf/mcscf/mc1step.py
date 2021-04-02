@@ -891,7 +891,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
                              e_tot, e_tot-envs['elast'], ss[0])
                 if 'norm_gci' in envs and envs['norm_gci'] is not None:
                     log.info('               |grad[o]|=%5.3g  '
-                             '|grad[c]|= %s  |ddm|=%5.3g  |maxRot[o]|=%5.3g',
+                             '|grad[c]|= %5.3g  |ddm|=%5.3g  |maxRot[o]|=%5.3g',
                              envs['norm_gorb0'],
                              envs['norm_gci'], envs['norm_ddm'], envs['max_offdiag_u'])
                 else:
