@@ -22,7 +22,7 @@ class KnownValues(unittest.TestCase):
 
     def setUp(self):
         self.pivoted_cholesky = [scipy_helper.pivoted_cholesky, \
-            scipy_helper._pivoted_cholesky_python]
+            scipy_helper.pivoted_cholesky_python]
 
     def test_pivoted_cholesky_1x1(self):
         for func in self.pivoted_cholesky:

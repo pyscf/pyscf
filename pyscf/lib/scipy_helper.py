@@ -28,7 +28,8 @@ import numpy
 try:
     from scipy.linalg.lapack import dpstrf as _dpstrf
 except ImportError:
-    _pivoted_cholesky_wrapper = _pivoted_cholesky_python
+    def _pivoted_cholesky_wrapper(A, tol, lower):
+        return pivoted_cholesky_python(A, tol=tol, lower=lower)
 else:
     def _pivoted_cholesky_wrapper(A, tol, lower):
         N = A.shape[0]
@@ -67,7 +68,7 @@ def pivoted_cholesky(A, tol=-1.0, lower=False):
     return _pivoted_cholesky_wrapper(A, tol=tol, lower=lower)
 
 
-def _pivoted_cholesky_python(A, tol=-1.0, lower=False):
+def pivoted_cholesky_python(A, tol=-1.0, lower=False):
     '''
     Pedestrian implementation of Cholesky factorization with full column pivoting.
     The LAPACK version should be used instead whenever possible!
