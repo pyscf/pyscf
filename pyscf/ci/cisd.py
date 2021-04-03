@@ -34,8 +34,37 @@ BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
 
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
+    '''
+    Run CISD calculation.
+
+    Args:
+        myci : CISD (inheriting) object
+        eris : ccsd._ChemistsERIs (inheriting) object (poss diff for df)
+            Contains the various (pq|rs) integrals needed.
+
+    Kwargs:
+        ci0 : (List of) numpy array(s) (if None it will set)
+            Initial guess for CISD coeffs.
+        max_cycle : integer
+            Maximum number of iterations to converge to CISD solution.
+            If not converged before, calculation stops without having
+            converged.
+        tol : float
+            Convergence tolerance.
+        verbose : integer
+            Level of output (roughly: the higher, the more output).
+
+    Returns:
+        conv : bool
+            Is it converged?
+        ecisd : List of floats or float
+            The lowest :attr:`myci.nroots` eigenvalues.
+        ci : List of 1D arrays or 1D array
+            The lowest :attr:`myci.nroots` eigenvectors.
+    '''
     log = logger.new_logger(myci, verbose)
     diag = myci.make_diagonal(eris)
+    # Note that ehf is not the HF energy (see `make_diagonal`).
     ehf = diag[0]
     diag -= ehf
 
@@ -69,6 +98,27 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     return conv, ecisd, ci
 
 def make_diagonal(myci, eris):
+    '''
+    Return diagonal of hamiltonian in Slater determinant basis.
+
+    Note that a constant has been substracted of all elements.
+    The first element is the HF energy (minus the
+    constant), the next elements are the diagonal elements with singly
+    excited determinants (<D_i^a|H|D_i^a> within the constant), then
+    doubly excited determinants (<D_ij^ab|H|D_ij^ab> within the
+    constant).
+
+    Args:
+        myci : CISD (inheriting) object
+        eris : ccsd._ChemistsERIs (inheriting) object (poss diff for df)
+            Contains the various (pq|rs) integrals needed.
+
+    Returns:
+        numpy array (size: (1, 1 + #single excitations from HF det
+                               + #double excitations from HF det))
+            Diagonal elements of hamiltonian matrix within a constant,
+            see above.
+    '''
     # DO NOT use eris.mo_energy, it may differ to eris.fock.diagonal()
     mo_energy = eris.fock.diagonal()
     nmo = mo_energy.size
@@ -89,6 +139,7 @@ def make_diagonal(myci, eris):
             jdiag[nocc+i,nocc:] = eris.vvvv[ii][diag_idx]
 
     jksum = (jdiag[:nocc,:nocc] * 2 - kdiag[:nocc,:nocc]).sum()
+    # Note that ehf is not the HF energy.
     ehf = mo_energy[:nocc].sum() * 2 - jksum
     e_ia = lib.direct_sum('a-i->ia', mo_energy[nocc:], mo_energy[:nocc])
     e_ia -= jdiag[:nocc,nocc:] - kdiag[:nocc,nocc:]
@@ -102,6 +153,18 @@ def make_diagonal(myci, eris):
     return numpy.hstack((ehf, e1diag.reshape(-1), e2diag.reshape(-1)))
 
 def contract(myci, civec, eris):
+    '''
+    Application of CISD hamiltonian onto civec.
+
+    Args:
+        myci : CISD (inheriting) object
+        civec : numpy array, same length as a CI vector.
+        eris : ccsd._ChemistsERIs (inheriting) object (poss diff for df)
+            Contains the various (pq|rs) integrals needed.
+
+    Returns:
+        numpy array, same length as a CI vector.
+    '''
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(myci.stdout, myci.verbose)
     nocc = myci.nocc
@@ -916,9 +979,29 @@ class CISD(lib.StreamObject):
         return self
 
     def get_init_guess(self, eris=None, nroots=1, diag=None):
-        # MP2 initial guess
+        '''
+        MP2 energy and MP2 initial guess(es) for CISD coefficients.
+
+        Kwargs:
+            eris : ccsd._ChemistsERIs (inheriting) object (poss diff for df)
+                Contains the various (pq|rs) integrals needed.
+            nroots : integer
+                Number of CISD solutions to be found.
+            diag : numpy array (1D)
+                e.g. CISD Hamiltonian diagonal in Slater determinant
+                space with HF energy subtracted.
+
+        Returns:
+            Tuple of float and numpy array or
+            tuple of float and list of numpy arrays (if nroots > 1)
+            MP2 energy and initial guess(es) for CISD coefficients.
+
+        '''
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
+        # [TODO] in `make_diagonal` function it says:
+        # [TODO] "# DO NOT use eris.mo_energy, it may differ to "
+        # [TODO] "eris.fock.diagonal()" - change here?
         mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
