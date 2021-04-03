@@ -450,10 +450,12 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
         ovlp+= lib.einsum('ab,ap,b ,p ->', bra_SS, trans_SD, trans_SS[:,0], ket2aa.ravel())
 
         ovlp+= lib.einsum(' b, p,bq,pq->', bra2aa.ravel(), trans_SS[0,:], trans_DS, ket_SS)
-        ovlp+= lib.einsum(' b, p,b ,p ->', bra2aa.ravel(), trans_SD[0,:], trans_DS[:,0], ket2aa.ravel())
+        ovlp+= lib.einsum(' b, p,b ,p ->', bra2aa.ravel(), trans_SD[0,:], trans_DS[:,0],
+                          ket2aa.ravel())
 
         ovlp+= lib.einsum('a ,ap, q,pq->', bra2aa.ravel(), trans_DS, trans_SS[0,:], ket_SS)
-        ovlp+= lib.einsum('a ,a , q, q->', bra2aa.ravel(), trans_DS[:,0], trans_SD[0,:], ket2aa.ravel())
+        ovlp+= lib.einsum('a ,a , q, q->', bra2aa.ravel(), trans_DS[:,0], trans_SD[0,:],
+                          ket2aa.ravel())
 
         # FIXME: whether to approximate the overlap between double excitation coefficients
         if numpy.linalg.norm(bra2aa)*numpy.linalg.norm(ket2aa) < 1e-4:
@@ -534,7 +536,7 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     dov = dvo.T.conj()
 
     theta = c2*2 - c2.transpose(0,1,3,2)
-    doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
+    doo  = -numpy.einsum('ia,ka->ik', c1.conj(), c1)
     doo -= lib.einsum('ijab,ikab->jk', c2.conj(), theta)
     dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
     dvv += lib.einsum('ijab,ijac->bc', theta, c2.conj())
@@ -562,7 +564,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     h5fobj['doooo'] = doooo.transpose(0,2,1,3) - doooo.transpose(1,2,0,3)*.5
     doooo = None
 
-    dooov =-lib.einsum('ia,klac->klic', c1*2, c2.conj())
+    dooov = -lib.einsum('ia,klac->klic', c1*2, c2.conj())
     h5fobj['dooov'] = dooov.transpose(0,2,1,3)*2 - dooov.transpose(1,2,0,3)
     dooov = None
 
@@ -581,7 +583,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     else:
         dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), dtype)
 
-    for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
+    for (p0, p1) in lib.prange(0, nvir, blksize):
         theta = c2[:,:,p0:p1] - c2[:,:,p0:p1].transpose(1,0,2,3) * .5
         gvvvv = lib.einsum('ijab,ijcd->abcd', theta.conj(), c2)
         if compress_vvvv:
@@ -656,7 +658,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dov -= numpy.einsum('jb,ijba->ia', c1ket, c2bra.conj())
 
     theta = c2ket*2 - c2ket.transpose(0,1,3,2)
-    doo  =-numpy.einsum('ia,ka->ik', c1bra.conj(), c1ket)
+    doo  = -numpy.einsum('ia,ka->ik', c1bra.conj(), c1ket)
     doo -= lib.einsum('ijab,ikab->jk', c2bra.conj(), theta)
     dvv  = numpy.einsum('ia,ic->ac', c1ket, c1bra.conj())
     dvv += lib.einsum('ijab,ijac->bc', theta, c2bra.conj())
@@ -730,7 +732,7 @@ def as_scanner(ci):
                 # FIXME: Whether to use the initial guess from last step?
                 # If root flips, large errors may be found in the solutions
                 ci0 = self.ci
-            self.kernel(ci0, **kwargs)[0]
+            _ = self.kernel(ci0, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)
 
@@ -742,7 +744,8 @@ class CISD(lib.StreamObject):
         verbose : int
             Print level.  Default value equals to :class:`Mole.verbose`
         max_memory : float or int
-            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+            Allowed memory in MB.  Default value equals to
+            :class:`Mole.max_memory`
         conv_tol : float
             converge threshold.  Default is 1e-9.
         max_cycle : int
@@ -969,15 +972,14 @@ class CISD(lib.StreamObject):
             (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
             return ccsd._make_eris_incore(self, mo_coeff)
 
-        elif getattr(self._scf, 'with_df', None):
+        if getattr(self._scf, 'with_df', None):
             logger.warn(self, 'CISD detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
                         'It\'s recommended to use dfccsd.CCSD for the '
                         'DF-CISD calculations')
             return ccsd._make_df_eris_outcore(self, mo_coeff)
 
-        else:
-            return ccsd._make_eris_outcore(self, mo_coeff)
+        return ccsd._make_eris_outcore(self, mo_coeff)
 
     def _add_vvvv(self, c2, eris, out=None, t2sym=None):
         return ccsd._add_vvvv(self, None, c2, eris, out, False, t2sym)
@@ -1048,7 +1050,6 @@ def _cp(a):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     from pyscf import ao2mo
 
     mol = gto.Mole()
