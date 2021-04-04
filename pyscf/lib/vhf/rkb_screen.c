@@ -269,7 +269,7 @@ void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-        NPdset0(opt->dm_cond, nbas*nbas*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*(1+nset));
         // dmcond followed by dmscond which are max matrix element for each dm
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
@@ -283,7 +283,7 @@ void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-        NPdset0(opt->dm_cond, nbas*nbas*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*(1+nset));
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
 }
@@ -304,7 +304,7 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         }
         nset = nset / 3;
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));
-        NPdset0(opt->dm_cond, nbas*nbas*4*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*4*(1+nset));
 
         // 4 types of dmcond (LL,SS,SL,SS) followed by 4 types of dmscond
         int n2c = CINTtot_cgto_spinor(bas, nbas);

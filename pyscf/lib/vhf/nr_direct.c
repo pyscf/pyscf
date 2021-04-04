@@ -291,7 +291,7 @@ static void zero_out_vjk(double *vjk, JKOperator *op,
         int jsh1 = shls_slice[oket+1];
         int nbra = ao_loc[ish1] - ao_loc[ish0];
         int nket = ao_loc[jsh1] - ao_loc[jsh0];
-        NPdset0(vjk, nbra * nket * ncomp);
+        NPdset0(vjk, ((size_t)nbra) * nket * ncomp);
 }
 
 static void assemble_v(double *vjk, JKOperator *op, JKArray *jkarray,

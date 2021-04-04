@@ -195,7 +195,7 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
 
-        NPdset0(ci1, na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
 
 #pragma omp parallel default(none) \
         shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
@@ -206,7 +206,7 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
         double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,

@@ -345,7 +345,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        NPdset0(opt->dm_cond, nbas*nbas);
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
 
         const size_t nao = ao_loc[nbas];
         double dmax, tmp;

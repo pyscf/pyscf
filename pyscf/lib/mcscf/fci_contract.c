@@ -250,7 +250,7 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
 void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
                           int norb, int na, int nlink, int *link_index)
 {
-        NPdset0(ci1, na*na);
+        NPdset0(ci1, ((size_t)na) * na);
         FCIcontract_a_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
                          link_index, link_index);
 }
@@ -365,7 +365,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlink * na);
         FCIcompress_link_tril(clink, link_index, na, nlink);
 
-        NPdset0(ci1, na*na);
+        NPdset0(ci1, ((size_t)na) * na);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -376,7 +376,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, na-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static, 112)
 /* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
                 for (strk = ib; strk < na; strk++) {
@@ -411,7 +411,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-        NPdset0(ci1, na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -422,7 +422,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
@@ -500,7 +500,7 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-        NPdset0(ci1, na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -511,7 +511,7 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_uhf2e_kern(eri_aa, eri_ab, eri_bb, ci0, ci1,
@@ -808,7 +808,7 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na_intermediate; strk++) {
                         ctr_rhf2esym_kern1(eri, ci0, ci1ab, ci1buf, t1buf,

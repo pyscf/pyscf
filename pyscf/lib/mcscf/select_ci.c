@@ -414,7 +414,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < inter_na; strk++) {
                         ctr_aaaa_kern(eri, ci0, ci1, ci1buf, t1buf,
@@ -640,7 +640,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                NPdset0(ci1buf, na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < inter_na; strk++) {
                         ctr_aaaa_symm(eri, ci0, ci1, ci1buf, t1buf,
