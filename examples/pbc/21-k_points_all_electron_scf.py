@@ -49,7 +49,7 @@ kmf.kernel()
 #
 # RS-JK builder is efficient for large number of k-points
 #
-kmf = dft.KRHF(cell, kpts).jk_method('RS')
+kmf = scf.KRHF(cell, kpts).jk_method('RS')
 kmf.kernel()
 
 #

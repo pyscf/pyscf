@@ -20,7 +20,7 @@ jobs:
         uses: docker://pyscf/pyscf-pypa-env:latest
         with:
           entrypoint: /build-wheels.sh
-          args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.0-deps-openblas.tar.gz
+          #args: http://www.sunqm.net/pyscf/files/bin/pyscf-2.0-deps-openblas.tar.gz
       - name: List available wheels
         run: |
           ls ${{ github.workspace }}/linux-wheels
