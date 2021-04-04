@@ -25,6 +25,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
+from pyscf.lib.scipy_helper import pivoted_cholesky
 from pyscf.scf import hf
 from pyscf import __config__
 
@@ -465,10 +466,9 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
 
     # Run the pivoted Cholesky decomposition
     Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
-    pstrf = scipy.linalg.lapack.get_lapack_funcs('pstrf')
-    c, piv, r_c, info = pstrf(Ssort, tol=cholthr)
+    c, piv, r_c = pivoted_cholesky(Ssort, tol=cholthr)
     # The functions we're going to use are given by the pivot as
-    idx = sortidx[piv[:r_c]-1]
+    idx = sortidx[piv[:r_c]]
 
     # Get the (un-normalized) sub-basis
     Ssub = S[numpy.ix_(idx, idx)].copy()

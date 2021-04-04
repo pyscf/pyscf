@@ -27,7 +27,7 @@ from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.soscf import ciah
-from pyscf.lo import orth
+from pyscf.lo import orth, cholesky_mos
 from pyscf import __config__
 
 
@@ -168,8 +168,9 @@ class Boys(ciah.CIAHOptimizer):
         init_guess : str or None
             Initial guess for optimization. If set to None, orbitals defined
             by the attribute .mo_coeff will be used as initial guess. If set
-            to 'atomic', atomic orbitals will be used as initial guess. Default
-            is 'atomic'
+            to 'atomic', atomic orbitals will be used as initial guess. If set
+            to 'cholesky', then cholesky orbitals will be used as the initial guess.
+            Default is 'atomic'.
 
     Saved results
 
@@ -306,6 +307,10 @@ class Boys(ciah.CIAHOptimizer):
         nmo = self.mo_coeff.shape[1]
         if isinstance(key, str) and key.lower() == 'atomic':
             u0 = atomic_init_guess(self.mol, self.mo_coeff)
+        elif isinstance(key, str) and key.lower().startswith('cho'):
+            mo_init = cholesky_mos(self.mo_coeff)
+            S = self.mol.intor_symmetric('int1e_ovlp')
+            u0 = numpy.linalg.multi_dot([self.mo_coeff.T, S, mo_init])
         else:
             u0 = numpy.eye(nmo)
         if (isinstance(key, str) and key.lower().startswith('rand')

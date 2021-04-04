@@ -17,13 +17,13 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
 #include "fci.h"
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
+#include "np_helper/np_helper.h"
+
 #define BLK     48
 #define BUFBASE 96
 
@@ -55,7 +55,7 @@ static void rdm4_0b_t2(double *ci0, double *t2,
 {
 #pragma omp for schedule(static, 1) nowait
         for (k = 0; k < bcount; k++) {
-                memset(t2+k*n4, 0, sizeof(double)*n4);
+                NPdset0(t2+k*n4, n4);
                 tab = clink_indexb + (strb_id+k) * nlinkb;
                 for (j = 0; j < nlinkb; j++) {
                         a    = EXTRACT_CRE (tab[j]);
@@ -446,10 +446,10 @@ void FCIrdm4_drv(void (*kernel)(),
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
-        memset(rdm1, 0, sizeof(double) * nnorb);
-        memset(rdm2, 0, sizeof(double) * n4);
-        memset(rdm3, 0, sizeof(double) * n4 * nnorb);
-        memset(rdm4, 0, sizeof(double) * n4 * n4);
+        NPdset0(rdm1, nnorb);
+        NPdset0(rdm2, n4);
+        NPdset0(rdm3, n4 * nnorb);
+        NPdset0(rdm4, n4 * n4);
 
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {
@@ -610,9 +610,9 @@ void FCIrdm3_drv(void (*kernel)(),
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
-        memset(rdm1, 0, sizeof(double) * nnorb);
-        memset(rdm2, 0, sizeof(double) * n4);
-        memset(rdm3, 0, sizeof(double) * n4 * nnorb);
+        NPdset0(rdm1, nnorb);
+        NPdset0(rdm2, n4);
+        NPdset0(rdm3, n4 * nnorb);
 
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {

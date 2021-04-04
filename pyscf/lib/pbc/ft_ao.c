@@ -17,20 +17,17 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <complex.h>
 #include <assert.h>
 #include "config.h"
 #include "cint.h"
 #include "gto/ft_ao.h"
 #include "vhf/fblas.h"
+#include "np_helper/np_helper.h"
 
 #define INTBUFMAX       16000
 #define IMGBLK          80
 #define OF_CMPLX        2
-
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
 int PBCsizeof_env(int *shls_slice,
                   int *atm, int natm, int *bas, int nbas, double *env);
@@ -631,7 +628,7 @@ static int subgroupGv(double *sGv, int *sgxyz, double *Gv, int *gxyz,
                       int nGv, int bufsize, int *shls_slice, int *ao_loc,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int i;
+        int i, n;
         int dimax = 0;
         int djmax = 0;
         for (i = shls_slice[0]; i < shls_slice[1]; i++) {
@@ -644,15 +641,20 @@ static int subgroupGv(double *sGv, int *sgxyz, double *Gv, int *gxyz,
         int gblksize = 0xfffffff8 & (bufsize / dij);
 
         int gs0, dg;
+        int *psgxyz, *pgxyz;
         for (gs0 = 0; gs0 < nGv; gs0 += gblksize) {
                 dg = MIN(nGv-gs0, gblksize);
                 for (i = 0; i < 3; i++) {
-                        memcpy(sGv+dg*i, Gv+nGv*i+gs0, sizeof(double)*dg);
+                        NPdcopy(sGv+dg*i, Gv+nGv*i+gs0, dg);
                 }
                 sGv += dg * 3;
                 if (gxyz != NULL) {
                         for (i = 0; i < 3; i++) {
-                                memcpy(sgxyz+dg*i, gxyz+nGv*i+gs0, sizeof(int)*dg);
+                                psgxyz = sgxyz + dg * i;
+                                pgxyz = gxyz + nGv * i + gs0;
+                                for (n = 0; n < dg; n++) {
+                                        psgxyz[n] = pgxyz[n];
+                                }
                         }
                         sgxyz += dg * 3;
                 }
@@ -699,7 +701,7 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + IMGBLK;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
 #pragma omp for schedule(dynamic)
@@ -752,7 +754,7 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + bvk_nimgs;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
 #pragma omp for schedule(dynamic)

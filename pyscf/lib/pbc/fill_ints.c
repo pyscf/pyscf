@@ -17,21 +17,18 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <complex.h>
 #include <assert.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
 #include "pbc/optimizer.h"
+#include "np_helper/np_helper.h"
 
 #define INTBUFMAX       1000
 #define INTBUFMAX10     8000
 #define IMGBLK          80
 #define OF_CMPLX        2
-
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
 int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -937,7 +934,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
 {
         int ish, jsh, ij;
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         double *buf = malloc(sizeof(double)*(count+cache_size));
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
@@ -1110,7 +1107,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
 {
         int jsh;
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;
         double *buf = malloc(sizeof(double)*(count*INTBUFMAX10*comp+cache_size));
 #pragma omp for schedule(dynamic)

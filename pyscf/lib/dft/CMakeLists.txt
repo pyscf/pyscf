@@ -16,14 +16,14 @@ add_library(dft SHARED
   CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
   numint_uniform_grid.c
   )
-add_dependencies(dft cgto cvhf)
+add_dependencies(dft cgto cvhf np_helper)
 
 set_target_properties(dft PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(dft cvhf cgto cint ${BLAS_LIBRARIES})
+target_link_libraries(dft cvhf cgto cint np_helper ${BLAS_LIBRARIES})
 
 
 if(ENABLE_LIBXC)

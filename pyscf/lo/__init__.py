@@ -15,6 +15,7 @@
 from pyscf.lo import nao
 from pyscf.lo import orth
 from pyscf.lo.orth import lowdin, schmidt, vec_lowdin, vec_schmidt, orth_ao
+from pyscf.lo.cholesky import cholesky_mos
 from pyscf.lo import iao
 from pyscf.lo import ibo
 from pyscf.lo import vvo
