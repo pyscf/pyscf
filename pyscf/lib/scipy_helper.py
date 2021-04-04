@@ -77,7 +77,7 @@ def pivoted_cholesky_python(A, tol=-1.0, lower=False):
         A : the positive semidefinite matrix to be factorized
         tol : stopping tolerance
         lower : return the lower or upper diagonal factorization
-    
+
     Returns:
         the factor, the permutation vector, the rank
     '''

@@ -38,7 +38,7 @@ def cholesky_mos(mo_coeff):
 
     Args:
         mo_coeff: block of MO coefficients to be localized
-    
+
     Returns:
         the localized MOs
     '''
@@ -50,7 +50,7 @@ def cholesky_mos(mo_coeff):
     L, piv, rank = pivoted_cholesky(D, lower=True)
     if rank < nmo:
         raise RuntimeError('rank of matrix lower than the number of orbitals')
-    
+
     # Permute L back to the original order of the AOs.
     # Superfluous columns are cropped out.
     P = np.zeros((nao, nao))
@@ -95,4 +95,3 @@ if __name__ == "__main__":
     for i in range(nocc):
         li = numpy.argsort(abs(mo_loc[:, i]))
         print('{0:3d}    {1}'. format(i, mo_loc[li[:-6:-1], i]))
-    
