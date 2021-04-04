@@ -355,7 +355,7 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c'''
 
 extensions += [
     make_ext('pyscf.lib.libnp_helper', 'np_helper',
-             'condense.c npdot.c omp_reduce.c pack_tril.c transpose.c',
+             'condense.c npdot.c omp_reduce.c pack_tril.c transpose.c np_helper.c',
              blas_libraries,
              extra_compile_flags=blas_extra_compile_flags,
              extra_link_flags=blas_extra_link_flags),
