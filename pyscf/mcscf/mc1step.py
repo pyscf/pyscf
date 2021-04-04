@@ -437,6 +437,18 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             small_rot = True
         else:
             small_rot = False
+        if not isinstance(casscf, StateAverageMCSCFSolver):
+            # The fcivec from builtin FCI solver is a numpy.ndarray
+            if not isinstance(fcivec, numpy.ndarray):
+                fcivec = small_rot
+        else:
+            newvecs = []
+            for subvec in fcivec:
+                if not isinstance(subvec, numpy.ndarray):
+                    newvecs.append(small_rot)
+                else:
+                    newvecs.append(subvec)
+            fcivec = newvecs
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
@@ -1282,7 +1294,6 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
     def newton(self):
         from pyscf.mcscf import newton_casscf
-        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
