@@ -1291,13 +1291,15 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
     def newton(self):
         from pyscf.mcscf import newton_casscf
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
         # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
-        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         if isinstance(self, StateAverageMCSCFSolver):
-            mc1 = mc1.state_average_(self.weights, self.wfnsym)
+            # FIXME: (QS) Should not need to pass wfnsym for general CASSCF object.
+            wfnsym = getattr(self, 'wfnsym', None)
+            mc1 = mc1.state_average_(self.weights, wfnsym)
         return mc1
 
 scf.hf.RHF.CASSCF = scf.rohf.ROHF.CASSCF = lib.class_as_method(CASSCF)
