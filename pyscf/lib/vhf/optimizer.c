@@ -17,14 +17,12 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
 #include "optimizer.h"
-
-#define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#include "np_helper/np_helper.h"
 
 int int2e_sph();
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -334,7 +332,7 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * len);
-        memcpy(opt->q_cond, q_cond, sizeof(double) * len);
+        NPdcopy(opt->q_cond, q_cond, len);
 }
 
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
@@ -347,7 +345,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
 
         const size_t nao = ao_loc[nbas];
         double dmax, tmp;
@@ -378,7 +376,7 @@ void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * len);
-        memcpy(opt->dm_cond, dm_cond, sizeof(double) * len);
+        NPdcopy(opt->dm_cond, dm_cond, len);
 }
 
 

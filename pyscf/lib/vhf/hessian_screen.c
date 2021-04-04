@@ -18,15 +18,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <complex.h>
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
 #include "optimizer.h"
-
-#define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#include "np_helper/np_helper.h"
 
 
 int int2e_sph();
@@ -147,7 +145,7 @@ void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         }
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
 
         const size_t nao = ao_loc[nbas];
         double dmax;

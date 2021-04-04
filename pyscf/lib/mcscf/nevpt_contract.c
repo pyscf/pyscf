@@ -17,13 +17,12 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "np_helper/np_helper.h"
 #include "fci.h"
 
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define BLK     48
 #define BUFBASE 96
 
@@ -251,8 +250,8 @@ void NEVPTcontract(void (*kernel)(),
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
-        memset(pdm2, 0, sizeof(double) * n4);
-        memset(rdm3, 0, sizeof(double) * n4 * nnorb);
+        NPdset0(pdm2, n4);
+        NPdset0(rdm3, n4 * nnorb);
 
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {
