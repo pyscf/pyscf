@@ -198,6 +198,64 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(ValueError, mcscf.addons.caslst_by_irrep, mc1, mf.mo_coeff,
                           {'E2ux': 2, 'E2uy': 2}, {'E1uy': 1, 'E1ux': 1})
 
+    def test_make_natural_orbitals_from_restricted(self):
+        from pyscf import mp, ci, cc
+        npt = numpy.testing
+
+        mol = gto.M(atom = 'C 0 0 0; O 0 0 1.2', basis = '3-21g', spin = 0)
+        myhf = scf.RHF(mol).run()
+        ncas, nelecas = (8, 10)
+        mymc = mcscf.CASCI(myhf, ncas, nelecas)
+
+        # Test MP2
+        # Trusted results from ORCA v4.2.1
+        rmp2_noons = [1.99992732,1.99989230,1.99204357,1.98051334,1.96825487,1.94377615,1.94376239,0.05792320,0.05791037,0.02833335,0.00847013,0.00531989,0.00420320,0.00420280,0.00257965,0.00101638,0.00101606,0.00085503]
+        mymp = mp.MP2(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(mymp)
+        npt.assert_array_almost_equal(rmp2_noons, noons, decimal=5)
+        mymc.kernel(natorbs)
+
+        # The tests below are only to ensure that `make_natural_orbitals` can 
+        # run at all since we've confirmed above that the NOONs are correct.
+        # Test CISD
+        mycisd = ci.CISD(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(mycisd)
+        mymc.kernel(natorbs)
+
+        # Test CCSD
+        myccsd = cc.CCSD(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(myccsd)
+        mymc.kernel(natorbs)
+
+    def test_make_natural_orbitals_from_unrestricted(self):
+        from pyscf import mp, ci, cc
+        npt = numpy.testing
+
+        mol = gto.M(atom = 'O 0 0 0; O 0 0 1.2', basis = '3-21g', spin = 2)
+        myhf = scf.UHF(mol).run()
+        ncas, nelecas = (8, 12)
+        mymc = mcscf.CASCI(myhf, ncas, nelecas)
+
+        # Test MP2
+        # Trusted results from ORCA v4.2.1
+        rmp2_noons = [1.99992786,1.99992701,1.99414062,1.98906552,1.96095173,1.96095165,1.95280755,1.02078458,1.02078457,0.04719006,0.01274288,0.01274278,0.00728679,0.00582683,0.00543964,0.00543962,0.00290772,0.00108258]
+        mymp = mp.UMP2(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(mymp)
+        npt.assert_array_almost_equal(rmp2_noons, noons)
+        mymc.kernel(natorbs)
+
+        # The tests below are only to ensure that `make_natural_orbitals` can 
+        # run at all since we've confirmed above that the NOONs are correct.
+        # Test CISD
+        mycisd = ci.CISD(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(mycisd)
+        mymc.kernel(natorbs)
+
+        # Test CCSD
+        myccsd = cc.CCSD(myhf).run()
+        noons, natorbs = mcscf.addons.make_natural_orbitals(myccsd)
+        mymc.kernel(natorbs)
+
     def test_state_average(self):
         mc = mcscf.CASSCF(mfr, 4, 4)
         mc.fcisolver = fci.solver(mol, singlet=False)

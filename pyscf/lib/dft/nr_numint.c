@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -167,7 +166,8 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                   unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(vv, 0, sizeof(double) * nao * nao);
+        size_t Nao = nao;
+        NPdset0(vv, Nao * Nao);
 
 #pragma omp parallel
 {

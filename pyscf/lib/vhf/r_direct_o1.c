@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <math.h>
 #include <complex.h>
@@ -27,6 +26,7 @@
 #include "optimizer.h"
 #include "nr_direct.h"
 #include "time_rev.h"
+#include "np_helper/np_helper.h"
 
 int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -289,7 +289,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
                 cintopt, ncomp};
 
-        memset(vjk, 0, sizeof(double complex)*nao*nao*n_dm*ncomp);
+        NPzset0(vjk, nao*nao*n_dm*ncomp);
 
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
@@ -298,7 +298,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
 {
         int i, j, ij;
         double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
-        memset(v_priv, 0, sizeof(double complex)*nao*nao*n_dm*ncomp);
+        NPzset0(v_priv, nao*nao*n_dm*ncomp);
         int bufsize = di*di*di*di*ncomp;
         bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
