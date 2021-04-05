@@ -1377,7 +1377,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
           | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
           | v3sigma3[:,10]    = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
           | v3rho2lapl[:,6]   = (u_u_u, u_u_d, u_d_u, u_d_d, d_d_u, d_d_d)
-          | v3r_s_l[:,12]     = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d, d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
+          | v3rhosigmalapl[:,12] = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d, d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
           | v3rholapl2[:,6]   = (u_u_u, u_u_d, u_d_d, d_u_u, d_u_d, d_d_d)
           | v3sigma2lapl[:,12]= (uu_uu_u, uu_uu_d, uu_ud_u, uu_ud_d, uu_dd_u, uu_dd_d, ud_ud_u, ud_ud_d, ud_dd_u, ud_dd_d, dd_dd_u, dd_dd_d)
           | v3sigmalapl2[:,9] = (uu_u_u, uu_u_d, uu_d_d, ud_u_u, ud_u_d, ud_d_d, dd_u_u, dd_u_d, dd_d_d)

@@ -26,6 +26,9 @@
 #include <xc.h>
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
+// TODO: register python signal
+#define raise_error     return
+
 /* Extracted from comments of libxc:gga.c
 
     sigma_st          = grad rho_s . grad rho_t
@@ -68,6 +71,12 @@
     v3rho2sigma(9)  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
     v3rhosigma2(12) = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
     v3sigma(10)     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+    v3rho2lapl(6)   = (u_u_u, u_u_d, u_d_u, u_d_d, d_d_u, d_d_d)
+    v3r_s_l(12)     = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d, d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
+    v3rholapl2(6)   = (u_u_u, u_u_d, u_d_d, d_u_u, d_u_d, d_d_d)
+    v3sigma2lapl(12)= (uu_uu_u, uu_uu_d, uu_ud_u, uu_ud_d, uu_dd_u, uu_dd_d, ud_ud_u, ud_ud_d, ud_dd_u, ud_dd_d, dd_dd_u, dd_dd_d)
+    v3sigmalapl2(9) = (uu_u_u, uu_u_d, uu_d_d, ud_u_u, ud_u_d, ud_d_d, dd_u_u, dd_u_d, dd_d_d)
+    v3lapl3(4)      = (u_u_u, u_u_d, u_d_d, d_d_d)
 
  */
 /*
@@ -83,9 +92,11 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
         double *rho, *sigma, *lapl, *tau;
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd;
         double *lapl_u, *lapl_d, *tau_u, *tau_d;
+        double *vrho   = NULL;
         double *vsigma = NULL;
         double *vlapl  = NULL;
         double *vtau   = NULL;
+        double *v2rho2      = NULL;
         double *v2rhosigma  = NULL;
         double *v2sigma2    = NULL;
         double *v2lapl2     = NULL;
@@ -95,6 +106,7 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
         double *v2sigmalapl = NULL;
         double *v2sigmatau  = NULL;
         double *v2lapltau   = NULL;
+        double *v3rho3      = NULL;
         double *v3rho2sigma = NULL;
         double *v3rhosigma2 = NULL;
         double *v3sigma3    = NULL;
@@ -149,31 +161,31 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 sigma[i*3+2] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
                         }
                         if (vxc != NULL) {
-                                // vrho = vxc
+                                vrho = vxc;
                                 vsigma = vxc + np * 2;
                         }
                         if (fxc != NULL) {
-                                // v2rho2 = fxc
+                                v2rho2 = fxc;
                                 v2rhosigma = fxc + np * 3;
                                 v2sigma2 = v2rhosigma + np * 6; // np*6
                         }
                         if (kxc != NULL) {
-                                // v3rho3 = kxc
+                                v3rho3 = kxc;
                                 v3rho2sigma = kxc + np * 4;
                                 v3rhosigma2 = v3rho2sigma + np * 9;
                                 v3sigma3 = v3rhosigma2 + np * 12; // np*10
                         }
 #if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
                         xc_gga(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2);
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2);
 #elif XC_MAJOR_VERSION < 5
                         xc_gga(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
-                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2,
+                               v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3);
 #else
                         xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
-                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2,
+                               v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3);
 #endif
                         free(rho);
                         free(sigma);
@@ -187,29 +199,31 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 sigma[i] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
                         }
                         if (vxc != NULL) {
+                                vrho = vxc;
                                 vsigma = vxc + np;
                         }
                         if (fxc != NULL) {
+                                v2rho2 = fxc;
                                 v2rhosigma = fxc + np;
                                 v2sigma2 = v2rhosigma + np;
                         }
                         if (kxc != NULL) {
+                                v3rho3 = kxc;
                                 v3rho2sigma = kxc + np;
                                 v3rhosigma2 = v3rho2sigma + np;
                                 v3sigma3 = v3rhosigma2 + np;
                         }
 #if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
                         xc_gga(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2);
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2);
 #elif XC_MAJOR_VERSION < 5
                         xc_gga(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
-                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2,
+                               v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3);
 #else
                         xc_gga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, ex,
-                               vxc, vsigma, fxc, v2rhosigma, v2sigma2,
-                               kxc, v3rho2sigma, v3rhosigma2, v3sigma3);
-
+                               vrho, vsigma, v2rho2, v2rhosigma, v2sigma2,
+                               v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3);
 #endif
                         free(sigma);
                 }
@@ -245,14 +259,14 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 tau[i*2+1] = tau_d[i];
                         }
                         if (vxc != NULL) {
-                                // vrho = vxc
+                                vrho = vxc;
                                 vsigma = vxc + np * 2;
                                 vlapl = vsigma + np * 3;
                                 vtau = vlapl + np * 2; // np*2
                         }
                         if (fxc != NULL) {
-                                // v2rho2 = fxc
-                                v2rhosigma  = fxc         + np * 3;
+                                v2rho2 = fxc;
+                                v2rhosigma  = v2rho2      + np * 3;
                                 v2sigma2    = v2rhosigma  + np * 6;
                                 v2lapl2     = v2sigma2    + np * 6;
                                 v2tau2      = v2lapl2     + np * 3;
@@ -260,19 +274,45 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 v2rhotau    = v2rholapl   + np * 4;
                                 v2lapltau   = v2rhotau    + np * 4;
                                 v2sigmalapl = v2lapltau   + np * 4;
-                                v2sigmatau  = v2sigmalapl + np * 6; // np*6
+                                v2sigmatau  = v2sigmalapl + np * 6;
                         }
-#if XC_MAJOR_VERSION >=5
-                        xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
-                                vxc, vsigma, vlapl, vtau,
-                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
-                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
-#else
-                        xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
-                                vxc, vsigma, vlapl, vtau,
-                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
-                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
-#endif
+                        if (kxc != NULL) {
+                                v3rho3         = kxc;
+                                v3rho2sigma    = v3rho3         + np * 4;
+                                v3rhosigma2    = v3rho2sigma    + np * 9;
+                                v3sigma3       = v3rhosigma2    + np * 12;
+                                v3rho2lapl     = v3sigma3       + np * 10;
+                                v3rhosigmalapl = v3rho2lapl     + np * 6;
+                                v3rholapl2     = v3rhosigmalapl + np * 12;
+                                v3sigma2lapl   = v3rholapl2     + np * 6;
+                                v3sigmalapl2   = v3sigma2lapl   + np * 12;
+                                v3lapl3        = v3sigmalapl2   + np * 9;
+                                v3rho2tau      = v3lapl3        + np * 4;
+                                v3rhosigmatau  = v3rho2tau      + np * 6;
+                                v3rholapltau   = v3rhosigmatau  + np * 12;
+                                v3rhotau2      = v3rholapltau   + np * 8;
+                                v3sigma2tau    = v3rhotau2      + np * 6;
+                                v3sigmalapltau = v3sigma2tau    + np * 12;
+                                v3sigmatau2    = v3sigmalapltau + np * 12;
+                                v3lapl2tau     = v3sigmatau2    + np * 9;
+                                v3lapltau2     = v3lapl2tau     + np * 6;
+                                v3tau3         = v3lapltau2     + np * 6;
+
+                                xc_mgga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                        vxc, vsigma, vlapl, vtau,
+                                        fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                        v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau,
+                                        v3rho3, v3rho2sigma, v3rho2lapl, v3rho2tau, v3rhosigma2,
+                                        v3rhosigmalapl, v3rhosigmatau, v3rholapl2, v3rholapltau,
+                                        v3rhotau2, v3sigma3, v3sigma2lapl, v3sigma2tau,
+                                        v3sigmalapl2, v3sigmalapltau, v3sigmatau2, v3lapl3,
+                                        v3lapl2tau, v3lapltau2, v3tau3);
+                        } else {
+                                xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                        vrho, vsigma, vlapl, vtau,
+                                        v2rho2, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                        v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+                        }
                         free(rho);
                         free(sigma);
                         free(lapl);
@@ -304,24 +344,51 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
                                 v2sigmalapl = v2lapltau   + np;
                                 v2sigmatau  = v2sigmalapl + np;
                         }
-#if XC_MAJOR_VERSION >= 5
-                        xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
-                                vxc, vsigma, vlapl, vtau,
-                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
-                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
-#else
-                        xc_mgga(func_x, np, rho, sigma, lapl, tau, ex,
-                                vxc, vsigma, vlapl, vtau,
-                                fxc, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
-                                v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
-#endif
+
+                        if (kxc != NULL) {
+                                v3rho3         = kxc;
+                                v3rho2sigma    = v3rho3         + np;
+                                v3rhosigma2    = v3rho2sigma    + np;
+                                v3sigma3       = v3rhosigma2    + np;
+                                v3rho2lapl     = v3sigma3       + np;
+                                v3rhosigmalapl = v3rho2lapl     + np;
+                                v3rholapl2     = v3rhosigmalapl + np;
+                                v3sigma2lapl   = v3rholapl2     + np;
+                                v3sigmalapl2   = v3sigma2lapl   + np;
+                                v3lapl3        = v3sigmalapl2   + np;
+                                v3rho2tau      = v3lapl3        + np;
+                                v3rhosigmatau  = v3rho2tau      + np;
+                                v3rholapltau   = v3rhosigmatau  + np;
+                                v3rhotau2      = v3rholapltau   + np;
+                                v3sigma2tau    = v3rhotau2      + np;
+                                v3sigmalapltau = v3sigma2tau    + np;
+                                v3sigmatau2    = v3sigmalapltau + np;
+                                v3lapl2tau     = v3sigmatau2    + np;
+                                v3lapltau2     = v3lapl2tau     + np;
+                                v3tau3         = v3lapltau2     + np;
+
+                                xc_mgga_exc_vxc_fxc_kxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                        vrho, vsigma, vlapl, vtau,
+                                        f2rho2, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                        v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau,
+                                        v3rho3, v3rho2sigma, v3rho2lapl, v3rho2tau, v3rhosigma2,
+                                        v3rhosigmalapl, v3rhosigmatau, v3rholapl2, v3rholapltau,
+                                        v3rhotau2, v3sigma3, v3sigma2lapl, v3sigma2tau,
+                                        v3sigmalapl2, v3sigmalapltau, v3sigmatau2, v3lapl3,
+                                        v3lapl2tau, v3lapltau2, v3tau3);
+                        } else {
+                                xc_mgga_exc_vxc_fxc(func_x, np, rho, sigma, lapl, tau, ex,
+                                        vrho, vsigma, vlapl, vtau,
+                                        v2rho2, v2sigma2, v2lapl2, v2tau2, v2rhosigma, v2rholapl,
+                                        v2rhotau, v2sigmalapl, v2sigmatau, v2lapltau);
+                        }
                         free(sigma);
                 }
                 break;
         default:
                 fprintf(stderr, "functional %d '%s' is not implmented\n",
                         func_x->info->number, func_x->info->name);
-                exit(1);
+                raise_error;
         }
 }
 
@@ -331,7 +398,7 @@ int LIBXC_is_lda(int xc_id)
         int lda;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -352,7 +419,7 @@ int LIBXC_is_gga(int xc_id)
         int gga;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -376,7 +443,7 @@ int LIBXC_is_meta_gga(int xc_id)
         int mgga;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -400,7 +467,7 @@ int LIBXC_needs_laplacian(int xc_id)
         int lapl;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         lapl = func.info->flags & XC_FLAGS_NEEDS_LAPLACIAN ? 1 : 0;
         xc_func_end(&func);
@@ -413,7 +480,7 @@ int LIBXC_is_hybrid(int xc_id)
         int hyb;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 
 #if XC_MAJOR_VERSION < 6
@@ -443,7 +510,7 @@ double LIBXC_hybrid_coeff(int xc_id)
         double factor;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error 0.0;
         }
 
 #if XC_MAJOR_VERSION < 6
@@ -466,7 +533,7 @@ double LIBXC_hybrid_coeff(int xc_id)
         else
           factor = 0.0;
 #endif
-        
+
         xc_func_end(&func);
         return factor;
 }
@@ -476,7 +543,7 @@ void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error;
         }
         XC(nlc_coef)(&func, &nlc_pars[0], &nlc_pars[1]);
         xc_func_end(&func);
@@ -487,7 +554,7 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error;
         }
         rsh_pars[0] = 0.0;
         rsh_pars[1] = 0.0;
@@ -509,7 +576,7 @@ int LIBXC_is_cam_rsh(int xc_id) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 #if XC_MAJOR_VERSION < 6
         int is_cam = func.info->flags & XC_FLAGS_HYB_CAM;
@@ -535,7 +602,7 @@ int LIBXC_xc_type(int fn_id)
         xc_func_type func;
         if (xc_func_init(&func, fn_id, 1) != 0) {
                 fprintf(stderr, "XC functional %d not found\n", fn_id);
-                exit(1);
+                raise_error -1;
         }
         int type = func.info->family;
         xc_func_end(&func);
@@ -563,7 +630,7 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
-                        exit(1);
+                        raise_error -1;
                 }
                 if (spin == XC_POLARIZED) {
                         switch (func.info->family) {
@@ -708,7 +775,8 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
 // omega is the range separation parameter mu in xcfun
 void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
-                   double *rho_u, double *rho_d, double *output)
+                   double *rho_u, double *rho_d, double *output,
+                   double dens_threshold)
 {
         assert(deriv <= 3);
         int nvar = LIBXC_input_length(nfn, fn_id, fac, spin);
@@ -730,8 +798,13 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
         if (deriv > 1) {
                 fbuf = malloc(sizeof(double) * np*48);
         }
-        if (deriv > 2) {  // *220 if mgga kxc available
-                kbuf = malloc(sizeof(double) * np*35);
+        if (deriv > 2) {
+                if (spin == 1) {  // spin-resctricted MGGA
+                        kbuf = malloc(sizeof(double) * np*20);
+                } else {  // spin-unresctricted MGGA
+                        // FIXME *220 in xcfun
+                        kbuf = malloc(sizeof(double) * np*165);
+                }
         }
 
         int i, j;
@@ -740,7 +813,10 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
-                        exit(1);
+                        raise_error;
+                }
+                if (dens_threshold > 0) {
+                        xc_func_set_dens_threshold(&func, dens_threshold);
                 }
 
                 // set the range-separated parameter
@@ -803,7 +879,7 @@ int LIBXC_max_deriv_order(int xc_id)
         int ord;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 
         if (func.info->flags & XC_FLAGS_HAVE_LXC) {
