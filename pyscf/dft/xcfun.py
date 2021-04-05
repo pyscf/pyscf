@@ -828,18 +828,24 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         all((is_lda(x) for x in fn_ids))):  # LDA
         if spin == 0:
             nvar = 1
+            xctype = 'R-LDA'
         else:
             nvar = 2
+            xctype = 'U-LDA'
     elif any((is_meta_gga(x) for x in fn_ids)):
         if spin == 0:
             nvar = 3
+            xctype = 'R-MGGA'
         else:
             nvar = 7
+            xctype = 'U-MGGA'
     else:  # GGA
         if spin == 0:
             nvar = 2
+            xctype = 'R-GGA'
         else:
             nvar = 5
+            xctype = 'U-GGA'
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     outbuf = numpy.zeros((ngrids,outlen))
@@ -858,29 +864,28 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     outbuf = outbuf.T
     exc = outbuf[0]
     vxc = fxc = kxc = None
-    if nvar == 1:
+    if xctype == 'R-LDA':
         if deriv > 0:
             vxc = (outbuf[1], None, None, None)
         if deriv > 1:
             fxc = (outbuf[2],) + (None,)*9
         if deriv > 2:
             kxc = (outbuf[3], None, None, None)
-    elif nvar == 2:
-        if spin == 0:  # GGA
-            if deriv > 0:
-                vxc = (outbuf[1], outbuf[2], None, None)
-            if deriv > 1:
-                fxc = (outbuf[3], outbuf[4], outbuf[5],) + (None,)*7
-            if deriv > 2:
-                kxc = outbuf[6:10]
-        else:  # LDA
-            if deriv > 0:
-                vxc = (outbuf[1:3].T, None, None, None)
-            if deriv > 1:
-                fxc = (outbuf[3:6].T,) + (None,)*9
-            if deriv > 2:
-                kxc = (outbuf[6:10].T, None, None, None)
-    elif nvar == 5:
+    elif xctype == 'R-GGA':
+        if deriv > 0:
+            vxc = (outbuf[1], outbuf[2], None, None)
+        if deriv > 1:
+            fxc = (outbuf[3], outbuf[4], outbuf[5],) + (None,)*7
+        if deriv > 2:
+            kxc = outbuf[6:10]
+    elif xctype == 'U-LDA':
+        if deriv > 0:
+            vxc = (outbuf[1:3].T, None, None, None)
+        if deriv > 1:
+            fxc = (outbuf[3:6].T,) + (None,)*9
+        if deriv > 2:
+            kxc = (outbuf[6:10].T, None, None, None)
+    elif xctype == 'U-GGA':
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, None)
         if deriv > 1:
@@ -900,7 +905,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 # MGGA/MLGGA: Note the MLGGA interface are not implemented. MGGA only needs 3
 # input arguments.  To make the interface compatible with libxc, treat MGGA as
 # MLGGA
-    elif nvar == 3:
+    elif xctype == 'R-MGGA':
         if deriv > 0:
             vxc = (outbuf[1], outbuf[2], None, outbuf[3])
         if deriv > 1:
@@ -910,7 +915,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             kxc = (outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
                    outbuf[XC_D201], outbuf[XC_D111], outbuf[XC_D102],
                    outbuf[XC_D021], outbuf[XC_D012], outbuf[XC_D003])
-    elif nvar == 7:
+    elif xctype == 'U-MGGA':
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
         if deriv > 1:
