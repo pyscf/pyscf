@@ -902,9 +902,7 @@ static void zcontract6_t3T(int nocc, int nvir, int a, int b, int c,
         double complex *t2T_ba = data_ptrs[21];
         double complex *t2T_aj = data_ptrs[22];
         double complex *t2T_ab = data_ptrs[23];
-        double abc = mo_energy[nocc+a+ka*nmo] + mo_energy[nocc+b+kb*nmo] + mo_energy[nocc+c+kc*nmo];
 
-        double div;
         double complex *v0 = cache1;
         double complex *w0 = v0 + nooo;
         double complex *z0 = w0 + nooo;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,8 +33,8 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold
 POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
-#FIXME: numerically unstable with small mesh?
-#TODO: Add a warning message for small mesh.
+    #FIXME: numerically unstable with small mesh?
+    #TODO: Add a warning message for small mesh.
 
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
-    C  0.          0.          0.        
+    C  0.          0.          0.
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''
@@ -291,31 +291,31 @@ if __name__ == '__main__':
     #mf.with_df._cderi = 'eri3d-mdf.h5'
     #mf.with_df.build(with_j3c=False)
     mf.run()
-#mesh=9  -8.65192427146353
-#mesh=12 -8.65192352289817
-#mesh=15 -8.6519235231529
-#MDF mesh=5 -8.6519301815144
+    #mesh=9  -8.65192427146353
+    #mesh=12 -8.65192352289817
+    #mesh=15 -8.6519235231529
+    #MDF mesh=5 -8.6519301815144
 
     td = TDA(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
-#mesh=12 [ 6.00253282  6.09317929  6.34799109]
-#mesh=15 [ 6.00253396  6.09317949  6.34799109]
-#MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
+    #mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
+    #mesh=12 [ 6.00253282  6.09317929  6.34799109]
+    #mesh=15 [ 6.00253396  6.09317949  6.34799109]
+    #MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
 
-#    from pyscf.pbc import tools
-#    scell = tools.super_cell(cell, [2,1,1])
-#    mf = scf.RHF(scell).run()
-#    td = rhf.TDA(mf)
-#    td.verbose = 5
-#    print(td.kernel()[0] * 27.2114)
+    #from pyscf.pbc import tools
+    #scell = tools.super_cell(cell, [2,1,1])
+    #mf = scf.RHF(scell).run()
+    #td = rhf.TDA(mf)
+    #td.verbose = 5
+    #print(td.kernel()[0] * 27.2114)
 
     td = TDHF(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#mesh=9  [ 6.03860914  6.21664545  8.20305225]
-#mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
-#mesh=15 [ 6.03861321  6.03861324  6.21675868]
-#MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
+    #mesh=9  [ 6.03860914  6.21664545  8.20305225]
+    #mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
+    #mesh=15 [ 6.03861321  6.03861324  6.21675868]
+    #MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
 

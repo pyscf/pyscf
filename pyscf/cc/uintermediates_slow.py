@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ def cc_Foo(t1,t2,eris):
     fov = eris.fock[:nocc,nocc:]
     foo = eris.fock[:nocc,:nocc]
     tau_tilde = make_tau(t2,t1,t1,fac=0.5)
-    Fmi = ( foo + 0.5*einsum('me,ie->mi',fov,t1) 
-            + einsum('ne,mnie->mi',t1,eris.ooov)
-            + 0.5*einsum('inef,mnef->mi',tau_tilde,eris.oovv) )
+    Fmi = (foo + 0.5*einsum('me,ie->mi',fov,t1)
+           + einsum('ne,mnie->mi',t1,eris.ooov)
+           + 0.5*einsum('inef,mnef->mi',tau_tilde,eris.oovv) )
     return Fmi
 
 def cc_Fov(t1,t2,eris):
@@ -78,9 +78,9 @@ def cc_Wvvvv(t1,t2,eris):
     nocc, nvir = t1.shape
     Wabef = fimd.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
     for a in range(nvir):
-        Wabef[a] = eris.vvvv[a] 
-        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:]) 
-        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv) 
+        Wabef[a] = eris.vvvv[a]
+        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:])
+        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv)
         Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
     return Wabef
 
@@ -127,13 +127,13 @@ def Wvvvv(t1,t2,eris):
     #_cc_Wvvvv = cc_Wvvvv(t1,t2,eris)
     for a in range(nvir):
         #Wabef[a] = _cc_Wvvvv[a]
-        Wabef[a] = eris.vvvv[a] 
-        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:]) 
-        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv) 
+        Wabef[a] = eris.vvvv[a]
+        Wabef[a] -= einsum('mb,mfe->bef',t1,eris.ovvv[:,a,:,:])
+        Wabef[a] += einsum('m,mbfe->bef',t1[:,a],eris.ovvv)
         #Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
 
-        #Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv) 
-        Wabef[a] += 0.5*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv) 
+        #Wabef[a] += 0.25*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
+        Wabef[a] += 0.5*einsum('mnb,mnef->bef',tau[:,:,a,:],eris.oovv)
     return Wabef
 
 def Wovvo(t1,t2,eris):
@@ -152,16 +152,16 @@ def Wvovv(t1,t2,eris):
 def Wovoo(t1,t2,eris):
     eris_ovvo = -np.array(eris.ovov).transpose(0,1,3,2)
     tmp1 = einsum('mnie,jnbe->mbij',eris.ooov,t2)
-    tmp2 = ( einsum('ie,mbej->mbij',t1,eris_ovvo)
-            - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv) )
+    tmp2 = (einsum('ie,mbej->mbij',t1,eris_ovvo)
+            - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv))
     FFov = Fov(t1,t2,eris)
     WWoooo = Woooo(t1,t2,eris)
     tau = make_tau(t2,t1,t1)
-    Wmbij = ( eris.ovoo - einsum('me,ijbe->mbij',FFov,t2)
-              - einsum('nb,mnij->mbij',t1,WWoooo)
-              + 0.5 * einsum('mbef,ijef->mbij',eris.ovvv,tau)
-              + tmp1 - tmp1.transpose(0,1,3,2)
-              + tmp2 - tmp2.transpose(0,1,3,2) )
+    Wmbij = (eris.ovoo - einsum('me,ijbe->mbij',FFov,t2)
+             - einsum('nb,mnij->mbij',t1,WWoooo)
+             + 0.5 * einsum('mbef,ijef->mbij',eris.ovvv,tau)
+             + tmp1 - tmp1.transpose(0,1,3,2)
+             + tmp2 - tmp2.transpose(0,1,3,2) )
     return Wmbij
 
 def Wvvvo(t1,t2,eris,_Wvvvv=None):
@@ -169,15 +169,15 @@ def Wvvvo(t1,t2,eris,_Wvvvv=None):
     eris_vvvo = -np.array(eris.ovvv).transpose(2,3,1,0).conj()
     eris_oovo = -np.array(eris.ooov).transpose(0,1,3,2)
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
-    tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
-            - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
+    tmp2 = (einsum('ma,mbei->abei',t1,eris_ovvo)
+            - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv))
     FFov = Fov(t1,t2,eris)
     tau = make_tau(t2,t1,t1)
-    Wabei = eris_vvvo 
+    Wabei = eris_vvvo
     Wabei += -einsum('me,miab->abei',FFov,t2)
     Wabei += 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
     Wabei += -tmp1 + tmp1.transpose(1,0,2,3)
-    Wabei += -tmp2 + tmp2.transpose(1,0,2,3) 
+    Wabei += -tmp2 + tmp2.transpose(1,0,2,3)
     nocc,nvir = t1.shape
     if _Wvvvv is None:
         _Wvvvv = Wvvvv(t1,t2,eris)
@@ -190,14 +190,14 @@ def Wvvvo_incore(t1,t2,eris):
     eris_vvvo = -np.array(eris.ovvv).transpose(2,3,1,0).conj()
     eris_oovo = -np.array(eris.ooov).transpose(0,1,3,2)
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
-    tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
-            - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
+    tmp2 = (einsum('ma,mbei->abei',t1,eris_ovvo)
+            - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv))
     FFov = Fov(t1,t2,eris)
     WWvvvv = Wvvvv(t1,t2,eris)
     tau = make_tau(t2,t1,t1)
-    Wabei = ( eris_vvvo - einsum('me,miab->abei',FFov,t2)
-                    + einsum('if,abef->abei',t1,WWvvvv)
-                    + 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
-                    - tmp1 + tmp1.transpose(1,0,2,3)
-                    - tmp2 + tmp2.transpose(1,0,2,3) )
+    Wabei = (eris_vvvo - einsum('me,miab->abei',FFov,t2)
+             + einsum('if,abef->abei',t1,WWvvvv)
+             + 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
+             - tmp1 + tmp1.transpose(1,0,2,3)
+             - tmp2 + tmp2.transpose(1,0,2,3) )
     return Wabei

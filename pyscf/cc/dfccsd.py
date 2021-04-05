@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -56,7 +56,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     _dgemm = lib.numpy_helper._dgemm
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mol, verbose)
 
     naux = vvL.shape[-1]

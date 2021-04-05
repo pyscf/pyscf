@@ -40,13 +40,13 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <complex.h>
 #include "config.h"
 #include "cint.h"
 #include "gto/ft_ao.h"
+#include "np_helper/np_helper.h"
 
 #define SQRTPI          1.7724538509055160272981674833411451
 #define EXPCUTOFF       100
@@ -366,7 +366,7 @@ static void vrr2d_ket_inc1_withGv(double complex *out, const double complex *g,
                                   double *rirj, int li, int lj, size_t NGv)
 {
         if (lj == 0) {
-                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*NGv);
+                NPzcopy(out, g, _LEN_CART[li]*NGv);
                 return;
         }
         const int row_10 = _LEN_CART[li+1];
@@ -414,7 +414,7 @@ static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
                               double *rirj, int li, int lj, size_t NGv)
 {
         if (lj == 0) {
-                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*NGv);
+                NPzcopy(out, g, _LEN_CART[li]*NGv);
                 return;
         }
         const int row_01 = _LEN_CART[lj];
@@ -1187,17 +1187,20 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
         double complex *csx = zbuf;
         double complex *csy = csx + nx;
         double complex *csz = csy + ny;
+        int n;
         char empty[nx+ny+nz];
         char *xempty = empty;
         char *yempty = xempty + nx;
         char *zempty = yempty + ny;
-        memset(empty, 1, sizeof(char)*(nx+ny+nz));
+        for (n = 0; n < nx+ny+nz; n++) {
+                empty[n] = 1;
+        }
         int *gx = gxyz;
         int *gy = gx + NGv;
         int *gz = gy + NGv;
 
         const double cutoff = EXPCUTOFF * aij * 4;
-        int n, ix, iy, iz;
+        int ix, iy, iz;
         double Gr, kk;
         for (n = 0; n < NGv; n++) {
                 ix = gx[n];
@@ -1667,7 +1670,7 @@ void GTOplain_vrr2d_ket_inc1(double *out, const double *g,
                              double *rirj, int li, int lj)
 {
         if (lj == 0) {
-                memcpy(out, g, sizeof(double)*_LEN_CART[li]);
+                NPdcopy(out, g, _LEN_CART[li]);
                 return;
         }
         const int row_10 = _LEN_CART[li+1];

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -90,15 +90,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     nas = (ctypes.c_int*TOTIRREPS)(*[x.size for x in aidx])
     nbs = (ctypes.c_int*TOTIRREPS)(*[x.size for x in bidx])
 
-# aa, ab
+    # aa, ab
     ci0 = []
     ci1 = []
     for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, bidx[wfnsym^ir].size
+        ma, mb = aidx[ir].size, bidx[wfnsym ^ ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
         if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym^ir], out=ci0[ir])
+            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym ^ ir], out=ci0[ir])
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
     ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
     libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
@@ -108,15 +108,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym^ir])
+            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym ^ ir])
 
-# bb, ba
+    # bb, ba
     ci0T = []
     for ir in range(TOTIRREPS):
-        mb, ma = bidx[ir].size, aidx[wfnsym^ir].size
+        mb, ma = bidx[ir].size, aidx[wfnsym ^ ir].size
         ci0T.append(numpy.zeros((mb,ma)))
         if ma > 0 and mb > 0:
-            lib.transpose(ci0[wfnsym^ir], out=ci0T[ir])
+            lib.transpose(ci0[wfnsym ^ ir], out=ci0T[ir])
     ci0, ci0T = ci0T, None
     ci1 = [numpy.zeros_like(x) for x in ci0]
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
@@ -128,7 +128,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym^ir], bidx[ir])
+            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym ^ ir], bidx[ir])
     return ci1new.reshape(fcivec_shape)
 
 
@@ -196,7 +196,7 @@ def _gen_strs_irrep(strs, orbsym):
             irreps ^= orbsym_in_d2h[strs[:,i]]
     else:
         for i, ir in enumerate(orbsym_in_d2h):
-            irreps[numpy.bitwise_and(strs, 1<<i) > 0] ^= ir
+            irreps[numpy.bitwise_and(strs, 1 << i) > 0] ^= ir
     return irreps
 
 def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
@@ -238,15 +238,15 @@ def reorder_eri(eri, norb, orbsym):
     # % 10 to map irrep IDs of Dooh or Coov, etc. to irreps of D2h, C2v
     orbsym = numpy.asarray(orbsym) % 10
 
-# irrep of (ij| pair
-    trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb)]
-# and the number of occurence for each irrep
+    # irrep of (ij| pair
+    trilirrep = (orbsym[:,None] ^ orbsym)[numpy.tril_indices(norb)]
+    # and the number of occurence for each irrep
     dimirrep = numpy.asarray(numpy.bincount(trilirrep), dtype=numpy.int32)
-# we sort the irreps of (ij| pair, to group the pairs which have same irreps
-# "order" is irrep-id-sorted index. The (ij| paired is ordered that the
-# pair-id given by order[0] comes first in the sorted pair
-# "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
-# of the sorted pair
+    # we sort the irreps of (ij| pair, to group the pairs which have same irreps
+    # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
+    # pair-id given by order[0] comes first in the sorted pair
+    # "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
+    # of the sorted pair
     old_eri_irrep = numpy.asarray(trilirrep, dtype=numpy.int32)
     rank_in_irrep = numpy.empty_like(old_eri_irrep)
     p0 = 0
@@ -368,8 +368,8 @@ class FCISolver(direct_spin1.FCISolver):
             airreps = numpy.zeros(na, dtype=numpy.int32)
             birreps = numpy.zeros(nb, dtype=numpy.int32)
             for i, ir in enumerate(orbsym_in_d2h):
-                airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
-                birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+                airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+                birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
 
             wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
             mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym

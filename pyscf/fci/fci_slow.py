@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -93,35 +93,35 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
 
     for addr, s in enumerate(strsa):
         for i in range(norb):
-            if s & (1<<i):
+            if s & (1 << i):
                 t1a[i,addr] += fcivec[addr]
     for addr, s in enumerate(strsb):
         for i in range(norb):
-            if s & (1<<i):
+            if s & (1 << i):
                 t1b[i,:,addr] += fcivec[:,addr]
 
     if u_aa != 0:
         # u * n_alpha^+ n_alpha
         for addr, s in enumerate(strsa):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[addr] += t1a[i,addr] * u_aa
     if u_ab != 0:
         # u * n_alpha^+ n_beta
         for addr, s in enumerate(strsa):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[addr] += t1b[i,addr] * u_ab
         # u * n_beta^+ n_alpha
         for addr, s in enumerate(strsb):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[:,addr] += t1a[i,:,addr] * u_ab
     if u_bb != 0:
         # u * n_beta^+ n_beta
         for addr, s in enumerate(strsb):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[:,addr] += t1b[i,:,addr] * u_bb
     return fcinew
 

@@ -227,7 +227,7 @@ TriChloroEthene                        3.422
 TriEthylAmine                          2.3832
 Xylene-mixture                         2.3879
 z-1,2-DiChloroEthene                   9.2
-'''
+'''  # noqa: E501
 
 import ctypes
 import numpy
@@ -448,8 +448,8 @@ def make_phi(pcmobj, dm, r_vdw, ui, ylm_1sph, with_nuc=True):
 
     if with_nuc:
         for ia in range(natm):
-# Note (-) sign is not applied to atom_charges, because (-) is explicitly
-# included in rhs and L matrix
+            # Note (-) sign is not applied to atom_charges, because (-) is explicitly
+            # included in rhs and L matrix
             d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
             v_phi[:,ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
 
@@ -568,9 +568,9 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, Xvec, L,
     return psi, vmat, L_S
 
 def cache_fake_multipoles(grids, r_vdw, lmax):
-# For each type of atoms, cache the product of last two terms in
-# JCP, 141, 184108, Eq (31):
-# x_{<}^{l} / x_{>}^{l+1} Y_l^m
+    # For each type of atoms, cache the product of last two terms in
+    # JCP, 141, 184108, Eq (31):
+    # x_{<}^{l} / x_{>}^{l+1} Y_l^m
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol)
     r_vdw_type = {}
@@ -637,7 +637,7 @@ class DDCOSMO(lib.StreamObject):
         self.grids = gen_grid.Grids(mol)
 
         # The maximum iterations and convergence tolerance to update solvent
-        # effects in CASCI, CC, MP, CI, ... methods 
+        # effects in CASCI, CC, MP, CI, ... methods
         self.max_cycle = 20
         self.conv_tol = 1e-7
         self.state_id = 0
@@ -723,9 +723,9 @@ class DDCOSMO(lib.StreamObject):
         self.grids.dump_flags(verbose)
         return self
 
-# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
-# psi are tested against ddPCM implementation on github. Psi needs to be
-# computed by the host program. It requires the numerical integration code. 
+    # TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
+    # psi are tested against ddPCM implementation on github. Psi needs to be
+    # computed by the host program. It requires the numerical integration code.
     def build(self):
         if self.grids.coords is None:
             self.grids.build(with_non0tab=True)

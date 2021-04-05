@@ -17,7 +17,7 @@
 Relativistic Dirac-Hartree-Fock
 """
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -38,7 +38,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
     n2c = dm0.shape[0] // 2
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -191,7 +191,7 @@ class Gradients(GradientsMixin):
         return 0
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ

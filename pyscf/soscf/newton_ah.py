@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ Co-iterative augmented hessian second order SCF solver (CIAH-SOSCF)
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -316,19 +316,19 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
-#TODO: dynamically adjust max_stepsize, as done in mc1step.py
+        #TODO: dynamically adjust max_stepsize, as done in mc1step.py
 
     def precond(x, e):
         hdiagd = h_diag-(e-mf.ah_level_shift)
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         x = x/hdiagd
-## Because of DFT, donot norm to 1 which leads 1st DM too large.
-#        norm_x = numpy.linalg.norm(x)
-#        if norm_x < 1e-2:
-#            x *= 1e-2/norm_x
+        # Because of DFT, donot norm to 1 which leads 1st DM too large.
+        #norm_x = numpy.linalg.norm(x)
+        #if norm_x < 1e-2:
+        #    x *= 1e-2/norm_x
         return x
 
-    t3m = (time.clock(), time.time())
+    t3m = (logger.process_clock(), logger.perf_counter())
     u = g_kf = g_orb = norm_gorb = dxi = kfcount = jkcount = None
     dm0 = vhf0 = None
     g_op = lambda: g_orb
@@ -408,9 +408,9 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     break
 
                 elif (ikf > 2 and # avoid frequent keyframe
-#TODO: replace it with keyframe_scheduler
+                      #TODO: replace it with keyframe_scheduler
                       (ikf >= max(mf.kf_interval, mf.kf_interval-numpy.log(norm_dr+1e-9)) or
-# Insert keyframe if the keyframe and the esitimated g_orb are too different
+                       # Insert keyframe if the keyframe and the esitimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     u = mf.update_rotate_matrix(dr, mo_occ, mo_coeff=mo_coeff)
@@ -420,11 +420,11 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                     dr[:] = 0
                     mo1 = mf.rotate_mo(mo_coeff, u)
                     dm = mf.make_rdm1(mo1, mo_occ)
-# use mf._scf.get_veff to avoid density-fit mf polluting get_veff
+                    # use mf._scf.get_veff to avoid density-fit mf polluting get_veff
                     vhf0 = mf._scf.get_veff(mf._scf.mol, dm, dm_last=dm0, vhf_last=vhf0)
                     dm0 = dm
-# Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
-# is the hook being overloaded in many places.
+                    # Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
+                    # is the hook being overloaded in many places.
                     fock_ao = mf.get_fock(h1e, s1e, vhf0, dm0)
                     g_kf1 = mf.get_grad(mo1, mo_occ, fock_ao)
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
@@ -465,7 +465,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
 def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
            conv_tol=1e-10, conv_tol_grad=None, max_cycle=50, dump_chk=True,
            callback=None, verbose=logger.NOTE):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mf, verbose)
     mol = mf._scf.mol
     if mol != mf.mol:
@@ -476,7 +476,7 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
         conv_tol_grad = numpy.sqrt(conv_tol)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
 
-# call mf._scf.get_hcore, mf._scf.get_ovlp because they might be overloaded
+    # call mf._scf.get_hcore, mf._scf.get_ovlp because they might be overloaded
     h1e = mf._scf.get_hcore(mol)
     s1e = mf._scf.get_ovlp(mol)
 
@@ -512,8 +512,8 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
     if dump_chk and mf.chkfile:
         chkfile.save_mol(mol, mf.chkfile)
 
-# Copy the integral file to soscf object to avoid the integrals being cached
-# twice.
+    # Copy the integral file to soscf object to avoid the integrals being
+    # cached twice.
     if mol is mf.mol and not getattr(mf, 'with_df', None):
         mf._eri = mf._scf._eri
         # If different direct_scf_cutoff is assigned to newton_ah mf.opt
@@ -538,11 +538,11 @@ def kernel(mf, mo_coeff=None, mo_occ=None, dm=None,
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
         fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
-# NOTE: DO NOT change the initial guess mo_occ, mo_coeff
+        # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
         if mf.verbose >= logger.DEBUG:
             mo_energy, mo_tmp = mf.eig(fock, s1e)
             mf.get_occ(mo_energy, mo_tmp)
-# call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
+            # call mf._scf.energy_tot for dft, because the (dft).get_veff step saved _exc in mf._scf
         e_tot = mf._scf.energy_tot(dm, h1e, vhf)
 
         log.info('macro= %d  E= %.15g  delta_E= %g  |g|= %g  %d KF %d JK',
@@ -681,7 +681,7 @@ class _CIAH_SOSCF(object):
         return self._scf.reset(mol)
 
     def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if dm0 is not None:
             if isinstance(dm0, str):
                 sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm0)
@@ -961,15 +961,15 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
         if ir % 2 == 0:
             Ex = orbsym == ir
             Ey = orbsym ==(ir + 1)
-            dr_x = dr[Ex[:,None]&Ex]
-            dr_y = dr[Ey[:,None]&Ey]
+            dr_x = dr[Ex[:,None] & Ex]
+            dr_y = dr[Ey[:,None] & Ey]
             # In certain open-shell systems, the rotation amplitudes dr_x may
             # be equal to 0 while dr_y are not. In this case, we choose the
             # larger one to represent the rotation amplitudes for both.
             if numpy.linalg.norm(dr_x) > numpy.linalg.norm(dr_y):
-                dr[Ey[:,None]&Ey] = dr_x
+                dr[Ey[:,None] & Ey] = dr_x
             else:
-                dr[Ex[:,None]&Ex] = dr_y
+                dr[Ex[:,None] & Ex] = dr_y
     return dr
 
 

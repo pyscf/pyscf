@@ -63,5 +63,5 @@ try:
     from .uks import Gradients as UKS
     from .roks import Gradients as ROKS
 
-except ImportError:
+except (ImportError, OSError):
     pass

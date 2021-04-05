@@ -150,7 +150,6 @@ class KUKSpU(kuks.KUKS):
         if isinstance(C_ao_lo, str):
             if C_ao_lo == 'minao':
                 minao_ref = kwargs.get("minao_ref", "MINAO")
-                pmol = kwargs.get("pmol", None)
                 self.C_ao_lo = make_minao_lo(self, minao_ref)
             else:
                 raise NotImplementedError

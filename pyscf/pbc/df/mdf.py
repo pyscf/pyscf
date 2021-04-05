@@ -23,7 +23,7 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import time
+
 import tempfile
 import numpy
 import h5py
@@ -50,7 +50,7 @@ from pyscf import __config__
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)

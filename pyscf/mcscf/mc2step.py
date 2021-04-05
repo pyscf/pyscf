@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
@@ -30,7 +30,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         callback = casscf.callback
 
     log = logger.Logger(casscf.stdout, verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 2-step CASSCF')
 
     mo = mo_coeff

@@ -68,7 +68,7 @@ def build_mats_ragf2_incore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     nvir = e_vir.size
 
     qeri = np.asarray(qeri, order='C')
-    e_i = np.asarray(e_occ, order='C') 
+    e_i = np.asarray(e_occ, order='C')
     e_a = np.asarray(e_vir, order='C')
 
     vv = np.zeros((nmo*nmo))
@@ -108,7 +108,6 @@ def build_mats_ragf2_outcore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     assert qeri.ndim == 4
     nmo = qeri.shape[0]
     nocc = e_occ.size
-    nvir = e_vir.size
 
     vv = np.zeros((nmo, nmo))
     vev = np.zeros((nmo, nmo))
@@ -158,7 +157,7 @@ def build_mats_dfragf2_incore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
 
     qxi = np.asarray(qxi, order='C')
     qja = np.asarray(qja, order='C')
-    e_i = np.asarray(e_occ, order='C') 
+    e_i = np.asarray(e_occ, order='C')
     e_a = np.asarray(e_vir, order='C')
 
     rank, size = mpi_helper.rank, mpi_helper.size
@@ -209,7 +208,7 @@ def build_mats_dfragf2_lowmem(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
 
     qxi = np.asarray(qxi, order='C')
     qja = np.asarray(qja, order='C')
-    e_i = np.asarray(e_occ, order='C') 
+    e_i = np.asarray(e_occ, order='C')
     e_a = np.asarray(e_vir, order='C')
 
     rank, size = mpi_helper.rank, mpi_helper.size
@@ -352,8 +351,9 @@ def build_mats_uagf2_outcore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
 
     assert qeri[0].ndim == qeri[1].ndim == 4
     nmo = qeri[0].shape[0]
-    noa, nob = e_occ[0].size, e_occ[1].size
-    nva, nvb = e_vir[0].size, e_vir[1].size
+    # noa, nob = e_occ[0].size, e_occ[1].size
+    # nva, nvb = e_vir[0].size, e_vir[1].size
+    noa = e_occ[0].size
 
     vv = np.zeros((nmo, nmo))
     vev = np.zeros((nmo, nmo))
@@ -393,7 +393,7 @@ def build_mats_uagf2_outcore(qeri, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
 
     return vv, vev
 
-    
+
 def build_mats_dfuagf2_incore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     ''' Wrapper for AGF2udf_vv_vev_islice
     '''
@@ -455,7 +455,7 @@ def build_mats_dfuagf2_incore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
 
     return vv, vev
 
-    
+
 def build_mats_dfuagf2_lowmem(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1.0):
     ''' Wrapper for AGF2udf_vv_vev_islice_lowmem
     '''
@@ -476,10 +476,10 @@ def build_mats_dfuagf2_lowmem(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=1
     qxi = np.asarray(qxi_a, order='C')
     qja = np.asarray(qja_a, order='C')
     qJA = np.asarray(qja_b, order='C')
-    e_i = np.asarray(gf_occ[0].energy, order='C')
-    e_I = np.asarray(gf_occ[1].energy, order='C')
-    e_a = np.asarray(gf_vir[0].energy, order='C')
-    e_A = np.asarray(gf_vir[1].energy, order='C')
+    e_i = np.asarray(e_occ[0], order='C')
+    e_I = np.asarray(e_occ[1], order='C')
+    e_a = np.asarray(e_vir[0], order='C')
+    e_A = np.asarray(e_vir[1], order='C')
 
     vv = np.zeros((nmo*nmo))
     vev = np.zeros((nmo*nmo))
@@ -544,9 +544,9 @@ def build_mats_dfuagf2_outcore(qxi, qja, e_occ, e_vir, os_factor=1.0, ss_factor=
     eja_a = lib.direct_sum('j,a->ja', e_occ[0], -e_vir[0]).ravel()
     eja_b = lib.direct_sum('j,a->ja', e_occ[1], -e_vir[1]).ravel()
 
-    buf = (np.zeros((nmo, noa*nva)), 
+    buf = (np.zeros((nmo, noa*nva)),
            np.zeros((nmo, nob*nvb)),
-           np.zeros((nmo*noa, nva))) 
+           np.zeros((nmo*noa, nva)))
 
     for i in mpi_helper.nrange(noa):
         qx_a = qxi_a.reshape(naux, nmo, noa)[:,:,i]

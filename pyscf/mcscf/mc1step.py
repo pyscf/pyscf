@@ -17,7 +17,7 @@
 #
 
 import sys
-import time
+
 import copy
 from functools import reduce
 import numpy
@@ -208,7 +208,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     if max_stepsize is None:
         max_stepsize = casscf.max_stepsize
 
-    t3m = (time.clock(), time.time())
+    t3m = (logger.process_clock(), logger.perf_counter())
     u = 1
     g_orb, gorb_update, h_op, h_diag = \
             casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
@@ -289,7 +289,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                 t3m = log.timer('aug_hess in %d inner iters' % imic, *t3m)
                 yield u, g_kf, ihop+jkcount, dxi
 
-                t3m = (time.clock(), time.time())
+                t3m = (logger.process_clock(), logger.perf_counter())
 # TODO: test whether to update h_op, h_diag to change the orbital hessian.
 # It leads to the different hessian operations in the same davidson
 # diagonalization procedure.  This is generally a bad approximation because it
@@ -334,7 +334,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     '''quasi-newton CASSCF optimization driver
     '''
     log = logger.new_logger(casscf, verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 1-step CASSCF')
     if callback is None:
         callback = casscf.callback

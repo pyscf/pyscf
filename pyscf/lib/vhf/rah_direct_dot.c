@@ -19,13 +19,13 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <math.h>
 #include <complex.h>
 #include "fblas.h"
 #include "time_rev.h"
 #include "r_direct_dot.h"
+#include "np_helper/np_helper.h"
 
 #define LOCIJKL \
 const int ish = shls[0]; \
@@ -154,7 +154,7 @@ void CVHFrah2ij_ji_s1kl(double complex *eri,
 
         CVHFtimerev_ijminus(sdm, dm, tao, jstart, jend, istart, iend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svj, 0, sizeof(double complex)*dkl);
+                NPzset0(svj, dkl);
                 zgemv_(&TRANST, &dij, &dkl, &Z1, eri, &dij,
                        sdm, &INC1, &Z0, svj, &INC1);
                 adbak_blockT(vj, svj, nao, kstart, kend, lstart, lend);
@@ -200,7 +200,7 @@ void CVHFrah2ij_jk_s1il(double complex *eri,
         CVHFtimerev_iT(sdm, dm, tao, istart, iend, kstart, kend, nao);
 
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*djl);
+                NPzset0(svk, djl);
                 zgemv_(&TRANST, &dik, &djl, &Z_1, p0213, &dik,
                        sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_iT(svk, vk, tao, jstart, jend, lstart, lend, nao);
@@ -236,7 +236,7 @@ void CVHFrah2ij_li_s1kj(double complex *eri,
 
         CVHFtimerev_j(sdm, dm, tao, lstart, lend, jstart, jend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dik);
+                NPzset0(svk, dik);
                 zgemv_(&TRANSN, &dik, &djl, &Z_1, p0213, &dik,
                        sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_j(svk, vk, tao, kstart, kend, istart, iend, nao);
@@ -301,7 +301,7 @@ void CVHFrah4_jk_s1il(double complex *eri,
         // tjtikl
         CVHFtimerev_iT(sdm, dm, tao, istart, iend, kstart, kend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*djl);
+                NPzset0(svk, djl);
                 zgemv_(&TRANST, &dik, &djl, &Z_1, p0213, &dik,
                        sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_iT(svk, pvk, tao, jstart, jend, lstart, lend, nao);
@@ -316,7 +316,7 @@ void CVHFrah4_jk_s1il(double complex *eri,
         // tjtitltk
         CVHFtimerev_blockT(sdm, dm, tao, istart, iend, lstart, lend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*djk);
+                NPzset0(svk, djk);
                 for (l = 0; l < dl; l++) {
                         zgemv_(&TRANST, &di, &djk, &Z_1, eri, &di,
                                sdm+l*di, &INC1, &Z1, svk, &INC1);
@@ -362,7 +362,7 @@ void CVHFrah4_li_s1kj(double complex *eri,
         // tjtikl
         CVHFtimerev_j(sdm, dm, tao, lstart, lend, jstart, jend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dik);
+                NPzset0(svk, dik);
                 zgemv_(&TRANSN, &dik, &djl, &Z_1, p0213, &dik,
                        sdm, &INC1, &Z1, svk, &INC1);
                 CVHFtimerev_adbak_j(svk, pvk, tao, kstart, kend, istart, iend, nao);
@@ -377,7 +377,7 @@ void CVHFrah4_li_s1kj(double complex *eri,
         // tjtitltk
         CVHFtimerev_block(sdm, dm, tao, kstart, kend, jstart, jend, nao);
         for (ic = 0; ic < ncomp; ic++) {
-                memset(svk, 0, sizeof(double complex)*dil);
+                NPzset0(svk, dil);
                 for (l = 0; l < dl; l++) {
                         zgemv_(&TRANSN, &di, &djk, &Z_1, eri, &di,
                                sdm, &INC1, &Z1, svk+l*di, &INC1);

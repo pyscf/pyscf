@@ -24,7 +24,7 @@ import numpy as np
 from pyscf.lib import logger
 from pyscf.pbc.grad import krhf as rhf_grad
 from pyscf.pbc import gto
-import time
+
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     mf = mf_grad.base
@@ -42,7 +42,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     s1 = mf_grad.get_ovlp(cell, kpts)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
     vhf = mf_grad.get_veff(dm0, kpts)
     log.timer('gradients of 2e part', *t0)

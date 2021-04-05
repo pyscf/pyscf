@@ -158,12 +158,6 @@ class KnownValues(unittest.TestCase):
         # FIXME: why python 3.8 generates different value at 4th decimal place
         self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 2)
 
-        a = numpy.eye(3) * 3
-        a[0,1] = .2
-        c = pgto.M(atom='H 0 0.1 0; H 1.1 2.0 0; He 1.2 .3 0.2',
-                   a=a, dimension=2, verbose=0)
-        self.assertAlmostEqual(c.ewald(), -3.0902098018260418, 9)
-
     def test_ewald_1d_inf_vacuum(self):
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 4
@@ -201,6 +195,12 @@ class KnownValues(unittest.TestCase):
         cell.rcut = 3.6
         cell.build()
         self.assertAlmostEqual(cell.ewald(), -5.1194779101355596, 9)
+
+        a = numpy.eye(3) * 3
+        a[0,1] = .2
+        c = pgto.M(atom='H 0 0.1 0; H 1.1 2.0 0; He 1.2 .3 0.2',
+                   a=a, dimension=2, verbose=0)
+        self.assertAlmostEqual(c.ewald(), -3.0902098018260418, 9)
 
 #    def test_ewald_1d(self):
 #        cell = pgto.Cell()

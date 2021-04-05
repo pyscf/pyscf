@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -811,7 +811,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             nshells_t = _pgto_shells(t_cell)
 
             h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-            l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
+            #l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
             t_coeff = scipy.linalg.block_diag(*t_coeff)
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
@@ -1807,13 +1807,13 @@ def _takebak_5d(out, a, indices):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft
+    from pyscf.pbc import dft
     numpy.random.seed(22)
     cell = gto.M(
         a = numpy.eye(3)*3.5668,
-        atom = '''C     0.      0.      0.    
+        atom = '''C     0.      0.      0.
                   C     0.8917  0.8917  0.8917
-                  C     1.7834  1.7834  0.    
+                  C     1.7834  1.7834  0.
                   C     2.6751  2.6751  0.8917
                   C     1.7834  0.      1.7834
                   C     2.6751  0.8917  2.6751

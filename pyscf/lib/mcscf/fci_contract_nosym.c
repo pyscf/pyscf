@@ -21,12 +21,11 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "np_helper/np_helper.h"
 #include "fci.h"
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define CSUMTHR         1e-28
 #define STRB_BLKSIZE    112
 
@@ -196,7 +195,7 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
 
-        memset(ci1, 0, sizeof(double)*na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
 
 #pragma omp parallel default(none) \
         shared(eri, ci0, ci1, norb, na, nb, nlinka, nlinkb, \
@@ -207,7 +206,7 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
         double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 import numpy
 from functools import reduce
 
@@ -66,7 +66,7 @@ def energy(cc, t1, t2, eris):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -353,7 +353,7 @@ class GCCSD(gccsd.GCCSD):
         return self
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -471,7 +471,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     from pyscf.pbc.cc.ccsd import _adjust_occ
 
     log = logger.Logger(cc.stdout, cc.verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = gccsd._PhysicistsERIs()
     cell = cc._scf.cell
     kpts = cc.kpts
@@ -578,16 +578,20 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
@@ -600,7 +604,8 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt[(eris.orbspin[kp][:, None] != eris.orbspin[kq]).ravel()] = 0
@@ -711,7 +716,7 @@ class _IMDS:
         self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -723,7 +728,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -749,7 +754,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -774,7 +779,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris

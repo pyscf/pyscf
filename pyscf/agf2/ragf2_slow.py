@@ -17,11 +17,10 @@
 #
 
 '''
-Auxiliary second-order Green's function perturbation theory for 
+Auxiliary second-order Green's function perturbation theory for
 arbitrary moment consistency
 '''
 
-import time
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -38,7 +37,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
             Electronic repulsion integrals
         gf_occ : GreensFunction
             Occupied Green's function
-        gf_vir : GreensFunction 
+        gf_vir : GreensFunction
             Virtual Green's function
 
     Kwargs:
@@ -53,7 +52,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ) is aux.GreensFunction
@@ -77,7 +76,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     fdia = np.sqrt(os_factor)
 
     eja = lib.direct_sum('j,a->ja', gf_occ.energy, -gf_vir.energy)
-    
+
     coeffs = (gf_occ.coupling, gf_occ.coupling, gf_vir.coupling)
     qeri = _make_qmo_eris_incore(agf2, eri, coeffs)
 
@@ -109,7 +108,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         se = aux.SelfEnergy(se.energy, coupling, chempot=se.chempot)
 
     log.timer('se part', *cput0)
-    
+
     return se
 
 
@@ -131,12 +130,12 @@ class RAGF2(ragf2.RAGF2):
             Convergence threshold for first-order reduced density matrix.
             Default value is 1e-8.
         conv_tol_nelec : float
-            Convergence threshold for the number of electrons. Default 
+            Convergence threshold for the number of electrons. Default
             value is 1e-6.
         max_cycle : int
             Maximum number of AGF2 iterations. Default value is 50.
         max_cycle_outer : int
-            Maximum number of outer Fock loop iterations. Default 
+            Maximum number of outer Fock loop iterations. Default
             value is 20.
         max_cycle_inner : int
             Maximum number of inner Fock loop iterations. Default
@@ -146,7 +145,7 @@ class RAGF2(ragf2.RAGF2):
             zero. Default 1e-11.
         fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        fock_diis_min_space : 
+        fock_diis_min_space :
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -216,7 +215,7 @@ class RAGF2(ragf2.RAGF2):
         if gf is None: gf = self.init_gf()
 
         fock = None
-        if self.nmom[0] != None:
+        if self.nmom[0] is not None:
             fock = self.get_fock(eri=eri, gf=gf)
 
         if os_factor is None: os_factor = self.os_factor
@@ -269,6 +268,6 @@ if __name__ == '__main__':
 
     agf2 = RAGF2(rhf, nmom=(None,0))
     agf2.run()
-    
+
     agf2 = ragf2.RAGF2(rhf)
     agf2.run()

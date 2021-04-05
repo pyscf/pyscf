@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 Second order CASSCF
 '''
 
-import time
+
 import copy
 from functools import reduce
 from itertools import product
@@ -63,7 +63,7 @@ def _pack_ci_get_H (mc, mo, ci0):
 
     # State average mix
     _state_arg = addons.StateAverageMixFCISolver_state_args
-    _solver_arg = addons.StateAverageMixFCISolver_solver_args
+    # _solver_arg = addons.StateAverageMixFCISolver_solver_args
     if isinstance (mc.fcisolver, addons.StateAverageMixFCISolver):
         linkstrl = []
         linkstr =  []
@@ -144,10 +144,10 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         casdm1, casdm2 = casscf.fcisolver.make_rdm12 (ci0, ncas, nelecas, link_index=linkstr)
         casdm1 = numpy.asarray ([casdm1])
         casdm2 = numpy.asarray ([casdm2])
-    dm2tmp = casdm2.transpose(0,2,3,1,4) + casdm2.transpose(0,1,3,2,4) 
-    dm2tmp = dm2tmp.reshape(nroots,ncas**2,-1) 
+    dm2tmp = casdm2.transpose(0,2,3,1,4) + casdm2.transpose(0,1,3,2,4)
+    dm2tmp = dm2tmp.reshape(nroots,ncas**2,-1)
     hdm2 = numpy.empty((nroots,nmo,ncas,nmo,ncas))
-    g_dm2 = numpy.empty((nroots,nmo,ncas)) 
+    g_dm2 = numpy.empty((nroots,nmo,ncas))
     eri_cas = numpy.empty((ncas,ncas,ncas,ncas))
     jtmp = numpy.empty ((nroots,nmo,ncas,ncas))
     ktmp = numpy.empty ((nroots,nmo,ncas,ncas))
@@ -156,8 +156,8 @@ def gen_g_hop(casscf, mo, ci0, eris, verbose=None):
         kbuf = eris.papa[i]
         if i < nocc:
             jkcaa[:,i] = numpy.einsum('ik,rik->ri', 6*kbuf[:,i]-2*jbuf[i], casdm1)
-        vhf_a[:,i] =(numpy.einsum('quv,ruv->rq', jbuf, casdm1)
-                 - numpy.einsum('uqv,ruv->rq', kbuf, casdm1) * .5)
+        vhf_a[:,i] = (numpy.einsum('quv,ruv->rq', jbuf, casdm1) -
+                      numpy.einsum('uqv,ruv->rq', kbuf, casdm1) * .5)
         for r, (dm2, dm2t) in enumerate (zip (casdm2, dm2tmp)):
             jtmp[r] = lib.dot(jbuf.reshape(nmo,-1), dm2.reshape(ncas*ncas,-1)).reshape (nmo,ncas,ncas)
             ktmp[r] = lib.dot(kbuf.transpose(1,0,2).reshape(nmo,-1), dm2t).reshape (nmo,ncas,ncas)
@@ -418,7 +418,6 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
         ci0 = [c.ravel () for c in ci0]
     g_all, g_update, h_op, h_diag = gen_g_hop(casscf, mo, ci0, eris)
     ngorb = numpy.count_nonzero (casscf.uniq_var_indices (nmo, casscf.ncore, casscf.ncas, casscf.frozen))
-    g_kf = g_all
     norm_gkf = norm_gall = numpy.linalg.norm(g_all)
     log.debug('    |g|=%5.3g (%4.3g %4.3g) (keyframe)', norm_gall,
               numpy.linalg.norm(g_all[:ngorb]),
@@ -520,7 +519,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                     #or norm_gkf1 < norm_gkf  # grad is decaying
                     # close to solution
                     or norm_gkf1 < conv_tol_grad*casscf.ah_grad_trust_region):
-                    g_all = g_kf = g_kf1
+                    g_all = g_kf1
                     g_kf1 = None
                     norm_gall = norm_gkf = norm_gkf1
                 else:
@@ -536,9 +535,9 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
     else:
         dci_kf = numpy.concatenate ([(x-y).ravel () for x, y in zip (ci_kf, ci0)])
     log.debug('    tot inner=%d  |g|= %4.3g (%4.3g %4.3g) |u-1|= %4.3g  |dci|= %4.3g',
-          stat.imic, norm_gall, norm_gorb, norm_gci,
-          numpy.linalg.norm(u-numpy.eye(nmo)),
-          numpy.linalg.norm(dci_kf))
+              stat.imic, norm_gall, norm_gorb, norm_gci,
+              numpy.linalg.norm(u-numpy.eye(nmo)),
+              numpy.linalg.norm(dci_kf))
     return u, ci_kf, norm_gkf, stat, dxi
 
 
@@ -550,7 +549,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
              'Its performance is bad for large systems.')
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start SO-CASSCF (newton CASSCF)')
     if callback is None:
         callback = casscf.callback

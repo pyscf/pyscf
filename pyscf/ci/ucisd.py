@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -429,21 +429,21 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     for i in range(norb):
         if frozena_mask[i]:
             if i < neleca:
-                core_a_mask &= (strsa & (1<<i)) != 0
+                core_a_mask &= (strsa & (1 <<i )) != 0
                 parity_a ^= (count_a & 1) == 1
             else:
-                core_a_mask &= (strsa & (1<<i)) == 0
+                core_a_mask &= (strsa & (1 << i)) == 0
         else:
-            count_a += (strsa & (1<<i)) != 0
+            count_a += (strsa & (1 << i)) != 0
 
         if frozenb_mask[i]:
             if i < nelecb:
-                core_b_mask &= (strsb & (1<<i)) != 0
+                core_b_mask &= (strsb & (1 <<i )) != 0
                 parity_b ^= (count_b & 1) == 1
             else:
-                core_b_mask &= (strsb & (1<<i)) == 0
+                core_b_mask &= (strsb & (1 << i)) == 0
         else:
-            count_b += (strsb & (1<<i)) != 0
+            count_b += (strsb & (1 << i)) != 0
 
     sub_strsa = strsa[core_a_mask & (count_a == nocca)]
     sub_strsb = strsb[core_b_mask & (count_b == noccb)]
@@ -646,7 +646,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
     return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
-                               ao_repr=ao_repr)
+                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo

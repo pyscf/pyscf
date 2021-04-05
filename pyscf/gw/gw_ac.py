@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ Useful References:
     New J. Phys. 14, 053020 (2012)
 '''
 
-import time
 from functools import reduce
 import numpy
 import numpy as np
@@ -42,7 +41,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -81,7 +80,6 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
     if vhf_df and frozen == 0:
@@ -166,7 +164,6 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
     '''
     mo_energy = _mo_energy_without_core(gw, gw._scf.mo_energy)
     nocc = gw.nocc
-    nmo = gw.nmo
     nw = len(freqs)
     naux = Lpq.shape[0]
     norbs = len(orbs)
@@ -186,8 +183,8 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
     # to avoid branch cuts in analytic continuation
     omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
     omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ = [i for i in orbs if i < nocc]
     norbs_occ = len(orbs_occ)
 
@@ -270,7 +267,7 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
+        # target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -412,7 +409,7 @@ class GWAC(lib.StreamObject):
         if mo_energy is None:
             mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff,
@@ -426,7 +423,6 @@ class GWAC(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         mem_incore = (2*nmo**2*naux) * 8/1e6
         mem_now = lib.current_memory()[0]
@@ -443,7 +439,7 @@ class GWAC(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = [
@@ -467,5 +463,5 @@ if __name__ == '__main__':
     gw.ac = 'pade'
     gw.kernel(orbs=range(nocc-3,nocc+3))
     print(gw.mo_energy)
-    assert(abs(gw.mo_energy[nocc-1]--0.412849230989)<1e-5)
-    assert(abs(gw.mo_energy[nocc]-0.165745160102)<1e-5)
+    assert (abs(gw.mo_energy[nocc-1]- -0.412849230989) < 1e-5)
+    assert (abs(gw.mo_energy[nocc] -0.165745160102) < 1e-5)

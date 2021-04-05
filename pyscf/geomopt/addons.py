@@ -62,7 +62,7 @@ def as_pyscf_method(mol, scan_function):
 def dump_mol_geometry(mol, new_coords, log=None):
     '''Dump the molecular geometry (new_coords) and the displacement wrt old
     geometry.
-    
+
     Args:
         new_coords (ndarray) : Cartesian coordinates in Angstrom
     '''

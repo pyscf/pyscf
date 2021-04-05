@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -51,7 +51,7 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time1 = time.clock(), time.time()
+    time0 = time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -541,7 +541,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector_to_nested(vec, self.ccsd_vector_desc)
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -710,7 +710,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -772,7 +772,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
-        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
         orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
@@ -826,7 +825,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 self.vvvv = None
 
             # <ij|pq>  = (ip|jq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -844,7 +843,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming oopq', *cput1)
 
             # <ia|pq> = (ip|aq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -862,7 +861,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
             ## Without k-point symmetry
-            # cput1 = time.clock(), time.time()
+            # cput1 = logger.process_clock(), logger.perf_counter()
             # for kp in range(nkpts):
             #    for kq in range(nkpts):
             #        for kr in range(nkpts):
@@ -880,7 +879,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
             # cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             mem_now = lib.current_memory()[0]
             if not vvvv_required:
                 _init_df_eris(cc, self)
@@ -992,7 +991,7 @@ class _IMDS:
             self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1004,7 +1003,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1030,7 +1029,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1058,7 +1057,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
