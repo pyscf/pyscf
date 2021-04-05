@@ -20,7 +20,8 @@ myhf = scf.RHF(mol).run()
 mycas = mcscf.CASSCF(myhf, 6, 8)
 
 #
-# Freeze the inner most two 1s orbitals
+# Freeze the two innermost oxygen 1s orbitals in the orbital
+# optimization
 #
 mycas.frozen = 2
 mycas.kernel()
