@@ -289,7 +289,8 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
                 cintopt, ncomp};
 
-        NPzset0(vjk, nao*nao*n_dm*ncomp);
+        const size_t jk_size = nao * nao * n_dm * ncomp;
+        NPzset0(vjk, jk_size);
 
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
@@ -297,8 +298,8 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
 #pragma omp parallel
 {
         int i, j, ij;
-        double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
-        NPzset0(v_priv, nao*nao*n_dm*ncomp);
+        double complex *v_priv = malloc(sizeof(double complex) * jk_size);
+        NPzset0(v_priv, jk_size);
         int bufsize = di*di*di*di*ncomp;
         bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
