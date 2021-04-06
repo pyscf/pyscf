@@ -1,15 +1,12 @@
 name: Publish
 
 on:
-  #push:
-  #  branches:
-  #    - master
-  ##    - 2.0
-  #  tags:
-  #    - v2.*
   release:
     types:
-      published
+      # Note: editing the prerelease then marking as release does not trigger
+      # this pipeline
+      - prereleased
+      - released
 
 jobs:
   release-pypi:
@@ -42,15 +39,12 @@ jobs:
         python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+      - name: Publish to conda
+        uses: docker://pyscf/pyscf-conda-env:latest
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: publish-to-conda
-        uses: maxibor/conda-package-publish-action@v1.1
-        with:
-          subdir: 'conda'
-          AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+          entrypoint: /build-conda.sh
+        env:
+          ANACONDATOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
   release-docker:
     runs-on: ${{ matrix.os }}
