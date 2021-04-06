@@ -56,9 +56,9 @@ class DFMP2(lib.StreamObject):
         if not frozen:
             self.nfrozen = 0
         else:
-            if isinteger(frozen):
+            if lib.isinteger(frozen):
                 self.nfrozen = int(frozen)
-            elif issequence(frozen, (int, np.integer)):
+            elif lib.isintsequence(frozen):
                 self.nfrozen = len(frozen)
                 self.mo_coeff, self.mo_energy = order_mos_fc(frozen, mf.mo_coeff, mf.mo_energy, self.nocc)
             else:
@@ -505,55 +505,6 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
     
     logger.info('*** 1-RDM calculation finished')
     return P
-
-
-def issequence(obj, datatype=None):
-    '''
-    Check if an object is a sequence.
-
-    Args:
-        obj : object to be tested
-        datatype : if provided, check if the elements of the sequence have the given type
-
-    Returns:
-        whether the object is a sequence (and its elements have the right type)
-    '''
-    try:
-        # For us, a sequence should:
-        # 1) have a length
-        # 2) support being iterated over
-        len(obj)
-        if datatype is None:
-            for element in obj:
-                pass
-        else:
-            for element in obj:
-                if not isinstance(element, datatype):
-                    return False
-    except TypeError:
-        return False
-    else:
-        return True
-
-
-def isinteger(obj):
-    '''
-    Check if an object is an integer.
-
-    Args:
-        obj : object to be tested
-
-    Returns:
-        whether the object is an integer
-    '''
-    # A bool is also an int in python, but we don't want that.
-    if isinstance(obj, bool):
-        return False
-    # These are actual ints we expect to encounter.
-    elif isinstance(obj, (int, np.integer)):
-        return True
-    else:
-        return False
 
 
 def order_mos_fc(frozen, mo_coeff, mo_energy, nocc):

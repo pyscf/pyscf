@@ -25,7 +25,7 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import df
 from pyscf.mp.dfmp2_fast import DFMP2, ints3c_cholesky, hdf5TempFile, \
-    isinteger, issequence, order_mos_fc
+    order_mos_fc
 
 
 class UDFMP2(DFMP2):
@@ -56,14 +56,14 @@ class UDFMP2(DFMP2):
         if not frozen:
             self.nfrozen = 0
         else:
-            if isinteger(frozen):
+            if lib.isinteger(frozen):
                 self.nfrozen = int(frozen)
             else:
                 try:
                     if len(frozen) != 2:
                         raise ValueError
                     for s in 0, 1:
-                        if not issequence(frozen[s], (int, np.integer)):
+                        if not lib.isintsequence(frozen[s]):
                             raise TypeError
                 except (TypeError, ValueError):
                     raise TypeError('frozen must be an integer or two integer lists')
