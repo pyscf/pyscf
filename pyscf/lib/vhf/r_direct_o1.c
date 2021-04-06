@@ -289,6 +289,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
                 cintopt, ncomp};
 
+        const size_t nbas2 = ((size_t)nbas) * nbas;
         const size_t jk_size = nao * nao * n_dm * ncomp;
         NPzset0(vjk, jk_size);
 
@@ -297,14 +298,14 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel
 {
-        int i, j, ij;
+        size_t i, j, ij;
         double complex *v_priv = malloc(sizeof(double complex) * jk_size);
         NPzset0(v_priv, jk_size);
         int bufsize = di*di*di*di*ncomp;
         bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
 #pragma omp for nowait schedule(dynamic)
-        for (ij = 0; ij < nbas*nbas; ij++) {
+        for (ij = 0; ij < nbas2; ij++) {
                 i = ij / nbas;
                 j = ij - i * nbas;
                 (*fdot)(intor, fjk, dms, v_priv, buf, n_dm, ncomp, i, j,
@@ -312,7 +313,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         }
 #pragma omp critical
         {
-                for (i = 0; i < nao*nao*n_dm*ncomp; i++) {
+                for (i = 0; i < jk_size; i++) {
                         vjk[i] += v_priv[i];
                 }
         }

@@ -73,7 +73,7 @@ void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
 {
         int i;
-        size_t idx = (size_t)row_id * (row_id + 1) / 2;
+        size_t idx = ((size_t)row_id) * (row_id + 1) / 2;
         NPdcopy(row, tril+idx, row_id);
         for (i = row_id; i < ndim; i++) {
                 idx += i;
