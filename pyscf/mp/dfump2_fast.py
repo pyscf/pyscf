@@ -28,7 +28,7 @@ from pyscf.mp.dfmp2_fast import DFMP2, ints3c_cholesky, hdf5TempFile, \
     order_mos_fc
 
 
-class UDFMP2(DFMP2):
+class DFUMP2(DFMP2):
     '''
     native implementation of DF-MP2/RI-MP2 with a UHF reference
     '''
@@ -96,7 +96,7 @@ class UDFMP2(DFMP2):
         logger.info('')
         logger.info('******** {0:s} ********'.format(repr(self.__class__)))
         logger.info('nmo = {0:d}'.format(self.nmo))
-        logger.info('nocc = {0}'.format(self.nocc))
+        logger.info('nocc = {0:d}, {1:d}'.format(self.nocc[0], self.nocc[1]))
         logger.info('nfrozen = {0:d}'.format(self.nfrozen))
         logger.info('basis = {0:s}'.format(repr(self.mol.basis)))
         logger.info('auxbasis = {0:s}'.format(repr(self.auxmol.basis)))
@@ -137,19 +137,20 @@ class UDFMP2(DFMP2):
         no = self.nocc - nfrz
         emo = self.mo_energy[:, nfrz:]
         logger = lib.logger.new_logger(self)
-        self.rdm1_mo = np.zeros((2, self.nmo, self.nmo))
-        self.rdm1_mo[:, nfrz:, nfrz:] += \
+        rdm1_mo = np.zeros((2, self.nmo, self.nmo))
+        rdm1_mo[:, nfrz:, nfrz:] += \
             rdm1_uhf_unrelaxed(self._intsfile, no, emo, self.max_memory, logger)
 
         # Set the UHF density matrix for the frozen orbitals if applicable.
         if nfrz > 0:
-            self.rdm1_mo[0, :nfrz, :nfrz] += np.eye(nfrz)
-            self.rdm1_mo[1, :nfrz, :nfrz] += np.eye(nfrz)
+            rdm1_mo[0, :nfrz, :nfrz] += np.eye(nfrz)
+            rdm1_mo[1, :nfrz, :nfrz] += np.eye(nfrz)
 
+        self.rdm1_mo = rdm1_mo
         if ao_repr:
-            return np.einsum('sxp,spq,syq->sxy', self.mo_coeff, self.rdm1_mo, self.mo_coeff)
+            return np.einsum('sxp,spq,syq->sxy', self.mo_coeff, rdm1_mo, self.mo_coeff)
         else:
-            return self.rdm1_mo
+            return rdm1_mo
 
     def make_natorbs(self):
         '''
@@ -173,21 +174,22 @@ class UDFMP2(DFMP2):
         # Diagonalize the spin-traced 1-RDM in alpha basis to get the natural orbitals.
         eigval, eigvec = np.linalg.eigh(rdm1_abas)
         natocc = np.flip(eigval)
-        natorb = np.dot(self.mo_coeff, np.fliplr(eigvec))
+        natorb = np.dot(self.mo_coeff[0, :, :], np.fliplr(eigvec))
         return natocc, natorb
     
     def calculate_integrals(self):
         '''
         Calculates the three center integrals for MP2.
         '''
-        self._intsfile = []
+        intsfile = []
         logger = lib.logger.new_logger(self)
         for s in 0, 1:
             moc_occ = self.mo_coeff[s, :, self.nfrozen:self.nocc[s]]
             moc_virt = self.mo_coeff[s, :, self.nocc[s]:]
             f = ints3c_cholesky(self.mol, self.auxmol, moc_occ, moc_virt, \
                 self.max_memory, logger)
-            self._intsfile.append(f)
+            intsfile.append(f)
+        self._intsfile = intsfile
     
     def delete(self):
         '''
@@ -216,8 +218,8 @@ def emp2_uhf(intsfiles, nocc, mo_energy, logger):
 
     logger.info('')
     logger.info('*** DF-MP2 energy')
-    logger.info('    Occupied orbitals: {0}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0}'.format(nvirt))
+    logger.info('    Occupied orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
+    logger.info('    Virtual orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
 
     energy = 0.0
     with intsfiles[0].open('r') as h5ints_a, intsfiles[1].open('r') as h5ints_b:
@@ -291,8 +293,8 @@ def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger):
 
     logger.info('')
     logger.info('*** Unrelaxed one-particle density matrix for DF-MP2')
-    logger.info('    Occupied orbitals: {0}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0}'.format(nvirt))
+    logger.info('    Occupied orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
+    logger.info('    Virtual orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
 
     # Density matrix initialized with the UHF contribution.
     P = np.zeros((2, nmo, nmo))
@@ -387,7 +389,7 @@ if __name__ == '__main__':
     mf = scf.UHF(mol)
     mf.kernel()
 
-    with UDFMP2(mf) as pt:
+    with DFUMP2(mf) as pt:
         pt.kernel()
         natocc, _ = pt.make_natorbs()
         print()

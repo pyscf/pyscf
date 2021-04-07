@@ -133,18 +133,19 @@ class DFMP2(lib.StreamObject):
         no = self.nocc - nfrz
         emo = self.mo_energy[nfrz:]
         logger = lib.logger.new_logger(self)
-        self.rdm1_mo = np.zeros((self.nmo, self.nmo))
-        self.rdm1_mo[nfrz:, nfrz:] = \
+        rdm1_mo = np.zeros((self.nmo, self.nmo))
+        rdm1_mo[nfrz:, nfrz:] = \
             rdm1_rhf_unrelaxed(self._intsfile, no, emo, self.max_memory, logger)
 
         # Set the RHF density matrix for the frozen orbitals if applicable.
         if nfrz > 0:
-            self.rdm1_mo[:nfrz, :nfrz] = 2.0 * np.eye(nfrz)
+            rdm1_mo[:nfrz, :nfrz] = 2.0 * np.eye(nfrz)
 
+        self.rdm1_mo = rdm1_mo
         if ao_repr:
-            return np.linalg.multi_dot([self.mo_coeff, self.rdm1_mo, self.mo_coeff.T])
+            return np.linalg.multi_dot([self.mo_coeff, rdm1_mo, self.mo_coeff.T])
         else:
-            return self.rdm1_mo
+            return rdm1_mo
 
     def make_natorbs(self):
         '''
@@ -197,7 +198,7 @@ class DFMP2(lib.StreamObject):
         return self.calculate_energy()
 
 
-RDFMP2 = DFMP2
+DFRMP2 = DFMP2
 
 
 class hdf5TempFile:
