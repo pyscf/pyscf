@@ -9,7 +9,7 @@ on:
       - released
 
 jobs:
-  release-pypi:
+  release-pypi-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -26,17 +26,62 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.PYPI_TEST_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
+          #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          #repository_url: https://test.pypi.org/legacy/
+          password: ${{ secrets.PYPI_API_TOKEN }}
           packages_dir: ${{ github.workspace }}/linux-wheels
           verbose: true
 
-  release-conda:
-    runs-on: ${{ matrix.os }}
+  release-pypi-sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build sdist
+        run: |
+          python3 setup.py sdist
+      - name: List available sdist
+        run: |
+          ls ${{ github.workspace }}/dist
+      - name: Publish to PyPI
+        # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          #password: ${{ secrets.PYPI_TEST_API_TOKEN }}
+          #repository_url: https://test.pypi.org/legacy/
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages_dir: ${{ github.workspace }}/dist
+          verbose: true
+
+  release-pypi-macos:
+    runs-on: macos-latest
     strategy:
       matrix:
-        os: [ubuntu-18.04]
-        python-version: [3.8]
+        python-version: [3.6, 3.7]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build wheels
+        run: |
+            pip install wheel
+            python setup.py bdist_wheel -v --dist-dir ${{ github.workspace }}/mac-wheels
+      - name: List available wheels
+        run: |
+            ls ${{ github.workspace }}/mac-wheels
+      - name: Publish to PyPI
+        run: |
+            pip install twine
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="${{ secrets.PYPI_TEST_API_TOKEN }}"
+            # export TWINE_REPOSITORY_URL="https://test.pypi.org/legacy/"
+            twine upload --verbose ${{ github.workspace }}/mac-wheels/*
+
+  # This pipeline builds conda-python3.7 only
+  release-conda-linux:
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
       - name: Publish to conda
@@ -46,15 +91,34 @@ jobs:
         env:
           ANACONDATOKEN: ${{ secrets.ANACONDA_TOKEN }}
 
+#  release-conda-macos:
+#    name: release-conda-macos-python${{ matrix.python-version }}
+#    runs-on: macos-latest
+#    strategy:
+#      matrix:
+#        python-version: [3.7]
+#      - uses: conda-incubator/setup-miniconda@v2
+#        with:
+#          auto-update-conda: true
+#          python-version: ${{ matrix.python-version }}
+#      - uses: actions/checkout@v2
+#      - name: Publish to conda
+#        env:
+#          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+#        shell: bash -l {0}
+#        run: |
+#          # Error in cmake  ld: unsupported tapi file type '!tapi-tbd'
+#          conda install -y anaconda-client conda-build && conda build --output-folder . pyscf/conda && anaconda upload macos/*.tar.bz2
+
   release-docker:
     runs-on: ${{ matrix.os }}
-    needs: release-pypi
+    needs: release-pypi-linux
     strategy:
       matrix:
         os: [ubuntu-18.04]
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v1 
+        uses: docker/login-action@v1
         with:
           username: pyscf
           password: ${{ secrets.DOCKERHUB_TOKEN }}
