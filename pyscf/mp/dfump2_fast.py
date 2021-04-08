@@ -24,10 +24,10 @@ import numpy as np
 from pyscf import lib
 from pyscf import scf
 from pyscf import df
-from pyscf.mp.dfmp2_fast import DFMP2, ints3c_cholesky, order_mos_fc
+from pyscf.mp.dfmp2_fast import DFRMP2, ints3c_cholesky, order_mos_fc
 
 
-class DFUMP2(DFMP2):
+class DFUMP2(DFRMP2):
     '''
     native implementation of DF-MP2/RI-MP2 with a UHF reference
     '''
@@ -90,6 +90,10 @@ class DFUMP2(DFMP2):
         # dump flags here, because calling kernel is not mandatory
         self.dump_flags()
 
+        # Spin component scaling factors
+        self.ps = 1.0
+        self.pt = 1.0
+
     def dump_flags(self):
         logger = lib.logger.new_logger(self)
         logger.info('')
@@ -112,7 +116,7 @@ class DFUMP2(DFMP2):
         no = self.nocc - self.nfrozen
         emo = self.mo_energy[:, self.nfrozen:]
         logger = lib.logger.new_logger(self)
-        self.e_corr = emp2_uhf(self._intsfile, no, emo, logger)
+        self.e_corr = emp2_uhf(self._intsfile, no, emo, logger, ps=self.ps, pt=self.pt)
         return self.e_corr
 
     def make_rdm1(self, ao_repr=True):
@@ -137,8 +141,8 @@ class DFUMP2(DFMP2):
         emo = self.mo_energy[:, nfrz:]
         logger = lib.logger.new_logger(self)
         rdm1_mo = np.zeros((2, self.nmo, self.nmo))
-        rdm1_mo[:, nfrz:, nfrz:] += \
-            rdm1_uhf_unrelaxed(self._intsfile, no, emo, self.max_memory, logger)
+        rdm1_mo[:, nfrz:, nfrz:] += rdm1_uhf_unrelaxed(self._intsfile, no, emo, \
+            self.max_memory, logger, ps=self.ps, pt=self.pt)
 
         # Set the UHF density matrix for the frozen orbitals if applicable.
         if nfrz > 0:
@@ -197,7 +201,31 @@ class DFUMP2(DFMP2):
         self._intsfile = []
 
 
-def emp2_uhf(intsfiles, nocc, mo_energy, logger):
+MP2 = UMP2 = DFMP2 = DFUMP2
+
+
+class SCSDFUMP2(DFUMP2):
+    '''
+    UHF-DF-MP2 with spin-component scaling
+    S. Grimme, J. Chem. Phys. 118 (2003), 9095
+    https://doi.org/10.1063/1.1569242
+    '''
+
+    def __init__(self, mf, ps=6/5, pt=1/3, *args, **kwargs):
+        '''
+        mf : UHF instance
+        ps : opposite-spin (singlet) scaling factor
+        pt : same-spin (triplet) scaling factor
+        '''
+        super().__init__(mf, *args, **kwargs)
+        self.ps = ps
+        self.pt = pt
+
+
+SCSMP2 = SCSUMP2 = SCSDFMP2 = SCSDFUMP2
+
+
+def emp2_uhf(intsfiles, nocc, mo_energy, logger, ps=1.0, pt=1.0):
     '''
     Calculates the DF-MP2 energy with an UHF reference.
 
@@ -206,6 +234,8 @@ def emp2_uhf(intsfiles, nocc, mo_energy, logger):
         nocc : numbers of occupied orbitals
         mo_energy : energies of the molecular orbitals
         logger : Logger instance
+        ps : SCS factor for opposite-spin contributions
+        pt : SCS factor for same-spin contributions
 
     Returns:
         the MP2 correlation energy
@@ -242,7 +272,7 @@ def emp2_uhf(intsfiles, nocc, mo_energy, logger):
                 Kab = np.matmul(ints3c_ia.T, ints3c_jb)
                 DE = mo_energy[s, i] + mo_energy[s, j] - Eab
                 Tab = (Kab - Kab.T) / DE
-                energy_contrib += np.einsum('ab,ab', Tab, Kab)
+                energy_contrib += pt * np.einsum('ab,ab', Tab, Kab)
         logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
         energy_total += energy_contrib
 
@@ -265,7 +295,7 @@ def emp2_uhf(intsfiles, nocc, mo_energy, logger):
             Kab = np.matmul(ints3c_ia.T, ints3c_jb)
             DE = mo_energy[0, i] + mo_energy[1, j] - Eab
             Tab = Kab / DE
-            energy_contrib += np.einsum('ab,ab', Tab, Kab)
+            energy_contrib += ps * np.einsum('ab,ab', Tab, Kab)
     logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
     energy_total += energy_contrib
 
@@ -273,7 +303,7 @@ def emp2_uhf(intsfiles, nocc, mo_energy, logger):
     return energy_total
 
 
-def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger):
+def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix with a UHF reference.
 
@@ -283,6 +313,8 @@ def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger):
         mo_energy : molecular orbital energies
         max_memory : memory threshold in MB
         logger : Logger instance
+        ps : SCS factor for opposite-spin contributions
+        pt : SCS factor for same-spin contributions
     
     Returns:
         matrix containing the unrelaxed 1-RDM
@@ -345,10 +377,10 @@ def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger):
                     DE = mo_energy[s1, i] + mo_energy[s2, j] - Eab
                     if s1 == s2:
                         numerator = Kab - Kab.T
-                        prefactor = 0.5
+                        prefactor = 0.5 * pt
                     else:
                         numerator = Kab
-                        prefactor = 1.0
+                        prefactor = ps
                     Tab = numerator / DE
                     tiset[j, :, :] = Tab
                     # virtual 1-RDM contribution
@@ -360,9 +392,9 @@ def rdm1_uhf_unrelaxed(intsfiles, nocc, mo_energy, max_memory, logger):
                     aend = min(astart+batchsize, nvirt[s1])
                     tbatch = tiset[:, astart:aend, :]
                     if s1 == s2:
-                        prefactor = 0.5
+                        prefactor = 0.5 * pt
                     else:
-                        prefactor = 1.0
+                        prefactor = ps
                     P[s2, :nocc[s2], :nocc[s2]] -= prefactor * \
                         np.tensordot(tbatch, tbatch, axes=([1, 2], [1, 2]))
 

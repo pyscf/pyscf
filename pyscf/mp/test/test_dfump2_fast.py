@@ -20,7 +20,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
-from pyscf.mp.dfump2_fast import DFUMP2
+from pyscf.mp.dfump2_fast import DFUMP2, SCSUMP2
 
 
 mol = gto.Mole()
@@ -171,6 +171,25 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[6], 1.9473283296, delta=1.0e-7)
             self.assertAlmostEqual(natocc[7], 1.0168954406, delta=1.0e-7)
             self.assertAlmostEqual(natocc[9], 0.0478262909, delta=1.0e-7)
+
+    def test_scs_energy(self):
+        with SCSUMP2(self.mf) as pt:
+            pt.kernel()
+            self.assertAlmostEqual(pt.e_corr, -0.324631353397, delta=1.0e-8)
+            self.assertAlmostEqual(pt.e_tot, -149.815015567956, delta=1.0e-8)
+
+    def test_scs_natorbs(self):
+        mol = self.mf.mol
+        with SCSUMP2(self.mf) as pt:
+            natocc, natorb = pt.make_natorbs()
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbitals orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[6], 1.9512132898, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.0092563934, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[9], 0.0451631109, delta=1.0e-7)
 
 
 if __name__ == "__main__":

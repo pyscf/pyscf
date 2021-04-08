@@ -29,7 +29,7 @@ from pyscf import scf
 from pyscf import df
 
 
-class DFMP2(lib.StreamObject):
+class DFRMP2(lib.StreamObject):
     '''
     native implementation of DF-MP2/RI-MP2 with an RHF reference
     '''
@@ -78,6 +78,10 @@ class DFMP2(lib.StreamObject):
         # dump flags here, because calling kernel is not mandatory
         self.dump_flags()
 
+        # Spin component scaling factors
+        self.ps = 1.0
+        self.pt = 1.0
+
     def dump_flags(self):
         logger = lib.logger.new_logger(self)
         logger.info('')
@@ -107,7 +111,7 @@ class DFMP2(lib.StreamObject):
         no = self.nocc - self.nfrozen
         emo = self.mo_energy[self.nfrozen:]
         logger = lib.logger.new_logger(self)
-        self.e_corr = emp2_rhf(self._intsfile, no, emo, logger)
+        self.e_corr = emp2_rhf(self._intsfile, no, emo, logger, ps=self.ps, pt=self.pt)
         return self.e_corr
     
     def make_rdm1(self, ao_repr=True):
@@ -132,8 +136,8 @@ class DFMP2(lib.StreamObject):
         emo = self.mo_energy[nfrz:]
         logger = lib.logger.new_logger(self)
         rdm1_mo = np.zeros((self.nmo, self.nmo))
-        rdm1_mo[nfrz:, nfrz:] = \
-            rdm1_rhf_unrelaxed(self._intsfile, no, emo, self.max_memory, logger)
+        rdm1_mo[nfrz:, nfrz:] = rdm1_rhf_unrelaxed(self._intsfile, no, emo, \
+            self.max_memory, logger, ps=self.ps, pt=self.pt)
 
         # Set the RHF density matrix for the frozen orbitals if applicable.
         if nfrz > 0:
@@ -194,7 +198,28 @@ class DFMP2(lib.StreamObject):
         return self.calculate_energy()
 
 
-DFRMP2 = DFMP2
+MP2 = RMP2 = DFMP2 = DFRMP2
+
+
+class SCSDFRMP2(DFRMP2):
+    '''
+    RHF-DF-MP2 with spin-component scaling
+    S. Grimme, J. Chem. Phys. 118 (2003), 9095
+    https://doi.org/10.1063/1.1569242
+    '''
+
+    def __init__(self, mf, ps=6/5, pt=1/3, *args, **kwargs):
+        '''
+        mf : RHF instance
+        ps : opposite-spin (singlet) scaling factor
+        pt : same-spin (triplet) scaling factor
+        '''
+        super().__init__(mf, *args, **kwargs)
+        self.ps = ps
+        self.pt = pt
+
+
+SCSMP2 = SCSRMP2 = SCSDFMP2 = SCSDFRMP2
 
 
 def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
@@ -289,7 +314,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     return intsfile_cho
 
 
-def emp2_rhf(intsfile, nocc, mo_energy, logger):
+def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
     '''
     Calculates the DF-MP2 energy with an RHF reference.
 
@@ -298,6 +323,8 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger):
         nocc : number of occupied orbitals
         mo_energy : energies of the molecular orbitals
         logger : Logger instance
+        ps : SCS factor for opposite-spin contributions
+        pt : SCS factor for same-spin contributions
 
     Returns:
         the MP2 correlation energy
@@ -326,19 +353,19 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger):
             Kab = np.matmul(ints3c_ia.T, ints3c_jb)
             DE = mo_energy[i] + mo_energy[j] - Eab
             Tab = Kab / DE
-            energy += 4.0 * np.einsum('ab,ab', Tab, Kab)
-            energy -= 2.0 * np.einsum('ab,ba', Tab, Kab)
+            energy += 2.0 * (ps + pt) * np.einsum('ab,ab', Tab, Kab)
+            energy -= 2.0 * pt * np.einsum('ab,ba', Tab, Kab)
         # contribution for j == i
         Kab = np.matmul(ints3c_ia.T, ints3c_ia)
         DE = 2.0 * mo_energy[i] - Eab
         Tab = Kab / DE
-        energy += np.einsum('ab,ab', Tab, Kab)
+        energy += ps * np.einsum('ab,ab', Tab, Kab)
 
     logger.note('*** DF-MP2 correlation energy: {0:.14f} Eh'.format(energy))
     return energy
 
 
-def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
+def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix with an RHF reference.
 
@@ -348,6 +375,8 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
         mo_energy : molecular orbital energies
         max_memory : memory threshold in MB
         logger : Logger instance
+        ps : SCS factor for opposite-spin contributions
+        pt : SCS factor for same-spin contributions
     
     Returns:
         matrix containing the unrelaxed 1-RDM
@@ -396,7 +425,7 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
                     Kab = np.matmul(ints3c_ia.T, ints3c_jb)
                     DE = mo_energy[i] + mo_energy[j] - Eab
                     Tab = Kab / DE
-                    TCab = 4.0 * Tab - 2.0 * Tab.T
+                    TCab = 2.0 * (ps + pt) * Tab - 2.0 * pt * Tab.T
                     tiset[j, :, :] = Tab
                     # virtual 1-RDM contribution
                     P[nocc:, nocc:] += np.matmul(Tab, TCab.T)
@@ -406,8 +435,8 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
                     aend = min(astart+batchsize, nvirt)
                     tbatch1 = tiset[:, astart:aend, :]
                     tbatch2 = tiset[:, :, astart:aend]
-                    P[:nocc, :nocc] -= 4.0 * np.tensordot(tbatch1, tbatch1, axes=([1, 2], [1, 2]))
-                    P[:nocc, :nocc] += 2.0 * np.tensordot(tbatch1, tbatch2, axes=([1, 2], [2, 1]))
+                    P[:nocc, :nocc] -= 2.0 * (ps + pt) * np.tensordot(tbatch1, tbatch1, axes=([1, 2], [1, 2]))
+                    P[:nocc, :nocc] += 2.0 * pt * np.tensordot(tbatch1, tbatch2, axes=([1, 2], [2, 1]))
     
     logger.info('*** 1-RDM calculation finished')
     return P
