@@ -19,9 +19,7 @@
 native implementation of DF-MP2/RI-MP2 with an RHF reference
 '''
 
-import tempfile
-import h5py
-import os
+
 import numpy as np
 import scipy
 
@@ -179,8 +177,6 @@ class DFMP2(lib.StreamObject):
         '''
         Delete the temporary file(s).
         '''
-        if self._intsfile:
-            self._intsfile.delete()
         self._intsfile = None
 
     # The class can be used with a context manager (with ... as ...:).
@@ -201,88 +197,6 @@ class DFMP2(lib.StreamObject):
 DFRMP2 = DFMP2
 
 
-class hdf5TempFile:
-    '''
-    Convenient handling of temporary HDF5 files.
-    Instances can be used in a context manager:
-
-        with hdf5TempFile() as ...:
-            ...
-    
-    The "open" method returns a h5py file-like object,
-    which can be used in a context manager itself.
-
-    The "delete" method erases the temporary file from disk.
-    '''
-
-    def __init__(self, dir=lib.param.TMPDIR):
-        '''
-        Args:
-            dir : directory to store the temporary file
-        '''
-        # We start by creating an empty temporary file.
-        # Storing the file name instead of passing around f directly allows
-        # h5py to use whichever driver it wants, instead of forcing it to do everything
-        # through python's file interface.
-        f = tempfile.NamedTemporaryFile(dir=dir, delete=False)
-        f.close()
-        self._filename = f.name
-        self._libver = 'latest'
-        self._file = None
-    
-    def open(self, mode):
-        '''
-        Opens the temporary file.
-        Note: existing h5py.File instances to this file are closed!
-
-        Args:
-            mode : access mode as per h5py convention (e.g. "r", "w", "r+")
-        
-        Returns:
-            an h5py.File instance (which can be used in a context manager itself)
-        '''
-        self.close()
-        # Passing the file name (instead of a file-like object)
-        # allows hdf5 to use its own drivers.
-        self._file = h5py.File(self._filename, mode=mode, libver=self._libver)
-        return self._file
-
-    def close(self):
-        '''
-        Close the file for access (without deleting it).
-        '''
-        if self._file is not None:
-            self._file.close()
-            self._file = None
-    
-    def delete(self):
-        '''
-        Delete the actual file on disk.
-        '''
-        self.close()
-        if self._filename:
-            os.remove(self._filename)
-        self._filename = None
-
-    def __enter__(self):
-        '''
-        Allows us to use instances in a context manager.
-        '''
-        return self
-    
-    def __exit__(self, exception_type, exception_value, traceback):
-        '''
-        Delete file when exiting the context.
-        '''
-        self.delete()
-
-    def __del__(self):
-        '''
-        Make sure to delete the file no later than at garbage collection.
-        '''
-        self.delete()
-
-
 def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     '''
     Calculate the three center electron repulsion integrals in MO basis
@@ -298,7 +212,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
         logger : Logger instance
     
     Returns:
-        Instance of hdf5TempFile containing the integrals in the dataset "ints_cholesky".
+        A HDF5 temporary file containing the integrals in the dataset "ints_cholesky".
         Indexing order: [mo1, aux, mo2]
     '''
     atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,\
@@ -312,20 +226,18 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     logger.info('    MO dimensions: {0:d} x {1:d}'.format(nmo1, nmo2))
     logger.info('    Aux functions: {0:d}'.format(nauxfcns))
 
-    intsfile = hdf5TempFile()
-    with hdf5TempFile() as ints_tmp, intsfile.open('w') as h5ints_cholesky:
+    intsfile_cho = lib.H5TmpFile(libver='latest')
+    with lib.H5TmpFile(libver='latest') as intsfile_tmp:
 
-        h5ints_3c = ints_tmp.open('r+')
-
-        logger.info('  > Calculating three center integrals in MO basis.')
-        logger.info('    Temporary file: {0:s}'.format(h5ints_3c.filename))
+        logger.info('  * Calculating three center integrals in MO basis.')
+        logger.info('    Temporary file: {0:s}'.format(intsfile_tmp.filename))
 
         intor = mol._add_suffix('int3c2e')
         logger.debug('    intor = {0:s}'.format(intor))
 
         # Loop over shells of auxiliary functions.
         # AO integrals are calculated in memory and directly transformed to MO basis.
-        ints_3c = h5ints_3c.create_dataset('ints_3c', (nauxfcns, nmo1, nmo2), dtype='f8')
+        ints_3c = intsfile_tmp.create_dataset('ints_3c', (nauxfcns, nmo1, nmo2), dtype='f8')
         aux_ctr = 0
         for auxsh in range(auxmol.nbas):
             # needs to follow the convention (AO, AO | Aux)
@@ -342,12 +254,12 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
                 ints_3c[aux_ctr, :, :] = moints
                 aux_ctr += 1
 
-        logger.info('  > Calculating fitted three center integrals.')
-        logger.info('    Storage file: {0:s}'.format(h5ints_cholesky.filename))
+        logger.info('  * Calculating fitted three center integrals.')
+        logger.info('    Storage file: {0:s}'.format(intsfile_cho.filename))
 
         # Typically we need the matrix for a specific occupied MO i in MP2.
         # => i is the leading index for optimal I/O.
-        ints_cholesky = h5ints_cholesky.create_dataset('ints_cholesky', (nmo1, nauxfcns, nmo2), dtype='f8')
+        ints_cholesky = intsfile_cho.create_dataset('ints_cholesky', (nmo1, nauxfcns, nmo2), dtype='f8')
 
         # (P | Q) matrix
         Vmat = auxmol.intor('int2c2e')
@@ -374,7 +286,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
                 ints_cholesky[i, :, :] = scipy.linalg.solve_triangular(L, intsbuf[:, i-istart, :], lower=True)
 
     logger.info('*** DF transformation finished')
-    return intsfile
+    return intsfile_cho
 
 
 def emp2_rhf(intsfile, nocc, mo_energy, logger):
@@ -395,6 +307,7 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger):
     logger.info('*** DF-MP2 energy')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
     logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Integrals from file: {0:s}'.format(intsfile.filename))
 
     # Somewhat awkward workaround to perform division in the MP2 energy expression
     # through numpy routines. We precompute Eab[a, b] = mo_energy[a] + mo_energy[b].
@@ -404,27 +317,22 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger):
         Eab[:, a] += mo_energy[nocc + a]
 
     energy = 0.0
-    with intsfile.open('r') as h5ints:
-        logger.info('  > Calculating the energy')
-        logger.info('    Integrals from file: {0:s}'.format(h5ints.filename))
-
-        ints = h5ints['ints_cholesky']
-
-        for i in range(nocc):
-            ints3c_ia = ints[i, :, :]
-            # contributions for occupied orbitals j < i
-            for j in range(i):
-                ints3c_jb = ints[j, :, :]
-                Kab = np.matmul(ints3c_ia.T, ints3c_jb)
-                DE = mo_energy[i] + mo_energy[j] - Eab
-                Tab = Kab / DE
-                energy += 4.0 * np.einsum('ab,ab', Tab, Kab)
-                energy -= 2.0 * np.einsum('ab,ba', Tab, Kab)
-            # contribution for j == i
-            Kab = np.matmul(ints3c_ia.T, ints3c_ia)
-            DE = 2.0 * mo_energy[i] - Eab
+    ints = intsfile['ints_cholesky']
+    for i in range(nocc):
+        ints3c_ia = ints[i, :, :]
+        # contributions for occupied orbitals j < i
+        for j in range(i):
+            ints3c_jb = ints[j, :, :]
+            Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+            DE = mo_energy[i] + mo_energy[j] - Eab
             Tab = Kab / DE
-            energy += np.einsum('ab,ab', Tab, Kab)
+            energy += 4.0 * np.einsum('ab,ab', Tab, Kab)
+            energy -= 2.0 * np.einsum('ab,ba', Tab, Kab)
+        # contribution for j == i
+        Kab = np.matmul(ints3c_ia.T, ints3c_ia)
+        DE = 2.0 * mo_energy[i] - Eab
+        Tab = Kab / DE
+        energy += np.einsum('ab,ab', Tab, Kab)
 
     logger.note('*** DF-MP2 correlation energy: {0:.14f} Eh'.format(energy))
     return energy
@@ -451,6 +359,7 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
     logger.info('*** Unrelaxed one-particle density matrix for DF-MP2')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
     logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Three center integrals from file: {0:s}'.format(intsfile.filename))
 
     # Precompute Eab[a, b] = mo_energy[a] + mo_energy[b] for division with numpy.
     Eab = np.zeros((nvirt, nvirt))
@@ -462,12 +371,8 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
     P = np.zeros((nmo, nmo))
     P[:nocc, :nocc] = 2.0 * np.eye(nocc)
 
-    with hdf5TempFile() as tfile, intsfile.open('r') as h5ints:
-        h5amplitudes = tfile.open('r+')
-
-        logger.info('  > Calculating the 1-RDM')
-        logger.info('    Three center integrals from file: {0:s}'.format(h5ints.filename))
-        logger.info('    Storing amplitudes in temporary file: {0:s}'.format(h5amplitudes.filename))
+    with lib.H5TmpFile(libver='latest') as tfile:
+        logger.info('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
 
         batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (2 * nocc * nvirt * 8))
         batchsize = min(nvirt, batchsize)
@@ -479,8 +384,8 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger):
         # The occupied 1-RDM contribution is calculated in a batched algorithm.
         # More memory -> more efficient I/O.
         # The virtual contribution to the 1-RDM is calculated in memory.
-        ints = h5ints['ints_cholesky']
-        tiset = h5amplitudes.create_dataset('amplitudes', (nocc, nvirt, nvirt), dtype='f8')
+        ints = intsfile['ints_cholesky']
+        tiset = tfile.create_dataset('amplitudes', (nocc, nvirt, nvirt), dtype='f8')
         for i in range(nocc):
                 ints3c_ia = ints[i, :, :]
 
