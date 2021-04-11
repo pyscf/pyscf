@@ -172,7 +172,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
 #pragma omp parallel
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao+2, sizeof(double));
+        double *v_priv = calloc(Nao*Nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;
@@ -182,7 +182,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
         }
 #pragma omp critical
         {
-                for (ip = 0; ip < nao*nao; ip++) {
+                for (ip = 0; ip < Nao*Nao; ip++) {
                         vv[ip] += v_priv[ip];
                 }
         }

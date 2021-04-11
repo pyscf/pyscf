@@ -231,7 +231,7 @@ static JKArray *allocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc, i
                           (shls_slice[oket+1] - shls_slice[oket]));
         int *outptr = malloc(sizeof(int) * outptr_size);
         jkarray->outptr = outptr;
-        size_t i;
+        int i;
         for (i = 0; i < outptr_size; i++) {
                 outptr[i] = NOVALUE;
         }

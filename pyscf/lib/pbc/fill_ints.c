@@ -450,7 +450,7 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
                 dijmk = dijmc * nkpts;
                 bufk_i = bufk_r + dijmk;
                 bufL   = bufk_i + dijmk;
-                cache  = bufL   + nimgs * dijmc;
+                cache  = bufL   + ((size_t)nimgs) * dijmc;
                 for (i = 0; i < dijmk*OF_CMPLX; i++) {
                         bufk_r[i] = 0;
                 }
@@ -654,7 +654,6 @@ static void sort3c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
         const int ip = ao_loc[ish] - ao_loc[ish0];
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         const int dij = di * dj;
-        const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         out += (ip * naoj + jp) * naok;
 
         int i, j, k, ksh, ic, dk, dijk;
