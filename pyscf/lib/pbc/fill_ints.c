@@ -517,8 +517,8 @@ static void sort3c_ks2_igtj(double complex *out, double *bufr, double *bufi,
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
+        const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijk = nij * naok;
 
         const int di = ao_loc[ish+1] - ao_loc[ish];
@@ -527,7 +527,7 @@ static void sort3c_ks2_igtj(double complex *out, double *bufr, double *bufi,
         const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         const size_t dijmc = dij * dkmax * comp;
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
+        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, kk, ksh, ic, dk, dijk;
         size_t off;
@@ -568,8 +568,8 @@ static void sort3c_ks2_ieqj(double complex *out, double *bufr, double *bufi,
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
+        const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijk = nij * naok;
 
         const int di = ao_loc[ish+1] - ao_loc[ish];
@@ -578,7 +578,7 @@ static void sort3c_ks2_ieqj(double complex *out, double *bufr, double *bufi,
         const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         const size_t dijmc = dij * dkmax * comp;
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
+        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, kk, ksh, ic, dk, dijk;
         size_t off;
@@ -777,15 +777,15 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
+        const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijk = nij * naok;
 
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int dij = di * dj;
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
+        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, ksh, ic, dk, dijk;
         double *pin, *pout;
@@ -818,14 +818,14 @@ static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-        const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
-        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
+        const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijk = nij * naok;
 
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dij = di * di;
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
+        out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
         int i, j, k, ij, ksh, ic, dk, dijk;
         double *pin, *pout;
