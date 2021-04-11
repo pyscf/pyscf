@@ -258,6 +258,7 @@ class KnownValues(unittest.TestCase):
         cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
         cell.ecp = {'Na':'lanl2dz'}
         cell.build()
+        # FIXME: ECP integrals segfault
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
