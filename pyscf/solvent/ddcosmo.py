@@ -293,7 +293,7 @@ scf.hf.SCF.ddCOSMO    = scf.hf.SCF.DDCOSMO    = ddcosmo_for_scf
 mp.mp2.MP2.ddCOSMO    = mp.mp2.MP2.DDCOSMO    = ddcosmo_for_post_scf
 ci.cisd.CISD.ddCOSMO  = ci.cisd.CISD.DDCOSMO  = ddcosmo_for_post_scf
 cc.ccsd.CCSD.ddCOSMO  = cc.ccsd.CCSD.DDCOSMO  = ddcosmo_for_post_scf
-tdscf.rhf.TDA.ddCOSMO = tdscf.rhf.TDA.DDCOSMO = ddcosmo_for_tdscf
+tdscf.rhf.TDMixin.ddCOSMO = tdscf.rhf.TDMixin.DDCOSMO = ddcosmo_for_tdscf
 mcscf.casci.CASCI.ddCOSMO = mcscf.casci.CASCI.DDCOSMO = ddcosmo_for_casci
 mcscf.mc1step.CASSCF.ddCOSMO = mcscf.mc1step.CASSCF.DDCOSMO = ddcosmo_for_casscf
 
@@ -862,7 +862,7 @@ class DDCOSMO(lib.StreamObject):
         if self.frozen:
             raise RuntimeError('Frozen solvent model is not supported for '
                                'energy gradients')
-        if isinstance(grad_method.base, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
+        if isinstance(grad_method.base, tdscf.rhf.TDMixin):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
