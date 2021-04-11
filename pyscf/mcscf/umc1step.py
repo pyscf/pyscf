@@ -428,7 +428,7 @@ class UCASSCF(ucasci.UCASCI):
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
-        log.info('augmented hessian level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian level shift = %g', self.ah_level_shift)
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
