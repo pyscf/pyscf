@@ -34,18 +34,9 @@ from pyscf import __config__
 
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
-MAXL = 10
-SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
-MAPSPDF = {'S': 0,
-           'P': 1,
-           'D': 2,
-           'F': 3,
-           'G': 4,
-           'H': 5,
-           'I': 6,
-           'K': 7,
-           'L': 8,
-           'M': 9,}
+MAXL = 15
+SPDF = 'SPDFGHIKLMNORTU'
+MAPSPDF = {key: l for l, key in enumerate(SPDF)}
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
