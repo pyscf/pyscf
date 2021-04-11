@@ -654,7 +654,6 @@ static void sort3c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
         const int ip = ao_loc[ish] - ao_loc[ish0];
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         const int dij = di * dj;
-        const int dkmax = ao_loc[msh1] - ao_loc[msh0];
         out += (ip * naoj + jp) * naok;
 
         int i, j, k, ksh, ic, dk, dijk;
