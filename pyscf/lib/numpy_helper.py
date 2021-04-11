@@ -331,9 +331,11 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         count, nd = 1, tril.size
         nd = int(numpy.sqrt(nd*2))
         shape = (nd,nd)
-    else:
-        nd = tril.shape[axis]
-        count = int(tril.size // nd)
+    else:  # 2d
+        if axis == 0:
+            nd, count = tril.shape
+        else:
+            count, nd = tril.shape
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
