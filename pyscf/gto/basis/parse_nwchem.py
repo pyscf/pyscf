@@ -101,7 +101,8 @@ def load(basisfile, symb, optimize=True):
     return _parse(raw_basis, optimize)
 
 def _parse(raw_basis, optimize=True):
-    basis_add = []
+    basis_parsed = [[] for l in range(MAXL)]
+    key = None
     for line in raw_basis:
         dat = line.strip()
         if not dat or dat.startswith('#'):
@@ -109,10 +110,12 @@ def _parse(raw_basis, optimize=True):
         elif dat[0].isalpha():
             key = dat.split()[1].upper()
             if key == 'SP':
-                basis_add.append([0])
-                basis_add.append([1])
+                basis_parsed[0].append([0])
+                basis_parsed[1].append([1])
             else:
-                basis_add.append([MAPSPDF[key]])
+                l = MAPSPDF[key]
+                current_basis = [l]
+                basis_parsed[l].append(current_basis)
         else:
             dat = dat.replace('D','e').split()
             try:
@@ -125,14 +128,14 @@ def _parse(raw_basis, optimize=True):
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
-            if key == 'SP':
-                basis_add[-2].append([dat[0], dat[1]])
-                basis_add[-1].append([dat[0], dat[2]])
+            if key is None:
+                raise RuntimeError('Failed to parse basis')
+            elif key == 'SP':
+                basis_parsed[0][-1].append([dat[0], dat[1]])
+                basis_parsed[1][-1].append([dat[0], dat[2]])
             else:
-                basis_add[-1].append(dat)
-    basis_sorted = []
-    for l in range(MAXL):
-        basis_sorted.extend([b for b in basis_add if b[0] == l])
+                current_basis.append(dat)
+    basis_sorted = [b for bs in basis_parsed for b in bs]
 
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)
