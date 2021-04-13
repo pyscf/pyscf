@@ -841,3 +841,18 @@ char * LIBXC_functional_name(int ifunc)
 {
   return xc_functional_get_name(ifunc);
 }
+
+const char * LIBXC_version()
+{
+  return xc_version_string();
+}
+
+const char * LIBXC_reference()
+{
+  return xc_reference();
+}
+
+const char * LIBXC_reference_doi()
+{
+  return xc_reference_doi();
+}
