@@ -57,8 +57,6 @@ from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
 from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
-from timeit import default_timer
-
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
@@ -147,7 +145,6 @@ def make_modchg_basis(auxcell, smooth_eta):
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    time_0 = default_timer()
     t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
@@ -161,20 +158,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     # separated temporary file can avoid this issue.  The DF intermediates may
     # be terribly huge. The temporary file should be placed in the same disk
     # as cderi_file.
-    #h5_driver = 'core' if cell.incore_anyway else None
-    h5_driver = None
-    #h5_driver = "core"
-    #h5_kw = dict(backing_store=False) if cell.incore_anyway else {}
-    h5_kw = dict(backing_store=False) if (h5_driver == "core") else {}
     swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-    fswap = lib.H5TmpFile(swapfile.name, driver=h5_driver, **h5_kw)
+    fswap = lib.H5TmpFile(swapfile.name)
     # Unlink swapfile to avoid trash
     swapfile = None
 
     outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
                     kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
-    print("Time _aux_e2= %.3f" % (default_timer()-time_0))
-    time_0 = default_timer()
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -194,9 +184,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-
-    print("Time j2c= %.3f" % (default_timer()-time_0))
-    time_0 = default_timer()
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
@@ -222,23 +209,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
-    print("Time ft_ao= %.3f" % (default_timer()-time_0))
-    time_0 = default_timer()
-
     def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         j2c_negative = None
-        hermerr = abs(j2c - j2c.T.conj()).max()
-        log.info("j2c hermiticity error for kpt %s: %.2e", uniq_kptji_id, hermerr)
         try:
-            # Force eigenvalue decomposition
-            if mydf.force_eig:
-                raise scipy.linalg.LinAlgError
-
-            l = scipy.linalg.cholesky(j2c, lower=True)
-            log.info("Error in Cholesky decomposition= %.2e", abs(numpy.dot(l, l.T.conj())-j2c).max())
-            j2c = l
-
+            j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
         except scipy.linalg.LinAlgError:
             #msg =('===================================\n'
@@ -251,7 +226,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-            log.info("Smallest/largest eigenvalue= %e / %e", w[0], w[-1])
             v1 = v[:,w>mydf.linear_dep_threshold].conj().T
             v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v1
@@ -435,7 +409,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 make_kpt(uniq_kptji_id, cholesky_j2c)
         done[uniq_kptji_ids] = True
 
-    print("Time make_kpt= %.3f" % (default_timer()-time_0))
     feri.close()
 
 
@@ -451,8 +424,6 @@ class GDF(aft.AFTDF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-
-        self.force_eig = False
 
         # Search for optimized eta and mesh here.
         if cell.dimension == 0:

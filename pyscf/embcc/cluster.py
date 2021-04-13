@@ -952,7 +952,7 @@ class Cluster:
             for i, s in enumerate(self.mf.mol.ao_labels()):
                 dmf = (pop[i]-pop_mf[i])
                 sig = (" !" if abs(dmf)>=sig_tol else "")
-                f.write("  * Population of OrthAO %4d %-16s = %10.5f , delta(MF)= %+10.5f%s\n" %
+                f.write("  orb= %4d %-16s occ= %10.5f dHF= %+10.5f%s\n" %
                         (i, s, pop[i], dmf, sig))
             # Charge per atom
             f.write("[%s] Atomic charges\n" % tstamp)
@@ -961,7 +961,7 @@ class Cluster:
                 symb = self.mf.mol.atom_symbol(ia)
                 dmf = (chg[ia]-chg_mf[ia])
                 sig = (" !" if abs(dmf)>=sig_tol else "")
-                f.write("  * Charge at atom %3d %-3s = %10.5f , delta(MF)= %+10.5f%s\n" %
+                f.write("  atom= %3d %-3s charge= %10.5f dHF= %+10.5f%s\n" %
                         (ia, symb, chg[ia], dmf, sig))
 
         return pop, chg

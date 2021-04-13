@@ -2,10 +2,12 @@
 import sys
 import argparse
 import os.path
+from datetime import datetime
 # External
 import numpy as np
 # Internal
 import pyscf
+import pyscf.lo
 import pyscf.pbc
 import pyscf.pbc.dft
 import pyscf.pbc.tools
@@ -56,22 +58,18 @@ def get_arguments():
     parser.add_argument("--load-scf-init")
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
     parser.add_argument("--exxdiv-none", action="store_true")
+    parser.add_argument("--hf-preconv-basis")
 
     # MP
     parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
 
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
-    parser.add_argument("--gdf-mesh", type=int, nargs=3)
-    parser.add_argument("--gdf-lindep-threshold", type=float)
-    parser.add_argument("--gdf-mesh-factor", type=float)
-    parser.add_argument("--gdf-exp-to-discard", type=float)
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
     parser.add_argument("--load-gdf-unfolded", action="store_true")
-    parser.add_argument("--gdf-force-eig", action="store_true")
 
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
@@ -95,7 +93,9 @@ def get_arguments():
     parser.add_argument("--local-vir-bath-tol", type=float, default=False)
     parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
     parser.add_argument("--prim-mp2-bath-tol-vir", type=float, default=False)
-    parser.add_argument("--dft")
+    parser.add_argument("--dft-xc", nargs="*", default=[])
+    parser.add_argument("--run-hf", type=int, default=1)
+    parser.add_argument("--run-embcc", type=int, default=1)
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -256,19 +256,48 @@ def make_cell(a, args):
 
     return cell
 
-def run_mf(a, cell, args):
+def pop_analysis(mf, filename=None, mode="a"):
+    t0 = timer()
+    if filename is None: filename = "popfile.txt"
+    lo = pyscf.lo.orth_ao(mf.mol, "lowdin")
+    mo = np.linalg.solve(lo, mf.mo_coeff)
+    dm = mf.make_rdm1(mo, mf.mo_occ)
+    pop, chg = mf.mulliken_pop(dm=dm, s=np.eye(dm.shape[-1]))
+
+    if filename:
+        tstamp = datetime.now()
+        log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
+        with open(filename, mode) as f:
+            f.write("[%s] Mean-field population analysis\n" % tstamp)
+            f.write("*%s********************************\n" % (26*"*"))
+            # per orbital
+            for i, s in enumerate(mf.mol.ao_labels()):
+                f.write("  * MF population of OrthAO %4d %-16s = %10.5f\n" % (i, s, pop[i]))
+            # per atom
+            f.write("[%s] Mean-field atomic charges\n" % tstamp)
+            f.write("*%s***************************\n" % (26*"*"))
+            for ia in range(mf.mol.natm):
+                symb = mf.mol.atom_symbol(ia)
+                f.write("  * MF charge at atom %3d %-3s = %10.5f\n" % (ia, symb, chg[ia]))
+    log.info("Time for population analysis= %.2f s", (timer()-t0))
+
+    return pop, chg
+
+def run_mf(a, cell, args, xc="hf", df=None, build_df_early=False):
     if args.k_points is None or np.product(args.k_points) == 1:
-        kpts = cell.make_kpts([1, 1, 1])
-        if args.dft:
-            mf = pyscf.pbc.dft.RKS(cell)
-        else:
+        #kpts = cell.make_kpts([1, 1, 1])
+        if xc == "hf":
             mf = pyscf.pbc.scf.RHF(cell)
+        else:
+            mf = pyscf.pbc.dft.RKS(cell)
+            mf.xc = xc
     else:
         kpts = cell.make_kpts(args.k_points)
-        if args.dft:
-            mf = pyscf.pbc.dft.KRKS(cell, kpts)
-        else:
+        if xc == "hf":
             mf = pyscf.pbc.scf.KRHF(cell, kpts)
+        else:
+            mf = pyscf.pbc.dft.KRKS(cell, kpts)
+            mf.xc = xc
     if args.exxdiv_none:
         mf.exxdiv = None
     # Load SCF from checkpoint file
@@ -293,17 +322,13 @@ def run_mf(a, cell, args):
             log.info("SCF loaded successfully.")
 
     # Density-fitting
-    if args.df == "GDF":
+    if df is not None:
+        mf.with_df = df
+    elif args.df == "GDF":
         mf = mf.density_fit()
         df = mf.with_df
         # TEST
 
-        if args.gdf_exp_to_discard is not None:
-            df.exp_to_discard = args.gdf_exp_to_discard
-        if args.gdf_lindep_threshold is not None:
-            df.linear_dep_threshold = args.gdf_lindep_threshold
-        if args.gdf_force_eig:
-            df.force_eig = True
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
             df.auxbasis = args.auxbasis
@@ -326,20 +351,15 @@ def run_mf(a, cell, args):
                 load_gdf_ok = True
         # Calculate GDF
         if not load_gdf_ok:
-            if args.gdf_mesh is not None:
-                df.mesh = args.gdf_mesh
-            elif args.gdf_mesh_factor is not None:
-                df.mesh = [int(args.gdf_mesh_factor*n) for n in df.mesh]
-            # Force odd mesh
-            df.mesh = [2*(n//2)+1 for n in df.mesh]
             if args.save_gdf is not None:
                 fname = (args.save_gdf % a) if ("%" in args.save_gdf) else args.save_gdf
                 df._cderi_to_save = fname
                 log.info("Saving GDF to file %s...", fname)
-            log.info("Building GDF...")
-            t0 = timer()
-            df.build()
-            log.info("Time for GDF build: %.3f s", (timer()-t0))
+            if build_df_early:
+                log.info("Building GDF...")
+                t0 = timer()
+                df.build()
+                log.info("Time for GDF build: %.3f s", (timer()-t0))
 
     # Calculate SCF
     if not load_scf_ok:
@@ -369,7 +389,8 @@ def run_mf(a, cell, args):
             assert stable
     log.info("HF converged: %r", mf.converged)
     log.info("HF energy: %.8e", mf.e_tot)
-    assert(mf.converged)
+    if not mf.converged:
+        log.warning("WARNING: mean-field not converged!!!")
 
     # Check orthogonality
     if hasattr(mf, "kpts"):
@@ -390,25 +411,9 @@ def run_mf(a, cell, args):
 
     return mf
 
-
-args = get_arguments()
-
-# Loop over geometries
-for i, a in enumerate(args.lattice_consts):
-
-    if MPI_rank == 0:
-        log.info("LATTICE CONSTANT %.2f", a)
-        log.info("*********************")
-        log.changeIndentLevel(1)
-
-    # Setup cell
-    cell = make_cell(a, args)
-
-    # Mean-field
-    mf = run_mf(a, cell, args)
-    log.info("Nuclear energy= %.8g", mf.energy_nuc())
-
-    # k-point to supercell gamma point
+def unfold_mf(mf, args, unfold_j3c=None):
+    if unfold_j3c is None:
+        unfold_j3c = args.run_embcc
     if args.k_points is not None and np.product(args.k_points) > 1:
         log.info("k2gamma...")
         t0 = timer()
@@ -418,18 +423,76 @@ for i, a in enumerate(args.lattice_consts):
             log.info("Loading unfolded GDF from file %s...", fname)
             mf.with_df._cderi = fname
         else:
-            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+            #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=unfold_j3c)
         log.info("Time for k2gamma: %.3f s", (timer()-t0))
     else:
         mf._eri = None
 
-    np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
+    return mf
 
-    natom = mf.mol.natm
-    ncells = natom / cell._natom_prim
-    eref = natom if (args.energy_per == "atom") else ncells
 
-    energies = { "hf" : [mf.e_tot / eref], "ccsd" : [], "ccsd-dmp2" : [] }
+args = get_arguments()
+
+# Loop over geometries
+for i, a in enumerate(args.lattice_consts):
+    t0 = timer()
+
+    if MPI_rank == 0:
+        log.info("LATTICE CONSTANT %.2f", a)
+        log.info("*********************")
+        log.changeIndentLevel(1)
+
+    energies = {}
+
+    # Setup cell
+    cell = make_cell(a, args)
+
+    # Mean-field
+    if args.run_hf:
+        mf = run_mf(a, cell, args)
+        mf = unfold_mf(mf, args)
+
+    # Reuse DF
+    #df = None
+    for xc in args.dft_xc:
+        dft = run_mf(a, cell, args, xc=xc)
+        #dft = run_mf(a, cell, args, xc=xc, df=df)
+        #df = dft.with_df
+        energies[xc] = [dft.e_tot]
+
+        # Population analysis
+        dft = unfold_mf(dft, args, unfold_j3c=False)
+        pop_analysis(dft, filename="pop-%s-%.2f.txt" % (xc, a))
+
+    # k-point to supercell gamma point
+    #if args.k_points is not None and np.product(args.k_points) > 1:
+    #    log.info("k2gamma...")
+    #    t0 = timer()
+    #    if args.load_gdf and args.load_gdf_unfolded:
+    #        mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=False)
+    #        fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+    #        log.info("Loading unfolded GDF from file %s...", fname)
+    #        mf.with_df._cderi = fname
+    #    else:
+    #        #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+    #        mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=args.run_embcc)
+    #    log.info("Time for k2gamma: %.3f s", (timer()-t0))
+    #else:
+    #    mf._eri = None
+
+    if args.run_hf:
+        np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
+        natom = mf.mol.natm
+        ncells = natom / cell._natom_prim
+        eref = natom if (args.energy_per == "atom") else ncells
+        energies["hf"] = [mf.e_tot / eref]
+    if args.run_embcc:
+        energies["ccsd"] = []
+        energies["ccsd-dmp2"] = []
+        if args.solver == "CCSD(T)":
+            energies["ccsdt"] = []
+            energies["ccsdt-dmp2"] = []
 
     # Canonical full system MP2
     if args.canonical_mp2:
@@ -443,52 +506,49 @@ for i, a in enumerate(args.lattice_consts):
         except Exception as e:
             log.error("Error in canonical MP2 calculation: %s", e)
 
-    if args.solver == "CCSD(T)":
-        energies["ccsdt"] = []
-        energies["ccsdt-dmp2"] = []
+    if args.run_embcc:
+        # Embedding calculations
+        # ----------------------
+        # Loop over bath tolerances
+        for j, btol in enumerate(args.bath_tol):
 
-    # Embedding calculations
-    # ----------------------
-    # Loop over bath tolerances
-    for j, btol in enumerate(args.bath_tol):
+            kwargs = {opt : True for opt in args.opts}
+            if args.prim_mp2_bath_tol_occ:
+                kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
+            if args.prim_mp2_bath_tol_vir:
+                kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
 
-        kwargs = {opt : True for opt in args.opts}
-        if args.prim_mp2_bath_tol_occ:
-            kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
-        if args.prim_mp2_bath_tol_vir:
-            kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
+            ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
+                bath_type=args.bath_type, bath_tol=btol,
+                mp2_correction=args.mp2_correction,
+                power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
+                **kwargs
+                )
 
-        ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
-            bath_type=args.bath_type, bath_tol=btol,
-            mp2_correction=args.mp2_correction,
-            power1_occ_bath_tol=args.power1_occ_bath_tol, power1_vir_bath_tol=args.power1_vir_bath_tol,
-            **kwargs
-            )
+            # Define atomic fragments, first argument is atom index
+            if args.system == "diamond":
+                ccx.make_atom_cluster(0, symmetry_factor=natom)
+            elif args.system == "graphene":
+                for ix in range(2):
+                    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
+            elif args.system == "perovskite":
+                weights = args.bath_tol_fragment_weight
+                # Overwrites ccx.bath_tol per cluster
+                if weights is not None:
+                    for ix in range(5):
+                        ccx.make_atom_cluster(ix, symmetry_factor=ncells, bath_tol=weights[ix]*btol)
+                else:
+                    for ix in range(5):
+                        ccx.make_atom_cluster(ix, symmetry_factor=ncells)
 
-        # Define atomic fragments, first argument is atom index
-        if args.system == "diamond":
-            ccx.make_atom_cluster(0, symmetry_factor=natom)
-        elif args.system == "graphene":
-            for ix in range(2):
-                ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
-        elif args.system == "perovskite":
-            weights = args.bath_tol_fragment_weight
-            # Overwrites ccx.bath_tol per cluster
-            if weights is not None:
-                for ix in range(5):
-                    ccx.make_atom_cluster(ix, symmetry_factor=ncells, bath_tol=weights[ix]*btol)
-            else:
-                for ix in range(5):
-                    ccx.make_atom_cluster(ix, symmetry_factor=ncells)
+            ccx.kernel()
 
-        ccx.kernel()
-
-        # Save energies
-        energies["ccsd"].append(ccx.e_tot / eref)
-        energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2) / eref)
-        if args.solver == "CCSD(T)":
-            energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t) / eref)
-            energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t) / eref)
+            # Save energies
+            energies["ccsd"].append(ccx.e_tot / eref)
+            energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2) / eref)
+            if args.solver == "CCSD(T)":
+                energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t) / eref)
+                energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t) / eref)
 
     # Write energies to files
     if MPI_rank == 0:
@@ -499,4 +559,5 @@ for i, a in enumerate(args.lattice_consts):
                 with open(fname, "a") as f:
                     f.write(("%6.3f" + len(val)*"  %+16.12e" + "\n") % (a, *val))
 
+    log.info("Total time for lattice constant= %.2f: %.3f s", a, (timer()-t0))
     log.changeIndentLevel(-1)

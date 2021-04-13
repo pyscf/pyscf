@@ -25,6 +25,7 @@ See also the original implementation at
 https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 '''
 
+from timeit import default_timer as timer
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -180,9 +181,10 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     # transformation that makes the transformed MOs real.
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < degen_tol
     degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-    print("degen_mask: %r", degen_mask)
 
+    t0 = timer()
     C_gamma = rotate_mo_to_real(cell, E_g, C_gamma, degen_tol=degen_tol)
+    logger.debug(cell, "Time for rotate_mo_to_real= %.2f s", (timer()-t0))
 
     if np.any(~degen_mask):
         cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
@@ -191,13 +193,12 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
         cimag_nondegen = 0.0
         logger.debug(cell, "No non-degenerate MOs found")
 
-    #1/0
-
     # Only fock can deal with significant imaginary parts outside of imaginary subspaces:
     if degen_method == "dm" and cimag_nondegen >= 1e-4:
         degen_method = "fock"
         print("Significant imaginary parts - changing degen_method to %s" % degen_method)
 
+    t0 = timer()
     if degen_method == "fock":
         if np.any(E_k_degen):
             if cimag_nondegen < 1e-4:
@@ -226,7 +227,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
         # Looping over stop-index, append state with energy 1e9 to guarantee closing of last subspace
         for idx, e1 in enumerate(np.hstack((E_g[1:], 1e9)), 1):
 
-            # Close of previous subspace
+            # Close off previous subspace
             if ((e1-E_g[idx-1]) > degen_tol):
 
                 dsize = (idx-idx0)
@@ -264,35 +265,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     else:
         print("Unknown value for degen_mode= %s", degen_mode)
 
-
-    #E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
-    #degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-    #if np.any(E_k_degen):
-    #    if abs(C_gamma[:,~degen_mask].imag).max() < 1e-4:
-    #        shift = min(E_g[degen_mask]) - .1
-    #        f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
-    #                   C_gamma[:,degen_mask].conj().T)
-    #        # ADD:
-    #        if abs(f.imag).max() > 1e-4:
-    #            print("Large imaginary part in Fock matrix= %.2e" % abs(f.imag).max())
-    #            f = np.dot(C_gamma[:,degen_mask], C_gamma[:,degen_mask].conj().T)
-    #            print("Imaginary part in DM= %.2e" % abs(f.imag).max())
-    #            nulltol = 1e-3
-    #        else:
-    #            nulltol = 1e-7
-    #        assert(abs(f.imag).max() < 1e-4)
-
-    #        e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
-    #        C_gamma = C_gamma.real
-    #        C_gamma[:,degen_mask] = na_orb[:, e>nulltol]
-    #    else:
-    #        f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-    #        if abs(f.imag).max() > 1e-4:
-    #            print("Large imaginary part in Fock matrix= %.2e" % abs(f.imag).max())
-    #            f = np.dot(C_gamma, C_gamma.conj().T)
-    #            print("Imaginary part in DM= %.2e" % abs(f.imag).max())
-    #        assert(abs(f.imag).max() < 1e-4)
-    #        e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
+    logger.debug(cell, "Time for degeneracy treatment= %.2f s", (timer()-t0))
 
     #s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     s_k = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=lib.c_null_ptr())
