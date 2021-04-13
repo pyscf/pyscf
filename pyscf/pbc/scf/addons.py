@@ -52,6 +52,28 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
         return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), sym_pos=True)
                 for k, kpt in enumerate(kpts)]
 
+def project_dm_nr2nr(cell1, dm1, cell2, kpts=None):
+    r''' Project density matrix representation from basis set 1 (cell1) to basis
+    set 2 (cell2).
+
+    .. math::
+
+        |AO2\rangle DM_AO2 \langle AO2|
+
+        = |AO2\rangle P DM_AO1 P \langle AO2|
+
+        DM_AO2 = P DM_AO1 P
+
+        P = S_{AO2}^{-1}\langle AO2|AO1\rangle
+    '''
+    s22 = cell2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
+    s21 = pbcgto.intor_cross('int1e_ovlp', cell2, cell1, kpts=kpts)
+    if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
+        p21 = scipy.linalg.solve(s22, s21, sym_pos=True)
+        return numpy.einsum("pi,...ij,qj->...pq", p21, dm1, p21.conj(), optimize=True) # Ellipsis for potential spin dimension in UHF
+    else:
+        p21 = [scipy.linalg.solve(s22[k], s21[k], sym_pos=True) for k, kpt in enumerate(kpts)]
+        return numpy.einsum("kpi,...kij,kqj->...kpq", p21, dm1, p21.conj(), optimize=True)
 
 def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
     '''Fermi-Dirac or Gaussian smearing'''

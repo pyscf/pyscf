@@ -55,10 +55,11 @@ def get_arguments():
     # Mean-field
     parser.add_argument("--save-scf", help="Save primitive cell SCF.", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
     parser.add_argument("--load-scf", help="Load primitive cell SCF.")
-    parser.add_argument("--load-scf-init")
+    parser.add_argument("--load-scf-init-guess")
     parser.add_argument("--hf-stability-check", type=int, choices=[0, 1], default=0)
     parser.add_argument("--exxdiv-none", action="store_true")
-    parser.add_argument("--hf-preconv-basis")
+    parser.add_argument("--hf-init-guess-basis")
+    parser.add_argument("--remove-linear-dep", type=float)
 
     # MP
     parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
@@ -220,7 +221,7 @@ def make_perovskite(a, atoms):
 
     return amat, atom
 
-def make_cell(a, args):
+def make_cell(a, args, **kwargs):
 
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
@@ -241,7 +242,7 @@ def make_cell(a, args):
         cell.ke_cutoff = args.ke_cutoff
 
     cell.verbose = args.pyscf_verbose
-    cell.basis = args.basis
+    cell.basis = kwargs.get("basis", args.basis)
     if args.pseudopot:
         cell.pseudo = args.pseudopot
     if args.ecp:
@@ -283,16 +284,14 @@ def pop_analysis(mf, filename=None, mode="a"):
 
     return pop, chg
 
-def run_mf(a, cell, args, xc="hf", df=None, build_df_early=False):
-    if args.k_points is None or np.product(args.k_points) == 1:
-        #kpts = cell.make_kpts([1, 1, 1])
+def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_early=False):
+    if kpts is None:
         if xc == "hf":
             mf = pyscf.pbc.scf.RHF(cell)
         else:
             mf = pyscf.pbc.dft.RKS(cell)
             mf.xc = xc
     else:
-        kpts = cell.make_kpts(args.k_points)
         if xc == "hf":
             mf = pyscf.pbc.scf.KRHF(cell, kpts)
         else:
@@ -320,6 +319,9 @@ def run_mf(a, cell, args, xc="hf", df=None, build_df_early=False):
         else:
             load_scf_ok = True
             log.info("SCF loaded successfully.")
+
+    if args.remove_linear_dep is not None:
+        mf = pyscf.scf.addons.remove_linear_dep_(mf, threshold=args.remove_linear_dep)
 
     # Density-fitting
     if df is not None:
@@ -367,19 +369,8 @@ def run_mf(a, cell, args, xc="hf", df=None, build_df_early=False):
             fname = (args.save_scf % a) if ("%" in args.save_scf) else args.save_scf
             mf.chkfile = fname
 
-        if args.load_scf_init:
-            fname = (args.load_scf_init % a) if ("%" in args.load_scf_init) else args.load_scf_init
-            log.info("Loading initial guess for SCF from file %s...", fname)
-            chkfile_dict = pyscf.pbc.scf.chkfile.load(fname, "scf")
-            log.info("Loaded attributes: %r", list(chkfile_dict.keys()))
-            occ0, c0 = chkfile_dict["mo_occ"], chkfile_dict["mo_coeff"]
-            c0 = c0[:,occ0>0]
-            dm0 = 2*np.dot(c0 * occ0[occ0>0], c0.T.conj())
-        else:
-            dm0 = None
-
         t0 = timer()
-        mf.kernel(dm0=dm0)
+        mf.kernel(dm0=dm_init)
         log.info("Time for HF: %.3f s", (timer()-t0))
         if args.hf_stability_check:
             t0 = timer()
@@ -448,9 +439,40 @@ for i, a in enumerate(args.lattice_consts):
     # Setup cell
     cell = make_cell(a, args)
 
+    # k-points
+    if args.k_points is None or np.product(args.k_points) == 1:
+        kpts = None
+    else:
+        kpts = cell.make_kpts(args.k_points)
+
+    if args.hf_init_guess_basis is not None:
+        cell_init_guess = make_cell(a, args, basis=args.hf_init_guess_basis)
+    else:
+        cell_init_guess = cell
+
+    if args.load_scf_init_guess:
+        fname = (args.load_scf_init_guess % a) if ("%" in args.load_scf_init_guess) else args.load_scf_init_guess
+        log.info("Loading initial guess for SCF from file %s...", fname)
+        chkfile_dict = pyscf.pbc.scf.chkfile.load(fname, "scf")
+        log.info("Loaded attributes: %r", list(chkfile_dict.keys()))
+        occ0, c0 = chkfile_dict["mo_occ"], chkfile_dict["mo_coeff"]
+        c0 = c0[:,occ0>0]
+        c_init = c0
+        dm_init = np.dot(c0 * occ0[occ0>0], c0.T.conj())
+    elif args.hf_init_guess_basis is not None:
+        mf_init_guess = run_mf(a, cell_init_guess, args)
+        dm_init = mf_init_guess.make_rdm1()
+    else:
+        dm_init = None
+
+    # Convert DM to cell AOs
+    if dm_init is not None and args.hf_init_guess_basis is not None:
+        log.debug("Converting basis of initial guess DM from %s to %s", cell_init_guess.basis, cell.basis)
+        dm_init = pyscf.pbc.scf.addons.project_dm_nr2nr(cell_init_guess, dm_init, cell, kpts)
+
     # Mean-field
     if args.run_hf:
-        mf = run_mf(a, cell, args)
+        mf = run_mf(a, cell, args, kpts=kpts, dm_init=dm_init)
         mf = unfold_mf(mf, args)
 
     # Reuse DF

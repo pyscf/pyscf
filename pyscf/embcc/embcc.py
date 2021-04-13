@@ -111,9 +111,35 @@ class EmbCC:
         log.info("******************")
         log.changeIndentLevel(1)
 
+        # New implementation of options
+        # TODO: Change other options to here
+        self.opts = Options()
+        default_opts = {
+                # Bath settings
+                "prim_mp2_bath_tol_occ" : False,
+                "prim_mp2_bath_tol_vir" : False,
+                #"orthogonal_mo_tol" : 1e-8,
+                "orbfile" : None,         # Filename for orbital coefficients
+                "orthogonal_mo_tol" : False,
+                # Population analysis
+                "make_rdm1" : False,
+                "popfile" : "population",       # Filename for population analysis
+                # EOM-CCSD
+                "eom_ccsd" : False,
+                "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
+                # Other
+                "strict" : False,               # Stop if cluster not converged
+                }
+        for key, val in default_opts.items():
+            setattr(self.opts, key, kwargs.pop(key, val))
+        if kwargs:
+            raise ValueError("Unknown arguments: %r" % kwargs.keys())
+
         # --- Check input
         if not mf.converged:
-            log.warning("Mean-field calculation not converged.")
+            log.error("ERROR: Mean-field calculation not converged.")
+            if self.opts.strict:
+                raise RuntimeError("ERROR: Mean-field calculation not converged.")
 
         # Local orbital types:
         # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
@@ -128,16 +154,16 @@ class EmbCC:
             raise ValueError("Unknown bath type: %s" % bath_type)
 
         # Convert KRHF to Gamma-point RHF
-        if isinstance(mf, pyscf.pbc.scf.KRHF) or isinstance(mf.mo_coeff, list):
-            log.info("Converting KRHF to gamma-point RHF calculation")
-            assert np.allclose(mf.kpts[0], 0)
-            mf_g = pyscf.pbc.scf.RHF(mf.cell)
-            mf_g.kpts = mf.kpts[0]
-            mf_g.mo_energy = mf.mo_energy[0].copy()
-            mf_g.mo_occ = mf.mo_occ[0].copy()
-            mf_g.mo_coeff = mf.mo_coeff[0].copy()
-            mf_g.with_df = mf.with_df
-            mf = mf_g
+        #if isinstance(mf, pyscf.pbc.scf.KRHF) or isinstance(mf.mo_coeff, list):
+        #    log.info("Converting KRHF to gamma-point RHF calculation")
+        #    assert np.allclose(mf.kpts[0], 0)
+        #    mf_g = pyscf.pbc.scf.RHF(mf.cell)
+        #    mf_g.kpts = mf.kpts[0]
+        #    mf_g.mo_energy = mf.mo_energy[0].copy()
+        #    mf_g.mo_occ = mf.mo_occ[0].copy()
+        #    mf_g.mo_coeff = mf.mo_coeff[0].copy()
+        #    mf_g.with_df = mf.with_df
+        #    mf = mf_g
 
         self.mf = mf
         self.mo_energy = mf.mo_energy.copy()
@@ -166,30 +192,6 @@ class EmbCC:
         self.maxiter = maxiter
         self.energy_part = energy_part
 
-        # New implementation of options
-        # TODO: Change other options to here
-        self.opts = Options()
-        default_opts = {
-                # Bath settings
-                "prim_mp2_bath_tol_occ" : False,
-                "prim_mp2_bath_tol_vir" : False,
-                #"orthogonal_mo_tol" : 1e-8,
-                "orbfile" : None,         # Filename for orbital coefficients
-                "orthogonal_mo_tol" : False,
-                # Population analysis
-                "make_rdm1" : False,
-                "popfile" : "population",       # Filename for population analysis
-                # EOM-CCSD
-                "eom_ccsd" : False,
-                "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
-                # Other
-                "strict" : False,               # Stop if cluster not converged
-                }
-        for key, val in default_opts.items():
-            setattr(self.opts, key, kwargs.pop(key, val))
-        if kwargs:
-            raise ValueError("Unknown arguments: %r" % kwargs.keys())
-
         # Options
         self.solver = solver
 
@@ -211,12 +213,9 @@ class EmbCC:
 
         self.clusters = []
 
-        # Correlation energy
-        self.e_corr = 0.0
-        # CCSD(T) correction
-        self.e_pert_t = 0.0
-        # MP2 correction
-        self.e_delta_mp2 = 0.0
+        self.e_corr = 0.0           # Correlation energy
+        self.e_pert_t = 0.0         # CCSD(T) correction
+        self.e_delta_mp2 = 0.0      # MP2 correction
 
         # Full cluster correlation energy. Only makes sense for a single cluster, otherwise double counting!
         self.e_corr_full = 0.0
@@ -230,7 +229,7 @@ class EmbCC:
         self.tccT2 = None
 
         # Fock matrix
-        # These two fock matrices are different for loose values of cell.precision
+        # These two Fock matrices are different for loose values of cell.precision
         # Which should be used?
         # (We only need Fock matrix for canonicalization, therefore not too important to be accurate for CCSD.
         # However, what about MP2 & CCSD(T)?)
