@@ -20,7 +20,6 @@
 Auxiliary second-order Green's function perturbation theory
 '''
 
-import time
 import numpy as np
 import copy
 from pyscf import lib
@@ -39,12 +38,12 @@ BLKMIN = getattr(__config__, 'agf2_blkmin', 1)
 def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 
     log = logger.new_logger(agf2, verbose)
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     name = agf2.__class__.__name__
 
     if eri is None: eri = agf2.ao2mo()
-    if gf is None: gf = self.gf
-    if se is None: se = self.se
+    if gf is None: gf = agf2.gf
+    if se is None: se = agf2.se
     if verbose is None: verbose = agf2.verbose
 
     if gf is None:
@@ -121,7 +120,7 @@ def kernel(agf2, eri=None, gf=None, se=None, verbose=None, dump_chk=True):
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
     ''' Builds either the auxiliaries of the occupied self-energy,
         or virtual if :attr:`gf_occ` and :attr:`gf_vir` are swapped.
-    
+
     Args:
         eri : _ChemistsERIs
             Electronic repulsion integrals
@@ -142,7 +141,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ) is aux.GreensFunction
@@ -283,14 +282,14 @@ def fock_loop(agf2, eri, gf, se):
             Auxiliaries of the self-energy
 
     Returns:
-        :class:`SelfEnergy`, :class:`GreensFunction` and a boolean 
-        indicating wheter convergence was successful. 
+        :class:`SelfEnergy`, :class:`GreensFunction` and a boolean
+        indicating wheter convergence was successful.
     '''
 
     assert type(gf) is aux.GreensFunction
     assert type(se) is aux.SelfEnergy
 
-    cput0 = cput1 = (time.clock(), time.time())
+    cput0 = cput1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     diis = lib.diis.DIIS(agf2)
@@ -305,6 +304,7 @@ def fock_loop(agf2, eri, gf, se):
     buf = np.zeros((nqmo, nqmo))
     converged = False
     opts = dict(tol=agf2.conv_tol_nelec, maxiter=agf2.max_cycle_inner)
+    rdm1_prev = 0
 
     for niter1 in range(1, agf2.max_cycle_outer+1):
         se, opt = minimize_chempot(se, fock, nelec, x0=se.chempot, **opts)
@@ -450,12 +450,12 @@ class RAGF2(lib.StreamObject):
             Convergence threshold for first-order reduced density matrix.
             Default value is 1e-8.
         conv_tol_nelec : float
-            Convergence threshold for the number of electrons. Default 
+            Convergence threshold for the number of electrons. Default
             value is 1e-6.
         max_cycle : int
             Maximum number of AGF2 iterations. Default value is 50.
         max_cycle_outer : int
-            Maximum number of outer Fock loop iterations. Default 
+            Maximum number of outer Fock loop iterations. Default
             value is 20.
         max_cycle_inner : int
             Maximum number of inner Fock loop iterations. Default
@@ -509,8 +509,8 @@ class RAGF2(lib.StreamObject):
     def __init__(self, mf, frozen=None, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         if mo_energy is None: mo_energy = mpi_helper.bcast(mf.mo_energy)
-        if mo_coeff  is None: mo_coeff  = mpi_helper.bcast(mf.mo_coeff)
-        if mo_occ    is None: mo_occ    = mpi_helper.bcast(mf.mo_occ)
+        if mo_coeff is None: mo_coeff = mpi_helper.bcast(mf.mo_coeff)
+        if mo_occ is None: mo_occ = mpi_helper.bcast(mf.mo_occ)
 
         self.mol = mf.mol
         self._scf = mf
@@ -567,7 +567,7 @@ class RAGF2(lib.StreamObject):
         mem_incore = ((self.nmo*(self.nmo+1)//2)**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if (self._scf._eri is not None and 
+        if (self._scf._eri is not None and
                 (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             eri = _make_mo_eris_incore(self, mo_coeff)
         else:
@@ -747,7 +747,7 @@ class RAGF2(lib.StreamObject):
     def energy_nuc(self):
         return self._scf.energy_nuc()
 
-        
+
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
@@ -825,9 +825,11 @@ class RAGF2(lib.StreamObject):
 
         return self.converged, self.e_1b, self.e_2b, self.gf, self.se
 
-    def dump_chk(self, chkfile=None, key='agf2', gf=None, se=None, frozen=None, nmom=None, mo_energy=None, mo_coeff=None, mo_occ=None):
-        chkutil.dump_agf2(self, chkfile, key, 
-                          gf, se, frozen, None, 
+    def dump_chk(self, chkfile=None, key='agf2', gf=None, se=None,
+                 frozen=None, nmom=None,
+                 mo_energy=None, mo_coeff=None, mo_occ=None):
+        chkutil.dump_agf2(self, chkfile, key,
+                          gf, se, frozen, None,
                           mo_energy, mo_coeff, mo_occ)
         return self
 
@@ -875,7 +877,7 @@ class RAGF2(lib.StreamObject):
 
         Returns:
             IP and transition moment (float, 1D array) if :attr:`nroots`
-            = 1, or array of IPs and moments (1D array, 2D array) if 
+            = 1, or array of IPs and moments (1D array, 2D array) if
             :attr:`nroots` > 1.
         '''
 
@@ -968,7 +970,7 @@ def get_frozen_mask(agf2):
 
 class _ChemistsERIs:
     ''' (pq|rs)
-    
+
     MO integrals stored in s4 symmetry, we only need QMO integrals
     in low-symmetry tensors and s4 is highest supported by _vhf
     '''
@@ -1017,7 +1019,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -1029,14 +1031,14 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     eris.eri = eri
 
     log.timer('MO integral transformation', *cput0)
-    
+
     return eris
 
 def _make_mo_eris_outcore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -1046,7 +1048,7 @@ def _make_mo_eris_outcore(agf2, mo_coeff=None):
     mo_coeff = np.asarray(eris.mo_coeff, order='F')
 
     eris.feri = lib.H5TmpFile()
-    ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo', 
+    ao2mo.outcore.full(mol, mo_coeff, eris.feri, dataname='mo',
                        max_memory=agf2.max_memory, verbose=log)
     eris.eri = eris.feri['mo']
 
@@ -1058,7 +1060,7 @@ def _make_qmo_eris_incore(agf2, eri, coeffs):
     ''' Returns ndarray
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     cx = np.eye(eri.nmo)
@@ -1080,11 +1082,10 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     ''' Returns H5 dataset
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     nmo = eri.nmo
-    cx = np.eye(nmo)
     ci, cj, ca = coeffs
     ni = ci.shape[1]
     nj = cj.shape[1]
@@ -1097,7 +1098,7 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     # possible to have incore MO, outcore QMO
     if getattr(eri, 'feri', None) is None:
         eri.feri = lib.H5TmpFile()
-    elif 'qmo' in eri.feri: 
+    elif 'qmo' in eri.feri:
         del eri.feri['qmo']
 
     eri.feri.create_dataset('qmo', (nmo-frozen, ni, nj, na), 'f8')
@@ -1107,20 +1108,26 @@ def _make_qmo_eris_outcore(agf2, eri, coeffs):
     log.debug1('blksize (ragf2._make_qmo_eris_outcore) = %d', blksize)
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
+    q1 = 0
     for p0, p1 in lib.prange(0, nmo, blksize):
+        if not np.any(mask[p0:p1]):
+            # block is fully frozen
+            continue
+
         inds = np.arange(p0, p1)[mask[p0:p1]]
+        q0, q1 = q1, q1 + len(inds)
         idx = list(np.concatenate(tril2sq[inds]))
 
         buf = eri.eri[idx] # (blk, nmo, npair)
-        buf = buf.reshape((len(inds))*nmo, -1) # (blk*nmo, npair)
+        buf = buf.reshape((q1-q0)*nmo, -1) # (blk*nmo, npair)
 
         jasym, nja, cja, sja = ao2mo.incore._conc_mos(cj, ca, compact=True)
         buf = ao2mo._ao2mo.nr_e2(buf, cja, sja, 's2kl', 's1')
-        buf = buf.reshape(len(inds), nmo, nj, na)
+        buf = buf.reshape(q1-q0, nmo, nj, na)
 
         buf = lib.einsum('xpja,pi->xija', buf, ci)
-        eri.feri['qmo'][inds] = np.asarray(buf, order='C')
-        
+        eri.feri['qmo'][q0:q1] = np.asarray(buf, order='C')
+
     log.timer('QMO integral transformation', *cput0)
 
     return eri.feri['qmo']

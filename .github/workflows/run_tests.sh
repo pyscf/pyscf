@@ -6,15 +6,11 @@ echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > .pyscf_conf.py
 echo "dftd3_DFTD3PATH = './pyscf/lib/deps/lib'" >> .pyscf_conf.py
 
 nosetests pyscf/ -v --with-timer --with-cov --cov-report xml --cov-report term --cov-config .coveragerc --cov pyscf \
-    --exclude-dir=examples --exclude-dir=pyscf/future --exclude-dir=pyscf/dmrgscf --exclude-dir=pyscf/fciqmcscf \
-    --exclude-dir=pyscf/icmpspt --exclude-dir=pyscf/shciscf --exclude-dir=pyscf/nao \
-    --exclude-dir=pyscf/cornell_shci --exclude-dir=pyscf/xianci --exclude-dir=pyscf/pbc/grad \
-    --exclude-dir=pyscf/extras --exclude-dir=pyscf/hci \
+    --exclude-dir=examples --exclude-dir=pyscf/pbc/grad \
     -e test_bz \
     -e h2o_vdz \
     -e test_mc2step_4o4e \
     -e test_ks_noimport \
-    -e test_jk_single_kpt \
     -e test_jk_hermi0 \
     -e test_j_kpts \
     -e test_k_kpts \

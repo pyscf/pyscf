@@ -17,7 +17,8 @@
 #
 
 '''
-Spin-restricted G0W0-CD QP eigenvalues
+Spin-restricted G0W0 approximation with contour deformation
+
 This implementation has the same scaling (N^4) as GW-AC, more robust but slower.
 GW-CD is particularly recommended for accurate core and high-energy states.
 
@@ -30,7 +31,6 @@ Useful References:
     J. Chem. Theory Comput. 14, 4856-4869 (2018)
 '''
 
-import time
 from functools import reduce
 import numpy
 import numpy as np
@@ -40,7 +40,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -54,7 +54,11 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert frozen == 0
 
     if Lpq is None:
         Lpq = gw.ao2mo(mo_coeff)
@@ -67,10 +71,9 @@ def kernel(gw, mo_energy, mo_coeff, Lpq=None, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
-    if vhf_df and gw.frozen == 0:
+    if vhf_df: # and frozen == 0:
         # density fitting for vk
         vk = -einsum('Lni,Lim->nm',Lpq[:,:,:nocc],Lpq[:,:nocc,:])
     else:
@@ -194,7 +197,6 @@ def get_sigmaR_diag(gw, omega, orbp, ef, Lpq):
     '''
     mo_energy = gw._scf.mo_energy
     nocc = gw.nocc
-    nmo = gw.nmo
     naux = Lpq.shape[0]
 
     if omega > ef:
@@ -256,7 +258,7 @@ class GWCD(lib.StreamObject):
     eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    def __init__(self, mf, frozen=0):
+    def __init__(self, mf, frozen=None):
         self.mol = mf.mol
         self._scf = mf
         self.verbose = self.mol.verbose
@@ -265,9 +267,8 @@ class GWCD(lib.StreamObject):
 
         self.frozen = frozen
         #TODO: implement frozen orbs
-        if self.frozen > 0:
+        if not (self.frozen is None or self.frozen == 0):
             raise NotImplementedError
-        self.frozen = 0
 
         # DF-GW must use density fitting integrals
         if getattr(mf, 'with_df', None):
@@ -298,8 +299,8 @@ class GWCD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         log.info('GW nocc = %d, nvir = %d', nocc, nvir)
-        if self.frozen is not 0:
-            log.info('frozen orbitals %s', str(self.frozen))
+        if self.frozen is not None:
+            log.info('frozen = %s', self.frozen)
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         return self
 
@@ -334,7 +335,7 @@ class GWCD(lib.StreamObject):
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff,
@@ -347,7 +348,6 @@ class GWCD(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         mem_incore = (2*nmo**2*naux) * 8/1e6
         mem_now = lib.current_memory()[0]
@@ -384,7 +384,7 @@ if __name__ == '__main__':
 
     gw = GWCD(mf)
     gw.kernel(orbs=range(0,nocc+3))
-    print gw.mo_energy
+    print(gw.mo_energy)
     assert(abs(gw.mo_energy[nocc-1]--0.41284735)<1e-5)
     assert(abs(gw.mo_energy[nocc]-0.16574524)<1e-5)
     assert(abs(gw.mo_energy[0]--19.53387986)<1e-5)

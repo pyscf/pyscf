@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     eia = mo_e[:nocc,None] - mo_e[nocc:]
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
 
-    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei)
-        - numpy.einsum('imbc,majk->ijkabc', t2, majk))
+    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei) -
+          numpy.einsum('imbc,majk->ijkabc', t2, majk))
     t3c = t3c - t3c.transpose(0,1,2,4,3,5) - t3c.transpose(0,1,2,5,4,3)
     t3c = t3c - t3c.transpose(1,0,2,3,4,5) - t3c.transpose(2,1,0,3,4,5)
     t3c /= d3
@@ -69,8 +69,8 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     eia = mo_e[:nocc,None] - mo_e[nocc:]
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
 
-    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei)
-        - numpy.einsum('imbc,majk->ijkabc', t2, majk))
+    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei) -
+          numpy.einsum('imbc,majk->ijkabc', t2, majk))
     t3c = t3c - t3c.transpose(0,1,2,4,3,5) - t3c.transpose(0,1,2,5,4,3)
     t3c = t3c - t3c.transpose(1,0,2,3,4,5) - t3c.transpose(2,1,0,3,4,5)
     t3c /= d3
@@ -81,7 +81,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     t3d = t3d - t3d.transpose(1,0,2,3,4,5) - t3d.transpose(2,1,0,3,4,5)
     t3d /= d3
 
-    goovv  = numpy.einsum('kc,ijkabc->ijab', t1.conj(), t3c).conj() * (1./4)
+    goovv = numpy.einsum('kc,ijkabc->ijab', t1.conj(), t3c).conj() * (1./4)
     dovov += goovv.transpose(0,2,1,3) - goovv.transpose(0,3,1,2)
 
     m3 = t3c * 2 + t3d

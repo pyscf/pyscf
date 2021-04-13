@@ -254,7 +254,7 @@ def _get_intor_and_comp(intor_name, comp=None):
     return intor_name, comp
 
 _INTOR_FUNCTIONS = {
-#   Functiona name              : (comp-for-scalar, comp-for-spinor)
+    # Functiona name            : (comp-for-scalar, comp-for-spinor)
     'int1e_ovlp'                : (1, 1),
     'int1e_nuc'                 : (1, 1),
     'int1e_kin'                 : (1, 1),

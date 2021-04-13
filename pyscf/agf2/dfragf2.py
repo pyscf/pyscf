@@ -21,7 +21,6 @@ Auxiliary second-order Green's function perturbation theory
 with density fitting
 '''
 
-import time
 import numpy as np
 import ctypes
 from pyscf import lib
@@ -57,7 +56,7 @@ def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):
         :class:`SelfEnergy`
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     assert type(gf_occ) is aux.GreensFunction
@@ -157,7 +156,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
 
         if with_k:
             buf1 = buf[0][:p1-p0]
-            fdrv(ftrans, fmmm, 
+            fdrv(ftrans, fmmm,
                  buf1.ctypes.data_as(ctypes.c_void_p),
                  bra0.ctypes.data_as(ctypes.c_void_p),
                  rdm1.ctypes.data_as(ctypes.c_void_p),
@@ -181,7 +180,7 @@ def get_jk(agf2, eri, rdm1, with_j=True, with_k=True):
     if with_k:
         mpi_helper.barrier()
         mpi_helper.allreduce_safe_inplace(vk)
-    
+
     return vj, vk
 
 
@@ -205,12 +204,12 @@ class DFRAGF2(ragf2.RAGF2):
             Convergence threshold for first-order reduced density matrix.
             Default value is 1e-8.
         conv_tol_nelec : float
-            Convergence threshold for the number of electrons. Default 
+            Convergence threshold for the number of electrons. Default
             value is 1e-6.
         max_cycle : int
             Maximum number of AGF2 iterations. Default value is 50.
         max_cycle_outer : int
-            Maximum number of outer Fock loop iterations. Default 
+            Maximum number of outer Fock loop iterations. Default
             value is 20.
         max_cycle_inner : int
             Maximum number of inner Fock loop iterations. Default
@@ -227,7 +226,7 @@ class DFRAGF2(ragf2.RAGF2):
             Minimum space of DIIS. Default value is 1.
         fock_diis_space : int
             DIIS space size for Fock loop iterations. Default value is 6.
-        fock_diis_min_space : 
+        fock_diis_min_space :
             Minimum space of DIIS. Default value is 1.
         os_factor : float
             Opposite-spin factor for spin-component-scaled (SCS)
@@ -323,7 +322,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     ''' Returns _ChemistsERIs
     '''
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     eris = _ChemistsERIs()
@@ -346,7 +345,7 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
     mpi_helper.allreduce_safe_inplace(qxy)
 
     eris.eri = eris.qxy = qxy
-    
+
     log.timer('MO integral transformation', *cput0)
 
     return eris
@@ -354,8 +353,8 @@ def _make_mo_eris_incore(agf2, mo_coeff=None):
 def _make_qmo_eris_incore(agf2, eri, coeffs):
     ''' Returns tuple of ndarray
     '''
-    
-    cput0 = (time.clock(), time.time())
+
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(agf2.stdout, agf2.verbose)
 
     cx = np.eye(agf2.nmo)

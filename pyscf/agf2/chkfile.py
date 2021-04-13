@@ -20,7 +20,6 @@
 Functions to support chkfiles with MPI
 '''
 
-import time
 import numpy as np
 import h5py
 from pyscf import lib
@@ -102,10 +101,14 @@ def load_agf2(chkfile):
         dic['nmom'] = (dic.get('ngf', None), dic.get('nse', None))
         del(dic['ngf'], dic['nse'])
 
+    if 'frozena' in dic:
+        dic['frozen'] = (dic['frozena'], dic['frozenb'])
+        del(dic['frozena'], dic['frozenb'])
+
     return load_mol(chkfile), dic
 
 
-def dump_agf2(agf2, chkfile=None, key='agf2', 
+def dump_agf2(agf2, chkfile=None, key='agf2',
               gf=None, se=None, frozen=None, nmom=None,
               mo_energy=None, mo_coeff=None, mo_occ=None):
     ''' Save the AGF2 calculatuion to a chkfile.
@@ -123,6 +126,11 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
     if mo_energy is None: mo_energy = agf2.mo_energy
     if mo_coeff is None: mo_coeff = agf2.mo_coeff
     if mo_occ is None: mo_occ = agf2.mo_occ
+
+    if isinstance(gf, (tuple, list)):
+        if frozen is not None:
+            if isinstance(frozen, int) or isinstance(frozen[0], int):
+                frozen = [frozen, frozen]
 
     if h5py.is_hdf5(chkfile):
         fh5 = h5py.File(chkfile, 'a')
@@ -147,7 +155,6 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
     store('mo_occ', mo_occ)
     store('_nmo', agf2._nmo)
     store('_nocc', agf2._nocc)
-    store('frozen', frozen)
 
     if gf is not None:
         if isinstance(gf, (tuple, list)):
@@ -157,10 +164,14 @@ def dump_agf2(agf2, chkfile=None, key='agf2',
             store('gfb/energy', gf[1].energy)
             store('gfb/coupling', gf[1].coupling)
             store('gfb/chempot', gf[1].chempot)
+            if frozen is not None:
+                store('frozena', frozen[0])
+                store('frozenb', frozen[1])
         else:
             store('gf/energy', gf.energy)
             store('gf/coupling', gf.coupling)
             store('gf/chempot', gf.chempot)
+            store('frozen', frozen)
 
     if se is not None:
         if isinstance(se, (tuple, list)):

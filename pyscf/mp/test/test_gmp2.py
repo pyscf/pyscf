@@ -204,7 +204,26 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         self.assertAlmostEqual(pt.kernel()[0], -0.12714840392411947, 7)
 
+    def test_gmp2_with_df(self):
+        pt = mp.GMP2(gmf).density_fit()
+        emp2, t2 = pt.kernel(gmf.mo_energy, gmf.mo_coeff)
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 9)
+
+        mf1 = scf.addons.convert_to_ghf(mf)
+        mf1.mo_coeff = numpy.asarray(mf1.mo_coeff)  # remove tag orbspin
+        pt = mp.GMP2(mf1).density_fit()
+        emp2, t2 = pt.kernel()
+        self.assertAlmostEqual(emp2, -0.09624851692896723, 9)
+
+        dm = gmf.get_init_guess() + .1j
+        dm = 0.5*(dm + dm.T.conj())
+        gmf.conv_tol = 1e-9
+        gmf.kernel(dm0=dm)
+        pt = mp.GMP2(gmf).density_fit()
+        emp2, t2 = pt.kernel()
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 8)
+
 
 if __name__ == "__main__":
-    print("Full Tests for mp2")
+    print("Full Tests for gmp2")
     unittest.main()

@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <complex.h>
 #include <math.h>
 #include <assert.h>
@@ -268,7 +267,7 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double complex *eri,
                                          envs->bas, envs->nbas, envs->env,
                                          envs->cintopt, NULL);
                         } else {
-                                memset(pbuf, 0, sizeof(double complex)*n);
+                                NPzset0(pbuf, n);
                         }
                         pbuf += n;
                 }
@@ -335,7 +334,7 @@ static void fill_s2(int (*intor)(), int (*fprescreen)(), double complex *eri,
                                          envs->bas, envs->nbas, envs->env,
                                          envs->cintopt, NULL);
                         } else {
-                                memset(pbuf, 0, sizeof(double complex)*n);
+                                NPzset0(pbuf, n);
                         }
                         pbuf += n;
                 }

@@ -24,6 +24,7 @@ from functools import reduce
 import numpy
 from pyscf.data.elements import _symbol, _rm_digit
 from pyscf import gto
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import geom
 from pyscf.symm import param
 
@@ -36,8 +37,7 @@ __all__ = ['tot_parity_odd',
            'linearmole_irrep_id2symb',
            'linearmole_symm_adapted_basis',
            'so3_irrep_symb2id',
-           'so3_irrep_id2symb',
-          ]
+           'so3_irrep_id2symb',]
 
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
@@ -56,7 +56,7 @@ def tot_parity_odd(op, l, m):
     else:
         ox,oy,oz = OP_PARITY_ODD[op]
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
-        return (ox and gx)^(oy and gy)^(oz and gz)
+        return (ox and gx) ^ (oy and gy) ^ (oz and gz)
 
 def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     if gpname == 'SO3':
@@ -184,7 +184,7 @@ def _ao_rotation_matrices(mol, axes):
     return Ds
 
 def dump_symm_adapted_basis(mol, so):
-    raise RuntimeError('TODO')
+    raise PointGroupSymmetryError('TODO')
 
 def symmetrize_matrix(mat, so):
     return [reduce(numpy.dot, (c.conj().T,mat,c)) for c in so]
@@ -206,7 +206,8 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-# This branch should never be reached if basis_tab is formated by function mole.format_basis
+        # This branch should never be reached if basis_tab is formated by
+        # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:
         nctr = len(basis[1]) - 1
@@ -401,7 +402,7 @@ def linearmole_symm_descent(gpname, irrepid):
     if gpname in ('Dooh', 'Coov'):
         return irrepid % 10
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 def linearmole_irrep_symb2id(gpname, symb):
     if gpname == 'Dooh':
@@ -423,7 +424,7 @@ def linearmole_irrep_symb2id(gpname, symb):
             else:
                 return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 DOOH_IRREP_SYMBS = ('A1g' , 'A2g' , 'E1gx', 'E1gy' , 'A2u', 'A1u' , 'E1uy', 'E1ux')
 DOOH_IRREP_SYMBS_EXT = ('gx' , 'gy' , 'gx', 'gy' , 'uy', 'ux' , 'uy', 'ux')
@@ -456,7 +457,7 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
                 xy = 'x'
             return 'E%d%s' % (rn, xy)
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     assert(gpname in ('Dooh', 'Coov'))

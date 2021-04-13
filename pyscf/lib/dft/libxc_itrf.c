@@ -22,7 +22,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <xc.h>
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
@@ -395,6 +394,19 @@ int LIBXC_is_meta_gga(int xc_id)
         return mgga;
 }
 
+int LIBXC_needs_laplacian(int xc_id)
+{
+        xc_func_type func;
+        int lapl;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        lapl = func.info->flags & XC_FLAGS_NEEDS_LAPLACIAN ? 1 : 0;
+        xc_func_end(&func);
+        return lapl;
+}
+
 int LIBXC_is_hybrid(int xc_id)
 {
         xc_func_type func;
@@ -706,7 +718,7 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
 
         int outlen = xc_output_length(nvar, deriv);
         // output buffer is zeroed in the Python caller
-        //memset(output, 0, sizeof(double) * np*outlen);
+        //NPdset0(output, np*outlen);
 
         double *ebuf = malloc(sizeof(double) * np);
         double *vbuf = NULL;

@@ -26,7 +26,7 @@ See Also:
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -462,11 +462,12 @@ class KSCF(pbchf.SCF):
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
+        # Range separation JK builder
+        self.rsjk = None
+
         self.exxdiv = exxdiv
         self.kpts = kpts
         self.conv_tol = cell.precision * 10
-        # Range separation JK builder
-        self.rsjk = None
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
@@ -480,6 +481,8 @@ class KSCF(pbchf.SCF):
     @kpts.setter
     def kpts(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
 
     @property
     def mo_energy_kpts(self):
@@ -620,7 +623,7 @@ class KSCF(pbchf.SCF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.rsjk:
             vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                       with_j, with_k, omega, self.exxdiv)
@@ -635,9 +638,9 @@ class KSCF(pbchf.SCF):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
+        if dm_kpts is None:
+            dm_kpts = self.make_rdm1()
         if self.rsjk and self.direct_scf:
-            if dm_kpts is None:
-                dm_kpts = self.make_rdm1()
             # Enable direct-SCF for real space JK builder
             ddm = dm_kpts - dm_last
             vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)

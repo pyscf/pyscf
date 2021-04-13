@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ Method:
 '''
 
 from functools import reduce
-import time
 import numpy
 import numpy as np
 import h5py
@@ -52,12 +51,14 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert (frozen == 0)
 
     nmoa, nmob = gw.nmo
     nocca, noccb = gw.nocc
-    nvira = nmoa - nocca
-    nvirb = nmob - noccb
 
     if orbs is None:
         orbs = range(nmoa)
@@ -66,7 +67,6 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
 
     nkpts = gw.nkpts
     nklist = len(kptlist)
-    norbs = len(orbs)
 
     # v_xc
     dm = np.array(mf.make_rdm1())
@@ -101,7 +101,8 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
     sigmaI, omega = get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=5.)
 
     # Analytic continuation
-    coeff_a = []; coeff_b = []
+    coeff_a = []
+    coeff_b = []
     if gw.ac == 'twopole':
         for k in range(nklist):
             coeff_a.append(AC_twopole_diag(sigmaI[0,k], omega[0], orbs, nocca))
@@ -117,7 +118,8 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
 
     conv = True
     # This code does not support metals
-    homo = -99.; lumo = 99.
+    homo = -99.
+    lumo = 99.
     mo_energy = np.asarray(mf.mo_energy)
     for k in range(nkpts):
         if homo < max(mo_energy[0,k][nocca-1],mo_energy[1,k][noccb-1]):
@@ -141,7 +143,8 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
                         dsigma = two_pole(ep-ef+de, coeff[s,k,:,p-orbs[0]]).real - sigmaR.real
                     elif gw.ac == 'pade':
                         sigmaR = pade_thiele(ep-ef, omega_fit[s,p-orbs[0]], coeff[s,k,:,p-orbs[0]]).real
-                        dsigma = pade_thiele(ep-ef+de, omega_fit[s,p-orbs[0]], coeff[s,k,:,p-orbs[0]]).real - sigmaR.real
+                        dsigma = pade_thiele(ep-ef+de, omega_fit[s,p-orbs[0]],
+                                             coeff[s,k,:,p-orbs[0]]).real - sigmaR.real
                     zn = 1.0/(1.0-dsigma/de)
                     e = ep + zn*(sigmaR.real + vk[s,kn,p,p].real - v_mf[s,kn,p,p].real)
                     mo_energy[s,kn,p] = e
@@ -192,7 +195,7 @@ def get_rho_response(gw, omega, mo_energy, Lpq, kL, kidx):
         Pia_a = einsum('Pia,ia->Pia',Lpq[0,i][:,:nocca,nocca:],eia_a)
         Pia_b = einsum('Pia,ia->Pia',Lpq[1,i][:,:noccb,noccb:],eia_b)
         # Response from both spin-up and spin-down density
-        Pi += 2./nkpts * (einsum('Pia,Qia->PQ',Pia_a,Lpq[0,i][:,:nocca,nocca:].conj()) + \
+        Pi += 2./nkpts * (einsum('Pia,Qia->PQ',Pia_a,Lpq[0,i][:,:nocca,nocca:].conj()) +
                           einsum('Pia,Qia->PQ',Pia_b,Lpq[1,i][:,:noccb,noccb:].conj()))
     return Pi
 
@@ -217,7 +220,8 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
     kscaled -= kscaled[0]
 
     # This code does not support metals
-    homo = -99.; lumo = 99.
+    homo = -99.
+    lumo = 99.
     for k in range(nkpts):
         if homo < max(mo_energy[0,k][nocca-1],mo_energy[1,k][noccb-1]):
             homo = max(mo_energy[0,k][nocca-1],mo_energy[1,k][noccb-1])
@@ -237,8 +241,8 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
     # to avoid branch cuts in analytic continuation
     omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
     omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ_a = [i for i in orbs if i < nocca]
     orbs_occ_b = [i for i in orbs if i < noccb]
     norbs_occ_a = len(orbs_occ_a)
@@ -267,7 +271,6 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
     if gw.fc:
         # Set up q mesh for q->0 finite size correction
         q_pts = np.array([1e-3,0,0]).reshape(1,3)
-        nq_pts = len(q_pts)
         q_abs = gw.mol.get_abs_kpts(q_pts)
 
         # Get qij = 1/sqrt(Omega) * < psi_{ik} | e^{iqr} | psi_{ak-q} > at q: (nkpts, nocc, nvir)
@@ -294,7 +297,8 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                     Lij_out_b = None
                     # Read (L|pq) and ao2mo transform to (L|ij)
                     Lpq = []
-                    for LpqR, LpqI, sign in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
+                    for LpqR, LpqI, sign \
+                            in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
                     Lpq = np.vstack(Lpq).reshape(-1,nmoa**2)
                     moija, ijslicea = _conc_mos(mo_coeff[0,i], mo_coeff[0,j])[2:]
@@ -365,12 +369,12 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
                         Wn_P0_b = einsum('Pnm,P->nm',Lij[1,kn],eps_inv_P0).diagonal()
                         Wn_P0_a = Wn_P0_a.real * 2.
                         Wn_P0_b = Wn_P0_b.real * 2.
-                        Del_P0_a = np.sqrt(gw.mol.vol/4./np.pi**3) * (6.*np.pi**2/gw.mol.vol/nkpts)**(2./3.) * Wn_P0_a[orbs]
-                        Del_P0_b = np.sqrt(gw.mol.vol/4./np.pi**3) * (6.*np.pi**2/gw.mol.vol/nkpts)**(2./3.) * Wn_P0_b[orbs]
-                        sigma[0,k][:norbs_occ_a] += -einsum('n,nw->nw',Del_P0_a[:norbs_occ_a],g0_occ_a[kn][orbs][:norbs_occ_a]) /np.pi
-                        sigma[0,k][norbs_occ_a:] += -einsum('n,nw->nw',Del_P0_a[norbs_occ_a:],g0_vir_a[kn][orbs][norbs_occ_a:]) /np.pi
-                        sigma[1,k][:norbs_occ_b] += -einsum('n,nw->nw',Del_P0_b[:norbs_occ_b],g0_occ_b[kn][orbs][:norbs_occ_b]) /np.pi
-                        sigma[1,k][norbs_occ_b:] += -einsum('n,nw->nw',Del_P0_b[norbs_occ_b:],g0_vir_b[kn][orbs][norbs_occ_b:]) /np.pi
+                        Del_P0_a = np.sqrt(gw.mol.vol/4./np.pi**3) * (6.*np.pi**2/gw.mol.vol/nkpts)**(2./3.) * Wn_P0_a[orbs]  # noqa: E501
+                        Del_P0_b = np.sqrt(gw.mol.vol/4./np.pi**3) * (6.*np.pi**2/gw.mol.vol/nkpts)**(2./3.) * Wn_P0_b[orbs]  # noqa: E501
+                        sigma[0,k][:norbs_occ_a] += -einsum('n,nw->nw',Del_P0_a[:norbs_occ_a],g0_occ_a[kn][orbs][:norbs_occ_a]) /np.pi  # noqa: E501
+                        sigma[0,k][norbs_occ_a:] += -einsum('n,nw->nw',Del_P0_a[norbs_occ_a:],g0_vir_a[kn][orbs][norbs_occ_a:]) /np.pi  # noqa: E501
+                        sigma[1,k][:norbs_occ_b] += -einsum('n,nw->nw',Del_P0_b[:norbs_occ_b],g0_occ_b[kn][orbs][:norbs_occ_b]) /np.pi  # noqa: E501
+                        sigma[1,k][norbs_occ_b:] += -einsum('n,nw->nw',Del_P0_b[norbs_occ_b:],g0_vir_b[kn][orbs][norbs_occ_b:]) /np.pi  # noqa: E501
         else:
             for w in range(nw):
                 Pi = get_rho_response(gw, freqs[w], mo_energy, Lij, kL, kidx)
@@ -411,8 +415,8 @@ def get_rho_response_head(gw, omega, mo_energy, qij):
         eia_b = mo_energy[1,i,:noccb,None] - mo_energy[1,i,None,noccb:]
         eia_a = eia_a/(omega**2+eia_a*eia_a)
         eia_b = eia_b/(omega**2+eia_b*eia_b)
-        Pi_00 += 2./nkpts * (einsum('ia,ia->',eia_a,qij_a[i].conj()*qij_a[i]) + \
-                        einsum('ia,ia->',eia_b,qij_b[i].conj()*qij_b[i]))
+        Pi_00 += 2./nkpts * (einsum('ia,ia->',eia_a,qij_a[i].conj()*qij_a[i]) +
+                             einsum('ia,ia->',eia_b,qij_b[i].conj()*qij_b[i]))
     return Pi_00
 
 def get_rho_response_wing(gw, omega, mo_energy, Lpq, qij):
@@ -434,7 +438,7 @@ def get_rho_response_wing(gw, omega, mo_energy, Lpq, qij):
         eia_b = eia_b/(omega**2+eia_b*eia_b)
         eia_q_a = eia_a * qij_a[i].conj()
         eia_q_b = eia_b * qij_b[i].conj()
-        Pi += 2./nkpts * (einsum('Pia,ia->P',Lpq[0,i][:,:nocca,nocca:],eia_q_a) + \
+        Pi += 2./nkpts * (einsum('Pia,ia->P',Lpq[0,i][:,:nocca,nocca:],eia_q_a) +
                           einsum('Pia,ia->P',Lpq[1,i][:,:noccb,noccb:],eia_q_b))
     return Pi
 
@@ -537,7 +541,6 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -585,7 +588,7 @@ def AC_pade_thiele_diag(sigma, omega):
     omega2 = omega[:,(idx[-1]+4)::4].copy()
     omega = np.hstack((omega1,omega2))
     norbs, nw = sigma.shape
-    npade = nw/2
+    npade = nw // 2
     coeff = np.zeros((npade*2,norbs),dtype=np.complex128)
     for p in range(norbs):
         coeff[:,p] = thiele(sigma[p,:npade*2], omega[p,:npade*2])
@@ -647,7 +650,7 @@ class KUGWAC(lib.StreamObject):
         nkpts = self.nkpts
         log.info('GW (nocca, noccb) = (%d, %d), (nvira, nvirb) = (%d, %d), nkpts = %d',
                  nocca, noccb, nvira, nvirb, nkpts)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'analytic continuation method = %s', self.ac)
@@ -675,7 +678,7 @@ class KUGWAC(lib.StreamObject):
     def kernel(self, mo_energy=None, mo_coeff=None, orbs=None, kptlist=None, nw=100):
         """
         Input:
-            kptlist: self-energy k-points 
+            kptlist: self-energy k-points
             orbs: self-energy orbs
             nw: grid number
         Output:
@@ -695,7 +698,7 @@ class KUGWAC(lib.StreamObject):
             logger.warn(self, 'Memory may not be enough!')
             raise NotImplementedError
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff, orbs=orbs,
@@ -706,7 +709,7 @@ class KUGWAC(lib.StreamObject):
         return self.mo_energy
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft, scf
+    from pyscf.pbc import gto
     from pyscf.pbc.lib import chkfile
     import os
     cell = gto.Cell()

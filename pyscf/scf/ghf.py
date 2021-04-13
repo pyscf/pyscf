@@ -378,10 +378,22 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
+    def __init__(self, mol):
+        hf.SCF.__init__(self, mol)
+        self.with_soc = None
+        self._keys = self._keys.union(['with_soc'])
+
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         hcore = hf.get_hcore(mol)
-        return scipy.linalg.block_diag(hcore, hcore)
+        hcore = scipy.linalg.block_diag(hcore, hcore)
+
+        if self.with_soc and mol.has_ecp_soc():
+            # The ECP SOC contribution = <|1j * s * U_SOC|>
+            s = .5 * lib.PauliMatrices
+            ecpso = numpy.einsum('sxy,spq->xpyq', -1j * s, mol.intor('ECPso'))
+            hcore = hcore + ecpso.reshape(hcore.shape)
+        return hcore
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol

@@ -67,7 +67,7 @@ class AuxiliarySpace(object):
 
     def get_occupied(self):
         ''' Returns a copy of the current AuxiliarySpace object
-            containing only the poles with energy less than the 
+            containing only the poles with energy less than the
             chemical potential. The object should already be sorted.
 
         Returns:
@@ -77,7 +77,7 @@ class AuxiliarySpace(object):
         energy = np.copy(self.energy[:nocc])
         coupling = np.copy(self.coupling[:,:nocc])
         return self.__class__(energy, coupling, chempot=self.chempot)
-        
+
     def get_virtual(self):
         ''' Returns a copy of the current AuxiliarySpace object
             containing only the poles with energy greater than the
@@ -107,7 +107,7 @@ class AuxiliarySpace(object):
                 and energies retain their values). Default 0.0
 
         Returns:
-            Array representing the coupling of the auxiliary space to 
+            Array representing the coupling of the auxiliary space to
             the physical space
         '''
 
@@ -254,7 +254,7 @@ class AuxiliarySpace(object):
                 Key to be used in h5py object. It can contain "/" to
                 represent the path in the HDF5 storage structure.
         '''
-        
+
         if key is None:
             key = 'aux'
 
@@ -339,11 +339,11 @@ class SelfEnergy(AuxiliarySpace):
                 Occupancy of the states, i.e. 2 for RHF and 1 for UHF
         '''
 
-        gf = get_greens_function(phys)
+        gf = self.get_greens_function(phys)
         return gf.make_rdm1(phys, chempot=chempot, occupancy=occupancy)
 
     def compress(self, phys=None, n=(None, 0), tol=1e-12):
-        ''' Compress the auxiliaries via moments of the particle and 
+        ''' Compress the auxiliaries via moments of the particle and
             hole Green's function and self-energy. Resulting :attr:`naux`
             depends on the chosen :attr:`n`.
 
@@ -499,7 +499,7 @@ def davidson(auxspc, phys, chempot=None, nroots=1, which='SM', tol=1e-14, maxite
         maxiter : int
             Maximum number of iterations. Default 10*dim
         ntrial : int
-            Maximum number of trial vectors. Default 
+            Maximum number of trial vectors. Default
             min(dim, max(2*nroots+1, 20))
 
     Returns:
@@ -660,7 +660,7 @@ def compress_via_se(se, n=0):
         :class:`SelfEnergy` with reduced auxiliary dimension
 
     Ref:
-        [1] H. Muther, T. Taigel and T.T.S. Kuo, Nucl. Phys., 482, 
+        [1] H. Muther, T. Taigel and T.T.S. Kuo, Nucl. Phys., 482,
             1988, pp. 601-616.
         [2] D. Van Neck,  K. Piers and M. Waroquier, J. Chem. Phys.,
             115, 2001, pp. 15-25.
@@ -672,7 +672,7 @@ def compress_via_se(se, n=0):
 
     e, v = _compress_via_se(se, n=n)
     se_red = SelfEnergy(e, v, chempot=se.chempot)
-    
+
     return se_red
 
 
@@ -693,7 +693,7 @@ def _build_projector(se, phys, n=0, tol=1e-12):
         p = np.einsum('xi,pi,ni->xpn', v[nphys:], v[:nphys], en)
         return p.reshape(naux, nphys*(n+1))
 
-    p = np.hstack((_part(w, v, w < se.chempot), 
+    p = np.hstack((_part(w, v, w < se.chempot),
                    _part(w, v, w >= se.chempot)))
 
     norm = np.linalg.norm(p, axis=0, keepdims=True)
@@ -750,7 +750,7 @@ def compress_via_gf(se, phys, n=0, tol=1e-12):
 
     e, v = _compress_via_gf(se, phys, n=n, tol=tol)
     se_red = SelfEnergy(e, v, chempot=se.chempot)
-    
+
     return se_red
 
 

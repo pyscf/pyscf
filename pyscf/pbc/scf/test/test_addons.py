@@ -371,7 +371,7 @@ class KnownValues(unittest.TestCase):
         kmf.kernel([dm_a, dm_b])
         self.assertAlmostEqual(kmf.entropy, 0.250750926026, 9)
         self.assertAlmostEqual(kmf.e_free, 1.3942942592412, 9)
-        self.assertAlmostEqual(lib.finger(kmf.mo_occ), 0.035214493032250, 9)
+        self.assertAlmostEqual(lib.fp(kmf.mo_occ), 0.035214493032250, 9)
 
 
 if __name__ == '__main__':

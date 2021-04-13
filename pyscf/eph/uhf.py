@@ -20,11 +20,15 @@
 Analytical electron-phonon matrix for unrestricted hartree fock
 '''
 import numpy as np
+from pyscf import lib
 from pyscf.eph import rhf as rhf_eph
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.scf._response_functions import _gen_uhf_response
-from pyscf import lib
+from pyscf.data.nist import MP_ME
+
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 
 def uhf_deriv_generator(mf, mo_coeff, mo_occ):
     nao, nmoa = mo_coeff[0].shape
@@ -80,11 +84,11 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
         shl0, shl1, p0, p1 = aoslices[ia]
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vja, vjb, vka, vkb= rhf_hess._get_jk(mol, 'int2e_ip1', 3, 's2kl',
-                                     ['ji->s2kl', -dm0a[:,p0:p1],  # vja
-                                      'ji->s2kl', -dm0b[:,p0:p1],  # vjb
-                                      'li->s1kj', -dm0a[:,p0:p1],  # vka
-                                      'li->s1kj', -dm0b[:,p0:p1]], # vkb
-                                     shls_slice=shls_slice)
+                                             ['ji->s2kl', -dm0a[:,p0:p1],  # vja
+                                              'ji->s2kl', -dm0b[:,p0:p1],  # vjb
+                                              'li->s1kj', -dm0a[:,p0:p1],  # vka
+                                              'li->s1kj', -dm0b[:,p0:p1]], # vkb
+                                             shls_slice=shls_slice)
         vhfa = vja + vjb - vka
         vhfb = vjb + vjb - vkb
         vtota = h1 + v1[0] + vhfa + vhfa.transpose(0,2,1)
@@ -95,13 +99,8 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     vcorea = np.asarray(vcorea).reshape(-1,nao,nao)
     vcoreb = np.asarray(vcoreb).reshape(-1,nao,nao)
 
-    mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    mass = mol.atom_mass_list() * MP_ME
+    vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mata = np.einsum('xJ,xuv->Juv', vec, vcorea)
     matb = np.einsum('xJ,xuv->Juv', vec, vcoreb)
     if mo_rep:
@@ -111,9 +110,29 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(uhf_hess.Hessian):
-    def __init__(self, scf_method):
+    '''EPH for unrestricted Hartree Fock
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[spin,j,a,b] (j in nmodes, a,b in norbs)
+    '''
+
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         uhf_hess.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY=80
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph

@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <math.h>
 //#include <omp.h>
@@ -25,14 +24,13 @@
 #include "cint.h"
 #include "optimizer.h"
 #include "nr_direct.h"
+#include "np_helper/np_helper.h"
 
 int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
 #define AO_BLOCK_SIZE   32
-
-#define MIN(I,J)        ((I) < (J) ? (I) : (J))
 
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
@@ -231,8 +229,12 @@ static JKArray *allocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc, i
         jkarray->offset0_outptr = v_bra_sh0 * jkarray->v_ket_nsh + v_ket_sh0;
         int outptr_size =((shls_slice[obra+1] - shls_slice[obra]) *
                           (shls_slice[oket+1] - shls_slice[oket]));
-        jkarray->outptr = malloc(sizeof(int) * outptr_size);
-        memset(jkarray->outptr, NOVALUE, sizeof(int) * outptr_size);
+        int *outptr = malloc(sizeof(int) * outptr_size);
+        jkarray->outptr = outptr;
+        int i;
+        for (i = 0; i < outptr_size; i++) {
+                outptr[i] = NOVALUE;
+        }
         jkarray->stack_size = 0;
         int data_size = v_rows * v_cols * ncomp;
         jkarray->data = malloc(sizeof(double) * data_size);
@@ -289,7 +291,7 @@ static void zero_out_vjk(double *vjk, JKOperator *op,
         int jsh1 = shls_slice[oket+1];
         int nbra = ao_loc[ish1] - ao_loc[ish0];
         int nket = ao_loc[jsh1] - ao_loc[jsh0];
-        memset(vjk, 0, sizeof(double) * nbra * nket * ncomp);
+        NPdset0(vjk, ((size_t)nbra) * nket * ncomp);
 }
 
 static void assemble_v(double *vjk, JKOperator *op, JKArray *jkarray,

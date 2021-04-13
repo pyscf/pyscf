@@ -98,6 +98,71 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_ea,     0.15581330758457984 , 6)
         self.assertAlmostEqual(v_ea,     0.9903734898112396  , 6)
 
+    def test_ragf2_frozen(self):
+        # test the frozen implementation
+        mf = scf.RHF(self.mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf.run()
+        gf2 = agf2.RAGF2(mf)
+        gf2.conv_tol = 1e-7
+        gf2.frozen = [2]
+        gf2.run()
+        e_ip, v_ip = gf2.ipagf2(nroots=1)
+        e_ea, v_ea = gf2.eaagf2(nroots=1)
+        v_ip = np.linalg.norm(v_ip)**2
+        v_ea = np.linalg.norm(v_ea)**2
+        self.assertAlmostEqual(gf2.e_1b, -75.90803303224045 , 6)
+        self.assertAlmostEqual(gf2.e_2b, -0.2378736532302642, 6)
+        self.assertAlmostEqual(e_ip,     0.45937490994065694, 6)
+        self.assertAlmostEqual(v_ip,     0.9726061540589924 , 6)
+        self.assertAlmostEqual(e_ea,     0.15201672352177295, 6)
+        self.assertAlmostEqual(v_ea,     0.988560730917133  , 6)
+
+    def test_ragf2_frozen_outcore(self):
+        # test the frozen implementation with outcore QMOs
+        mf = scf.RHF(self.mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf.incore_complete = True
+        mf.run()
+        gf2 = agf2.RAGF2(mf)
+        gf2.conv_tol = 1e-7
+        gf2.frozen = [2]
+        eri = gf2.ao2mo()
+        gf2.max_memory = 1
+        gf2.incore_complete = False
+        gf2.kernel(eri=eri)
+        e_ip, v_ip = gf2.ipagf2(nroots=1)
+        e_ea, v_ea = gf2.eaagf2(nroots=1)
+        v_ip = np.linalg.norm(v_ip)**2
+        v_ea = np.linalg.norm(v_ea)**2
+        self.assertAlmostEqual(gf2.e_1b, -75.90803303224045 , 6)
+        self.assertAlmostEqual(gf2.e_2b, -0.2378736532302642, 6)
+        self.assertAlmostEqual(e_ip,     0.45937490994065694, 6)
+        self.assertAlmostEqual(v_ip,     0.9726061540589924 , 6)
+        self.assertAlmostEqual(e_ea,     0.15201672352177295, 6)
+        self.assertAlmostEqual(v_ea,     0.988560730917133  , 6)
+
+    def test_ragf2_frozen_fully_outcore(self):
+        # test the frozen implementation with outcore MOs and QMOs
+        mf = scf.RHF(self.mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf.max_memory = 1
+        mf.run()
+        gf2 = agf2.RAGF2(mf)
+        gf2.conv_tol = 1e-7
+        gf2.frozen = [2]
+        gf2.kernel()
+        e_ip, v_ip = gf2.ipagf2(nroots=1)
+        e_ea, v_ea = gf2.eaagf2(nroots=1)
+        v_ip = np.linalg.norm(v_ip)**2
+        v_ea = np.linalg.norm(v_ea)**2
+        self.assertAlmostEqual(gf2.e_1b, -75.90803303224045 , 6)
+        self.assertAlmostEqual(gf2.e_2b, -0.2378736532302642, 6)
+        self.assertAlmostEqual(e_ip,     0.45937490994065694, 6)
+        self.assertAlmostEqual(v_ip,     0.9726061540589924 , 6)
+        self.assertAlmostEqual(e_ea,     0.15201672352177295, 6)
+        self.assertAlmostEqual(v_ea,     0.988560730917133  , 6)
+
 
 if __name__ == '__main__':
     print('RAGF2 calculations for H2O')

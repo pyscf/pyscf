@@ -20,7 +20,6 @@
 MPI helper functions using mpi4py
 '''
 
-import time
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -35,7 +34,7 @@ try:
     comm = mpi.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-except:
+except Exception:
     mpi = None
     comm = None
     size = 1

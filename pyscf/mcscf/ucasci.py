@@ -22,7 +22,7 @@ orbitals)
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -88,7 +88,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start uhf-based CASCI')
 
     ncas = casci.ncas

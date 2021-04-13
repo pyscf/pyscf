@@ -20,7 +20,7 @@
 Non-relativistic Unrestricted Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -39,7 +39,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         dm = numpy.asarray((dm*.5,dm*.5))
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ Method:
 '''
 
 from functools import reduce
-import time
 import numpy
 import numpy as np
 import h5py
@@ -52,7 +51,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     mf = gw._scf
-    assert(gw.frozen is 0 or gw.frozen is None)
+    if gw.frozen is None:
+        frozen = 0
+    else:
+        frozen = gw.frozen
+    assert (frozen == 0)
 
     if orbs is None:
         orbs = range(gw.nmo)
@@ -60,7 +63,6 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         kptlist = range(gw.nkpts)
     nkpts = gw.nkpts
     nklist = len(kptlist)
-    norbs = len(orbs)
 
     # v_xc
     dm = np.array(mf.make_rdm1())
@@ -70,7 +72,6 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
 
     nocc = gw.nocc
     nmo = gw.nmo
-    nvir = nmo-nocc
 
     # v_hf from DFT/HF density
     if gw.fc:
@@ -79,7 +80,11 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
         exxdiv = None
     rhf = scf.KRHF(gw.mol, gw.kpts, exxdiv=exxdiv)
     rhf.with_df = gw.with_df
-    rhf.with_df._cderi = gw.with_df._cderi
+    if getattr(gw.with_df, '_cderi', None) is None:
+        raise RuntimeError('Found incompatible integral scheme %s.'
+                           'KGWCD can be only used with GDF integrals' %
+                           gw.with_df.__class__)
+
     vk = rhf.get_veff(gw.mol,dm_kpts=dm) - rhf.get_j(gw.mol,dm_kpts=dm)
     for k in range(nkpts):
         vk[k] = reduce(numpy.dot, (mo_coeff[k].T.conj(), vk[k], mo_coeff[k]))
@@ -108,10 +113,10 @@ def kernel(gw, mo_energy, mo_coeff, orbs=None,
                 def quasiparticle(omega):
                     if gw.fc:
                         sigmaR = get_sigma_diag(gw, omega, kn, p, Wmn[:,k,:,p-orbs[0],:],
-                                            Del_00, Del_P0[k,p-orbs[0],:], freqs, wts, qij, q_abs).real
+                                                Del_00, Del_P0[k,p-orbs[0],:], freqs, wts, qij, q_abs).real
                     else:
                         sigmaR = get_sigma_diag(gw, omega, kn, p, Wmn[:,k,:,p-orbs[0],:],
-                                            Del_00, Del_P0, freqs, wts, qij, q_abs).real
+                                                Del_00, Del_P0, freqs, wts, qij, q_abs).real
                     return omega - mf.mo_energy[kn][p] - (sigmaR.real + vk[kn,p,p].real - v_mf[kn,p,p].real)
                 try:
                     e = newton(quasiparticle, mf.mo_energy[kn][p]+delta, tol=1e-6, maxiter=50)
@@ -136,7 +141,8 @@ def get_sigma_diag(gw, ep, kp, p, Wmn, Del_00, Del_P0, freqs, wts, qij, q_abs):
     nocc = gw.nocc
     nkpts = gw.nkpts
     # This code does not support metals
-    homo = -99.; lumo = 99.
+    homo = -99.
+    lumo = 99.
     for k in range(nkpts):
         if homo < gw._scf.mo_energy[k][nocc-1]:
             homo = gw._scf.mo_energy[k][nocc-1]
@@ -181,7 +187,6 @@ def get_WmnI_diag(gw, orbs, kptlist, freqs, max_memory=8000):
     '''
     mo_energy = np.array(gw._scf.mo_energy)
     mo_coeff = np.array(gw._scf.mo_coeff)
-    nocc = gw.nocc
     nmo = gw.nmo
     nkpts = gw.nkpts
     kpts = gw.kpts
@@ -198,7 +203,6 @@ def get_WmnI_diag(gw, orbs, kptlist, freqs, max_memory=8000):
     if gw.fc:
         # Set up q mesh for q->0 finite size correction
         q_pts = np.array([1e-3,0,0]).reshape(1,3)
-        nq_pts = len(q_pts)
         q_abs = gw.mol.get_abs_kpts(q_pts)
 
         # Get qij = 1/sqrt(Omega) * < psi_{ik} | e^{iqr} | psi_{ak-q} > at q: (nkpts, nocc, nvir)
@@ -227,7 +231,8 @@ def get_WmnI_diag(gw, orbs, kptlist, freqs, max_memory=8000):
                     Lij_out = None
                     # Read (L|pq) and ao2mo transform to (L|ij)
                     Lpq = []
-                    for LpqR, LpqI, sign in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
+                    for LpqR, LpqI, sign \
+                            in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                         Lpq.append(LpqR+LpqI*1.0j)
                     # support uneqaul naux on different k points
                     Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
@@ -335,11 +340,9 @@ def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
     '''
     mo_energy = np.array(gw._scf.mo_energy)
     mo_coeff = np.array(gw._scf.mo_coeff)
-    nocc = gw.nocc
     nmo = gw.nmo
     nkpts = gw.nkpts
     kpts = gw.kpts
-    nw = len(freqs)
     mydf = gw.with_df
 
     # possible kpts shift center
@@ -385,7 +388,8 @@ def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
                         Lij_out = None
                         # Read (L|pq) and ao2mo transform to (L|ij)
                         Lpq = []
-                        for LpqR, LpqI, sign in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
+                        for LpqR, LpqI, sign \
+                                in mydf.sr_loop([kpti, kptj], max_memory=0.1*gw._scf.max_memory, compact=False):
                             Lpq.append(LpqR+LpqI*1.0j)
                         # support uneqaul naux on different k points
                         Lpq = np.vstack(Lpq).reshape(-1,nmo**2)
@@ -396,7 +400,7 @@ def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
                         Lij.append(Lij_out.reshape(-1,nmo,nmo))
             Lij = np.asarray(Lij)
             naux = Lij.shape[1]
- 
+
             if kL == 0:
                 km = kidx_r[kn]
                 if len(idx[km]) > 0:
@@ -447,7 +451,7 @@ def get_sigmaR_diag(gw, omega, kn, orbp, ef, freqs, qij, q_abs):
                         Qmn = einsum('P,PQ->Q',Lij[km][:,m,orbp].conj(),Pi_inv)
                         Wmn = 1./nkpts * einsum('Q,Q->',Qmn,Lij[km][:,m,orbp])
                         sigmaR += fm * Wmn
-     
+
     return sigmaR
 
 def get_rho_response_head_R(gw, omega, mo_energy, qij):
@@ -638,7 +642,7 @@ class KRGWCD(lib.StreamObject):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         log.info('GW nocc = %d, nvir = %d, nkpts = %d', nocc, nvir, nkpts)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
         logger.info(self, 'GW finite size corrections = %s', self.fc)
@@ -685,7 +689,7 @@ class KRGWCD(lib.StreamObject):
             logger.warn(self, 'Memory may not be enough!')
             raise NotImplementedError
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff, orbs=orbs,
@@ -696,24 +700,24 @@ class KRGWCD(lib.StreamObject):
         return self.mo_energy
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft, scf
+    from pyscf.pbc import gto
     from pyscf.pbc.lib import chkfile
     import os
     # This test takes a few minutes
     cell = gto.Cell()
     cell.build(unit = 'angstrom',
-            a = '''
-                0.000000     1.783500     1.783500
-                1.783500     0.000000     1.783500
-                1.783500     1.783500     0.000000
-            ''',
-            atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
-            dimension = 3,
-            max_memory = 8000,
-            verbose = 4,
-            pseudo = 'gth-pade',
-            basis='gth-szv',
-            precision=1e-10)
+               a = '''
+               0.000000     1.783500     1.783500
+               1.783500     0.000000     1.783500
+               1.783500     1.783500     0.000000
+               ''',
+               atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
+               dimension = 3,
+               max_memory = 8000,
+               verbose = 4,
+               pseudo = 'gth-pade',
+               basis='gth-szv',
+               precision=1e-10)
 
     kpts = cell.make_kpts([3,1,1],scaled_center=[0,0,0])
     gdf = df.GDF(cell, kpts)

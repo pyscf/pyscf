@@ -25,5 +25,5 @@ from pyscf.hessian.rhf import hess_nuc
 try:
     from . import rks
     from . import uks
-except ImportError:
+except (ImportError, IOError):
     pass

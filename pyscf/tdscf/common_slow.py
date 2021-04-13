@@ -757,7 +757,8 @@ class TDBase(object):
             vectors (numpy.ndarray): raw eigenvectors to transform;
 
         Returns:
-            Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
+            Amplitudes with the following shape: (# of roots, 2 (x or y), # of
+            occupied orbitals, # of virtual orbitals).
         """
         return self.v2a(vectors, self.eri.nocc, self.eri.nmo)
 

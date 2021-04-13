@@ -1,17 +1,39 @@
-PySCF 1.7.6a (2020-12-17)
--------------------------
+PySCF 1.7.6 (2021-03-28)
+------------------------
 * Added
   - KMP2 2-particle density matrix
   - PBC J, K matrices module rsjk (RangeSeparationJKBuilder)
-  - ADC (RADC and UADC)
+  - ADC (RADC, UADC, DFADC)
+  - Eigenvector analyzer for IP and EA, RADC and UADC
   - Analytical nuclear gradients for state-average CASSCF
   - Support SO3 symmetry
+  - ECP-SOC for GHF/GKS
+  - density fitting GMP2
+  - G0W0 approximations (analytic continuation, contour deformation)
+  - Auxiliary second-order Green's function perturbation theory (agf2)
+  - Smearing for molecules
+  - Visscher small component correction approximation for DHF
 * Improved
   - Threading safety in Mole temporary context
   - Basis parser to support arithmetic expressions in basis data
+  - dmrgci interface refactored
+  - MP2 gradients performance
+  - Interface of polariazable embedding with integral batching
+  - Electron-phonon Hamiltonian module refactored
+  - Remove memorization of Ewald parameters.
+  - molden dumper refactored
 * Fixed
   - stack overflow in ecp integral code
   - SCAN functional crashing problem
+  - Ghost atoms for IAOs/IBOs
+  - Fix fractional occupations for case of zero beta electrons
+  - mcscf project_init_guess
+  - Symmetry verification bug when deducting subgroup
+  - Mole.set_geom_ bug
+  - GDF with non-zero drop_eta (for diffused auxiliary basis)
+  - Paddings in KMP2 when remove_linear_dep_ is applied
+  - SC-NEVPT2 Sijr Srsi
+
 
 
 PySCF 1.7.5 (2020-9-27)

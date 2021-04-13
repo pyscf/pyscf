@@ -28,7 +28,7 @@
 # given molecule.  Regular operations (rotation, mirror etc) can be applied
 # then to identify the symmetry.  Current implementation only checks the
 # rotation functions and it's roughly enough for D2h and subgroups.
-# 
+#
 # There are special cases this detection method may break down, eg two H8 cube
 # molecules sitting on the same center but with random orientation.  The
 # system is in C1 while this detection method gives O group because the
@@ -43,6 +43,7 @@ import scipy.linalg
 from pyscf.gto import mole
 from pyscf.lib import norm
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm.param import OPERATOR_TABLE
 from pyscf import __config__
 
@@ -358,7 +359,7 @@ def as_subgroup(topgroup, axes, subgroup=None):
             axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
 
         elif (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
-            subgroup in ('C2v', 'Cs')):
+              subgroup in ('C2v', 'Cs')):
             # Special treatment for D2d, D4d, .... get_subgroup gives D2 by
             # default while C2v is also D2d's subgroup.
             groupname = 'C2v'
@@ -371,15 +372,15 @@ def as_subgroup(topgroup, axes, subgroup=None):
             axes = numpy.array((x,y,z))
 
         elif subgroup not in SUBGROUP[groupname]:
-            raise RuntimeError('%s not in Ablien subgroup of %s' %
-                               (subgroup, topgroup))
+            raise PointGroupSymmetryError('%s not in Ablien subgroup of %s' %
+                                          (subgroup, topgroup))
 
         groupname = subgroup
     return groupname, axes
 
 def symm_ops(gpname, axes=None):
     if axes is not None:
-        raise RuntimeError('TODO: non-standard orientation')
+        raise PointGroupSymmetryError('TODO: non-standard orientation')
     op1 = numpy.eye(3)
     opi = -1
 
@@ -440,7 +441,7 @@ def symm_identical_atoms(gpname, atoms):
         newc = numpy.dot(coords, op)
         idx = argsort_coords(newc)
         if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
-            raise RuntimeError('Symmetry identical atoms not found')
+            raise PointGroupSymmetryError('Symmetry identical atoms not found')
         dup_atom_ids.append(idx)
 
     dup_atom_ids = numpy.sort(dup_atom_ids, axis=0).T
@@ -450,10 +451,10 @@ def symm_identical_atoms(gpname, atoms):
     return eql_atom_ids
 
 def check_given_symm(gpname, atoms, basis=None):
-# more strict than symm_identical_atoms, we required not only the coordinates
-# match, but also the symbols and basis functions
+    # more strict than symm_identical_atoms, we required not only the coordinates
+    # match, but also the symbols and basis functions
 
-#FIXME: compare the basis set when basis is given
+    #FIXME: compare the basis set when basis is given
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
         if numpy.allclose(coords[:,:2], 0, atol=TOLERANCE):
@@ -486,7 +487,7 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
-class RotationAxisNotFound(RuntimeError):
+class RotationAxisNotFound(PointGroupSymmetryError):
     pass
 
 class SymmSys(object):
@@ -795,11 +796,11 @@ def _remove_dupvec(vs):
 
 def _make_axes(z, x):
     y = numpy.cross(z, x)
-    x = numpy.cross(y, z) # because x might not perp to z
+    x = numpy.cross(y, z)  # because x might not perp to z
     return _normalize(numpy.array((x,y,z)))
 
 def _refine(axes):
-# Make sure the axes can be rotated from continuous unitary transformation
+    # Make sure the axes can be rotated from continuous unitary transformation
     if axes[2,2] < 0:
         axes[2] *= -1
     if abs(axes[0,0]) > abs(axes[1,0]):

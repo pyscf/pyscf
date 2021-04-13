@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2019-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,12 +47,12 @@ def MakeShellsForElement(mol, Element):
 
         l, ExponentsAndContractions = ShellData[0], np.asarray(ShellData[1:])
         # primitive exponents
-        Exp = ExponentsAndContractions[:,0]
+        # Exp = ExponentsAndContractions[:,0]
         # contraction coefficient matrix
         CGTO = ExponentsAndContractions[:,1:]
-        nCGTO= CGTO.shape[1]
-        nLk=nCGTO*(2*l+1)
-        AtShells.append((l,nCGTO,nLk))
+        nCGTO = CGTO.shape[1]
+        nLk = nCGTO*(2*l+1)
+        AtShells.append((l, nCGTO, nLk))
     return AtShells
 
 def MakeShells(mol, Elements):
@@ -104,11 +104,11 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
 
 
 
-    OrbBasis=mol.basis
+    # OrbBasis = mol.basis
     C = mf.mo_coeff
-    S1=mol.intor_symmetric("cint1e_ovlp_sph")
-    S2=mol2.intor_symmetric("cint1e_ovlp_sph")
-    S12 = gto.intor_cross('cint1e_ovlp_sph', mol, mol2)
+    S1 = mol.intor_symmetric("int1e_ovlp")
+    S2 = mol2.intor_symmetric("int1e_ovlp")
+    S12 = gto.intor_cross('int1e_ovlp', mol, mol2)
     SMo = mdot(C.T, S1, C)
     print("    MO deviation from orthogonality  {:8.2e} \n".format(rmsd(SMo - np.eye(SMo.shape[0]))))
 
@@ -131,31 +131,28 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
 
     # Compute Fock matrix from orbital eigenvalues (SCF has to be fully converged)
     Fock = mdot(S1, C, np.diag(Eps), C.T, S1.T)
-    Rdm = mdot(C, np.diag(Occ), C.T)
-
+    # Rdm = mdot(C, np.diag(Occ), C.T)
 
     COcc = C[:,:nOcc]
     CVir = C[:,nOcc:]
 
-    Smh1 = MakeSmh(S1)
-    Sh1 = np.dot(S1, Smh1)
+    # Smh1 = MakeSmh(S1)
+    # Sh1 = np.dot(S1, Smh1)
 
     # Compute IAO basis (non-orthogonal). Will be used to identify the
     # pi-MO-space of the target atom groups.
     CIb = MakeIaosRaw(COcc, S1, S2, S12)
-    CIbOcc = np.linalg.lstsq(CIb, COcc)[0]
-    Err = np.dot(Sh1, np.dot(CIb, CIbOcc) - COcc)
+    # CIbOcc = np.linalg.lstsq(CIb, COcc)[0]
+    # Err = np.dot(Sh1, np.dot(CIb, CIbOcc) - COcc)
 
     # check orthogonality of IAO basis occupied orbitals
     SIb = mdot(CIb.T, S1, CIb)
-    SIbOcc = mdot(CIbOcc.T, SIb, CIbOcc)
+    # SIbOcc = mdot(CIbOcc.T, SIb, CIbOcc)
     nIb = SIb.shape[0]
-
 
     if 0:
         # make the a representation of the virtual valence space.
-        SmhIb = MakeSmh(SIb)
-
+        # SmhIb = MakeSmh(SIb)
 
         nIbVir = nIb - nOcc  # number of virtual valence orbitals
 
@@ -189,9 +186,9 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
     CActOcc = []
     CActVir = []
 
-
     # add pi-HOMOs and pi-LUMOs
-    CFragOcc, CFragVir,nOccOrbExpected,nVirtOrbExpected = MakePiSystemOrbitals("Pi-System", PiAtomsList, None, Elements,Coords, CIb, Shells, S1, S12, S2, Fock, COcc, CVir)
+    CFragOcc, CFragVir,nOccOrbExpected,nVirtOrbExpected = MakePiSystemOrbitals(
+        "Pi-System", PiAtomsList, None, Elements,Coords, CIb, Shells, S1, S12, S2, Fock, COcc, CVir)
     if (nPiOcc is None):
         for i in range(1,nOccOrbExpected+1):
             CActOcc.append(CFragOcc[:,-i])
@@ -206,11 +203,6 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         for j in range(nPiVirt):
             CActVir.append(CFragVir[:,j])
 
-
-    nActOcc = len(CActOcc)
-    nActVir = len(CActVir)
-
-
     print("\n -- Joining active spaces")
     if (mol.spin==0):
         nElec = 2*len(CActOcc)
@@ -221,7 +213,8 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         # orthogonalize and semi-canonicalize
         SAct = mdot(CAct.T, S1, CAct)
         ew, ev = np.linalg.eigh(SAct)
-        print("    CAct initial overlap (if all ~approx 1, then the initial active orbitals are near-orthogonal. That is good.)")
+        print("    CAct initial overlap (if all ~approx 1, then the initial "
+              "active orbitals are near-orthogonal. That is good.)")
         print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in ew)))
 
         CAct = np.dot(CAct, MakeSmh(SAct))
@@ -251,8 +244,6 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
 
     CNewClo = MakeInactiveSpace("NewClo", CActOcc, COcc)
     CNewExt = MakeInactiveSpace("NewVir", CActVir, CVir)
-    nNewClo = CNewClo.shape[1]
-    nNewExt = CNewExt.shape[1]
 
     # re-orthogonalize (should be orthogonal already, but just to be sure).
     COrbNew = np.hstack([CAct])
@@ -317,7 +308,8 @@ def GetPzOrientation(iTargetAtoms, Coords_, Elements_):
     for vCoord in Coords:
         I += np.outer(vCoord, vCoord)
     # diagonalize inertial-like tensor; large eigenvalues first.
-    ew,ev = np.linalg.eigh(-I); ew *= -1
+    ew,ev = np.linalg.eigh(-I)
+    ew *= -1
 
     print("Target Atom List:")
     print("[{}]".format(', '.join('{}'.format(k) for k in iTargetAtoms)))
@@ -353,7 +345,7 @@ def FindValenceAoIndices(iAt, Shells, TargetL):
 
 
 def MakePzMinaoVectors(iTargetAtoms, vPz, Shells):
-#    nIb = len(Shells)*len(Shells[Atom])*len( Shells[AtomShell][AtomL])
+    # nIb = len(Shells)*len(Shells[Atom])*len( Shells[AtomShell][AtomL])
     nIb=0
     for Atom in range(len(Shells)):
         for AtomL in range(len(Shells[Atom])):
@@ -390,7 +382,29 @@ _NumPiElec = {
 }
 
 
-_CovalentRadii = {1: 38.0, 2: 32.0, 3: 134.0, 4: 90.0, 5: 82.0, 6: 77.0, 7: 75.0, 8: 73.0, 9: 71.0, 10: 69.0, 11: 154.0, 12: 130.0, 13: 118.0, 14: 111.0, 15: 106.0, 16: 102.0, 17: 99.0, 18: 97.0, 19: 196.0, 20: 174.0, 21: 144.0, 22: 136.0, 23: 125.0, 24: 127.0, 25: 139.0, 26: 125.0, 27: 126.0, 28: 121.0, 29: 138.0, 30: 131.0, 31: 126.0, 32: 122.0, 33: 119.0, 34: 116.0, 35: 114.0, 36: 110.0, 37: 211.0, 38: 192.0, 39: 162.0, 40: 148.0, 41: 137.0, 42: 145.0, 43: 156.0, 44: 126.0, 45: 135.0, 46: 131.0, 47: 153.0, 48: 148.0, 49: 144.0, 50: 141.0, 51: 138.0, 52: 135.0, 53: 133.0, 54: 130.0, 55: 225.0, 56: 198.0, 57: 169.0, 58: None, 59: None, 60: None, 61: None, 62: None, 63: None, 64: None, 65: None, 66: None, 67: None, 68: None, 69: None, 70: None, 71: 160.0, 72: 150.0, 73: 138.0, 74: 146.0, 75: 159.0, 76: 128.0, 77: 137.0, 78: 128.0, 79: 144.0, 80: 149.0, 81: 148.0, 82: 147.0, 83: 146.0, 84: None, 85: None, 86: 145.0, 87: None, 88: None, 89: None, 90: None, 91: None, 92: None, 93: None, 94: None, 95: None, 96: None, 97: None, 98: None, 99: None, 100: None, 101: None, 102: None, 103: None, 104: None, 105: None, 106: None, 107: None, 108: None, 109: None, 110: None, 111: None, 112: None, 113: None, 114: None, 115: None, 116: None}
+_CovalentRadii = {1: 38.0, 2: 32.0, 3: 134.0, 4: 90.0, 5: 82.0,
+                  6: 77.0, 7: 75.0, 8: 73.0, 9: 71.0, 10: 69.0,
+                  11: 154.0, 12: 130.0, 13: 118.0, 14: 111.0, 15: 106.0,
+                  16: 102.0, 17: 99.0, 18: 97.0, 19: 196.0, 20: 174.0,
+                  21: 144.0, 22: 136.0, 23: 125.0, 24: 127.0, 25: 139.0,
+                  26: 125.0, 27: 126.0, 28: 121.0, 29: 138.0, 30: 131.0,
+                  31: 126.0, 32: 122.0, 33: 119.0, 34: 116.0, 35: 114.0,
+                  36: 110.0, 37: 211.0, 38: 192.0, 39: 162.0, 40: 148.0,
+                  41: 137.0, 42: 145.0, 43: 156.0, 44: 126.0, 45: 135.0,
+                  46: 131.0, 47: 153.0, 48: 148.0, 49: 144.0, 50: 141.0,
+                  51: 138.0, 52: 135.0, 53: 133.0, 54: 130.0, 55: 225.0,
+                  56: 198.0, 57: 169.0, 58: None, 59: None, 60: None,
+                  61: None, 62: None, 63: None, 64: None, 65: None,
+                  66: None, 67: None, 68: None, 69: None, 70: None,
+                  71: 160.0, 72: 150.0, 73: 138.0, 74: 146.0, 75: 159.0,
+                  76: 128.0, 77: 137.0, 78: 128.0, 79: 144.0, 80: 149.0,
+                  81: 148.0, 82: 147.0, 83: 146.0, 84: None, 85: None,
+                  86: 145.0, 87: None, 88: None, 89: None, 90: None,
+                  91: None, 92: None, 93: None, 94: None, 95: None,
+                  96: None, 97: None, 98: None, 99: None, 100: None,
+                  101: None, 102: None, 103: None, 104: None, 105: None,
+                  106: None, 107: None, 108: None, 109: None, 110: None,
+                  111: None, 112: None, 113: None, 114: None, 115: None, 116: None}
 # ^- embedded now to remove dependency on finding .txt path.
 
 
@@ -463,9 +477,9 @@ def MakeOverlappingOrbSubspace(Space, Name, COrb, nOrbExpected,  CTargetIb, S1, 
 
     print("    S[{},{}] singular Values (n={}, nThr={})".format(Space, Name, len(sig), nOrbExpected))
     print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in sig)))
-    print("    Sigma[{}]                         ".format(nOrbExpected-1), "{:.4f}".format(sig[nOrbExpected-1])," (should be 1)")
+    print("    Sigma[{}]                         {:.4f} (should be 1)".format(nOrbExpected-1, sig[nOrbExpected-1]))
     if nOrbExpected < len(sig):
-        print("    Sigma[{}]                         ".format(nOrbExpected), "{:.4f}".format(sig[nOrbExpected])," (should be 0)")
+        print("    Sigma[{}]                         {:.4f} (should be 0)".format(nOrbExpected, sig[nOrbExpected]))
         if sig[nOrbExpected-1] < 0.8 or sig[nOrbExpected] > 0.5:
             raise Exception("{} orbital construction okay?".format(Space))
 
@@ -476,7 +490,9 @@ def MakeOverlappingOrbSubspace(Space, Name, COrb, nOrbExpected,  CTargetIb, S1, 
 
 
 # Use these to add 'stuff' to the proto-active space.
-def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_, iTargetAtomsForBasis_,Elements,Coords, CIb, Shells, S1, S12, S2, Fock, COcc, CVir):
+def MakePiSystemOrbitals(TargetName, iTargetAtomsForPlane_,
+                         iTargetAtomsForBasis_,Elements,Coords, CIb, Shells,
+                         S1, S12, S2, Fock, COcc, CVir):
     print("\n *** TARGET: {}\n".format(TargetName))
     # convert from 1-based atom indices to 0-based indices.
     iTargetAtomsForPlane = np.array(iTargetAtomsForPlane_) - 1

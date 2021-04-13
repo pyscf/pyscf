@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 UCCSD with spatial integrals
 '''
 
-import time
+
 from functools import reduce
 import numpy as np
 
@@ -39,7 +39,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 # This is unrestricted (U)CCSD, in spatial-orbital form.
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
@@ -418,7 +418,7 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
     '''Ht2 = np.einsum('iJcD,acBD->iJaB', t2ab, vvVV)
     without using symmetry in t2ab or Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     if t2ab.size == 0:
         return np.zeros_like(t2ab)
     if t1 is not None:
@@ -452,7 +452,7 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
         return eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, out, log)
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if t1 is None:
         t2aa, t2ab, t2bb = t2
@@ -552,7 +552,7 @@ class UCCSD(ccsd.CCSD):
     get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
@@ -862,8 +862,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
 
 def _get_ovvv_base(ovvv, *slices):
-    if len(ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library
-                              # backward compatbility
+    if ovvv.ndim == 3:
         ovw = np.asarray(ovvv[slices])
         nocc, nvir, nvir_pair = ovw.shape
         ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
@@ -997,7 +996,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.OVvo = eris.feri.create_dataset('OVvo', (noccb,nvirb,nvira,nocca), 'f8')
     eris.OVvv = eris.feri.create_dataset('OVvv', (noccb,nvirb,nvira*(nvira+1)//2), 'f8')
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     mol = mycc.mol
     # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
     tmpf = lib.H5TmpFile()
@@ -1090,7 +1089,7 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     tau1ab += t2ab
     return tau1ab
 
-def _fp(nocc, nmo):
+def _flops(nocc, nmo):
     nocca, noccb = nocc
     nmoa, nmob = nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb

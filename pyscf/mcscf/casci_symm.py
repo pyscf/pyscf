@@ -113,6 +113,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     wfnsym = 0
     if getattr(mc.fcisolver, 'wfnsym', None) is not None:
         wfnsym = mc.fcisolver.wfnsym
+        log.debug('Use fcisolver.wfnsym %s', wfnsym)
 
     elif ci0 is None:
         # Guess wfnsym based on HF determinant.  mo_coeff may not be HF
@@ -125,6 +126,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
                 wfnsym ^= ir
             mc.fcisolver.wfnsym = wfnsym
             log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
+
         elif getattr(mo_coeff, 'orbsym', None) is not None:  # It may be reordered SCF orbitals
             cas_orb = mo_coeff[:,ncore:nocc]
             s = reduce(numpy.dot, (cas_orb.conj().T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
@@ -145,7 +147,12 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
         log.debug('CASCI wfnsym %s (based on CI initial guess)', wfnsym)
 
     if isinstance(wfnsym, (int, numpy.integer)):
-        wfnsym = symm.irrep_id2name(mc.mol.groupname, wfnsym)
+        try:
+            wfnsym = symm.irrep_id2name(mc.mol.groupname, wfnsym)
+        except KeyError:
+            log.warn('mwfnsym Id %s not found in group %s. This might be caused by '
+                     'the projection from high-symmetry group to D2h symmetry.',
+                     wfnsym, mc.mol.groupname)
 
     log.info('Active space CI wfn symmetry = %s', wfnsym)
 

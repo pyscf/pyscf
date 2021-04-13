@@ -25,12 +25,17 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
+from pyscf.lib.scipy_helper import pivoted_cholesky
 from pyscf.scf import hf
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
+
+def smearing_(*args, **kwargs):
+    from pyscf.pbc.scf.addons import smearing_
+    return smearing_(*args, **kwargs)
 
 def frac_occ_(mf, tol=1e-3):
     '''
@@ -47,16 +52,21 @@ def frac_occ_(mf, tol=1e-3):
     mol = mf.mol
 
     def guess_occ(mo_energy, nocc):
-        sorted_idx = numpy.argsort(mo_energy)
-        homo = mo_energy[sorted_idx[nocc-1]]
-        lumo = mo_energy[sorted_idx[nocc]]
-        frac_occ_lst = abs(mo_energy - homo) < tol
-        integer_occ_lst = (mo_energy <= homo) & (~frac_occ_lst)
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[integer_occ_lst] = 1
-        degen = numpy.count_nonzero(frac_occ_lst)
-        frac = nocc - numpy.count_nonzero(integer_occ_lst)
-        mo_occ[frac_occ_lst] = float(frac) / degen
+        if nocc:
+            sorted_idx = numpy.argsort(mo_energy)
+            homo = mo_energy[sorted_idx[nocc-1]]
+            lumo = mo_energy[sorted_idx[nocc]]
+            frac_occ_lst = abs(mo_energy - homo) < tol
+            integer_occ_lst = (mo_energy <= homo) & (~frac_occ_lst)
+            mo_occ[integer_occ_lst] = 1
+            degen = numpy.count_nonzero(frac_occ_lst)
+            frac = nocc - numpy.count_nonzero(integer_occ_lst)
+            mo_occ[frac_occ_lst] = float(frac) / degen
+        else:
+            homo = 0.0
+            lumo = 0.0
+            frac_occ_lst = numpy.zeros_like(mo_energy, dtype=bool)
         return mo_occ, numpy.where(frac_occ_lst)[0], homo, lumo
 
     get_grad = None
@@ -69,14 +79,20 @@ def frac_occ_(mf, tol=1e-3):
 
             if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
                 mo_occ = numpy.array([mo_occa, mo_occb])
-                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
-                            '%6g for beta orbitals %s',
-                            mo_occa[frac_lsta[0]], frac_lsta,
-                            mo_occb[frac_lstb[0]], frac_lstb)
-                logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
-                logger.info(mf, '  beta  HOMO = %.12g  LUMO = %.12g', homob, lumob)
-                logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
-                logger.debug(mf, '  beta  mo_energy = %s', mo_energy[1])
+                if len(frac_lstb):
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                                '%6g for beta orbitals %s',
+                                mo_occa[frac_lsta[0]], frac_lsta,
+                                mo_occb[frac_lstb[0]], frac_lstb)
+                    logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.info(mf, '  beta  HOMO = %.12g  LUMO = %.12g', homob, lumob)
+                    logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
+                    logger.debug(mf, '  beta  mo_energy = %s', mo_energy[1])
+                else:
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  ',
+                                mo_occa[frac_lsta[0]], frac_lsta)
+                    logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
             else:
                 mo_occ = old_get_occ(mo_energy, mo_coeff)
             return mo_occ
@@ -89,12 +105,18 @@ def frac_occ_(mf, tol=1e-3):
 
             if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
                 mo_occ = mo_occa + mo_occb
-                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
-                            '%6g for beta orbitals %s',
-                            mo_occa[frac_lsta[0]], frac_lsta,
-                            mo_occb[frac_lstb[0]], frac_lstb)
-                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
-                logger.debug(mf, '  mo_energy = %s', mo_energy)
+                if len(frac_lstb):
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                                '%6g for beta orbitals %s',
+                                mo_occa[frac_lsta[0]], frac_lsta,
+                                mo_occb[frac_lstb[0]], frac_lstb)
+                    logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  mo_energy = %s', mo_energy)
+                else:
+                    logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  ',
+                                mo_occa[frac_lsta[0]], frac_lsta)
+                    logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                    logger.debug(mf, '  mo_energy = %s', mo_energy)
             else:
                 mo_occ = old_get_occ(mo_energy, mo_coeff)
             return mo_occ
@@ -444,10 +466,9 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
 
     # Run the pivoted Cholesky decomposition
     Ssort = Snorm[numpy.ix_(sortidx, sortidx)].copy()
-    pstrf = scipy.linalg.lapack.get_lapack_funcs('pstrf')
-    c, piv, r_c, info = pstrf(Ssort, tol=cholthr)
+    c, piv, r_c = pivoted_cholesky(Ssort, tol=cholthr)
     # The functions we're going to use are given by the pivot as
-    idx = sortidx[piv[:r_c]-1]
+    idx = sortidx[piv[:r_c]]
 
     # Get the (un-normalized) sub-basis
     Ssub = S[numpy.ix_(idx, idx)].copy()
@@ -558,11 +579,11 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.uhf.UHF):
-# Remove with_df for SOSCF method because the post-HF code checks the
-# attribute .with_df to identify whether an SCF object is DF-SCF method.
-# with_df in SOSCF is used in orbital hessian approximation only.  For the
-# returned SCF object, whehter with_df exists in SOSCF has no effects on the
-# mean-field energy and other properties.
+        # Remove with_df for SOSCF method because the post-HF code checks the
+        # attribute .with_df to identify whether an SCF object is DF-SCF method.
+        # with_df in SOSCF is used in orbital hessian approximation only.  For the
+        # returned SCF object, whehter with_df exists in SOSCF has no effects on the
+        # mean-field energy and other properties.
         if getattr(mf, '_scf', None):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:

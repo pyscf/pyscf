@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,19 +89,19 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
         ovlpba = numpy.dot(mo_coeff[1].T, mo_coeff[0])
 
     # if ovlp=1, ssz = (neleca-nelecb)**2 * .25
-    ssz =(numpy.einsum('ijkl,ij,kl->', dm2aa, ovlpaa, ovlpaa)
-        - numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)
-        + numpy.einsum('ijkl,ij,kl->', dm2bb, ovlpbb, ovlpbb)
-        - numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)) * .25 \
-        +(numpy.einsum('ji,ij->', dm1a, ovlpaa)
-        + numpy.einsum('ji,ij->', dm1b, ovlpbb)) *.25
+    ssz = (numpy.einsum('ijkl,ij,kl->', dm2aa, ovlpaa, ovlpaa) -
+           numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb) +
+           numpy.einsum('ijkl,ij,kl->', dm2bb, ovlpbb, ovlpbb) -
+           numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)) * .25
+    ssz += (numpy.einsum('ji,ij->', dm1a, ovlpaa) +
+            numpy.einsum('ji,ij->', dm1b, ovlpbb)) *.25
 
     dm2abba = -dm2ab.transpose(0,3,2,1)  # alpha^+ beta^+ alpha beta
     dm2baab = -dm2ab.transpose(2,1,0,3)  # beta^+ alpha^+ beta alpha
-    ssxy =(numpy.einsum('ijkl,ij,kl->', dm2baab, ovlpba, ovlpab)
-         + numpy.einsum('ijkl,ij,kl->', dm2abba, ovlpab, ovlpba)
-         + numpy.einsum('ji,ij->', dm1a, ovlpaa)
-         + numpy.einsum('ji,ij->', dm1b, ovlpbb)) * .5
+    ssxy =(numpy.einsum('ijkl,ij,kl->', dm2baab, ovlpba, ovlpab) +
+           numpy.einsum('ijkl,ij,kl->', dm2abba, ovlpab, ovlpba) +
+           numpy.einsum('ji,ij->', dm1a, ovlpaa) +
+           numpy.einsum('ji,ij->', dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
 
     s = numpy.sqrt(ss+.25) - .5

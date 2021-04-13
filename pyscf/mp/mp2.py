@@ -18,7 +18,7 @@
 RMP2
 '''
 
-import time
+
 import copy
 import numpy
 from pyscf import gto
@@ -73,7 +73,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
 # Iteratively solve MP2 if non-canonical HF is provided
 def _iterative_kernel(mp, eris, verbose=None):
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 
     emp2, t2 = mp.init_amps(eris=eris)
@@ -188,10 +188,10 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += numpy.einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', l2i, t2i)
+        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - lib.einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - lib.einsum('iab,jba->ij', l2i, t2i)
     return -dm1occ, dm1vir
 
 
@@ -459,8 +459,8 @@ class MP2(lib.StreamObject):
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -645,7 +645,7 @@ class _ChemistsERIs:
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mp, mo_coeff)
     mo_coeff = eris.mo_coeff
@@ -688,7 +688,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         #eris.ovov = eris.feri['eri_mo']
         eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max(2000, max_memory), log)
 
-    time1 = log.timer('Integral transformation', *time0)
+    log.timer('Integral transformation', *time0)
     return eris
 
 #
@@ -697,7 +697,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 #   or    => (ij|ol) => (oj|ol) => (oj|ov) => (ov|ov)
 #
 def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 
     mol = mp.mol

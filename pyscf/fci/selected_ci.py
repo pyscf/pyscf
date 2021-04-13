@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,11 @@
 #
 
 '''
-Selected CI
+Selected CI.
+
+This is an inefficient dialect of Selected CI using the same structure as
+determinant based FCI algorithm. For the efficient Selected CI programs,
+Dice program (https://github.com/sanshar/Dice.git) is a good candidate.
 
 Simple usage::
 
@@ -409,7 +413,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e_last = 0
     float_tol = myci.start_tol
     tol_decay_rate = myci.tol_decay_rate
-    conv = False
+    # conv = False
     for icycle in range(norb):
         ci_strs = ci0[0]._strs
         float_tol = max(float_tol*tol_decay_rate, tol*1e2)
@@ -433,7 +437,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
 
         if ci0[0].shape == (namax,nbmax) or abs(de) < tol*1e3:
-            conv = True
+            # conv = True
             break
 
         last_ci0_size = float(len(ci_strs[0])), float(len(ci_strs[1]))
@@ -442,7 +446,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         nb = len(ci0[0]._strs[1])
         if ((.99 < na/last_ci0_size[0] < 1.01) and
             (.99 < nb/last_ci0_size[1] < 1.01)):
-            conv = True
+            # conv = True
             break
 
     ci_strs = ci0[0]._strs
@@ -743,9 +747,9 @@ class SelectedCI(direct_spin1.FCISolver):
         logger.info(self, 'select_cutoff   %g', self.select_cutoff)
 
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
-# The argument civec_strs is a CI vector in function FCISolver.contract_2e.
-# Save and patch self._strs to make this contract_2e function compatible to
-# FCISolver.contract_2e.
+        # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
+        # Save and patch self._strs to make this contract_2e function compatible to
+        # FCISolver.contract_2e.
         if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:

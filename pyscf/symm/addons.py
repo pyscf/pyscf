@@ -21,6 +21,7 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import basis
 from pyscf.symm import param
 from pyscf import __config__
@@ -73,7 +74,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
         try:
             s_moso = lib.cho_solve(ovlpso, moso)
-        except:
+        except numpy.linalg.LinAlgError:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
             s_moso = lib.cho_solve(ovlpso, moso)
         norm[i] = numpy.einsum('ki,ki->i', moso.conj(), s_moso).real
@@ -196,17 +197,17 @@ def symmetrize_space(mol, mo, s=None,
     nmo = mo.shape[1]
     s_mo = numpy.dot(s, mo)
     if check and abs(numpy.dot(mo.conj().T, s_mo) - numpy.eye(nmo)).max() > tol:
-            raise ValueError('Orbitals are not orthogonalized')
+        raise ValueError('Orbitals are not orthogonalized')
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(csym.T, s_mo)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
-# excluding orbitals which are already symmetrized
+        # excluding orbitals which are already symmetrized
         try:
             diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        except:
+        except numpy.linalg.LinAlgError:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
             diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
         idx = abs(1-diag) < 1e-8
@@ -280,7 +281,7 @@ def irrep_id2name(gpname, irrep_id):
         return param.CHARACTER_TABLE[gpname][irrep_id_in_d2h][0]
 
 def irrep_name(pgname, irrep_id):
-    raise RuntimeError('This function was obsoleted. Use irrep_id2name')
+    raise PointGroupSymmetryError('This function was obsoleted. Use irrep_id2name')
 
 def route(target, nelec, orbsym):
     '''Pick orbitals to form a determinant which has the right symmetry.
@@ -296,7 +297,7 @@ def route(target, nelec, orbsym):
             for i, ir in enumerate(orbsym):
                 off = i + 1
                 orb_left = orbsym[off:]
-                res = riter(target^ir, nelec-1, orb_left)
+                res = riter(target ^ ir, nelec-1, orb_left)
                 if res:
                     return [i] + [off+x for x in res]
             return []
@@ -371,4 +372,4 @@ if __name__ == "__main__":
 
     orbsym = [0, 3, 0, 2, 5, 6]
     res = route(7, 3, orbsym)
-    print(res, reduce(lambda x,y:x^y, [orbsym[i] for i in res]))
+    print(res, reduce(lambda x, y: x ^ y, [orbsym[i] for i in res]))

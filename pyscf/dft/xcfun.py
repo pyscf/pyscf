@@ -131,7 +131,7 @@ XC = XC_CODES = {
 'BPW91'         : 'B88 + PW91C',
 'BPW92'         : 'B88 + PW92C',
 'OLYP'          : '2.4832*SLATER - 1.43169*OPTX + LYP',  # CPL, 341, 319
-'KT1'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
+'KT1X'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
 'KT2XC'         : '1.07173*SLATER - .006*KTX + 0.576727*VWN5',  # Keal-Tozer 2, JCP, 119, 3015
 'KT3XC'         : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409',  # Keal-Tozer 3, JCP, 121, 5654
 # == '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',
@@ -202,7 +202,7 @@ XC_ALIAS = {
 #    'MVSH'              : 'MVSH,REGTPSS',
 #    'SOGGA11'           : 'SOGGA11,SOGGA11',
 #    'SOGGA11-X'         : 'SOGGA11X,SOGGA11X',
-    'KT1'               : 'KT1,VWN',
+    'KT1'               : 'KT1X,VWN',
 #    'DLDF'              : 'DLDF,DLDF',
 #    'GAM'               : 'GAM,GAM',
     'M06-L'             : 'M06L,M06L',
@@ -414,7 +414,7 @@ def parse_xc(description):
                 fac, key = sign, token
 
             if key[:3] == 'RSH':
-# RSH(alpha; beta; omega): Range-separated-hybrid functional
+                # RSH(alpha; beta; omega): Range-separated-hybrid functional
                 alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
                 assign_omega(omega, fac*(alpha+beta), fac*alpha)
             elif key == 'HF':
@@ -799,10 +799,6 @@ XC_D0000021 = 117
 XC_D0000012 = 118
 XC_D0000003 = 119
 
-#SCAN functionals have problems when sigma is small
-#https://github.com/dftlibs/xcfun/issues/144
-SINGULAR_IDS = set((45,46,47,48,49,50,51,52,53,54))
-
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     assert(deriv < 4)
     if spin == 0:
@@ -827,7 +823,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         omega = [0] * len(facs)
 
-    fn_ids_set = set(fn_ids)
     n = len(fn_ids)
     if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
         all((is_lda(x) for x in fn_ids))):  # LDA
@@ -847,20 +842,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-
-    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 0:
-        if spin == 0:
-            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
-            non0idx = sigma_uu > 1e-16
-        else:
-            sigma_uu = rho_u[1]*rho_u[1] + rho_u[2]*rho_u[2] + rho_u[3]*rho_u[3]
-            sigma_dd = rho_d[1]*rho_d[1] + rho_d[2]*rho_d[2] + rho_d[3]*rho_d[3]
-            non0idx = (sigma_uu > 1e-16) & (sigma_dd > 1e-16)
-        rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
-        rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
-        outbuf = numpy.zeros((non0idx.sum(),outlen))
-    else:
-        outbuf = numpy.zeros((ngrids,outlen))
+    outbuf = numpy.zeros((ngrids,outlen))
 
     if n > 0:
         _itrf.XCFUN_eval_xc(ctypes.c_int(n),
@@ -872,11 +854,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                             rho_u.ctypes.data_as(ctypes.c_void_p),
                             rho_d.ctypes.data_as(ctypes.c_void_p),
                             outbuf.ctypes.data_as(ctypes.c_void_p))
-
-    if outbuf.shape[0] != ngrids:
-        out = numpy.zeros((ngrids,outlen))
-        out[non0idx,:] = outbuf
-        outbuf = out
 
     outbuf = outbuf.T
     exc = outbuf[0]

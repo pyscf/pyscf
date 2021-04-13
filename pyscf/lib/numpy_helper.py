@@ -30,8 +30,8 @@ from numpy import asarray  # For backward compatibility
 EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
 
 try:
-# Import tblis before libnp_helper to avoid potential dl-loading conflicts
-    from pyscf.lib import tblis_einsum
+    # Import tblis before libnp_helper to avoid potential dl-loading conflicts
+    from pyscf import tblis_einsum
     FOUND_TBLIS = True
 except (ImportError, OSError):
     FOUND_TBLIS = False
@@ -65,11 +65,10 @@ else:
         if '->' in subscripts:
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
-            indices = indices_in + [idx_final]
+            # indices = indices_in + [idx_final]
         else:
             idx_final = ''
             indices_in = subscripts.split('->')[0].split(',')
-            indices = indices_in
 
         if len(indices_in) <= 2:
             idx_removed = set(indices_in[0]).intersection(set(indices_in[1]))
@@ -102,29 +101,43 @@ else:
 _numpy_einsum = numpy.einsum
 def _contract(subscripts, *tensors, **kwargs):
     idx_str = subscripts.replace(' ','')
-    indices  = idx_str.replace(',', '').replace('->', '')
-    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-        return _numpy_einsum(idx_str, *tensors)
-
     A, B = tensors
-    # Call numpy.asarray because A or B may be HDF5 Datasets 
-    A = numpy.asarray(A, order='A')
-    B = numpy.asarray(B, order='A')
+    # Call numpy.asarray because A or B may be HDF5 Datasets
+    A = numpy.asarray(A)
+    B = numpy.asarray(B)
+
+    # small problem size
     if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
-        return _numpy_einsum(idx_str, *tensors)
+        return _numpy_einsum(idx_str, A, B)
 
     C_dtype = numpy.result_type(A, B)
     if FOUND_TBLIS and C_dtype == numpy.double:
         # tblis is slow for complex type
-        return tblis_einsum._contract(idx_str, A, B, **kwargs)
+        return tblis_einsum.contract(idx_str, A, B, **kwargs)
 
-    DEBUG = kwargs.get('DEBUG', False)
+    indices  = idx_str.replace(',', '').replace('->', '')
+    if '->' not in idx_str or any(indices.count(x) != 2 for x in set(indices)):
+        return _numpy_einsum(idx_str, A, B)
 
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
     idxB, idxC = idxBC.split('->')
-    assert(len(idxA) == A.ndim)
-    assert(len(idxB) == B.ndim)
+    assert len(idxA) == A.ndim
+    assert len(idxB) == B.ndim
+
+    uniq_idxA = set(idxA)
+    uniq_idxB = set(idxB)
+    # Find the shared indices being summed over
+    shared_idxAB = uniq_idxA.intersection(uniq_idxB)
+
+    if ((not shared_idxAB) or  # Indices must overlap
+        # one operand is a subset of the other one (e.g. 'ijkl,jk->il')
+        uniq_idxA == shared_idxAB or uniq_idxB == shared_idxAB or
+        # repeated indices (e.g. 'iijk,kl->jl')
+        len(idxA) != len(uniq_idxA) or len(idxB) != len(uniq_idxB)):
+        return _numpy_einsum(idx_str, A, B)
+
+    DEBUG = kwargs.get('DEBUG', False)
 
     if DEBUG:
         print("*** Einsum for", idx_str)
@@ -139,15 +152,6 @@ def _contract(subscripts, *tensors, **kwargs):
     if DEBUG:
         print("rangeA =", rangeA)
         print("rangeB =", rangeB)
-
-    # duplicated indices 'in,ijj->n'
-    if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
-        return _numpy_einsum(idx_str, A, B)
-
-    # Find the shared indices being summed over
-    shared_idxAB = set(idxA).intersection(idxB)
-    if len(shared_idxAB) == 0: # Indices must overlap
-        return _numpy_einsum(idx_str, A, B)
 
     idxAt = list(idxA)
     idxBt = list(idxB)
@@ -237,7 +241,7 @@ def einsum(subscripts, *tensors, **kwargs):
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
         else:
-            idx_final = ''
+            # idx_final = ''
             indices_in = subscripts.split('->')[0].split(',')
         tensors = list(tensors)
         contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
@@ -278,7 +282,7 @@ def pack_tril(mat, axis=-1, out=None):
         out = numpy.ndarray(shape, mat.dtype, buffer=out)
         if mat.dtype == numpy.double:
             fn = _np_helper.NPdpack_tril_2d
-        elif mat.dtype == numpy.complex:
+        elif mat.dtype == numpy.complex128:
             fn = _np_helper.NPzpack_tril_2d
         else:
             out[:] = mat[numpy.tril_indices(nd)]
@@ -333,7 +337,7 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if (tril.dtype != numpy.double and tril.dtype != numpy.complex):
+    if (tril.dtype != numpy.double and tril.dtype != numpy.complex128):
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         idx, idy = numpy.tril_indices(nd)
         if filltriu == ANTIHERMI:
@@ -394,7 +398,7 @@ def unpack_row(tril, row_id):
     mat = numpy.empty(nd, tril.dtype)
     if tril.dtype == numpy.double:
         fn = _np_helper.NPdunpack_row
-    elif tril.dtype == numpy.complex:
+    elif tril.dtype == numpy.complex128:
         fn = _np_helper.NPzunpack_row
     else:
         p0 = row_id*(row_id+1)//2
@@ -444,7 +448,7 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
 
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
-    elif mat.dtype == numpy.complex:
+    elif mat.dtype == numpy.complex128:
         fn = _np_helper.NPzhermi_triu
     else:
         raise NotImplementedError
@@ -488,7 +492,7 @@ def take_2d(a, idx, idy, out=None):
     idy = numpy.asarray(idy, dtype=numpy.int32)
     if a.dtype == numpy.double:
         fn = _np_helper.NPdtake_2d
-    elif a.dtype == numpy.complex:
+    elif a.dtype == numpy.complex128:
         fn = _np_helper.NPztake_2d
     else:
         return a[idx[:,None],idy]
@@ -518,7 +522,7 @@ def takebak_2d(out, a, idx, idy, thread_safe=True):
         a = a.astype(out.dtype)
     if out.dtype == numpy.double:
         fn = _np_helper.NPdtakebak_2d
-    elif out.dtype == numpy.complex:
+    elif out.dtype == numpy.complex128:
         fn = _np_helper.NPztakebak_2d
     else:
         if thread_safe:
@@ -560,7 +564,7 @@ def transpose(a, axes=None, inplace=False, out=None):
         return a
 
     if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+        or (a.dtype != numpy.double and a.dtype != numpy.complex128)):
         if a.ndim == 2:
             arow, acol = a.shape
             out = numpy.empty((acol,arow), a.dtype)
@@ -626,7 +630,7 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
     if (not a.flags.c_contiguous
-        or (a.dtype != numpy.double and a.dtype != numpy.complex)):
+        or (a.dtype != numpy.double and a.dtype != numpy.complex128)):
         if a.ndim == 2:
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):
@@ -1073,12 +1077,14 @@ class NPArrayWithTag(numpy.ndarray):
     #    obj = numpy.asarray(a).view(cls)
     #    obj.__dict__.update(kwargs)
     #    return obj
-# Customize __reduce__ and __setstate__ to keep tags after serialization
-# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+
+    # Customize __reduce__ and __setstate__ to keep tags after serialization
+    # pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
     def __reduce__(self):
         pickled = numpy.ndarray.__reduce__(self)
         state = pickled[2] + (self.__dict__,)
         return (pickled[0], pickled[1], state)
+
     def __setstate__(self, state):
         numpy.ndarray.__setstate__(self, state[0:-1])
         self.__dict__.update(state[-1])
@@ -1110,7 +1116,7 @@ def split_reshape(a, shapes):
     The entries of shapes indicate the shape of each tensor.
 
     Returns:
-        tensors : a list of tensors 
+        tensors : a list of tensors
 
     Examples:
 

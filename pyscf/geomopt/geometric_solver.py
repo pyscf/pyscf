@@ -150,8 +150,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     engine.assert_convergence = assert_convergence
     try:
-        m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                             constraints=constraints, **kwargs)
+        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                         constraints=constraints, **kwargs)
         conv = True
         # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
     except NotConvergedError as e:
@@ -180,7 +180,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     '''
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
     return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
-            constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
+                  constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
     '''Optimize the molecular geometry for the input method.
