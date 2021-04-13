@@ -50,6 +50,10 @@ _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
 _itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 _itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 
+_itrf.LIBXC_version.restype = ctypes.c_char_p
+_itrf.LIBXC_reference.restype = ctypes.c_char_p
+_itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
+
 # Runtime detection of available functionals
 dynamic_func = getattr(__config__, 'dft_libxc_dynamic', False)
 
@@ -1587,3 +1591,18 @@ if __name__ == '__main__':
     mf._numint = define_xc(mf._numint, 'B3LYP5')
     e1 = mf.kernel()
     print(e1 - -75.2753037898599)
+
+def libxc_version():
+    '''Returns the version of libxc'''
+
+    return _itrf.LIBXC_version().decode("UTF-8")
+
+def libxc_reference():
+    '''Returns the reference to libxc'''
+
+    return _itrf.LIBXC_reference().decode("UTF-8")
+
+def libxc_reference_doi():
+    '''Returns the reference to libxc'''
+
+    return _itrf.LIBXC_reference_doi().decode("UTF-8")
