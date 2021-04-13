@@ -582,7 +582,7 @@ class CASSCF(casci.CASCI):
             Default is 1e-4
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            Default is 0.05
+            Default is 0.02
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
         max_cycle_micro : int
@@ -674,7 +674,7 @@ class CASSCF(casci.CASCI):
     '''
 
 # the max orbital rotation and CI increment, prefer small step size
-    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', 5e-2)
+    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', 2e-2)
     min_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_min_stepsize', 5e-4)
     max_cycle_macro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_macro', 50)
     max_cycle_micro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_micro', 4)
