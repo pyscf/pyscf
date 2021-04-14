@@ -224,8 +224,8 @@ class SCSDFUMP2(DFUMP2):
         if not logger:
             logger = lib.logger.new_logger(self)
         super().dump_flags(logger=logger)
-        logger.info('pt(scs) = {0:f}'.format(self.pt))
-        logger.info('ps(scs) = {0:f}'.format(self.ps))
+        logger.info('pt(scs) = {0:.6f}'.format(self.pt))
+        logger.info('ps(scs) = {0:.6f}'.format(self.ps))
 
 
 SCSMP2 = SCSUMP2 = SCSDFMP2 = SCSDFUMP2
