@@ -20,7 +20,6 @@
 Functions for tuning the chemical potential.
 '''
 
-import time
 import numpy as np
 from scipy import optimize
 from pyscf import lib
@@ -34,7 +33,7 @@ def _objective(x, se, fock, nelec, occupancy=2, buf=None):
 
     w, v = se.eig(fock, chempot=x, out=buf)
 
-    chempot, error = binsearch_chempot((w,v), se.nphys, nelec, 
+    chempot, error = binsearch_chempot((w,v), se.nphys, nelec,
                                        occupancy=occupancy)
 
     return error**2
@@ -46,7 +45,7 @@ def _gradient(x, se, fock, nelec, occupancy=2, buf=None):
 
     w, v = se.eig(fock, chempot=x, out=buf)
 
-    chempot, error = binsearch_chempot((w,v), se.nphys, nelec, 
+    chempot, error = binsearch_chempot((w,v), se.nphys, nelec,
                                        occupancy=occupancy)
 
     nocc = np.sum(w < chempot)
@@ -144,9 +143,9 @@ def minimize_chempot(se, fock, nelec, occupancy=2, x0=0.0, tol=1e-6, maxiter=200
             Maximum number of iterations. Default 200.
         jac : bool
             If True, use gradient. Default True.
-    
+
     Returns:
-        AuxiliarySpace object with altered :attr:`energy` and 
+        AuxiliarySpace object with altered :attr:`energy` and
         :attr:`chempot`, and the SciPy :attr:`OptimizeResult` object.
     '''
 

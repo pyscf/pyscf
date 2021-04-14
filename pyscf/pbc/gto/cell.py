@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import numpy as np
 import scipy.linalg
 try:
     from scipy.special import factorial2
-except:
+except ImportError:
     from scipy.misc import factorial2
 from scipy.special import erf, erfc
 import scipy.optimize
@@ -248,7 +248,7 @@ def loads(cellstr):
     from numpy import array  # noqa
     celldic = json.loads(cellstr)
     if sys.version_info < (3,):
-# Convert to utf8 because JSON loads fucntion returns unicode.
+        # Convert to utf8 because JSON loads fucntion returns unicode.
         def byteify(inp):
             if isinstance(inp, dict):
                 return dict([(byteify(k), byteify(v)) for k, v in inp.iteritems()])
@@ -361,8 +361,8 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     pcell = copy.copy(cell1)
     pcell.precision = min(cell1.precision, cell2.precision)
     pcell._atm, pcell._bas, pcell._env = \
-    atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
-                             cell2._atm, cell2._bas, cell2._env)
+            atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
+                                     cell2._atm, cell2._bas, cell2._env)
     if shls_slice is None:
         shls_slice = (0, cell1.nbas, 0, cell2.nbas)
     i0, i1, j0, j1 = shls_slice[:4]
@@ -551,7 +551,7 @@ def error_for_ke_cutoff(cell, ke_cutoff):
     return errmax
 
 def get_bounding_sphere(cell, rcut):
-    '''Finds all the lattice points within a sphere of radius rcut.  
+    '''Finds all the lattice points within a sphere of radius rcut.
 
     Defines a parallelipiped given by -N_x <= n_x <= N_x, with x in [1,3]
     See Martin p. 85
@@ -703,9 +703,9 @@ def get_ewald_params(cell, precision=None, mesh=None):
         return 0, 0
     elif (cell.dimension < 2 or
           (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-# Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
-# estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
-# non-uniform grids.  Smooth model density is preferred.
+        # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
+        # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
+        # non-uniform grids.  Smooth model density is preferred.
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     else:
@@ -848,7 +848,7 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
         scaled_center : (3,) array
             Shift all points in the Monkhorst-pack grid to be centered on
             scaled_center, given as the zeroth index of the returned kpts.
-            Scaled meaning that the k-points are scaled to a grid from 
+            Scaled meaning that the k-points are scaled to a grid from
             [-1,1] x [-1,1] x [-1,1]
 
     Returns:
@@ -1053,8 +1053,10 @@ class Cell(mole.Mole):
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
-        self.ke_cutoff = None # if set, defines a spherical cutoff
-                              # of fourier components, with .5 * G**2 < ke_cutoff
+        # if set, defines a spherical cutoff
+        # of fourier components, with .5 * G**2 < ke_cutoff
+        self.ke_cutoff = None
+
         self.pseudo = None
         self.dimension = 3
         # TODO: Simple hack for now; the implementation of ewald depends on the
@@ -1108,10 +1110,10 @@ class Cell(mole.Mole):
         warnings.warn("ew_cut is no longer stored in the cell object. Setting it has no effect")
 
     if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
-# nelec method defined in Mole class raises error when the attributes .spin
-# and .nelectron are inconsistent.  In PBC, when the system has even number of
-# k-points, it is valid that .spin is odd while .nelectron is even.
-# Overwriting nelec method to avoid this check.
+        # nelec method defined in Mole class raises error when the attributes .spin
+        # and .nelectron are inconsistent.  In PBC, when the system has even number of
+        # k-points, it is valid that .spin is odd while .nelectron is even.
+        # Overwriting nelec method to avoid this check.
         @property
         def nelec(self):
             ne = self.nelectron
@@ -1129,7 +1131,7 @@ class Cell(mole.Mole):
         if key[:2] == '__':  # Skip Python builtins
             raise AttributeError('Cell object has no attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
-                   '_repr_mimebundle_'):
+                     '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
             # https://github.com/jupyter/notebook/issues/2014
             raise AttributeError
@@ -1528,7 +1530,7 @@ class Cell(mole.Mole):
             \mathbf{b_3} &= 2\pi \frac{\mathbf{a_1} \times \mathbf{a_2}}{\mathbf{a_3} \cdot (\mathbf{a_1} \times \mathbf{a_2})}
             \end{align}
 
-        '''
+        '''  # noqa: E501
         a = self.lattice_vectors()
         if self.dimension == 1:
             assert(abs(np.dot(a[0], a[1])) < 1e-9 and
@@ -1548,7 +1550,7 @@ class Cell(mole.Mole):
             scaled_kpts : (nkpts, 3) ndarray of floats
 
         Returns:
-            abs_kpts : (nkpts, 3) ndarray of floats 
+            abs_kpts : (nkpts, 3) ndarray of floats
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
@@ -1556,7 +1558,7 @@ class Cell(mole.Mole):
         '''Get scaled k-points, given absolute k-points in 1/Bohr.
 
         Args:
-            abs_kpts : (nkpts, 3) ndarray of floats 
+            abs_kpts : (nkpts, 3) ndarray of floats
 
         Returns:
             scaled_kpts : (nkpts, 3) ndarray of floats
@@ -1569,17 +1571,25 @@ class Cell(mole.Mole):
         return copy(self)
 
     pack = pack
+
+    @classmethod
     @lib.with_doc(unpack.__doc__)
-    def unpack(self, moldic):
+    def unpack(cls, moldic):
         return unpack(moldic)
+
+    @lib.with_doc(unpack.__doc__)
     def unpack_(self, moldic):
         self.__dict__.update(moldic)
         return self
 
     dumps = dumps
+
+    @classmethod
     @lib.with_doc(loads.__doc__)
-    def loads(self, molstr):
+    def loads(cls, molstr):
         return loads(molstr)
+
+    @lib.with_doc(unpack.__doc__)
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self

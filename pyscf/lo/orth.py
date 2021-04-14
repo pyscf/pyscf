@@ -303,7 +303,7 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
 
     if method.lower() == 'lowdin':
         if pre_orth_ao is None:
-            c_orth = lowdin(s1)
+            c_orth = lowdin(s)
         else:
             if not isinstance(pre_orth_ao, numpy.ndarray):
                 pre_orth_ao = restore_ao_character(mol, pre_orth_ao)
@@ -314,8 +314,9 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
         assert(mf is not None)
         c_orth = nao.nao(mol, mf, s)
 
-    else: # meta_lowdin: partition AOs into core, valence and Rydberg sets,
-          # orthogonalizing within each set
+    else:
+        # meta_lowdin: partition AOs into core, valence and Rydberg sets,
+        # orthogonalizing within each set
         if pre_orth_ao is None:
             pre_orth_ao = numpy.eye(mol.nao)
         elif not isinstance(pre_orth_ao, numpy.ndarray):

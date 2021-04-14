@@ -14,15 +14,14 @@
 # limitations under the License.
 #
 # Author: Yang Gao <younggao1994@gmail.com>
-
 #
+
 '''
 Analytical electron-phonon matrix for restricted hartree fock
 '''
 
-import time
 import numpy as np
-import scipy
+import scipy.linalg
 from pyscf.hessian import rhf
 from pyscf.lib import logger, chkfile
 from pyscf.scf._response_functions import _gen_rhf_response
@@ -34,7 +33,6 @@ KEEP_IMAG_FREQUENCY = getattr(__config__, 'eph_keep_imaginary_frequency', False)
 IMAG_CUTOFF_FREQUENCY = getattr(__config__, 'eph_imag_cutoff_frequency', 1e-4)
 
 def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
-    cput0 = (time.clock(), time.time())
     if mo_energy is None: mo_energy = ephobj.base.mo_energy
     if mo_coeff is None: mo_coeff = ephobj.base.mo_coeff
     if mo_occ is None: mo_occ = ephobj.base.mo_occ

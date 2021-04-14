@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -116,7 +116,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     '''
     from pyscf.df.outcore import _guess_shell_ranges
     assert(comp == 1)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if auxmol is None:
         auxmol = addons.make_auxmol(mol, auxbasis)
@@ -134,7 +134,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     j2c = None
     naoaux, naux = low.shape
     log.debug('size of aux basis %d', naux)
-    t1 = log.timer_debug1('2c2e', *t0)
+    log.timer_debug1('2c2e', *t0)
 
     int3c = gto.moleintor.ascint3(mol._add_suffix(int3c))
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
@@ -203,7 +203,7 @@ def cholesky_eri_debug(mol, auxbasis='weigend+etb', auxmol=None,
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
     assert(comp == 1)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if auxmol is None:
         auxmol = addons.make_auxmol(mol, auxbasis)

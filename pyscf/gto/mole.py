@@ -27,6 +27,7 @@ import re
 import platform
 import gc
 import time
+
 import json
 import ctypes
 import numpy
@@ -2052,8 +2053,7 @@ class Mole(lib.StreamObject):
     >>> mol.charge = 1
     >>> mol.build()
     <class 'pyscf.gto.mole.Mole'> has no attributes Charge
-
-    '''
+    '''  # noqa: E501
 
     verbose = getattr(__config__, 'VERBOSE', logger.NOTE)
 
@@ -2232,18 +2232,24 @@ class Mole(lib.StreamObject):
 
     pack = pack
 
+    @classmethod
     @lib.with_doc(unpack.__doc__)
-    def unpack(self, moldic):
+    def unpack(cls, moldic):
         return unpack(moldic)
+
+    @lib.with_doc(unpack.__doc__)
     def unpack_(self, moldic):
         self.__dict__.update(moldic)
         return self
 
     dumps = dumps
 
+    @classmethod
     @lib.with_doc(loads.__doc__)
-    def loads(self, molstr):
+    def loads(cls, molstr):
         return loads(molstr)
+
+    @lib.with_doc(loads.__doc__)
     def loads_(self, molstr):
         self.__dict__.update(loads(molstr).__dict__)
         return self
@@ -2502,27 +2508,11 @@ class Mole(lib.StreamObject):
                           (numpy.__version__, scipy.__version__))
         self.stdout.write('Date: %s\n' % time.ctime())
         import pyscf
-        pyscfdir = os.path.abspath(os.path.join(__file__, '..', '..'))
         self.stdout.write('PySCF version %s\n' % pyscf.__version__)
-        self.stdout.write('PySCF path  %s\n' % pyscfdir)
-        try:
-            with open(os.path.join(pyscfdir, '..', '.git', 'ORIG_HEAD'), 'r') as f:
-                self.stdout.write('GIT ORIG_HEAD %s' % f.read())
-        except IOError:
-            pass
-        try:
-            head = os.path.join(pyscfdir, '..', '.git', 'HEAD')
-            with open(head, 'r') as f:
-                head = f.read().splitlines()[0]
-                self.stdout.write('GIT HEAD      %s\n' % head)
-            # or command(git log -1 --pretty=%H)
-            if head.startswith('ref:'):
-                branch = os.path.basename(head)
-                head = os.path.join(pyscfdir, '..', '.git', head.split(' ')[1])
-                with open(head, 'r') as f:
-                    self.stdout.write('GIT %s branch  %s' % (branch, f.read()))
-        except IOError:
-            pass
+        info = lib.repo_info(os.path.join(__file__, '..', '..'))
+        self.stdout.write('PySCF path  %s\n' % info['path'])
+        if 'git' in info:
+            self.stdout.write(info['git'] + '\n')
 
         self.stdout.write('\n')
         for key in os.environ:
@@ -2618,7 +2608,7 @@ class Mole(lib.StreamObject):
                 exps = self.bas_exp(i)
                 logger.debug1(self, 'bas %d, expnt(s) = %s', i, str(exps))
 
-        logger.info(self, 'CPU time: %12.2f', time.clock())
+        logger.info(self, 'CPU time: %12.2f', logger.process_clock())
         return self
 
     def set_common_origin(self, coord):
@@ -3516,11 +3506,9 @@ def _parse_nuc_mod(str_or_int_or_fn):
     return nucmod
 
 def _update_from_cmdargs_(mol):
-    # Ipython shell conflicts with optparse
-    # pass sys.args when using ipython
     try:
-        __IPYTHON__
-        #sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
+        # Detect whether in Ipython shell
+        __IPYTHON__  # noqa:
         return
     except Exception:
         pass

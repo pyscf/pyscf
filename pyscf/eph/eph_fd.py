@@ -54,6 +54,9 @@ def get_mode(mf, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMA
     return w_new, c_new
 
 def gen_moles(mol, disp):
+    """From the given equilibrium molecule, generate 3N molecules with a shift
+    on + displacement(mol_a) and - displacement(mol_s) on each Cartesian coordinates
+    """
     coords = mol.atom_coords()
     natoms = len(coords)
     mol_a, mol_s = [],[]

@@ -428,22 +428,6 @@ class PolEmbed(lib.StreamObject):
 
         return op
 
-    def _compute_field_integrals(self, sites, moments):
-        mol = self.mol
-        fakemol = gto.fakemol_for_charges(sites)
-        j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
-        op = numpy.einsum('aijg,nga->nij', j3c, -moments)
-        op = op + op.transpose(0, 2, 1)
-        return op
-
-    def _compute_field(self, sites, Ds):
-        mol = self.mol
-        fakemol = gto.fakemol_for_charges(sites)
-        j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1')
-        field = (numpy.einsum('aijg,nij->nga', j3c, Ds) +
-                 numpy.einsum('aijg,nji->nga', j3c, Ds))
-        return field
-
     def _B_dot_x(self, dm):
         dms = numpy.asarray(dm)
         dm_shape = dms.shape

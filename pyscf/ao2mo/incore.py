@@ -271,11 +271,11 @@ if __name__ == '__main__':
     mol.build()
     rhf = scf.RHF(mol)
     rhf.scf()
-    import time
-    print(time.clock())
+
+    print(logger.process_clock())
     eri0 = full(rhf._eri, rhf.mo_coeff)
     print(abs(eri0).sum()-5384.460843787659) # should = 0
     eri0 = general(rhf._eri, (rhf.mo_coeff,)*4)
     print(abs(eri0).sum()-5384.460843787659)
-    print(time.clock())
+    print(logger.process_clock())
 

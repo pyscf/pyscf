@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -101,7 +101,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
 # update L1, L2
 def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     fov = eris.fock[:nocc,nocc:]

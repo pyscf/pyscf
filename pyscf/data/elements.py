@@ -15,7 +15,8 @@
 
 import numpy
 
-ELEMENTS = ['X',  # Ghost
+ELEMENTS = [
+    'X',  # Ghost
     'H' , 'He', 'Li', 'Be', 'B' , 'C' , 'N' , 'O' , 'F' , 'Ne',
     'Na', 'Mg', 'Al', 'Si', 'P' , 'S' , 'Cl', 'Ar', 'K' , 'Ca',
     'Sc', 'Ti', 'V' , 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
@@ -34,8 +35,9 @@ NUC.update((x.upper(),i) for i,x in enumerate(ELEMENTS))
 NUC['GHOST'] = 0
 ELEMENTS_PROTON = NUC
 
-ATOMIC_NAMES = ['Ghost',
-# IUPAC version dated 28 November 2016
+ATOMIC_NAMES = [
+    'Ghost',
+    # IUPAC version dated 28 November 2016
     'Hydrogen', 'Helium', 'Lithium', 'Beryllium', 'Boron',
     'Carbon', 'Nitrogen', 'Oxygen', 'Fluorine', 'Neon',
     'Sodium', 'Magnesium', 'Aluminium', 'Silicon', 'Phosphorus',

@@ -20,7 +20,7 @@
 UCCSD analytical nuclear gradients
 '''
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -52,7 +52,7 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     if l2 is None: l2 = mycc.l2
 
     log = logger.new_logger(mycc, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     log.debug('Build uccsd rdm1 intermediates')
     if d1 is None:
@@ -299,7 +299,7 @@ def _response_dm1(mycc, Xvo, eris=None):
 
 def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     if fsave is None:
         incore = True
         fsave = lib.H5TmpFile()

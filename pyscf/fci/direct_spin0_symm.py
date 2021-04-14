@@ -89,11 +89,11 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     ci0 = []
     ci1 = []
     for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, aidx[wfnsym^ir].size
+        ma, mb = aidx[ir].size, aidx[wfnsym ^ ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
         if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], aidx[wfnsym^ir], out=ci0[ir])
+            lib.take_2d(fcivec, aidx[ir], aidx[wfnsym ^ ir], out=ci0[ir])
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
     ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
     libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
@@ -103,7 +103,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym^ir])
+            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym ^ ir])
     return lib.transpose_sum(ci1new, inplace=True).reshape(fcivec_shape)
 
 

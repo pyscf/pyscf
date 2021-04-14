@@ -20,7 +20,7 @@
 J-metric density fitting
 '''
 
-import time
+
 import copy
 import tempfile
 import numpy
@@ -123,7 +123,7 @@ class DF(lib.StreamObject):
         return self
 
     def build(self):
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         self.check_sanity()

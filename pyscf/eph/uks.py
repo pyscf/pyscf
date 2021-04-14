@@ -62,14 +62,13 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             rhoa = ni.eval_rho2(mol, ao[0], mo_coeff[0], mo_occ[0], mask, xctype)
             rhob = ni.eval_rho2(mol, ao[0], mo_coeff[1], mo_occ[1], mask, xctype)
             vxc, fxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=2)[1:3]
-            vrho = vxc[0]
             u_u, u_d, d_d = fxc[0].T
 
             ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc)
             ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
-# First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
+                # First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
                 rho1a = np.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0a[:,p0:p1])
                 rho1b = np.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0b[:,p0:p1])
 
@@ -82,7 +81,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 wv *= weight
                 aow = np.einsum('pi,xp->xpi', ao[0], wv)
                 rks_grad._d1_dot_(vmatb[ia], mol, aow, ao[0], mask, ao_loc, True)
-            ao_dm0a = ao_dm0b = aow = aow1a = aow1b = None
+            ao_dm0a = ao_dm0b = aow = None
 
         for ia in range(mol.natm):
             vmata[ia] = -vmata[ia] - vmata[ia].transpose(0,2,1)

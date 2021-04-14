@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -108,8 +108,8 @@ def ipccsd_diag(eom, imds=None):
                 Hr2[i,j,a] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
                 Hr2[i,j,a] += imds.Wovvo[i,a,a,i]
                 Hr2[i,j,a] += imds.Wovvo[j,a,a,j]
-                Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:])
-                                  -np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
+                Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:]) -
+                                   np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
@@ -131,7 +131,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=No
     Reference:
         Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
-    assert (eom.partition == None)
+    assert eom.partition is None
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
@@ -336,14 +336,14 @@ def eaccsd_diag(eom, imds=None):
         _Wvvvva = np.array(imds.Wvvvv[a])
         for b in range(a):
             for j in range(nocc):
-               Hr2[j,a,b] += imds.Fvv[a,a]
-               Hr2[j,a,b] += imds.Fvv[b,b]
-               Hr2[j,a,b] += -imds.Foo[j,j]
-               Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
-               Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
-               Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
-               Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b])
-                                  -np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
+                Hr2[j,a,b] += imds.Fvv[a,a]
+                Hr2[j,a,b] += imds.Fvv[b,b]
+                Hr2[j,a,b] += -imds.Foo[j,j]
+                Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
+                Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
+                Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
+                Hr2[j,a,b] -= 0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b]) -
+                                   np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
 
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
@@ -360,12 +360,12 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
     Reference:
         Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
-    assert (eom.partition == None)
+    assert eom.partition is None
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
-    assert (isinstance(eris, gccsd._PhysicistsERIs))
+    assert isinstance(eris, gccsd._PhysicistsERIs)
     fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
@@ -543,8 +543,8 @@ def eeccsd_diag(eom, imds=None):
         for a in range(nvir):
             Hr1[i,a] = imds.Fvv[a,a] - imds.Foo[i,i] + imds.Wovvo[i,a,a,i]
     for a in range(nvir):
-        tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2)
-                  -np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
+        tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2) -
+                   np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
         Hr2[:,:,:,a] += imds.Fvv[a,a] + tmp
         Hr2[:,:,a,:] += imds.Fvv[a,a] + tmp
         _Wvvvva = np.array(imds.Wvvvv[a])
@@ -557,8 +557,8 @@ def eeccsd_diag(eom, imds=None):
             Hr2[:,i,a,:] += tmp
             Hr2[i,:,a,:] += tmp
     for i in range(nocc):
-        tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2)
-                  -np.einsum('kjba,jkab->jab', imds.Woovv, t2))
+        tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2) -
+                   np.einsum('kjba,jkab->jab', imds.Woovv, t2))
         Hr2[:,i,:,:] += -imds.Foo[i,i] + tmp
         Hr2[i,:,:,:] += -imds.Foo[i,i] + tmp
         for j in range(i):
@@ -640,7 +640,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Foo = imd.Foo(t1, t2, eris)
@@ -659,7 +659,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -673,7 +673,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -694,7 +694,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -708,7 +708,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -729,7 +729,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 

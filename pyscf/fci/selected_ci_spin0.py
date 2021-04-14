@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -146,9 +146,9 @@ trans_rdm1 = selected_ci.trans_rdm1
 
 class SelectedCI(selected_ci.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
-# The argument civec_strs is a CI vector in function FCISolver.contract_2e.
-# Save and patch self._strs to make this contract_2e function compatible to
-# FCISolver.contract_2e.
+        # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
+        # Save and patch self._strs to make this contract_2e function compatible to
+        # FCISolver.contract_2e.
         if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:

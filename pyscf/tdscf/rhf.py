@@ -21,7 +21,7 @@
 # Recent Advances in Density Functional Methods, Chapter 5, M. E. Casida
 #
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -44,7 +44,7 @@ POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_thresh
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''Generate function to compute (A+B)x
-    
+
     Kwargs:
         wfnsym : int or str
             Point group symmetry irrep symbol or ID for excited CIS wavefunction.
@@ -776,7 +776,7 @@ class TDA(lib.StreamObject):
     def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -949,7 +949,7 @@ class TDHF(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_sanity()
         self.dump_flags()
         if nstates is None:

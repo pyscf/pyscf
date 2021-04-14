@@ -116,7 +116,7 @@ def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
     occb = occb[idxb]
     ub = ub[:,idxb]
 
-# guess ncas and nelecas
+    # guess ncas and nelecas
     nb = ((occb > occ_cutoff) & (occb < 2-occ_cutoff)).sum()
     log.debug('bath weight occ = %s', occb[:nb])
     cum_nelec = numpy.cumsum(occb[:nb]) + occi.sum()
@@ -127,7 +127,7 @@ def kernel(mf, dm, aolabels_or_baslst, threshold=THRESHOLD,
     nb4cas = nb
     for i in range(nb):
         if (ne_error[i] < threshold and
-# whether all baths next to ith bath are less important
+            # whether all baths next to ith bath are less important
             (occb[i] < threshold or occb[i] > 2-threshold)):
             nb4cas = i
             break
@@ -235,9 +235,9 @@ if __name__ == '__main__':
     from pyscf import mcscf
 
     mol = gto.M(
-    verbose = 0,
-    atom = '''
-           H    0.000000,  0.500000,  1.5   
+        verbose = 0,
+        atom = '''
+           H    0.000000,  0.500000,  1.5
            O    0.000000,  0.000000,  1.
            O    0.000000,  0.000000, -1.
            H    0.000000, -0.500000, -1.5''',

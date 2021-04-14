@@ -21,7 +21,7 @@
 Spin-restricted G0W0 approximation with exact frequency integration
 '''
 
-import time
+
 from functools import reduce
 import numpy
 import numpy as np
@@ -226,7 +226,7 @@ class GWExact(lib.StreamObject):
         if td_xy is None:
             td_xy = self._tdscf.xy
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff, td_e, td_xy,
@@ -303,7 +303,7 @@ class _ChemistsERIs:
         return self
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -324,7 +324,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)

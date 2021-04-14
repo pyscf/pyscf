@@ -44,7 +44,7 @@ def dump_tri(stdout, c, label=None,
         >>> import sys, numpy
         >>> dm = numpy.eye(3)
         >>> dump_tri(sys.stdout, dm)
-                #0        #1        #2   
+                #0        #1        #2
         0       1.00000
         1       0.00000   1.00000
         2       0.00000   0.00000   1.00000
@@ -52,7 +52,7 @@ def dump_tri(stdout, c, label=None,
         >>> mol = gto.M(atom='C 0 0 0')
         >>> dm = numpy.eye(mol.nao_nr())
         >>> dump_tri(sys.stdout, dm, label=mol.ao_labels(), ncol=9, digits=2)
-                    #0     #1     #2     #3     #4     #5     #6     #7     #8   
+                    #0     #1     #2     #3     #4     #5     #6     #7     #8
         0  C 1s     1.00
         0  C 2s     0.00   1.00
         0  C 3s     0.00   0.00   1.00
@@ -69,7 +69,7 @@ def dump_tri(stdout, c, label=None,
         m = dc.shape[1]
         fmt = (' %%%d.%df'%(digits+4,digits))*m + '\n'
         if label is None:
-            stdout.write(((' '*(digits+3))+'%s\n') % \
+            stdout.write(((' '*(digits+3))+'%s\n') %
                          (' '*(digits)).join(['#%-4d'%i for i in range(start+ic,start+ic+m)]))
             for k, v in enumerate(dc[ic:ic+m]):
                 fmt = (' %%%d.%df'%(digits+4,digits))*(k+1) + '\n'
@@ -77,7 +77,7 @@ def dump_tri(stdout, c, label=None,
             for k, v in enumerate(dc[ic+m:]):
                 stdout.write(('%-5d' % (ic+m+k+start)) + (fmt % tuple(v)))
         else:
-            stdout.write(((' '*(digits+10))+'%s\n') % \
+            stdout.write(((' '*(digits+10))+'%s\n') %
                          (' '*(digits)).join(['#%-4d'%i for i in range(start+ic,start+ic+m)]))
             #stdout.write('           ')
             #stdout.write(((' '*(digits)+'#%-5d')*m) % tuple(range(ic+start,ic+m+start)) + '\n')
@@ -115,7 +115,7 @@ def dump_rec(stdout, c, label=None, label2=None,
         >>> import sys, numpy
         >>> dm = numpy.eye(3)
         >>> dump_rec(sys.stdout, dm)
-                #0        #1        #2   
+                #0        #1        #2
         0       1.00000   0.00000   0.00000
         1       0.00000   1.00000   0.00000
         2       0.00000   0.00000   1.00000
@@ -123,7 +123,7 @@ def dump_rec(stdout, c, label=None, label2=None,
         >>> mol = gto.M(atom='C 0 0 0')
         >>> dm = numpy.eye(mol.nao_nr())
         >>> dump_rec(sys.stdout, dm, label=mol.ao_labels(), ncol=9, digits=2)
-                    #0     #1     #2     #3     #4     #5     #6     #7     #8   
+                    #0     #1     #2     #3     #4     #5     #6     #7     #8
         0  C 1s     1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
         0  C 2s     0.00   1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
         0  C 3s     0.00   0.00   1.00   0.00   0.00   0.00   0.00   0.00   0.00
@@ -175,7 +175,7 @@ def dump_mo(mol, c, label=None,
         >>> mol = gto.M(atom='C 0 0 0')
         >>> mo = numpy.eye(mol.nao_nr())
         >>> dump_mo(mol, mo)
-                    #0     #1     #2     #3     #4     #5     #6     #7     #8   
+                    #0     #1     #2     #3     #4     #5     #6     #7     #8
         0  C 1s     1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
         0  C 2s     0.00   1.00   0.00   0.00   0.00   0.00   0.00   0.00   0.00
         0  C 3s     0.00   0.00   1.00   0.00   0.00   0.00   0.00   0.00   0.00

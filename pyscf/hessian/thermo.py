@@ -2,25 +2,24 @@
 #
 # This code was copied from the data generation program of Tencent Alchemy
 # project (https://github.com/tencent-alchemy).
+
 #
-# 
-# #
-# # Copyright 2019 Tencent America LLC. All Rights Reserved.
-# #
-# # Licensed under the Apache License, Version 2.0 (the "License");
-# # you may not use this file except in compliance with the License.
-# # You may obtain a copy of the License at
-# #
-# #     http://www.apache.org/licenses/LICENSE-2.0
-# #
-# # Unless required by applicable law or agreed to in writing, software
-# # distributed under the License is distributed on an "AS IS" BASIS,
-# # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# # See the License for the specific language governing permissions and
-# # limitations under the License.
-# #
-# # Author: Qiming Sun <osirpt.sun@gmail.com>
-# #
+# Copyright 2019 Tencent America LLC. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 '''
 Thermochemistry analysis.
@@ -41,7 +40,7 @@ LINDEP_THRESHOLD = 1e-7
 def harmonic_analysis(mol, hess, exclude_trans=True, exclude_rot=True,
                       imaginary_freq=True):
     '''Each column is one mode
-    
+
     imaginary_freq (boolean): save imaginary_freq as complex number (if True)
     or negative real number (if False)
     '''
@@ -90,7 +89,7 @@ def harmonic_analysis(mol, hess, exclude_trans=True, exclude_rot=True,
 
     results['freq_au'] = freq_au
     au2hz = (nist.HARTREE2J / (nist.ATOMIC_MASS * nist.BOHR_SI**2))**.5 / (2 * numpy.pi)
-    results['freq_wavenumber'] = freq_wn = freq_au * au2hz / nist.LIGHT_SPEED_SI * 1e-2
+    results['freq_wavenumber'] = freq_au * au2hz / nist.LIGHT_SPEED_SI * 1e-2
 
     norm_mode = numpy.einsum('z,zri->izr', mass**-.5, mode.reshape(natm,3,-1))
     results['norm_mode'] = norm_mode
@@ -141,8 +140,8 @@ def thermo(model, freq, temperature=298.15, pressure=101325):
 
     kB = nist.BOLTZMANN
     h = nist.PLANCK
-    c = nist.LIGHT_SPEED_SI
-    beta = 1. / (kB * temperature)
+    # c = nist.LIGHT_SPEED_SI
+    # beta = 1. / (kB * temperature)
     R_Eh = kB*nist.AVOGADRO / (nist.HARTREE2J * nist.AVOGADRO)
 
     results = {}
@@ -199,7 +198,8 @@ def thermo(model, freq, temperature=298.15, pressure=101325):
     au2hz = (nist.HARTREE2J / (nist.ATOMIC_MASS * nist.BOHR_SI**2))**.5 / (2 * numpy.pi)
     idx = freq.real > 0
     vib_temperature = freq.real[idx] * au2hz * h / kB
-    rt = reduced_temperature = vib_temperature / max(1e-14, temperature)
+    # reduced_temperature
+    rt = vib_temperature / max(1e-14, temperature)
     e = numpy.exp(-rt)
 
     ZPE = R_Eh * .5 * vib_temperature.sum()
@@ -233,7 +233,6 @@ def _get_TR(mass, coords):
     '''Translational mode and rotational mode'''
     mass_center = numpy.einsum('z,zx->x', mass, coords) / mass.sum()
     coords = coords - mass_center
-    natm = coords.shape[0]
     massp = mass ** .5
 
     # translational mode
@@ -359,7 +358,7 @@ def dump_normal_mode(mol, results):
         return ''.join('%20.4f' % q[i] for i in range(col0, col1))
     def mode_inline(row, col0, col1):
         return '  '.join('%6.2f%6.2f%6.2f' % (mode[i,row,0], mode[i,row,1], mode[i,row,2])
-                       for i in range(col0, col1))
+                         for i in range(col0, col1))
 
     for col0, col1 in lib.prange(0, nfreq, 3):
         dump('Mode              %s\n' % ''.join('%20d'%i for i in range(col0,col1)))

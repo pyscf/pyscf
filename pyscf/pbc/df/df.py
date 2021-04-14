@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import time
+
 import copy
 import ctypes
 import warnings
@@ -145,7 +145,7 @@ def make_modchg_basis(auxcell, smooth_eta):
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
@@ -576,7 +576,7 @@ class GDF(aft.AFTDF):
                                 'DF integrals will be saved in file %s .',
                                 cderi)
             self._cderi = cderi
-            t1 = (time.clock(), time.time())
+            t1 = (logger.process_clock(), logger.perf_counter())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
@@ -685,7 +685,7 @@ class GDF(aft.AFTDF):
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
-    get_nuc = aft.get_nuc
+    get_nuc = aft.get_nuc  # noqa: F811
     get_pp = aft.get_pp
 
     # Note: Special exxdiv by default should not be used for an arbitrary

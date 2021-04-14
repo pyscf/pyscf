@@ -3,7 +3,7 @@
 '''
 Hartree-Fock/DFT with k-points sampling for all-electron calculations
 
-GDF (Gassuaing desnity fitting), MDF (mixed density fitting) or RS-JK builder
+GDF (Gaussian density fitting), MDF (mixed density fitting) or RS-JK builder
 can be used in all electron calculations. They are more efficient than the
 default SCF JK builder.
 '''
@@ -49,7 +49,7 @@ kmf.kernel()
 #
 # RS-JK builder is efficient for large number of k-points
 #
-kmf = dft.KRHF(cell, kpts).jk_method('RS')
+kmf = scf.KRHF(cell, kpts).jk_method('RS')
 kmf.kernel()
 
 #

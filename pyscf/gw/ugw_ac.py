@@ -33,7 +33,6 @@ Useful References:
     New J. Phys. 14, 053020 (2012)
 '''
 
-import time
 from functools import reduce
 import numpy
 import numpy as np
@@ -43,7 +42,7 @@ from scipy.optimize import newton, least_squares
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
@@ -214,10 +213,12 @@ def get_sigma_diag(gw, orbs, Lpq, freqs, wts, iw_cutoff=None):
 
     # Compute occ for -iw and vir for iw separately
     # to avoid branch cuts in analytic continuation
-    omega_occ = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_vir = np.zeros((nw_sigma),dtype=np.complex128)
-    omega_occ[0] = 1j*0.; omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
-    omega_vir[0] = 1j*0.; omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
+    omega_occ = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_vir = np.zeros((nw_sigma), dtype=np.complex128)
+    omega_occ[0] = 0.j
+    omega_vir[0] = 0.j
+    omega_occ[1:] = -1j*freqs[:(nw_sigma-1)]
+    omega_vir[1:] = 1j*freqs[:(nw_sigma-1)]
     orbs_occ_a = [i for i in orbs if i < nocca]
     orbs_occ_b = [i for i in orbs if i < noccb]
     norbs_occ_a = len(orbs_occ_a)
@@ -313,7 +314,7 @@ def AC_twopole_diag(sigma, omega, orbs, nocc):
     norbs, nw = sigma.shape
     coeff = np.zeros((10,norbs))
     for p in range(norbs):
-        target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
+        # target = np.array([sigma[p].real,sigma[p].imag]).reshape(-1)
         if orbs[p] < nocc:
             x0 = np.array([0, 1, 1, 1, -1, 0, 0, 0, -1.0, -0.5])
         else:
@@ -463,7 +464,7 @@ class UGWAC(lib.StreamObject):
         if mo_energy is None:
             mo_energy = _mo_energy_without_core(self, self._scf.mo_energy)
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
                 kernel(self, mo_energy, mo_coeff,
@@ -496,7 +497,7 @@ class UGWAC(lib.StreamObject):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = 'O 0 0 0'
@@ -519,8 +520,7 @@ if __name__ == '__main__':
     gw.linearized = False
     gw.ac = 'pade'
     gw.kernel(orbs=range(nocca-3,nocca+3))
-    print(gw.mo_energy)
-    assert(abs(gw.mo_energy[0][nocca-1]--0.521932084529)<1e-5)
-    assert(abs(gw.mo_energy[0][nocca]-0.167547592784)<1e-5)
-    assert(abs(gw.mo_energy[1][noccb-1]--0.464605523684)<1e-5)
-    assert(abs(gw.mo_energy[1][noccb]--0.0133557793765)<1e-5)
+    assert (abs(gw.mo_energy[0][nocca-1]- -0.521932084529) < 1e-5)
+    assert (abs(gw.mo_energy[0][nocca] -0.167547592784) < 1e-5)
+    assert (abs(gw.mo_energy[1][noccb-1]- -0.464605523684) < 1e-5)
+    assert (abs(gw.mo_energy[1][noccb]- -0.0133557793765) < 1e-5)

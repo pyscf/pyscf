@@ -20,14 +20,13 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
-import time
 import h5py
 import tempfile
 
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     occ = myadc.mo_coeff[:,:myadc._nocc]
@@ -40,15 +39,15 @@ def transform_integrals_incore(myadc):
 
     # TODO: check if myadc._scf._eri is not None
 
-    eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()
-    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()
-    eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()
-    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()
-    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
+    eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()  # noqa: E501
+    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()  # noqa: E501
+    eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()  # noqa: E501
+    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()  # noqa: E501
+    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()  # noqa: E501
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
-        eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3)) 
+        eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
         eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
 
     log.timer('ADC integral transformation', *cput0)
@@ -58,7 +57,7 @@ def transform_integrals_incore(myadc):
 ### Out-of-core integral transformation for integrals in Chemists' notation###
 def transform_integrals_outcore(myadc):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mol = myadc.mol
@@ -72,7 +71,7 @@ def transform_integrals_outcore(myadc):
     nocc = occ.shape[1]
     nvir = vir.shape[1]
     nvpair = nvir * (nvir+1) // 2
-    
+
     eris = lambda:None
 
     eris.feri1 = lib.H5TmpFile()
@@ -94,11 +93,11 @@ def transform_integrals_outcore(myadc):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     fswap = lib.H5TmpFile()
     max_memory = myadc.max_memory-lib.current_memory()[0]
     if max_memory <= 0:
-        max_memory = myadc.memorymin  
+        max_memory = myadc.memorymin
     int2e = mol._add_suffix('int2e')
     ao2mo.outcore.half_e1(mol, (mo_coeff,occ), fswap, int2e,
                           's4', 1, max_memory=max_memory, verbose=log)
@@ -130,14 +129,14 @@ def transform_integrals_outcore(myadc):
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
-        cput2 = log.timer_debug1('transforming oopp', *cput2) 
+        cput2 = log.timer_debug1('transforming oopp', *cput2)
 
         prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
             buf, buf_prefetch = buf_prefetch, buf
             prefetch(buf_prefetch, nocc+p1, nmo)
 
-            nrow = (p1 - p0) * nocc 
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
@@ -147,53 +146,53 @@ def transform_integrals_outcore(myadc):
     cput1 = log.timer_debug1('transforming oppp', *cput1)
 
     ############### forming eris_vvvv ########################################
-    
+
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
         eris.vvvv = []
 
-        cput3 = time.clock(), time.time()
-        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+        cput3 = logger.process_clock(), logger.perf_counter()
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
         chnk_size = calculate_chunk_size(myadc)
 
         for p in range(0,vir.shape[1],chnk_size):
 
             if chnk_size < vir.shape[1] :
                 orb_slice = vir[:, p:p+chnk_size]
-            else :
+            else:
                 orb_slice = vir[:, p:]
 
             _, tmp = tempfile.mkstemp()
-            ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), tmp, max_memory = avail_mem, ioblk_size=100, compact=False)
+            ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), tmp,
+                                  max_memory=avail_mem, ioblk_size=100, compact=False)
             vvvv = read_dataset(tmp,'eri_mo')
             vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
             vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
-            
+
             vvvv_p = write_dataset(vvvv)
             del vvvv
             eris.vvvv.append(vvvv_p)
             cput3 = log.timer_debug1('transforming vvvv', *cput3)
 
     log.timer('ADC integral transformation', *cput0)
-          
+
     return eris
 
 
 ### DF integral transformation for integrals in Chemists' notation###
 def transform_integrals_df(myadc):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_coeff = np.asarray(myadc.mo_coeff, order='F')
     nocc = myadc._nocc
     nao, nmo = mo_coeff.shape
     nvir = myadc._nmo - myadc._nocc
-    nvir_pair = nvir*(nvir+1)//2
     with_df = myadc.with_df
     naux = with_df.get_naoaux()
-    eris = lambda:None
+    eris = lambda: None
     eris.vvvv = None
     eris.ovvv = None
-    
+
     Loo = np.empty((naux,nocc,nocc))
     Lvo = np.empty((naux,nvir,nocc))
     eris.Lvv = np.empty((naux,nvir,nvir))
@@ -227,13 +226,14 @@ def transform_integrals_df(myadc):
     eris.ovoo[:] = lib.ddot(eris.Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)
     eris.oovv[:] = lib.ddot(Loo.T, eris.Lvv).reshape(nocc,nocc,nvir,nvir)
     eris.ovvo[:] = lib.ddot(eris.Lov.T, Lvo).reshape(nocc,nvir,nvir,nocc)
+
     log.timer('DF-ADC integral transformation', *cput0)
     return eris
 
 
 def calculate_chunk_size(myadc):
 
-    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
     vvv_mem = (myadc._nvir**3) * 8/1e6
 
     chnk_size =  int(avail_mem/vvv_mem)
@@ -242,8 +242,8 @@ def calculate_chunk_size(myadc):
         chnk_size = 1
 
     return chnk_size
-                   
-                   
+
+
 def read_dataset(h5file, dataname):
     f5 = h5py.File(h5file, 'r')
     data = f5[dataname][:]
@@ -277,8 +277,8 @@ def unpack_eri_1(eri, norb):
         else:
             raise TypeError("ERI dimensions don't match")
 
-    else: 
-            raise RuntimeError("ERI does not have a correct dimension")
+    else:
+        raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_
 
@@ -300,7 +300,7 @@ def unpack_eri_2(eri, norb):
         eri_ = np.zeros((norb, norb, norb, norb))
         eri_[ind_oo[0], ind_oo[1]] = temp
         eri_[ind_oo[1], ind_oo[0]] = -temp
-    else: 
-            raise RuntimeError("ERI does not have a correct dimension")
+    else:
+        raise RuntimeError("ERI does not have a correct dimension")
 
     return eri_

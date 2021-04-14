@@ -20,7 +20,7 @@
 Dirac Hartree-Fock
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -243,7 +243,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         s = get_ovlp(mol)
 
     def fproj(mo):
-#TODO: check if mo is GHF orbital
+        #TODO: check if mo is GHF orbital
         if project:
             mo = addons.project_mo_r2r(chk_mol, mo, mol)
             norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
@@ -258,8 +258,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         if mo[0].ndim == 1: # nr-RHF
             dm = reduce(numpy.dot, (mo*mo_occ, mo.T))
         else: # nr-UHF
-            dm = reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) \
-               + reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T))
+            dm = (reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) +
+                  reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T)))
         dm = _proj_dmll(chk_mol, dm, mol)
     return dm
 
@@ -310,10 +310,10 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info('occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info('virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
     mol = mf.mol
     if mf.verbose >= logger.DEBUG1:
@@ -561,7 +561,7 @@ class DHF(hf.SCF):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.new_logger(self)
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
@@ -600,7 +600,7 @@ class DHF(hf.SCF):
             return vj - vk
 
     def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         self.build()
         self.dump_flags()
