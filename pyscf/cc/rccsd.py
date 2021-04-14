@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ Note MO integrals are treated in chemist's notation
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -227,9 +227,6 @@ class RCCSD(ccsd.CCSD):
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
-#?        # Note
-#?        assert(t1.dtype == np.double)
-#?        assert(t2.dtype == np.double)
         return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
     def density_fit(self, auxbasis=None, with_df=None):
@@ -247,7 +244,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None,
         direct_init=False, **kwargs):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     if direct_init:
         eris._direct_init_(mycc, mo_coeff, **kwargs)
@@ -272,7 +269,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None,
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -413,10 +410,8 @@ if __name__ == '__main__':
     orbspin = np.zeros(nao*2, dtype=int)
     orbspin[1::2] = 1
     eri1 = np.zeros([nao*2]*4, dtype=np.complex)
-    eri1[0::2,0::2,0::2,0::2] = \
-    eri1[0::2,0::2,1::2,1::2] = \
-    eri1[1::2,1::2,0::2,0::2] = \
-    eri1[1::2,1::2,1::2,1::2] = eri0
+    eri1[0::2,0::2,0::2,0::2] = eri1[0::2,0::2,1::2,1::2] = eri0
+    eri1[1::2,1::2,0::2,0::2] = eri1[1::2,1::2,1::2,1::2] = eri0
     eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)
     erig = gccsd._PhysicistsERIs(mol)
     nocc *= 2

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,7 +52,10 @@ def run_mfs(mf, cells_a, cells_b):
     return mflist
 
 def gen_cells(cell, disp):
-    """From the given cell, generate 3N cells with a shift on + displacement(cell_a) and - displacement(cell_s) on each Cartesian coordinates"""
+    """From the given cell, generate 3N cells with a shift on
+    + displacement(cell_a) and - displacement(cell_s) on each Cartesian
+    coordinates
+    """
     coords = cell.atom_coords()
     if cell.unit[0].lower() == 'a':
         coords = np.asarray(coords) * param.BOHR

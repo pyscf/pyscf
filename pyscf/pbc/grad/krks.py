@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,14 +26,14 @@ import numpy as np
 from pyscf.pbc.dft import numint
 from pyscf import lib
 from pyscf.lib import logger
-import time
+
 
 def get_veff(ks_grad, dm=None, kpts=None):
     mf = ks_grad.base
     cell = ks_grad.cell
     if dm is None: dm = mf.make_rdm1()
     if kpts is None: kpts = mf.kpts
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ni = mf._numint
     if ks_grad.grids is not None:
@@ -70,11 +70,9 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
-    shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
     nkpts = len(kpts)
     vmat = np.zeros((3,nset,nkpts,nao,nao), dtype=dms.dtype)
-    excsum = np.zeros(nset)
     if xctype == 'LDA':
         ao_deriv = 1
         for ao_k1, ao_k2, mask, weight, coords \
@@ -88,7 +86,7 @@ def get_vxc(ni, cell, grids, xc_code, dms, kpts, kpts_band=None, relativity=0, h
                 aow = np.einsum('xpi,p->xpi', ao_k1[:,0], weight*vrho)
                 for kn in range(nkpts):
                     rks_grad._d1_dot_(vmat[:,i,kn], cell, ao_k1[kn,1:4], aow[kn], mask, ao_loc, True)
-                rho = vc = vrho = aow = None
+                rho = vrho = aow = None
 
     elif xctype=='GGA':
         ao_deriv = 2

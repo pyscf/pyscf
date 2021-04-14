@@ -129,7 +129,7 @@ class DFMP2(mp2.MP2):
 
     def ao2mo(self, mo_coeff=None, store_eris=False):
         eris = mp2._ChemistsERIs()
-        # Initialize only the mo_coeff and 
+        # Initialize only the mo_coeff
         eris._common_init_(self, mo_coeff)
 
         if store_eris:

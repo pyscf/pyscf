@@ -3,7 +3,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import unittest
 import numpy

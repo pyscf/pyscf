@@ -17,16 +17,14 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <complex.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
 #include "gto/grid_ao_drv.h"
+#include "np_helper/np_helper.h"
 
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
-#define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define ALL_IMAGES      255
 #define IMGBLK          40
 #define OF_CMPLX        2
@@ -127,7 +125,7 @@ static void _copy(double complex *out, double *ao_k,
         int i, j, k, ic;
         double complex *pout;
         double *ao_r, *ao_i;
-        int blksize = ncomp * ncol * bgrids;
+        size_t blksize = ncomp * ncol * bgrids;
         for (k = 0; k < nkpts; k++) {
                 ao_r = ao_k + k*2 * blksize;
                 ao_i = ao_k +(k*2+1) * blksize;
@@ -149,7 +147,7 @@ static void _fill_grid2atm(double *grid2atm, double *min_grid2atm,
                            double *coord, double *Ls, double *r_atm,
                            int atm_imag_max, size_t bgrids, size_t ngrids, int nimgs)
 {
-        int ig, m;
+        size_t ig, m;
         double rL[3];
         double dist;
         double dist_min;
@@ -345,9 +343,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                         grid2atm_atm_id = atm_id;
                 }
 
-                for (i = 0; i < nkpts2*dimc; i++) {
-                        aobufk[i] = 0;
-                }
+                NPdset0(aobufk, ((size_t)nkpts2) * dimc);
                 for (iL0 = 0; iL0 < nimgs; iL0+=IMGBLK) {
                         iLcount = MIN(IMGBLK, nimgs - iL0);
 
@@ -358,7 +354,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         if ((iL < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
             (min_grid2atm[iL] < rcut[bas_id]) &&
             (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
-                pao = aobuf + count * dimc;
+                pao = aobuf + ((size_t)count) * dimc;
                 if (l <= 1) { // s, p functions
                         (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
                                  l, np, nc, nc*dcart, bgrids, bgrids);

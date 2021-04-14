@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2020-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ Ref:
     Q. Sun, arXiv:2012.07929
 '''
 
-import time
 import copy
 import ctypes
 import numpy as np
@@ -100,7 +99,7 @@ class RangeSeparationJKBuilder(object):
         return self
 
     def build(self, omega=None, direct_scf_tol=None):
-        cpu0 = (time.clock(), time.time())
+        cpu0 = logger.process_clock(), logger.perf_counter()
         cell = self.cell
         kpts = self.kpts
 
@@ -235,7 +234,7 @@ class RangeSeparationJKBuilder(object):
         if kpts_band is not None:
             raise NotImplementedError
 
-        cpu0 = (time.clock(), time.time())
+        cpu0 = logger.process_clock(), logger.perf_counter()
         if self.supmol is None:
             self.build()
 
@@ -700,7 +699,7 @@ class _LongRangeAFT(aft.AFTDF):
 
     def get_j_for_bands(self, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         log = logger.Logger(self.stdout, self.verbose)
-        t1 = (time.clock(), time.time())
+        t1 = logger.process_clock(), logger.perf_counter()
 
         cell = self.cell
         dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -789,7 +788,7 @@ class _LongRangeAFT(aft.AFTDF):
         '''
         cell = self.cell
         log = logger.Logger(self.stdout, self.verbose)
-        t1 = (time.clock(), time.time())
+        t1 = logger.process_clock(), logger.perf_counter()
 
         mesh = self.mesh
         dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -899,11 +898,9 @@ if __name__ == '__main__':
                        He     0.4917  0.4917  0.4917'''
         cell.basis = {'He': [[0, [4.1, 1, -.2],
                                  [0.5, .2, .5],
-                                 [0.15, .5, .5]
-                             ],
-                             [1, [0.3, 1]],
+                                 [0.15, .5, .5]],
                              #[1, [1.5, 1]],
-                            ]}
+                             [1, [0.3, 1]],]}
         cell.build()
         cell.verbose = 6
         cells.append(cell)

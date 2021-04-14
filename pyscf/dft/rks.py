@@ -20,7 +20,7 @@
 Non-relativistic restricted Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -29,7 +29,6 @@ from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import jk
 from pyscf.dft import gen_grid
-from pyscf.dft import numint
 from pyscf import __config__
 
 
@@ -65,7 +64,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
@@ -186,7 +185,7 @@ def get_vsap(ks, mol=None):
         matrix Vsap = Vnuc + J + Vxc.
     '''
     if mol is None: mol = ks.mol
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -277,6 +276,7 @@ def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 
 
 def _dft_common_init_(mf, xc='LDA,VWN'):
+    from pyscf.dft import numint
     mf.xc = xc
     mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)

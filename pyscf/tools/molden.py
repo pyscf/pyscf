@@ -108,9 +108,9 @@ def from_mcscf(mc, filename, ignore_h=IGNORE_H, cas_natorb=False):
     mol = mc.mol
     dm1 = mc.make_rdm1()
     if cas_natorb:
-        mo_coeff, ci, mo_energy = mc.canonicalize(sort=True, cas_natorb=cas_natorb)
+        mo_coeff, _, mo_energy = mc.canonicalize(sort=True, cas_natorb=cas_natorb)
     else:
-        mo_coeff, ci, mo_energy = mc.mo_coeff, mc.ci, mc.mo_energy
+        mo_coeff, mo_energy = mc.mo_coeff, mc.mo_energy
 
     mo_inv = numpy.dot(mc._scf.get_ovlp(), mo_coeff)
     occ = numpy.einsum('pi,pq,qi->i', mo_inv, dm1, mo_inv)
@@ -144,9 +144,9 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
             occ = None
         if occ.ndim == 2:
             orbital_coeff(mol, f, mo[0], spin='Alpha', ene=ene[0], occ=occ[0],
-                         ignore_h=ignore_h)
+                          ignore_h=ignore_h)
             orbital_coeff(mol, f, mo[1], spin='Beta', ene=ene[1], occ=occ[1],
-                         ignore_h=ignore_h)
+                          ignore_h=ignore_h)
         else:
             orbital_coeff(mol, f, mo, ene=ene, occ=occ, ignore_h=ignore_h)
 
@@ -438,15 +438,15 @@ def header(mol, fout, ignore_h=IGNORE_H):
     fout.write('\n')
 
 def order_ao_index(mol):
-# reorder d,f,g fucntion to
-#  5D: D 0, D+1, D-1, D+2, D-2
-#  6D: xx, yy, zz, xy, xz, yz
-#
-#  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
-# 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
-#
-#  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
-# 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
+    # reorder d,f,g fucntion to
+    #  5D: D 0, D+1, D-1, D+2, D-2
+    #  6D: xx, yy, zz, xy, xz, yz
+    #
+    #  7F: F 0, F+1, F-1, F+2, F-2, F+3, F-3
+    # 10F: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
+    #
+    #  9G: G 0, G+1, G-1, G+2, G-2, G+3, G-3, G+4, G-4
+    # 15G: xxxx yyyy zzzz xxxy xxxz yyyx yyyz zzzx zzzy xxyy xxzz yyzz xxyz yyxz zzxy
     idx = []
     off = 0
     if mol.cart:

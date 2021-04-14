@@ -18,7 +18,7 @@
 #
 
 import ctypes
-import time
+
 import tempfile
 from functools import reduce
 import numpy
@@ -288,7 +288,6 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
     dm3 = dms['3']
     #dm4 = dms['4']
     ncore = mo_core.shape[1]
-    nvirt = mo_virt.shape[1]
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
 
@@ -726,7 +725,7 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
             log = self.verbose
         else:
             log = logger.Logger(self.stdout, self.verbose)
-        time0 = (time.clock(), time.time())
+        time0 = (logger.process_clock(), logger.perf_counter())
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -744,9 +743,10 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
                                                self.load_ci(), self.load_ci(), ncas, self.nelecas)
         dm4 = None
 
-        dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
-               #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
-              }
+        dms = {
+            '1': dm1, '2': dm2, '3': dm3, '4': dm4,
+            # 'h1': hdm1, 'h2': hdm2, 'h3': hdm3
+        }
         time1 = log.timer('3pdm, 4pdm', *time0)
 
         eris = _ERIS(self, self.mo_coeff)
@@ -943,7 +943,7 @@ def trans_e1_incore(mc, mo):
 
 def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     mol = mc.mol
     log = logger.Logger(mc.stdout, verbose)
     ncore = mc.ncore
@@ -978,7 +978,7 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
             time1[:] = logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
     time0 = logger.timer(mol, 'halfe1', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
     with h5py.File(cvcvfile.name, 'w') as f5:

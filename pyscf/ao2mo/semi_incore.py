@@ -31,7 +31,7 @@ intermediates in memory, this version uses less memory but performs slow due
 to IO overhead.
 """
 
-import time
+
 import ctypes
 import numpy
 import h5py
@@ -185,7 +185,7 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         feri_swap[str(piece)] = buf.T
 
     # transform \mu\nu -> ij
-    cput0 = time.clock(), time.time()
+    cput0 = logger.process_clock(), logger.perf_counter()
     with lib.call_in_background(save) as async_write:
         for istep, (p0, p1) in enumerate(lib.prange(0, nao_pair, chunk_size)):
             if dtype == numpy.double:
@@ -217,7 +217,7 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
     log.timer('(uv|lo) -> (ij|lo)', *cput0)
 
     # transform \lambda\sigma -> kl
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     Cklam = mo_coeffs[2].conj()
     buf_read = numpy.empty((chunk_size,nao_pair), dtype=dtype)
     buf_prefetch = numpy.empty_like(buf_read)
@@ -279,31 +279,31 @@ if __name__ == '__main__':
     nvir = nmo - nocc
 
     print('Full incore transformation (pyscf)...')
-    start_time = time.time()
+    start_time = logger.perf_counter()
     eri_incore = ao2mo.incore.full(mf._eri, mo_coeff)
     onnn = eri_incore[:nocc*nmo].copy()
-    print('    Time elapsed (s): ',time.time() - start_time)
+    print('    Time elapsed (s): ',logger.perf_counter() - start_time)
 
     print('Parital incore transformation (pyscf)...')
-    start_time = time.time()
+    start_time = logger.perf_counter()
     orbo = mo_coeff[:,:nocc]
     onnn2 = ao2mo.incore.general(mf._eri, (orbo,mo_coeff,mo_coeff,mo_coeff))
-    print('    Time elapsed (s): ',time.time() - start_time)
+    print('    Time elapsed (s): ',logger.perf_counter() - start_time)
 
     tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 
     print('\n\nCustom outcore transformation ...')
     orbo = mo_coeff[:,:nocc]
-    start_time = time.time()
+    start_time = logger.perf_counter()
     general(mf._eri, (orbo,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'aa',
             verbose=verbose)
-    stop_time = time.time() - start_time
+    stop_time = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time)
     print('\n\nPyscf outcore transformation ...')
-    start_time = time.time()
+    start_time = logger.perf_counter()
     ao2mo.outcore.general(mol, (orbo,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'ab',
                           verbose=verbose)
-    stop_time2 = time.time() - start_time
+    stop_time2 = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('How worse is the custom implemenation?',stop_time/stop_time2)
     with h5py.File(tmpfile2.name, 'r') as f:
@@ -311,15 +311,15 @@ if __name__ == '__main__':
         print('Outcore (pyscf) vs outcore (custom)?',numpy.allclose(f['ab'],f['aa']))
 
     print('\n\nCustom full outcore transformation ...')
-    start_time = time.time()
+    start_time = logger.perf_counter()
     general(mf._eri, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'aa',
             verbose=verbose)
-    stop_time = time.time() - start_time
+    stop_time = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time)
     print('\n\nPyscf full outcore transformation ...')
-    start_time = time.time()
+    start_time = logger.perf_counter()
     ao2mo.outcore.full(mol, mo_coeff, tmpfile2.name, 'ab',verbose=verbose)
-    stop_time2 = time.time() - start_time
+    stop_time2 = logger.perf_counter() - start_time
     print('    Time elapsed (s): ',stop_time2)
     print('    How worse is the custom implemenation?',stop_time/stop_time2)
     with h5py.File(tmpfile2.name, 'r') as f:

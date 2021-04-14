@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ Extension to scipy.linalg module developed for PBC branch.
 '''
 
 from functools import reduce
-import time
+
 import numpy as np
 import scipy.linalg
 
@@ -33,7 +33,7 @@ method = 'davidson'
 VERBOSE = False
 
 try:
-# Temporary fix for davidson when using mpicc
+    # Temporary fix for davidson when using mpicc
     from mpi4py import MPI
     FOUND_MPI4PY = True
     MPI_RANK = MPI.COMM_WORLD.Get_rank()
@@ -53,10 +53,10 @@ def eigs(matvec, size, nroots, x0=None, Adiag=None, guess=False, verbose=logger.
     nroots = min(nroots, size)
 
     if method == 'davidson':
-        if guess == False:
-            conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
-        else:
+        if guess:
             conv, e, c, niter = davidson_guess(matvec, size, nroots, Adiag)
+        else:
+            conv, e, c, niter = davidson(matvec, size, nroots, x0, Adiag, verbose)
         return conv, e, c
     elif method == 'arnoldi':
         # Currently not used:
@@ -90,7 +90,7 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
         import sys
         log = logger.Logger(sys.stdout, verbose)
 
-    cput1 = (time.clock(), time.time())
+    cput1 = (logger.process_clock(), logger.perf_counter())
 
     Mmin = min(neig,N)
     Mmax = min(N,2000)
@@ -404,8 +404,8 @@ class Arnoldi(object):
         if self.totalIter == 0 or self.deflated == 1: # construct the full block of v^*Av
             for i in range(self.currentSize):
                 for j in range(self.currentSize):
-                   val = np.vdot(self.vlist[i],self.Avlist[j])
-                   self.subH[i,j] = val
+                    val = np.vdot(self.vlist[i],self.Avlist[j])
+                    self.subH[i,j] = val
         else:
             for j in range(self.currentSize):
                 if j <= (self.currentSize-1):
@@ -518,8 +518,7 @@ class Arnoldi(object):
             #  To get around this I'm not sure what to do other than to throw that
             #  solution out and start at that eigenvalue
             ########################################################################
-            print(" ERROR!!!! ... restarting at eigenvalue #%" % \
-                        (northo, cvnorm))
+            print(" ERROR!!!! ... restarting at eigenvalue #%s %s" % (northo, cvnorm))
             self.ciEig = northo
         self.cv /= np.linalg.norm(self.cv)
 
@@ -529,11 +528,14 @@ class Arnoldi(object):
             self.deflated = 1
             for i in range(self.nEigen):
                 self.sol[:self.currentSize] = self.evecs[:self.currentSize,i]
-                self.constructSolV()            # Finds the "best" eigenvector for this eigenvalue
-                self.Avlist[i,:] = self.cv.copy() # Puts this guess in self.Avlist rather than self.vlist for now...
-                                                # since this would mess up self.constructSolV()'s solution
+                # Finds the "best" eigenvector for this eigenvalue
+                self.constructSolV()
+                # Puts this guess in self.Avlist rather than self.vlist for now...
+                # since this would mess up self.constructSolV()'s solution
+                self.Avlist[i,:] = self.cv.copy()
             for i in range(self.nEigen):
-                self.cv = self.Avlist[i,:].copy() # This is actually the "best" eigenvector v, not A*v (see above)
+                # This is actually the "best" eigenvector v, not A*v (see above)
+                self.cv = self.Avlist[i,:].copy()
                 self.gramSchmidtCurrentVec(i)
                 self.vlist[i,:] = self.cv.copy()
 
@@ -543,8 +545,10 @@ class Arnoldi(object):
                     orthog += np.vdot(self.vlist[j,:],self.vlist[i,:])**2.0
 
             for i in range(self.nEigen):
-                self.cv = self.vlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
-                self.hMult()                   # Use current vector cv to create cAv
+                # This is actually the "best" eigenvector v, not A*v (see above)
+                self.cv = self.vlist[i].copy()
+                # Use current vector cv to create cAv
+                self.hMult()
                 self.Avlist[i] = self.cAv.copy()
 
     def constructDeflatedSub(self):
@@ -615,7 +619,6 @@ class DavidsonZL(object):
         ifconv = False
         neig = self.neig
         iconv = [False]*neig
-        ediff = 0.0
         eigs = np.zeros(neig)
         ndim = neig
         rlst = []
@@ -683,7 +686,8 @@ class DavidsonZL(object):
             # New directions from residuals
             rlst = []
             for i in range(neig):
-                if iconv[i] == True: continue
+                if iconv[i]:
+                    continue
                 for j in range(self.ndim):
                     tmp = self.diag[j] - eigs[i]
                     if abs(tmp) < self.crit_demo:
@@ -802,8 +806,9 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
                 if debug: print(' ktime,i,rii=', k, i, rii)
                 # TOO SMALL
                 if rii <= crit_indp*10.0**(-k):
-                    if debug: print(' unable to normalize:', i, ' norm=', rii,\
-                                   ' thresh=', crit_indp)
+                    if debug:
+                        print(' unable to normalize:', i, ' norm=', rii,
+                              ' thresh=', crit_indp)
                     continue
                 # NORMALIZE
                 rvec = rvec / rii
@@ -824,9 +829,9 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
     if diff > 1.e-10:
         if VERBOSE: print(' error in mgs_ortho: diff=', diff)
         if VERBOSE: print(iden)
-        exit(1)
+        raise RuntimeError
     else:
-        if VERBOSE: print(' final nindp from mgs_ortho =', nindp, \
+        if VERBOSE: print(' final nindp from mgs_ortho =', nindp,
                           ' diffIden=', diff)
     return nindp, vlst2
 

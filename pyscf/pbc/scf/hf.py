@@ -26,7 +26,7 @@ See Also:
 '''
 
 import sys
-import time
+
 import numpy as np
 import h5py
 from pyscf.scf import hf as mol_hf
@@ -604,7 +604,7 @@ class SCF(mol_hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
 
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 

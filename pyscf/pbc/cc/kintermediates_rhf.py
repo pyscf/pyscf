@@ -18,7 +18,7 @@
 #
 
 import numpy as np
-import time
+
 from itertools import product
 from pyscf import lib
 from pyscf.lib import logger
@@ -705,7 +705,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     the corresponding `kintermediates.py`.
     """
     from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
-    cpu1 = cpu0 = (time.clock(), time.time())
+    cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     if eris is None:
         eris = mycc.ao2mo()
     fock = eris.fock
@@ -821,7 +821,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     pt2 = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
     for ka, kb in product(range(nkpts), repeat=2):
         for task_id, task in enumerate(tasks):
-            cput2 = (time.clock(), time.time())
+            cput2 = (logger.process_clock(), logger.perf_counter())
             a0,a1,b0,b1,c0,c1 = task
             my_permuted_w = np.zeros((nkpts,)*3 + (a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
 
@@ -855,7 +855,7 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
                 tmp_t3Tv_jik = my_permuted_w[kj,ki,kk]
                 tmp_t3Tv_kji = my_permuted_w[kk,kj,ki]
                 Ptmp_t3Tv = add_and_permute(kpt_indices, task,
-                                (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
+                                            (tmp_t3Tv_ijk,tmp_t3Tv_jik,tmp_t3Tv_kji))
                 Ptmp_t3Tv /= eabcijk
 
                 # Contribution to T1 amplitudes

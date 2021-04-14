@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ MO integrals for UCASSCF methods
 '''
 
 import ctypes
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -68,7 +68,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 def trans_e1_outcore(mol, mo, ncore, ncas,
                      max_memory=None, ioblk_size=512, verbose=logger.WARN):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     nao, nmo = mo[0].shape
     nao_pair = nao*(nao+1)//2
@@ -95,7 +95,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         return buf
 
     time0 = log.timer('halfe1-beta', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     AAPP, AApp, APPA, tmp, IAPCV, APcv = \
             _trans_aapp_((mo[1],mo[0]), (ncore[1],ncore[0]), ncas, load_bufa,
@@ -129,7 +129,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
         return buf
 
     time0 = log.timer('halfe1-alpha', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     aapp, aaPP, appa, apPA, Iapcv, apCV = \
             _trans_aapp_(mo, ncore, ncas, load_bufb, ao_loc)
     time0 = log.timer('trans_aapp', *time0)
@@ -233,11 +233,11 @@ class _ERIS(object):
             mol.incore_anyway):
             if eri is None:
                 eri = mol.intor('int2e', aosym='s8')
-            self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
-            self.aapp, self.aaPP, self.AApp, self.AAPP, \
-            self.appa, self.apPA, self.APPA, \
-            self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
-            self.Icvcv, self.ICVCV, self.cvCV = \
+            (self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP,
+             self.aapp, self.aaPP, self.AApp, self.AAPP,
+             self.appa, self.apPA, self.APPA,
+             self.Iapcv, self.IAPCV, self.apCV, self.APcv,
+             self.Icvcv, self.ICVCV, self.cvCV) = \
                     trans_e1_incore(eri, mo, ncore, ncas)
             self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                           numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
@@ -250,11 +250,11 @@ class _ERIS(object):
                 if max_memory < mem_basic:
                     log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                              (mem_outcore+mem_now)/.9, casscf.max_memory)
-                self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP, \
-                self.aapp, self.aaPP, self.AApp, self.AAPP, \
-                self.appa, self.apPA, self.APPA, \
-                self.Iapcv, self.IAPCV, self.apCV, self.APcv, \
-                self.Icvcv, self.ICVCV, self.cvCV = \
+                (self.jkcpp, self.jkcPP, self.jC_pp, self.jc_PP,
+                 self.aapp, self.aaPP, self.AApp, self.AAPP,
+                 self.appa, self.apPA, self.APPA,
+                 self.Iapcv, self.IAPCV, self.apCV, self.APcv,
+                 self.Icvcv, self.ICVCV, self.cvCV) = \
                         trans_e1_outcore(mol, mo, ncore, ncas,
                                          max_memory=max_memory, verbose=log)
                 self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,

@@ -21,7 +21,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include <complex.h>
@@ -1614,7 +1613,7 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         int ptrxyz;
 #pragma omp for schedule(dynamic)
         for (ijm = 0; ijm < nimgs*nijsh; ijm++) {
@@ -1887,7 +1886,7 @@ void NUMINTrho_lda_orth(double *rho, double *dm, int comp, size_t naoi,
         double *dm_cart = cache;
         double *dm_6d = dm_cart + _MAX_RR_SIZE[topl];
         _dm_vrr6d(dm_cart, dm, naoi, li, lj, ri, rj, dm_6d);
-        memset(dm_xyz, 0, sizeof(double) * l1l1l1);
+        NPdset0(dm_xyz, l1l1l1);
         _cart_to_xyz(dm_xyz, dm_cart, li, topl, l1);
 
         _orth_rho(rho, dm_xyz, fac, topl, offset, submesh, mesh,
@@ -1929,7 +1928,7 @@ void NUMINTrho_gga_orth(double *rho, double *dm, int comp, size_t naoi,
         int i, j, lx, ly, lz;
         _dm_vrr6d(dm_cart, dm, naoi, li, lj, ri, rj, dm_6d);
         lx = l1 - 1;
-        memset(dm_xyz, 0, sizeof(double) * lx * lx * lx);
+        NPdset0(dm_xyz, lx * lx * lx);
         _cart_to_xyz(dm_xyz, dm_cart, li, topl-1, lx);
         _orth_rho(rho, dm_xyz, fac, li+lj, offset, submesh, mesh,
                   img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
@@ -1939,14 +1938,14 @@ void NUMINTrho_gga_orth(double *rho, double *dm, int comp, size_t naoi,
         int di_1 = _LEN_CART[MAX(0, li_1)];
         double ai2 = -2 * ai;
         double fac_li;
-        memset(dm_6d, 0, sizeof(double) * di1*dj);
+        NPdset0(dm_6d, di1*dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREX_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
                 }
         }
         GTOreverse_vrr2d_ket(dm_cart, dm_6d, li+1, lj, ri, rj);
-        memset(dm_xyz, 0, sizeof(double) * l1l1l1);
+        NPdset0(dm_xyz, l1l1l1);
         _cart_to_xyz(dm_xyz, dm_cart, li+1, topl, l1);
         if (li_1 >= 0) {
                 for (i = 0, lx = li_1; lx >= 0; lx--) {
@@ -1962,14 +1961,14 @@ void NUMINTrho_gga_orth(double *rho, double *dm, int comp, size_t naoi,
         _orth_rho(rhox, dm_xyz, fac, topl, offset, submesh, mesh,
                   img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 
-        memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
+        NPdset0(dm_6d, _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREY_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
                 }
         }
         GTOreverse_vrr2d_ket(dm_cart, dm_6d, li+1, lj, ri, rj);
-        memset(dm_xyz, 0, sizeof(double) * l1l1l1);
+        NPdset0(dm_xyz, l1l1l1);
         _cart_to_xyz(dm_xyz, dm_cart, li+1, topl, l1);
         if (li_1 >= 0) {
                 for (i = 0, lx = li_1; lx >= 0; lx--) {
@@ -1985,14 +1984,14 @@ void NUMINTrho_gga_orth(double *rho, double *dm, int comp, size_t naoi,
         _orth_rho(rhoy, dm_xyz, fac, topl, offset, submesh, mesh,
                   img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 
-        memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
+        NPdset0(dm_6d, _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREZ_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
                 }
         }
         GTOreverse_vrr2d_ket(dm_cart, dm_6d, li+1, lj, ri, rj);
-        memset(dm_xyz, 0, sizeof(double) * l1l1l1);
+        NPdset0(dm_xyz, l1l1l1);
         _cart_to_xyz(dm_xyz, dm_cart, li+1, topl, l1);
         if (li_1 >= 0) {
                 for (i = 0, lx = li_1; lx >= 0; lx--) {
@@ -2487,7 +2486,7 @@ void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, size_t naoi,
         int di_1 = _LEN_CART[MAX(0, li_1)];
         double ai2 = -2 * ai;
         double fac_li;
-        memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
+        NPdset0(dm_6d, _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREX_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
@@ -2511,7 +2510,7 @@ void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, size_t naoi,
                      a, rij_frac, xs_exp, ys_exp, zs_exp,
                      img_slice, grid_slice, offset, submesh, mesh, cache);
 
-        memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
+        NPdset0(dm_6d, _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREY_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
@@ -2535,7 +2534,7 @@ void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, size_t naoi,
                      a, rij_frac, xs_exp, ys_exp, zs_exp,
                      img_slice, grid_slice, offset, submesh, mesh, cache);
 
-        memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
+        NPdset0(dm_6d, _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
                 for (j = 0; j < dj; j++) {
                         dm_6d[di1*j+WHEREZ_IF_L_INC1(i)] = dm[naoi*j+i] * ai2;
@@ -2650,7 +2649,7 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
-        memcpy(env_loc, env, sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
         int ptrxyz;
         int thread_id = omp_get_thread_num();
         double *rho_priv, *pdm, *pdm1;

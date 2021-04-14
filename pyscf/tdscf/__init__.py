@@ -15,16 +15,20 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from pyscf import scf
 from pyscf.tdscf import rhf
 from pyscf.tdscf import uhf
-from pyscf.tdscf import rks
-from pyscf.tdscf import uks
 from pyscf.tdscf.rhf import TDRHF
-from pyscf.tdscf.rks import TDRKS
 from pyscf.tdscf.uhf import TDUHF
-from pyscf.tdscf.uks import TDUKS
-from pyscf import scf
-from pyscf import dft
+
+try:
+    from pyscf import dft
+    from pyscf.tdscf import rks
+    from pyscf.tdscf import uks
+    from pyscf.tdscf.rks import TDRKS
+    from pyscf.tdscf.uks import TDUKS
+except (ImportError, IOError):
+    pass
 
 
 def TDHF(mf):

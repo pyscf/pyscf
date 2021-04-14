@@ -18,7 +18,7 @@
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -31,7 +31,7 @@ from pyscf import __config__
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, **kwargs):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if eom.verbose >= logger.WARN:
         eom.check_sanity()
@@ -201,7 +201,7 @@ def _sort_left_right_eigensystem(eom, right_converged, right_evals, right_evecs,
 
 
 def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
-            left_guess=None, eris=None, imds=None):
+                          left_guess=None, eris=None, imds=None):
     '''Wrapper for running perturbative excited-states that require both left
     and right amplitudes.'''
     if imds is None:
@@ -261,8 +261,8 @@ def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
             The IP-CCSD* energy.
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
-               right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds)
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds)
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -398,14 +398,13 @@ def ipccsd_diag(eom, imds=None):
 
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, imds=None):
     from pyscf.cc.ccsd_t import _sort_eri, _sort_t2_vooo_
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
 
-    fock = eris.fock
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
@@ -600,15 +599,15 @@ def eaccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     return ipccsd(eom, nroots, left, koopmans, guess, partition, eris, imds)
 
 def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None,
-        left_guess=None, eris=None, imds=None, **kwargs):
+                left_guess=None, eris=None, imds=None, **kwargs):
     """Calculates CCSD* perturbative correction.
 
     Args:
         See also ipccd_star()
     """
     return perturbed_ccsd_kernel(eom, nroots=nroots, koopmans=koopmans,
-               right_guess=right_guess, left_guess=left_guess, eris=eris,
-               imds=imds)
+                                 right_guess=right_guess, left_guess=left_guess, eris=eris,
+                                 imds=imds)
 
 def vector_to_amplitudes_ea(vector, nmo, nocc):
     nvir = nmo - nocc
@@ -748,14 +747,13 @@ def eaccsd_diag(eom, imds=None):
     return vector
 
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=None):
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
 
-    fock = eris.fock
     nocc, nvir = t1.shape
     dtype = np.result_type(t1, t2, eris.ovoo.dtype)
     # Notice we do not use `sort_eri` as compared to the eaccsd_star.
@@ -796,8 +794,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, imds=No
             vvL = np.asarray(eris.vvL)
             nvir = int(np.sqrt(eris.vvL.shape[0]*2))
             return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
-        elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
-                                         # backward compatbility
+        elif eris.vvvv.ndim == 2:
             nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
             return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
         else:
@@ -1579,8 +1576,7 @@ def eeccsd_diag(eom, imds=None):
     Wvvaa = Wvvaa + Wvvaa.T
     if eris.vvvv is None: # AO-direct CCSD, vvvv is not generated.
         pass
-    elif len(eris.vvvv.shape) == 4:  # DO NOT use .ndim here for h5py library
-                                     # backward compatbility
+    elif eris.vvvv.ndim == 4:
         eris_vvvv = ao2mo.restore(1,np.asarray(eris.vvvv), t1.shape[1])
         tmp = np.einsum('aabb->ab', eris_vvvv)
         Wvvaa += tmp
@@ -1750,7 +1746,7 @@ class _IMDS:
         self._made_shared_2e = False
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Loo = imd.Loo(t1, t2, eris)
@@ -1762,7 +1758,7 @@ class _IMDS:
         return self
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1780,7 +1776,7 @@ class _IMDS:
         if not self._made_shared_2e and ip_partition != 'mp':
             self._make_shared_2e()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1795,7 +1791,7 @@ class _IMDS:
 
     def make_t3p2_ip(self, cc, ip_partition=None):
         assert(ip_partition is None)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1816,7 +1812,7 @@ class _IMDS:
         if not self._made_shared_2e and ea_partition != 'mp':
             self._make_shared_2e()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1833,7 +1829,7 @@ class _IMDS:
 
     def make_t3p2_ea(self, cc, ea_partition=None):
         assert(ea_partition is None)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1850,7 +1846,7 @@ class _IMDS:
 
 
     def make_ee(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

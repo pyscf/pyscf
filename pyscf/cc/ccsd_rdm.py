@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -66,7 +66,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
                                   chunks=(nocc,1,nvir,nocc))
     fswap = lib.H5TmpFile()
 
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     pvOOv = lib.einsum('ikca,jkcb->aijb', l2, t2)
     moo = numpy.einsum('dljd->jl', pvOOv) * 2
     mvv = numpy.einsum('blld->db', pvOOv) * 2
@@ -83,8 +83,8 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     fswap['mvoOV'] = pvoOV
     pvoOV = None
 
-    mia =(numpy.einsum('kc,ikac->ia', l1, t2) * 2
-        - numpy.einsum('kc,ikca->ia', l1, t2))
+    mia =(numpy.einsum('kc,ikac->ia', l1, t2) * 2 -
+          numpy.einsum('kc,ikca->ia', l1, t2))
     mab = numpy.einsum('kc,kb->cb', l1, t1)
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
@@ -154,7 +154,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
                                   chunks=(nocc,min(nocc,nvir),1,nvir))
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1]
         gvvvv = lib.einsum('ijab,ijcd->abcd', l2tmp, t2)
@@ -163,11 +163,11 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
         l2tmp = jabc = None
 
         if compress_vvvv:
-# symmetrize dvvvv because it does not affect the results of ccsd_grad
-# dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
-# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
-# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
-# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            # symmetrize dvvvv because it does not affect the results of ccsd_grad
+            # dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
+            # dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+            # dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+            # now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
@@ -307,8 +307,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2).conj()
     dovvo = None
 
-    if len(dvvvv.shape) == 2:
-# To handle the case of compressed vvvv, which is used in nuclear gradients
+    if dvvvv.ndim == 2:
+        # To handle the case of compressed vvvv, which is used in nuclear gradients
         dvvvv = ao2mo.restore(1, dvvvv, nvir)
         dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
         dm2[nocc:,nocc:,nocc:,nocc:]*= 4
@@ -402,8 +402,8 @@ if __name__ == '__main__':
     l1 = numpy.random.random((nocc,nvir))
     l2 = numpy.random.random((nocc,nocc,nvir,nvir))
     l2 = l2 + l2.transpose(1,0,3,2)
-    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2
-                - numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
+    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2 -
+                  numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
 
     eris = lambda:None
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
@@ -454,20 +454,20 @@ if __name__ == '__main__':
 
     dm1 = make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = make_rdm2(mcc, t1, t2, l1, l2)
-    e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
-        +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
-        +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
-        +numpy.einsum('icba,icba', dovvv, eris.ovvv)*2
-        +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
-        +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
-        +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
-        +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
-        +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
-        +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
-        +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
-        +fock0[:nocc].trace()*2
-        -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2
-        +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
+    e2 = (numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2 +
+          numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2 +
+          numpy.einsum('jkia,jkia', dooov, eris.ooov)*2 +
+          numpy.einsum('icba,icba', dovvv, eris.ovvv)*2 +
+          numpy.einsum('iajb,iajb', dovov, eris.ovov)*2 +
+          numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2 +
+          numpy.einsum('ijab,ijab', doovv, eris.oovv)*2 +
+          numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2 +
+          numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2 +
+          numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2 +
+          numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2 +
+          fock0[:nocc].trace()*2 -
+          numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2 +
+          numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
     print(e2+794721.197459942)
     print(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
           numpy.einsum('pq,qp', dm1, h1) - e2)

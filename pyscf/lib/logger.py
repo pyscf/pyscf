@@ -26,16 +26,16 @@ Log level
 ======= ======
 Level   number
 ------- ------
-DEBUG4  9 
-DEBUG3  8 
-DEBUG2  7 
-DEBUG1  6 
-DEBUG   5 
-INFO    4 
-NOTE    3 
-WARN    2 
-ERROR   1 
-QUIET   0 
+DEBUG4  9
+DEBUG3  8
+DEBUG2  7
+DEBUG1  6
+DEBUG   5
+INFO    4
+NOTE    3
+WARN    2
+ERROR   1
+QUIET   0
 ======= ======
 
 Large value means more noise in the output file.
@@ -69,7 +69,7 @@ control at which level the timing information should be output.  It is 5
 >>> import sys, time
 >>> from pyscf import lib
 >>> log = lib.logger.Logger(sys.stdout, 4)
->>> t0 = time.clock()
+>>> t0 = logger.process_clock()
 >>> log.timer('test', t0)
 >>> lib.logger.TIMER_LEVEL = 4
 >>> log.timer('test', t0)
@@ -79,10 +79,13 @@ control at which level the timing information should be output.  It is 5
 
 import sys
 import time
-if sys.version_info >= (3,6):
-    time.clock = time.process_time
-    if sys.version_info >= (3,8):
-        time.time = time.perf_counter
+
+if sys.version_info < (3, 0):
+    process_clock = time.clock
+    perf_counter = time.time
+else:
+    process_clock = time.process_time
+    perf_counter = time.perf_counter
 
 from pyscf.lib import parameters as param
 import pyscf.__config__
@@ -167,13 +170,13 @@ def timer(rec, msg, cpu0=None, wall0=None):
     if cpu0 is None:
         cpu0 = rec._t0
     if wall0:
-        rec._t0, rec._w0 = time.clock(), time.time()
+        rec._t0, rec._w0 = process_clock(), perf_counter()
         if rec.verbose >= TIMER_LEVEL:
             flush(rec, '    CPU time for %s %9.2f sec, wall time %9.2f sec'
                   % (msg, rec._t0-cpu0, rec._w0-wall0))
         return rec._t0, rec._w0
     else:
-        rec._t0 = time.clock()
+        rec._t0 = process_clock()
         if rec.verbose >= TIMER_LEVEL:
             flush(rec, '    CPU time for %s %9.2f sec' % (msg, rec._t0-cpu0))
         return rec._t0
@@ -182,10 +185,10 @@ def timer_debug1(rec, msg, cpu0=None, wall0=None):
     if rec.verbose >= DEBUG1:
         return timer(rec, msg, cpu0, wall0)
     elif wall0:
-        rec._t0, rec._w0 = time.clock(), time.time()
+        rec._t0, rec._w0 = process_clock(), perf_counter()
         return rec._t0, rec._w0
     else:
-        rec._t0 = time.clock()
+        rec._t0 = process_clock()
         return rec._t0
 
 class Logger(object):
@@ -199,8 +202,8 @@ class Logger(object):
     def __init__(self, stdout=sys.stdout, verbose=NOTE):
         self.stdout = stdout
         self.verbose = verbose
-        self._t0 = time.clock()
-        self._w0 = time.time()
+        self._t0 = process_clock()
+        self._w0 = perf_counter()
 
     log = log
     error = error

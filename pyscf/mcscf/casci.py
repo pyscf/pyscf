@@ -17,7 +17,7 @@
 #
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -425,7 +425,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
     if cas_natorb:
         mo_coeff1, ci, mc.mo_occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
-                                           verbose, with_meta_lowdin)
+                                                 verbose, with_meta_lowdin)
     else:
         # Keep the active space unchanged by default.  The rotation in active space
         # may cause problem for external CI solver eg DMRG.
@@ -490,7 +490,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start CASCI')
 
     ncas = casci.ncas
@@ -928,7 +928,7 @@ To enable the solvent model for CASCI, the following code needs to be called
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
         self.mo_coeff, self.ci, self.mo_occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, casdm1, verbose)
+                                                         sort, casdm1, verbose)
         return self.mo_coeff, self.ci, self.mo_occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
@@ -936,6 +936,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         return get_fock(self, mo_coeff, ci, eris, casdm1, verbose)
 
     canonicalize = canonicalize
+
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                       cas_natorb=False, casdm1=None, verbose=None,

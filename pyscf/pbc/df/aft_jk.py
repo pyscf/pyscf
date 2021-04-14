@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 JK with analytic Fourier transformation
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -44,7 +44,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     weight = 1./len(kpts)
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         _update_vj_(vj_kpts, aoaoks, dms, coulG[p0:p1], weight)
-    aoao = aoaoks = p0 = p1 = None
+    aoaoks = p0 = p1 = None
 
     if gamma_point(kpts):
         vj_kpts = vj_kpts.real.copy()
@@ -70,7 +70,7 @@ def _update_vj_(vj_kpts, aoaoks, dms, coulG, weight):
 
 def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -115,7 +115,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     mesh = mydf.mesh
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -253,7 +253,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     dm = numpy.asarray(dm, order='C')
     dms = _format_dms(dm, [kpt])

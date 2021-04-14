@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -492,8 +492,8 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             pw = pv = None
 
         if pspace_size >= na*nb and ci0 is None and not davidson_only:
-# The degenerated wfn can break symmetry.  The davidson iteration with proper
-# initial guess doesn't have this issue
+            # The degenerated wfn can break symmetry.  The davidson iteration with proper
+            # initial guess doesn't have this issue
             if na*nb == 1:
                 return pw[0]+ecore, pv[:,0].reshape(1,1)
             elif nroots > 1:
@@ -674,8 +674,8 @@ class FCIBase(lib.StreamObject):
         self.mol = mol
         self.nroots = 1
         self.spin = None
-# Initialize symmetry attributes for the compatibility with direct_spin1_symm
-# solver.  They are not used by direct_spin1 solver.
+        # Initialize symmetry attributes for the compatibility with direct_spin1_symm
+        # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
 
@@ -850,7 +850,7 @@ class FCIBase(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)
 
-    def contract_ss(self, fcivec, norb, nelec):
+    def contract_ss(self, fcivec, norb, nelec):  # noqa: F811
         from pyscf.fci import spin_op
         nelec = _unpack_nelec(nelec, self.spin)
         return spin_op.contract_ss(fcivec, norb, nelec)

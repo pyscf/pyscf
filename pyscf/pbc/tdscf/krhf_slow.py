@@ -1,4 +1,5 @@
 #  Author: Artem Pulkin
+# flake8: noqa
 """
 This and other `_slow` modules implement the time-dependent Hartree-Fock procedure. The primary performance drawback is
 that, unlike other 'fast' routines with an implicit construction of the eigenvalue problem, these modules construct

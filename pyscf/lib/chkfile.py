@@ -27,7 +27,7 @@ else:
 
 def load(chkfile, key):
     '''Load array(s) from chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile. The chkfile needs to be saved in HDF5 format.
@@ -76,7 +76,7 @@ load_chkfile_key = load
 
 def dump(chkfile, key, value):
     '''Save array(s) in chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -142,7 +142,7 @@ dump_chkfile_key = save = dump
 def load_mol(chkfile):
     '''Load Mole object from chkfile.
     The save_mol/load_mol operation can be used a serialization method for Mole object.
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -163,9 +163,9 @@ def load_mol(chkfile):
     try:
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.loads(fh5['mol'][()])
-    except:
-# Compatibility to the old serialization format
-# TODO: remove it in future release
+    except Exception:
+        # Compatibility to the old serialization format
+        # TODO: remove it in future release
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.Mole()
             mol.output = '/dev/null'

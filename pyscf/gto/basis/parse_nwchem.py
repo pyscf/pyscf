@@ -45,8 +45,7 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'K': 7,
            'L': 8,
-           'M': 9,
-          }
+           'M': 9,}
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')

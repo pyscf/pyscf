@@ -26,90 +26,44 @@ try:
 except (ImportError, ModuleNotFoundError):
     MPI = False
 
-#base_output = "pyscf.log"
-#default_output = base_output
-#idx = 0
-#while os.path.isfile(default_output):
-#    idx += 1
-#    default_output = base_output + ".%d" % idx
-## Make sure all MPI ranks agree on the latest logfile
-#MPI_comm.Barrier()
+import argparse
 
-if sys.version_info >= (2,7):
+def cmd_args():
+    '''
+    get input from cmdline
+    '''
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument('-v', '--verbose',
+                        action='store_false', dest='verbose', default=0,
+                        help='make lots of noise')
+    parser.add_argument('-q', '--quiet',
+                        action='store_false', dest='quite', default=False,
+                        help='be very quiet')
+    parser.add_argument('-o', '--output',
+                        dest='output', metavar='FILE', help='write output to FILE')#,
+    parser.add_argument('-m', '--max-memory',
+                        action='store', dest='max_memory', metavar='NUM',
+                        help='maximum memory to use (in MB)')
 
-    import argparse
+    (opts, args_left) = parser.parse_known_args()
 
-    def cmd_args():
-        '''
-        get input from cmdline
-        '''
-        parser = argparse.ArgumentParser(allow_abbrev=False)
-        parser.add_argument('-v', '--verbose',
-                            action='store_false', dest='verbose', default=0,
-                            help='make lots of noise')
-        parser.add_argument('-q', '--quiet',
-                            action='store_false', dest='quite', default=False,
-                            help='be very quiet')
-        parser.add_argument('-o', '--output',
-                            dest='output', metavar='FILE', help='write output to FILE')#,
-                            #default=default_output)
-                            #default="pyscf.log")
-        parser.add_argument('-m', '--max-memory',
-                            action='store', dest='max_memory', metavar='NUM',
-                            help='maximum memory to use (in MB)')
+    # Append MPI rank to output file
+    if MPI and opts.output is not None and MPI_rank > 0:
+        logname, ext = opts.output.rsplit(".", 1)
+        opts.output = logname + (".mpi%d" % MPI_rank)
+        if ext:
+            opts.output += (".%s" % ext)
 
-        (opts, args_left) = parser.parse_known_args()
+    if opts.quite:
+        opts.verbose = pyscf.lib.logger.QUIET
 
-        # Append MPI rank to output file
-        if MPI and opts.output is not None and MPI_rank > 0:
-            logname, ext = opts.output.rsplit(".", 1)
-            opts.output = logname + (".mpi%d" % MPI_rank)
-            if ext:
-                opts.output += (".%s" % ext)
+    if opts.verbose:
+        opts.verbose = pyscf.lib.logger.DEBUG
 
-        if opts.quite:
-            opts.verbose = pyscf.lib.logger.QUIET
+    if opts.max_memory:
+        opts.max_memory = float(opts.max_memory)
 
-        if opts.verbose:
-            opts.verbose = pyscf.lib.logger.DEBUG
-
-        if opts.max_memory:
-            opts.max_memory = float(opts.max_memory)
-
-        return opts
-
-else:
-    import optparse
-
-    def cmd_args():
-        '''
-        get input from cmdline
-        '''
-        parser = optparse.OptionParser()
-        parser.add_option('-v', '--verbose',
-                          action='store_false', dest='verbose',
-                          help='make lots of noise')
-        parser.add_option('-q', '--quiet',
-                          action='store_false', dest='quite', default=False,
-                          help='be very quiet')
-        parser.add_option('-o', '--output',
-                          dest='output', metavar='FILE', help='write output to FILE')
-        parser.add_option('-m', '--max-memory',
-                          action='store', dest='max_memory', metavar='NUM',
-                          help='maximum memory to use (in MB)')
-
-        (opts, args_left) = parser.parse_args()
-
-        if opts.quite:
-            opts.verbose = pyscf.lib.logger.QUIET
-
-        if opts.verbose:
-            opts.verbose = pyscf.lib.logger.DEBUG
-
-        if opts.max_memory:
-            opts.max_memory = float(opts.max_memory)
-
-        return opts
+    return opts
 
 
 if __name__ == '__main__':

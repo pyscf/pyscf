@@ -149,7 +149,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
     nao = ao_loc[mol.nbas]
     ao_loc = numpy.asarray(numpy.hstack((ao_loc, [nao+1])), dtype=numpy.int32)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    mat = numpy.zeros((nGv,ni), order='F', dtype=numpy.complex)
+    mat = numpy.zeros((nGv,ni), order='F', dtype=numpy.complex128)
 
     shls_slice = shls_slice + (mol.nbas, mol.nbas+1)
     fn(intor, eval_gz, fill, mat.ctypes.data_as(ctypes.c_void_p),
@@ -186,9 +186,5 @@ if __name__ == '__main__':
     gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
     Gv = 2*numpy.pi * numpy.dot(gxyz, b)
 
-    import time
-    print(time.clock())
     print(numpy.linalg.norm(ft_aopair(mol, Gv, None, 's1', b, gxyz, gs)) - 63.0239113778)
-    print(time.clock())
     print(numpy.linalg.norm(ft_ao(mol, Gv, None, b, gxyz, gs))-56.8273147065)
-    print(time.clock())

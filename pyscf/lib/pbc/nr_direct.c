@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <math.h>
 //#include <omp.h>
@@ -150,9 +149,10 @@ void PBCVHF_contract_k_s1(double *vk, double *dms, double *buf,
         const int kshp = cell0_shl_id[ksh];
         const int lshp = cell0_shl_id[lsh];
         const int dm_jk_off = dm_translation[cell_j * nkpts + cell_k];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*nbasp+kshp];
+        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*Nbasp+kshp];
         if (dm_jk_cond < direct_scf_cutoff) {
                 return;
         } else {
@@ -164,11 +164,11 @@ void PBCVHF_contract_k_s1(double *vk, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -213,10 +213,11 @@ static void contract_k_s2_kgtl(double *vk, double *dms, double *buf,
         const int lshp = cell0_shl_id[lsh];
         const int dm_jk_off = dm_translation[cell_j*nkpts+cell_k];
         const int dm_jl_off = dm_translation[cell_j*nkpts+cell_l];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*nbasp+kshp];
-        double dm_jl_cond = vhfopt->dm_cond[dm_jl_off*nn0 + jshp*nbasp+lshp];
+        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*Nbasp+kshp];
+        double dm_jl_cond = vhfopt->dm_cond[dm_jl_off*nn0 + jshp*Nbasp+lshp];
         double dm_cond_max = MAX(dm_jk_cond, dm_jl_cond);
         if (dm_cond_max < direct_scf_cutoff) {
                 return;
@@ -229,11 +230,11 @@ static void contract_k_s2_kgtl(double *vk, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -302,9 +303,10 @@ void PBCVHF_contract_j_s1(double *vj, double *dms, double *buf,
         const int kshp = cell0_shl_id[ksh];
         const int lshp = cell0_shl_id[lsh];
         const int dm_lk_off = dm_translation[cell_l * nkpts + cell_k];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*nbasp+kshp];
+        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*Nbasp+kshp];
         if (dm_lk_cond < direct_scf_cutoff) {
                 return;
         } else {
@@ -316,11 +318,11 @@ void PBCVHF_contract_j_s1(double *vj, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -365,10 +367,11 @@ static void contract_j_s2_kgtl(double *vj, double *dms, double *buf,
         const int lshp = cell0_shl_id[lsh];
         const int dm_lk_off = dm_translation[cell_l * nkpts + cell_k];
         const int dm_kl_off = dm_translation[cell_k * nkpts + cell_l];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*nbasp+kshp];
-        double dm_kl_cond = vhfopt->dm_cond[dm_kl_off*nn0 + kshp*nbasp+lshp];
+        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*Nbasp+kshp];
+        double dm_kl_cond = vhfopt->dm_cond[dm_kl_off*nn0 + kshp*Nbasp+lshp];
         double dm_cond_max = dm_lk_cond + dm_kl_cond;
         if (dm_cond_max < direct_scf_cutoff) {
                 return;
@@ -381,11 +384,11 @@ static void contract_j_s2_kgtl(double *vj, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -451,10 +454,11 @@ void PBCVHF_contract_jk_s1(double *jk, double *dms, double *buf,
         const int lshp = cell0_shl_id[lsh];
         const int dm_lk_off = dm_translation[cell_l * nkpts + cell_k];
         const int dm_jk_off = dm_translation[cell_j * nkpts + cell_k];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*nbasp+kshp];
-        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*nbasp+kshp];
+        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*Nbasp+kshp];
+        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*Nbasp+kshp];
         double dm_cond_max = MAX(dm_lk_cond, dm_jk_cond);
         if (dm_cond_max < direct_scf_cutoff) {
                 return;
@@ -467,11 +471,11 @@ void PBCVHF_contract_jk_s1(double *jk, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -524,12 +528,13 @@ static void contract_jk_s2_kgtl(double *jk, double *dms, double *buf,
         const int dm_jl_off = dm_translation[cell_j*nkpts+cell_l];
         const int dm_lk_off = dm_translation[cell_l*nkpts+cell_k];
         const int dm_kl_off = dm_translation[cell_k*nkpts+cell_l];
-        const int nn0 = nbasp * nbasp;
+        const size_t Nbasp = nbasp;
+        const size_t nn0 = Nbasp * Nbasp;
         double direct_scf_cutoff = vhfopt->direct_scf_cutoff;
-        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*nbasp+kshp];
-        double dm_jl_cond = vhfopt->dm_cond[dm_jl_off*nn0 + jshp*nbasp+lshp];
-        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*nbasp+kshp];
-        double dm_kl_cond = vhfopt->dm_cond[dm_kl_off*nn0 + kshp*nbasp+lshp];
+        double dm_jk_cond = vhfopt->dm_cond[dm_jk_off*nn0 + jshp*Nbasp+kshp];
+        double dm_jl_cond = vhfopt->dm_cond[dm_jl_off*nn0 + jshp*Nbasp+lshp];
+        double dm_lk_cond = vhfopt->dm_cond[dm_lk_off*nn0 + lshp*Nbasp+kshp];
+        double dm_kl_cond = vhfopt->dm_cond[dm_kl_off*nn0 + kshp*Nbasp+lshp];
         double dm_cond_max = MAX(dm_jk_cond, dm_jl_cond);
         dm_cond_max = MAX(dm_cond_max, dm_lk_cond + dm_kl_cond);
         if (dm_cond_max < direct_scf_cutoff) {
@@ -543,11 +548,11 @@ static void contract_jk_s2_kgtl(double *jk, double *dms, double *buf,
         }
 
         const int *ao_loc = envs->ao_loc;
-        const int naop = ao_loc[nbasp];
-        const int nn = naop * naop;
-        const int bn = naop * nbands;
-        const int knn = nn * nkpts;
-        const int bnn = bn * naop;
+        const size_t naop = ao_loc[nbasp];
+        const size_t nn = naop * naop;
+        const size_t bn = naop * nbands;
+        const size_t knn = nn * nkpts;
+        const size_t bnn = bn * naop;
         const int i0  = ao_loc[ish];
         const int jp0 = ao_loc[jshp];
         const int kp0 = ao_loc[kshp];
@@ -643,7 +648,7 @@ void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
         const int cache_size = _max_cache_size(int2e_sph, shls_slice, images_loc,
                                                atm, natm, bas, nbas, env);
         const size_t nij = nish * njsh;
-        const int naop = bvk_ao_loc[nbasp];
+        const size_t naop = bvk_ao_loc[nbasp];
 
 #pragma omp parallel
 {

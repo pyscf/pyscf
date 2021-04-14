@@ -447,3 +447,5 @@ MM3 = 1/BOHR * numpy.array((unknown,  # Ghost atom
     unknown,    #118  Og
 ))
 del unknown
+
+# flake8: noqa
