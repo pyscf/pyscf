@@ -126,7 +126,7 @@ def test_diamond():
 
 def run_test():
     test_helium()
-    #test_diamond()
+    test_diamond()
 
 if __name__ == "__main__":
     run_test()
