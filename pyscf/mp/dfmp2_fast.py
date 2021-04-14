@@ -75,15 +75,13 @@ class DFRMP2(lib.StreamObject):
         self.e_corr = None
         self.rdm1_mo = None
 
-        # dump flags here, because calling kernel is not mandatory
-        self.dump_flags()
-
         # Spin component scaling factors
         self.ps = 1.0
         self.pt = 1.0
 
-    def dump_flags(self):
-        logger = lib.logger.new_logger(self)
+    def dump_flags(self, logger=None):
+        if not logger:
+            logger = lib.logger.new_logger(self)
         logger.info('')
         logger.info('******** {0:s} ********'.format(repr(self.__class__)))
         logger.info('nmo = {0:d}'.format(self.nmo))
@@ -136,8 +134,8 @@ class DFRMP2(lib.StreamObject):
         emo = self.mo_energy[nfrz:]
         logger = lib.logger.new_logger(self)
         rdm1_mo = np.zeros((self.nmo, self.nmo))
-        rdm1_mo[nfrz:, nfrz:] = rdm1_rhf_unrelaxed(self._intsfile, no, emo, \
-            self.max_memory, logger, ps=self.ps, pt=self.pt)
+        rdm1_mo[nfrz:, nfrz:] = mp2_rhf_densities(self._intsfile, no, emo, \
+            self.max_memory, logger, ps=self.ps, pt=self.pt)[0]
 
         # Set the RHF density matrix for the frozen orbitals if applicable.
         if nfrz > 0:
@@ -195,6 +193,7 @@ class DFRMP2(lib.StreamObject):
         Alias for the MP2 energy calculation.
         Does not need to be called to calculate the 1-RDM only.
         '''
+        self.dump_flags()
         return self.calculate_energy()
 
 
@@ -217,6 +216,13 @@ class SCSDFRMP2(DFRMP2):
         super().__init__(mf, *args, **kwargs)
         self.ps = ps
         self.pt = pt
+
+    def dump_flags(self, logger=None):
+        if not logger:
+            logger = lib.logger.new_logger(self)
+        super().dump_flags(logger=logger)
+        logger.info('pt(scs) = {0:.6f}'.format(self.pt))
+        logger.info('ps(scs) = {0:.6f}'.format(self.ps))
 
 
 SCSMP2 = SCSRMP2 = SCSDFMP2 = SCSDFRMP2
@@ -298,7 +304,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
         if bufsize < 1:
             raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
         bufsize = min(nmo1, bufsize)
-        logger.info('    Batch size: {0:d} (of {1:d})'.format(bufsize, nmo1))
+        logger.debug('    Batch size: {0:d} (of {1:d})'.format(bufsize, nmo1))
 
         # In batches:
         # - Read integrals from the temporary file.
@@ -365,9 +371,11 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
     return energy
 
 
-def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger, ps=1.0, pt=1.0):
+def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
+    relaxed=False, auxmol=None, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix with an RHF reference.
+    Also calculates the three-center two-particle density if requested.
 
     Args:
         intsfile : contains the three center integrals
@@ -375,17 +383,19 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger, ps=1.0, pt
         mo_energy : molecular orbital energies
         max_memory : memory threshold in MB
         logger : Logger instance
+        relaxed : if True, calculate contributions for the relaxed density
+        auxmol : required if relaxed is True
         ps : SCS factor for opposite-spin contributions
         pt : SCS factor for same-spin contributions
     
     Returns:
-        matrix containing the unrelaxed 1-RDM
+        matrix containing the unrelaxed 1-RDM, file with 3c2e density if requested
     '''
     nmo = len(mo_energy)
     nvirt = nmo - nocc
 
     logger.info('')
-    logger.info('*** Unrelaxed one-particle density matrix for DF-MP2')
+    logger.info('*** Density matrix contributions for DF-MP2')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
     logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
     logger.info('    Three center integrals from file: {0:s}'.format(intsfile.filename))
@@ -400,14 +410,21 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger, ps=1.0, pt
     P = np.zeros((nmo, nmo))
     P[:nocc, :nocc] = 2.0 * np.eye(nocc)
 
+    GammaFile, Gamma, LT, naux = (None,) * 4
+    if relaxed:
+        if not auxmol:
+            raise RuntimeError('auxmol needs to be specified for relaxed density computation')
+        else:
+            naux = auxmol.nao
+        # create temporary file to store the two-body density Gamma
+        GammaFile = lib.H5TmpFile(libver='latest')
+        Gamma = GammaFile.create_dataset('Gamma', (nocc, naux, nvirt), dtype='f8')
+        logger.info('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
+        # We will need LT = L^T, where L L^T = V
+        LT = scipy.linalg.cholesky(auxmol.intor('int2c2e'), lower=False)
+
     with lib.H5TmpFile(libver='latest') as tfile:
         logger.info('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
-
-        batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (2 * nocc * nvirt * 8))
-        batchsize = min(nvirt, batchsize)
-        if batchsize < 1:
-            raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-        logger.info('    Batch size: {0:d} (of {1:d})'.format(batchsize, nvirt))
 
         # For each occupied orbital i, all amplitudes are calculated once and stored on disk.
         # The occupied 1-RDM contribution is calculated in a batched algorithm.
@@ -429,17 +446,46 @@ def rdm1_rhf_unrelaxed(intsfile, nocc, mo_energy, max_memory, logger, ps=1.0, pt
                     tiset[j, :, :] = Tab
                     # virtual 1-RDM contribution
                     P[nocc:, nocc:] += np.matmul(Tab, TCab.T)
+                del ints3c_jb, Kab, DE, Tab, TCab
 
                 # Read batches of amplitudes from disk and calculate the occupied 1-RDM.
+                batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (2 * nocc * nvirt * 8))
+                batchsize = min(nvirt, batchsize)
+                if batchsize < 1:
+                    raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
+                logger.debug('      Pij formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+                    format(i, batchsize, nvirt))
                 for astart in range(0, nvirt, batchsize):
                     aend = min(astart+batchsize, nvirt)
                     tbatch1 = tiset[:, astart:aend, :]
                     tbatch2 = tiset[:, :, astart:aend]
-                    P[:nocc, :nocc] -= 2.0 * (ps + pt) * np.tensordot(tbatch1, tbatch1, axes=([1, 2], [1, 2]))
-                    P[:nocc, :nocc] += 2.0 * pt * np.tensordot(tbatch1, tbatch2, axes=([1, 2], [2, 1]))
-    
-    logger.info('*** 1-RDM calculation finished')
-    return P
+                    P[:nocc, :nocc] -= 2.0 * (ps + pt) * np.einsum('iab,jab->ij', tbatch1, tbatch1)
+                    P[:nocc, :nocc] += 2.0 * pt * np.einsum('iab,jba->ij', tbatch1, tbatch2)
+                del tbatch1, tbatch2
+                
+                if relaxed:
+                    # This produces (P | Q)^-1 (Q | i a)
+                    ints3cV1_ia = scipy.linalg.solve_triangular(LT, ints3c_ia, lower=False)
+                    # Read batches of amplitudes from disk and calculate the two-body density Gamma
+                    size = nvirt * nvirt * 8 + naux * nvirt * 8
+                    batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / size)
+                    batchsize = min(nocc, batchsize)
+                    if batchsize < 1:
+                        raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
+                    logger.debug('      Gamma formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+                        format(i, batchsize, nocc))
+                    for jstart in range(0, nocc, batchsize):
+                        jend = min(jstart+batchsize, nocc)
+                        tbatch = tiset[jstart:jend, :, :]
+                        Gbatch = Gamma[jstart:jend, :, :]
+                        for jj in range(jend-jstart):
+                            TCijab = 2.0 * (pt + pt) * tbatch[jj] - 2.0 * pt * tbatch[jj]
+                            Gbatch[jj] += np.matmul(ints3cV1_ia, TCijab)
+                        Gamma[jstart:jend, :, :] = Gbatch
+                    del ints3cV1_ia, tbatch, Gbatch, TCijab
+
+    logger.info('*** Density matrix contributions calculation finished')
+    return P, GammaFile
 
 
 def order_mos_fc(frozen, mo_coeff, mo_energy, nocc):
