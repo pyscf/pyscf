@@ -28,14 +28,14 @@ if dist is None or [int(x) for x in dist.version.split('.')] < [0, 6, 2]:
            'with:\n\n\tpip install -U pyberny')
     raise ImportError(msg)
 
-import time
+
 import numpy
 import logging
 from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsBasics
+from pyscf.grad.rhf import GradientsMixin
 
 from berny import Berny, geomlib, coords
 
@@ -92,7 +92,7 @@ def to_berny_log(pyscf_log):
 def kernel(method, assert_convergence=ASSERT_CONV,
            include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize geometry with pyberny for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 
@@ -108,7 +108,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
         opt.params = conv_params
         opt.kernel()
     '''
-    t0 = time.clock(), time.time()
+    t0 = lib.logger.process_clock(), lib.logger.perf_counter()
     mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])
@@ -119,7 +119,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsBasics):
+    elif isinstance(method, GradientsMixin):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -170,7 +170,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, callback=None, **kwargs):
     '''Optimize geometry with pyberny for the given method.
-    
+
     To adjust the convergence threshold, parameters can be set in kwargs as
     below:
 

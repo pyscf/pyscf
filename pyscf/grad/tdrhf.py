@@ -19,7 +19,7 @@
 # J. Chem. Phys. 117, 7433
 #
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -42,7 +42,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
             TDA energy gradients.
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -218,7 +218,7 @@ def as_scanner(td_grad, state=1):
         return TDSCF_GradScanner(td_grad)
 
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
     cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)

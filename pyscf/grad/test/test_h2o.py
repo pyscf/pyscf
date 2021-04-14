@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.kernel()
         g = grad.ROHF(mf)
-        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.1499791106739679, 6)
+        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.230345200147354, 6)
 
     def test_energy_nuc(self):
         rhf = scf.RHF(h2o)
@@ -163,9 +163,9 @@ class KnownValues(unittest.TestCase):
         mf = dft.ROKS(h2o_n)
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = roks.Grad(mf)
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655206305717471, 6)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.14281412906618443, 6)
         g.grid_response = True
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655364690125929, 6)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.14281571291026954, 6)
 
 
 if __name__ == "__main__":

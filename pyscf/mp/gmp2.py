@@ -1,4 +1,4 @@
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ GMP2 in spin-orbital form
 E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
 '''
 
-import time
+import copy
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -127,7 +127,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
     E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if t2 is None: t2 = mp.t2
-    nmo = nmo0 = mp.nmo
+    nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
 
     if mp.frozen is None:
@@ -196,6 +196,16 @@ class GMP2(mp2.MP2):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.mp import dfgmp2
+        mymp = dfgmp2.DFGMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mymp.with_df = with_df
+        if mymp.with_df.auxbasis != auxbasis:
+            mymp.with_df = copy.copy(mymp.with_df)
+            mymp.with_df.auxbasis = auxbasis
+        return mymp
 
     def nuc_grad_method(self):
         raise NotImplementedError
@@ -296,7 +306,7 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     return eris
 
 def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mp.stdout, mp.verbose)
     eris = _PhysicistsERIs()
     eris._common_init_(mp, mo_coeff)

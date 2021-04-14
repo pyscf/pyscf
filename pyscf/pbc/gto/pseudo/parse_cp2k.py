@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ def load(pseudofile, symb, suffix=None):
     return _parse(search_seg(pseudofile, symb, suffix))
 
 def _parse(plines):
-    header_ln = plines.pop(0)
+    header_ln = plines.pop(0)  # noqa: F841
     nelecs = [ int(nelec) for nelec in plines.pop(0).split() ]
     rnc_ppl = plines.pop(0).split()
     rloc = float(rnc_ppl[0])
@@ -116,5 +116,4 @@ if __name__ == '__main__':
         2
          0.30232223    1     9.66551228
          0.28637912    0
-    """
-    ))
+    """))

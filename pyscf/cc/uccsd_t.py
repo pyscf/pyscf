@@ -20,7 +20,7 @@
 UCCSD(T)
 '''
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -28,7 +28,7 @@ from pyscf.lib import logger
 from pyscf.cc import _ccsd
 
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
-    cpu1 = cpu0 = (time.clock(), time.time())
+    cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
@@ -172,7 +172,7 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
     mo_energy = numpy.asarray(mo_energy, order='C')
     fvo = fock[nocc:,:nocc].copy()
 
-    cpu2 = [time.clock(), time.time()]
+    cpu2 = [logger.process_clock(), logger.perf_counter()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
     o_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(orbsym[:nocc], minlength=8)))
     v_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(orbsym[nocc:], minlength=8)))
@@ -224,7 +224,7 @@ def _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log):
     fvo = focka[nocca:,:nocca].copy()
     fVO = fockb[noccb:,:noccb].copy()
 
-    cpu2 = [time.clock(), time.time()]
+    cpu2 = [logger.process_clock(), logger.perf_counter()]
     dtype = numpy.result_type(t2aaT.dtype, vooo.dtype)
     if dtype == numpy.complex:
         drv = _ccsd.libcc.CCuccsd_t_zbaa
@@ -256,7 +256,7 @@ def _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log):
     return contract
 
 def _sort_eri(mycc, eris, h5tmp, log):
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     nocca, noccb = mycc.nocc
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]

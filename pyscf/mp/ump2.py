@@ -17,7 +17,7 @@
 UMP2 with spatial integals
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -147,7 +147,7 @@ def update_amps(mp, t2, eris):
 
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocca,nvira,nocca,nvira).conj() * .5
     eris_OVOV = numpy.asarray(eris.OVOV).reshape(noccb,nvirb,noccb,nvirb).conj() * .5
-    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb).conj()
+    eris_ovOV = numpy.asarray(eris.ovOV).reshape(nocca,nvira,noccb,nvirb).conj().copy()
     u2aa = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
     u2bb = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
     u2ab = eris_ovOV.transpose(0,2,1,3)
@@ -490,7 +490,7 @@ class _ChemistsERIs(mp2._ChemistsERIs):
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mp, mo_coeff)
 
@@ -541,11 +541,11 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         eris.ovOV = eris.feri['ovOV']
         eris.OVOV = eris.feri['OVOV']
 
-    time1 = log.timer('Integral transformation', *time0)
+    log.timer('Integral transformation', *time0)
     return eris
 
 def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
     orboa = numpy.asarray(orbs[0], order='F')
     orbva = numpy.asarray(orbs[1], order='F')

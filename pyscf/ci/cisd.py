@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -102,7 +102,7 @@ def make_diagonal(myci, eris):
     return numpy.hstack((ehf, e1diag.reshape(-1), e2diag.reshape(-1)))
 
 def contract(myci, civec, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(myci.stdout, myci.verbose)
     nocc = myci.nocc
     nmo = myci.nmo
@@ -111,7 +111,7 @@ def contract(myci, civec, eris):
 
     t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
     t2 *= .5  # due to t2+t2.transpose(1,0,3,2) in the end
-    time1 = log.timer_debug1('vvvv', *time0)
+    log.timer_debug1('vvvv', *time0)
 
     foo = eris.fock[:nocc,:nocc].copy()
     fov = eris.fock[:nocc,nocc:].copy()
@@ -145,7 +145,7 @@ def contract(myci, civec, eris):
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
-        eris_oVoV = eris_ovov = None
+        eris_oVoV = None
         theta = c2[:,:,p0:p1].transpose(2,0,1,3) * 2
         theta-= c2[:,:,p0:p1].transpose(2,1,0,3)
         for j in range(nocc):
@@ -219,7 +219,7 @@ def tn_addrs_signs(norb, nelec, n_excite):
     hole_strs = hole_strs[::-1]
     hole_sum = numpy.zeros(len(hole_strs), dtype=int)
     for i in range(nocc):
-        hole_at_i = (hole_strs & (1<<i)) == 0
+        hole_at_i = (hole_strs & (1 << i)) == 0
         hole_sum[hole_at_i] += i
 
     # The hole operators are listed from low-lying to high-lying orbitals
@@ -297,14 +297,14 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
         if frozen_mask[i]:
             if i < neleca:
                 # frozen occupied orbital should be occupied
-                core_mask &= (strs & (1<<i)) != 0
+                core_mask &= (strs & (1 << i)) != 0
                 parity ^= (count & 1) == 1
             else:
                 # frozen virtual orbital should not be occupied.
                 # parity is not needed since it's unoccupied
-                core_mask &= (strs & (1<<i)) == 0
+                core_mask &= (strs & (1 << i)) == 0
         else:
-            count += (strs & (1<<i)) != 0
+            count += (strs & (1 << i)) != 0
     sub_strs = strs[core_mask & (count == nocc)]
     addrs = cistring.strs2addr(norb, neleca, sub_strs)
     fcivec1 = numpy.zeros((na,na))
@@ -543,8 +543,8 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
 def _gamma2_intermediates(myci, civec, nmo, nocc, compress_vvvv=False):
     f = lib.H5TmpFile()
     _gamma2_outcore(myci, civec, nmo, nocc, f, compress_vvvv)
-    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
-          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
+    d2 = (f['dovov'][:], f['dvvvv'][:], f['doooo'][:], f['doovv'][:],
+          f['dovvo'][:], None,          f['dovvv'][:], f['dooov'][:])
     return d2
 
 def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
@@ -585,10 +585,10 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
         theta = c2[:,:,p0:p1] - c2[:,:,p0:p1].transpose(1,0,2,3) * .5
         gvvvv = lib.einsum('ijab,ijcd->abcd', theta.conj(), c2)
         if compress_vvvv:
-# symmetrize dvvvv because it does not affect the results of cisd_grad
-# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
-# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
-# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            # symmetrize dvvvv because it does not affect the results of cisd_grad
+            # dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+            # dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+            # now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
@@ -727,8 +727,8 @@ def as_scanner(ci):
             if getattr(self.ci, 'size', 0) != self.vector_size():
                 self.ci = None
             if ci0 is None:
-# FIXME: Whether to use the initial guess from last step? If root flips, large
-# errors may be found in the solutions
+                # FIXME: Whether to use the initial guess from last step?
+                # If root flips, large errors may be found in the solutions
                 ci0 = self.ci
             self.kernel(ci0, **kwargs)[0]
             return self.e_tot
@@ -795,7 +795,7 @@ class CISD(lib.StreamObject):
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ   is None: mo_occ   = mf.mo_occ
+        if mo_occ is None: mo_occ   = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf

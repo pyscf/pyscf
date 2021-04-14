@@ -20,7 +20,7 @@
 CCSD analytical nuclear gradients
 '''
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -51,7 +51,7 @@ def grad_elec(cc_grad, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=Non
     if l2 is None: l2 = mycc.l2
 
     log = logger.new_logger(mycc, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     log.debug('Build ccsd rdm1 intermediates')
     if d1 is None:
@@ -295,16 +295,17 @@ def _response_dm1(mycc, Xvo, eris=None):
     return dm1
 
 def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
-# dm2 = ccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
-# dm2 = numpy.einsum('pi,ijkl->pjkl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pj,ijkl->ipkl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pk,ijkl->ijpl', mo_coeff, dm2)
-# dm2 = numpy.einsum('pl,ijkl->ijkp', mo_coeff, dm2)
-# dm2 = dm2 + dm2.transpose(1,0,2,3)
-# dm2 = dm2 + dm2.transpose(0,1,3,2)
-# return ao2mo.restore(4, dm2*.5, nmo)
+    # dm2 = ccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
+    # dm2 = numpy.einsum('pi,ijkl->pjkl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pj,ijkl->ipkl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pk,ijkl->ijpl', mo_coeff, dm2)
+    # dm2 = numpy.einsum('pl,ijkl->ijkp', mo_coeff, dm2)
+    # dm2 = dm2 + dm2.transpose(1,0,2,3)
+    # dm2 = dm2 + dm2.transpose(0,1,3,2)
+    # return ao2mo.restore(4, dm2*.5, nmo)
+
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     if fsave is None:
         incore = True
         fsave = lib.H5TmpFile()
@@ -383,7 +384,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         gsave[p0:p1] = buf2
     time1 = log.timer_debug1('_rdm2_mo2ao pass 3', *time1)
     if incore:
-        return fsave['dm2'].value
+        return fsave['dm2'][:]
     else:
         return fsave
 
@@ -414,7 +415,7 @@ def _load_block_tril(h5dat, row0, row1, nao, out=None):
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     grad_elec = grad_elec
 

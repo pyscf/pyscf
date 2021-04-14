@@ -20,9 +20,10 @@
 JK with discrete Fourier transformation
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
@@ -239,13 +240,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
-    lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
-                      max_memory, blksize)
+    logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
+                  max_memory, blksize)
     #ao1_dtype = np.result_type(*ao1_kpts)
     #ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -263,11 +264,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -289,7 +289,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
-        t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
+        t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
     # Note in the _ewald_exxdiv_for_G0 implementation, the G=0 treatments are
@@ -353,12 +353,12 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/3/ngrids/nao)))
-    lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
-                      max_memory, blksize)
+    logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
+                  max_memory, blksize)
 
     vR_dm = np.empty((3,nset,nao,ngrids), dtype=vk_kpts.dtype)
 
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -376,11 +376,10 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
-            mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, exxdiv, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -402,7 +401,7 @@ def get_k_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[:,i,k1] -= weight * np.einsum('aig,jg->aij', vR_dm[:,i], ao1T[0])
-        t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
+        t1 = logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     # Ewald correction has no contribution to nuclear gradient unless range separted Coulomb is used
     # The gradient correction part is not added in the vk matrix

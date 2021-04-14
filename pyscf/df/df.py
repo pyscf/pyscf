@@ -20,7 +20,7 @@
 J-metric density fitting
 '''
 
-import time
+
 import copy
 import tempfile
 import numpy
@@ -123,7 +123,7 @@ class DF(lib.StreamObject):
         return self
 
     def build(self):
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         self.check_sanity()
@@ -200,30 +200,26 @@ class DF(lib.StreamObject):
                     # starting from pyscf-1.7, DF tensor may be stored in
                     # block format
                     naoaux = feri['0'].shape[0]
-                    def load(b0, b1, prefetch):
-                        prefetch[0] = _load_from_h5g(feri, b0, b1)
+                    def load(aux_slice):
+                        b0, b1 = aux_slice
+                        return _load_from_h5g(feri, b0, b1)
                 else:
                     naoaux = feri.shape[0]
-                    def load(b0, b1, prefetch):
-                        prefetch[0] = numpy.asarray(feri[b0:b1])
+                    def load(aux_slice):
+                        b0, b1 = aux_slice
+                        return numpy.asarray(feri[b0:b1])
 
-                dat = [None]
-                prefetch = [None]
-                with lib.call_in_background(load) as bload:
-                    bload(0, min(blksize, naoaux), prefetch)
-                    for b0, b1 in self.prange(blksize, naoaux, blksize):
-                        dat, prefetch = prefetch, dat
-                        bload(b0, b1, prefetch)
-                        yield dat[0]
-                yield prefetch[0]
+                for dat in lib.map_with_prefetch(load, self.prange(0, naoaux, blksize)):
+                    yield dat
+                    dat = None
 
     def prange(self, start, end, step):
         for i in range(start, end, step):
             yield i, min(i+step, end)
 
     def get_naoaux(self):
-# determine naoaux with self._cderi, because DF object may be used as CD
-# object when self._cderi is provided.
+        # determine naoaux with self._cderi, because DF object may be used as CD
+        # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
         with addons.load(self._cderi, 'j3c') as feri:

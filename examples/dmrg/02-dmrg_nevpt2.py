@@ -1,1 +1,0 @@
-../../pyscf/dmrgscf/example/nevpt2.py

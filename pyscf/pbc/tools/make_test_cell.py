@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -80,8 +80,7 @@ def test_cell_n2(L=5, mesh=[9]*3):
     cell.unit = 'B'
     cell.atom.extend([['O', (L/2., L/2., L/2.)],
                       ['H', (L/2.-0.689440, L/2.+0.578509, L/2.)],
-                      ['H', (L/2.+0.689440, L/2.-0.578509, L/2.)],
-        ])
+                      ['H', (L/2.+0.689440, L/2.-0.578509, L/2.)], ])
     cell.a = L * np.identity(3)
 
     cell.basis = 'sto-3g'

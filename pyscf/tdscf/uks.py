@@ -16,11 +16,12 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import symm
 from pyscf import lib
 from pyscf import scf
+from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.scf import _response_functions  # noqa
@@ -121,7 +122,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
@@ -132,7 +133,7 @@ class TDDFTNoHybrid(TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.get_vind(self._scf)
         precond = self.get_precond(hdiag)

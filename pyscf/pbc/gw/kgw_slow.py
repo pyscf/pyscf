@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 This module implements the G0W0 approximation on top of `pyscf.tdscf.rhf_slow` TDHF implementation. Unlike `gw.py`, all
 integrals are stored in memory. Several variants of GW are available:

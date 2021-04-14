@@ -1,174 +1,77 @@
-from pyscf.gto import Mole
-from pyscf.scf import RHF, RKS
-from pyscf.gw import GW
-from pyscf.gw.gw_slow import GW as GW_slow
-from pyscf.tdscf import TDRHF, TDRKS
-from pyscf.tdscf.rhf_slow import TDRHF as TDRHF_slow
-from pyscf.tdscf.proxy import TDProxy
+#!/usr/bin/env python
 
-import numpy
-from numpy import testing
 import unittest
+import numpy
+from pyscf import lib, gto, scf, dft, tdscf
+from pyscf import gw
 
-from test_common import assert_vectors_close, adjust_td_phase
+mol = gto.Mole()
+mol.verbose = 7
+mol.output = '/dev/null'
+mol.atom = [
+    ['O' , (0. , 0.     , 0.)],
+    ['H' , (0. , -0.7571 , 0.5861)],
+    ['H' , (0. , 0.7571 , 0.5861)]]
+mol.basis = 'def2-svp'
+mol.build()
 
+mf = dft.RKS(mol)
+mf.xc = 'pbe'
+mf.kernel()
 
-class H20Test(unittest.TestCase):
-    """Compare gw and gw_slow."""
-    @classmethod
-    def setUpClass(cls):
-        cls.mol = mol = Mole()
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
+class KnownValues(unittest.TestCase):
+    def test_gwac_pade(self):
+        nocc = mol.nelectron//2
+        gw_obj = gw.GW(mf, freq_int='ac', frozen=0)
+        gw_obj.linearized = False
+        gw_obj.ac = 'pade'
+        gw_obj.kernel(orbs=range(nocc-3, nocc+3))
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.412849230989, 5)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.165745160102, 5)
+
+    def test_gwcd(self):
+        nocc = mol.nelectron//2
+        gw_obj = gw.GW(mf, freq_int='cd', frozen=0)
+        gw_obj.linearized = False
+        gw_obj.kernel(orbs=range(0, nocc+3))
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.41284735, 5)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc], 0.16574524, 5)
+        self.assertAlmostEqual(gw_obj.mo_energy[0], -19.53387986, 5)
+
+    def test_gw_exact(self):
+        mol = gto.Mole()
+        mol.verbose = 7
+        mol.output = '/dev/null'
         mol.atom = [
-            [8, (0., 0., 0.)],
-            [1, (0., -0.757, 0.587)],
-            [1, (0., 0.757, 0.587)]]
-
+            ['O' , (0. , 0.     , 0.)],
+            ['H' , (0. , -0.757 , 0.587)],
+            ['H' , (0. , 0.757 , 0.587)]]
         mol.basis = 'cc-pvdz'
-        mol.verbose = 5
         mol.build()
 
-        cls.model_rhf = model_rhf = RHF(mol)
-        model_rhf.kernel()
+        mf = dft.RKS(mol)
+        mf.xc = 'hf'
+        mf.kernel()
 
-        cls.model_rks = model_rks = RKS(mol)
-        model_rks.xc = 'hf'
-        model_rks.kernel()
-
-        testing.assert_allclose(model_rhf.mo_energy, model_rks.mo_energy)
-        assert_vectors_close(model_rhf.mo_coeff.T, model_rks.mo_coeff.T)
-
-        model_rks.mo_coeff = model_rhf.mo_coeff
-
-        cls.td_model_rks = td_model_rks = TDRHF(model_rks)
-        td_model_rks.nroots = 4
-        td_model_rks.kernel()
-
-        cls.td_model_rhf_slow = td_model_rhf_slow = TDRHF_slow(model_rhf)
-        td_model_rhf_slow.nroots = td_model_rks.nroots
-        td_model_rhf_slow.kernel()
-
-        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, "dft")
-        td_proxy_model.nroots = td_model_rks.nroots
-        td_proxy_model.kernel()
-
-        cls.gw = gw = GW(model_rks, td_model_rks)
-        gw.kernel()
-
-    @classmethod
-    def tearDownClass(cls):
-        # These are here to remove temporary files
-        del cls.gw
-        del cls.td_proxy_model
-        del cls.td_model_rhf_slow
-        del cls.td_model_rks
-        del cls.model_rhf
-        del cls.model_rks
-        del cls.mol
-
-    def test_gw(self):
-        """Tests container behavior."""
-        gw_slow = GW_slow(self.td_model_rhf_slow)
-        gw_slow.kernel()
-
-        testing.assert_allclose(gw_slow.mo_energy, self.gw.mo_energy, atol=1e-6)
-
-    def test_gw_proxy(self):
-        """Tests container behavior (proxy)."""
-        eri = TDRHF_slow(self.model_rks).ao2mo()
-        assert eri is not None
-        gw_slow = GW_slow(self.td_proxy_model, eri=eri)
-        gw_slow.kernel()
-
-        testing.assert_allclose(gw_slow.mo_energy, self.gw.mo_energy, atol=1e-6)
-
-    def test_imds_frozen(self):
-        """Tests intermediates: frozen vs non-frozen."""
-        td = TDRHF_slow(self.model_rhf, frozen=1)
-        td.nroots = self.td_model_rhf_slow.nroots
+        nocc = mol.nelectron // 2
+        nvir = mf.mo_energy.size - nocc
+        td = tdscf.dRPA(mf)
+        td.nstates = min(100, nocc*nvir)
         td.kernel()
 
-        adjust_td_phase(self.td_model_rhf_slow, td)
-
-        gw_slow_ref = GW_slow(self.td_model_rhf_slow)
-        gw_slow_ref.kernel()
-
-        gw_slow_frozen = GW_slow(td)
-        gw_slow_frozen.kernel()
-
-        testing.assert_allclose(gw_slow_ref.imds.tdm[..., 1:, 1:], gw_slow_frozen.imds.tdm, atol=1e-4)
-
-        test_energies = numpy.linspace(-2, 3, 300)
-        ref_samples = numpy.array(tuple(gw_slow_ref.imds.get_sigma_element(i, 1, 0.01) for i in test_energies))
-        frozen_samples = numpy.array(tuple(gw_slow_frozen.imds.get_sigma_element(i, 0, 0.01) for i in test_energies))
-
-        testing.assert_allclose(ref_samples, frozen_samples, atol=5e-4)
-        testing.assert_allclose(
-            gw_slow_ref.imds.get_rhs(1),
-            gw_slow_frozen.imds.get_rhs(0),
-            atol=1e-13,
-        )
-
-    def test_gw_frozen(self):
-        """Tests container behavior (frozen TDHF)."""
-        td = TDRHF_slow(self.model_rhf, frozen=1)
-        td.nroots = self.td_model_rhf_slow.nroots
-        td.kernel()
-        adjust_td_phase(self.td_model_rhf_slow, td)
-
-        gw_slow_ref = GW_slow(self.td_model_rhf_slow)
-        gw_slow_ref.kernel()
-        gw_slow_frozen = GW_slow(td)
-        gw_slow_frozen.kernel()
-
-        testing.assert_allclose(gw_slow_frozen.mo_energy, gw_slow_ref.mo_energy[1:], atol=1e-4)
+        gw_obj = gw.GW(mf, freq_int='exact', frozen=0)
+        gw_obj.kernel()
+        gw_obj.linearized = True
+        gw_obj.kernel(orbs=[nocc-1,nocc])
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.44684106, 7)
+        self.assertAlmostEqual(gw_obj.mo_energy[nocc]  ,  0.17292032, 7)
 
 
-class H20KSTest(unittest.TestCase):
-    """Compare gw and gw_slow on KS."""
-    @classmethod
-    def setUpClass(cls):
-        cls.mol = mol = Mole()
-        mol.atom = [
-            [8, (0., 0., 0.)],
-            [1, (0., -0.757, 0.587)],
-            [1, (0., 0.757, 0.587)]]
-
-        mol.basis = 'cc-pvdz'
-        mol.verbose = 5
-        mol.build()
-
-        cls.model_rks = model_rks = RKS(mol)
-        # model_rks.xc = 'hf'
-        model_rks.kernel()
-
-        cls.td_model_rks = td_model_rks = TDRKS(model_rks)
-        td_model_rks.nroots = 4
-        td_model_rks.kernel()
-
-        cls.td_proxy_model = td_proxy_model = TDProxy(model_rks, "dft")
-        td_proxy_model.nroots = td_model_rks.nroots
-        td_proxy_model.kernel()
-
-        testing.assert_allclose(td_model_rks.e, td_proxy_model.e, atol=1e-6)
-
-        cls.gw = gw = GW(model_rks, td_model_rks)
-        gw.kernel()
-
-    @classmethod
-    def tearDownClass(cls):
-        # These are here to remove temporary files
-        del cls.gw
-        del cls.td_proxy_model
-        del cls.td_model_rks
-        del cls.model_rks
-        del cls.mol
-
-    def test_gw(self):
-        """Tests container behavior (proxy)."""
-        eri = TDRHF_slow(self.model_rks).ao2mo()
-        assert eri is not None
-        gw_slow = GW_slow(self.td_proxy_model, eri=eri)
-        gw_slow.kernel()
-        # print(self.gw.mo_energy)
-
-        testing.assert_allclose(gw_slow.mo_energy, self.gw.mo_energy, atol=1e-6)
+if __name__ == "__main__":
+    print("Full Tests for GW")
+    unittest.main()

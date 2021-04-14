@@ -26,9 +26,13 @@ __all__ = ['parse', 'load', 'parse_ecp', 'load_ecp',
 
 import re
 import numpy
+import numpy as np
 import scipy.linalg
 from pyscf.data.elements import _std_symbol
 from pyscf.lib.exceptions import BasisNotFoundError
+from pyscf import __config__
+
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 10
 SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
@@ -41,8 +45,7 @@ MAPSPDF = {'S': 0,
            'I': 6,
            'K': 7,
            'L': 8,
-           'M': 9,
-          }
+           'M': 9,}
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n|END\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
@@ -96,9 +99,10 @@ def parse(string, symb=None, optimize=True):
 
     raw_basis = []
     for dat in string.splitlines():
-        x = dat.split('#')[0].strip().upper()  # Use # to start comments
-        if (x and not x.startswith('END') and not x.startswith('BASIS')):
-            raw_basis.append(x)
+        dat = dat.split('#')[0].strip()  # Use # to start comments
+        dat_upper = dat.upper()
+        if (dat and not dat_upper.startswith('END') and not dat_upper.startswith('BASIS')):
+            raw_basis.append(dat)
     return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
@@ -112,23 +116,29 @@ def _parse(raw_basis, optimize=True):
         if not dat or dat.startswith('#'):
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1]
+            key = dat.split()[1].upper()
             if key == 'SP':
                 basis_add.append([0])
                 basis_add.append([1])
             else:
                 basis_add.append([MAPSPDF[key]])
         else:
+            dat = dat.replace('D','e').split()
             try:
-                line = [float(x) for x in dat.replace('D','e').split()]
+                dat = [float(x) for x in dat]
+            except ValueError:
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse basis %s' % line)
+                else:
+                    dat = list(eval(','.join(dat)))
             except Exception as e:
                 raise BasisNotFoundError('\n' + str(e) +
                                          '\nor the required basis file not existed.')
             if key == 'SP':
-                basis_add[-2].append([line[0], line[1]])
-                basis_add[-1].append([line[0], line[2]])
+                basis_add[-2].append([dat[0], dat[1]])
+                basis_add[-1].append([dat[0], dat[2]])
             else:
-                basis_add[-1].append(line)
+                basis_add[-1].append(dat)
     basis_sorted = []
     for l in range(MAXL):
         basis_sorted.extend([b for b in basis_add if b[0] == l])
@@ -151,9 +161,9 @@ def parse_ecp(string, symb=None):
             raise BasisNotFoundError('ECP not found for  %s' % symb)
         seg = []
         for dat in raw_data[i:]:
-            dat = dat.strip().upper()
+            dat = dat.strip()
             if dat: # remove empty lines
-                if ((dat[0].isalpha() and dat.split(None, 1)[0] != symb.upper())):
+                if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
                     break
                 else:
                     seg.append(dat)
@@ -162,9 +172,10 @@ def parse_ecp(string, symb=None):
 
     ecptxt = []
     for dat in seg:
-        x = dat.split('#')[0].strip().upper()
-        if (x and not x.startswith('END') and not x.startswith('ECP')):
-            ecptxt.append(x)
+        dat = dat.split('#')[0].strip()
+        dat_upper = dat.upper()
+        if (dat and not dat_upper.startswith('END') and not dat_upper.startswith('ECP')):
+            ecptxt.append(dat)
     return _parse_ecp(ecptxt)
 
 def _parse_ecp(raw_ecp):
@@ -175,7 +186,7 @@ def _parse_ecp(raw_ecp):
         if not dat or dat.startswith('#'): # comment line
             continue
         elif dat[0].isalpha():
-            key = dat.split()[1]
+            key = dat.split()[1].upper()
             if key == 'NELEC':
                 nelec = int(dat.split()[2])
                 continue
@@ -189,7 +200,14 @@ def _parse_ecp(raw_ecp):
         else:
             line = dat.replace('D','e').split()
             l = int(line[0])
-            by_ang[l].append([float(x) for x in line[1:]])
+            try:
+                coef = [float(x) for x in line[1:]]
+            except ValueError:
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse ecp %s' % line)
+                else:
+                    coef = list(eval(','.join(line[1:])))
+            by_ang[l].append(coef)
 
     if nelec is None:
         return []
@@ -207,7 +225,7 @@ def search_seg(basisfile, symb):
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
     raw_basis = _search_basis_block(fdata, symb)
-    return [x.upper() for x in raw_basis.splitlines() if x and 'END' not in x]
+    return [x for x in raw_basis.splitlines() if x and 'END' not in x]
 
 def _search_basis_block(raw_data, symb):
     raw_basis = ''
@@ -232,9 +250,9 @@ def search_ecp(basisfile, symb):
             break
     seg = []
     for dat in fdata[i:]:
-        dat = dat.strip().upper()
+        dat = dat.strip()
         if dat:  # remove empty lines
-            if ((dat[0].isalpha() and dat.split(None, 1)[0] != symb.upper())):
+            if ((dat[0].isalpha() and dat.split(None, 1)[0].upper() != symb.upper())):
                 return seg
             else:
                 seg.append(dat)

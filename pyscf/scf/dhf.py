@@ -20,7 +20,7 @@
 Dirac Hartree-Fock
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -31,10 +31,15 @@ from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
 from pyscf import __config__
-try:
-    import zquatev
-except ImportError:
-    zquatev = None
+
+zquatev = None
+if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
+    try:
+        # Install zquatev with
+        # pip install git+https://github.com/sunqm/zquatev
+        import zquatev
+    except ImportError:
+        pass
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -53,31 +58,75 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
     else:
         dm = dm0
 
-    mf._coulomb_now = 'LLLL'
-    if dm0 is None and mf._coulomb_now.upper() == 'LLLL':
+    mf._coulomb_level = 'LLLL'
+    if dm0 is None and mf._coulomb_level.upper() == 'LLLL':
         scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
                 = hf.kernel(mf, 1e-2, 1e-1,
                             dump_chk, dm0=dm, callback=callback,
                             conv_check=False)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
-        mf._coulomb_now = 'SSLL'
-
-    if dm0 is None and (mf._coulomb_now.upper() == 'SSLL' or
-                        mf._coulomb_now.upper() == 'LLSS'):
-        scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
-                = hf.kernel(mf, 1e-3, 1e-1,
-                            dump_chk, dm0=dm, callback=callback,
-                            conv_check=False)
-        dm = mf.make_rdm1(mo_coeff, mo_occ)
-        mf._coulomb_now = 'SSSS'
+        mf._coulomb_level = 'SSLL'
 
     if mf.with_ssss:
-        mf._coulomb_now = 'SSSS'
+        if dm0 is None and (mf._coulomb_level.upper() == 'SSLL' or
+                            mf._coulomb_level.upper() == 'LLSS'):
+            scf_conv, e_tot, mo_energy, mo_coeff, mo_occ \
+                    = hf.kernel(mf, 1e-3, 1e-1,
+                                dump_chk, dm0=dm, callback=callback,
+                                conv_check=False)
+            dm = mf.make_rdm1(mo_coeff, mo_occ)
+        mf._coulomb_level = 'SSSS'
     else:
-        mf._coulomb_now = 'SSLL'
+        mf._coulomb_level = 'SSLL'
 
     return hf.kernel(mf, conv_tol, conv_tol_grad, dump_chk, dm0=dm,
                      callback=callback, conv_check=conv_check)
+
+def energy_elec(mf, dm=None, h1e=None, vhf=None):
+    r'''Electronic part of Dirac-Hartree-Fock energy
+
+    Args:
+        mf : an instance of SCF class
+
+    Kwargs:
+        dm : 2D ndarray
+            one-partical density matrix
+        h1e : 2D ndarray
+            Core hamiltonian
+        vhf : 2D ndarray
+            HF potential
+
+    Returns:
+        Hartree-Fock electronic energy and the Coulomb energy
+    '''
+    if dm is None: dm = mf.make_rdm1()
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    e1 = numpy.einsum('ij,ji->', h1e, dm).real
+    e_coul = numpy.einsum('ij,ji->', vhf, dm).real * .5
+    logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
+
+    if not mf.with_ssss and mf.ssss_approx == 'Visscher':
+        # Visscher point charge corrections for small component, TCA, 98, 68
+        # Note there is a small difference to Visscher's work. The model
+        # charges in Visscher's work are obtained from atomic calculations.
+        # Charges here are Mulliken charges on small components.
+        aoslice = mf.mol.aoslice_2c_by_atom()
+        n2c = dm[0].shape[0] // 2
+        s = mf.get_ovlp()
+        ss_mul_charges = []
+        for p0, p1 in aoslice[:,2:] + n2c:
+            mul_charge = numpy.einsum('ij,ji->', s[n2c:,p0:p1], dm[p0:p1,n2c:])
+            ss_mul_charges.append(mul_charge.real)
+        ss_mul_charges = numpy.array(ss_mul_charges)
+        e_coul_ss = gto.energy_nuc(mf.mol, ss_mul_charges)
+        e_coul += e_coul_ss
+        mf.scf_summary['e_coul_ss'] = e_coul_ss
+        logger.debug(mf, 'Visscher corrections for small component = %.14g', e_coul_ss)
+
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['e2'] = e_coul.real
+    return (e1+e_coul).real, e_coul
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
@@ -194,7 +243,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         s = get_ovlp(mol)
 
     def fproj(mo):
-#TODO: check if mo is GHF orbital
+        #TODO: check if mo is GHF orbital
         if project:
             mo = addons.project_mo_r2r(chk_mol, mo, mol)
             norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
@@ -209,8 +258,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         if mo[0].ndim == 1: # nr-RHF
             dm = reduce(numpy.dot, (mo*mo_occ, mo.T))
         else: # nr-UHF
-            dm = reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) \
-               + reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T))
+            dm = (reduce(numpy.dot, (mo[0]*mo_occ[0], mo[0].T)) +
+                  reduce(numpy.dot, (mo[1]*mo_occ[1], mo[1].T)))
         dm = _proj_dmll(chk_mol, dm, mol)
     return dm
 
@@ -261,10 +310,10 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
         if mo_occ[i] > 0:
-            log.info('occupied MO #%d energy= %.15g occ= %g', \
+            log.info('occupied MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
         else:
-            log.info('virtual MO #%d energy= %.15g occ= %g', \
+            log.info('virtual MO #%d energy= %.15g occ= %g',
                      i+1, mo_energy[i], mo_occ[i])
     mol = mf.mol
     if mf.verbose >= logger.DEBUG1:
@@ -357,7 +406,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
 class DHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for Dirac-Hartree-Fock
-        with_ssss : bool, for Dirac-Hartree-Fock only
+        with_ssss : bool or string, for Dirac-Hartree-Fock only
             If False, ignore small component integrals (SS|SS).  Default is True.
         with_gaunt : bool, for Dirac-Hartree-Fock only
             Default is False.
@@ -379,19 +428,23 @@ class DHF(hf.SCF):
     with_ssss = getattr(__config__, 'scf_dhf_SCF_with_ssss', True)
     with_gaunt = getattr(__config__, 'scf_dhf_SCF_with_gaunt', False)
     with_breit = getattr(__config__, 'scf_dhf_SCF_with_breit', False)
+    # corrections for small component when with_ssss is set to False
+    ssss_approx = getattr(__config__, 'scf_dhf_SCF_ssss_approx', 'Visscher')
 
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
-                           'with_breit', 'opt'))
+                           'with_breit', 'ssss_approx', 'opt'))
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
         log = logger.new_logger(self, verbose)
         log.info('with_ssss %s, with_gaunt %s, with_breit %s',
                  self.with_ssss, self.with_gaunt, self.with_breit)
+        if not self.with_ssss:
+            log.info('ssss_approx: %s', self.ssss_approx)
         log.info('light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
@@ -435,7 +488,9 @@ class DHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.opt = None
+        if self.direct_scf:
+            self.opt = self.init_direct_scf(mol)
+        return self
 
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
@@ -464,6 +519,8 @@ class DHF(hf.SCF):
         if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
+    energy_elec = energy_elec
+
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
         def set_vkscreen(opt, name):
@@ -491,6 +548,8 @@ class DHF(hf.SCF):
             opt_ssll.direct_scf_tol = self.direct_scf_tol
             set_vkscreen(opt_ssll, 'CVHFrkbssll_vkscreen')
             nbas = mol.nbas
+            # The second parts of q_cond corresponds to ssss integrals. They
+            # need to be scaled by the factor (1/2c)^2
             q_cond = opt_ssll.get_q_cond(shape=(2, nbas, nbas))
             q_cond[1] *= c1**2
 
@@ -502,22 +561,24 @@ class DHF(hf.SCF):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         log = logger.new_logger(self)
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
         opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
 
-        vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
+        vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_level,
                                 opt_llll, opt_ssll, opt_ssss, omega, log)
 
         if self.with_breit:
-            if 'SSSS' in self._coulomb_now.upper():
+            if ('SSSS' in self._coulomb_level.upper() or
+                # for the case both with_breit and with_ssss are set
+                (not self.with_ssss and 'SSLL' in self._coulomb_level.upper())):
                 vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
                 log.debug('Add Breit term')
                 vj += vj1
                 vk += vk1
-        elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
+        elif self.with_gaunt and 'SS' in self._coulomb_level.upper():
             log.debug('Add Gaunt term')
             vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
@@ -539,7 +600,7 @@ class DHF(hf.SCF):
             return vj - vk
 
     def scf(self, dm0=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         self.build()
         self.dump_flags()
@@ -590,7 +651,7 @@ class DHF(hf.SCF):
         '''Reset mol and clean up relevant attributes for scanner mode'''
         if mol is not None:
             self.mol = mol
-        self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
+        self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
 

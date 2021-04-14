@@ -20,7 +20,7 @@
 Non-relativistic unrestricted Hartree-Fock analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -45,7 +45,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -89,7 +89,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
                           rhf_grad.make_rdm1e(mo_energy[1], mo_coeff[1], mo_occ[1])))
 
 
-class Gradients(rhf_grad.Gradients):
+class Gradients(rhf_grad.GradientsMixin):
     '''Non-relativistic unrestricted Hartree-Fock gradients
     '''
     def get_veff(self, mol=None, dm=None):

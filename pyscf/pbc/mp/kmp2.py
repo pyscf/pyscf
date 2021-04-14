@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -550,10 +550,9 @@ def get_frozen_mask(mp):
 
 def _add_padding(mp, mo_coeff, mo_energy):
     nmo = mp.nmo
-    nocc = mp.nocc
 
     # Check if these are padded mo coefficients and energies
-    if not np.all([x.shape[0] == nmo for x in mo_coeff]):
+    if not np.all([x.shape[1] == nmo for x in mo_coeff]):
         mo_coeff = padded_mo_coeff(mp, mo_coeff)
 
     if not np.all([x.shape[0] == nmo for x in mo_energy]):
@@ -613,7 +612,6 @@ def make_rdm2(mp, t2=None, kind="compact"):
     dm1 = mp.make_rdm1(t2, "padded")
     nmo = mp.nmo
     nocc = mp.nocc
-    nvir = nmo - nocc
     nkpts = mp.nkpts
     dtype = t2.dtype
 
@@ -658,7 +656,7 @@ def make_rdm2(mp, t2=None, kind="compact"):
                     ks = mp.khelper.kconserv[kp, kq, kr]
                     result.append(dm2[kp,kq,kr][np.ix_(idx[kp],idx[kq],idx[kr],idx[ks])])
         return result
- 
+
 
 def _gamma1_intermediates(mp, t2=None):
     # Memory optimization should be here
@@ -690,8 +688,8 @@ def _gamma1_intermediates(mp, t2=None):
 class KMP2(mp2.MP2):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf

@@ -20,7 +20,7 @@
 Non-relativistic Hartree-Fock analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 import ctypes
 from pyscf import gto
@@ -47,7 +47,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -75,7 +75,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
 def _write(dev, mol, de, atmlst):
     '''Format output of nuclear gradients.
-    
+
     Args:
         dev : lib.logger.Logger object
     '''
@@ -267,7 +267,7 @@ def as_scanner(mf_grad):
     return SCF_GradScanner(mf_grad)
 
 
-class GradientsBasics(lib.StreamObject):
+class GradientsMixin(lib.StreamObject):
     '''
     Basic nuclear gradient functions for non-relativistic methods
     '''
@@ -313,7 +313,7 @@ class GradientsBasics(lib.StreamObject):
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         vj, vk = get_jk(mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
@@ -331,6 +331,12 @@ class GradientsBasics(lib.StreamObject):
         intor = mol._add_suffix('int2e_ip1')
         return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
                                   mol._atm, mol._bas, mol._env)
+
+    def get_veff(self, mol=None, dm=None):
+        raise NotImplementedError
+
+    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+        raise NotImplementedError
 
     def grad_nuc(self, mol=None, atmlst=None):
         if mol is None: mol = self.mol
@@ -352,45 +358,12 @@ class GradientsBasics(lib.StreamObject):
         else:
             raise RuntimeError('Unknown geometry optimization solver %s' % solver)
 
-    def grad_elec(self):
-        raise NotImplementedError
-
-    def kernel(self):
-        raise NotImplementedError
-
     @lib.with_doc(symmetrize.__doc__)
     def symmetrize(self, de, atmlst=None):
         return symmetrize(self.mol, de, atmlst)
 
-    grad = lib.alias(kernel, alias_name='grad')
-
-    def _finalize(self):
-        if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
-            self._write(self.mol, self.de, self.atmlst)
-            logger.note(self, '----------------------------------------------')
-
-    _write = _write
-
-    def as_scanner(self):
-        '''Generate Gradients Scanner'''
+    def grad_elec(self):
         raise NotImplementedError
-
-
-class Gradients(GradientsBasics):
-    '''Non-relativistic restricted Hartree-Fock gradients'''
-
-    def get_veff(self, mol=None, dm=None):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.base.make_rdm1()
-        return get_veff(self, mol, dm)
-
-    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if mo_energy is None: mo_energy = self.base.mo_energy
-        if mo_coeff is None: mo_coeff = self.base.mo_coeff
-        if mo_occ is None: mo_occ = self.base.mo_occ
-        return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     def extra_force(self, atom_id, envs):
         '''Hook for extra contributions in analytical gradients.
@@ -401,10 +374,8 @@ class Gradients(GradientsBasics):
         '''
         return 0
 
-    grad_elec = grad_elec
-
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
@@ -426,7 +397,35 @@ class Gradients(GradientsBasics):
         self._finalize()
         return self.de
 
+    grad = lib.alias(kernel, alias_name='grad')
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
+            self._write(self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
+
+    _write = _write
+
     as_scanner = as_scanner
+
+
+class Gradients(GradientsMixin):
+    '''Non-relativistic restricted Hartree-Fock gradients'''
+
+    def get_veff(self, mol=None, dm=None):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.base.make_rdm1()
+        return get_veff(self, mol, dm)
+
+    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
+        return make_rdm1e(mo_energy, mo_coeff, mo_occ)
+
+    grad_elec = grad_elec
 
 Grad = Gradients
 

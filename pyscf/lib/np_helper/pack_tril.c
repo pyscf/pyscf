@@ -16,7 +16,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
-#include <string.h>
+#include "stdlib.h"
 #include <complex.h>
 #include "config.h"
 #include "np_helper.h"
@@ -73,8 +73,8 @@ void NPdunpack_tril(int n, double *tril, double *mat, int hermi)
 void NPdunpack_row(int ndim, int row_id, double *tril, double *row)
 {
         int i;
-        size_t idx = (size_t)row_id * (row_id + 1) / 2;
-        memcpy(row, tril+idx, sizeof(double)*row_id);
+        size_t idx = ((size_t)row_id) * (row_id + 1) / 2;
+        NPdcopy(row, tril+idx, row_id);
         for (i = row_id; i < ndim; i++) {
                 idx += i;
                 row[i] = tril[idx];
@@ -154,8 +154,9 @@ void NPztake_2d(double complex *out, double complex *in, int *idx, int *idy,
 
 /* out[idx[:,None],idy] += in */
 void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
-                   int odim, int idim, int nx, int ny)
+                   int odim, int idim, int nx, int ny, int thread_safe)
 {
+        if (thread_safe) {
 #pragma omp parallel default(none) \
         shared(out, in, idx,idy, odim, idim, nx, ny)
 {
@@ -169,11 +170,22 @@ void NPdtakebak_2d(double *out, double *in, int *idx, int *idy,
                 }
         }
 }
+        } else {
+                size_t i, j;
+                double *pout;
+                for (i = 0; i < nx; i++) {
+                        pout = out + (size_t)odim * idx[i];
+                        for (j = 0; j < ny; j++) {
+                                pout[idy[j]] += in[i*idim+j];
+                        }
+                }
+        }
 }
 
 void NPztakebak_2d(double complex *out, double complex *in, int *idx, int *idy,
-                   int odim, int idim, int nx, int ny)
+                   int odim, int idim, int nx, int ny, int thread_safe)
 {
+        if (thread_safe) {
 #pragma omp parallel default(none) \
         shared(out, in, idx,idy, odim, idim, nx, ny)
 {
@@ -187,6 +199,16 @@ void NPztakebak_2d(double complex *out, double complex *in, int *idx, int *idy,
                 }
         }
 }
+        } else {
+                size_t i, j;
+                double complex *pout;
+                for (i = 0; i < nx; i++) {
+                        pout = out + (size_t)odim * idx[i];
+                        for (j = 0; j < ny; j++) {
+                                pout[idy[j]] += in[i*idim+j];
+                        }
+                }
+        }
 }
 
 void NPdunpack_tril_2d(int count, int n, double *tril, double *mat, int hermi)

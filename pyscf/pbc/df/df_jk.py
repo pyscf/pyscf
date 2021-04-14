@@ -22,7 +22,7 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import time
+
 import copy
 from functools import reduce
 import numpy
@@ -66,7 +66,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -153,7 +153,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                  'exxdiv needs to be "ewald" or None', exxdiv)
         raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
 
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -252,7 +252,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -380,7 +380,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     else:
         if getattr(kpts_band, 'ndim', None) == 1:
             v_kpts = v_kpts[:,0]
-# A temporary solution for issue 242. Looking for better way to sort out the
+# A temporary solution for issue 242. Looking for better ways to sort out the
 # dimension of the output
 # dm_kpts.shape     kpts.shape     nset
 # (Nao,Nao)         (1 ,3)         None

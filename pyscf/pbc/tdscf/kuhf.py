@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -281,7 +281,6 @@ def _unpack(vo, mo_occ):
     return za, zb
 
 
-from pyscf.pbc import scf
 scf.kuhf.KUHF.TDA  = lib.class_as_method(KTDA)
 scf.kuhf.KUHF.TDHF = lib.class_as_method(KTDHF)
 
@@ -293,7 +292,7 @@ if __name__ == '__main__':
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
-    C  0.          0.          0.        
+    C  0.          0.          0.
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''

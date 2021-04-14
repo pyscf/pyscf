@@ -1,13 +1,24 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-include = */pyscf/*
-omit = dmrgscf/*
-    fciqmcscf/*
-    shciscf/*
-    xianci/*
-    icmpspt/*
-    gen_*_param.py
+omit = */dmrgscf/*
+    */fciqmcscf/*
+    */shciscf/*
+    */xianci/*
+    */icmpspt/*
+    */cornell_shci/*
+    */hci/*
+    */nao/*
+    */rt/*
+    */semiempirical/*
+    */extras/*
+    */future/*
+    */pbc/grad/*
+    */pbc/geomopt/*
+    */pbc/eph/*
+    */pbc/mpicc/*
+    */pbc/mpitools/*
+    */gen_*_param.py
 disable_warnings = include-ignored
 
 [report]

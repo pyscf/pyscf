@@ -20,7 +20,7 @@
 Generalized Kohn-Sham
 '''
 
-import time
+
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -34,7 +34,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 

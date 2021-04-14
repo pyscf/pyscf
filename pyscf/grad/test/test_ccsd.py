@@ -136,7 +136,7 @@ class KnownValues(unittest.TestCase):
         rdm2 = ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff)
         ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
         self.assertAlmostEqual(abs(ref-rdm2).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref-fdm2['dm2'].value).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref-fdm2['dm2'][:]).max(), 0, 10)
         self.assertAlmostEqual(lib.finger(rdm2), -0.32532303057849454, 6)
 
     def test_uccsd_rdm2_mo2ao(self):
@@ -183,8 +183,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref[0]-rdm2[0]).max(), 0, 10)
         self.assertAlmostEqual(abs(ref[1]-rdm2[1]).max(), 0, 10)
         uccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
-        self.assertAlmostEqual(abs(ref[0]-fdm2['dm2aa+ab'].value).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref[1]-fdm2['dm2bb+ab'].value).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref[0]-fdm2['dm2aa+ab'][:]).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref[1]-fdm2['dm2bb+ab'][:]).max(), 0, 10)
         self.assertAlmostEqual(lib.finger(rdm2[0]), -1.6247203743431637, 7)
         self.assertAlmostEqual(lib.finger(rdm2[1]), -0.44062825991527471, 7)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ RCCSD for real integrals
 (ij|kl) = (ji|kl) = (kl|ij) = ...
 '''
 
-import time
+
 import ctypes
 from functools import reduce
 import numpy
@@ -51,7 +51,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
     log.info('Init E_corr(CCSD) = %.15g', eccsd)
@@ -95,7 +95,7 @@ def update_amps(mycc, t1, t2, eris):
         raise NotImplementedError
     assert(isinstance(eris, _ChemistsERIs))
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     fock = eris.fock
@@ -275,7 +275,7 @@ def update_amps(mycc, t1, t2, eris):
 
 
 def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nvir_pair = nvir * (nvir+1) // 2
@@ -376,7 +376,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
     Using symmetry t2[ijab] = t2[jiba] and Ht2[ijab] = Ht2[jiba], compute the
     lower triangular part of  Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if with_ovvv is None:
         with_ovvv = mycc.direct
@@ -428,7 +428,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     without using symmetry t2[ijab] = t2[jiba] in t2 or Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if t1 is None:
         tau = t2
@@ -486,7 +486,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         return numpy.zeros_like(t2)
 
     _dgemm = lib.numpy_helper._dgemm
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -560,16 +560,29 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
+
+        if mycc.async_io:
+            fmap = lib.map_with_prefetch
+            unit += nvira*nvir_pair
+        else:
+            fmap = map
+
         blksize = numpy.sqrt(max(BLKMIN**2, max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
-        tril2sq = lib.square_mat_in_trilu_indices(nvira)
-        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
-        def block_contract(i0, i1):
+        def load(v_slice):
+            i0, i1 = v_slice
             off0 = i0*(i0+1)//2
             off1 = i1*(i1+1)//2
-            # TODO: prefetch vvvv
-            wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
+            return numpy.asarray(vvvv[off0:off1], order='C')
+
+        tril2sq = lib.square_mat_in_trilu_indices(nvira)
+        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
+
+        slices = [(i0, i1) for i0, i1 in lib.prange(0, nvira, blksize)]
+        for istep, wwbuf in enumerate(fmap(load, lib.prange(0, nvira, blksize))):
+            i0, i1 = slices[istep]
+            off0 = i0*(i0+1)//2
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
                 tmp = numpy.ndarray((i1-i0,nvirb,j1-j0,nvirb), buffer=loadbuf)
@@ -578,11 +591,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                                        (ctypes.c_int*4)(i0, i1, j0, j1),
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
-
-        with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
-            for p0, p1 in lib.prange(0, nvira, blksize):
-                bcontract(p0, p1)
-                time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
+            wwbuf = None
+            time0 = log.timer_debug1('vvvv [%d:%d]'%(i0,i1), *time0)
     return Ht2.reshape(t2.shape)
 
 def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
@@ -597,7 +607,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert(vvvv is not None)
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -892,8 +902,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
                                '    mf_hf = mol.HF()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -982,14 +992,14 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.__class__ == CCSD):
             nocc = self.nocc
             nvir = self.nmo - self.nocc
-            flops = _fp(nocc, nvir)
+            flops = _flops(nocc, nvir)
             log.debug1('total FLOPs %s', flops)
         return self
 
     def get_init_guess(self, eris=None):
         return self.init_amps(eris)[1:]
     def init_amps(self, eris=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         mo_e = eris.mo_energy
@@ -1332,7 +1342,7 @@ class _ChemistsERIs:
         raise NotImplementedError
 
 def _make_eris_incore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -1389,7 +1399,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -1423,7 +1433,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     if not mycc.direct:
         max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
         eris.feri2 = lib.H5TmpFile()
@@ -1481,7 +1491,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     return eris
 
 def _make_df_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -1529,7 +1539,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
-def _fp(nocc, nvir):
+def _flops(nocc, nvir):
     '''Total float points'''
     return (nocc**3*nvir**2*2 + nocc**2*nvir**3*2 +     # Ftilde
             nocc**4*nvir*2 * 2 + nocc**4*nvir**2*2 +    # Wijkl

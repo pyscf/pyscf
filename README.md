@@ -4,13 +4,12 @@
 
 Python-based Simulations of Chemistry Framework
 ===============================================
-[![Build Status](https://travis-ci.org/pyscf/pyscf.svg?branch=master)](https://travis-ci.org/pyscf/pyscf)
+[![Build Status](https://github.com/pyscf/pyscf/workflows/CI/badge.svg)](https://github.com/pyscf/pyscf/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/pyscf/pyscf/branch/master/graph/badge.svg)](https://codecov.io/gh/pyscf/pyscf)
 
-2020-9-27
+2020-03-28
 
-* [Stable release 1.7.5](https://github.com/pyscf/pyscf/releases/tag/v1.7.5)
-* [Previous release 1.6.6](https://github.com/pyscf/pyscf/releases/tag/v1.6.6)
+* [Stable release 1.7.6](https://github.com/pyscf/pyscf/releases/tag/v1.7.6)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org/pyscf)
 * [Installation](#installation)
@@ -19,58 +18,23 @@ Python-based Simulations of Chemistry Framework
 
 Installation
 ------------
-* Prerequisites
-    - Cmake 2.8 or higher
-    - Python 2.6, 2.7, 3.4 or higher
-    - Numpy 1.8.0 or higher
-    - Scipy 0.10 or higher (0.12.0 or higher for python 3.4 - 3.8)
-    - h5py 2.3.0 or higher (requires HDF5 1.8.4 or higher)
 
-* Compile core module
+* Install stable release
 
-        cd pyscf/lib
-        mkdir build; cd build
-        cmake ..
-        make
+        pip install pyscf
 
-  Note during the compilation, external libraries (libcint, libxc, xcfun) will
-  be downloaded and installed.  If you want to disable the automatic
-  downloading, this [document](http://pyscf.org/pyscf/install.html#installation-without-network)
-  shows how to manually build these packages and PySCF C libraries.
+* (Optionally) Extensions projects geomopt, dftd3, dmrgscf, doci, icmpspt,
+  properties, semiempirical, shciscf ... (more on https://github.com/pyscf) can
+  be installed using pip
 
-* To export PySCF to Python, you need to set environment variable `PYTHONPATH`.
-  E.g.  if PySCF is installed in /opt, your `PYTHONPATH` should be
+        pip install pyscf[all]
 
-        export PYTHONPATH=/opt/pyscf:$PYTHONPATH
+  Install an individual extension
 
-* Using Intel MKL as BLAS library.  Enabling the cmake options
-  `-DBLA_VENDOR=Intel10_64lp_seq` when executing cmake
+        pip install pyscf[dftd3]
 
-        cmake -DBLA_VENDOR=Intel10_64lp_seq ..
-
-
-* Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
-  interfaces available in pyscf.
-      Block (https://sanshar.github.io/Block)
-      CheMPS2 (https://github.com/SebWouters/CheMPS2)
-  After installing the DMRG solver, create a file dmrgscf/settings.py
-  to store the path where the DMRG solver was installed.
-
-* Using FCIQMC as the FCI solver for CASSCF.
-      NECI (https://github.com/ghb24/NECI_STABLE)
-  After installing the NECI, create a file future/fciqmc/settings.py
-  to store the path where the NECI was installed.
-
-* Using optimized integral library on X86 platform.  [Qcint](https://github.com/sunqm/qcint.git)
-  is a branch of libcint library.
-  It is heavily optimized against X86_64 platforms.  To replace the
-  default libcint library with qcint library, edit the URL of the
-  integral library in lib/CMakeLists.txt file
-
-        ExternalProject_Add(libcint
-          GIT_REPOSITORY https://github.com/sunqm/qcint.git
-          ...
-
+* More details of custom install can be found in
+  [installation manual](http://pyscf.org/pyscf/install.html#compiling-from-source-code)
 
 Tutorials
 ---------

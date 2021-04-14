@@ -18,7 +18,7 @@
 
 '''Non-relativistic UKS analytical nuclear gradients'''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -37,7 +37,7 @@ def get_veff(ks_grad, mol=None, dm=None):
     '''
     if mol is None: mol = ks_grad.mol
     if dm is None: dm = ks_grad.base.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
     ni = mf._numint
@@ -139,7 +139,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
-            ngrids = weight.size
             sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)

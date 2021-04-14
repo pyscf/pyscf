@@ -27,7 +27,7 @@ from pyscf import lib
 from pyscf.geomopt.addons import (as_pyscf_method, dump_mol_geometry,
                                   symmetrize)  # noqa
 from pyscf import __config__
-from pyscf.grad.rhf import GradientsBasics
+from pyscf.grad.rhf import GradientsMixin
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -119,7 +119,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsBasics):
+    elif isinstance(method, GradientsMixin):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -150,8 +150,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     engine.assert_convergence = assert_convergence
     try:
-        m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                             constraints=constraints, **kwargs)
+        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                         constraints=constraints, **kwargs)
         conv = True
         # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
     except NotConvergedError as e:
@@ -180,7 +180,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     '''
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
     return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
-            constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
+                  constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
     '''Optimize the molecular geometry for the input method.

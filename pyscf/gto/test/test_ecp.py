@@ -260,6 +260,7 @@ Na ul
                     ecp = {'Na': gto.basis.parse_ecp('''
 Na nelec 8
 Na S
+0      0.     0     0
 1      0.    -3.    -3.
 Na P
 1      0.    -3.    -3.

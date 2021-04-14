@@ -255,10 +255,10 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-             dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE, tol_residual=None):
+              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+              dot=numpy.dot, callback=None,
+              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
+              follow_state=FOLLOW_STATE, tol_residual=None):
     r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -533,7 +533,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -926,7 +926,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -1025,9 +1025,9 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-          dot=numpy.dot, callback=None,
-          nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
+           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+           dot=numpy.dot, callback=None,
+           nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
     '''Davidson diagonalization method to solve  A c = e B c.
 
     Args:
@@ -1234,7 +1234,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max(dx_norm), e, de[ide], norm)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = all(norm < toloose for norm in dx_norm)
             break
 
@@ -1324,7 +1324,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1[i] *= rmat[i,i]
 
     innerprod = [dot(xi.conj(), xi).real for xi in x1]
-    max_innerprod = max(innerprod)
+    if innerprod:
+        max_innerprod = max(innerprod)
+    else:
+        max_innerprod = 0
     if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)

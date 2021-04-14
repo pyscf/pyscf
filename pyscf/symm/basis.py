@@ -23,6 +23,8 @@ Generate symmetry adapted basis
 from functools import reduce
 import numpy
 from pyscf.data.elements import _symbol, _rm_digit
+from pyscf import gto
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import geom
 from pyscf.symm import param
 
@@ -34,7 +36,8 @@ __all__ = ['tot_parity_odd',
            'linearmole_irrep_symb2id',
            'linearmole_irrep_id2symb',
            'linearmole_symm_adapted_basis',
-          ]
+           'so3_irrep_symb2id',
+           'so3_irrep_id2symb',]
 
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
@@ -53,10 +56,12 @@ def tot_parity_odd(op, l, m):
     else:
         ox,oy,oz = OP_PARITY_ODD[op]
         gx,gy,gz = param.SPHERIC_GTO_PARITY_ODD[l][l+m]
-        return (ox and gx)^(oy and gy)^(oz and gz)
+        return (ox and gx) ^ (oy and gy) ^ (oz and gz)
 
 def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
-    if gpname in ('Dooh', 'Coov'):
+    if gpname == 'SO3':
+        return so3_symm_adapted_basis(mol, gpname, orig, coordinates)
+    elif gpname in ('Dooh', 'Coov'):
         return linearmole_symm_adapted_basis(mol, gpname, orig, coordinates)
 
     # prop_atoms are the atoms relocated wrt the charge center with proper
@@ -179,7 +184,7 @@ def _ao_rotation_matrices(mol, axes):
     return Ds
 
 def dump_symm_adapted_basis(mol, so):
-    raise RuntimeError('TODO')
+    raise PointGroupSymmetryError('TODO')
 
 def symmetrize_matrix(mat, so):
     return [reduce(numpy.dot, (c.conj().T,mat,c)) for c in so]
@@ -201,11 +206,137 @@ def _basis_offset_for_atoms(atoms, basis_tab):
 
 def _num_contract(basis):
     if isinstance(basis[1], int):
-# This branch should never be reached if basis_tab is formated by function mole.format_basis
+        # This branch should never be reached if basis_tab is formated by
+        # function mole.format_basis
         nctr = len(basis[2]) - 1
     else:
         nctr = len(basis[1]) - 1
     return nctr
+
+###############################
+# SO3 (real spherical harmonics)
+# Irreps ID maps
+# SO3       ->  Dooh
+# s       0 ->  A1g   0
+
+# pz    105 ->  A1u   5
+# py    106 ->  E1uy  6
+# px    107 ->  E1ux  7
+
+# dz2   200 ->  A1g   0
+# dyz   203 ->  E1gy  3
+# dxz   202 ->  E1gx  2
+# dxy   211 ->  E2gy  11
+# dx2y2 210 ->  E2gx  10
+
+# f0    305 ->  A1u   5
+# f-1   306 ->  E1uy  6
+# f+1   307 ->  E1ux  7
+# f-2   314 ->  E2uy  14
+# f+2   315 ->  E2ux  15
+# f-3   316 ->  E3uy  16
+# f+3   317 ->  E3ux  17
+
+# g0    400 ->  A1g   0
+# g-1   403 ->  E1gy  3
+# g+1   402 ->  E1gx  2
+# g-2   411 ->  E2gy  11
+# g+2   410 ->  E2gx  10
+# g-3   413 ->  E3gy  13
+# g+3   412 ->  E3gx  12
+# g-4   421 ->  E4gy  21
+# g+4   420 ->  E4gx  20
+_SO3_SYMB2ID = {
+    's+0' :     0,
+    'p-1':    106,
+    'p+0':    105,
+    'p+1':    107,
+    'd-2':    211,
+    'd-1':    203,
+    'd+0':    200,
+    'd+1':    202,
+    'd+2':    210,
+    'f-3':    316,
+    'f-2':    314,
+    'f-1':    306,
+    'f+0':    305,
+    'f+1':    307,
+    'f+2':    315,
+    'f+3':    317,
+    'g-4':    421,
+    'g-3':    413,
+    'g-2':    411,
+    'g-1':    403,
+    'g+0':    400,
+    'g+1':    402,
+    'g+2':    410,
+    'g+3':    412,
+    'g+4':    420,
+    'h-5':    526,
+    'h-4':    524,
+    'h-3':    516,
+    'h-2':    514,
+    'h-1':    506,
+    'h+0':    505,
+    'h+1':    507,
+    'h+2':    515,
+    'h+3':    517,
+    'h+4':    525,
+    'h+5':    527,
+    'i-6':    631,
+    'i-5':    623,
+    'i-4':    621,
+    'i-3':    613,
+    'i-2':    611,
+    'i-1':    603,
+    'i+0':    600,
+    'i+1':    602,
+    'i+2':    610,
+    'i+3':    612,
+    'i+4':    620,
+    'i+5':    622,
+    'i+6':    630,
+}
+_SO3_ID2SYMB = dict([(v, k) for k, v in _SO3_SYMB2ID.items()])
+_ANGULAR = 'spdfghik'
+
+def so3_irrep_symb2id(symb):
+    return _SO3_SYMB2ID[symb.lower()]
+
+def so3_irrep_id2symb(irrep_id):
+    return _SO3_ID2SYMB[irrep_id]
+
+def so3_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
+    assert gpname == 'SO3'
+    assert mol.natm == 1
+
+    ao_loc = mol.ao_loc_nr(cart=False)
+    nao_sph = ao_loc[-1]
+
+    if mol.cart:
+        coeff = mol.cart2sph(normalized='sp')
+    else:
+        coeff = numpy.eye(nao_sph)
+    nao = coeff.shape[0]
+
+    lmax = max(mol._bas[:,gto.ANG_OF])
+    so = []
+    irrep_names = []
+    for l in range(lmax+1):
+        bas_idx = mol._bas[:,gto.ANG_OF] == l
+        cs = [coeff[:,p0:p1]
+              for p0, p1 in zip(ao_loc[:-1][bas_idx], ao_loc[1:][bas_idx])]
+        c_groups = numpy.hstack(cs).reshape(nao, -1, l*2+1)
+        if l == 1:
+            so.extend([c_groups[:,:,1], c_groups[:,:,2], c_groups[:,:,0]])
+            irrep_names.extend(['p-1', 'p+0', 'p+1'])
+        else:
+            for m in range(-l, l+1):
+                so.append(c_groups[:,:,l+m])
+                irrep_names.append('%s%+d' % (_ANGULAR[l], m))
+
+    irrep_ids = [so3_irrep_symb2id(ir) for ir in irrep_names]
+    return so, irrep_ids
 
 
 ###############################
@@ -271,7 +402,7 @@ def linearmole_symm_descent(gpname, irrepid):
     if gpname in ('Dooh', 'Coov'):
         return irrepid % 10
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 def linearmole_irrep_symb2id(gpname, symb):
     if gpname == 'Dooh':
@@ -293,7 +424,7 @@ def linearmole_irrep_symb2id(gpname, symb):
             else:
                 return (n//2)*10 + COOV_IRREP_ID_TABLE['_even'+symb[-1]]
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 DOOH_IRREP_SYMBS = ('A1g' , 'A2g' , 'E1gx', 'E1gy' , 'A2u', 'A1u' , 'E1uy', 'E1ux')
 DOOH_IRREP_SYMBS_EXT = ('gx' , 'gy' , 'gx', 'gy' , 'uy', 'ux' , 'uy', 'ux')
@@ -326,7 +457,7 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
                 xy = 'x'
             return 'E%d%s' % (rn, xy)
     else:
-        raise RuntimeError('%s is not proper for linear molecule.' % gpname)
+        raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     assert(gpname in ('Dooh', 'Coov'))
@@ -522,7 +653,6 @@ def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
 
 
 if __name__ == "__main__":
-    from pyscf import gto
     h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None

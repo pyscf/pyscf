@@ -22,7 +22,7 @@ Hartree-Fock
 
 import sys
 import tempfile
-import time
+
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -112,7 +112,7 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.11.
 Keyword argument "init_dm" is replaced by "dm0"''')
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
@@ -370,8 +370,15 @@ def init_guess_by_minao(mol):
         occ = numpy.hstack(occ)
 
         if nelec_ecp > 0:
+            if symb in mol._basis:
+                input_basis = mol._basis[symb]
+            elif stdsymb in mol._basis:
+                input_basis = mol._basis[stdsymb]
+            else:
+                raise KeyError(symb)
+
             basis4ecp = [[] for i in range(4)]
-            for bas in mol._basis[symb]:
+            for bas in input_basis:
                 l = bas[0]
                 if l < 4:
                     basis4ecp[l].append(bas)
@@ -778,10 +785,10 @@ def get_jk(mol, dm, hermi=1, vhfopt=None, with_j=True, with_k=True, omega=None):
         vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
                              vhfopt, hermi, mol.cart, with_j, with_k)
     else:
-# The vhfopt of standard Coulomb operator can be used here as an approximate
-# integral prescreening conditioner since long-range part Coulomb is always
-# smaller than standard Coulomb.  It's safe to filter LR integrals with the
-# integral estimation from standard Coulomb.
+        # The vhfopt of standard Coulomb operator can be used here as an approximate
+        # integral prescreening conditioner since long-range part Coulomb is always
+        # smaller than standard Coulomb.  It's safe to filter LR integrals with the
+        # integral estimation from standard Coulomb.
         with mol.with_range_coulomb(omega):
             vj, vk = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
                                  vhfopt, hermi, mol.cart, with_j, with_k)
@@ -1098,8 +1105,7 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
     if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
 
-    c = orth.restore_ao_character(mol, pre_orth_method)
-    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
+    orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_method, s=s)
     c_inv = numpy.dot(orth_coeff.conj().T, s)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = reduce(numpy.dot, (c_inv, dm, c_inv.T.conj()))
@@ -1408,12 +1414,12 @@ class SCF(lib.StreamObject):
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
 
-# If chkfile is muted, SCF intermediates will not be dumped anywhere.
+        # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
             self.chkfile = None
         else:
-# the chkfile will be removed automatically, to save the chkfile, assign a
-# filename to self.chkfile
+            # the chkfile will be removed automatically, to save the chkfile, assign a
+            # filename to self.chkfile
             self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
             self.chkfile = self._chkfile.name
 
@@ -1483,10 +1489,10 @@ class SCF(lib.StreamObject):
 
     @lib.with_doc(eig.__doc__)
     def eig(self, h, s):
-# An intermediate call to self._eigh so that the modification to eig function
-# can be applied on different level.  Different SCF modules like RHF/UHF
-# redefine only the eig solver and leave the other modifications (like removing
-# linear dependence, sorting eigenvlaue) to low level ._eigh
+        # An intermediate call to self._eigh so that the modification to eig function
+        # can be applied on different level.  Different SCF modules like RHF/UHF
+        # redefine only the eig solver and leave the other modifications (like removing
+        # linear dependence, sorting eigenvlaue) to low level ._eigh
         return self._eigh(h, s)
 
     def get_hcore(self, mol=None):
@@ -1631,7 +1637,7 @@ class SCF(lib.StreamObject):
         converged SCF energy = -98.5521904482821
         -98.552190448282104
         '''
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         self.dump_flags()
         self.build(self.mol)
@@ -1680,7 +1686,7 @@ class SCF(lib.StreamObject):
                omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
 
@@ -1709,7 +1715,7 @@ class SCF(lib.StreamObject):
 
     @lib.with_doc(get_veff.__doc__)
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-# Be carefule with the effects of :attr:`SCF.direct_scf` on this function
+        # Be carefule with the effects of :attr:`SCF.direct_scf` on this function
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
@@ -1940,7 +1946,7 @@ class RHF(SCF):
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                omega=None):
-# Note the incore version, which initializes an _eri array in memory.
+        # Note the incore version, which initializes an _eri array in memory.
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if (not omega and

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy as np
 from functools import reduce
 
@@ -192,9 +192,9 @@ class GCCSD(ccsd.CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.converged_lambda, self.l1, self.l2 = \
                 gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                   max_cycle=self.max_cycle,
-                                   tol=self.conv_tol_normt,
-                                   verbose=self.verbose)
+                                    max_cycle=self.max_cycle,
+                                    tol=self.conv_tol_normt,
+                                    verbose=self.verbose)
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
@@ -403,7 +403,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
     eris = _PhysicistsERIs()

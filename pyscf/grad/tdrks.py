@@ -19,7 +19,7 @@
 # J. Chem. Phys. 117, 7433
 #
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -47,7 +47,7 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
             TDA energy gradients.
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -78,7 +78,6 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     # dm0 = mf.make_rdm1(mo_coeff, mo_occ), but it is not used when computing
     # fxc since rho0 is passed to fxc function.
-    dm0 = None
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     f1vo, f1oo, vxc1, k1ao = \

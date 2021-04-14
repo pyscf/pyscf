@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #
 
 import itertools
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -65,7 +65,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         dtype : type
             Type for eigenvectors.
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if eom.verbose >= logger.WARN:
         eom.check_sanity()
@@ -179,8 +179,8 @@ def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
                 continue
             ka = kconserv[ki, kshift, kj]
             idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
-            idxoab = idxoa[ki][:,None] * nocc + idxob[kj]
-            idxoba = idxob[ki][:,None] * nocc + idxoa[kj]
+            #idxoab = idxoa[ki][:,None] * nocc + idxob[kj]
+            #idxoba = idxob[ki][:,None] * nocc + idxoa[kj]
             idxobb = idxob[ki][:,None] * nocc + idxob[kj]
 
             r2_tmp = 0.5 * (r2[ki, kj] - r2[kj, ki].transpose(1, 0, 2))
@@ -199,8 +199,8 @@ def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
                 continue
 
             idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
-            idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
-            idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
+            #idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+            #idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
             idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
 
             r2_tmp = 0.5 * (r2[kj, ka] - r2[kj, kb].transpose(0, 2, 1))
@@ -440,7 +440,7 @@ def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 def ipccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
+    t1 = imds.t1
     nkpts, nocc, nvir = t1.shape
     kconserv = imds.kconserv
 
@@ -491,12 +491,11 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
     Reference:
         Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
-    assert (eom.partition == None)
+    assert (eom.partition is None)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
-    fock = eris.fock
     nkpts, nocc, nvir = t1.shape
     nmo = nocc + nvir
     dtype = np.result_type(t1, t2)
@@ -533,7 +532,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
             lijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
             rijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
-                          [ka,kb,kshift,range(nkpts),range(nkpts)])
+                                               [ka,kb,kshift,range(nkpts),range(nkpts)])
 
             for ki, kj in itertools.product(range(nkpts), repeat=2):
                 kk = kklist[ki,kj]
@@ -604,7 +603,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
         deltaE *= 1./12
         deltaE = deltaE.real
         logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-        ip_eval + deltaE, deltaE)
+                    ip_eval + deltaE, deltaE)
         e_star.append(ip_eval + deltaE)
     return e_star
 
@@ -651,8 +650,8 @@ def perturbed_ccsd_kernel(eom, nroots=1, koopmans=False, right_guess=None,
 
 
 def ipccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None,
-           eris=None, imds=None, partition=None, kptlist=None,
-           dtype=None, **kwargs):
+                eris=None, imds=None, partition=None, kptlist=None,
+                dtype=None, **kwargs):
     '''See `kernel()` for a description of arguments.'''
     if partition:
         raise NotImplementedError
@@ -665,7 +664,6 @@ def mask_frozen_ip(eom, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
     r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
     nkpts = eom.nkpts
-    nocc, nmo = eom.nocc, eom.nmo
     kconserv = eom.kconserv
 
     # Get location of padded elements in occupied and virtual space
@@ -1003,7 +1001,7 @@ def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 def eaccsd_diag(eom, kshift, imds=None):
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
+    t1 = imds.t1
     nkpts, nocc, nvir = t1.shape
     kconserv = imds.kconserv
 
@@ -1050,12 +1048,11 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
     Reference:
         Saeh, Stanton "...energy surfaces of radicals" JCP 111, 8275 (1999); DOI:10.1063/1.480171
     """
-    assert (eom.partition == None)
+    assert (eom.partition is None)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
-    fock = eris.fock
     nkpts, nocc, nvir = t1.shape
     nmo = nocc + nvir
     dtype = np.result_type(t1, t2)
@@ -1092,7 +1089,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
             lijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
             rijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
-                          [ki,kj,kshift,range(nkpts),range(nkpts)])
+                                               [ki,kj,kshift,range(nkpts),range(nkpts)])
 
             for ka, kb in itertools.product(range(nkpts), repeat=2):
                 #TODO: can reduce size of ijabc arrays since `kc` fixed from other k-points
@@ -1165,13 +1162,13 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
         deltaE *= 1./12
         deltaE = deltaE.real
         logger.info(eom, "Exc. energy, delta energy = %16.12f, %16.12f",
-        ea_eval + deltaE, deltaE)
+                    ea_eval + deltaE, deltaE)
         e_star.append(ea_eval + deltaE)
     return e_star
 
 def eaccsd_star(eom, nroots=1, koopmans=False, right_guess=None, left_guess=None,
-           eris=None, imds=None, partition=None, kptlist=None,
-           dtype=None, **kwargs):
+                eris=None, imds=None, partition=None, kptlist=None,
+                dtype=None, **kwargs):
     '''See `kernel()` for a description of arguments.'''
     if partition:
         raise NotImplementedError
@@ -1185,7 +1182,6 @@ def mask_frozen_ea(eom, vector, kshift, const=LARGE_DENOM):
     r1, r2 = eom.vector_to_amplitudes(vector, kshift=kshift)
     kconserv = eom.kconserv
     nkpts = eom.nkpts
-    nocc, nmo = eom.nocc, eom.nmo
 
     # Get location of padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = eom.nonzero_opadding, eom.nonzero_vpadding
@@ -1290,15 +1286,15 @@ class EOMEA_Ta(EOMEA):
 ########################################
 
 def kernel_ee(eom, nroots=1, koopmans=False, guess=None, left=False,
-           eris=None, imds=None, partition=None, kptlist=None,
-           dtype=None, **kwargs):
+              eris=None, imds=None, partition=None, kptlist=None,
+              dtype=None, **kwargs):
     '''See `kernel()` for a description of arguments.
 
     This method is merely a simplified version of kernel() with a few parts
     removed, such as those involving `eom.mask_frozen()`. Slowly they will be
     added back for the completion of program.
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
     if eom.verbose >= logger.WARN:
         eom.check_sanity()
@@ -1394,7 +1390,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
     '''See `kernel_ee()` for a description of arguments.'''
     eom.converged, eom.e, eom.v \
             = kernel_ee(eom, nroots, koopmans, guess, left, eris=eris, imds=imds,
-                  partition=partition, kptlist=kptlist, dtype=dtype)
+                        partition=partition, kptlist=kptlist, dtype=dtype)
     return eom.e, eom.v
 
 
@@ -1552,7 +1548,7 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 def eeccsd_diag(eom, kshift, imds=None):
     '''Diagonal elements of similarity-transformed Hamiltonian'''
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
+    t1 = imds.t1
     nkpts, nocc, nvir = t1.shape
     kconserv = eom.kconserv
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
@@ -1862,7 +1858,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1883,7 +1879,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1898,7 +1894,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1918,7 +1914,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1936,7 +1932,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_corr, pt1, pt2, Wovoo, Wvvvo = \
@@ -1956,7 +1952,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris

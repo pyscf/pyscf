@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -167,12 +166,13 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                   unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(vv, 0, sizeof(double) * nao * nao);
+        size_t Nao = nao;
+        NPdset0(vv, Nao * Nao);
 
 #pragma omp parallel
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao+2, sizeof(double));
+        double *v_priv = calloc(Nao*Nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;
@@ -182,7 +182,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
         }
 #pragma omp critical
         {
-                for (ip = 0; ip < nao*nao; ip++) {
+                for (ip = 0; ip < Nao*Nao; ip++) {
                         vv[ip] += v_priv[ip];
                 }
         }

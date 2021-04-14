@@ -22,7 +22,7 @@ Non-relativistic RHF analytical Hessian
 
 from functools import reduce
 import ctypes
-import time
+
 import numpy
 from pyscf import lib
 from pyscf import gto
@@ -40,7 +40,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
               mo1=None, mo_e1=None, h1ao=None,
               atmlst=None, max_memory=4000, verbose=None):
     log = logger.new_logger(hessobj, verbose)
-    time0 = t1 = (time.clock(), time.time())
+    time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mol = hessobj.mol
     mf = hessobj.base
@@ -106,7 +106,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 def _partial_hess_ejk(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                       atmlst=None, max_memory=4000, verbose=None, with_k=True):
     log = logger.new_logger(hessobj, verbose)
-    time0 = t1 = (time.clock(), time.time())
+    time0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mol = hessobj.mol
     mf = hessobj.base
@@ -389,9 +389,7 @@ def hess_nuc(mol, atmlst=None):
         tmp1 = qs[i] * qs / s12**3
         tmp2 = numpy.einsum('k, ki,kj->kij',-3*qs[i]*qs/s12**5, r12, r12)
 
-        h[i,i,0,0] = \
-        h[i,i,1,1] = \
-        h[i,i,2,2] = -tmp1.sum()
+        h[i,i,0,0] = h[i,i,1,1] = h[i,i,2,2] = -tmp1.sum()
         h[i,i] -= numpy.einsum('kij->ij', tmp2)
 
         h[i,:,0,0] += tmp1

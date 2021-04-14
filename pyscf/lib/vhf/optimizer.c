@@ -17,14 +17,12 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
 #include "optimizer.h"
-
-#define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#include "np_helper/np_helper.h"
 
 int int2e_sph();
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -77,7 +75,7 @@ int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
         int j = shls[1];
         int k = shls[2];
         int l = shls[3];
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         assert(opt->q_cond);
         assert(i < n);
         assert(j < n);
@@ -97,7 +95,7 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
         int j = shls[1];
         int k = shls[2];
         int l = shls[3];
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         double *q_cond = opt->q_cond;
         double *dm_cond = opt->dm_cond;
         assert(q_cond);
@@ -127,7 +125,7 @@ int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt,
         int j = shls[1];
         int k = shls[2];
         int l = shls[3];
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         assert(opt->q_cond);
         assert(opt->dm_cond);
         assert(i < n);
@@ -151,7 +149,7 @@ int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
         int j = shls[1];
         int k = shls[2];
         int l = shls[3];
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         double *q_cond = opt->q_cond;
         double *dm_cond = opt->dm_cond;
         assert(q_cond);
@@ -188,7 +186,7 @@ int CVHFnr3c2e_vj_pass1_prescreen(int *shls, CVHFOpt *opt,
         if (!opt) {
                 return 1; // no screen
         }
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         int i = shls[0];
         int j = shls[1];
         // Be careful with the range of basis k, which is between nbas and
@@ -211,7 +209,7 @@ int CVHFnr3c2e_vj_pass2_prescreen(int *shls, CVHFOpt *opt,
         if (!opt) {
                 return 1; // no screen
         }
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         int i = shls[0];
         int j = shls[1];
         // Be careful with the range of basis k, which is between nbas and
@@ -234,7 +232,7 @@ int CVHFnr3c2e_schwarz_cond(int *shls, CVHFOpt *opt,
         if (!opt) {
                 return 1; // no screen
         }
-        int n = opt->nbas;
+        size_t n = opt->nbas;
         int i = shls[0];
         int j = shls[1];
         // Be careful with the range of basis k, which is between nbas and
@@ -290,7 +288,8 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
 #pragma omp parallel
 {
         double qtmp, tmp;
-        int ij, i, j, di, dj, ish, jsh;
+        size_t ij, i, j, di, dj, ish, jsh;
+        size_t Nbas = nbas;
         int shls[4];
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
@@ -300,8 +299,8 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
         }
         double *buf = malloc(sizeof(double) * di*di*di*di);
 #pragma omp for schedule(dynamic, 4)
-        for (ij = 0; ij < nbas*(nbas+1)/2; ij++) {
-                ish = (int)(sqrt(2*ij+.25) - .5 + 1e-7);
+        for (ij = 0; ij < Nbas*(Nbas+1)/2; ij++) {
+                ish = (size_t)(sqrt(2*ij+.25) - .5 + 1e-7);
                 jsh = ij - ish*(ish+1)/2;
                 di = ao_loc[ish+1] - ao_loc[ish];
                 dj = ao_loc[jsh+1] - ao_loc[jsh];
@@ -333,7 +332,7 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * len);
-        memcpy(opt->q_cond, q_cond, sizeof(double) * len);
+        NPdcopy(opt->q_cond, q_cond, len);
 }
 
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
@@ -346,12 +345,11 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         // Use opt->nbas because it is used in the prescreen function
         nbas = opt->nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas);
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
 
         const size_t nao = ao_loc[nbas];
         double dmax, tmp;
-        int i, j, ish, jsh;
-        int iset;
+        size_t i, j, ish, jsh, iset;
         double *pdm;
         for (ish = 0; ish < nbas; ish++) {
         for (jsh = 0; jsh <= ish; jsh++) {
@@ -378,7 +376,7 @@ void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * len);
-        memcpy(opt->dm_cond, dm_cond, sizeof(double) * len);
+        NPdcopy(opt->dm_cond, dm_cond, len);
 }
 
 

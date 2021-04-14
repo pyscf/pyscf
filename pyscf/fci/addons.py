@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
             for x in gen_str_iter(restorb, nelec-1):
                 yield [orb_list[0]] + x
 
-# search for alpha and beta pattern which match to the required symmetry
+    # search for alpha and beta pattern which match to the required symmetry
     def query(target, nelec_atmost, spin, orbsym):
         norb = len(orbsym)
         for excite_level in range(1, nelec_atmost+1):
@@ -192,14 +192,6 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
         addrb = find_addr_(strb, bonly, nelecb)
         ci1[addra,addrb] = 1
 
-#    target = 0
-#    for i,k in enumerate(stra):
-#        if k:
-#            target ^= orbsym[i]
-#    for i,k in enumerate(strb):
-#        if k:
-#            target ^= orbsym[i]
-#    print target
     return ci1
 
 
@@ -218,6 +210,8 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     >>> ci0 = fci.addons.cylindrical_init_guess(mol, 4, (3,3), orbsym, wfnsym=10, singlet=False)[0]
     >>> print(ci0.reshape(4,4))
     '''
+    warnings.warn('Initial guess for cylindrical symmetry is under testing')
+
     neleca, nelecb = _unpack_nelec(nelec)
     if isinstance(orbsym[0], str):
         orbsym = [symm.irrep_name2id(mol.groupname, x) for x in orbsym]
@@ -225,10 +219,12 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     if isinstance(wfnsym, str):
         wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
 
-    if mol.groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('SO3', 'Dooh', 'Coov'):
         def irrep_id2lz(irrep_id):
             # See also symm.basis.DOOH_IRREP_ID_TABLE
             level = irrep_id // 10
+            if mol.groupname == 'SO3':
+                level = level % 10  # See SO3 irreps in pyscf.symm.basis
             d2h_id = irrep_id % 10
             # irrep_id 0,1,4,5 corresponds to lz = 0,2,4,...
             # irrep_id 2,3,6,7 corresponds to lz = 1,3,5,...
@@ -328,7 +324,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                 addr_x_b, addr_y_b = search_open_shell_det(occb)
                 if singlet:
                     if wfn_lz == 0:
-                        ci_1[addr_x_a,addr_x_b] = \
+                        ci_1[addr_x_a,addr_x_b] = numpy.sqrt(.5)
                         ci_1[addr_y_a,addr_y_b] = numpy.sqrt(.5)
                     else:
                         ci_1[addr_x_a,addr_x_b] = numpy.sqrt(.5)
@@ -355,8 +351,8 @@ def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
     orbsym_in_d2h = numpy.asarray(orbsym) % 10
     wfnsym_in_d2h = wfnsym % 10
     for i, ir in enumerate(orbsym_in_d2h):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
+        airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+        birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
     mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym_in_d2h
     ci1 = numpy.zeros_like(ci)
     ci1[mask] = ci[mask]
@@ -389,7 +385,6 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
 
 def _guess_wfnsym(ci, strsa, strsb, orbsym):
-    na = len(strsa)
     nb = len(strsb)
     idx = abs(ci).argmax()
     stra = strsa[idx // nb]
@@ -399,9 +394,9 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
     airrep = 0
     birrep = 0
     for i, ir in enumerate(orbsym_in_d2h):
-        if (stra & (1<<i)):
+        if (stra & (1 << i)):
             airrep ^= ir
-        if (strb & (1<<i)):
+        if (strb & (1 << i)):
             birrep ^= ir
     return airrep ^ birrep
 def guess_wfnsym(ci, norb, nelec, orbsym):
@@ -607,8 +602,8 @@ def det_overlap(string1, string2, norb, s=None):
             string2 = int(string2, 2)
         else:
             assert(bin(string2).count('1') == nelec)
-        idx1 = [i for i in range(norb) if (1<<i & string1)]
-        idx2 = [i for i in range(norb) if (1<<i & string2)]
+        idx1 = [i for i in range(norb) if (1 << i & string1)]
+        idx2 = [i for i in range(norb) if (1 << i & string2)]
         s1 = lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
@@ -666,12 +661,12 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             ss = ss_value
 
         if ss < sz*(sz+1)+.1:
-# (S^2-ss)|Psi> to shift state other than the lowest state
+            # (S^2-ss)|Psi> to shift state other than the lowest state
             ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
-# (S^2-ss)^2|Psi> to shift states except the given spin.
-# It still relies on the quality of initial guess
+            # (S^2-ss)^2|Psi> to shift states except the given spin.
+            # It still relies on the quality of initial guess
             tmp = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
@@ -738,8 +733,8 @@ def transform_ci(ci, nelec, u):
     nb_new = cistring.num_strings(norb_new, nelecb)
     ci = ci.reshape(na_old, nb_old)
 
-    one_particle_strs_old = numpy.asarray([1<<i for i in range(norb_old)])
-    one_particle_strs_new = numpy.asarray([1<<i for i in range(norb_new)])
+    one_particle_strs_old = numpy.asarray([1 << i for i in range(norb_old)])
+    one_particle_strs_new = numpy.asarray([1 << i for i in range(norb_new)])
 
     if neleca == 0:
         trans_ci_a = numpy.ones((1, 1))

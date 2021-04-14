@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -59,7 +59,7 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
     Returns:
         tuple -- A tuple of excitation energies and corresponding eigenvectors
     """
-    cpu0 = (time.clock(), time.time())
+    cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(cis.stdout, cis.verbose)
     cis.dump_flags()
 
@@ -79,9 +79,8 @@ def kernel(cis, nroots=1, eris=None, kptlist=None, **kargs):
 
     evals = [None] * len(kptlist)
     evecs = [None] * len(kptlist)
-    convs = [None] * len(kptlist)
 
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     for k, kshift in enumerate(kptlist):
         print("\nkshift =", kshift)
 
@@ -210,7 +209,7 @@ def cis_H(cis, kshift, eris=None):
     Returns:
         2D array -- the Hamiltonian matrix reshaped into (ki,i,a) by (kj,j,b)
     """
-    cpu0 = (time.clock(), time.time())
+    cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(cis.stdout, cis.verbose)
 
     if eris is None:
@@ -257,9 +256,13 @@ def cis_H(cis, kshift, eris=None):
             for kj in range(nkpts):
                 kb = kconserv_r[kj]
                 # contribution from 2 (ai|jb) = 2 B^L_ai B^L_jb
-                tmp = 2. * einsum("Lai,Ljb->iajb", eris.Lpq_mo[ka,ki][:, nocc:, :nocc], eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
+                tmp = 2. * einsum("Lai,Ljb->iajb",
+                                  eris.Lpq_mo[ka,ki][:, nocc:, :nocc],
+                                  eris.Lpq_mo[kj,kb][:, :nocc, nocc:])
                 # contribution from -(ab|ji) = - B^L_ab B^L_ji
-                tmp -= einsum("Lab,Lji->iajb", eris.Lpq_mo[ka,kb][:, nocc:, nocc:], eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
+                tmp -= einsum("Lab,Lji->iajb",
+                              eris.Lpq_mo[ka,kb][:, nocc:, nocc:],
+                              eris.Lpq_mo[kj,ki][:, :nocc, :nocc])
                 tmp *= 1. / nkpts
                 H[ki, kj] += tmp.reshape(nov, nov)
 
@@ -455,7 +458,7 @@ class KCIS(lib.StreamObject):
 class _CIS_ERIS:
     def __init__(self, cis, mo_coeff=None, method="incore"):
         log = logger.Logger(cis.stdout, cis.verbose)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         cell = cis._scf.cell
         nocc = cis.nocc
@@ -575,7 +578,7 @@ class _CIS_ERIS:
                 )
 
                 # <ia|pq> = (ip|aq)
-                cput1 = time.clock(), time.time()
+                cput1 = logger.process_clock(), logger.perf_counter()
                 for kp in range(nkpts):
                     for kq in range(nkpts):
                         for kr in range(nkpts):
@@ -634,7 +637,6 @@ def _init_cis_df_eris(cis, eris):
         # DF-driven CCSD implementation.
         raise NotImplementedError
 
-    nocc = cis.nocc
     nmo = cis.nmo
     nao = cell.nao_nr()
 
@@ -647,10 +649,10 @@ def _init_cis_df_eris(cis, eris):
     eris.dtype = dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
 
     with h5py.File(cis._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):

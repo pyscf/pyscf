@@ -37,6 +37,32 @@ Na P
 2      0.9461106              7.1241813        
 ''')})
 
+#
+# Simple arithmetic expressions can be specified in ecp input
+#
+mol = gto.M(atom='''
+ Na 0. 0. 0.
+ H  0.  0.  1.''',
+            basis={'Na':'lanl2dz', 'H':'sto3g'},
+            ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 10
+Na ul
+0      2.0000000              6.0000000*np.exp(.5)
+1    175.5502590            -10.0000000*np.exp(.5)
+2      2.3365719             -6.0637782*np.exp(.5)
+2      0.7799867             -0.7299393*np.exp(.5)
+Na S
+0    243.3605846              3.0000000
+1     41.5764759             36.2847626
+2     13.2649167             72.9304880
+2      0.9764209              6.0123861
+Na P
+0   1257.2650682              5.0000000
+1    189.6248810            117.4495683
+2     54.5247759            423.3986704
+2      0.9461106              7.1241813
+''')})
+
 
 #
 # Burkatzki-Filippi-Dolg pseudo potential and basis are prefixed with "bfd"
@@ -53,7 +79,7 @@ mol = gto.M(atom='Na 0. 0. 0.; H 0 0 2.',
 #  https://people.clarkson.edu/~pchristi/reps.html 
 #  http://www.nwchem-sw.org/index.php/ECP
 #
-# Note the SOC factor 2/(2l+1) has been included in the SO coefficients
+# Note the SOC factor 2/(2l+1) has been multiplied in the SO coefficients
 #
 mol = gto.M(atom='Cu 0. 0. 0.; H 0 0 2.',
             basis={'Cu':'crenbl', 'H':'ccpvdz'},

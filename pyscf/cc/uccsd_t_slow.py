@@ -40,8 +40,7 @@ def kernel(mcc, eris, t1=None, t2=None):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb = t2ab.shape[:2]
-    mo_ea = eris.focka.diagonal().real
-    mo_eb = eris.fockb.diagonal().real
+    mo_ea, mo_eb = eris.mo_energy
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]
     fvo = eris.focka[nocca:,:nocca]

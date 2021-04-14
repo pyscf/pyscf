@@ -17,7 +17,7 @@
 #
 
 import copy
-import time
+
 import ctypes
 import numpy
 import scipy.linalg
@@ -206,7 +206,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         dfobj._cderi is None):
         return get_j(dfobj, dm, hermi, direct_scf_tol), None
 
-    t0 = t1 = (time.clock(), time.time())
+    t0 = t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(dfobj.stdout, dfobj.verbose)
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
@@ -232,7 +232,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             vj += numpy.einsum('ip,px->ix', rho, eri1)
 
     elif getattr(dm, 'mo_coeff', None) is not None:
-#TODO: test whether dm.mo_coeff matching dm
+        #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = numpy.asarray(dm.mo_coeff, order='F')
         mo_occ   = numpy.asarray(dm.mo_occ)
         nmo = mo_occ.shape[-1]
@@ -310,7 +310,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
     from pyscf.scf import _vhf
     from pyscf.scf import jk
     from pyscf.df import addons
-    t0 = t1 = (time.clock(), time.time())
+    t0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mol = dfobj.mol
     if dfobj._vjopt is None:
@@ -407,7 +407,7 @@ def get_j(dfobj, dm, hermi=1, direct_scf_tol=1e-13):
 
 def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     '''Relativistic density fitting JK'''
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     mol = dfobj.mol
     c1 = .5 / lib.param.LIGHT_SPEED
     tao = mol.tmap()

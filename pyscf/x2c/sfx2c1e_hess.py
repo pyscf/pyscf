@@ -272,10 +272,10 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
 
     s1i_sqrt = s1i / (w_sqrt[:,None] + w_sqrt)
     s1i_invsqrt = (numpy.einsum('i,ij,j->ij', w_invsqrt**2, s1i, w_invsqrt**2)
-                  / -(w_invsqrt[:,None] + w_invsqrt))
+                   / -(w_invsqrt[:,None] + w_invsqrt))
     s1j_sqrt = s1j / (w_sqrt[:,None] + w_sqrt)
     s1j_invsqrt = (numpy.einsum('i,ij,j->ij', w_invsqrt**2, s1j, w_invsqrt**2)
-                  / -(w_invsqrt[:,None] + w_invsqrt))
+                   / -(w_invsqrt[:,None] + w_invsqrt))
 
     tmp = numpy.dot(s1i_sqrt, s1j_sqrt)
     s2_sqrt = (s2 - tmp - tmp.T) / (w_sqrt[:,None] + w_sqrt)

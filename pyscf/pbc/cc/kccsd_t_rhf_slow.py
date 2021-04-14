@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: James D. McClain <jmcclain@princeton.edu>
 #
@@ -8,7 +21,7 @@ import h5py
 import itertools
 import numpy as np
 import pyscf.pbc.cc.kccsd_rhf
-import time
+
 
 from itertools import product
 from pyscf import lib
@@ -54,7 +67,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         energy_t (float): The real-part of the k-point CCSD(T) energy.
     '''
     assert isinstance(mycc, pyscf.pbc.cc.kccsd_rhf.RCCSD)
-    cpu1 = cpu0 = (time.clock(), time.time())
+    cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -120,8 +133,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     def get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):
         '''Vijkabc intermediate as described in Scuseria paper'''
-        km = kconserv[ki,ka,kj]
-        kf = kconserv[ki,ka,kj]
         out = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
         if kk == kc:
             out = out + einsum('kc,ijab->abcijk', t1[kk,:,c0:c1], eris.oovv[ki,kj,ka,:,:,a0:a1,b0:b1].conj())
@@ -131,7 +142,6 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     def get_permuted_v(ki, kj, kk, ka, kb, kc, orb_indices):
         '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper'''
         a0, a1, b0, b1, c0, c1 = orb_indices
-        tmp = np.zeros((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=dtype)
         ret = get_v(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1)
         ret = ret + get_v(kj, kk, ki, kb, kc, ka, b0, b1, c0, c1, a0, a1).transpose(2,0,1,5,3,4)
         ret = ret + get_v(kk, ki, kj, kc, ka, kb, c0, c1, a0, a1, b0, b1).transpose(1,2,0,4,5,3)
@@ -165,7 +175,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = LARGE_DENOM * np.ones((nocc,)*3, dtype=mo_energy_occ[0].dtype)
                 n0_ovp_ijk = np.ix_(nonzero_opadding[ki], nonzero_opadding[kj], nonzero_opadding[kk])
-                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
+                eijk[n0_ovp_ijk] = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki],
+                                                  mo_energy_occ[kj], mo_energy_occ[kk])[n0_ovp_ijk]
 
                 # Find momentum conservation condition for triples
                 # amplitude t3ijkabc
@@ -183,12 +194,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
                 eabc = LARGE_DENOM * np.ones((nvir,)*3, dtype=mo_energy_occ[0].dtype)
                 n0_ovp_abc = np.ix_(nonzero_vpadding[ka], nonzero_vpadding[kb], nonzero_vpadding[kc])
-                eabc[n0_ovp_abc] = lib.direct_sum('i,j,k->ijk', mo_energy_vir[ka], mo_energy_vir[kb], mo_energy_vir[kc])[n0_ovp_abc]
+                eabc[n0_ovp_abc] = lib.direct_sum('i,j,k->ijk', mo_energy_vir[ka],
+                                                  mo_energy_vir[kb], mo_energy_vir[kc])[n0_ovp_abc]
                 for task_id, task in enumerate(tasks):
-                    orb_indices = a0,a1,b0,b1,c0,c1
                     eijkabc = (eijk[None,None,None,:,:,:] - eabc[a0:a1,b0:b1,c0:c1,None,None,None])
-                    pwijk = (       get_permuted_w(ki,kj,kk,ka,kb,kc,task) +
-                              0.5 * get_permuted_v(ki,kj,kk,ka,kb,kc,task) )
+                    pwijk = (get_permuted_w(ki,kj,kk,ka,kb,kc,task) +
+                             get_permuted_v(ki,kj,kk,ka,kb,kc,task) * 0.5)
                     rwijk = get_rw(ki,kj,kk,ka,kb,kc,task) / eijkabc
                     energy_t += symm_kpt * einsum('abcijk,abcijk', pwijk, rwijk.conj())
 

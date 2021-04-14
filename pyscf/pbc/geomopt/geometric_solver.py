@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import geometric.molecule
 from pyscf import lib
 from pyscf.geomopt.addons import dump_mol_geometry
 from pyscf import __config__
-from pyscf.pbc.grad.krhf import GradientsBasics
+from pyscf.pbc.grad.krhf import GradientsMixin
 
 try:
     from geometric import internal, optimize, nifty, engine, molecule
@@ -114,7 +114,7 @@ def kernel(method, assert_convergence=ASSERT_CONV,
     '''
     if isinstance(method, lib.GradScanner):
         g_scanner = method
-    elif isinstance(method, GradientsBasics):
+    elif isinstance(method, GradientsMixin):
         g_scanner = method.as_scanner()
     elif getattr(method, 'nuc_grad_method', None):
         g_scanner = method.nuc_grad_method().as_scanner()
@@ -143,8 +143,8 @@ def kernel(method, assert_convergence=ASSERT_CONV,
 
     engine.assert_convergence = assert_convergence
     try:
-        m = geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
-                                             constraints=constraints, **kwargs)
+        geometric.optimize.run_optimizer(customengine=engine, input=tmpf,
+                                         constraints=constraints, **kwargs)
         conv = True
         # method.mol.set_geom_(m.xyzs[-1], unit='Angstrom')
     except NotConvergedError as e:
@@ -173,7 +173,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     '''
     # MRH, 07/23/2019: name all explicit kwargs for forward compatibility
     return kernel(method, assert_convergence=assert_convergence, include_ghost=include_ghost,
-            constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
+                  constraints=constraints, callback=callback, maxsteps=maxsteps, **kwargs)[1]
 
 class GeometryOptimizer(lib.StreamObject):
     '''Optimize the molecular geometry for the input method.
