@@ -95,11 +95,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                     ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
 
                     eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-
-                    if mp.regularized:
-                        regulator = (1 - np.exp(1.45 * eijab))**2
-                        eijab /= regulator
-
                     t2_ijab = np.conj(oovv_ij[ka]/eijab)
                     if with_t2:
                         t2[ki, kj, ka] = t2_ijab
@@ -127,11 +122,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                     ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
 
                     eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-
-                    if mp.regularized:
-                        regulator = (1 - np.exp(1.45 * eijab))**2
-                        eijab /= regulator
-
                     t2_ijab = np.conj(oovv_ij[ka]/eijab)
                     if with_t2:
                         t2[ki, kj, ka] = t2_ijab
@@ -699,7 +689,6 @@ class KMP2(mp2.MP2):
 
         self.frozen = frozen
         self.with_df = True
-        self.regularized = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
