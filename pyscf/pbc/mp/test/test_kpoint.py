@@ -151,6 +151,7 @@ class KnownValues(unittest.TestCase):
         0, 0, 2.85595455
         '''
         cell.unit = 'angstrom'
+        cell.spin = 1
         cell.build()
         cell.verbose = 4
         cell.incore_anyway = True
@@ -161,7 +162,7 @@ class KnownValues(unittest.TestCase):
         kmf.kernel()
         mp = pyscf.pbc.mp.kmp2.KMP2(kmf)
         mp.kernel(with_t2=True)
-        self.assertAlmostEqual(mp.e_corr, -0.00162057921874043)
+        self.assertAlmostEqual(mp.e_corr, -0.00162057921874043, 6)
         dm = mp.make_rdm1()
         np.testing.assert_allclose(np.trace(dm[0]) + np.trace(dm[1]), 6)
         for kdm in dm:

@@ -29,7 +29,6 @@ eri of size (nkpts,nocc,nocc,nvir,nvir)
 import numpy as np
 from scipy.linalg import block_diag
 import h5py
-import time
 
 from pyscf import lib
 from pyscf.lib import logger, einsum
@@ -42,8 +41,8 @@ from pyscf import __config__
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
-    cpu0 = (time.clock(), time.time())
-    log = logger.Logger(mp.stdout, mp.verbose)
+    cput0 = (logger.process_clock(), logger.perf_counter())
+    log = logger.new_logger(mp, verbose)
 
     mp.dump_flags()
     nmo = mp.nmo
@@ -110,7 +109,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                 woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
                 emp2 += einsum('ijab,ijab', t2_ijab, woovv).real
 
-    log.timer("KMP2", *cpu0)
+    log.timer("KMP2", *cput0)
 
     emp2 /= nkpts
 
@@ -162,14 +161,14 @@ def _init_mp_df_eris(mp):
     dtype = np.result_type(dtype, *mo_coeff)
     Lov = np.empty((nkpts, nkpts), dtype=object)
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
 
     bra_start = 0
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
     with h5py.File(mp._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
