@@ -64,13 +64,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
                         Lov).reshape(nvir,nocc,nvir)
         gi = numpy.array(buf, copy=False)
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-        denom = lib.direct_sum('jb+a->jba', eia, eia[i])
-
-        if mp.regularized:
-            regulator = (1 - numpy.exp(1.45 * denom))**2
-            denom /= regulator
-
-        t2i = gi/denom
+        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
         emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
         emp2 -= numpy.einsum('jab,jba', t2i, gi)
         if with_t2:
