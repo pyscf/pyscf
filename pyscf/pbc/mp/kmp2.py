@@ -72,7 +72,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     with_df_ints = mp.with_df_ints and type(mp._scf.with_df) is df.GDF
 
     # Build 3-index DF tensor Lov
-    if with_df_ints: 
+    if with_df_ints:
         Lov = _init_mp_df_eris(mp)
 
     for ki in range(nkpts):
@@ -88,8 +88,8 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
                     orbv_a = mo_coeff[ka][:,nocc:]
                     orbv_b = mo_coeff[kb][:,nocc:]
                     oovv_ij[ka] = fao2mo((orbo_i,orbv_a,orbo_j,orbv_b),
-                                        (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
-                                        compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
+                                         (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
+                                         compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
             for ka in range(nkpts):
                 kb = kconserv[ki,ka,kj]
 
