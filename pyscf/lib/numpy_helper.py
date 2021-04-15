@@ -331,13 +331,15 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         count, nd = 1, tril.size
         nd = int(numpy.sqrt(nd*2))
         shape = (nd,nd)
-    else:  # 2d
+    elif tril.ndim == 2:
         if axis == 0:
             nd, count = tril.shape
         else:
             count, nd = tril.shape
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
+    else:
+        raise NotImplementedError('unpack_tril for high dimension arrays')
 
     if (tril.dtype != numpy.double and tril.dtype != numpy.complex128):
         out = numpy.ndarray(shape, tril.dtype, buffer=out)

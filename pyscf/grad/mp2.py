@@ -102,7 +102,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
             dm2buf = None
 # HF part
             for i in range(3):
-                eri1tmp = lib.unpack_tril(eri1[i]).reshape(nf*nao,-1)
+                eri1tmp = lib.unpack_tril(eri1[i].reshape(nf*nao,-1))
                 eri1tmp = eri1tmp.reshape(nf,nao,nao,nao)
                 vhf[i] += numpy.einsum('ijkl,ij->kl', eri1tmp, hf_dm1[ip0:ip1])
                 vhf[i] -= numpy.einsum('ijkl,il->kj', eri1tmp, hf_dm1[ip0:ip1]) * .5
