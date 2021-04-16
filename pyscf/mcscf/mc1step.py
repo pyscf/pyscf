@@ -857,13 +857,8 @@ To enable the solvent model for CASSCF, the following code needs to be called
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        if envs is not None and 'small_rot' in envs:
-            small_rot = envs['small_rot']
-            if small_rot:
-                log.info('Small orbital rotation, restart CI if supported by solver')
-        else:
-            small_rot = None
-        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log, fciRestart=small_rot)
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log,
+                                            envs=envs)
         if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'

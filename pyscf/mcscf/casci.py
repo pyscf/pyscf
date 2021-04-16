@@ -529,8 +529,26 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, ci, mo_energy
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, fciRestart=None):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''CASCI solver
+
+    Args:
+        casci: CASCI or CASSCF object
+
+        mo_coeff : ndarray
+            orbitals to construct active space Hamiltonian
+        ci0 : ndarray or custom types
+            FCI sovler initial guess. For external FCI-like solvers, it can be
+            overloaded different data type. For example, in the state-average
+            FCI solver, ci0 is a list of ndarray. In other solvers such as
+            DMRGCI solver, SHCI solver, ci0 are custom types.
+
+    kwargs:
+        envs: dict
+            The variable envs is created (for PR 807) to passes MCSCF runtime
+            environment variables to SHCI solver. For solvers which do not
+            need this parameter, a kwargs should be created in kernel method
+            and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
@@ -558,7 +576,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, fciRestart=None)
     e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
                                            ci0=ci0, verbose=log,
                                            max_memory=max_memory,
-                                           ecore=energy_core, fciRestart=fciRestart)
+                                           ecore=energy_core)
 
     t1 = log.timer('FCI solver', *t1)
     e_cas = e_tot - energy_core
