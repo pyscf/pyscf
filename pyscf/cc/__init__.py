@@ -147,18 +147,17 @@ def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
 
     Attributes:
         thresh : float
-            Threshold on NO occupation numbers.  Default is 1e-6.
+            Threshold on NO occupation numbers. Default is 1e-6 (very conservative).
         pct_occ : float
-            Percentage of total occupation number.  Default is None.  If present, overrides `thresh`.
+            Percentage of total occupation number. Default is None. If present, overrides `thresh`.
+        nvir_act : int
+            Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
     """
-    #from pyscf import mp
-    #pt = mp.MP2(mf).set(verbose=0).run()
-    from pyscf.mp.mp2 import MP2
-    pt = MP2(mf).set(verbose=0).run()
+    from pyscf import mp
+    pt = mp.MP2(mf).set(verbose=0).run()
     frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
-    #pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run() #avoid DF
-    pt_no = MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
-    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff) #avoid DF
+    pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
+    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
     mycc.delta_emp2 = pt.e_corr - pt_no.e_corr
     from pyscf.lib import logger
     def _finalize(self):
