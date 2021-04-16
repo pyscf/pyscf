@@ -17,6 +17,7 @@
 #
 
 
+import copy
 import ctypes
 from functools import reduce
 import numpy
