@@ -25,7 +25,7 @@ ref. JCTC, 9, 4834
 from functools import reduce
 import numpy
 import scipy.linalg
-from pyscf.lib import logger
+from pyscf.lib import logger, c_null_ptr
 from pyscf import gto
 from pyscf import scf
 from pyscf import __config__
@@ -37,7 +37,7 @@ from pyscf.data.elements import is_ghost_atom
 #     vec_lowdin(iao_coeff, mol.intor('int1e_ovlp'))
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
-def iao(mol, orbocc, minao=MINAO, kpts=None):
+def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
     '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
 
     Args:
@@ -54,8 +54,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
         >>> c = iao(mol, orbocc)
         >>> numpy.dot(c, orth.lowdin(reduce(numpy.dot, (c.T,s,c))))
     '''
-    if mol.has_ecp():
-        logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis in IAO.')
+    if mol.has_ecp() and minao == "minao":
+        logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis for IAOs.')
 
     pmol = reference_mol(mol, minao)
     # For PBC, we must use the pbc code for evaluating the integrals lest the
@@ -65,9 +65,9 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
     # The code should work even pbc module is not availabe.
     if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
         from pyscf.pbc import gto as pbcgto
-        s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
-        s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
-        s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts))
+        s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
+        s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
+        s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts, pbcopt=c_null_ptr()))
     else:
         #s1 is the one electron overlap integrals (coulomb integrals)
         s1 = mol.intor_symmetric('int1e_ovlp')
@@ -78,11 +78,24 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
 
     if len(s1.shape) == 2:
         s21 = s12.conj().T
-        s1cd = scipy.linalg.cho_factor(s1)
+        # Minimal basis CD is not expected to fail
         s2cd = scipy.linalg.cho_factor(s2)
-        p12 = scipy.linalg.cho_solve(s1cd, s12)
         ctild = scipy.linalg.cho_solve(s2cd, numpy.dot(s21, orbocc))
-        ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
+        # Try Cholesky of computational basis first
+        try:
+            s1cd = scipy.linalg.cho_factor(s1)
+            p12 = scipy.linalg.cho_solve(s1cd, s12)
+            ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
+        # For overcomplete basis sets, use eigendecomposition + canonical orthogonalization instead
+        except numpy.linalg.LinAlgError:
+            se, sv = numpy.linalg.eigh(s1)
+            keep = (se >= lindep_threshold)
+            logger.warn(mol, "Cholesky decomposition of overlap matrix S failed; removing %d eigenvalues of S with eigenvalues below %.2e",
+                    numpy.count_nonzero(se < lindep_threshold), lindep_threshold)
+            invS = numpy.einsum("ai,i,bi->ab", sv[:,keep], 1/se[keep], sv[:,keep])
+            p12 = numpy.dot(invS, s12)
+            ctild = numpy.dot(p12, ctild)
+
         ctild = vec_lowdin(ctild, s1)
         ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
         ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))

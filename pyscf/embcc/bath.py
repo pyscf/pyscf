@@ -87,7 +87,6 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     C_virenv : ndarray
         Virtual environment orbitals.
     """
-    C_local = self.C_local
     C_env = self.C_env
     S = self.mf.get_ovlp()
     # Divide by 2 to get eigenvalues in [0,1]
@@ -100,11 +99,6 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
     if ((eig.max()-1) > 1e-9):
         log.warning("Max eigenvalue of env. DM = %.12e", eig.max())
 
-    # Entanglement spectrum
-    if False:
-        np.savetxt("dmet-spectrum.txt", eig)
-        raise SystemExit()
-
     C_env = np.dot(C_env, R)
 
     if nbath is not None:
@@ -113,7 +107,6 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
         # We can assume e is sorted:
         #mask_occenv = np.asarray(
         raise NotImplementedError()
-
     else:
         mask_bath = np.logical_and(eig >= tol, eig <= 1-tol)
         mask_occenv = eig > 1-tol
@@ -122,18 +115,16 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
 
     noccenv = sum(mask_occenv)
     nvirenv = sum(mask_virenv)
-    log.info("Number of DMET bath orbitals:        %d", nbath)
-    log.info("Number of occ. environment orbitals: %d", noccenv)
-    log.info("Number of vir. environment orbitals: %d", nvirenv)
+    log.info("DMET bath:  #bath= %4d  #occ-environment= %4d  #vir-environment= %4d", nbath, noccenv, nvirenv)
     assert (nbath + noccenv + nvirenv == C_env.shape[-1])
     C_bath = C_env[:,mask_bath].copy()
     C_occenv = C_env[:,mask_occenv].copy()
     C_virenv = C_env[:,mask_virenv].copy()
 
-    # FANCY NEW PRINTING
+    # Orbitals in [print_tol, 1-print_tol] will be printed (even if they don't fall in the DMET tol range)
     print_tol = 1e-10
+    # DMET bath orbitals with eigenvalue in [strong_tol, 1-strong_tol] are printed as strongly entangled
     strong_tol = 0.1
-    #limits = [1-print_tol, 1-tol, 1-strong_tol, strong_tol, tol, print_tol]
     limits = [print_tol, tol, strong_tol, 1-strong_tol, 1-tol, 1-print_tol]
     if np.any(np.logical_and(eig > limits[0], eig <= limits[-1])):
         names = [
@@ -143,7 +134,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
                 "Weakly-entangled occ. bath orbital",
                 "Unentangled occ. env. orbital",
                 ]
-        log.info("Non-trivial (0 or 1) eigenvalues (e) of non-fragment DM:")
+        log.info("Non-(0 or 1) eigenvalues (n) of environment DM:")
         for i, e in enumerate(eig):
             name = None
             for j, llim in enumerate(limits[:-1]):
@@ -152,43 +143,13 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
                     name = names[j]
                     break
             if name:
-                log.info("  * %-34s :  e=%12.6g  1-e=%12.6g", name, e, 1-e)
-
-    #mask_ttol = np.logical_and(eig >= ttol, eig <= 1-ttol)
-    #mask_occ = np.logical_and(eig >= 0.5, eig <= 1-ttol)
-    #log.info("  1-eigenvalues of orbitals with occupation >= 0.5:")
-    #for e in eig[mask_occ]:
-    #    if (1-e) < tol:
-    #        s = "environment"
-    #    elif (1-e) < 0.1:
-    #        s = "weakly entangled"
-    #    else:
-    #        s = "strongly entangled"
-    #    log.info("    %16.10g  ->  %s occupied orbital", 1-e, s)
-    #    log.info("    %s occupied orbital  ->  %16.10g", s, 1-e)
-    #mask_vir = np.logical_and(eig >= ttol, eig < 0.5)
-    #log.info("  eigenvalues of orbitals with occupation < 0.5:")
-    #for e in eig[mask_vir]:
-    #    if e < tol:
-    #        s = "environment"
-    #    elif e < 0.1:
-    #        s = "weakly entangled"
-    #    else:
-    #        s = "strongly entangled"
-    #    log.info("    %16.10g  ->  %s virtual orbital", e, s)
+                log.info("  * %-34s  n= %12.6g  1-n= %12.6g", name, e, 1-e)
 
     # Calculate entanglement entropy
     entropy = np.sum(eig * (1-eig))
     entropy_bath = np.sum(eig[mask_bath] * (1-eig[mask_bath]))
-    log.info("Full entanglement entropy: %.6e", entropy)
-    log.info("Bath entanglement entropy: %.6e ( %.2f %%)", entropy_bath, 100*entropy_bath/entropy)
-
-    # TEST
-    #p = np.linalg.multi_dot((C_local.T, S, self.mf.make_rdm1(), S, C_local)) / 2
-    #l, u = np.linalg.eigh(p)
-    #log.info("Eigenvalues of occupied fragment space: %r", l)
-    #entropy = np.sum(l * (1-l))
-    #log.info("Entanglement entropy fragment=%.6e", entropy)
+    log.info("Entanglement entropy: total= %.6e  bath= %.6e  captured=  %.2f %%",
+            entropy, entropy_bath, 100.0*entropy_bath/entropy)
 
     # Complete DMET orbital space using reference orbitals
     if C_ref is not None:
@@ -237,7 +198,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
             raise RuntimeError(err)
 
     # There should never be more DMET bath orbitals than fragment orbitals
-    assert nbath <= C_local.shape[-1]
+    assert nbath <= self.C_local.shape[-1]
 
     return C_bath, C_occenv, C_virenv
 

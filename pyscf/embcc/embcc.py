@@ -804,29 +804,29 @@ class EmbCC:
         C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
         # Add remaining virtual space
-        # Transform to MO basis
-        C_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_iao))
+        C_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_iao)) # Transform IAOs to MO basis
         # Get eigenvectors of projector into complement
         P_iao = np.dot(C_iao_mo, C_iao_mo.T)
         P_env = np.eye(norb) - P_iao
         e, C = np.linalg.eigh(P_env)
-        # Tolerance for environment orbitals
-        # Warning
-        mask = np.logical_and(e>1e-6, e<(1-1e-6))
+        # Ideally, all eigenvalues of P_env should be 0 (IAOs) or 1 (environment)
+        # Error if > 1e-3
+        mask = np.fmin(abs(e), abs(1-e)) > 1e-3
         if np.any(mask):
-            log.warning("IAO states with large eigenvalues of Projector 1-P_IAO:\n%r", e[mask])
-
-        tol = 1e-4
-        assert np.all(np.logical_or(abs(e) < tol, abs(e)-1 < tol))
-        mask_env = (e > tol)
-        #assert (np.sum(mask_env) + niao == norb)
-        if not (np.sum(mask_env) + niao == norb):
-            log.critical("Eigenvalues of projector:\n%r", e)
-            log.critical("Number of eigenvalues above %e = %d", tol, np.sum(mask_env))
-            log.critical("Total number of orbitals = %d", norb)
+            log.error("CRITICAL: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
             raise RuntimeError()
-        # Transform back to AO basis
-        C_env = np.dot(self.mo_coeff, C[:,mask_env])
+        # Warning if > 1e-6
+        mask = np.fmin(abs(e), abs(1-e)) > 1e-6
+        if np.any(mask):
+            log.warning("WARNING: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
+        mask_env = (e > 0.5)
+        if not (np.sum(mask_env) + niao == norb):
+            log.critical("CRITICAL: Error in construction of environment orbitals")
+            log.critical("CRITICAL: Eigenvalues of projector 1-P_IAO:\n%r", e)
+            log.critical("CRITICAL: Number of eigenvalues above 0.5 = %d", np.sum(mask_env))
+            log.critical("CRITICAL: Total number of orbitals = %d", norb)
+            raise RuntimeError("Incorrect number of environment orbitals")
+        C_env = np.dot(self.mo_coeff, C[:,mask_env])        # Transform back to AO basis
 
         # Get base atoms of IAOs
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
@@ -839,8 +839,8 @@ class EmbCC:
         #assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0, 1e-5)
         ortherr = abs(C.T.dot(S).dot(C) - np.eye(norb)).max()
         log.debug("Max orthogonality error in rotated basis = %.1e" % ortherr)
-        assert (ortherr < max(2*nonorthmax, 1e-7))
-        assert (ortherr < 1e-4)
+        #assert (ortherr < max(10*nonorthmax, 1e-6))
+        assert (ortherr < 1e-5)
 
         # Check that all electrons are in IAO DM
         dm_iao = np.linalg.multi_dot((C_iao.T, S, self.mf.make_rdm1(), S, C_iao))
@@ -855,8 +855,10 @@ class EmbCC:
         iao_atoms = np.asarray([i[0] for i in iao_labels])
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
-            ne = np.trace(dm_iao[mask][:,mask])
-            log.info("  * %3d: %-6s= %.8f", a, self.mol.atom_symbol(a), ne)
+            n_diag = np.diag(dm_iao[mask][:,mask])
+            #n_trace = np.trace(dm_iao[mask][:,mask])
+            #log.info("  * %3d: %-6s= %.8f", a, self.mol.atom_symbol(a), ne)
+            log.info("  * %3d: %-6s=  %r  sum= %.8f", a, self.mol.atom_symbol(a), n_diag, np.sum(n_diag))
 
         return C_iao, C_env, iao_labels
 

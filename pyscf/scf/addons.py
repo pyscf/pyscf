@@ -504,21 +504,24 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         logger.info(mf, 'Using canonical orthogonalization')
         def eigh(h, s):
             x = canonical_orth_(s, threshold)
+            n0, n1 = x.shape
+            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "canonical orth.", threshold, n0, (n0-n1))
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
             return e, c
-        mf._eigh = eigh
     else:
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
         def eigh(h, s):
             x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
+            n0, n1 = x.shape
+            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "Choleksy orth.", choleksy_threshold, n0, (n0-n1))
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
             return e, c
-        mf._eigh = eigh
+    mf._eigh = eigh
     return mf
 remove_linear_dep = remove_linear_dep_
 

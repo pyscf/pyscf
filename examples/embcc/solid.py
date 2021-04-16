@@ -460,6 +460,7 @@ for i, a in enumerate(args.lattice_consts):
         c_init = c0
         dm_init = np.dot(c0 * occ0[occ0>0], c0.T.conj())
     elif args.hf_init_guess_basis is not None:
+        log.info("Running initial guess HF")
         mf_init_guess = run_mf(a, cell_init_guess, args)
         dm_init = mf_init_guess.make_rdm1()
     else:
