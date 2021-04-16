@@ -29,16 +29,9 @@ except ImportError:
     optimize_contraction = lambda basis: basis
     remove_zero = lambda basis: basis
 
-MAXL = 8
-MAPSPDF = {'S': 0,
-           'P': 1,
-           'D': 2,
-           'F': 3,
-           'G': 4,
-           'H': 5,
-           'I': 6,
-           'J': 7,
-           'K': 8}
+MAXL = 12
+SPDF = 'SPDFGHIKLMNO'
+MAPSPDF = {key: l for l, key in enumerate(SPDF)}
 
 DELIMETER = '****'
 

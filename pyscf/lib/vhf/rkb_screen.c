@@ -25,6 +25,7 @@
 #include "cvhf.h"
 #include "optimizer.h"
 #include "np_helper/np_helper.h"
+#include "gto/gto.h"
 
 #define LL 0
 #define SS 1
@@ -34,8 +35,6 @@
 
 int int2e_spinor();
 int int2e_spsp1spsp2_spinor();
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
