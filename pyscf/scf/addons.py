@@ -476,7 +476,7 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     Xsub = canonical_orth_(Ssub, thr=canthr)
 
     # Full X
-    X = numpy.zeros((S.shape[0], Xsub.shape[1]))
+    X = numpy.zeros((S.shape[0], Xsub.shape[1]), dtype=Xsub.dtype)
     X[idx,:] = Xsub
 
     return X
@@ -516,7 +516,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
         def eigh(h, s):
             x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
             n0, n1 = x.shape
-            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "Choleksy orth.", choleksy_threshold, n0, (n0-n1))
+            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "Choleksy orth.", cholesky_threshold, n0, (n0-n1))
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)

@@ -1454,7 +1454,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
 
 
 def cho_solve(a, b, strict_sym_pos=True):
-    '''Solve ax = b, where a is a postive definite hermitian matrix
+    '''Solve ax = b, where a is a positive definite hermitian matrix
 
     Kwargs:
         strict_sym_pos (bool) : Whether to impose the strict positive definition

@@ -38,17 +38,27 @@ from pyscf.data.elements import is_ghost_atom
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
 def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
-    '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
+    '''Intrinsic Atomic Orbitals (IAO). [Ref. JCTC, 9, 4834]
 
     Args:
-        mol : the molecule or cell object
-
-        orbocc : 2D array
-            occupied orbitals
+        mol : pyscf.gto.Mole or pyscf.pbc.gto.Cell
+            The molecule or cell object.
+        orbocc : (N, M) or (K, N, M) array
+            Occupied molecular orbitals. N= number of AOs, M= number of occupied MOs,
+            K= number of k-points (only if mol is Cell object).
+        minao : str, optional
+            Minimal basis set used for IAOs.
+        kpts : ndarray(K), optional
+            k-points, only used for Cell objects.
+        lindep_threshold : float, optional
+            For almost linearly dependent basis sets, the Cholesky decomposition can fail.
+            In this case the eigendecomposition of the overlap matrix is used
+            with eigenvectors corresponding to eigenvalues below `lindep_threshold`
+            removed.
 
     Returns:
-        non-orthogonal IAO orbitals.  Orthogonalize them as C (C^T S C)^{-1/2},
-        eg using :func:`orth.lowdin`
+        a : (N, L) or (K, N, L) array
+            Non-orthogonal IAOs. Orthogonalize them as C (C^T S C)^{-1/2}, eg. using :func:`orth.lowdin`
 
         >>> orbocc = mf.mo_coeff[:,mf.mo_occ>0]
         >>> c = iao(mol, orbocc)
@@ -57,26 +67,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
     if mol.has_ecp() and minao == "minao":
         logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis for IAOs.')
 
-    pmol = reference_mol(mol, minao)
-    # For PBC, we must use the pbc code for evaluating the integrals lest the
-    # pbc conditions be ignored.
-    # DO NOT import pbcgto early and check whether mol is a cell object.
-    # "from pyscf.pbc import gto as pbcgto and isinstance(mol, pbcgto.Cell)"
-    # The code should work even pbc module is not availabe.
-    if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
-        from pyscf.pbc import gto as pbcgto
-        s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
-        s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
-        s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts, pbcopt=c_null_ptr()))
-    else:
-        #s1 is the one electron overlap integrals (coulomb integrals)
-        s1 = mol.intor_symmetric('int1e_ovlp')
-        #s2 is the same as s1 except in minao
-        s2 = pmol.intor_symmetric('int1e_ovlp')
-        #overlap integrals of the two molecules
-        s12 = gto.mole.intor_cross('int1e_ovlp', mol, pmol)
-
-    if len(s1.shape) == 2:
+    def kernel(s1, s2, s12, orbocc):
+        """Make IAOs for a molecule or single k-point."""
         s21 = s12.conj().T
         # Minimal basis CD is not expected to fail
         s2cd = scipy.linalg.cho_factor(s2)
@@ -89,36 +81,50 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
         # For overcomplete basis sets, use eigendecomposition + canonical orthogonalization instead
         except numpy.linalg.LinAlgError:
             se, sv = numpy.linalg.eigh(s1)
-            keep = (se >= lindep_threshold)
-            logger.warn(mol, "Cholesky decomposition of overlap matrix S failed; removing %d eigenvalues of S with eigenvalues below %.2e",
+            logger.debug(mol, "Cholesky decomp. of overlap S failed; removing %d eigenvectors of S with eigenvalues below %.2e",
                     numpy.count_nonzero(se < lindep_threshold), lindep_threshold)
+            keep = (se >= lindep_threshold)
             invS = numpy.einsum("ai,i,bi->ab", sv[:,keep], 1/se[keep], sv[:,keep])
             p12 = numpy.dot(invS, s12)
             ctild = numpy.dot(p12, ctild)
-
         ctild = vec_lowdin(ctild, s1)
         ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
         ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
         #a is the set of IAOs in the original basis
         a = (p12 + reduce(numpy.dot, (ccs1, ccs2, p12)) * 2
              - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))
-    else: # k point sampling
-        s21 = numpy.swapaxes(s12, -1, -2).conj()
-        nkpts = len(kpts)
-        a = numpy.zeros((nkpts, s1.shape[-1], s2.shape[-1]), dtype=numpy.complex128)
-        for k in range(nkpts):
-            # ZHC NOTE check the case, at some kpts, there is no occupied MO.
-            s1cd_k = scipy.linalg.cho_factor(s1[k])
-            s2cd_k = scipy.linalg.cho_factor(s2[k])
-            p12_k = scipy.linalg.cho_solve(s1cd_k, s12[k])
-            ctild_k = scipy.linalg.cho_solve(s2cd_k, numpy.dot(s21[k], orbocc[k]))
-            ctild_k = scipy.linalg.cho_solve(s1cd_k, numpy.dot(s12[k], ctild_k))
-            ctild_k = vec_lowdin(ctild_k, s1[k])
-            ccs1_k = reduce(numpy.dot, (orbocc[k], orbocc[k].conj().T, s1[k]))
-            ccs2_k = reduce(numpy.dot, (ctild_k, ctild_k.conj().T, s1[k]))
-            #a is the set of IAOs in the original basis
-            a[k] = (p12_k + reduce(numpy.dot, (ccs1_k, ccs2_k, p12_k)) * 2
-                    - numpy.dot(ccs1_k, p12_k) - numpy.dot(ccs2_k, p12_k))
+        return a
+
+    pmol = reference_mol(mol, minao)
+    # For PBC, we must use the pbc code for evaluating the integrals lest the
+    # pbc conditions be ignored.
+    # DO NOT import pbcgto early and check whether mol is a cell object.
+    # "from pyscf.pbc import gto as pbcgto and isinstance(mol, pbcgto.Cell)"
+    # The code should work even pbc module is not availabe.
+    #
+    # s1 is the one electron overlap integrals (coulomb integrals)
+    # s2 is the same as s1 except in minao
+    # s12 are the overlap integrals of the two molecules
+    if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
+        from pyscf.pbc import gto as pbcgto
+        s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
+        s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
+        s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts, pbcopt=c_null_ptr()))
+    else:
+        s1 = mol.intor_symmetric('int1e_ovlp')
+        s2 = pmol.intor_symmetric('int1e_ovlp')
+        s12 = gto.mole.intor_cross('int1e_ovlp', mol, pmol)
+
+    # Molecule
+    if len(s1.shape) == 2:
+        a = kernel(s1, s2, s12, orbocc)
+    # k-point sampling
+    else:
+        a = []
+        for k in range(len(kpts)):
+            ak = kernel(s1[k], s2[k], s12[k], orbocc[k])
+            a.append(ak)
+        a = numpy.asarray(a)
     return a
 
 def reference_mol(mol, minao=MINAO):

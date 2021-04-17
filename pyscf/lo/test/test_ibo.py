@@ -24,8 +24,8 @@ from pyscf.lo import iao, ibo, orth, pipek
 mol = gto.Mole()
 mol.atom = '''
      O    0.   0.       0
-     h    0.   -0.757   0.587
-     h    0.   0.757    0.587'''
+     H    0.   -0.757   0.587
+     H    0.   0.757    0.587'''
 mol.basis = 'unc-sto3g'
 mol.verbose = 5
 mol.output = '/dev/null'
