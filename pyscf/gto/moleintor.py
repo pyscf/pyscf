@@ -35,6 +35,8 @@ KAPPA_OF   = 4
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
+NGRIDS     = 11
+PTR_GRIDS  = 12
 
 def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             aosym='s1', ao_loc=None, cintopt=None, out=None):
@@ -115,6 +117,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_iprinv_spinor"             (nabla \| rinv \|\)
             "int1e_ipspnucsp_spinor"          (nabla sigma dot p \| nuc \| sigma dot p\)
             "int1e_ipsprinvsp_spinor"         (nabla sigma dot p \| rinv \| sigma dot p\)
+            "int1e_grids"                     ( \| 1/r_grids \| \)
+            "int1e_grids_spinor"              ( \| 1/r_grids \| \)
             "int2e"                           ( \, \| \, \)
             "int2e_ig1"                       (#C(0 1) g \, \| \, \)
             "int2e_gg1"                       (g g \, \| \, \)
@@ -427,6 +431,8 @@ _INTOR_FUNCTIONS = {
     'int2e_yp'                  : (1, 1),
     'int2e_stg'                 : (1, 1),
     'int2e_coulerf'             : (1, 1),
+    "int1e_grids"               : (1, 1),
+    "int1e_grids_ip"            : (3, 3),
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),
     'ECPscalar_iprinv'          : (3, None),
@@ -452,15 +458,25 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     i0, i1, j0, j1 = shls_slice[:4]
     naoi = ao_loc[i1] - ao_loc[i0]
     naoj = ao_loc[j1] - ao_loc[j0]
-    if intor_name.endswith('_cart') or intor_name.endswith('_sph'):
-        mat = numpy.ndarray((naoi,naoj,comp), numpy.double, out, order='F')
-        drv_name = 'GTOint2c'
+
+    if 'int1e_grids' in intor_name:
+        shape = (int(env[NGRIDS]), naoi, naoj, comp)
+        prefix = 'GTOgrids_'
     else:
-        mat = numpy.ndarray((naoi,naoj,comp), numpy.complex, out, order='F')
+        shape = (naoi, naoj, comp)
+        prefix = 'GTO'
+
+    if intor_name.endswith('_cart') or intor_name.endswith('_sph'):
+        dtype = numpy.double
+        drv_name = prefix + 'int2c'
+    else:
+        dtype = numpy.complex
         if '2c2e' in intor_name:
             assert(hermi != lib.HERMITIAN and
                    hermi != lib.ANTIHERMI)
-        drv_name = 'GTOint2c_spinor'
+        drv_name = prefix + 'int2c_spinor'
+
+    mat = numpy.ndarray(shape, dtype, out, order='F')
 
     if mat.size > 0:
         if cintopt is None:
@@ -475,7 +491,7 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
            env.ctypes.data_as(ctypes.c_void_p))
 
-    mat = mat.transpose(2,0,1)
+    mat = numpy.rollaxis(mat, -1, 0)
     if comp == 1:
         mat = mat[0]
     return mat

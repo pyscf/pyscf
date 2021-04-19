@@ -31,9 +31,25 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
 endif()
 set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
 
-if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
-  cmake_policy(SET CMP0042 NEW)
+option(BUILD_MARCH_NATIVE "gcc flag -march=native" off)
+if (BUILD_MARCH_NATIVE)
+  include(CheckCCompilerFlag)
+  CHECK_C_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+  if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+      message("Add CFLAGS -march=native -unroll-aggressive")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -unroll-aggressive -ipo")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
+    else()
+      message("Add CFLAGS -march=native -ftree-vectorize")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -funroll-loops -ftree-vectorize")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
+    endif()
+  endif()
 endif()
+
+
+cmake_policy(SET CMP0042 NEW)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -128,7 +144,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.1.1
+    GIT_TAG v4.2.2
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
@@ -139,6 +155,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
             -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
             -DBLAS_LIBRARIES=${BLAS_LIBRARIES}
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+            -DBUILD_MARCH_NATIVE=${BUILD_MARCH_NATIVE}
   )
   add_dependencies(cgto libcint)
   add_dependencies(ao2mo libcint)

@@ -18,8 +18,9 @@ import numpy
 from pyscf import gto
 from pyscf import dft
 from pyscf import lib
+from pyscf.dft import numint
 
-dft.numint.SWITCH_SIZE = 0
+numint.SWITCH_SIZE = 0
 
 mol = gto.Mole()
 mol.verbose = 0
