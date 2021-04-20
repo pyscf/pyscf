@@ -66,6 +66,7 @@ def transform_integrals_incore(myadc):
      eris.ovvv = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
 
      eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
+     eris.voov = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
 
      for (ikp,ikq,ikr) in khelper.symm_map.keys():
           iks = kconserv[ikp,ikq,ikr]
@@ -83,6 +84,7 @@ def transform_integrals_incore(myadc):
               eris.ovvv[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,nocc:]/nkpts
 
               eris.ovvo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,:nocc]/nkpts
+              eris.voov[kp,kq,kr] = eri_kpt_symm[nocc:,:nocc,:nocc,nocc:]/nkpts
 
      if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
           eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
