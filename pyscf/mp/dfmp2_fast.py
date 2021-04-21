@@ -488,6 +488,83 @@ def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
     return P, GammaFile
 
 
+class BatchSizeError(Exception):
+    pass
+
+
+def shellBatchGenerator(mol, nao_max):
+    nbas = mol.nbas
+    # ao_loc contains nbas + 1 entries
+    ao_loc = mol.ao_loc
+    shell_start = 0
+    while shell_start < nbas:
+        shell_stop = shell_start
+        while (ao_loc[shell_stop+1] - ao_loc[shell_start] <= nao_max):
+            shell_stop += 1
+            if shell_stop == nbas:
+                break
+        if shell_stop == shell_start:
+            raise BatchSizeError('empty batch')
+        shell_range = (shell_start, shell_stop)
+        ao_range = (ao_loc[shell_start], ao_loc[shell_stop])
+        yield shell_range, ao_range
+        shell_start = shell_stop
+
+
+def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, nocc, max_memory, logger):
+    atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,\
+        auxmol._atm, auxmol._bas, auxmol._env)
+    intor = mol._add_suffix('int3c2e')
+    logger.debug('    intor = {0:s}'.format(intor))
+    nvirt = mo_coeff.shape[1] - nocc
+    Lia = np.zeros((nocc, nvirt))
+    naux_max = int((max_memory - lib.current_memory()[0]) * 1e6 / (nocc * nvirt + mol.nao ** 2))
+    try:
+        for auxsh_range, aux_range in shellBatchGenerator(auxmol, naux_max):
+            auxsh_start, auxsh_stop = auxsh_range
+            aux_start, aux_stop = aux_range
+            # needs to follow the convention (AO, AO | Aux)
+            shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas+auxsh_start, mol.nbas+auxsh_stop)
+            # AO integrals
+            aoints_auxshell = gto.getints(intor, atm, bas, env, shls_slice)
+            # read 3c2e density elements for the current aux functions
+            GiKa = Gamma[:, aux_start:aux_stop, :]
+            for m in range(aux_stop - aux_start):
+                # Half-transformed Gamma for specific auxiliary function m
+                G12 = np.matmul(GiKa[:, m, :], mo_coeff[:, nocc:].T)
+                # contracted integrals: one index still in AO basis
+                ints12 = np.matmul(G12, aoints_auxshell[:, :, m])
+                # 3c2e integrals in occupied MO basis
+                ints_occ = np.matmul(mo_coeff[:, :nocc].T, \
+                    np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, :nocc]))
+                # contribution to the orbital gradient
+                Lia += np.matmul(ints_occ, GiKa[:, m, :]) - np.matmul(ints12, mo_coeff[:, nocc:])
+    except BatchSizeError:
+        raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY)')
+    return Lia
+
+    # aux_loc = auxmol.ao_loc
+    # naux_shell = [aux_loc[b] - aux_loc[b-1] for b in range(1, auxmol.nbas)]
+    # naux_shell.append(auxmol.nao - aux_loc[-1])
+    # for auxsh in range(auxmol.nbas):
+    #     # needs to follow the convention (AO, AO | Aux)
+    #     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas+auxsh, mol.nbas+auxsh+1)
+    #     # AO integrals
+    #     aoints_auxshell = gto.getints(intor, atm, bas, env, shls_slice)
+    #     # read 3c2e density elements for the current aux functions
+    #     GiKa = Gamma[:, aux_loc[auxsh] : aux_loc[auxsh] + naux_shell[auxsh], :]
+    #     for m in range(naux_shell[auxsh]):
+    #         # Half-transformed Gamma for specific auxiliary function m
+    #         G12 = np.matmul(GiKa[:, m, :], mo_coeff[:, nocc:].T)
+    #         # contracted integrals: one index still in AO basis
+    #         ints12 = np.matmul(G12, aoints_auxshell[:, :, m])
+    #         # 3c2e integrals in occupied MO basis
+    #         ints_occ = np.matmul(mo_coeff[:, :nocc].T, \
+    #             np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, :nocc]))
+    #         # contribution to the orbital gradient
+    #         Lia += np.matmul(ints_occ, GiKa[:, m, :]) - np.matmul(ints12, mo_coeff[:, nocc:])
+
+
 def order_mos_fc(frozen, mo_coeff, mo_energy, nocc):
     '''
     Order MO coefficients and energies such that frozen orbitals come leftmost.
