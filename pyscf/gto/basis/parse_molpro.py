@@ -35,16 +35,9 @@ except ImportError:
 from pyscf import __config__
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
-MAXL = 8
-SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
-MAPSPDF = {'S': 0,
-           'P': 1,
-           'D': 2,
-           'F': 3,
-           'G': 4,
-           'H': 5,
-           'I': 6,
-           'K': 7}
+MAXL = 12
+SPDF = 'SPDFGHIKLMNO'
+MAPSPDF = {key: l for l, key in enumerate(SPDF)}
 COMMENT_KEYWORDS = '!*#'
 
 # parse the basis text which is in Molpro format, return an internal basis
