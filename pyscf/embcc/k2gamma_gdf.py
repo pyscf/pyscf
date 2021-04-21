@@ -38,7 +38,7 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True, cderi_file=None):
         # Store integrals in memory
         if unfold_j3c:
 
-            j3c = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
+            j3c, j3c_neg = k2gamma_3c2e(mf.cell, mf.with_df, mf.kpts)
 
             if cderi_file:
                 df._cderi = cderi_file
@@ -47,6 +47,7 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True, cderi_file=None):
                     kptij_lst = np.asarray([(G, G)])
                     f["j3c-kptij"] = kptij_lst
                     f["j3c/0/0"] = j3c
+                    f["j3c-/0/0"] = j3c_neg
             else:
                 df._cderi = j3c
 
@@ -94,44 +95,49 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
 
         if compact:
             ncomp = nk*nao*(nk*nao+1)//2
-            j3c_sc = np.zeros((nk, naux, ncomp), dtype=np.complex)
+            j3c = np.zeros((nk, naux, ncomp), dtype=np.complex)
         else:
-            j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
-        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c_sc.shape), memory_string(j3c_sc))
+            j3c = np.zeros((nk, naux, nk*nao, nk*nao), dtype=np.complex)
+        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c.shape), memory_string(j3c))
 
         t0 = timer()
         for ki in range(nk):
             jmax = (ki+1) if use_ksymm else nk
             for kj in range(jmax):
-                j3c_kpts = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                j3c_kpts, npos, nneg = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                #j3c_kpts, npos_ij, nneg_ij = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False, include_sign=True)
+                #assert (nneg == 0)
+                log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
                 j3c_ij = einsum("Lab,i,j->Liajb", j3c_kpts, phase[ki], phase[kj].conj()).reshape(naux, nk*nao, nk*nao)
                 kl = kconserv[ki,kj]
                 if compact:
-                    j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
+                    j3c[kl] += pyscf.lib.pack_tril(j3c_ij)
                 else:
-                    j3c_sc[kl] += j3c_ij
+                    j3c[kl] += j3c_ij
 
                 if use_ksymm and kj < ki:
                     j3c_ij = j3c_ij.transpose(0, 2, 1).conj()
                     kl = kconserv[kj,ki]
                     if compact:
-                        j3c_sc[kl] += pyscf.lib.pack_tril(j3c_ij)
+                        j3c[kl] += pyscf.lib.pack_tril(j3c_ij)
                     else:
-                        j3c_sc[kl] += j3c_ij
+                        j3c[kl] += j3c_ij
         log.info("Time for unfolding AO basis= %.2g s", (timer()-t0))
 
         # Rotate auxiliary dimension to yield real integrals
         t0 = timer()
-        j3c_sc = einsum("k...,kR->R...", j3c_sc, phase)
+        j3c = einsum("k...,kR->R...", j3c, phase)
         log.info("Time for unfolding auxiliary basis= %.2g s", (timer()-t0))
 
-        maximag = abs(j3c_sc.imag).max()
-        log.info("Max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
+
+        maximag = abs(j3c.imag).max()
         if maximag > 1e-4:
-            log.error("ERROR: Large imaginary part in unfolded 3c2e integrals!!!")
+            log.error("ERROR: Large imaginary part in unfolded 3c2e integrals= %.2e !!!", maximag)
         elif maximag > 1e-8:
-            log.warning("WARNING: Large imaginary part in unfolded 3c2e integrals!")
-        j3c_sc = j3c_sc.real
+            log.warning("WARNING: Large imaginary part in unfolded 3c2e integrals= %.2e !", maximag)
+        else:
+            log.info("Max imaginary part in unfolded 3c2e integrals= %.2e", maximag)
+        j3c = j3c.real
 
     elif version == "C":
         # Precompute all j3c_kpts
@@ -139,50 +145,95 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
         log.info("Loading k-point sampled 3c-integrals into memory...")
         j3c_kpts = np.zeros((naux, nao, nao, nk, nk), dtype=np.complex)
         log.info("Size of primitive cell 3c-integrals= %s", memory_string(j3c_kpts))
+        if cell.dimension == 2:
+            j3c_kpts_neg = np.zeros((naux, nao, nao, nk, nk), dtype=np.complex)
+
+        naux_pos = naux_neg = 0
         for ki in range(nk):
             kjmax = (ki+1) if use_ksymm else nk
             for kj in range(kjmax):
-                j3c_kpts[...,ki,kj] = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                j3c_kpts[...,ki,kj], npos, nneg = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
+                log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
+                naux_pos = max(npos, naux_pos)
+                naux_neg = max(nneg, naux_neg)
+                assert (cell.dimension == 2) or (nneg == 0)
+                # Transfer negative parts from j3c_kpts to j3c_kpts_neg
+                if cell.dimension == 2:
+                    j3c_kpts_neg[...,ki,kj][:nneg] = j3c_kpts[...,ki,kj][npos:npos+nneg].copy()
+                    j3c_kpts[...,ki,kj][npos:npos+nneg] = 0.0
+                    #assert abs(j3c_kpts_neg[...,ki,kj]).max() > 0
+                    #log.debug("before: %.2e", abs(j3c_kpts
+                #assert npos is None
                 if use_ksymm and kj < ki:
                     # Transpose AO indices
                     j3c_kpts[...,kj,ki] = j3c_kpts[...,ki,kj].transpose(0,2,1).conj()
+                    if cell.dimension == 2:
+                        j3c_kpts_neg[...,kj,ki] = j3c_kpts_neg[...,ki,kj].transpose(0,2,1).conj()
         log.info("Time to load k-sampled j3c= %.2g s", (timer()-t0))
 
         if compact:
             ncomp = nk*nao*(nk*nao+1)//2
-            j3c_sc = np.zeros((nk, naux, ncomp))
+            j3c = np.zeros((nk, naux, ncomp))
         else:
-            j3c_sc = np.zeros((nk, naux, nk*nao, nk*nao))
-        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c_sc.shape), memory_string(j3c_sc))
+            j3c = np.zeros((nk, naux, nk*nao, nk*nao))
+        log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c.shape), memory_string(j3c))
 
         t0 = timer()
         libpbc = pyscf.lib.load_library("libpbc")
         ierr = libpbc.j3c_k2gamma(
-                ctypes.c_int64(nk),
-                ctypes.c_int64(nao),
-                ctypes.c_int64(naux),
+                ctypes.c_int64(nk), ctypes.c_int64(nao), ctypes.c_int64(naux),
                 kconserv.ctypes.data_as(ctypes.c_void_p),
                 phase.ctypes.data_as(ctypes.c_void_p),
                 j3c_kpts.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_bool(compact),
                 # Out
-                j3c_sc.ctypes.data_as(ctypes.c_void_p),
+                j3c.ctypes.data_as(ctypes.c_void_p),
                 )
         assert (ierr == 0)
         log.info("Time for unfolding in C= %.2g s", (timer()-t0))
 
+        if cell.dimension == 2:
+            if compact:
+                ncomp = nk*nao*(nk*nao+1)//2
+                j3c_neg = np.zeros((nk, naux_neg, ncomp))
+            else:
+                j3c_neg = np.zeros((nk, naux_neg, nk*nao, nk*nao))
+            log.info("Memory for negative supercell 3c-integrals with shape %r= %s", list(j3c_neg.shape), memory_string(j3c_neg))
+
+            t0 = timer()
+            ierr = libpbc.j3c_k2gamma(
+                    ctypes.c_int64(nk), ctypes.c_int64(nao), ctypes.c_int64(naux_neg),
+                    kconserv.ctypes.data_as(ctypes.c_void_p),
+                    phase.ctypes.data_as(ctypes.c_void_p),
+                    j3c_kpts_neg.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_bool(compact),
+                    # Out
+                    j3c_neg.ctypes.data_as(ctypes.c_void_p),
+                    )
+            assert (ierr == 0)
+            log.info("Time for unfolding in C= %.2g s", (timer()-t0))
+        else:
+            j3c_neg = None
+
     # Normalize
-    j3c_sc = j3c_sc / np.sqrt(nk)
+    j3c = j3c / np.sqrt(nk)
+    if j3c_neg is not None:
+        j3c_neg = j3c_neg / np.sqrt(nk)
 
     if compact:
-        j3c_sc = j3c_sc.reshape(nk*naux, ncomp)
+        j3c = j3c.reshape(nk*naux, ncomp)
+        if j3c_neg is not None:
+            j3c_neg = j3c_neg.reshape(nk*naux_neg, ncomp)
     else:
-        j3c_sc = j3c_sc.reshape(nk*naux, nk*nao, nk*nao)
-        assert (np.allclose(j3c_sc, j3c_sc.transpose(0,2,1)))
+        j3c = j3c.reshape(nk*naux, nk*nao, nk*nao)
+        assert (np.allclose(j3c, j3c.transpose(0,2,1)))
+        if j3c_neg is not None:
+            j3c_neg = j3c_neg.reshape(nk*naux_neg, nk*nao, nk*nao)
+            assert (np.allclose(j3c_neg, j3c_neg.transpose(0,2,1)))
 
-    return j3c_sc
+    return j3c, j3c_neg
 
-def load_j3c(cell, gdf, kij, compact=False):
+def load_j3c(cell, gdf, kij, compact=False, include_sign=False):
     """Load 3c-integrals into memory"""
     nao = cell.nao_nr()
     if gdf.auxcell is None:
@@ -195,11 +246,21 @@ def load_j3c(cell, gdf, kij, compact=False):
         j3c_kij = np.zeros((naux, ncomp), dtype=np.complex)
     else:
         j3c_kij = np.zeros((naux, nao, nao), dtype=np.complex)
-
+    # Number of positive definite elements (in 3D simulations = all)
+    npos = nneg = 0
     blkstart = 0
     for lr, li, sign in gdf.sr_loop(kij, compact=compact):
-        assert (sign == 1)
         blksize = lr.shape[0]
+        assert sign in (1, -1)
+        log.debug("blksize=%d, sign=%d", blksize, sign)
+        if sign == 1:
+            npos += blksize
+        elif sign == -1:
+            nneg += blksize
+            # multiply by i (sqrt(-1))
+            if include_sign:
+                lr, li = -li, lr
+
         blk = np.s_[blkstart:blkstart+blksize]
         if compact:
             j3c_kij[blk] += (lr+1j*li)#.reshape(blksize, ncomp)
@@ -209,7 +270,7 @@ def load_j3c(cell, gdf, kij, compact=False):
 
     assert (blkstart <= naux)
 
-    return j3c_kij
+    return j3c_kij, npos, nneg
 
 
 if __name__ == "__main__":
@@ -262,7 +323,7 @@ if __name__ == "__main__":
         # Supercell unfolding
         t0 = timer()
         scell, phase = k2gamma.get_phase(cell, kpts)
-        j3c = k2gamma_3c2e(cell, mf.with_df, kpts, compact=compact)
+        j3c, j3c_neg = k2gamma_3c2e(cell, mf.with_df, kpts, compact=compact)
         t_pc_eri = timer() - t0
         print("Time for primitive cell ERI: %.6f" % (t_pc_eri))
 

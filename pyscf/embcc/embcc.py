@@ -58,7 +58,7 @@ class EmbCC:
             "bath_type",
             "bath_size",
             "bath_tol",
-            "bath_tol_per_electron",
+            #"bath_tol_per_electron",
             "bath_energy_tol",
             "dmet_bath_tol",
             "power1_occ_bath_tol",
@@ -73,7 +73,7 @@ class EmbCC:
             bath_type="mp2-natorb",
             bath_size=None,
             bath_tol=None,
-            bath_tol_per_electron=False,
+            #bath_tol_per_electron=False,
             bath_energy_tol=1e-3,
             #minao="minao",
             minao=None,
@@ -83,8 +83,6 @@ class EmbCC:
             maxiter=1,
             dmet_bath_tol=1e-4,
             energy_part="first-occ",
-            # Perform numerical localization on fragment orbitals
-            localize_fragment=False,
             # Additional bath orbitals
             power1_occ_bath_tol=False, power1_vir_bath_tol=False, local_occ_bath_tol=False, local_vir_bath_tol=False,
             **kwargs
@@ -115,7 +113,10 @@ class EmbCC:
         # TODO: Change other options to here
         self.opts = Options()
         default_opts = {
+                # Fragment settings
+                "localize_fragment" : False,    # Perform numerical localization on fragment orbitals
                 # Bath settings
+                "bath_tol_per_elec" : False,
                 "prim_mp2_bath_tol_occ" : False,
                 "prim_mp2_bath_tol_vir" : False,
                 #"orthogonal_mo_tol" : 1e-8,
@@ -125,13 +126,20 @@ class EmbCC:
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis
                 # EOM-CCSD
-                "eom_ccsd" : False,
+                "eom_ccsd" : False,             # Perform EOM-CCSD in each cluster by default
                 "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
+                #Orbital file
+                "plot_orbitals" : False,
+                "plot_orbitals_grid" : (100, 100, 100),
                 # Other
                 "strict" : False,               # Stop if cluster not converged
                 }
+        if kwargs:
+            log.info("EmbCC keyword arguments:")
         for key, val in default_opts.items():
-            setattr(self.opts, key, kwargs.pop(key, val))
+            val = kwargs.pop(key, val)
+            log.info("  %-24s= %r", key, val)
+            setattr(self.opts, key, val)
         if kwargs:
             raise ValueError("Unknown arguments: %r" % kwargs.keys())
 
@@ -198,13 +206,11 @@ class EmbCC:
         self.bath_type = bath_type
         self.bath_size = bath_size
         self.bath_tol = bath_tol
-        self.bath_tol_per_electron = bath_tol_per_electron
         self.bath_energy_tol = bath_energy_tol
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
         self.mp2_correction = mp2_correction
         self.dmet_bath_tol = dmet_bath_tol
-        self.localize_fragment = localize_fragment
         # Additional bath orbitals
         self.power1_occ_bath_tol = power1_occ_bath_tol
         self.power1_vir_bath_tol = power1_vir_bath_tol
@@ -274,8 +280,10 @@ class EmbCC:
             self.C_ao, self.lao_labels = self.make_lowdin_ao()
             self.ao_labels = self.lao_labels
 
-        if self.localize_fragment:
-            log.debug("Localize fragment orbitals with %s method", self.localize_fragment)
+
+        locmethod = self.opts.localize_fragment
+        if locmethod:
+            log.debug("Localize fragment orbitals with %s method", locmethod)
 
             #orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
             #orbs = {"A" : self.C_ao}
@@ -286,13 +294,12 @@ class EmbCC:
             create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment", filetype="cube")
 
             t0 = timer()
-            if self.localize_fragment in ("BF", "ER", "PM"):
-                #locfunc = getattr(pyscf.lo, self.localize_fragment)
-                localizer = getattr(pyscf.lo, self.localize_fragment)(self.mol)
+            if locmethod in ("BF", "ER", "PM"):
+                localizer = getattr(pyscf.lo, locmethod)(self.mol)
                 localizer.init_guess = None
                 #localizer.pop_method = "lowdin"
                 C_loc = localizer.kernel(self.C_ao, verbose=4)
-            elif self.localize_fragment == "LAO":
+            elif locmethod == "LAO":
                 #centers = [l[0] for l in self.mol.ao_labels(None)]
                 centers = [l[0] for l in self.ao_labels]
                 log.debug("Atom centers: %r", centers)
@@ -552,7 +559,7 @@ class EmbCC:
             assert (cluster_id != cluster.id)
         # Make name unique
         for i in range(1, 100):
-            name_i = name if i == 1 else "%s-%d" % (name, i)
+            name_i = name if i == 1 else "%s%d" % (name, i)
             if name_i not in [x.name for x in self.clusters]:
                 name = name_i
                 break

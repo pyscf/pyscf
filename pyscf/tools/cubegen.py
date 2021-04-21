@@ -46,6 +46,7 @@ from pyscf import gto
 from pyscf import df
 from pyscf.dft import numint
 from pyscf import __config__
+from pyscf.pbc.gto import Cell
 
 RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
 BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
@@ -56,7 +57,7 @@ EXTENT = getattr(__config__, 'cubegen_box_extent', None)
 
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
-            margin=BOX_MARGIN):
+            margin=BOX_MARGIN, comment="Electron density in real space (e/Bohr^3)"):
     """Calculates electron density and write out in cube format.
 
     Args:
@@ -83,7 +84,6 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
             of nx/ny/nz will be determined by the resolution and the cube box
             size.
     """
-    from pyscf.pbc.gto import Cell
     cc = Cube(mol, nx, ny, nz, resolution, margin)
 
     GTOval = 'GTOval'
@@ -101,12 +101,12 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
     rho = rho.reshape(cc.nx,cc.ny,cc.nz)
 
     # Write out density to the .cube file
-    cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
+    cc.write(rho, outfile, comment=comment)
     return rho
 
 
 def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION,
-            margin=BOX_MARGIN):
+        margin=BOX_MARGIN, comment="Orbital value in real space (1/Bohr^3)"):
     """Calculate orbital value on real space grid and write out in cube format.
 
     Args:
@@ -133,7 +133,6 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION,
             of nx/ny/nz will be determined by the resolution and the cube box
             size.
     """
-    from pyscf.pbc.gto import Cell
     cc = Cube(mol, nx, ny, nz, resolution, margin)
 
     GTOval = 'GTOval'
@@ -151,8 +150,40 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION,
     orb_on_grid = orb_on_grid.reshape(cc.nx,cc.ny,cc.nz)
 
     # Write out orbital to the .cube file
-    cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
+    cc.write(orb_on_grid, outfile, comment=comment)
     return orb_on_grid
+
+def general(mol, outfile, orbitals=None, densities=None, nx=80, ny=80, nz=80,
+        resolution=RESOLUTION, margin=BOX_MARGIN, **kwargs):
+    if orbitals is None: orbitals = []
+    if densities is None: densities = []
+    cc = Cube(mol, nx, ny, nz, resolution, margin)
+    GTOval = 'GTOval'
+    if isinstance(mol, Cell): GTOval = 'PBC' + GTOval
+
+    # Compute density on the .cube grid
+    coords = cc.get_coords()
+    ngrids = cc.get_ngrids()
+    blksize = min(8000, ngrids)
+
+    data_orb = numpy.zeros((len(orbitals), ngrids))
+    for i, coeff in enumerate(orbitals):
+        for ip0, ip1 in lib.prange(0, ngrids, blksize):
+            ip = numpy.s_[ip0:ip1]
+            ao = mol.eval_gto(GTOval, coords[ip])
+            data_orb[i,ip] = numpy.dot(ao, coeff)
+    data_den = numpy.zeros((len(densities), ngrids))
+    for i, dm in enumerate(densities):
+        for ip0, ip1 in lib.prange(0, ngrids, blksize):
+            ip = numpy.s_[ip0:ip1]
+            ao = mol.eval_gto(GTOval, coords[ip])
+            data_den[i,ip] = numint.eval_rho(mol, ao, dm)
+    data = numpy.vstack((data_orb, data_den))
+    data = data.reshape(len(orbitals)+len(densities), cc.nx, cc.ny, cc.nz)
+
+    # Write out orbital to the .cube file
+    cc.write_multiple_fields(data, outfile, **kwargs)
+    return data
 
 
 def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION,
@@ -228,11 +259,10 @@ class Cube(object):
             Resolution of the mesh grid in the cube box. If resolution is
             given in the input, the input nx/ny/nz have no effects.  The value
             of nx/ny/nz will be determined by the resolution and the cube box
-            size. The unit is Bohr.
+            size. The unit is 1/Bohr.
     '''
     def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
                  margin=BOX_MARGIN, origin=ORIGIN, extent=EXTENT):
-        from pyscf.pbc.gto import Cell
         self.mol = mol
         coord = mol.atom_coords()
 
@@ -242,6 +272,7 @@ class Cube(object):
             self.box = mol.lattice_vectors()
             box = numpy.diag(self.box)
             self.boxorig = (numpy.max(coord, axis=0) + numpy.min(coord, axis=0))/2 - box/2
+            #self.boxorig = np.sum(self.box, axis=0)/2.0
         else:
             if extent is None:
                 box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
@@ -254,8 +285,9 @@ class Cube(object):
                 self.boxorig = numpy.array(origin)
 
         if resolution is not None:
-            nx, ny, nz = numpy.ceil(numpy.diag(self.box) / resolution).astype(int)
+            nx, ny, nz = numpy.ceil(numpy.diag(self.box) * resolution).astype(int)
 
+        lib.logger.info(mol, "Creating cube file with grid nx= %d ny= %d nz= %d", nx, ny, nz)
         self.nx = nx
         self.ny = ny
         self.nz = nz
@@ -313,6 +345,41 @@ class Cube(object):
                     for iz0, iz1 in lib.prange(0, self.nz, 6):
                         fmt = '%13.5E' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
+
+    def write_multiple_fields(self, fields, fname, dset_ids=None, comment=None):
+        """  Result: .cube file with the field in the file fname.  """
+        assert(fields.ndim == 4)
+        assert(fields.shape[1:] == (self.nx, self.ny, self.nz))
+        nfields = fields.shape[0]
+        if dset_ids is None: dset_ids = range(1, nfields+1)
+        assert len(dset_ids) == nfields
+        if comment is None: comment = "<comment>"
+
+        with open(fname, 'w') as f:
+            f.write(comment+'\n')
+            f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
+            f.write('%5d' % -self.mol.natm)
+            f.write('%12.6f%12.6f%12.6f' % tuple(self.boxorig.tolist()))
+            f.write('%5d\n' % nfields)
+            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nx, self.xs[1], 0, 0))
+            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.ny, 0, self.ys[1], 0))
+            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nz, 0, 0, self.zs[1]))
+            for ia in range(self.mol.natm):
+                atmsymb = self.mol.atom_symbol(ia)
+                f.write('%5d%12.6f'% (gto.charge(atmsymb), 0.))
+                f.write('%12.6f%12.6f%12.6f\n' % tuple(self.mol.atom_coords()[ia]))
+            f.write("%d" % nfields)
+            for i in range(0, nfields):
+                f.write(" %d" % dset_ids[i])
+            f.write("\n")
+
+            for ix in range(self.nx):
+                for iy in range(self.ny):
+                    for iz in range(self.nz):
+                        for nf in range(nfields):
+                            f.write("%13.5E" % fields[nf,ix,iy,iz])
+                            if (iz*nfields + nf) % 6 == 5: f.write("\n")
+                    f.write("\n")
 
     def read(self, cube_file):
         with open(cube_file, 'r') as f:

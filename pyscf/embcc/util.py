@@ -57,6 +57,16 @@ def memory_string(b, fmt=".2f"):
 class Object:
     pass
 
+def get_unique_name(basename):
+    name = basename
+    idx = 0
+    while os.path.isfile(name):
+        idx += 1
+        name = basename + ".%d" % idx
+    if MPI: MPI_comm.Barrier()
+    return name
+
+
 class Options:
 
     def get(self, attr, default=None):
@@ -288,7 +298,7 @@ def eigreorder_logging(e, reorder, log):
 #    from pyscf.tools import cubegen
 #    cubegen.orbital(mol, filename, C, **kwargs)
 
-def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals", filetype="molden", **kwargs):
+def create_orbital_file(mol, filename, coeffs, names=None, dir="orbitals", filetype="molden", **kwargs):
     if filetype not in ("cube", "molden"):
         raise ValueError("Unknown file type: %s" % filetype)
     if coeffs.ndim == 1:
@@ -297,9 +307,9 @@ def create_orbital_file(mol, filename, coeffs, names=None, directory="orbitals",
     norb = coeffs.shape[-1]
     if names is None:
         names = ["orbital-%d" % i for i in range(1, norb+1)]
-    if directory is not None:
-        os.makedirs(directory, exist_ok=True)
-        path = directory
+    if dir is not None:
+        os.makedirs(dir, exist_ok=True)
+        path = dir
     else:
         path = "."
 

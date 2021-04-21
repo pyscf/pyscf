@@ -231,6 +231,11 @@ def make_bath(self, C_env, bathtype, kind, C_ref=None, eigref=None,
     C_env : ndarray
         Environment orbitals.
     """
+
+    # The bath tolerance is understood per electron in DMET cluster
+    if self.opts.bath_tol_per_elec and tol is not None:
+        tol *= (2*self.C_occclst.shape[-1])
+
     log.debug("type=%r, nbath=%r, tol=%r, energy_tol=%r, C_ref given=%r",
             bathtype, nbath, tol, energy_tol, C_ref is not None)
 
@@ -648,10 +653,15 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         # do, dv = -2*do, 2*dv
     else:
         raise ValueError("Unknown value for local_dm: %r" % local_dm)
-    dmo = 2*(2*einsum("ik...,jk...->ij", t2l, t2r)
-             - einsum("ik...,kj...->ij", t2l, t2r))
-    dmv = 2*(2*einsum("...ac,...bc->ab", t2l, t2r)
-             - einsum("...ac,...cb->ab", t2l, t2r))
+    # Playing with fire!
+    #dmo = 2*(2*einsum("ik...,jk...->ij", t2l, t2r)
+    #         - einsum("ik...,kj...->ij", t2l, t2r))
+    #dmv = 2*(2*einsum("...ac,...bc->ab", t2l, t2r)
+    #         - einsum("...ac,...cb->ab", t2l, t2r))
+    dmo = 2*(2*einsum("ikab,jkab->ij", t2l, t2r)
+             - einsum("ikab,kjab->ij", t2l, t2r))
+    dmv = 2*(2*einsum("ijac,ijbc->ab", t2l, t2r)
+             - einsum("ijac,ijcb->ab", t2l, t2r))
     if local_dm == "semi":
         dmo = (dmo + dmo.T)/2
         dmv = (dmv + dmv.T)/2
@@ -939,16 +949,14 @@ def make_mp2_bath(self,
     if kind not in ("occ", "vir"):
         raise ValueError("Unknown kind: %s", kind)
     if mp2_correction is None: mp2_correction = self.mp2_correction[0 if kind == "occ" else 1]
-
-    kindname = {"occ": "occupied", "vir" : "virtual"}
-    kind = kindname[kind]
+    kindname = {"occ": "occupied", "vir" : "virtual"}[kind]
 
     # All occupied and virtual orbitals
     c_occall = np.hstack((c_occclst, c_occenv))
     c_virall = np.hstack((c_virclst, c_virenv))
 
     # All occupied orbitals, only cluster virtual orbitals
-    if kind == "occupied":
+    if kind == "occ":
         c_occ = c_occall
         c_vir = c_virclst
         c_env = c_occenv
@@ -959,7 +967,7 @@ def make_mp2_bath(self,
         nenv = c_occ.shape[-1] - ncluster
 
     # All virtual orbitals, only cluster occupied orbitals
-    elif kind == "virtual":
+    elif kind == "vir":
         c_occ = c_occclst
         c_vir = c_virall
         c_env = c_virenv
@@ -985,6 +993,21 @@ def make_mp2_bath(self,
     if False:
         with open("MP2-natorb-%s-%s.txt" % (self.name, kind), "ab") as f:
             np.savetxt(f, dm_occ[np.newaxis])
+
+    if self.opts.plot_orbitals:
+        #bins = np.hstack((-np.inf, np.logspace(-9, -3, 9-3+1), np.inf))
+        bins = np.hstack((1, np.logspace(-3, -9, 9-3+1), -1))
+        for idx, upper in enumerate(bins[:-1]):
+            lower = bins[idx+1]
+            mask = np.logical_and((dm_occ > lower), (dm_occ <= upper))
+            if np.any(mask):
+                coeff = c_rot[:,mask]
+                #cmt = "MP2 bath density containing %d orbitals with occupation %r" % (coeff.shape[-1], dm_occ[mask].tolist())
+                #self.write_orbitals(coeff, "mp2-%s-%.0e--%.0e" % (kind, lower, upper), density=True, comment=cmt)
+                log.info("Plotting MP2 bath density between %.0e and %.0e containing %d orbitals." % (upper, lower, coeff.shape[-1]))
+                name = "mp2-%s-%.0e--%.0e" % (kind, upper, lower)
+                dm = np.dot(coeff, coeff.T)
+                self.orbitals_for_plot[name] = dm
 
     # Reorder the eigenvalues and vectors according to the reference ordering, specified in eigref
     if False:
@@ -1062,12 +1085,12 @@ def make_mp2_bath(self,
         rot = np.block(
                 [[np.eye(ncluster), np.zeros((ncluster, nenv))],
                 [np.zeros((nenv, ncluster)), dm_rot]])
-        if kind == "occupied":
+        if kind == "occ":
             t2_loc = einsum("ij...,ix,jy->xy...", t2_loc, rot, rot)
             g = einsum("iajb,ix,jy->xayb", g, rot, rot)
             em = (2*einsum("ijab,iajb->ij", t2_loc, g)
                   - einsum("ijab,ibja->ij", t2_loc, g))
-        elif kind == "virtual":
+        elif kind == "vir":
             t2_loc = einsum("...ab,ax,by->...xy", t2_loc, rot, rot)
             g = einsum("iajb,ax,by->ixjy", g, rot, rot)
             em = (2*einsum("ijab,iajb->ab", t2_loc, g)
@@ -1114,7 +1137,7 @@ def make_mp2_bath(self,
     c_bath, c_env = np.hsplit(c_rot, [nbath])
 
     # Output some information
-    log.info("%s MP2 natural orbitals:" % kind.title())
+    log.info("%s MP2 natural orbitals:" % kindname.title())
     if nbath > 0:
         log.info("  * %3d bath orbitals:        largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
             nbath, max(dm_occ[:nbath]), min(dm_occ[:nbath]), np.mean(dm_occ[:nbath]))
@@ -1125,17 +1148,17 @@ def make_mp2_bath(self,
     # Delta MP2 correction - no correction if all natural orbitals are already included (0 environment orbitals)
     if mp2_correction and c_env.shape[-1] > 0:
         if e_delta_mp2 is None:
-            if kind == "occupied":
+            if kind == "occ":
                 co_act = np.hstack((c_occclst, c_bath))
                 #*_, e_mp2_act = self.run_mp2(co_act, c_vir, c_occenv=c_env, c_virenv=c_virenv)
                 *_, e_mp2_act = self.run_mp2(co_act, c_vir, c_occenv=c_env, c_virenv=c_virenv, eris=eris)
-            elif kind == "virtual":
+            elif kind == "vir":
                 cv_act = np.hstack((c_virclst, c_bath))
                 #*_, e_mp2_act = self.run_mp2(c_occ, cv_act, c_occenv=c_occenv, c_virenv=c_env)
                 *_, e_mp2_act = self.run_mp2(c_occ, cv_act, c_occenv=c_occenv, c_virenv=c_env, eris=eris)
 
             e_delta_mp2 = e_mp2_all - e_mp2_act
-            log.debug("MP2 correction (%s): all=%.4g, active=%.4g, correction=%+.4g", kind, e_mp2_all, e_mp2_act, e_delta_mp2)
+            log.debug("MP2 correction (%s): all=%.4g, active=%.4g, correction=%+.4g", kindname, e_mp2_all, e_mp2_act, e_delta_mp2)
     else:
         e_delta_mp2 = 0.0
 

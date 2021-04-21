@@ -76,6 +76,7 @@ def get_arguments():
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
     parser.add_argument("--opts", nargs="*", default=[])
+    parser.add_argument("--plot-orbitals-grid", type=int, nargs=3)
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
     parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
@@ -390,14 +391,14 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
             c = mf.mo_coeff[ik]
             csc = np.linalg.multi_dot((c.T.conj(), sk[ik], c))
             err = abs(csc-np.eye(c.shape[-1])).max()
-            if err > 1e-9:
+            if err > 1e-6:
                 log.error("MOs not orthogonal at k-point %d. Error= %.2e", ik, err)
     else:
         s = mf.get_ovlp()
         c = mf.mo_coeff
         csc = np.linalg.multi_dot((c.T.conj(), s, c))
         err = abs(csc-np.eye(c.shape[-1])).max()
-        if err > 1e-9:
+        if err > 1e-6:
             log.error("MOs not orthogonal. Error= %.2e", err)
 
     return mf
@@ -416,6 +417,7 @@ def unfold_mf(mf, args, unfold_j3c=None):
         else:
             #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
             mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=unfold_j3c)
+            #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=unfold_j3c, cderi_file="gdf.h5")
         log.info("Time for k2gamma: %.3f s", (timer()-t0))
     else:
         mf._eri = None
@@ -479,14 +481,15 @@ for i, a in enumerate(args.lattice_consts):
     # Reuse DF
     #df = None
     for xc in args.dft_xc:
-        dft = run_mf(a, cell, args, xc=xc)
+        dft = run_mf(a, cell, args, kpts=kpts, xc=xc)
         #dft = run_mf(a, cell, args, xc=xc, df=df)
         #df = dft.with_df
         energies[xc] = [dft.e_tot]
 
         # Population analysis
-        dft = unfold_mf(dft, args, unfold_j3c=False)
-        pop_analysis(dft, filename="pop-%s-%.2f.txt" % (xc, a))
+        if False:
+            dft = unfold_mf(dft, args, unfold_j3c=False)
+            pop_analysis(dft, filename="pop-%s-%.2f.txt" % (xc, a))
 
     # k-point to supercell gamma point
     #if args.k_points is not None and np.product(args.k_points) > 1:
@@ -507,7 +510,7 @@ for i, a in enumerate(args.lattice_consts):
     if args.run_hf:
         np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
         natom = mf.mol.natm
-        ncells = natom / cell._natom_prim
+        ncells = natom // cell._natom_prim
         eref = natom if (args.energy_per == "atom") else ncells
         energies["hf"] = [mf.e_tot / eref]
     if args.run_embcc:
@@ -540,6 +543,8 @@ for i, a in enumerate(args.lattice_consts):
                 kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
             if args.prim_mp2_bath_tol_vir:
                 kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
+            if args.plot_orbitals_grid:
+                kwargs["plot_orbitals_grid"] = args.plot_orbitals_grid
 
             ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
                 bath_type=args.bath_type, bath_tol=btol,
@@ -552,8 +557,10 @@ for i, a in enumerate(args.lattice_consts):
             if args.system == "diamond":
                 ccx.make_atom_cluster(0, symmetry_factor=natom)
             elif args.system == "graphene":
-                for ix in range(2):
-                    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
+                #for ix in range(2):
+                #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
+                ix = ncells-1    # Make cluster in center
+                ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
             elif args.system == "perovskite":
                 weights = args.bath_tol_fragment_weight
                 # Overwrites ccx.bath_tol per cluster

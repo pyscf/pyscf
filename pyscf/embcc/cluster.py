@@ -1,4 +1,6 @@
 # Standard libaries
+import os
+import os.path
 import logging
 from collections import OrderedDict
 import functools
@@ -97,17 +99,6 @@ class Cluster:
         if not has_length(bath_energy_tol, 2):
             bath_energy_tol = (bath_energy_tol, bath_energy_tol)
 
-        # Relative tolerances?
-        if kwargs.get("bath_tol_per_electron", True):
-            if bath_tol[0] is not None:
-                bath_tol = (self.nelec_mf_frag*bath_tol[0], bath_tol[1])
-            if bath_tol[1] is not None:
-                bath_tol = (bath_tol[0], self.nelec_mf_frag*bath_tol[1])
-            if bath_energy_tol[0] is not None:
-                bath_energy_tol = (self.nelec_mf_frag*bath_energy_tol[0], bath_energy_tol[1])
-            if bath_energy_tol[1] is not None:
-                bath_energy_tol = (bath_energy_tol[0], self.nelec_mf_frag*bath_energy_tol[1])
-
         #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
         if bath_type not in self.base.VALID_BATH_TYPES:
             raise ValueError("Unknown bath type: %s" % bath_type)
@@ -168,19 +159,24 @@ class Cluster:
         #self.make_rdm1 = kwargs.get("make_rdm1", False)     # Calculate RDM1 in cluster?
 
         self.opts = Options()
+        self.opts.bath_tol_per_elec = self.base.opts.get("bath_tol_per_elec", False)
         self.opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
         self.opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
         self.opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
         self.opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
+        self.opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
 
         #self.project_type = kwargs.get("project_type", "first-occ")
 
         # Orbital coefficents added to this dictionary can be written as an orbital file
         #self.orbitals = {"Fragment" : self.C_local}
-        self.orbitals = OrderedDict()
-        self.orbitals["Fragment"] = self.C_local
+        #self.orbitals = OrderedDict()
+        #self.orbitals["Fragment"] = self.C_local
+        self.orbitals_for_plot = {}
+        #if self.opts.write_orbitals : self.write_orbitals(self.C_local, "fragment")
+        if self.opts.plot_orbitals:
+            self.orbitals_for_plot["fragment"] = self.C_local.copy()
 
-        #
         #self.occbath_eigref = kwargs.get("occbath-eigref", None)
         #self.virbath_eigref = kwargs.get("virbath-eigref", None)
         self.refdata_in = kwargs.get("refdata", {})
@@ -720,6 +716,10 @@ class Cluster:
         #    log.info("Adding %d local virtual bath orbitals to cluster.", C_add.shape[-1])
         #    C_bath = np.hstack((C_bath, C_add))
         C_bath, C_occenv, C_virenv = self.additional_bath_for_cluster(C_bath, C_occenv, C_virenv)
+        #self.orbitals["DMET-bath"] = C_bath     # Plotting only
+        #if self.opts.write_orbitals: self.write_orbitals(C_bath, "dmet-bath")
+        if self.opts.plot_orbitals:
+            self.orbitals_for_plot["dmet-bath"] = C_bath.copy()
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
@@ -760,9 +760,8 @@ class Cluster:
         self.C_virclst = C_virclst
 
         # For orbital plotting
-        self.orbitals["DMET-bath"] = C_bath
-        self.orbitals["Occ.-Cluster"] = C_occclst
-        self.orbitals["Vir.-Cluster"] = C_virclst
+        #self.orbitals["Occ.-Cluster"] = C_occclst
+        #self.orbitals["Vir.-Cluster"] = C_virclst
 
         self.refdata_out["dmet-bath"] = C_bath
 
@@ -818,6 +817,11 @@ class Cluster:
         log.debug("Time for virtual %r bath: %s", self.bath_type, get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
+        # Plot
+        if self.opts.plot_orbitals:
+            self.plot_orbitals(self.orbitals_for_plot)
+
+
         C_occenv, C_virenv = C_occenv2, C_virenv2
         self.C_occbath = C_occbath
         self.C_virbath = C_virbath
@@ -825,10 +829,10 @@ class Cluster:
         self.C_virenv = C_virenv
 
         # For orbital ploting
-        self.orbitals["Occ.-bath"] = C_occbath
-        self.orbitals["Vir.-bath"] = C_virbath
-        self.orbitals["Occ.-env."] = C_occenv
-        self.orbitals["Vir.-env."] = C_virenv
+        #self.orbitals["Occupied-bath"] = C_occbath
+        #self.orbitals["Virtual-bath"] = C_virbath
+        #self.orbitals["Occ.-env."] = C_occenv
+        #self.orbitals["Vir.-env."] = C_virenv
 
         self.refdata_out["occ-bath"] = C_occbath
         self.refdata_out["vir-bath"] = C_virbath
@@ -1025,27 +1029,58 @@ class Cluster:
         filename = "cluster-%d.%s" % (self.id, ext[filetype])
         create_orbital_file(self.mol, filename, self.orbitals, filetype=filetype)
 
-        #if filetype == "molden":
-        #    from pyscf.tools import molden
+    def write_orbitals(self, coeff, name, density=False, dir=None, filetype="cube", **kwargs):
+        if coeff.ndim == 1:
+            coeff = coeff[:,np.newaxis]
+        norb = coeff.shape[-1]
 
-        #    with open(filename, "w") as f:
-        #        molden.header(self.mol, f)
-        #        labels = []
-        #        coeffs = []
-        #        for name, C in orbitals.items():
-        #            labels += C.shape[-1]*[name]
-        #            coeffs.append(C)
-        #        coeffs = np.hstack(coeffs)
-        #        molden.orbital_coeff(self.mol, f, coeffs, symm=labels)
+        if isinstance(name, str) and not density:
+            name = ["%s-%d" % (name, i) for i in range(norb)]
+        #name = [x.replace(" ", "_") for x in name]
+        if dir is None: dir = "orbitals-%s" % self.name
+        os.makedirs(dir, exist_ok=True)
 
-        #        #for name, C in self.orbitals.items():
-        #            #symm = orb_labels.get(name, "?")
-        #            #symm = C.shape[-1] * [name]
-        #            #molden.orbital_coeff(self.mol, f, C)
-        #            #molden.orbital_coeff(self.mol, f, C, symm=symm)
-        #elif filetype == "cube":
-        #    raise NotImplementedError()
-        #    for orbkind, C in self.orbitals.items():
-        #        for j in range(C.shape[-1]):
-        #            filename = "C%d-%s-%d.cube" % (self.id, orbkind, j)
-        #            make_cubegen_file(self.mol, C[:,j], filename)
+        if filetype == "cube":
+            from pyscf.tools import cubegen
+
+            if density:
+                dm = np.dot(coeff, coeff.T)
+                fname = os.path.join(dir, "%s.cube" % name)
+                cubegen.density(self.mol, fname, dm, **kwargs)
+
+            else:
+                for i in range(norb):
+                    fname = os.path.join(dir, "%s.cube" % name[i])
+                    cubegen.orbital(self.mol, fname, coeff[:,i], **kwargs)
+
+    def plot_orbitals(self, orbitals, name=None, dir="orbitals", filetype="cube", **kwargs):
+        #kwargs["resolution"] = kwargs.pop("resolution", 10)
+        kwargs["nx"] = kwargs.pop("nx", self.base.opts.plot_orbitals_grid[0])
+        kwargs["ny"] = kwargs.pop("ny", self.base.opts.plot_orbitals_grid[1])
+        kwargs["nz"] = kwargs.pop("nz", self.base.opts.plot_orbitals_grid[2])
+
+        orbs_frag = orbitals.pop("fragment").T
+        orbs_dmet = orbitals.pop("dmet-bath").T
+        offset = 1000
+        dset_ids = list(range(1, len(orbs_frag)+1)) + list(range(offset+1, offset+len(orbs_frag)+1))
+        orbs = np.vstack((orbs_frag, orbs_dmet))
+        dens = []
+        for i, key in enumerate([key for key in orbitals.keys() if "occ" in key], 1):
+            idx = 2*offset + i
+            dset_ids.append(idx)
+            log.info("Density %s = %d", key, idx)
+            dens.append(orbitals[key])
+        for i, key in enumerate([key for key in orbitals.keys() if "vir" in key], 1):
+            idx = 3*offset + i
+            dset_ids.append(idx)
+            log.info("Density %s = %d", key, idx)
+            dens.append(orbitals[key])
+
+        dens = np.stack(dens)
+        name = name or self.name
+        os.makedirs(dir, exist_ok=True)
+        name = "%s.cube" % os.path.join(dir, name)
+        if filetype == "cube":
+            from pyscf.tools import cubegen
+            cubegen.general(self.mol, name, orbitals=orbs, densities=dens, dset_ids=dset_ids, **kwargs)
+            1/0

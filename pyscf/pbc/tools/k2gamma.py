@@ -119,9 +119,11 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
     mo_coeff_rot = mo_coeff.copy()
 
     def _imag_norm(arg, mo):
-        mo_rot = mo*np.exp(1j*arg)
-        norm = np.linalg.norm(mo_rot.imag)
-        return norm
+        phase = np.exp(1j*arg)
+        mo = mo*phase
+        norm_re = np.linalg.norm(mo.real)
+        norm_im = np.linalg.norm(mo.imag)
+        return norm_im / norm_re
 
     for mo, mo_e in enumerate(mo_energy):
         # Check if MO is degnerate
@@ -140,7 +142,6 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
         if abs(mo_c.imag).max() > 1e-10:
             res = scipy.optimize.minimize(_imag_norm, arg0, args=(mo_c,))
             arg, fun = res.x, res.fun
-
             if fun < fun0:
                 mo_coeff_rot[:,mo] = mo_c*np.exp(1j*arg)
                 rotated = True
