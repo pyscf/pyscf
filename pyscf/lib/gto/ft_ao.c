@@ -49,7 +49,7 @@
 #include "np_helper/np_helper.h"
 
 #define SQRTPI          1.7724538509055160272981674833411451
-#define EXPCUTOFF       100
+#define EXP_CUTOFF      100
 #define NCTRMAX         72
 
 
@@ -122,7 +122,6 @@ void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
         envs->g_stride_l = 0;
 }
 
-#define CART_MAX        128 // > (ANG_MAX*(ANG_MAX+1)/2)
 void CINTcart_comp(int *nx, int *ny, int *nz, const int lmax);
 static void _g2c_index_xyz(int *idx, const CINTEnvVars *envs)
 {
@@ -891,7 +890,7 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                 for (ip = 0; ip < i_prim; ip++) {
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
-                        if (eij > EXPCUTOFF) {
+                        if (eij > EXP_CUTOFF) {
                                 continue;
                         }
 
@@ -1018,7 +1017,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                         envs->ai = ai[ip];
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
-                        if (eij > EXPCUTOFF) {
+                        if (eij > EXP_CUTOFF) {
                                 continue;
                         }
 
@@ -1063,7 +1062,7 @@ void GTO_Gv_general(double complex *out, double aij, double *rij,
         double *kx = Gv;
         double *ky = kx + NGv;
         double *kz = ky + NGv;
-        const double cutoff = EXPCUTOFF * aij * 4;
+        const double cutoff = EXP_CUTOFF * aij * 4;
         int n;
         double kR, kk;
         for (n = 0; n < NGv; n++) {
@@ -1121,7 +1120,7 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
         int *gy = gx + NGv;
         int *gz = gy + NGv;
 
-        const double cutoff = EXPCUTOFF * aij * 4;
+        const double cutoff = EXP_CUTOFF * aij * 4;
         int n, ix, iy, iz;
         double Gr;
         for (n = 0; n < nx+ny+nz; n++) {
@@ -1199,7 +1198,7 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
         int *gy = gx + NGv;
         int *gz = gy + NGv;
 
-        const double cutoff = EXPCUTOFF * aij * 4;
+        const double cutoff = EXP_CUTOFF * aij * 4;
         int ix, iy, iz;
         double Gr, kk;
         for (n = 0; n < NGv; n++) {

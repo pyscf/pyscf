@@ -102,10 +102,10 @@ class KnownValues(unittest.TestCase):
         z = 16
         rad, dr = radi.gauss_chebyshev(50)
         angs = gen_grid.sg1_prune(z, rad, 434, radii=radi.SG1RADII)
-        self.assertAlmostEqual(lib.finger(angs), -291.0794420982329, 9)
+        self.assertAlmostEqual(lib.fp(angs), -291.0794420982329, 9)
 
         angs = gen_grid.nwchem_prune(z, rad, 434, radii=radi.BRAGG_RADII)
-        self.assertAlmostEqual(lib.finger(angs), -180.12023039394498, 9)
+        self.assertAlmostEqual(lib.fp(angs), -180.12023039394498, 9)
 
         angs = gen_grid.nwchem_prune(z, rad, 26, radii=radi.BRAGG_RADII)
         self.assertTrue(numpy.all(angs==26))
@@ -122,8 +122,8 @@ class KnownValues(unittest.TestCase):
         grid.build()
         coords = grid.coords*10.
         non0 = gen_grid.make_mask(h2o, coords)
-        self.assertEqual(non0.sum(), 106)
-        self.assertAlmostEqual(lib.finger(non0), -0.81399929716237085, 9)
+        self.assertEqual(non0.sum(), 122)
+        self.assertAlmostEqual(lib.fp(non0), 0.554275491306796, 9)
 
     def test_overwriting_grids_attribute(self):
         g = gen_grid.Grids(h2o).run()

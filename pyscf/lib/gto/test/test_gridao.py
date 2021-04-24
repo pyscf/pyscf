@@ -17,9 +17,9 @@ import ctypes
 import unittest
 import numpy
 from pyscf import lib, gto, df
+from pyscf.gto.eval_gto import BLKSIZE
 
 libcgto = lib.load_library('libdft')
-BLKSIZE = 64
 
 mol = gto.M(atom='''
             O 0.5 0.5 0.
@@ -317,6 +317,14 @@ H  0.  0.  1.3''', basis='ccpvtz')
 
         ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_ip1_spinor').transpose(0,3,1,2)
         j3c = mol1.intor('int1e_grids_ip_spinor', grids=grids)
+        self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+    def test_int1e_grids_spvsp(self):
+        ngrids = 201
+        grids = numpy.random.random((ngrids, 3)) * 12 - 5
+        fmol = gto.fakemol_for_charges(grids)
+        ref = df.r_incore.aux_e2(mol, fmol, intor='int3c2e_spsp1_spinor').transpose(2,0,1)
+        j3c = mol.intor('int1e_grids_spvsp_spinor', grids=grids)
         self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
 
 

@@ -119,6 +119,9 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_ipsprinvsp_spinor"         (nabla sigma dot p \| rinv \| sigma dot p\)
             "int1e_grids"                     ( \| 1/r_grids \| \)
             "int1e_grids_spinor"              ( \| 1/r_grids \| \)
+            "int1e_grids_ip"                  (nabla \| 1/r_grids \| \)
+            "int1e_grids_ip_spinor"           (nabla \| 1/r_grids \| \)
+            "int1e_grids_spvsp_spinor"        (sigma dot p \| 1/r_grids \| sigma dot p\)
             "int2e"                           ( \, \| \, \)
             "int2e_ig1"                       (#C(0 1) g \, \| \, \)
             "int2e_gg1"                       (g g \, \| \, \)
@@ -433,6 +436,7 @@ _INTOR_FUNCTIONS = {
     'int2e_coulerf'             : (1, 1),
     "int1e_grids"               : (1, 1),
     "int1e_grids_ip"            : (3, 3),
+    "int1e_grids_spvsp"         : (4, 1),
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),
     'ECPscalar_iprinv'          : (3, None),

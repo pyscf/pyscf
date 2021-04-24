@@ -31,6 +31,32 @@
 // from cint.h
 #define NGRIDS          11
 
+#define BLKSIZE         312
+
+// for grids integrals only
+int _max_cache_size(int (*intor)(), int *shls_slice, int ncenter,
+                    int *atm, int natm, int *bas, int nbas, double *env)
+{
+        int i, n;
+        int i0 = shls_slice[0];
+        int i1 = shls_slice[1];
+        for (i = 1; i < ncenter; i++) {
+                i0 = MIN(i0, shls_slice[i*2  ]);
+                i1 = MAX(i1, shls_slice[i*2+1]);
+        }
+        int shls[4];
+        int cache_size = 0;
+        for (i = i0; i < i1; i++) {
+                shls[0] = i;
+                shls[1] = i;
+                shls[2] = 0;
+                shls[3] = BLKSIZE;
+                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env, NULL, NULL);
+                cache_size = MAX(cache_size, n);
+        }
+        return cache_size;
+}
+
 /*
  * mat(ngrids,naoi,naoj,comp) in F-order
  */
@@ -47,16 +73,16 @@ void GTOgrids_int2c(int (*intor)(), double *mat, int comp, int hermi,
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
-                                                 atm, natm, bas, nbas, env);
-        const int dims[] = {ngrids, naoi, naoj};
+        const int cache_size = _max_cache_size(intor, shls_slice, 2,
+                                               atm, natm, bas, nbas, env);
+        const int dims[] = {naoi, naoj, ngrids};
 #pragma omp parallel
 {
         size_t ij;
-        int ish, jsh, i0, j0;
-        int shls[2];
+        int ish, jsh, i0, j0, grid0, grid1;
+        int shls[4];
         double *cache = malloc(sizeof(double) * cache_size);
-#pragma omp for schedule(dynamic, 4)
+#pragma omp for schedule(dynamic, 1)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;
                 jsh = ij % njsh;
@@ -65,14 +91,19 @@ void GTOgrids_int2c(int (*intor)(), double *mat, int comp, int hermi,
                         continue;
                 }
 
-                ish += ish0;
-                jsh += jsh0;
-                shls[0] = ish;
-                shls[1] = jsh;
-                i0 = ao_loc[ish] - ao_loc[ish0];
-                j0 = ao_loc[jsh] - ao_loc[jsh0];
-                (*intor)(mat+ngrids*(j0*naoi+i0), dims, shls,
-                         atm, natm, bas, nbas, env, opt, cache);
+                for (grid0 = 0; grid0 < ngrids; grid0 += BLKSIZE) {
+                        grid1 = MIN(grid0 + BLKSIZE, ngrids);
+                        ish += ish0;
+                        jsh += jsh0;
+                        shls[0] = ish;
+                        shls[1] = jsh;
+                        shls[2] = grid0;
+                        shls[3] = grid1;
+                        i0 = ao_loc[ish] - ao_loc[ish0];
+                        j0 = ao_loc[jsh] - ao_loc[jsh0];
+                        (*intor)(mat+ngrids*(j0*naoi+i0)+grid0, dims, shls,
+                                 atm, natm, bas, nbas, env, opt, cache);
+                }
         }
         free(cache);
 
@@ -120,16 +151,16 @@ void GTOgrids_int2c_spinor(int (*intor)(), double complex *mat, int comp, int he
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 2,
-                                                 atm, natm, bas, nbas, env);
-        int dims[] = {ngrids, naoi, naoj};
+        const int cache_size = _max_cache_size(intor, shls_slice, 2,
+                                               atm, natm, bas, nbas, env);
+        int dims[] = {naoi, naoj, ngrids};
 #pragma omp parallel
 {
         size_t ij;
-        int ish, jsh, i0, j0;
-        int shls[2];
+        int ish, jsh, i0, j0, grid0, grid1;
+        int shls[4];
         double *cache = malloc(sizeof(double) * cache_size);
-#pragma omp for schedule(dynamic, 4)
+#pragma omp for schedule(dynamic, 1)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;
                 jsh = ij % njsh;
@@ -137,14 +168,19 @@ void GTOgrids_int2c_spinor(int (*intor)(), double complex *mat, int comp, int he
                         continue;
                 }
 
-                ish += ish0;
-                jsh += jsh0;
-                shls[0] = ish;
-                shls[1] = jsh;
-                i0 = ao_loc[ish] - ao_loc[ish0];
-                j0 = ao_loc[jsh] - ao_loc[jsh0];
-                (*intor)(mat+ngrids*(j0*naoi+i0), dims, shls,
-                         atm, natm, bas, nbas, env, opt, cache);
+                for (grid0 = 0; grid0 < ngrids; grid0 += BLKSIZE) {
+                        grid1 = MIN(grid0 + BLKSIZE, ngrids);
+                        ish += ish0;
+                        jsh += jsh0;
+                        shls[0] = ish;
+                        shls[1] = jsh;
+                        shls[2] = grid0;
+                        shls[3] = grid1;
+                        i0 = ao_loc[ish] - ao_loc[ish0];
+                        j0 = ao_loc[jsh] - ao_loc[jsh0];
+                        (*intor)(mat+ngrids*(j0*naoi+i0)+grid0, dims, shls,
+                                 atm, natm, bas, nbas, env, opt, cache);
+                }
         }
         free(cache);
 
