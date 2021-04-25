@@ -324,7 +324,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             rho[5] -= rho5 * .5
     return rho
 
-def _vv10nlc(rho,coords,vvrho,vvweight,vvcoords,nlc_pars):
+def _vv10nlc(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
     thresh=1e-8
 
     #output
@@ -866,11 +866,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = wv = None
     elif xctype == 'NLC':
-        nlc_pars = ni.nlc_coeff(xc_code[:-6])
-        if nlc_pars == [0,0]:
-            raise NotImplementedError('VV10 cannot be used with %s. '
-                                      'The supported functionals are %s' %
-                                      (xc_code[:-6], ni.libxc.VV10_XC))
+        nlc_pars = ni.nlc_coeff(xc_code)
         ao_deriv = 1
         vvrho=numpy.empty([nset,4,0])
         vvweight=numpy.empty([nset,0])
@@ -896,7 +892,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, 'GGA')
-                exc, vxc = _vv10nlc(rho,coords,vvrho[idm],vvweight[idm],vvcoords[idm],nlc_pars)
+                exc, vxc = _vv10nlc(rho, coords,
+                                    vvrho[idm], vvweight[idm], vvcoords[idm], nlc_pars)
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
@@ -937,6 +934,10 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
 
                 rho = exc = vxc = vrho = wv = None
+    elif xctype == 'HF':
+        pass
+    else:
+        raise NotImplementedError(f'numint.nr_uks for functional {xc_code}')
 
     for i in range(nset):
         vmat[i] = vmat[i] + vmat[i].conj().T
@@ -1098,6 +1099,10 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 vmat[1,idm] += _dot_ao_ao(mol, ao[2], wv*ao[2], mask, shls_slice, ao_loc)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[3], wv*ao[3], mask, shls_slice, ao_loc)
                 rho_a = rho_b = exc = vxc = vrho = wva = wvb = None
+    elif xctype == 'HF':
+        pass
+    else:
+        raise NotImplementedError(f'numint.nr_uks for functional {xc_code}')
 
     for i in range(nset):
         vmat[0,i] = vmat[0,i] + vmat[0,i].conj().T
