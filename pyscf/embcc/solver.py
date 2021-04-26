@@ -160,14 +160,17 @@ class ClusterSolver:
         self.c2 = cc.t2 + einsum("ia,jb->ijab", cc.t1, cc.t1)
 
         if self.cluster.opts.make_rdm1:
-            t0 = timer()
-            log.info("Making RDM1...")
-            self.dm1 = cc.make_rdm1(eris=eris, ao_repr=True)
-            log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
-            if not cc.converged_lambda:
-                log.warning("WARNING: Solution of lambda equation not converged!")
-            t = (timer()-t0)
-            log.info("Time for RDM1: %.3f (%s)", t, get_time_string(t))
+            try:
+                t0 = timer()
+                log.info("Making RDM1...")
+                self.dm1 = cc.make_rdm1(eris=eris, ao_repr=True)
+                log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
+                if not cc.converged_lambda:
+                    log.warning("WARNING: Solution of lambda equation not converged!")
+                t = (timer()-t0)
+                log.info("Time for RDM1: %.3f (%s)", t, get_time_string(t))
+            except Exception as e:
+                log.error("ERROR while making RDM1: %s", e)
 
         #def eom_ccsd(kind, nroots=3, sort_weight=True, r1_min=0.01):
         def eom_ccsd(kind, nroots=3):

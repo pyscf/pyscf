@@ -902,7 +902,10 @@ class Cluster:
 
         # Population analysis
         if self.opts.make_rdm1 and csolver.dm1 is not None:
-            self.pop_analysis(csolver.dm1)
+            try:
+                self.pop_analysis(csolver.dm1)
+            except Exception as e:
+                log.error("ERROR in population analysis: %s", e)
         # EOM analysis
         if self.opts.eom_ccsd in (True, "IP"):
             self.eom_ip_energy, _ = self.eom_analysis(csolver, "IP")
