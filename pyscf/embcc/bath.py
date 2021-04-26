@@ -1002,12 +1002,10 @@ def make_mp2_bath(self,
             mask = np.logical_and((dm_occ > lower), (dm_occ <= upper))
             if np.any(mask):
                 coeff = c_rot[:,mask]
-                #cmt = "MP2 bath density containing %d orbitals with occupation %r" % (coeff.shape[-1], dm_occ[mask].tolist())
-                #self.write_orbitals(coeff, "mp2-%s-%.0e--%.0e" % (kind, lower, upper), density=True, comment=cmt)
                 log.info("Plotting MP2 bath density between %.0e and %.0e containing %d orbitals." % (upper, lower, coeff.shape[-1]))
-                name = "mp2-%s-%.0e--%.0e" % (kind, upper, lower)
                 dm = np.dot(coeff, coeff.T)
-                self.orbitals_for_plot[name] = dm
+                dset_idx = (4001 if kind == "occ" else 5001) + idx
+                self.cubefile.add_density(dm, dset_idx=dset_idx)
 
     # Reorder the eigenvalues and vectors according to the reference ordering, specified in eigref
     if False:

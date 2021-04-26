@@ -130,7 +130,8 @@ class EmbCC:
                 "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
                 #Orbital file
                 "plot_orbitals" : False,
-                "plot_orbitals_grid" : (100, 100, 100),
+                "plot_orbitals_dir" : "orbitals",
+                "plot_orbitals_kwargs" : {},
                 # Other
                 "strict" : False,               # Stop if cluster not converged
                 }
@@ -623,7 +624,8 @@ class EmbCC:
             Name of cluster.
         """
         # Atoms may be a single atom index/label
-        if isinstance(atoms, int) or isinstance(atoms, str):
+        #if isinstance(atoms, int) or isinstance(atoms, str):
+        if not isinstance(atoms, (tuple, list, np.ndarray)):
             atoms = [atoms]
 
         # Check if atoms are valid labels of molecule
@@ -634,7 +636,7 @@ class EmbCC:
                     raise ValueError("Atom with label %s not in molecule." % atom)
 
         # Get atom indices/labels
-        if isinstance(atoms[0], int):
+        if isinstance(atoms[0], (int, np.integer)):
             atom_indices = atoms
             atom_labels = [self.mol.atom_symbol(i) for i in atoms]
         else:

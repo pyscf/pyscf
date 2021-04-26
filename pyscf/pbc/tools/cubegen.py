@@ -1,4 +1,5 @@
 import numpy as np
+import pickle
 
 import pyscf
 from pyscf import __config__
@@ -14,16 +15,16 @@ DEFAULT_RESOLUTION = getattr(__config__, "cubegen_resolution", 15)
 class CubeFile:
 
     def __init__(self, cell, filename, nx=DEFAULT_NPOINTS, ny=DEFAULT_NPOINTS, nz=DEFAULT_NPOINTS,
-            resolution=DEFAULT_RESOLUTION, comment1=None, comment2=None, origin=(0.0, 0.0, 0.0), fmt="%13.5E",
+            resolution=DEFAULT_RESOLUTION, title=None, comment=None, origin=(0.0, 0.0, 0.0), fmt="%13.5E",
             crop=None):
-        """Initialize a cube file object. Data can be added using the `add_field` and `add_fields` methods.
+        """Initialize a cube file object. Data can be added using the `add_orbital` and `add_density` methods.
 
         This class can also be used as a context manager:
 
         >>> with CubeFile(cell, "mycubefile.cube") as f:
-        >>>     f.add_field(hf.mo_coeff[:,0])
-        >>>     f.add_fields(hf.mo_coeff[:,5:10].T)
-        >>>     f.add_field(hf.make_rdm1(), kind="density")
+        >>>     f.add_orbital(hf.mo_coeff[:,0])
+        >>>     f.add_orbital(hf.mo_coeff[:,5:10])
+        >>>     f.add_density(hf.make_rdm1())
 
         Arguments
         ---------
@@ -35,12 +36,15 @@ class CubeFile:
                 they take precedence over `resolution`. Default: None.
             resolution : float, optional
                 Resolution in units of 1/Bohr for automatic choice of `nx`,`ny`, and `nz`. Default: 15.0.
-            comment1 : str, optional
+            title : str, optional
                 First comment line in cube-file.
-            comment2 : str, optional
+            comment : str, optional
                 Second comment line in cube-file.
             origin : array(3), optional
                 Origin in X, Y, Z coordinates
+            fmt : str, optional
+                Float formatter for voxel data. According to the cube-file standard, this is required to
+                be "%13.5E", but some applications may work with a different format. Default: "%13.5E"
             crop : dict, optional
                 By default, the coordinate grid will span the entire unit cell. `crop` can be set
                 to crop the unit cell. `crop` should be a dictionary with possible keys
@@ -48,12 +52,13 @@ class CubeFile:
                 start, "a1" crops the first lattice vector at the end, "b0" crops the second lattice vector
                 at the start etc. The corresponding values is the distance which should be cropped in
                 units of Bohr.
+                EXPERIMENTAL FEATURE - NOT FULLY TESTED.
         """
 
         self.cell = cell
         self.filename = filename
         if resolution < 1:
-            logger.warn(cell, "Warning: resolution is below 1/Bohr. Recommended values are >5/Bohr")
+            logger.warn(cell, "Warning: resolution is below 1/Bohr. Recommended values are 5/Bohr or higher.")
         self.a = self.cell.lattice_vectors().copy()
         self.origin = np.asarray(origin)
         if crop is not None:
@@ -67,11 +72,12 @@ class CubeFile:
             self.origin += crop.get("c0", 0)*self.a[2]/norm[2]
             self.a = a
 
-        self.nx = (nx or min(np.ceil(abs(self.a[0,0]) * resolution).astype(int), 200))
-        self.ny = (ny or min(np.ceil(abs(self.a[1,1]) * resolution).astype(int), 200))
-        self.nz = (nz or min(np.ceil(abs(self.a[2,2]) * resolution).astype(int), 200))
-        self.comment1 = comment1 or "<title>"
-        self.comment2 = comment2 or ("Generated with PySCF v%s" % pyscf.__version__)
+        # Use nx, ny, or nz if provided, else determine based on resolution, but not more than 128
+        self.nx = (nx or min(np.ceil(abs(self.a[0,0]) * resolution).astype(int), 128))
+        self.ny = (ny or min(np.ceil(abs(self.a[1,1]) * resolution).astype(int), 128))
+        self.nz = (nz or min(np.ceil(abs(self.a[2,2]) * resolution).astype(int), 128))
+        self.title = title or "<title>"
+        self.comment = comment or ("Generated with PySCF v%s" % pyscf.__version__)
         self.fmt = fmt
         self.coords = self.get_coords()
 
@@ -94,6 +100,17 @@ class CubeFile:
     def nfields(self):
         return len(self.fields)
 
+    def save_state(self, filename):
+        cell, self.cell = self.cell, None       # Do not pickle cell
+        pickle.dump(self, open(filename, "wb"))
+        self.cell = cell                        # Restore self.cell
+
+    @classmethod
+    def load_state(cls, filename, cell=None):
+        self = pickle.load(open(filename, "rb"))
+        self.cell = cell
+        return self
+
     # Context manager support
     def __enter__(self):
         return self
@@ -101,42 +118,31 @@ class CubeFile:
     def __exit__(self, type, value, traceback):
         self.write()
 
-
-    def add_field(self, data, kind="orbital", dset_idx=None):
-        """Add a field to be included in the cube file.
-
-        Arguments
-        ---------
-            data : (N) or (N, N), array
-                Orbital coefficients or density matrix.
-            kind : ["orbital", "density"], optional
-                Type of field. Default: "orbital".
-            dset_ids : int, optional
-                Dataset index.
-        """
-        if kind not in ("orbital", "density", "mep"):
-            raise ValueError("Unknown value for kind= %s" % kind)
-        # TODO
-        if kind == "mep": raise NotImplementedError()
-        self.fields.append((data, kind, dset_idx))
-
-    def add_fields(self, data, kind="orbital", **kwargs):
-        """Add multiple fields to be included in the cube file.
+    def add_orbital(self, coeff, dset_idx=None):
+        """Add one or more orbitals to the cube files data set.
 
         Arguments
         ---------
-            data : (N, M) or (M, N, N), array
-                Array of Orbital coefficients or density matrices.
-                Note that for kind="orbital", the last dimension labels the orbitals,
-                however, for kind="density" the first dimension labels different density matrices.
-            kind : ["orbital", "density"], optional
-                Type of field. Default: "orbital".
-            dset_ids : int, optional
-                Dataset index.
+        coeff : (N,...) array
+            AO coefficients of orbitals.
         """
-        if kind == "orbital": data = data.T
-        for dat in data:
-            self.add_field(dat, kind=kind, **kwargs)
+        coeff = np.asarray(coeff)
+        if coeff.ndim == 1: coeff = coeff[:,np.newaxis]
+        assert coeff.ndim == 2
+        for i, c in enumerate(coeff.T):
+            idx = dset_idx+i if dset_idx is not None else None
+            self.fields.append((c, "orbital", idx))
+
+    def add_density(self, dm, dset_idx=None):
+        dm = np.asarray(dm)
+        if dm.ndim == 2: dm = dm[np.newaxis]
+        assert dm.ndim == 3
+        for i, d in enumerate(dm):
+            idx = dset_idx+i if dset_idx is not None else None
+            self.fields.append((d, "density", idx))
+
+    def add_mep(self, dm, dset_idx=None):
+        raise NotImplementedError()
 
     def write(self, filename=None):
         filename = filename or self.filename
@@ -157,8 +163,8 @@ class CubeFile:
         if self.nfields > 1 and dset_ids is None:
             dset_ids = range(1, self.nfields+1)
         with open(filename, "w") as f:
-            f.write("%s\n" % self.comment1)
-            f.write("%s\n" % self.comment2)
+            f.write("%s\n" % self.title)
+            f.write("%s\n" % self.comment)
             if self.nfields > 1:
                 f.write("%5d" % -self.cell.natm)
             else:
@@ -232,7 +238,6 @@ if __name__ == "__main__":
 
     from pyscf import pbc
     cell = pbc.gto.Cell(
-        #basis = 'gth-szv',
         basis = 'gth-dzv',
         pseudo = 'gth-pade',
         dimension = 2,
@@ -242,7 +247,7 @@ if __name__ == "__main__":
     hf = hf.density_fit()
     hf.kernel()
 
-    with CubeFile(cell, "graphene.cube", crop={"c0" : 4.0, "c1" : 4.0}) as f:
-        f.add_field(hf.mo_coeff[:,0])
-        f.add_fields(hf.mo_coeff[:,6:10])
-        f.add_field(hf.make_rdm1(), kind="density")
+    with CubeFile(cell, "graphene.cube", crop={"c0" : 5.0, "c1" : 5.0}) as f:
+        f.add_orbital(hf.mo_coeff[:,0])
+        f.add_orbital(hf.mo_coeff[:,6:10])
+        f.add_density([hf.make_rdm1(), np.linalg.inv(hf.get_ovlp())-hf.make_rdm1()])

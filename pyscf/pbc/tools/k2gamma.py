@@ -108,7 +108,7 @@ def translation_map(nk):
                        dtype=int, buffer=np.append(idx.ravel(), 0))
     return t_map
 
-def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
+def rotate_mo_to_real(cell, mo_energy, mo_coeff, ovlp, degen_tol=1e-3, rotate_degen=True, method="max-element"):
     """Applies a phase factor to each MO, minimizing the norm of the imaginary part.
 
     Typically, this should reduce the imaginary part of a non-degenerate, Gamma point orbital to zero.
@@ -117,13 +117,6 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
 
     # Output orbitals
     mo_coeff_rot = mo_coeff.copy()
-
-    def _imag_norm(arg, mo):
-        phase = np.exp(1j*arg)
-        mo = mo*phase
-        norm_re = np.linalg.norm(mo.real)
-        norm_im = np.linalg.norm(mo.imag)
-        return norm_im / norm_re
 
     for mo, mo_e in enumerate(mo_energy):
         # Check if MO is degnerate
@@ -134,22 +127,52 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3):
         else:
             degen = (abs(mo_e - mo_energy[mo-1]) < degen_tol) or (abs(mo_e - mo_energy[mo+1]) < degen_tol)
 
+        if degen and not rotate_degen:
+            continue
+
         mo_c = mo_coeff[:,mo]
 
-        arg0 = 0.0
-        fun0 = _imag_norm(arg0, mo_c)
-        rotated = False
-        if abs(mo_c.imag).max() > 1e-10:
-            res = scipy.optimize.minimize(_imag_norm, arg0, args=(mo_c,))
-            arg, fun = res.x, res.fun
-            if fun < fun0:
-                mo_coeff_rot[:,mo] = mo_c*np.exp(1j*arg)
-                rotated = True
+        rotate = False
+        norm0 = np.linalg.norm(mo_c.imag)
 
-        if rotated:
-            logger.debug(cell, "MO %3d at E=%+12.8e: degenerate= %5r imag=%.2e -> %.2e (arg= %.5f)", mo, mo_e, degen, fun0, fun, arg)
+        if method == "max-element":
+            maxidx = np.argmax(abs(mo_c.imag))
+            maxval = mo_c[maxidx]
+            ratio0 = abs(maxval.imag/maxval.real)
+
+            if ratio0 > 1e-8 and abs(maxval.imag) > 1e-8:
+                # Determine -phase of maxval
+                phase = -np.angle(maxval)
+                # Rotate to real axis
+                mo_c1 = mo_c*np.exp(1j*phase)
+                maxval1 = mo_c1[maxidx]
+                ratio1 = abs(maxval1.imag/maxval1.real)
+                norm1 = np.linalg.norm(mo_c1.imag)
+            else:
+                norm1 = norm0
+
+        # Optimization
+        elif method == "optimize":
+
+            # Function to optimize
+            def funcval(phase, mo):
+                mo1 = mo*np.exp(1j*phase)
+                fval = np.linalg.norm(mo1.imag) #/ np.linalg.norm(mo1.real)
+                return fval
+
+            phase0 = 0.0
+            res = scipy.optimize.minimize(funcval, x0=phase0, args=(mo_c,))
+            phase = res.x
+            norm1 = funcval(phase, mo_c)
         else:
-            logger.debug(cell, "MO %3d at E=%+12.8e: degenerate= %5r imag=%.2e", mo, mo_e, degen, fun0)
+            raise ValueError()
+
+        # Only perform rotation if imaginary norm is decreased
+        if (norm1 < norm0):
+            mo_coeff_rot[:,mo] = mo_c1
+            logger.debug(cell, "MO %3d at E=%+12.8e: degen= %5r |Im C|= %.2e -> %.2e (phase= %.8f)", mo, mo_e, degen, norm0, norm1, phase)
+        else:
+            logger.debug(cell, "MO %3d at E=%+12.8e: degen= %5r |Im C|= %.2e", mo, mo_e, degen, norm0)
 
     return mo_coeff_rot
 
@@ -183,9 +206,8 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     E_k_degen = abs(E_g[1:] - E_g[:-1]) < degen_tol
     degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
 
-    t0 = timer()
-    C_gamma = rotate_mo_to_real(cell, E_g, C_gamma, degen_tol=degen_tol)
-    logger.debug(cell, "Time for rotate_mo_to_real= %.2f s", (timer()-t0))
+    # Try to remove imaginary parts by multiplication of simple phase factors
+    C_gamma = rotate_mo_to_real(cell, E_g, C_gamma, ovlp=s, degen_tol=degen_tol)
 
     if np.any(~degen_mask):
         cimag_nondegen = abs(C_gamma[:,~degen_mask].imag).max()
@@ -223,7 +245,6 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     elif degen_method == "dm":
         assert cimag_nondegen < 1e-4
         print("Initial imaginary part in Gamma-point MO coefficients= %5.2e" % abs(C_gamma.imag).max())
-        degen_tol = 1e-3
         idx0 = 0
         # Looping over stop-index, append state with energy 1e9 to guarantee closing of last subspace
         for idx, e1 in enumerate(np.hstack((E_g[1:], 1e9)), 1):

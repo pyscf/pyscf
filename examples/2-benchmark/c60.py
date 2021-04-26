@@ -3,6 +3,7 @@
 import os
 import time
 import pyscf
+from pyscf.lib import logger
 from pyscf.tools import c60struct
 
 log = pyscf.lib.logger.Logger(verbose=5)
@@ -21,7 +22,7 @@ for bas in ('6-31g**', 'cc-pVTZ'):
                   basis=bas,
                   max_memory=40000)
 
-    cpu0 = time.clock(), time.time()
+    cpu0 = time.process_time(), time.perf_counter()
     mf = pyscf.scf.fast_newton(mol.RHF())
     cpu0 = logger.timer('SOSCF/%s' % bas, *cpu0)
 

@@ -76,7 +76,8 @@ def get_arguments():
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
     parser.add_argument("--opts", nargs="*", default=[])
-    parser.add_argument("--plot-orbitals-grid", type=int, nargs=3)
+    #parser.add_argument("--plot-orbitals-grid", type=int, nargs=3)
+    parser.add_argument("--plot-orbitals-crop-c", type=float, nargs=2)
     # Bath specific
     parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
     parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=0.05.")
@@ -543,8 +544,13 @@ for i, a in enumerate(args.lattice_consts):
                 kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
             if args.prim_mp2_bath_tol_vir:
                 kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
-            if args.plot_orbitals_grid:
-                kwargs["plot_orbitals_grid"] = args.plot_orbitals_grid
+            #if args.plot_orbitals_grid:
+                #kwargs["plot_orbitals_grid"] = args.plot_orbitals_grid
+            if args.plot_orbitals_crop_c:
+                kwargs["plot_orbitals_kwargs"] = {
+                        "c0" : args.plot_orbitals_crop_z[0],
+                        "c1" : args.plot_orbitals_crop_z[1]}
+
 
             ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
                 bath_type=args.bath_type, bath_tol=btol,
@@ -559,7 +565,11 @@ for i, a in enumerate(args.lattice_consts):
             elif args.system == "graphene":
                 #for ix in range(2):
                 #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
-                ix = ncells-1    # Make cluster in center
+                if ncells % 2 == 0:
+                    nx, ny = args.supercell[:2]
+                    ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
+                else:
+                    ix = ncells-1    # Make cluster in center
                 ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
             elif args.system == "perovskite":
                 weights = args.bath_tol_fragment_weight
