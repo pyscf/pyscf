@@ -132,7 +132,7 @@ class KnownValues(unittest.TestCase):
         mf = dft.UKS(mol2).run(xc='b88,p86').run()
         es = mf.TDDFT().kernel(nstates=5)[0] * 27.2114
         ref = [3.57861422, 15.09578777, 18.33541598, 20.76914533, 22.12731478]
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 4)
 
     def test_tddft_b3lyp(self):
         td = tdscf.uks.TDDFT(mf_b3lyp).set(conv_tol=1e-12)
