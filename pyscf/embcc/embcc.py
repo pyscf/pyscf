@@ -139,7 +139,7 @@ class EmbCC:
             log.info("EmbCC keyword arguments:")
         for key, val in default_opts.items():
             val = kwargs.pop(key, val)
-            log.info("  %-24s= %r", key, val)
+            log.info("  * %-24s= %r", key, val)
             setattr(self.opts, key, val)
         if kwargs:
             raise ValueError("Unknown arguments: %r" % kwargs.keys())

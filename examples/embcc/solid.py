@@ -509,7 +509,9 @@ for i, a in enumerate(args.lattice_consts):
     #    mf._eri = None
 
     if args.run_hf:
-        np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy)
+        with open("mo-energies.txt", "a") as f:
+            np.savetxt(f, mf.mo_energy, fmt="%.10e", header="MO energies at a=%.2f" % a)
+        #np.savetxt("mo-energies-%.2f.txt" % a, mf.mo_energy, fmt="%.10e")
         natom = mf.mol.natm
         ncells = natom // cell._natom_prim
         eref = natom if (args.energy_per == "atom") else ncells
