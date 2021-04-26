@@ -30,7 +30,7 @@ except ImportError:
     remove_zero = lambda basis: basis
 
 MAXL = 12
-SPDF = 'SPDFGHIKLMNO'
+SPDF = 'SPDFGHIJKLMN'
 MAPSPDF = {key: l for l, key in enumerate(SPDF)}
 
 DELIMETER = '****'
