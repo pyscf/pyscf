@@ -405,92 +405,6 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
 
 # ================================================================================================ #
 
-#def run_mp2(self, Co, Cv, make_dm=False, canon_occ=True, canon_vir=True, eris=None):
-##def run_mp2(self, Co, Cv, make_dm=False, canon_occ=False, canon_vir=True, eris=None):
-##def run_mp2(self, Co, Cv, make_dm=False, canon_occ=False, canon_vir=False, eris=None):
-#    """Select virtual space from MP2 natural orbitals (NOs) according to occupation number."""
-#
-#    #F = self.mf.get_fock()
-#    #F = self.base.fock
-#    F = self.base.get_fock()
-#    Fo = np.linalg.multi_dot((Co.T, F, Co))
-#    Fv = np.linalg.multi_dot((Cv.T, F, Cv))
-#    # Canonicalization [optional]
-#    if canon_occ:
-#        eo, Ro = np.linalg.eigh(Fo)
-#        Co = np.dot(Co, Ro)
-#    else:
-#        eo = np.diag(Fo)
-#    if canon_vir:
-#        ev, Rv = np.linalg.eigh(Fv)
-#        Cv = np.dot(Cv, Rv)
-#    else:
-#        ev = np.diag(Fv)
-#    C = np.hstack((Co, Cv))
-#    eigs = np.hstack((eo, ev))
-#    no = Co.shape[-1]
-#    nv = Cv.shape[-1]
-#    # Use PySCF MP2 for T2 amplitudes
-#    occ = np.asarray(no*[2] + nv*[0])
-#    if self.has_pbc:
-#        mp2 = pyscf.pbc.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
-#    else:
-#        mp2 = pyscf.mp.MP2(self.mf, mo_coeff=C, mo_occ=occ)
-#    # Integral transformation
-#    t0 = MPI.Wtime()
-#    if eris is None:
-#        eris = mp2.ao2mo()
-#        # Does not work for DF at the moment...
-#        assert (eris.ovov is not None)
-#        time_ao2mo = MPI.Wtime() - t0
-#        log.debug("Time for AO->MO: %s", get_time_string(time_ao2mo))
-#    # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
-#    else:
-#        eris = self.transform_mp2_eris(eris, Co, Cv)
-#        #eris2 = mp2.ao2mo()
-#        #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
-#        #assert np.allclose(eris.ovov, eris2.ovov)
-#        time_mo2mo = MPI.Wtime() - t0
-#        log.debug("Time for MO->MO: %s", get_time_string(time_mo2mo))
-#
-#    eris.nocc = mp2.nocc
-#
-#    # T2 amplitudes
-#    #e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris)
-#    e_mp2_full, T2 = mp2.kernel(mo_energy=eigs, eris=eris, hf_reference="legacy")
-#    e_mp2_full *= self.symmetry_factor
-#    log.debug("Full MP2 energy = %12.8g htr", e_mp2_full)
-#
-#    # Calculate local energy
-#    # Project first occupied index onto local space
-#    _, pT2 = self.get_local_amplitudes(mp2, None, T2, symmetrize=False)
-#    #_, pT2 = self.get_local_amplitudes(mp2, None, T2, variant="democratic")
-#    e_mp2 = self.symmetry_factor * mp2.energy(pT2, eris)
-#
-#    # MP2 density matrix [optional]
-#    if make_dm:
-#        #Doo = 2*(2*einsum("ikab,jkab->ij", T2, T2)
-#        #         - einsum("ikab,jkba->ij", T2, T2))
-#        #Dvv = 2*(2*einsum("ijac,ijbc->ab", T2, T2)
-#        #         - einsum("ijac,ijcb->ab", T2, T2))
-#        Doo, Dvv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
-#        Doo, Dvv = -2*Doo, 2*Dvv
-#
-#        # Rotate back to input coeffients (undo canonicalization)
-#        if canon_occ:
-#            Doo = np.linalg.multi_dot((Ro, Doo, Ro.T))
-#        if canon_vir:
-#            Dvv = np.linalg.multi_dot((Rv, Dvv, Rv.T))
-#    else:
-#        Doo = Dvv = None
-#
-#    # Rotate T2 back
-#    T2 = einsum("ijab,ki,lj,ca,db->klcd", T2, Ro, Ro, Rv, Rv)
-#
-#    #return e_mp2, eris, Doo, Dvv
-#    return e_mp2, eris, Doo, Dvv, T2
-
-
 def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True, eris=None, local_dm=False):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
 
@@ -542,8 +456,6 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     noccenv = c_occenv.shape[-1]
     nvirenv = c_virenv.shape[-1]
     frozen = list(range(noccenv)) + list(range(norb-nvirenv, norb))
-    #log.debug("Active orbitals: %d occupied and %d virtual", c_occ.shape[-1], c_vir.shape[-1])
-    #log.debug("Freezing %d occupied and %d virtual orbitals with indices:\n%r", noccenv, nvirenv, frozen)
     if self.use_pbc:
         cls = pyscf.pbc.mp.MP2
     else:

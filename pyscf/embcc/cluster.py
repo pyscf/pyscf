@@ -123,10 +123,6 @@ class Cluster:
 
         # Bath parameters
 
-        # Currently not in use (always on!)
-        self.use_ref_orbitals_dmet = kwargs.get("use_ref_orbitals_dmet", True)
-        self.use_ref_orbitals_bath = kwargs.get("use_ref_orbitals_bath", False)
-
         self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
         self.coupled_bath = kwargs.get("coupled_bath", False)
 
@@ -175,11 +171,6 @@ class Cluster:
             self.cubefile = cubegen.CubeFile(self.mol, filename=name, **self.base.opts.plot_orbitals_kwargs)
             self.cubefile.add_orbital(self.C_local.copy())
 
-        # Still in use??
-        #self.occbath_eigref = kwargs.get("occbath-eigref", None)
-        #self.virbath_eigref = kwargs.get("virbath-eigref", None)
-        self.refdata_in = kwargs.get("refdata", {})
-
         # Maximum number of iterations for consistency of amplitudes between clusters
         self.maxiter = kwargs.get("maxiter", 1)
 
@@ -210,14 +201,6 @@ class Cluster:
         self.mo_coeff = None
         self.mo_occ = None
         self.eris = None
-
-        #self.ref_orbitals = None
-
-        # Reference orbitals should be saved with keys
-        # dmet-bath, occ-bath, vir-bath
-        #self.refdata = {}
-        self.refdata_out = {}
-        #self.ref_orbitals = {}
 
         # Local amplitudes [C1, C2] can be stored here and
         # used by other fragments
@@ -289,43 +272,6 @@ class Cluster:
     def nfrozen(self):
         """Number of frozen environment orbitals."""
         return len(self.frozen)
-
-    #def get_orbitals(self):
-    #    """Get dictionary with orbital coefficients."""
-    #    orbitals = {
-    #            "local" : self.C_local,
-    #            "dmet-bath" : self.C_bath,
-    #            "occ-bath" : self.C_occbath,
-    #            "vir-bath" : self.C_virbath,
-    #            }
-    #    return orbitals
-
-    def get_refdata(self):
-        """Get data of reference calculation for smooth PES."""
-        refdata = self.refdata_out
-        log.debug("Getting refdata: %r", refdata.keys())
-        #refdata = {
-        #        "dmet-bath" : self.C_bath,
-        #        "occbath-eigref" : self.occbath_eigref,
-        #        "virbath-eigref" : self.virbath_eigref,
-        #        }
-        return refdata
-
-    def set_refdata(self, refdata):
-        log.debug("Setting refdata: %r", refdata.keys())
-        #self.refdata = refdata
-        self.refdata_in = refdata
-        #self.dmetbath_ref = refdata["dmet-bath"]
-        #self.occbath_eigref = refdata["occbath-eigref"]
-        #self.virbath_eigref = refdata["virbath-eigref"]
-
-    def reset(self, keep_ref_orbitals=True):
-        """Reset cluster object. By default it stores the previous orbitals, so they can be used
-        as reference orbitals for a new calculation of different geometry."""
-        ref_orbitals = self.get_orbitals()
-        self.set_default_attributes()
-        if keep_ref_orbitals:
-            self.ref_orbitals = ref_orbitals
 
     def loop_clusters(self, exclude_self=False):
         """Loop over all clusters."""
@@ -653,8 +599,6 @@ class Cluster:
         ---------
         solver : str
             Method ["MP2", "CISD", "CCSD", "CCSD(T)", "FCI"]
-        ref_orbitals : dict
-            Dictionary with reference orbitals.
 
         Returns
         -------
@@ -662,21 +606,12 @@ class Cluster:
         """
 
         solver = solver or self.solver
-        # Orbitals from a reference calaculation (e.g. different geometry)
-        # Used for recovery of orbitals via active transformation
-        refdata = refdata or self.refdata_in
-        if False:
-            ref_orbitals = ref_orbitals or self.ref_orbitals
-
-            # === Make DMET bath orbital and diagonalize DM in cluster space
-            if ref_orbitals.get("dmet-bath", None) is not None:
-                assert np.allclose(ref_orbitals["dmet-bath"], self.refdata_in["dmet-bath"])
 
         t0_bath = t0 = timer()
         log.info("MAKING DMET BATH")
         log.info("****************")
         log.changeIndentLevel(1)
-        C_bath, C_occenv, C_virenv = self.make_dmet_bath(C_ref=refdata.get("dmet-bath", None), tol=self.dmet_bath_tol)
+        C_bath, C_occenv, C_virenv = self.make_dmet_bath(tol=self.dmet_bath_tol)
         log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
@@ -685,32 +620,12 @@ class Cluster:
             self.cubefile.add_orbital(C_bath.copy(), dset_idx=1001)
 
         # Add additional orbitals to cluster [optional]
-        # First-order power orbitals:
-        #if self.power1_occ_bath_tol is not False:
-        #    C_add, C_occenv, _ = make_mf_bath(self, C_occenv, "occ", bathtype="power",
-        #            tol=self.power1_occ_bath_tol)
-        #    log.info("Adding %d first-order occupied power bath orbitals to cluster.", C_add.shape[-1])
-        #    C_bath = np.hstack((C_add, C_bath))
-        #if self.power1_vir_bath_tol is not False:
-        #    C_add, C_virenv, _ = make_mf_bath(self, C_virenv, "vir", bathtype="power",
-        #            tol=self.power1_vir_bath_tol)
-        #    log.info("Adding %d first-order virtual power bath orbitals to cluster.", C_add.shape[-1])
-        #    C_bath = np.hstack((C_bath, C_add))
-        ## Local orbitals:
-        #if self.local_occ_bath_tol is not False:
-        #    C_add, C_occenv = make_local_bath(self, C_occenv, tol=self.local_occ_bath_tol)
-        #    log.info("Adding %d local occupied bath orbitals to cluster.", C_add.shape[-1])
-        #    C_bath = np.hstack((C_add, C_bath))
-        #if self.local_vir_bath_tol is not False:
-        #    C_add, C_virenv = make_local_bath(self, C_virenv, tol=self.local_vir_bath_tol)
-        #    log.info("Adding %d local virtual bath orbitals to cluster.", C_add.shape[-1])
-        #    C_bath = np.hstack((C_bath, C_add))
         C_bath, C_occenv, C_virenv = self.additional_bath_for_cluster(C_bath, C_occenv, C_virenv)
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
 
-        # Add cluster orbitals to plot [currently deactivated]
+        # Add cluster orbitals to plot
         #if self.opts.plot_orbitals:
         #    self.cubefile.add_orbital(C_occclst.copy(), dset_idx=2001)
         #    self.cubefile.add_orbital(C_virclst.copy(), dset_idx=3001)
@@ -750,48 +665,17 @@ class Cluster:
         self.C_occclst = C_occclst
         self.C_virclst = C_virclst
 
-        # For orbital plotting
-        #self.orbitals["Occ.-Cluster"] = C_occclst
-        #self.orbitals["Vir.-Cluster"] = C_virclst
-
-        self.refdata_out["dmet-bath"] = C_bath
-
         # === Additional bath orbitals
-
-        if self.use_ref_orbitals_bath:
-            #C_occref = ref_orbitals.get("occ-bath", None)
-            #C_virref = ref_orbitals.get("vir-bath", None)
-            #if C_occref is not None:
-            #    assert np.allclose(C_occref, self.refdata_in["occ-bath"])
-            #if C_virref is not None:
-            #    assert np.allclose(C_virref, self.refdata_in["vir-bath"])
-            C_occref = refdata.get("occ-bath", None)
-            C_virref = refdata.get("vir-bath", None)
-        else:
-            C_occref = None
-            C_virref = None
-
-        # Reorder
-        #occbath_eigref = self.occbath_eigref
-        #virbath_eigref = self.virbath_eigref
-        occbath_eigref = refdata.get("occbath-eigref", None)
-        virbath_eigref = refdata.get("virbath-eigref", None)
-        #virbath_eigref = self.virbath_eigref
-
-        # TEST
-        #occbath_eigref = None
-        #virbath_eigref = None
 
         log.info("MAKING OCCUPIED BATH")
         log.info("********************")
         t0 = timer()
         log.changeIndentLevel(1)
-        C_occbath, C_occenv2, e_delta_occ, occbath_eigref = self.make_bath(
+        C_occbath, C_occenv2, e_delta_occ, _ = self.make_bath(
                 C_occenv, self.bath_type, "occ",
-                C_ref=C_occref, eigref=occbath_eigref,
                 # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[0], tol=self.bath_tol[0], energy_tol=self.bath_energy_tol[0])
+                nbath=self.bath_target_size[0], tol=self.bath_tol[0])
         log.debug("Time for occupied %r bath: %s", self.bath_type, get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
@@ -799,12 +683,11 @@ class Cluster:
         log.info("*******************")
         t0 = timer()
         log.changeIndentLevel(1)
-        C_virbath, C_virenv2, e_delta_vir, virbath_eigref = self.make_bath(
+        C_virbath, C_virenv2, e_delta_vir, _ = self.make_bath(
                 C_virenv, self.bath_type, "vir",
-                C_ref=C_virref, eigref=virbath_eigref,
                 # New for MP2 bath:
                 C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[1], tol=self.bath_tol[1], energy_tol=self.bath_energy_tol[1])
+                nbath=self.bath_target_size[1], tol=self.bath_tol[1])
         log.debug("Time for virtual %r bath: %s", self.bath_type, get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
@@ -820,15 +703,6 @@ class Cluster:
         self.C_virbath = C_virbath
         self.C_occenv = C_occenv
         self.C_virenv = C_virenv
-
-        self.refdata_out["occ-bath"] = C_occbath
-        self.refdata_out["vir-bath"] = C_virbath
-
-        # For future reorderings
-        #self.occbath_eigref = occbath_eigref
-        #self.virbath_eigref = virbath_eigref
-        self.refdata_out["occbath-eigref"] = occbath_eigref
-        self.refdata_out["virbath-eigref"] = virbath_eigref
 
         self.e_delta_mp2 = e_delta_occ + e_delta_vir
         log.debug("MP2 correction = %.8g", self.e_delta_mp2)
