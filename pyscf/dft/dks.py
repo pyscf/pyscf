@@ -167,21 +167,3 @@ class RDKS(DKS, dhf.RDHF):
     x2c = x2c1e
 
 RKS = RDKS
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = DKS(mol)
-    print(m.kernel())
-
-    m = DKS(mol).x2c()
-    print(m.kernel())
-

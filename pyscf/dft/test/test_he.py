@@ -21,8 +21,8 @@ from pyscf import dft
 
 # for cgto
 mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
+mol.verbose = 7
+mol.output = '/dev/null'
 mol.atom = [[2, (0.,0.,0.)], ]
 mol.basis = {"He": 'cc-pvdz'}
 mol.build()
@@ -39,6 +39,7 @@ mol1.build()
 
 def tearDownModule():
     global mol, method, mol1
+    mol.stdout.close()
     del mol, method, mol1
 
 
@@ -46,6 +47,20 @@ class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method.xc = 'lda, vwn_rpa'
         self.assertAlmostEqual(method.scf(), -2.8641551904776055, 9)
+
+    def test_dks_lda(self):
+        m = mol.DKS()
+        self.assertAlmostEqual(m.kernel(), -2.8268242330361373, 9)
+
+        m = mol.DKS().x2c()
+        self.assertAlmostEqual(m.kernel(), -2.826788817256218, 9)
+
+    def test_udks_lda(self):
+        m = dft.dks.UDKS(mol)
+        self.assertAlmostEqual(m.kernel(), -2.8268242330361373, 9)
+
+        m = dft.dks.UDKS(mol).x2c()
+        self.assertAlmostEqual(m.kernel(), -2.826788817256218, 9)
 
     def test_nr_pw91pw91(self):
         method.xc = 'pw91, pw91'
@@ -63,6 +78,10 @@ class KnownValues(unittest.TestCase):
         method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -2.9070540942168002, 9)
 
+        m = mol.UKS()
+        m.xc = 'b3lyp'
+        self.assertAlmostEqual(m.scf(), -2.89992555753, 9)
+
     def test_nr_lda_1e(self):
         mf = dft.RKS(mol1).run()
         self.assertAlmostEqual(mf.e_tot, -1.936332393935281, 9)
@@ -71,8 +90,12 @@ class KnownValues(unittest.TestCase):
         mf = dft.ROKS(mol1).set(xc='b3lypg').run()
         self.assertAlmostEqual(mf.e_tot, -1.9931564410562266, 9)
 
+    def test_xcfun_nr_blyp(self):
+        m = mol.RKS()
+        m._numint.libxc = dft.xcfun
+        m.xc = 'b88,lyp'
+        self.assertAlmostEqual(m.scf(), -2.8978518405, 9)
 
 if __name__ == "__main__":
     print("Full Tests for He")
     unittest.main()
-

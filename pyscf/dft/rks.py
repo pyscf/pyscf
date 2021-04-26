@@ -21,6 +21,7 @@ Non-relativistic restricted Kohn-Sham
 '''
 
 
+import textwrap
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -360,14 +361,24 @@ class KohnShamDFT(object):
         self._numint.omega = float(v)
 
     def dump_flags(self, verbose=None):
-        logger.info(self, 'XC functionals = %s', self.xc)
+        log = logger.new_logger(self, verbose)
+        log.info('XC library %s version %s\n    %s',
+                 self._numint.libxc.__name__,
+                 self._numint.libxc.__version__,
+                 self._numint.libxc.__reference__)
+
+        log.info('XC functionals = %s', self.xc)
+        if hasattr(self._numint.libxc, 'xc_reference'):
+            log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
         if self.nlc!='':
-            logger.info(self, 'NLC functional = %s', self.nlc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+            log.info('NLC functional = %s', self.nlc)
+
         self.grids.dump_flags(verbose)
         if self.nlc!='':
-            logger.info(self, '** Following is NLC Grids **')
+            log.info('** Following is NLC Grids **')
             self.nlcgrids.dump_flags(verbose)
+
+        log.info('small_rho_cutoff = %g', self.small_rho_cutoff)
         return self
 
     define_xc_ = define_xc_
@@ -495,25 +506,3 @@ class RKS(KohnShamDFT, hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf.dft import xcfun
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = RKS(mol)
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405
-
-    m = RKS(mol)
-    m._numint.libxc = xcfun
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405

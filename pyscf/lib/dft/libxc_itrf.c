@@ -856,3 +856,22 @@ const char * LIBXC_reference_doi()
 {
   return xc_reference_doi();
 }
+
+void LIBXC_xc_reference(int xc_id, const char **refs)
+{
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+
+        int i;
+        for (i = 0; i < XC_MAX_REFERENCES; i++) {
+                if (func.info->refs[i] == NULL) {
+                        refs[i] = NULL;
+                        break;
+                }
+                refs[i] = func.info->refs[i]->ref;
+        }
+        return;
+}
