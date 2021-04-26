@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
     def test_tddft_b88p86(self):
         td = tdscf.uks.TDDFT(mf_bp86).set(conv_tol=1e-12)
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 4.105290861883461, 4)
+        self.assertAlmostEqual(lib.fp(es[:3]), 4.105290861883461, 4)
 
         mf = dft.UKS(mol1).run(xc='b88,p86').run()
         es = mf.TDDFT().kernel(nstates=5)[0] * 27.2114
