@@ -75,8 +75,8 @@ class Cluster:
         log.info("  * Size= %d", self.size)     # depends on self.C_local
 
         # Determine number of mean-field electrons in fragment space
-        s = self.base.get_ovlp()
-        dm = np.linalg.multi_dot((self.C_local.T, s, self.mf.make_rdm1(), s, self.C_local))
+        sc = np.dot(self.base.ovlp, self.C_local)
+        dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         self.nelec_mf_frag = np.trace(dm)
         log.info("  * Mean-field electrons= %.5f", self.nelec_mf_frag)
 
@@ -123,7 +123,6 @@ class Cluster:
 
         # Bath parameters
 
-        self.dmet_bath_tol = kwargs.get("dmet_bath_tol", 1e-4)
         self.coupled_bath = kwargs.get("coupled_bath", False)
 
         # Add additional orbitals to 0-cluster
@@ -155,13 +154,15 @@ class Cluster:
 
         #self.make_rdm1 = kwargs.get("make_rdm1", False)     # Calculate RDM1 in cluster?
 
-        self.opts = Options()
-        self.opts.bath_tol_per_elec = self.base.opts.get("bath_tol_per_elec", False)
-        self.opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
-        self.opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
-        self.opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
-        self.opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
-        self.opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
+        opts = Options()
+        opts.dmet_bath_tol = self.base.opts.get("dmet_bath_tol", 1e-4)
+        opts.bath_tol_per_elec = self.base.opts.get("bath_tol_per_elec", False)
+        opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
+        opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
+        opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
+        opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
+        opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
+        self.opts = opts
 
         #self.project_type = kwargs.get("project_type", "first-occ")
 
@@ -170,9 +171,6 @@ class Cluster:
             name = "%s.cube" % os.path.join(self.base.opts.plot_orbitals_dir, self.name)
             self.cubefile = cubegen.CubeFile(self.mol, filename=name, **self.base.opts.plot_orbitals_kwargs)
             self.cubefile.add_orbital(self.C_local.copy())
-
-        # Maximum number of iterations for consistency of amplitudes between clusters
-        self.maxiter = kwargs.get("maxiter", 1)
 
         self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 200)
 
@@ -354,7 +352,7 @@ class Cluster:
 
         # Calculate chi
         for ao in range(self.mol.nao_nr()):
-            S = self.mf.get_ovlp()
+            S = self.base.ovlp
             S121 = 1/S[ao,ao] * np.outer(S[:,ao], S[:,ao])
             for ispace, space in enumerate(spaces):
                 C = orbitals.get_coeff(space)
@@ -400,11 +398,11 @@ class Cluster:
         C_virclst : ndarray
             Virtual cluster orbitals.
         """
-        S = self.mf.get_ovlp()
         C_clst = np.hstack((self.C_local, C_bath))
-        D_clst = np.linalg.multi_dot((C_clst.T, S, self.mf.make_rdm1(), S, C_clst)) / 2
+        sc = np.dot(self.base.ovlp, C_clst)
+        D_clst = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
         e, R = np.linalg.eigh(D_clst)
-        tol = self.dmet_bath_tol
+        tol = self.opts.dmet_bath_tol
         if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=tol, rtol=0):
             raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
         e, R = e[::-1], R[:,::-1]
@@ -440,12 +438,12 @@ class Cluster:
             return C, e
         return C
 
-    def get_occup(self, C):
+    def get_occup(self, coeff):
         """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
 
         Parameters
         ----------
-        C : ndarray, shape(N, M)
+        coeff : ndarray, shape(N, M)
             Orbital coefficients.
 
         Returns
@@ -453,9 +451,9 @@ class Cluster:
         occ : ndarray, shape(M)
             Occupation numbers of orbitals.
         """
-        S = self.mf.get_ovlp()
-        D = np.linalg.multi_dot((C.T, S, self.mf.make_rdm1(), S, C))
-        occ = np.diag(D)
+        sc = np.dot(self.base.ovlp, coeff)
+        dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
+        occ = np.diag(dm)
         return occ
 
     def get_local_projector(self, C, kind="right", inverse=False):
@@ -475,7 +473,7 @@ class Cluster:
         P : ndarray, shape(M, M)
             Projection matrix.
         """
-        S = self.mf.get_ovlp()
+        S = self.base.ovlp
 
         # Project onto space of local (fragment) orbitals.
         #if self.local_orbital_type in ("IAO", "LAO"):
@@ -611,7 +609,7 @@ class Cluster:
         log.info("MAKING DMET BATH")
         log.info("****************")
         log.changeIndentLevel(1)
-        C_bath, C_occenv, C_virenv = self.make_dmet_bath(tol=self.dmet_bath_tol)
+        C_bath, C_occenv, C_virenv = self.make_dmet_bath(tol=self.opts.dmet_bath_tol)
         log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
@@ -732,8 +730,8 @@ class Cluster:
         No = Co.shape[-1]
         Nv = Cv.shape[-1]
         # Check occupations
-        assert np.allclose(self.get_occup(Co), 2, atol=2*self.dmet_bath_tol), "%r" % self.get_occup(Co)
-        assert np.allclose(self.get_occup(Cv), 0, atol=2*self.dmet_bath_tol), "%r" % self.get_occup(Cv)
+        assert np.allclose(self.get_occup(Co), 2, atol=2*self.opts.dmet_bath_tol), "%r" % self.get_occup(Co)
+        assert np.allclose(self.get_occup(Cv), 0, atol=2*self.opts.dmet_bath_tol), "%r" % self.get_occup(Cv)
         mo_occ = np.asarray(No*[2] + Nv*[0])
 
         frozen_occ = list(range(C_occenv.shape[-1]))
@@ -795,9 +793,8 @@ class Cluster:
         if filename is None:
             filename = "%s-%s.txt" % (self.base.opts.popfile, self.name)
 
-        s = self.base.get_ovlp()
-        lo = self.base.lo
-        dm1 = np.linalg.multi_dot((lo.T, s, dm1, s, lo))
+        sc = np.dot(self.base.ovlp, self.base.lo)
+        dm1 = np.linalg.multi_dot((sc.T, dm1, sc))
         pop, chg = self.mf.mulliken_pop(dm=dm1, s=np.eye(dm1.shape[-1]))
         pop_mf = self.base.pop_mf
         chg_mf = self.base.pop_mf_chg
@@ -834,8 +831,7 @@ class Cluster:
         if filename is None:
             filename = "%s-%s.txt" % (self.base.opts.eomfile, self.name)
 
-        s = self.base.get_ovlp()
-        lo = self.base.lo
+        sc = np.dot(self.base.ovlp, self.base.lo)
         if kind == "IP":
             e, c = csolver.ip_energy, csolver.ip_coeff
         else:
@@ -859,7 +855,7 @@ class Cluster:
                         (kind, root, e[root], qp))
                 if qp < 0.0 or qp > 1.0:
                     log.error("Error: QP-weight not between 0 and 1!")
-                r1lo = einsum("i,ai,ab,bl->l", r1, eris.mo_coeff[:,:cc.nocc], s, lo)
+                r1lo = einsum("i,ai,al->l", r1, eris.mo_coeff[:,:cc.nocc], sc)
 
                 if sort_weight:
                     order = np.argsort(-r1lo**2)

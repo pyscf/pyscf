@@ -50,6 +50,7 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True, cderi_file=None):
                     f["j3c-/0/0"] = j3c_neg
             else:
                 df._cderi = j3c
+                assert (j3c_neg is None)
 
     return mf_sc
 
@@ -105,9 +106,8 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
             jmax = (ki+1) if use_ksymm else nk
             for kj in range(jmax):
                 j3c_kpts, npos, nneg = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
-                #j3c_kpts, npos_ij, nneg_ij = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False, include_sign=True)
-                #assert (nneg == 0)
-                log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
+                assert (nneg == 0)
+                #log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
                 j3c_ij = einsum("Lab,i,j->Liajb", j3c_kpts, phase[ki], phase[kj].conj()).reshape(naux, nk*nao, nk*nao)
                 kl = kconserv[ki,kj]
                 if compact:
@@ -153,7 +153,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
             kjmax = (ki+1) if use_ksymm else nk
             for kj in range(kjmax):
                 j3c_kpts[...,ki,kj], npos, nneg = load_j3c(cell, gdf, (kpts[ki], kpts[kj]), compact=False)
-                log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
+                #log.debug("naux=%d npos=%d nneg=%d at ki=%d kj=%d", naux, npos, nneg, ki, kj)
                 naux_pos = max(npos, naux_pos)
                 naux_neg = max(nneg, naux_neg)
                 assert (cell.dimension == 2) or (nneg == 0)
@@ -179,6 +179,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
         log.info("Memory for supercell 3c-integrals with shape %r= %s", list(j3c.shape), memory_string(j3c))
 
         t0 = timer()
+        max_imag = np.zeros(1)
         libpbc = pyscf.lib.load_library("libpbc")
         ierr = libpbc.j3c_k2gamma(
                 ctypes.c_int64(nk), ctypes.c_int64(nao), ctypes.c_int64(naux),
@@ -188,8 +189,11 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
                 ctypes.c_bool(compact),
                 # Out
                 j3c.ctypes.data_as(ctypes.c_void_p),
+                max_imag.ctypes.data_as(ctypes.c_void_p),
                 )
         assert (ierr == 0)
+        log.debug("Max imaginary element in j3c= %.2e", max_imag)
+        if max_imag > 1e-3: log.warning("WARNING: Large imaginary element in j3c= %.2e !", max_imag)
         log.info("Time for unfolding in C= %.2g s", (timer()-t0))
 
         if cell.dimension == 2:
@@ -201,6 +205,7 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
             log.info("Memory for negative supercell 3c-integrals with shape %r= %s", list(j3c_neg.shape), memory_string(j3c_neg))
 
             t0 = timer()
+            max_imag[0] = 0.0
             ierr = libpbc.j3c_k2gamma(
                     ctypes.c_int64(nk), ctypes.c_int64(nao), ctypes.c_int64(naux_neg),
                     kconserv.ctypes.data_as(ctypes.c_void_p),
@@ -209,16 +214,18 @@ def k2gamma_3c2e(cell, gdf, kpts, compact=True, use_ksymm=True, version=DEFAULT_
                     ctypes.c_bool(compact),
                     # Out
                     j3c_neg.ctypes.data_as(ctypes.c_void_p),
+                    max_imag.ctypes.data_as(ctypes.c_void_p),
                     )
             assert (ierr == 0)
+            log.debug("Max imaginary element in j3c= %.2e", max_imag)
+            if max_imag > 1e-3: log.warning("WARNING: Large imaginary element in j3c= %.2e !", max_imag)
             log.info("Time for unfolding in C= %.2g s", (timer()-t0))
         else:
             j3c_neg = None
 
     # Normalize
-    j3c = j3c / np.sqrt(nk)
-    if j3c_neg is not None:
-        j3c_neg = j3c_neg / np.sqrt(nk)
+    j3c /= np.sqrt(nk)
+    if j3c_neg is not None: j3c_neg /= np.sqrt(nk)
 
     if compact:
         j3c = j3c.reshape(nk*naux, ncomp)
@@ -252,7 +259,7 @@ def load_j3c(cell, gdf, kij, compact=False, include_sign=False):
     for lr, li, sign in gdf.sr_loop(kij, compact=compact):
         blksize = lr.shape[0]
         assert sign in (1, -1)
-        log.debug("blksize=%d, sign=%d", blksize, sign)
+        #log.debug("blksize=%d, sign=%d", blksize, sign)
         if sign == 1:
             npos += blksize
         elif sign == -1:

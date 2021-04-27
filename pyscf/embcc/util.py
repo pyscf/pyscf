@@ -114,6 +114,7 @@ def orthogonalize_mo(c, s, tol=1e-8):
         Orthogonalized MO coefficients.
     """
     assert np.allclose(c.imag,  0)
+    assert np.allclose(s, s.T)
     chi = np.linalg.multi_dot((c.T, s, c))
     assert np.allclose(chi, chi.T)
     e, v = np.linalg.eigh(chi)

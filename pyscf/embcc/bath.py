@@ -46,7 +46,7 @@ def project_ref_orbitals(self, C_ref, C):
     assert (nref > 0)
     assert (C.shape[-1] > 0)
     log.debug("Projecting %d reference orbitals into space of %d orbitals", nref, C.shape[-1])
-    S = self.mf.get_ovlp()
+    S = self.base.ovlp
     # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
     C_ref_orth = pyscf.lo.vec_lowdin(C_ref, S)
     assert (C_ref_orth.shape == C_ref.shape)
@@ -88,9 +88,9 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-8, reftol=0.8):
         Virtual environment orbitals.
     """
     C_env = self.C_env
-    S = self.mf.get_ovlp()
     # Divide by 2 to get eigenvalues in [0,1]
-    D_env = np.linalg.multi_dot((C_env.T, S, self.mf.make_rdm1(), S, C_env)) / 2
+    sc = np.dot(self.base.ovlp, C_env)
+    D_env = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
     eig, R = np.linalg.eigh(D_env)
     eig, R = eig[::-1], R[:,::-1]
 
@@ -325,7 +325,7 @@ def make_mf_bath(self, C_env, kind, bathtype, eigref=None, nbath=None, tol=None,
     elif kind == "vir":
         mask = self.base.mo_occ == 0
 
-    S = self.mf.get_ovlp()
+    S = self.base.ovlp
     CSC_loc = np.linalg.multi_dot((self.C_local.T, S, self.base.mo_coeff[:,mask]))
     CSC_env = np.linalg.multi_dot((C_env.T, S, self.base.mo_coeff[:,mask]))
     e = self.base.mo_energy[mask]
@@ -506,8 +506,6 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
 
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
-    if t2.size > 0:
-        log.debug("Min(|T2|)= %.2e Max(|T2|)= %.2e", abs(t2).min(), abs(t2).max())
     t = (timer() - t0)
     if t > 10:
         log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
@@ -519,7 +517,7 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     if False:
         c_mf_occ = self.base.mo_coeff[:,self.base.mo_occ>0]
         c_mf_vir = self.base.mo_coeff[:,self.base.mo_occ==0]
-        s = self.base.get_ovlp()
+        s = self.base.ovlp
         csco = np.linalg.multi_dot((c_mf_occ.T, s, c_occ))
         cscv = np.linalg.multi_dot((c_mf_vir.T, s, c_vir))
         t2_exact = einsum("ijab,ik,jl,ac,bd->klcd", self.base._t2_exact, csco, csco, cscv, cscv)
@@ -544,8 +542,6 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Calculate local energy
     # Project first occupied index onto local space
     _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
-    if t2loc.size > 0:
-        log.info("Min(|pT2|)= %.2e Max(|pT2|)= %.2e", abs(t2loc).min(), abs(t2loc).max())
 
     e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
     log.debug("Local MP2 energy= %12.8g htr", e_mp2)
@@ -755,7 +751,7 @@ def transform_mp2_eris(self, eris, Co, Cv):
     assert (eris is not None)
     assert (eris.ovov is not None)
 
-    S = self.mf.get_ovlp()
+    S = self.base.ovlp
     Co0, Cv0 = np.hsplit(eris.mo_coeff, [eris.nocc])
     #log.debug("eris.nocc = %d", eris.nocc)
     no0 = Co0.shape[-1]
@@ -924,7 +920,7 @@ def make_mp2_bath(self,
         if eigref is not None:
             log.debug("eigref given: performing reordering of eigenpairs.")
             # Get reordering array
-            S = self.base.get_ovlp()
+            S = self.base.ovlp
             reorder, cost = eigassign(eigref[0], eigref[1], N, C_no, b=S, cost_matrix="er/v")
             log.debug("Optimized linear assignment cost=%.3e", cost)
             N = N[reorder]

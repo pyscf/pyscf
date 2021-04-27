@@ -38,7 +38,8 @@ int64_t j3c_k2gamma(
         double complex *j3c_kpts,   // k-point sampled 3c-integrals (naux, nao, nao, nk, nk)
         bool compact,               // compact
         /* Out */
-        double *j3c)                // (nk*naux, (nk*nao)*(nk*nao+1)/2)
+        double *j3c,                // (nk*naux, (nk*nao)*(nk*nao+1)/2)
+        double *max_imag)           // Max encountered imaginary element
 {
     int64_t ierr = 0;
     const size_t N = nao;
@@ -54,7 +55,6 @@ int64_t j3c_k2gamma(
 
     const double complex Z0 = 0.0;
     const double complex Z1 = 1.0;
-    const double IMAG_TOL = 1e-7;
 
     // Precompute phase.conj() (avoid using CblasConjNoTrans, not BLAS standard, OpenBLAS specific)
     size_t i;
@@ -113,11 +113,13 @@ int64_t j3c_k2gamma(
             i = rk*K2N2 + a*K2N + b*K2 + rj*K + ri;
             rtmp = fabs(cimag(work1[i]));
             //printf("imaginary part = %.2e\n", rtmp);
-            if (rtmp > IMAG_TOL) {
-                if (ierr == 0) {
-                    printf("ERROR: signficant imaginary part= %.2e !\n", rtmp);
-                    ierr = 1;
-                }
+            if (rtmp > *max_imag) {
+                *max_imag = rtmp;
+            //if (rtmp > max_imag) {
+                //if (ierr == 0) {
+                 //   printf("ERROR: signficant imaginary part= %.2e !\n", rtmp);
+                //    ierr = 1;
+                //}
             }
 
             // Fill all
@@ -137,6 +139,8 @@ int64_t j3c_k2gamma(
     }
 
     free(phase_cc);
+
+    printf("C: Max imaginary element in j3c= %.2e\n", *max_imag);
 
     return ierr;
 }

@@ -36,15 +36,16 @@ def get_arguments():
     # System
     parser.add_argument("--system", choices=["diamond", "graphene", "perovskite"], default="diamond")
     parser.add_argument("--atoms", nargs="*")
-    parser.add_argument("--basis", default="gth-dzv")
+    parser.add_argument("--basis", default="gth-dzvp")
     parser.add_argument("--pseudopot", default="gth-pade")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
     parser.add_argument("--lattice-consts", type=float, nargs="*")
+    parser.add_argument("--skip", type=int, default=0)
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
-    parser.add_argument("--precision", type=float, default=1e-5)
+    parser.add_argument("--precision", type=float, default=1e-8)
     parser.add_argument("--pyscf-verbose", type=int, default=10)
     parser.add_argument("--exp-to-discard", type=float, help="If set, discard diffuse basis functions.")
     # Mean-field
@@ -113,7 +114,7 @@ def get_arguments():
         if getattr(args, key) is None:
             setattr(args, key, val)
 
-    args.lattice_consts = np.asarray(args.lattice_consts)
+    args.lattice_consts = np.asarray(args.lattice_consts)[args.skip:]
 
     if MPI_rank == 0:
         log.info("PARAMETERS")
@@ -492,6 +493,11 @@ for i, a in enumerate(args.lattice_consts):
             if args.solver == "CCSD(T)":
                 energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t) / ncells)
                 energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t) / ncells)
+
+            del ccx
+
+    if args.run_hf: del mf
+    del cell
 
     # Write energies to files
     if MPI_rank == 0:

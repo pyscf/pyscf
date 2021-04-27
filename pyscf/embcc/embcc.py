@@ -14,6 +14,7 @@ import pyscf.scf
 from .util import *
 from .cluster import Cluster
 from .localao import localize_ao
+from . import helper
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ except (ImportError, ModuleNotFoundError):
 __all__ = ["EmbCC",]
 
 class EmbCC:
-    """What should this be named?"""
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
@@ -53,14 +53,12 @@ class EmbCC:
             "use_ref_orbitals_dmet",
             "use_ref_orbitals_bath",
             "mp2_correction",
-            "maxiter",
             # BATH
             "bath_type",
             "bath_size",
             "bath_tol",
             #"bath_tol_per_electron",
             "bath_energy_tol",
-            "dmet_bath_tol",
             "power1_occ_bath_tol",
             "power1_vir_bath_tol",
             "local_occ_bath_tol",
@@ -68,7 +66,7 @@ class EmbCC:
             ]
 
     def __init__(self, mf,
-            local_type="IAO",       # TODO: rename, fragment_type?
+            local_type="IAO",       # TODO: rename -> fragment_type?
             solver="CCSD",
             bath_type="mp2-natorb",
             bath_size=None,
@@ -77,11 +75,11 @@ class EmbCC:
             bath_energy_tol=1e-3,
             #minao="minao",
             minao=None,
+            #
+            ovlp=None,
             use_ref_orbitals_dmet=True,
             use_ref_orbitals_bath=False,
             mp2_correction=True,
-            maxiter=1,
-            dmet_bath_tol=1e-4,
             energy_part="first-occ",
             # Additional bath orbitals
             power1_occ_bath_tol=False, power1_vir_bath_tol=False, local_occ_bath_tol=False, local_vir_bath_tol=False,
@@ -98,6 +96,8 @@ class EmbCC:
             Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_bath_tol`,
             or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
 
+        ovlp : ndarray
+            AO overlap matrix - may be higher accuracy (eg. from k2gamma) than `mf.get_ovlp()`
 
         make_rdm1 : [True, False]
             Calculate RDM1 in cluster.
@@ -109,19 +109,18 @@ class EmbCC:
         log.info("******************")
         log.changeIndentLevel(1)
 
-        # New implementation of options
         # TODO: Change other options to here
-        self.opts = Options()
         default_opts = {
                 # Fragment settings
                 "localize_fragment" : False,    # Perform numerical localization on fragment orbitals
                 # Bath settings
+                "dmet_bath_tol" : 1e-4,
                 "bath_tol_per_elec" : False,
                 "prim_mp2_bath_tol_occ" : False,
                 "prim_mp2_bath_tol_vir" : False,
-                #"orthogonal_mo_tol" : 1e-8,
                 "orbfile" : None,         # Filename for orbital coefficients
-                "orthogonal_mo_tol" : False,
+                #"orthogonal_mo_tol" : False,
+                "orthogonal_mo_tol" : 1e-8,
                 # Population analysis
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis
@@ -135,8 +134,8 @@ class EmbCC:
                 # Other
                 "strict" : False,               # Stop if cluster not converged
                 }
-        if kwargs:
-            log.info("EmbCC keyword arguments:")
+        self.opts = Options()
+        if kwargs: log.info("EmbCC keyword arguments:")
         for key, val in default_opts.items():
             val = kwargs.pop(key, val)
             log.info("  * %-24s= %r", key, val)
@@ -162,6 +161,8 @@ class EmbCC:
         if bath_type not in self.VALID_BATH_TYPES:
             raise ValueError("Unknown bath type: %s" % bath_type)
 
+        # TODO:
+        # Automatic conversion from k-point MF
         # Convert KRHF to Gamma-point RHF
         #if isinstance(mf, pyscf.pbc.scf.KRHF) or isinstance(mf.mo_coeff, list):
         #    log.info("Converting KRHF to gamma-point RHF calculation")
@@ -175,6 +176,14 @@ class EmbCC:
         #    mf = mf_g
 
         self.mf = mf
+
+        # AO overlap matrix
+        self.ovlp = ovlp or mf.get_ovlp()
+        log.debug("Symmetry error of AO overlap matrix norm= %.2e max= %.2e", np.linalg.norm(ovlp-ovlp.T), abs(ovlp-ovlp.T).max())
+        # Symmetrize
+        self.ovlp += ovlp.T
+        self.ovlp /= 2
+
         self.mo_energy = mf.mo_energy.copy()
         self.mo_occ = mf.mo_occ.copy()
         self.mo_coeff = mf.mo_coeff.copy()
@@ -184,21 +193,13 @@ class EmbCC:
         self.local_orbital_type = local_type
 
         # Minimal basis for IAO
-        default_minao = {
-                "gth-dzv" : "gth-szv",
-                "gth-dzvp" : "gth-szv",
-                "gth-tzvp" : "gth-szv",
-                "gth-tzv2p" : "gth-szv",
-                }
         if minao is None:
-            log.warning("No minimal basis for IAOs specified.")
-            minao = default_minao.get(self.mol.basis, "minao")
-            log.info("Computational basis= %s -> using minimal basis= %s", self.mol.basis, minao)
+            minao = helper.get_minimal_basis(self.mol.basis)
+            log.warning("No minimal basis for IAOs specified. Basis %s was selected automatically.",  minao)
         self.minao = minao
         log.info("Computational basis= %s", self.mol.basis)
         log.info("Minimal basis=       %s", self.minao)
 
-        self.maxiter = maxiter
         self.energy_part = energy_part
 
         # Options
@@ -211,7 +212,6 @@ class EmbCC:
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
         self.mp2_correction = mp2_correction
-        self.dmet_bath_tol = dmet_bath_tol
         # Additional bath orbitals
         self.power1_occ_bath_tol = power1_occ_bath_tol
         self.power1_vir_bath_tol = power1_vir_bath_tol
@@ -246,7 +246,7 @@ class EmbCC:
             self._fock = self.mf.get_fock()
             log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
         else:
-            cs = np.dot(self.mo_coeff.T, self.get_ovlp())
+            cs = np.dot(self.mo_coeff.T, self.ovlp)
             #log.debug("SHAPES: %r %r %r %r", list(self.mo_coeff.shape), list(self.get_ovlp().shape), list(cs.shape), list(self.mo_energy.shape))
             self._fock = np.einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
 
@@ -254,13 +254,13 @@ class EmbCC:
         # (For example as a result of k2gamma conversion with low cell.precision)
         c = self.mo_coeff.copy()
         assert np.allclose(c.imag, 0)
-        ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
+        ctsc = np.linalg.multi_dot((c.T, self.ovlp, c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             log.info("Orthogonalizing orbitals...")
-            self.mo_coeff = orthogonalize_mo(c, self.get_ovlp(), tol=1e-6)
-            change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
+            self.mo_coeff = orthogonalize_mo(c, self.ovlp, tol=1e-6)
+            change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.ovlp, c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
 
         # Prepare fragments
@@ -310,7 +310,7 @@ class EmbCC:
             log.debug("Time for orbital localization: %s", get_time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
-            chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
+            chi = np.einsum("ai,ab,bi->i", self.C_ao, self.ovlp, C_loc)
             log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
             log.info("Smallest value: %.3g" % np.amin(chi))
             #assert np.all(chi > 0.5)
@@ -334,8 +334,9 @@ class EmbCC:
     def norb(self):
         return self.mol.nao_nr()
 
-    def get_ovlp(self, *args, **kwargs):
-        return self.mf.get_ovlp(*args, **kwargs)
+    def get_ovlp(self):
+        log.warning("get_ovlp is deprecated.")
+        return self.ovlp
 
     def get_hcore(self, *args, **kwargs):
         return self.mf.get_hcore(*args, **kwargs)
@@ -371,7 +372,7 @@ class EmbCC:
             Projector into AO subspace.
         """
         #S1 = self.mf.get_ovlp()
-        S1 = self.get_ovlp()
+        S1 = self.ovlp
         S2 = S1[np.ix_(ao_indices, ao_indices)]
         S21 = S1[ao_indices]
         P21 = scipy.linalg.solve(S2, S21, assume_a="pos")
@@ -399,6 +400,7 @@ class EmbCC:
             Projector into AO space.
         """
         mol1 = self.mol
+        s1 = self.ovlp
         if basis2 is not None:
             mol2 = mol1.copy()
             if getattr(mol2, 'rcut', None) is not None:
@@ -409,23 +411,22 @@ class EmbCC:
                 #from pyscf.pbc import gto as pbcgto
                 # At the moment: Gamma point only
                 kpts = None
-                s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
+                #s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
                 s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
                 s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=kpts))
                 assert s1.ndim == 2
                 #s1, s2, s12 = s1[0], s2[0], s12[0]
             else:
-                s1 = mol1.intor_symmetric('int1e_ovlp')
+                #s1 = mol1.intor_symmetric('int1e_ovlp')
                 s2 = mol2.intor_symmetric('int1e_ovlp')
                 s12 = pyscf.gto.mole.intor_cross('int1e_ovlp', mol1, mol2)
         else:
             mol2 = mol1
-            if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
-                s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
-            else:
-                s1 = mol1.intor_symmetric('int1e_ovlp')
-            s2 = s1.copy()
-            s12 = s1.copy()
+            #if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
+            #    s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
+            #else:
+            #    s1 = mol1.intor_symmetric('int1e_ovlp')
+            s2 = s12 = s1
 
         # Convert AO labels to AO indices
         if ao_labels is not None:
@@ -434,12 +435,6 @@ class EmbCC:
         assert (ao_indices == np.sort(ao_indices)).all()
         log.debug("Basis 2 contains AOs:\n%r", np.asarray(mol2.ao_labels())[ao_indices])
 
-        #assert np.allclose(s1, mol1.get_ovlp())
-        #log.debug("s1.shape: %r", list(s1.shape))
-        #log.debug("ovlp.shape: %r", list(self.mf.get_ovlp().shape))
-        #log.debug("norm: %e", np.linalg.norm(s1 - self.mf.get_ovlp()))
-        #assert np.allclose(s1, self.mf.get_ovlp())
-        assert np.allclose(s1, self.get_ovlp())
         # Restrict basis function of space 2
         s2 = s2[np.ix_(ao_indices, ao_indices)]
         s12 = s12[:,ao_indices]
@@ -459,7 +454,7 @@ class EmbCC:
 
     def make_local_ao_orbitals(self, ao_indices):
         #S = self.mf.get_ovlp()
-        S = self.get_ovlp()
+        S = self.ovlp
         nao = S.shape[-1]
         P = self.make_ao_projector(ao_indices)
         e, C = scipy.linalg.eigh(P, b=S)
@@ -509,7 +504,7 @@ class EmbCC:
         C_local = C_ao[:,loc]
         # Orthogonalize locally
         #S = self.mf.get_ovlp()
-        S = self.get_ovlp()
+        S = self.ovlp
         C_local = pyscf.lo.vec_lowdin(C_local, S)
 
         # Add remaining space
@@ -799,17 +794,16 @@ class EmbCC:
         # Orthogonality of input mo_coeff
         mo_coeff = self.mo_coeff
         norb = mo_coeff.shape[-1]
-        S = self.get_ovlp()
+        S = self.ovlp
         nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
         log.debug("Max orthogonality error in canonical basis = %.1e" % nonorthmax)
 
         C_occ = self.mo_coeff[:,self.mo_occ>0]
         C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
         niao = C_iao.shape[-1]
-        log.debug("Total number of IAOs=%3d", niao)
+        log.debug("Total number of IAOs= %4d", niao)
 
         # Orthogonalize IAO
-        #S = self.mf.get_ovlp()
         C_iao = pyscf.lo.vec_lowdin(C_iao, S)
 
         # Add remaining virtual space
@@ -845,7 +839,6 @@ class EmbCC:
 
         # Test orthogonality
         C = np.hstack((C_iao, C_env))
-        #assert np.allclose(C.T.dot(S).dot(C) - np.eye(norb), 0, 1e-5)
         ortherr = abs(C.T.dot(S).dot(C) - np.eye(norb)).max()
         log.debug("Max orthogonality error in rotated basis = %.1e" % ortherr)
         #assert (ortherr < max(10*nonorthmax, 1e-6))
@@ -864,15 +857,13 @@ class EmbCC:
         iao_atoms = np.asarray([i[0] for i in iao_labels])
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
-            n_diag = np.diag(dm_iao[mask][:,mask])
-            #n_trace = np.trace(dm_iao[mask][:,mask])
-            #log.info("  * %3d: %-6s= %.8f", a, self.mol.atom_symbol(a), ne)
+            n_diag = np.diag(dm_iao[mask][:,mask]).tolist()
             log.info("  * %3d: %-6s=  %r  sum= %.8f", a, self.mol.atom_symbol(a), n_diag, np.sum(n_diag))
 
         return C_iao, C_env, iao_labels
 
     def make_lowdin_ao(self):
-        S = self.get_ovlp()
+        S = self.ovlp
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
         lao_labels = self.mol.ao_labels(None)
         #lao_labels = self.mol.ao_labels()
@@ -883,7 +874,7 @@ class EmbCC:
 
     def make_lowdin_ao_per_atom(self):
         #S = self.mf.get_ovlp()
-        S = self.get_ovlp()
+        S = self.ovlp
         C_lao = np.zeros_like(S)
         aorange = self.mol.aoslice_by_atom()
         for atomid in range(self.mol.natm):
@@ -1007,41 +998,6 @@ class EmbCC:
         #log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
         t_tot = (timer() - t_start)
         log.info("Total wall time [s]: %.5g (%s)", t_tot, get_time_string(t_tot))
-
-        if self.maxiter > 1:
-            for it in range(2, self.maxiter+1):
-
-                self.tccT1 = self.T1
-                self.tccT2 = self.T2
-                self.T1 = None
-                self.T2 = None
-
-                for idx, cluster in enumerate(self.clusters):
-                    if MPI_rank != (idx % MPI_size):
-                        continue
-
-                    # Only rerun the solver
-                    log.debug("Running cluster %s on MPI process=%d...", cluster.name, MPI_rank)
-                    cluster.run_solver()
-                    log.debug("Cluster %s on MPI process=%d is done.", cluster.name, MPI_rank)
-
-                #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
-                results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_full", "e_corr_v", "e_corr_d")
-                if MPI_rank == 0 and not np.all(results["converged"]):
-                    log.debug("converged = %s", results["converged"])
-                    raise RuntimeError("Not all cluster converged")
-
-                self.e_corr = sum(results["e_corr"])
-                self.e_delta_mp2 = sum(results["e_delta_mp2"])
-                self.e_corr_full = sum(results["e_corr_full"])
-                self.e_corr_v = sum(results["e_corr_v"])
-                self.e_corr_d = sum(results["e_corr_d"])
-
-                if MPI_rank == 0:
-                    self.print_results(results)
-
-                if MPI: MPI_comm.Barrier()
-                log.info("Total wall time for EmbCC: %s", get_time_string(timer()-t_start))
 
         log.info("All done.")
 
