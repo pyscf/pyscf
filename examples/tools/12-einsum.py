@@ -4,7 +4,7 @@
 An efficient einsum function using BLAS or TBLIS (https://github.com/devinamatthews/tblis)
 as the tensor contraction engine. By default, pyscf.lib.einsum calls BLAS gemm
 functions for tensor contraction. If tblis is available (see the installation
-instruction http://pyscf.org/pyscf/install.html#tblis), pyscf.lib.einsum calls
+instruction http://pyscf.org/install.html#tblis), pyscf.lib.einsum calls
 TBLIS library at the end. The main advantage of TBLIS library is its small
 memory overhead.
 '''
