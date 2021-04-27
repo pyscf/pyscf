@@ -1654,7 +1654,12 @@ def aoslice_by_atom(mol, ao_loc=None):
     '''
     if ao_loc is None:
         ao_loc = mol.ao_loc_nr()
+
     aorange = numpy.empty((mol.natm,4), dtype=int)
+
+    if mol.natm == 0:
+        return aorange
+
     bas_atom = mol._bas[:,ATOM_OF]
     delimiter = numpy.where(bas_atom[0:-1] != bas_atom[1:])[0] + 1
 
