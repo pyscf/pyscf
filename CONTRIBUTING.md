@@ -1,4 +1,3 @@
 # Contributing to PySCF
 
-Please see the "How to contribute" session of PySCF document
-https://pyscf.org/contributing.html
+See the "How to contribute" section of the PySCF website: https://pyscf.org/contributing.html
