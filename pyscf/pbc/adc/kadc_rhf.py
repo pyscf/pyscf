@@ -1701,36 +1701,45 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 ################ ADC(3) i - kja block and ajk - i ############################
 
-#               for ka in range(nkpts):
-#                   for kb in range(nkpts):
-#                       #ka = kconserv[kc,kshift,kb]
-#                       #ka = kconserv[kb,kc,kshift]
-#                         
-#                       #for ki in range(nkpts): 
-#
-#                           #kj = kconserv[kb, kc, ki]
-#                           #kj = kconserv[kb, kc, ki]
-#                           #ka = kconserv[ki,kj,kshift]
-#
-##                           temp = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
-##                           temp[ka,kb] +=  0.25 * lib.einsum('ijbc,aij->abc',t2_1[ki,kj,kb], r2[ka,ki], optimize=True)
-###                           temp[ka,kb] -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1[ki,kj,kb], r2[ka,kj], optimize=True)
-###                           temp[ka,kb] -= 0.25 * lib.einsum('jibc,aij->abc',t2_1[kj,ki,kb], r2[ka,ki], optimize=True)
-###                           temp[ka,kb] += 0.25 * lib.einsum('jibc,aji->abc',t2_1[kj,ki,kb], r2[ka,kj], optimize=True)
-##
-##                           kb = kconserv[ki,kc,ka]
-###                           s[s1:f1] += lib.einsum('abc,icab->i',temp[ka,kb], eris_ovvv[ki,kc,ka].conj(), optimize=True)
-###                           s[s1:f1] -= lib.einsum('abc,ibac->i',temp[ka,kb], eris_ovvv[ki,kb,ka].conj(), optimize=True)
-#
-#                           #kc = kconserv[kshift, kc, ki]
-#                      kc = kconserv[ka,kshift,kb]
-#                      ki = kconserv[kc,kb,ka]
-#
-#                      temp_new = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
-#                      #temp_new[kc,kb] += lib.einsum('i,icab->cba',r1,eris_ovvv[ki,kc,ka],optimize=True)
-#                      temp_new[kc,kb] += lib.einsum('i,icba->cba',r1,eris_ovvv[ki,kc,kb].conj(),optimize=True)
-#
-#               temp_doubles = np.zeros_like((r2))
+               for kb in range(nkpts):
+                   for kc in range(nkpts):
+                       ka = kconserv[kc,kshift,kb]
+                         
+                       for kk in range(nkpts): 
+                           temp = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
+                           temp_1 = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
+                           temp_2 = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
+                           #temp_doubles = np.zeros_like((r2))
+
+                           kj = kconserv[kk, kb, kc]
+                           temp_1[ka,kb] +=  lib.einsum('jkbc,ajk->abc',    t2_1[kj,kk,kb], r2[ka,kj], optimize=True)
+                           temp[ka,kb] += 0.25 * lib.einsum('jkbc,ajk->abc',t2_1[kj,kk,kb], r2[ka,kj], optimize=True)
+                           temp[ka,kb] -= 0.25 * lib.einsum('jkbc,akj->abc',t2_1[kj,kk,kb], r2[ka,kk], optimize=True)
+                           temp[ka,kb] -= 0.25 * lib.einsum('kjbc,ajk->abc',t2_1[kk,kj,kb], r2[ka,kj], optimize=True)
+                           temp[ka,kb] += 0.25 * lib.einsum('kjbc,akj->abc',t2_1[kk,kj,kb], r2[ka,kk], optimize=True)
+
+                           ki = kconserv[kc,ka,kb]
+                           s[s1:f1] += lib.einsum('abc,icab->i',temp_1[ka,kb].conj(), eris_ovvv[ki,kc,ka].conj(), optimize=True)
+                           s[s1:f1] += lib.einsum('abc,icab->i',temp[ka,kb].conj(),   eris_ovvv[ki,kc,ka].conj(), optimize=True)
+                           s[s1:f1] -= lib.einsum('abc,ibac->i',temp[ka,kb].conj(),   eris_ovvv[ki,kb,ka].conj(), optimize=True)
+
+                           temp_2[kc,kb] += lib.einsum('i,icab->cba',r1,eris_ovvv[ki,kc,ka],optimize=True)
+                           #temp_2[ka,kb] += lib.einsum('i,icab->abc',r1,eris_ovvv[ki,kc,ka],optimize=True)
+                           #temp_doubles[ka,kj] += lib.einsum('cba,kjcb->ajk',temp_2[kc,kb], t2_1[kk,kj,kc], optimize=True)
+
+               #s[s2:f2] += temp_doubles.reshape(-1) 
+
+               temp_doubles = np.zeros_like((r2))
+               for kj in range(nkpts):
+                   for kk in range(nkpts):
+                          ka = kconserv[kk, kshift, kj]
+                          for kc in range(nkpts):
+                              kb = kconserv[kc, kk, kj]
+                              #temp_doubles = np.zeros_like((r2))
+                              temp_doubles[ka,kj] += lib.einsum('cba,kjbc->ajk',temp_2[kc,kb], t2_1[kk,kj,kb].conj(), optimize=True)
+               s[s2:f2] += temp_doubles.reshape(-1) 
+
+
 #               temp_new = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=t2_1.dtype)
 #               for kj in range(nkpts):
 #                   for kk in range(nkpts):
@@ -1823,7 +1832,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 #               del temp
 #               del temp_1
 #               del temp_2
-
+#
 #               temp_1 = np.zeros((nkpts,nkpts,nocc,nvir,nocc),dtype=np.complex)
 #               for kl in range(nkpts):
 #                   for kb in range(nkpts):
