@@ -21,6 +21,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import lib
 from pyscf.mp.dfmp2_fast import DFMP2, SCSMP2
+from pyscf.mp.dfmp2_fast import solve_cphf_rhf, fock_response_rhf
 
 
 mol = gto.Mole()
@@ -129,6 +130,53 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[7], 1.9384836199, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0459325459, delta=1.0e-7)
             self.assertAlmostEqual(natocc[47], 0.0000751662, delta=1.0e-7)
+
+    def test_fock_response(self):
+        nmo = mf.mo_coeff.shape[1]
+        nocc = numpy.count_nonzero(mf.mo_occ > 0)
+        eri = mf.mol.ao2mo(mo_coeffs=mf.mo_coeff, intor='int2e', aosym=1).reshape((nmo,)*4)
+        # test Fock response of a fully dimensioned density matrix
+        dmfull = numpy.random.random((nmo, nmo))
+        Rvo = fock_response_rhf(self.mf, dmfull)
+        Rvo_test = 4 * numpy.einsum('aipq,pq->ai', eri[nocc:, :nocc, :, :], dmfull) \
+            - numpy.einsum('apiq,pq->ai', eri[nocc:, :, :nocc, :], dmfull+dmfull.T)
+        self.assertAlmostEqual(numpy.linalg.norm(Rvo - Rvo_test), 0, delta=1e-11)
+        # test Fock response of a virtual x occupied density matrix
+        dmvo = dmfull[nocc:, :nocc]
+        Rvo = fock_response_rhf(self.mf, dmvo, full=False)
+        Rvo_test = 4 * numpy.einsum('aipq,pq->ai', eri[nocc:, :nocc, nocc:, :nocc], dmvo) \
+            - numpy.einsum('apiq,pq->ai', eri[nocc:, nocc:, :nocc, :nocc], dmvo) \
+            - numpy.einsum('apiq,pq->ai', eri[nocc:, :nocc:, :nocc, nocc:], dmvo.T)
+        self.assertAlmostEqual(numpy.linalg.norm(Rvo - Rvo_test), 0, delta=1e-11)
+
+    def test_solve_cphf(self):
+        nmo = mf.mo_coeff.shape[1]
+        nocc = numpy.count_nonzero(self.mf.mo_occ > 0)
+        nvirt = nmo - nocc
+        # test if the CPHF solution is valid
+        Lai = numpy.random.random((nvirt, nocc))
+        logger = lib.logger.new_logger(self.mf)
+        zai = solve_cphf_rhf(self.mf, Lai, max_cycle=50, tol=1e-12, logger=logger)
+        lhs = numpy.einsum('i,ai->ai', self.mf.mo_energy[:nocc], zai)
+        lhs -= numpy.einsum('a,ai->ai', self.mf.mo_energy[nocc:], zai)
+        lhs -= fock_response_rhf(self.mf, zai, full=False)
+        diffnorm = numpy.linalg.norm(Lai - lhs)
+        self.assertAlmostEqual(diffnorm, 0, delta=1.0e-6)
+
+    def test_natorbs_relaxed(self):
+        mol = self.mf.mol
+        with DFMP2(self.mf) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbitals orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[0], 1.9997950023, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.9402044334, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[8], 0.045982906, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[47], 0.0000658464, delta=1.0e-7)
 
     def test_memory(self):
         # Dummy class to set a very low memory limit.
