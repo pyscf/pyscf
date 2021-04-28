@@ -392,9 +392,9 @@ else:
         'GGA_XC_TH_FL'                 : 196, # D. J. Tozer, N. C. Handy, and W. H. Green, Chem. Phys. Lett. 273, 183 (1997)
         'GGA_XC_VV10'                  : 255, # O. A. Vydrov and T. Van Voorhis, J. Chem. Phys. 133, 244103 (2010)
         'GGA_XC_XLYP'                  : 166, # X. Xu and W. A. Goddard, Proc. Natl. Acad. Sci. U. S. A. 101, 2673 (2004)
-        'HYB_GGA_X_LC2GAU'             : 710, # J.-W. Song, M. A. Watson, and K. Hirao, J. Chem. Phys. 131, 144108 (2009)
-        'HYB_GGA_X_LCGAU'              : 708, # J.-W. Song, S. Tokura, T. Sato, M. A. Watson, and K. Hirao, J. Chem. Phys. 127, 154109 (2007)
-        'HYB_GGA_X_LCGAU_CORE'         : 709, # J.-W. Song, M. A. Watson, A. Nakata, and K. Hirao, J. Chem. Phys. 129, 184113 (2008)
+        #'HYB_GGA_X_LC2GAU'             : 710, # J.-W. Song, M. A. Watson, and K. Hirao, J. Chem. Phys. 131, 144108 (2009)
+        #'HYB_GGA_X_LCGAU'              : 708, # J.-W. Song, S. Tokura, T. Sato, M. A. Watson, and K. Hirao, J. Chem. Phys. 127, 154109 (2007)
+        #'HYB_GGA_X_LCGAU_CORE'         : 709, # J.-W. Song, M. A. Watson, A. Nakata, and K. Hirao, J. Chem. Phys. 129, 184113 (2008)
         'HYB_GGA_X_N12_SX'             : 81 , # R. Peverati and D. G. Truhlar, Phys. Chem. Chem. Phys. 14, 16187 (2012)
         'HYB_GGA_X_S12H'               : 496, # M. Swart, Chem. Phys. Lett. 580, 166 (2013)
         'HYB_GGA_X_SOGGA11_X'          : 426, # R. Peverati and D. G. Truhlar, J. Chem. Phys. 135, 191102 (2011)
@@ -403,14 +403,14 @@ else:
         'HYB_GGA_XC_B1LYP'             : 416, # C. Adamo and V. Barone, Chem. Phys. Lett. 274, 242 (1997)
         'HYB_GGA_XC_B1PW91'            : 417, # C. Adamo and V. Barone, Chem. Phys. Lett. 274, 242 (1997)
         'HYB_GGA_XC_B1WC'              : 412, # D. I. Bilc, R. Orlando, R. Shaltaf, G.-M. Rignanese, J. Iniguez, and P. Ghosez, Phys. Rev. B 77, 165107 (2008)
-        'HYB_GGA_XC_B2PLYP'            : 713, # S. Grimme, J. Chem. Phys. 124, 034108 (2006)
+        #'HYB_GGA_XC_B2PLYP'            : 713, # S. Grimme, J. Chem. Phys. 124, 034108 (2006)
         'HYB_GGA_XC_B3LYP'             : 402, # P. J. Stephens, F. J. Devlin, C. F. Chabalowski, and M. J. Frisch, J. Phys. Chem. 98, 11623 (1994)
         'HYB_GGA_XC_B3LYP5'            : 475, # P. J. Stephens, F. J. Devlin, C. F. Chabalowski, and M. J. Frisch, J. Phys. Chem. 98, 11623 (1994)
         'HYB_GGA_XC_B3LYP_MCM1'        : 461, # M. T. Caldeira and R. Custodio, J. Mol. Model. 25, 62 (2019)
         'HYB_GGA_XC_B3LYP_MCM2'        : 462, # M. T. Caldeira and R. Custodio, J. Mol. Model. 25, 62 (2019)
         'HYB_GGA_XC_B3LYPS'            : 459, # M. Reiher, O. Salomon, and B. A. Hess, Theor. Chem. Acc. 107, 48 (2001)
         'HYB_GGA_XC_B3P86'             : 403, # Defined through Gaussian implementation
-        'HYB_GGA_XC_B3P86_NWCHEM'      : 315, # Defined through NWChem implementation
+        #'HYB_GGA_XC_B3P86_NWCHEM'      : 315, # Defined through NWChem implementation
         'HYB_GGA_XC_B3PW91'            : 401, # A. D. Becke, J. Chem. Phys. 98, 5648 (1993)
         'HYB_GGA_XC_B5050LYP'          : 572, # Y. Shao, M. Head-Gordon, and A. I. Krylov, J. Chem. Phys. 118, 4807 (2003)
         'HYB_GGA_XC_B97'               : 407, # A. D. Becke, J. Chem. Phys. 107, 8554 (1997)
@@ -436,7 +436,7 @@ else:
         'HYB_GGA_XC_EDF2'              : 476, # C. Y. Lin, M. W. George, and P. M. W. Gill, Aust. J. Chem. 57, 365 (2004)
         'HYB_GGA_XC_HAPBE'             : 608, # E. Fabiano, L. A. Constantin, P. Cortona, and F. Della Sala, J. Chem. Theory Comput. 11, 122 (2015)
         'HYB_GGA_XC_HFLYP'             : 314, # C. Lee, W. Yang, and R. G. Parr, Phys. Rev. B 37, 785 (1988)
-        'HYB_GGA_XC_HISS'              : 717, # T. M. Henderson, A. F. Izmaylov, G. E. Scuseria, and A. Savin, J. Chem. Phys. 127, 221103 (2007)
+        #'HYB_GGA_XC_HISS'              : 717, # T. M. Henderson, A. F. Izmaylov, G. E. Scuseria, and A. Savin, J. Chem. Phys. 127, 221103 (2007)
         'HYB_GGA_XC_HJS_B88'           : 431, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_HJS_B97X'          : 432, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
         'HYB_GGA_XC_HJS_PBE'           : 429, # T. M. Henderson, B. G. Janesko, and G. E. Scuseria, J. Chem. Phys. 128, 194105 (2008)
@@ -487,8 +487,8 @@ else:
         'HYB_GGA_XC_SB98_2A'           : 423, # H. L. Schmider and A. D. Becke, J. Chem. Phys. 108, 9624 (1998)
         'HYB_GGA_XC_SB98_2B'           : 424, # H. L. Schmider and A. D. Becke, J. Chem. Phys. 108, 9624 (1998)
         'HYB_GGA_XC_SB98_2C'           : 425, # H. L. Schmider and A. D. Becke, J. Chem. Phys. 108, 9624 (1998)
-        'HYB_GGA_XC_SRC1_BLYP'         : 714, # N. A. Besley, M. J. G. Peach, and D. J. Tozer, Phys. Chem. Chem. Phys. 11, 10350 (2009)
-        'HYB_GGA_XC_SRC2_BLYP'         : 715, # N. A. Besley, M. J. G. Peach, and D. J. Tozer, Phys. Chem. Chem. Phys. 11, 10350 (2009)
+        #'HYB_GGA_XC_SRC1_BLYP'         : 714, # N. A. Besley, M. J. G. Peach, and D. J. Tozer, Phys. Chem. Chem. Phys. 11, 10350 (2009)
+        #'HYB_GGA_XC_SRC2_BLYP'         : 715, # N. A. Besley, M. J. G. Peach, and D. J. Tozer, Phys. Chem. Chem. Phys. 11, 10350 (2009)
         'HYB_GGA_XC_TUNED_CAM_B3LYP'   : 434, # K. Okuno, Y. Shigeta, R. Kishi, H. Miyasaka, and M. Nakano, J. Photochem. Photobiol., A 235, 29 (2012)
         'HYB_GGA_XC_WB97'              : 463, # J.-D. Chai and M. Head-Gordon, J. Chem. Phys. 128, 084106 (2008)
         'HYB_GGA_XC_WB97X'             : 464, # J.-D. Chai and M. Head-Gordon, J. Chem. Phys. 128, 084106 (2008)
@@ -808,10 +808,10 @@ XC_ALIAS = {
     'PBEOP'             : 'PBE,OP_PBE',
     'BOP'               : 'B88,OP_B88',
     # new in libxc-4.2.3
-    'REVSCAN'           : 'MGGA_X_REVSCAN,XC_MGGA_C_REVSCAN',
-    'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,XC_MGGA_C_REVSCAN_VV10',
-    'SCAN_VV10'         : 'MGGA_X_SCAN,XC_MGGA_C_SCAN_VV10',
-    'SCAN_RVV10'        : 'MGGA_X_SCAN,XC_MGGA_C_SCAN_RVV10',
+    'REVSCAN'           : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN',
+    'REVSCAN_VV10'      : 'MGGA_X_REVSCAN,MGGA_C_REVSCAN_VV10',
+    'SCAN_VV10'         : 'MGGA_X_SCAN,MGGA_C_SCAN_VV10',
+    'SCAN_RVV10'        : 'MGGA_X_SCAN,MGGA_C_SCAN_RVV10',
     'M05'               : 'HYB_MGGA_X_M05,MGGA_C_M05',
     'M06'               : 'HYB_MGGA_X_M06,MGGA_C_M06',
     'M05_2X'            : 'HYB_MGGA_X_M05_2X,MGGA_C_M05_2X',
@@ -831,7 +831,9 @@ XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
 VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
-               'REVSCAN_VV10', 'SCAN_VV10', 'SCAN_RVV10'))
+               'REVSCAN_VV10',
+               'SCAN_VV10', 'SCAN_RVV10', 'SCANL_VV10', 'SCANL_RVV10'))
+VV10_XC = VV10_XC.union(set([x.replace('_', '') for x in VV10_XC]))
 
 def xc_type(xc_code):
     if xc_code is None:
@@ -927,6 +929,10 @@ def hybrid_coeff(xc_code, spin=0):
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
+    nlc_code = None
+    if isinstance(xc_code, str) and '__VV10' in xc_code.upper():
+        xc_code, nlc_code = xc_code.upper().split('__', 1)
+
     hyb, fn_facs = parse_xc(xc_code)
     nlc_pars = [0, 0]
     nlc_tmp = (ctypes.c_double*2)()
@@ -934,6 +940,17 @@ def nlc_coeff(xc_code):
         _itrf.LIBXC_nlc_coeff(xid, nlc_tmp)
         nlc_pars[0] += nlc_tmp[0]
         nlc_pars[1] += nlc_tmp[1]
+
+    if nlc_pars[0] == 0 and nlc_pars[1] == 0:
+        if nlc_code is not None:
+            # Use VV10 NLC parameters by default for the general case
+            _itrf.LIBXC_nlc_coeff(XC_CODES['GGA_XC_' + nlc_code], nlc_tmp)
+            nlc_pars[0] += nlc_tmp[0]
+            nlc_pars[1] += nlc_tmp[1]
+        else:
+            raise NotImplementedError(
+                '%s does not have NLC part. Available functionals are %s' %
+                (xc_code, ', '.join(VV10_XC.keys())))
     return nlc_pars
 
 def rsh_coeff(xc_code):

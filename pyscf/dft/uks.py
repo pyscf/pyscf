@@ -59,8 +59,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
+        if ks.nlc:
+            assert 'VV10' in ks.nlc.upper()
             _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1],
                                       max_memory=max_memory)
             exc += enlc
