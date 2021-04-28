@@ -41,6 +41,20 @@ from pyscf import __config__
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
+    """Computes k-point RMP2 energy.
+
+    Args:
+        mp (KMP2): an instance of KMP2
+        mo_energy (list): a list of numpy.ndarray. Each array contains MO energies of
+                          shape (Nmo,) for one kpt
+        mo_coeff (list): a list of numpy.ndarray. Each array contains MO coefficients
+                         of shape (Nao, Nmo) for one kpt
+        verbose (int, optional): level of verbosity. Defaults to logger.NOTE (=3).
+        with_t2 (bool, optional): whether to compute t2 amplitudes. Defaults to WITH_T2 (=True).
+
+    Returns:
+        KMP2 energy and t2 amplitudes (=None if with_t2 is False)
+    """
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mp, verbose)
 
@@ -69,7 +83,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     else:
         t2 = None
 
-    with_df_ints = mp.with_df_ints and type(mp._scf.with_df) is df.GDF
+    with_df_ints = mp.with_df_ints and isinstance(mp._scf.with_df, df.GDF)
 
     # Build 3-index DF tensor Lov
     if with_df_ints:
@@ -117,17 +131,16 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
 
 
 def _init_mp_df_eris(mp):
-    """Add 3-center electron repulsion integrals, i.e. (L|pq), in `eris`,
-    where `L` denotes DF auxiliary basis functions and `p` and `q` canonical
-    crystalline orbitals. Note that `p` and `q` contain kpt indices `kp` and `kq`,
+    """Compute 3-center electron repulsion integrals, i.e. (L|ov),
+    where `L` denotes DF auxiliary basis functions and `o` and `v` occupied and virtual
+    canonical crystalline orbitals. Note that `o` and `v` contain kpt indices `ko` and `kv`,
     and the third kpt index `kL` is determined by the conservation of momentum.
 
     Arguments:
-        mp {Kmp} -- A Kmp instance
-        eris {_mp_ERIS} -- A _mp_ERIS instance to which we want to add 3c ints
+        mp (KMP2) -- A KMP2 instance
 
     Returns:
-        _mp_ERIS -- A _mp_ERIS instance with 3c ints
+        Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts, nkpts, naux, nocc, nvir)
     """
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
@@ -669,7 +682,10 @@ class KMP2(mp2.MP2):
         self.max_memory = mf.max_memory
 
         self.frozen = frozen
-        self.with_df_ints = True
+        if isinstance(self._scf.with_df, df.GDF):
+            self.with_df_ints = True
+        else:
+            self.with_df_ints = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
