@@ -96,7 +96,7 @@ def has_length(a, length=2):
     except TypeError:
         return False
 
-def orthogonalize_mo(c, s, tol=1e-8):
+def orthogonalize_mo(c, s, tol=1e-6):
     """Orthogonalize MOs, such that C^T S C = I (identity matrix).
 
     Parameters
@@ -113,10 +113,13 @@ def orthogonalize_mo(c, s, tol=1e-8):
     c_out : ndarray
         Orthogonalized MO coefficients.
     """
-    assert np.allclose(c.imag,  0)
+    assert np.all(c.imag == 0)
     assert np.allclose(s, s.T)
-    chi = np.linalg.multi_dot((c.T, s, c))
-    assert np.allclose(chi, chi.T)
+    l = np.linalg.cholesky(s)
+    c2 = np.dot(l.T, c)
+    #chi = np.linalg.multi_dot((c.T, s, c))
+    chi = np.dot(c2.T, c2)
+    chi = (chi + chi.T)/2
     e, v = np.linalg.eigh(chi)
     assert np.all(e > 0)
     r = einsum("ai,i,bi->ab", v, 1/np.sqrt(e), v)

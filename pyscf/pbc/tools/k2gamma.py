@@ -381,6 +381,8 @@ def k2gamma(kmf, kmesh=None):
     # Use unfolded overlap matrix for better error cancellation
     s_k = kmf.cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kmf.kpts, pbcopt=lib.c_null_ptr())
     ovlp = to_supercell_ao_integrals(kmf.cell, kmf.kpts, s_k)
+    assert np.allclose(ovlp, ovlp.T)
+    ovlp = (ovlp + ovlp.T) / 2
     mf.get_ovlp = lambda *args : ovlp
 
     return mf

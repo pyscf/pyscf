@@ -140,7 +140,6 @@ int64_t j3c_k2gamma(
 
     free(phase_cc);
 
-    printf("C: Max imaginary element in j3c= %.2e\n", *max_imag);
-
+    //printf("C: Max imaginary element in j3c= %.2e\n", *max_imag);
     return ierr;
 }

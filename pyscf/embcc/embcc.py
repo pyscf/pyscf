@@ -178,11 +178,9 @@ class EmbCC:
         self.mf = mf
 
         # AO overlap matrix
-        self.ovlp = ovlp or mf.get_ovlp()
+        if ovlp is None: ovlp = mf.get_ovlp()
         log.debug("Symmetry error of AO overlap matrix norm= %.2e max= %.2e", np.linalg.norm(ovlp-ovlp.T), abs(ovlp-ovlp.T).max())
-        # Symmetrize
-        self.ovlp += ovlp.T
-        self.ovlp /= 2
+        self.ovlp = (ovlp + ovlp.T)/2
 
         self.mo_energy = mf.mo_energy.copy()
         self.mo_occ = mf.mo_occ.copy()
@@ -253,20 +251,19 @@ class EmbCC:
         # Orthogonalize insufficiently orthogonal MOs
         # (For example as a result of k2gamma conversion with low cell.precision)
         c = self.mo_coeff.copy()
-        assert np.allclose(c.imag, 0)
+        assert np.all(c.imag == 0)
         ctsc = np.linalg.multi_dot((c.T, self.ovlp, c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             log.info("Orthogonalizing orbitals...")
-            self.mo_coeff = orthogonalize_mo(c, self.ovlp, tol=1e-6)
+            self.mo_coeff = orthogonalize_mo(c, self.ovlp)
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.ovlp, c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
             self.init_fragments()
-
 
         log.changeIndentLevel(-1)
 
