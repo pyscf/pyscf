@@ -118,6 +118,11 @@ class KnownValues(unittest.TestCase):
             arr[[1, 3]] = arr[[3, 1]]
         mol = self.mf.mol
         with DFMP2(self.mf, frozen=[3, 5]) as pt:
+            # also check the density matrix
+            rdm1 = pt.make_rdm1()
+            self.assertAlmostEqual(rdm1[3, 3], 2.0, delta=1.0e-12)
+            self.assertAlmostEqual(rdm1[5, 5], 2.0, delta=1.0e-12)
+            # now calculate the natural orbitals
             natocc, natorb = pt.make_natorbs()
             # number of electrons conserved
             self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)

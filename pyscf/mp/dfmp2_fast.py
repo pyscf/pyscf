@@ -52,17 +52,27 @@ class DFRMP2(lib.StreamObject):
         self.e_scf = mf.e_tot
         self._scf = mf
 
-        # process the frozen core option correctly as an integer or a list
-        if not frozen:
-            self.nfrozen = 0
+        # Process the frozen core option correctly as an integer or a list.
+        # self.frozen_mask sets a flag for each orbital if it is frozen (True) or not (False).
+        # Only occupied orbitals can be frozen.
+        self.frozen_mask = np.zeros(self.nmo, dtype=bool)
+        if frozen is None:
+            pass
+        elif lib.isinteger(frozen):
+            if frozen > self.nocc:
+                raise ValueError('only occupied orbitals can be frozen')
+            self.frozen_mask[:frozen] = True
+        elif lib.isintsequence(frozen):
+            if max(frozen) > self.nocc - 1:
+                raise ValueError('only occupied orbitals can be frozen')
+            self.frozen_mask[frozen] = True
         else:
-            if lib.isinteger(frozen):
-                self.nfrozen = int(frozen)
-            elif lib.isintsequence(frozen):
-                self.nfrozen = len(frozen)
-                self.mo_coeff, self.mo_energy = order_mos_fc(frozen, mf.mo_coeff, mf.mo_energy, self.nocc)
-            else:
-                raise TypeError('frozen must be an integer or a list of integers')
+            raise TypeError('frozen must be an integer or a list of integers')
+
+        # mask for occupied orbitals that are not frozen
+        self.occ_mask = np.zeros(self.nmo, dtype=bool)
+        self.occ_mask[:self.nocc] = True
+        self.occ_mask[self.frozen_mask] = False
 
         self.mol = mf.mol
         if not auxbasis:
@@ -84,13 +94,22 @@ class DFRMP2(lib.StreamObject):
         self.cphf_tol = mf.conv_tol
 
     def dump_flags(self, logger=None):
+        '''
+        Prints selected information.
+
+        Args:
+            logger : Logger object
+        '''
         if not logger:
             logger = lib.logger.new_logger(self)
         logger.info('')
         logger.info('******** {0:s} ********'.format(repr(self.__class__)))
         logger.info('nmo = {0:d}'.format(self.nmo))
         logger.info('nocc = {0:d}'.format(self.nocc))
-        logger.info('nfrozen = {0:d}'.format(self.nfrozen))
+        nfrozen = np.count_nonzero(self.frozen_mask)
+        logger.info('no. of frozen = {0:d}'.format(nfrozen))
+        frozen_list = np.arange(self.nmo)[self.frozen_mask]
+        logger.debug('frozen = {0}'.format(frozen_list))
         logger.info('basis = {0:s}'.format(repr(self.mol.basis)))
         logger.info('auxbasis = {0:s}'.format(repr(self.auxmol.basis)))
         logger.info('max_memory = {0:.1f} MB (current use {1:.1f} MB)'. \
@@ -108,20 +127,16 @@ class DFRMP2(lib.StreamObject):
         Calculates the MP2 correlation energy.
         '''
         if not self._intsfile:
-            self.calculate_integrals()
+            self.calculate_integrals_()
 
-        no = self.nocc - self.nfrozen
-        emo = self.mo_energy[self.nfrozen:]
+        mo_energy = self.mo_energy[~self.frozen_mask]
         logger = lib.logger.new_logger(self)
-        self.e_corr = emp2_rhf(self._intsfile, no, emo, logger, ps=self.ps, pt=self.pt)
+        self.e_corr = emp2_rhf(self._intsfile, mo_energy, logger, ps=self.ps, pt=self.pt)
         return self.e_corr
-    
-    def make_rdm1(self, ao_repr=True):
+
+    def make_rdm1(self, ao_repr=False):
         '''
         Calculates the unrelaxed MP2 density matrix.
-
-        Warning: the MO basis is self.mo_coeff, not mf.mo_coeff. This is relevant if
-        __init__ was supplied with a list of frozen orbitals.
 
         Args:
             ao_repr : density in AO or in MO basis
@@ -130,15 +145,11 @@ class DFRMP2(lib.StreamObject):
             the 1-RDM
         '''
         if not self._intsfile:
-            self.calculate_integrals()
+            self.calculate_integrals_()
 
         # Calculate the unrelaxed 1-RDM.
-        nfrz = self.nfrozen
-        no = self.nocc - nfrz
-        emo = self.mo_energy[nfrz:]
         logger = lib.logger.new_logger(self)
-        rdm1_mo = np.zeros((self.nmo, self.nmo))
-        rdm1_mo[nfrz:, nfrz:] = mp2_rhf_densities(self._intsfile, no, emo, \
+        rdm1_mo = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
             self.max_memory, logger, ps=self.ps, pt=self.pt)[0]
 
         # HF contribution
@@ -148,8 +159,8 @@ class DFRMP2(lib.StreamObject):
             return np.linalg.multi_dot([self.mo_coeff, rdm1_mo, self.mo_coeff.T])
         else:
             return rdm1_mo
-    
-    def make_response_dm(self, ao_repr=True):
+
+    def make_response_dm(self, ao_repr=False):
         '''
         Calculates the relaxed MP2 density matrix.
 
@@ -161,14 +172,14 @@ class DFRMP2(lib.StreamObject):
         '''
         # get the unrelaxed 1-RDM and the 3-center-2-electron density
         if not self._intsfile:
-            self.calculate_integrals()
+            self.calculate_integrals_()
         logger = lib.logger.new_logger(self)
-        rdm1_ur, GammaFile = mp2_rhf_densities(self._intsfile, self.nocc, self.mo_energy, \
-            self.max_memory, logger, relaxed=True, auxmol=self.auxmol, ps=self.ps, pt=self.pt)
+        rdm1_ur, GammaFile = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
+            self.max_memory, logger, calcGamma=True, auxmol=self.auxmol, ps=self.ps, pt=self.pt)
 
         # right-hand side for the CPHF equation
         Lai = orbgrad_from_Gamma(self.mol, self.auxmol, GammaFile['Gamma'], \
-            self.mo_coeff, self.nocc, self.max_memory, logger)
+            self.mo_coeff, self.frozen_mask, self.max_memory, logger)
         Lai -= fock_response_rhf(self._scf, rdm1_ur)
         zai = solve_cphf_rhf(self._scf, -Lai, self.cphf_max_cycle, self.cphf_tol, logger)
 
@@ -185,36 +196,41 @@ class DFRMP2(lib.StreamObject):
 
     def make_natorbs(self, rdm1_mo=None, relaxed=False):
         '''
-        Calculate the natural orbitals.
-        Perform the entire 1-RDM computation if necessary.
+        Calculate natural orbitals.
         Note: the most occupied orbitals come first (left)
               and the least occupied orbitals last (right).
+
+        Args:
+            rdm1_mo : 1-RDM in MO basis
+                      the function calculates a density matrix if none is provided
+            relaxed : calculated relaxed or unrelaxed density matrix
 
         Returns:
             natural occupation numbers, natural orbitals
         '''
         if rdm1_mo is None:
             if relaxed:
-                rdm1_mo = self.make_response_dm(ao_repr=False)
+                dm = self.make_response_dm(ao_repr=False)
             else:
-                rdm1_mo = self.make_rdm1(ao_repr=False)
-        elif not isinstance(rdm1_mo, np.ndarray):
+                dm = self.make_rdm1(ao_repr=False)
+        elif isinstance(rdm1_mo, np.ndarray):
+            dm = rdm1_mo
+        else:
             raise TypeError('rdm1_mo must be a 2-D array')
 
-        eigval, eigvec = np.linalg.eigh(rdm1_mo)
+        eigval, eigvec = np.linalg.eigh(dm)
         natocc = np.flip(eigval)
         natorb = np.dot(self.mo_coeff, np.fliplr(eigvec))
         return natocc, natorb
 
-    def calculate_integrals(self):
+    def calculate_integrals_(self):
         '''
         Calculates the three center integrals for MP2.
         '''
-        moc_occ = self.mo_coeff[:, self.nfrozen:self.nocc]
-        moc_virt = self.mo_coeff[:, self.nocc:]
+        Co = self.mo_coeff[:, self.occ_mask]
+        Cv = self.mo_coeff[:, self.nocc:]
         logger = lib.logger.new_logger(self)
-        self._intsfile = ints3c_cholesky(self.mol, self.auxmol, moc_occ, moc_virt, \
-            self.max_memory, logger)
+        self._intsfile = ints3c_cholesky(self.mol, self.auxmol, Co, Cv, self.max_memory, logger)
 
     def delete(self):
         '''
@@ -361,13 +377,12 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     return intsfile_cho
 
 
-def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
+def emp2_rhf(intsfile, mo_energy, logger, ps=1.0, pt=1.0):
     '''
     Calculates the DF-MP2 energy with an RHF reference.
 
     Args:
         intsfile : contains the three center integrals in MO basis
-        nocc : number of occupied orbitals
         mo_energy : energies of the molecular orbitals
         logger : Logger instance
         ps : SCS factor for opposite-spin contributions
@@ -376,11 +391,13 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
     Returns:
         the MP2 correlation energy
     '''
-    nvirt = len(mo_energy) - nocc
+    ints = intsfile['ints_cholesky']
+    nocc, _, nvirt = ints.shape
+
     logger.info('')
     logger.info('*** DF-MP2 energy')
-    logger.info('    Occupied orbitals: {0:d}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Occupied correlated orbitals: {0:d}'.format(nocc))
+    logger.info('    Virtual correlated orbitals:  {0:d}'.format(nvirt))
     logger.info('    Integrals from file: {0:s}'.format(intsfile.filename))
 
     # Somewhat awkward workaround to perform division in the MP2 energy expression
@@ -391,7 +408,6 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
         Eab[:, a] += mo_energy[nocc + a]
 
     energy = 0.0
-    ints = intsfile['ints_cholesky']
     for i in range(nocc):
         ints3c_ia = ints[i, :, :]
         # contributions for occupied orbitals j < i
@@ -412,8 +428,8 @@ def emp2_rhf(intsfile, nocc, mo_energy, logger, ps=1.0, pt=1.0):
     return energy
 
 
-def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
-    relaxed=False, auxmol=None, ps=1.0, pt=1.0):
+def mp2_rhf_densities(intsfile, mo_energy, frozen_mask, max_memory, logger, \
+    calcGamma=False, auxmol=None, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix contribution with an RHF reference.
     Note: this is the difference density, i.e. without HF contribution.
@@ -421,11 +437,11 @@ def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
 
     Args:
         intsfile : contains the three center integrals
-        nocc : number of occupied orbitals
         mo_energy : molecular orbital energies
+        frozen_mask : boolean mask for frozen orbitals
         max_memory : memory threshold in MB
         logger : Logger instance
-        relaxed : if True, calculate contributions for the relaxed density
+        calcGamma : if True, calculate 3c2e density
         auxmol : required if relaxed is True
         ps : SCS factor for opposite-spin contributions
         pt : SCS factor for same-spin contributions
@@ -433,13 +449,19 @@ def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
     Returns:
         matrix containing the 1-RDM contribution, file with 3c2e density if requested
     '''
+    ints = intsfile['ints_cholesky']
+    nocc_act, naux, nvirt = ints.shape
     nmo = len(mo_energy)
-    nvirt = nmo - nocc
+    nfrozen = np.count_nonzero(frozen_mask)
+    nocc = nocc_act + nfrozen
+    if nocc + nvirt != nmo:
+        raise ValueError('numbers of frozen, occupied and virtual orbitals inconsistent')
 
     logger.info('')
     logger.info('*** Density matrix contributions for DF-MP2')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
     logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
     logger.info('    Three center integrals from file: {0:s}'.format(intsfile.filename))
 
     # Precompute Eab[a, b] = mo_energy[a] + mo_energy[b] for division with numpy.
@@ -448,20 +470,20 @@ def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
         Eab[a, :] += mo_energy[nocc + a]
         Eab[:, a] += mo_energy[nocc + a]
 
-    GammaFile, Gamma, LT, naux = (None,) * 4
-    if relaxed:
+    GammaFile, Gamma, LT = None, None, None
+    if calcGamma:
         if not auxmol:
             raise RuntimeError('auxmol needs to be specified for relaxed density computation')
-        else:
-            naux = auxmol.nao
         # create temporary file to store the two-body density Gamma
         GammaFile = lib.H5TmpFile(libver='latest')
-        Gamma = GammaFile.create_dataset('Gamma', (nocc, naux, nvirt), dtype='f8')
+        Gamma = GammaFile.create_dataset('Gamma', (nocc_act, naux, nvirt), dtype='f8')
         logger.info('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
         # We will need LT = L^T, where L L^T = V
         LT = scipy.linalg.cholesky(auxmol.intor('int2c2e'), lower=False)
 
+    # We start forming P with contiguous frozen, occupied, virtual subblocks.
     P = np.zeros((nmo, nmo))
+    mo_energy_masked = mo_energy[~frozen_mask]
 
     with lib.H5TmpFile(libver='latest') as tfile:
         logger.info('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
@@ -470,59 +492,64 @@ def mp2_rhf_densities(intsfile, nocc, mo_energy, max_memory, logger, \
         # The occupied 1-RDM contribution is calculated in a batched algorithm.
         # More memory -> more efficient I/O.
         # The virtual contribution to the 1-RDM is calculated in memory.
-        ints = intsfile['ints_cholesky']
-        tiset = tfile.create_dataset('amplitudes', (nocc, nvirt, nvirt), dtype='f8')
-        for i in range(nocc):
-                ints3c_ia = ints[i, :, :]
+        tiset = tfile.create_dataset('amplitudes', (nocc_act, nvirt, nvirt), dtype='f8')
+        for i in range(nocc_act):
+            ints3c_ia = ints[i, :, :]
 
-                # Calculate amplitudes T^ij_ab for a given i and all j, a, b
-                # Store the amplitudes in a file.
-                for j in range(nocc):
-                    ints3c_jb = ints[j, :, :]
-                    Kab = np.matmul(ints3c_ia.T, ints3c_jb)
-                    DE = mo_energy[i] + mo_energy[j] - Eab
-                    Tab = Kab / DE
-                    TCab = 2.0 * (ps + pt) * Tab - 2.0 * pt * Tab.T
-                    tiset[j, :, :] = Tab
-                    # virtual 1-RDM contribution
-                    P[nocc:, nocc:] += np.matmul(Tab, TCab.T)
-                del ints3c_jb, Kab, DE, Tab, TCab
+            # Calculate amplitudes T^ij_ab for a given i and all j, a, b
+            # Store the amplitudes in a file.
+            for j in range(nocc_act):
+                ints3c_jb = ints[j, :, :]
+                Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+                DE = mo_energy_masked[i] + mo_energy_masked[j] - Eab
+                Tab = Kab / DE
+                TCab = 2.0 * (ps + pt) * Tab - 2.0 * pt * Tab.T
+                tiset[j, :, :] = Tab
+                # virtual 1-RDM contribution
+                P[nocc:, nocc:] += np.matmul(Tab, TCab.T)
+            del ints3c_jb, Kab, DE, Tab, TCab
 
-                # Read batches of amplitudes from disk and calculate the occupied 1-RDM.
-                batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (2 * nocc * nvirt * 8))
-                batchsize = min(nvirt, batchsize)
+            # Read batches of amplitudes from disk and calculate the occupied 1-RDM.
+            batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / (2 * nocc_act * nvirt * 8))
+            batchsize = min(nvirt, batchsize)
+            if batchsize < 1:
+                raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
+            logger.debug('      Pij formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+                format(i, batchsize, nvirt))
+            for astart in range(0, nvirt, batchsize):
+                aend = min(astart+batchsize, nvirt)
+                tbatch1 = tiset[:, astart:aend, :]
+                tbatch2 = tiset[:, :, astart:aend]
+                P[nfrozen:nocc, nfrozen:nocc] += \
+                    - 2.0 * (ps + pt) * np.einsum('iab,jab->ij', tbatch1, tbatch1) \
+                    + 2.0 * pt * np.einsum('iab,jba->ij', tbatch1, tbatch2)
+            del tbatch1, tbatch2
+            
+            if calcGamma:
+                # This produces (P | Q)^-1 (Q | i a)
+                ints3cV1_ia = scipy.linalg.solve_triangular(LT, ints3c_ia, lower=False)
+                # Read batches of amplitudes from disk and calculate the two-body density Gamma
+                size = nvirt * nvirt * 8 + naux * nvirt * 8
+                batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / size)
+                batchsize = min(nocc_act, batchsize)
                 if batchsize < 1:
                     raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                logger.debug('      Pij formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
-                    format(i, batchsize, nvirt))
-                for astart in range(0, nvirt, batchsize):
-                    aend = min(astart+batchsize, nvirt)
-                    tbatch1 = tiset[:, astart:aend, :]
-                    tbatch2 = tiset[:, :, astart:aend]
-                    P[:nocc, :nocc] -= 2.0 * (ps + pt) * np.einsum('iab,jab->ij', tbatch1, tbatch1)
-                    P[:nocc, :nocc] += 2.0 * pt * np.einsum('iab,jba->ij', tbatch1, tbatch2)
-                del tbatch1, tbatch2
-                
-                if relaxed:
-                    # This produces (P | Q)^-1 (Q | i a)
-                    ints3cV1_ia = scipy.linalg.solve_triangular(LT, ints3c_ia, lower=False)
-                    # Read batches of amplitudes from disk and calculate the two-body density Gamma
-                    size = nvirt * nvirt * 8 + naux * nvirt * 8
-                    batchsize = int((max_memory - lib.current_memory()[0]) * 1e6 / size)
-                    batchsize = min(nocc, batchsize)
-                    if batchsize < 1:
-                        raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                    logger.debug('      Gamma formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
-                        format(i, batchsize, nocc))
-                    for jstart in range(0, nocc, batchsize):
-                        jend = min(jstart+batchsize, nocc)
-                        tbatch = tiset[jstart:jend, :, :]
-                        Gbatch = Gamma[jstart:jend, :, :]
-                        for jj in range(jend-jstart):
-                            TCijab_scal = 4.0 * (pt + pt) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
-                            Gbatch[jj] += np.matmul(ints3cV1_ia, TCijab_scal)
-                        Gamma[jstart:jend, :, :] = Gbatch
-                    del ints3cV1_ia, tbatch, Gbatch, TCijab_scal
+                logger.debug('      Gamma formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+                    format(i, batchsize, nocc_act))
+                for jstart in range(0, nocc_act, batchsize):
+                    jend = min(jstart+batchsize, nocc_act)
+                    tbatch = tiset[jstart:jend, :, :]
+                    Gbatch = Gamma[jstart:jend, :, :]
+                    for jj in range(jend-jstart):
+                        TCijab_scal = 4.0 * (pt + pt) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
+                        Gbatch[jj] += np.matmul(ints3cV1_ia, TCijab_scal)
+                    Gamma[jstart:jend, :, :] = Gbatch
+                del ints3cV1_ia, tbatch, Gbatch, TCijab_scal
+    
+    # now reorder P such that the frozen orbitals correspond to frozen_mask
+    idx_reordered = np.concatenate([np.arange(nmo)[frozen_mask], np.arange(nmo)[~frozen_mask]])
+    P[idx_reordered, :] = P.copy()
+    P[:, idx_reordered] = P.copy()
 
     logger.info('*** Density matrix contributions calculation finished')
     return P, GammaFile
@@ -561,7 +588,7 @@ def shellBatchGenerator(mol, nao_max):
         shell_start = shell_stop
 
 
-def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, nocc, max_memory, logger):
+def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, logger):
     '''
     Calculates the orbital gradient of the two-electron term in the Hylleraas functional.
 
@@ -570,27 +597,34 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, nocc, max_memory, logger):
         auxmol : Mole object for the auxiliary functions
         Gamma : h5py dataset with the 3c2e density, order: [occ. orbs., aux. fcns., virt. orbs.]
         mo_coeff : molecular orbital coefficients
-        nocc : number of occupied orbitals
+        frozen_mask : boolean mask for frozen orbitals
         max_memory : memory limit in MB
         logger : Logger object
 
     Returns:
         orbital gradient in shape: virt. orbitals x occ. orbitals
     '''
-    nvirt = mo_coeff.shape[1] - nocc
+    nocc_act, _, nvirt = Gamma.shape
+    nfrozen = np.count_nonzero(frozen_mask)
+    nocc = nfrozen + nocc_act
+    if nocc + nvirt != len(mo_coeff):
+        raise ValueError('numbers of frozen, occupied and virtual orbitals inconsistent')
+
     logger.info('')
     logger.info('*** Contracting the two-body density with 3c2e integrals in memory')
     logger.info('    Occupied orbitals: {0:d}'.format(nocc))
     logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
 
     atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,\
         auxmol._atm, auxmol._bas, auxmol._env)
     intor = mol._add_suffix('int3c2e')
     logger.debug('    intor = {0:s}'.format(intor))
 
-    Lia = np.zeros((nocc, nvirt))
+    Lia_act = np.zeros((nocc_act, nvirt))
     # process as many auxiliary functions in a go as possible: may reduce I/O cost
-    naux_max = int((max_memory - lib.current_memory()[0]) * 1e6 / (nocc * nvirt + mol.nao ** 2))
+    size_per_aux = (nocc_act * nvirt + mol.nao ** 2) * 8
+    naux_max = int((max_memory - lib.current_memory()[0]) * 1e6 / size_per_aux)
     logger.debug('    Max. auxiliary functions per batch: {0:d}'.format(naux_max))
     try:
 
@@ -614,13 +648,18 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, nocc, max_memory, logger):
                 ints_occ = np.matmul(mo_coeff[:, :nocc].T, \
                     np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, :nocc]))
                 # contribution to the orbital gradient
-                Lia += np.matmul(ints_occ, GiKa[:, m, :]) - np.matmul(ints12, mo_coeff[:, nocc:])
+                Lia_act += np.matmul(ints_occ, GiKa[:, m, :]) - np.matmul(ints12, mo_coeff[:, nocc:])
+            del GiKa, aoints_auxshell
 
     except BatchSizeError:
         raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY)')
 
+    # convert to full matrix with frozen orbitals
+    Lai = np.zeros((nvirt, nocc))
+    Lai[:, ~frozen_mask[:nocc]] = Lia_act.T
+
     logger.info('*** Finished integral contraction.')
-    Lai = Lia.T
+
     return Lai
 
 
@@ -679,34 +718,6 @@ def solve_cphf_rhf(mf, Lai, max_cycle, tol, logger):
         max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
     logger.info('*** CPHF iterations finished')
     return zai
-
-
-def order_mos_fc(frozen, mo_coeff, mo_energy, nocc):
-    '''
-    Order MO coefficients and energies such that frozen orbitals come leftmost.
-
-    Args:
-        frozen : list / array of frozen orbitals
-        mo_coeff : MO coefficient matrix
-        mo_energy : MO energies
-        nocc : number of occupied orbitals (only used for checking)
-    
-    Returns:
-        Ordered MO coefficients, ordered MO energies.
-    '''
-    _, nmo = mo_coeff.shape
-    if mo_energy.shape != (nmo,):
-        raise ValueError('MO coefficients and energies have inconsistent shapes.')
-    if len(frozen) != len(set(frozen)):
-        raise ValueError('Duplicate elements in list of frozen MOs.')
-    if np.any(np.array(frozen) >= nocc):
-        raise ValueError('Virtual orbital specified as frozen.')
-    mo_order = list(frozen)
-    mo_order.sort()
-    for p in range(nmo):
-        if p not in frozen:
-            mo_order.append(p)
-    return mo_coeff[:, mo_order], mo_energy[mo_order]
 
 
 if __name__ == '__main__':

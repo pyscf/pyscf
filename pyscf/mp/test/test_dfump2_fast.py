@@ -119,9 +119,13 @@ class KnownValues(unittest.TestCase):
         self.mf.mo_coeff[1, :, [0, 4]] = self.mf.mo_coeff[1, :, [4, 0]]
         self.mf.mo_energy[1, [0, 4]] = self.mf.mo_energy[1, [4, 0]]
         with DFUMP2(self.mf, frozen=[[0, 3], [1, 4]]) as pt:
-            pt.kernel()
-            self.assertAlmostEqual(pt.e_corr, -0.343816318675, delta=1.0e-8)
-            self.assertAlmostEqual(pt.e_tot, -149.834200533235, delta=1.0e-8)
+            # also check the density matrix
+            rdm1 = pt.make_rdm1()
+            self.assertAlmostEqual(rdm1[0, 0, 0], 1.0, delta=1.0e-12)
+            self.assertAlmostEqual(rdm1[0, 3, 3], 1.0, delta=1.0e-12)
+            self.assertAlmostEqual(rdm1[1, 1, 1], 1.0, delta=1.0e-12)
+            self.assertAlmostEqual(rdm1[1, 4, 4], 1.0, delta=1.0e-12)
+            # now calculate the natural orbitals
             natocc, natorb = pt.make_natorbs()
             # number of electrons conserved
             self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
