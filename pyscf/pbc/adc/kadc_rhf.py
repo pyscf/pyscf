@@ -55,6 +55,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     size = adc.vector_size()
     nroots = min(nroots,size)
+    nkpts = adc.nkpts
 
     if kptlist is None:
         kptlist = range(nkpts)
@@ -77,6 +78,15 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         evals[k] = evals_k
         evecs[k] = evecs_k
         convs[k] = conv_k
+
+    adc.U = np.array(evecs).T.copy()
+
+    P,X = adc.get_properties(nroots)
+
+    print (evals)
+    print (P)
+    exit()
+
 #    adc.U = np.array(U).T.copy()
 #
 #     T = adc.get_trans_moments
@@ -1834,9 +1844,9 @@ def ip_compute_trans_moments(adc, orb):
 
     method = adc.method
     nkpts = adc.nkpts
-    nocc = adc.nocc
-    kconserv = adc.khelper.kconserv
-    t2 = adc.t2[0]
+    nocc = adc.t2[0].shape[3]
+    t2_1 = adc.t2[0]
+    t1_2 = adc.t1[0]
     n_singles = nocc
     nvir = adc.nmo - adc.nocc
     n_doubles = nkpts * nkpts * nvir * nocc * nocc
@@ -1851,12 +1861,13 @@ def ip_compute_trans_moments(adc, orb):
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
 
-    T = np.zeros((dim))
+    T = np.zeros((dim),dtype=np.complex)
 
 ######## ADC(2) 1h part  ############################################
 
     if orb < nocc:
         T[s1:f1]  = idn_occ[orb, :]
+        T[s1:f1] += 0.25*lib.einsum('pqrkdc,pqrikdc->i',t2_1[:,:,:,:,orb,:,:], t2_1, optimize = True)
         #T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
         #T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
         #T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
@@ -1887,18 +1898,43 @@ def get_trans_moments(adc):
     T = np.array(T)
     return T
 
+def renormalize_eigenvectors_ip(adc, nroots=1):
+
+    nkpts = adc.nkpts
+    nocc = adc.t2[0].shape[3]
+    t2 = adc.t2[0]
+    t1_2 = adc.t1[0]
+    n_singles = nocc
+    nvir = adc.nmo - adc.nocc
+    n_doubles = nkpts * nkpts * nvir * nocc * nocc
+
+    dim = n_singles + n_doubles
+
+    U = adc.U
+
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nkpts,nkpts,nvir,nocc,nocc)
+        #UdotU = np.dot(U1, U1) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        UdotU = np.dot(U1.ravel(), U1.ravel()) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,1,2,4,3).ravel())
+        U[:,I] /= np.sqrt(UdotU)
+
+    U = U.reshape(-1,nroots)
+
+    return U
 
 def get_properties(adc, nroots=1):
 
     #Transition moments
     T = adc.get_trans_moments()
-
+    
     #Spectroscopic amplitudes
     U = adc.renormalize_eigenvectors(nroots)
     X = np.dot(T, U).reshape(-1, nroots)
-
+    
     #Spectroscopic factors
     P = 2.0*lib.einsum("pi,pi->i", X, X)
+    P = P.real
 
     return P,X
 
@@ -1998,8 +2034,8 @@ class RADCEA(RADC):
     vector_size = ea_vector_size
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
-    #renormalize_eigenvectors = renormalize_eigenvectors_ip
-    #get_properties = get_properties
+    renormalize_eigenvectors = renormalize_eigenvectors_ip
+    get_properties = get_properties
     #analyze_spec_factor = analyze_spec_factor
     #analyze_eigenvector = analyze_eigenvector_ip
     #analyze = analyze
@@ -2126,8 +2162,8 @@ class RADCIP(RADC):
     vector_size = ip_vector_size
     compute_trans_moments = ip_compute_trans_moments
     get_trans_moments = get_trans_moments
-    #renormalize_eigenvectors = renormalize_eigenvectors_ip
-    #get_properties = get_properties
+    renormalize_eigenvectors = renormalize_eigenvectors_ip
+    get_properties = get_properties
     #analyze_spec_factor = analyze_spec_factor
     #analyze_eigenvector = analyze_eigenvector_ip
     #analyze = analyze

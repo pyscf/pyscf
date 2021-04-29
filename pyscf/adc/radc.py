@@ -2187,20 +2187,20 @@ def ip_compute_trans_moments(adc, orb):
 
     if orb < nocc:
         T[s1:f1]  = idn_occ[orb, :]
-        T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
-        T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1, optimize = True)
-    else:
+        #T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        #T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        #T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        #T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_1, optimize = True)
+        #T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1, optimize = True)
+        #T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1, optimize = True)
+    else :
         T[s1:f1] += t1_2[:,(orb-nocc)]
 
 ######## ADC(2) 2h-1p  part  ############################################
 
         t2_1_t = t2_1.transpose(2,3,1,0)
 
-        T[s2:f2] = t2_1_t[(orb-nocc),:,:,:].reshape(-1)
+        #T[s2:f2] = t2_1_t[(orb-nocc),:,:,:].reshape(-1)
 
 ######## ADC(3) 2h-1p  part  ############################################
 
@@ -2242,9 +2242,9 @@ def ip_compute_trans_moments(adc, orb):
         del t2_2
     del t2_1
 
-    T_aaa = T[n_singles:].reshape(nvir,nocc,nocc).copy()
-    T_aaa = T_aaa - T_aaa.transpose(0,2,1)
-    T[n_singles:] += T_aaa.reshape(-1)
+    #T_aaa = T[n_singles:].reshape(nvir,nocc,nocc).copy()
+    #T_aaa = T_aaa - T_aaa.transpose(0,2,1)
+    #T[n_singles:] += T_aaa.reshape(-1)
 
     return T
 
