@@ -174,19 +174,30 @@ class DFRMP2(lib.StreamObject):
         if not self._intsfile:
             self.calculate_integrals_()
         logger = lib.logger.new_logger(self)
-        rdm1_ur, GammaFile = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
+        rdm1_noz, GammaFile = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
             self.max_memory, logger, calcGamma=True, auxmol=self.auxmol, ps=self.ps, pt=self.pt)
 
         # right-hand side for the CPHF equation
-        Lai = orbgrad_from_Gamma(self.mol, self.auxmol, GammaFile['Gamma'], \
+        Lvo, Lfo = orbgrad_from_Gamma(self.mol, self.auxmol, GammaFile['Gamma'], \
             self.mo_coeff, self.frozen_mask, self.max_memory, logger)
-        Lai -= fock_response_rhf(self._scf, rdm1_ur)
-        zai = solve_cphf_rhf(self._scf, -Lai, self.cphf_max_cycle, self.cphf_tol, logger)
+
+        # frozen core contribution
+        frozen_list = np.arange(self.nmo)[self.frozen_mask]
+        for fm, f in enumerate(frozen_list):
+            for i in np.arange(self.nmo)[self.occ_mask]:
+                zfo = Lfo[fm, i] / (self.mo_energy[f] - self.mo_energy[i])
+                rdm1_noz[f, i] += 0.5 * zfo
+                rdm1_noz[i, f] += 0.5 * zfo
+
+        # Fock response
+        Lvo -= fock_response_rhf(self._scf, rdm1_noz)
+        # solving the CPHF equations
+        zvo = solve_cphf_rhf(self._scf, -Lvo, self.cphf_max_cycle, self.cphf_tol, logger)
 
         # add the relaxation contribution to the density
-        rdm1_re = rdm1_ur
-        rdm1_re[self.nocc:, :self.nocc] += 0.5 * zai
-        rdm1_re[:self.nocc, self.nocc:] += 0.5 * zai.T
+        rdm1_re = rdm1_noz
+        rdm1_re[self.nocc:, :self.nocc] += 0.5 * zvo
+        rdm1_re[:self.nocc, self.nocc:] += 0.5 * zvo.T
         rdm1_re[:self.nocc, :self.nocc] += 2.0 * np.eye(self.nocc)
 
         if ao_repr:
@@ -602,13 +613,19 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
         logger : Logger object
 
     Returns:
-        orbital gradient in shape: virt. orbitals x occ. orbitals
+        orbital gradient in shape: virt. orbitals x occ. orbitals,
+        orbital gradient in shape: froz. orbitals x occ. orbitals
     '''
     nocc_act, _, nvirt = Gamma.shape
     nfrozen = np.count_nonzero(frozen_mask)
     nocc = nfrozen + nocc_act
-    if nocc + nvirt != len(mo_coeff):
+    nmo = len(mo_coeff)
+    if nocc + nvirt != nmo:
         raise ValueError('numbers of frozen, occupied and virtual orbitals inconsistent')
+
+    occ_mask = np.zeros(nmo, dtype=bool)
+    occ_mask[:nocc] = True
+    occ_mask[frozen_mask] = False
 
     logger.info('')
     logger.info('*** Contracting the two-body density with 3c2e integrals in memory')
@@ -621,7 +638,9 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
     intor = mol._add_suffix('int3c2e')
     logger.debug('    intor = {0:s}'.format(intor))
 
-    Lia_act = np.zeros((nocc_act, nvirt))
+    Lov_act = np.zeros((nocc_act, nvirt))
+    Lof_act = np.zeros((nocc_act, nfrozen))
+    Lfv = np.zeros((nfrozen, nvirt))
     # process as many auxiliary functions in a go as possible: may reduce I/O cost
     size_per_aux = (nocc_act * nvirt + mol.nao ** 2) * 8
     naux_max = int((max_memory - lib.current_memory()[0]) * 1e6 / size_per_aux)
@@ -642,25 +661,31 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
             for m in range(aux_stop - aux_start):
                 # Half-transformed Gamma for specific auxiliary function m
                 G12 = np.matmul(GiKa[:, m, :], mo_coeff[:, nocc:].T)
-                # contracted integrals: one index still in AO basis
-                ints12 = np.matmul(G12, aoints_auxshell[:, :, m])
+                # product of Gamma with integrals: one index still in AO basis
+                Gints = np.matmul(G12, aoints_auxshell[:, :, m])
                 # 3c2e integrals in occupied MO basis
-                ints_occ = np.matmul(mo_coeff[:, :nocc].T, \
-                    np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, :nocc]))
-                # contribution to the orbital gradient
-                Lia_act += np.matmul(ints_occ, GiKa[:, m, :]) - np.matmul(ints12, mo_coeff[:, nocc:])
+                intso12 = np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, occ_mask])
+                intsoo = np.matmul(mo_coeff[:, occ_mask].T, intso12)
+                intsfo = np.matmul(mo_coeff[:, frozen_mask].T, intso12)
+                # contributions to the orbital gradient
+                Lov_act += np.matmul(intsoo, GiKa[:, m, :]) - np.matmul(Gints, mo_coeff[:, nocc:])
+                Lof_act -= np.matmul(Gints, mo_coeff[:, frozen_mask])
+                Lfv += np.matmul(intsfo, GiKa[:, m, :])
             del GiKa, aoints_auxshell
 
     except BatchSizeError:
         raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY)')
 
     # convert to full matrix with frozen orbitals
-    Lai = np.zeros((nvirt, nocc))
-    Lai[:, ~frozen_mask[:nocc]] = Lia_act.T
+    Lvo = np.zeros((nvirt, nocc))
+    Lvo[:, occ_mask[:nocc]] = Lov_act.T
+    Lvo[:, frozen_mask[:nocc]] = Lfv.T
+    Lfo = np.zeros((nfrozen, nocc))
+    Lfo[:, occ_mask[:nocc]] = Lof_act.T
 
     logger.info('*** Finished integral contraction.')
 
-    return Lai
+    return Lvo, Lfo
 
 
 def fock_response_rhf(mf, dm, full=True):
@@ -685,18 +710,18 @@ def fock_response_rhf(mf, dm, full=True):
     else:
         dmao = np.linalg.multi_dot([Ca, dm, Ci.T])
     rao = 2.0 * mf.get_veff(dm=dmao+dmao.T)
-    rai = np.linalg.multi_dot([Ca.T, rao, Ci])
-    return rai
+    rvo = np.linalg.multi_dot([Ca.T, rao, Ci])
+    return rvo
 
 
-def solve_cphf_rhf(mf, Lai, max_cycle, tol, logger):
+def solve_cphf_rhf(mf, Lvo, max_cycle, tol, logger):
     '''
     Solve the CPHF equations.
-    (e[i] - e[a]) zai[a, i] - sum_bj [ 4 (ai|bj) - (ab|ij) - (aj|ib) ] zai[b, j] = Lai[a, i]
+    (e[i] - e[a]) zvo[a, i] - sum_bj [ 4 (ai|bj) - (ab|ij) - (aj|ib) ] zvo[b, j] = Lvo[a, i]
 
     Args:
         mf : an RHF object
-        Lai : right-hand side the the response equation
+        Lvo : right-hand side the the response equation
         max_cycle : number of iterations for the CPHF solver
         tol : convergence tolerance for the CPHF solver
         logger : Logger object
@@ -712,12 +737,12 @@ def solve_cphf_rhf(mf, Lai, max_cycle, tol, logger):
         cphf_verbose = lib.logger.DEBUG
 
     def fvind(z):
-        return fock_response_rhf(mf, z.reshape(Lai.shape), full=False)
+        return fock_response_rhf(mf, z.reshape(Lvo.shape), full=False)
 
-    zai = cphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lai, \
+    zvo = cphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lvo, \
         max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
     logger.info('*** CPHF iterations finished')
-    return zai
+    return zvo
 
 
 if __name__ == '__main__':
