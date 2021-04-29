@@ -20,8 +20,8 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
-from pyscf.mp.dfmp2_fast import DFMP2, SCSMP2
-from pyscf.mp.dfmp2_fast import solve_cphf_rhf, fock_response_rhf
+from pyscf.mp.dfmp2_native import DFMP2, SCSMP2
+from pyscf.mp.dfmp2_native import solve_cphf_rhf, fock_response_rhf
 
 
 mol = gto.Mole()

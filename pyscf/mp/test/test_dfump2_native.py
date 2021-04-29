@@ -20,7 +20,7 @@ import numpy
 from pyscf import gto
 from pyscf import scf
 from pyscf import lib
-from pyscf.mp.dfump2_fast import DFUMP2, SCSUMP2
+from pyscf.mp.dfump2_native import DFUMP2, SCSUMP2
 
 
 mol = gto.Mole()

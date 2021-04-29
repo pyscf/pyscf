@@ -25,7 +25,7 @@ import scipy
 from pyscf import lib
 from pyscf import scf
 from pyscf import df
-from pyscf.mp.dfmp2_fast import DFRMP2, ints3c_cholesky
+from pyscf.mp.dfmp2_native import DFRMP2, ints3c_cholesky
 
 
 class DFUMP2(DFRMP2):
