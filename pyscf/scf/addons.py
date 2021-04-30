@@ -32,6 +32,7 @@ from pyscf import __config__
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
+LINEAR_DEP_METHOD = getattr(__config__, 'scf_addons_remove_linear_dep_method', 'auto')
 
 def smearing_(*args, **kwargs):
     from pyscf.pbc.scf.addons import smearing_
@@ -481,10 +482,11 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
 
     return X
 
-def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
-                       lindep=LINEAR_DEP_TRIGGER,
-                       cholesky_threshold=CHOLESKY_THRESHOLD):
+def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD, lindep=LINEAR_DEP_TRIGGER,
+                       cholesky_threshold=CHOLESKY_THRESHOLD, method=LINEAR_DEP_METHOD):
     '''
+    Partial CD: doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504
+
     Args:
         threshold : float
             The threshold under which the eigenvalues of the overlap matrix are
@@ -495,28 +497,29 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     '''
     s = mf.get_ovlp()
     cond = numpy.max(lib.cond(s))
+    logger.debug(mf, 'Method= %s Overlap condition number= %.2e', method, cond)
     if cond < 1./lindep:
+        logger.debug(mf, "No linear dependency treatment.")
         return mf
 
+    if method == 'auto':
+        method = ('canonical-orth' if (cond < 1./numpy.finfo(s.dtype).eps) else 'partial-CD')
+
     logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
-    logger.debug(mf, 'Overlap condition number %g', cond)
-    if(cond < 1./numpy.finfo(s.dtype).eps):
-        logger.info(mf, 'Using canonical orthogonalization')
+    if method.lower() == 'canonical-orth':
         def eigh(h, s):
             x = canonical_orth_(s, threshold)
             n0, n1 = x.shape
-            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "canonical orth.", threshold, n0, (n0-n1))
+            logger.debug(mf, "Removing linearly dependent AOs: method= %s threshold= %.1e N(tot)= %4d N(del)= %3d", method, threshold, n0, (n0-n1))
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
             return e, c
-    else:
-        logger.info(mf, 'Using partial Cholesky orthogonalization '
-                    '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+    elif method.lower() == 'partial-cd':
         def eigh(h, s):
             x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
             n0, n1 = x.shape
-            logger.debug(mf, "remove_linear_dep: method= %s threshold= %.2e #total= %4d #removed= %3d", "Choleksy orth.", cholesky_threshold, n0, (n0-n1))
+            logger.debug(mf, "Removing linearly dependent AOs: method= %s threshold= %.1e N(tot)= %4d N(del)= %3d", method, threshold, n0, (n0-n1))
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
             e, c = numpy.linalg.eigh(xhx)
             c = numpy.dot(x, c)
@@ -881,7 +884,7 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin
 
-del(LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER)
+del(LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER, LINEAR_DEP_METHOD)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
                 auxbasis=None, dual_basis=None, **newton_kwargs):

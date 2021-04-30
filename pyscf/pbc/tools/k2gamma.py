@@ -41,6 +41,7 @@ def kpts_to_kmesh(cell, kpts):
     kmesh = (len(np.unique(scaled_k[:,0])),
              len(np.unique(scaled_k[:,1])),
              len(np.unique(scaled_k[:,2])))
+    logger.debug(cell, "Guessed kmesh= %r", kmesh)
     return kmesh
 
 def translation_vectors_for_kmesh(cell, kmesh):
@@ -170,13 +171,13 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, ovlp, degen_tol=1e-3, rotate_de
         # Only perform rotation if imaginary norm is decreased
         if (norm1 < norm0):
             mo_coeff_rot[:,mo] = mo_c1
-            logger.debug(cell, "MO %3d at E=%+12.8e: degen= %5r |Im C|= %.2e -> %.2e (phase= %+.8f)", mo, mo_e, degen, norm0, norm1, phase)
+            logger.debug(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e -> %.2e (phase= %+.8f)", mo, mo_e, degen, norm0, norm1, phase)
         else:
-            logger.debug(cell, "MO %3d at E=%+12.8e: degen= %5r |Im C|= %.2e", mo, mo_e, degen, norm0)
+            logger.debug(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e", mo, mo_e, degen, norm0)
 
     return mo_coeff_rot
 
-def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", degen_tol=1e-3):
+def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock", degen_tol=1e-3):
     logger.debug(cell, "starting mo_k2gamma")
     scell, phase = get_phase(cell, kpts, kmesh)
 
@@ -254,28 +255,73 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
         degen_method = "fock"
         print("Significant imaginary parts - changing degen_method to %s" % degen_method)
 
+    # Eigenvalue solver with linear-dependency treatment
+    #eigh = scell.eigh_factory()
+
     t0 = timer()
     if degen_method == "fock":
+        C_gamma_out = C_gamma.copy()
         if np.any(E_k_degen):
+            # Diagonalize Fock matrix within degenerate subspace only
             if cimag_nondegen < 1e-4:
-                shift = min(E_g[degen_mask]) - .1
-                f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
-                           C_gamma[:,degen_mask].conj().T)
-                assert(abs(f.imag).max() < 1e-3), "max|Im(F)| = %.2e" % abs(f.imag).max()
 
-                e, na_orb = scipy.linalg.eigh(f.real, ovlp, type=2)
-                print("Max error of MO energies= %.2e" % abs(E_g[degen_mask]-shift-e).max())
+                # Shift all MOs above the eig=0 subspace (so they can be identified later)
+                shift = 1.0 - min(E_g[degen_mask])
+                #f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] + shift), C_gamma[:,degen_mask].conj().T)
+                #f = np.linalg.multi_dot((ovlp, f, ovlp))
+                cs = np.dot(C_gamma[:,degen_mask].conj().T, ovlp)
+                f = np.dot(cs.T.conj() * (E_g[degen_mask] + shift), cs)
+                fimag = abs(f.imag).max()
+                logger.debug(cell, "max|Im(F)|= %.2e", fimag)
+
+                #fimag = abs(np.dot(f, ovlp).imag).max()
+                #logger.debug(cell, "max|Im(F.S)|= %.2e", fimag)
+
+                #assert(abs(f.imag).max() < 1e-3), "max|Im(F)| = %.2e" % abs(f.imag).max()
+
+                #e, na_orb = scipy.linalg.eigh(f.real, ovlp, type=2)
+                e, na_orb = scipy.linalg.eigh(f.real, ovlp)
+                #e, na_orb = eigh(f.real, ovlp)
+
+                # Extract MOs from rank-deficient fock matrix
+                mask = (e > 0.5)
+                #logger.debug(cell, "Eigenvalues > 1e-14: %r", e[abs(e) > 1e-14])
+                assert np.count_nonzero(mask) == np.count_nonzero(degen_mask)
+                logger.debug(cell, "Max error of MO energies= %.2e", abs(E_g[degen_mask]-(e[mask]-shift)).max())
                 #E_g[degen_mask] = e+shift
-                C_gamma = C_gamma.real
-                C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
+                C_gamma_out = C_gamma_out.real
+                C_gamma_out[:,degen_mask] = na_orb[:,mask]
+            # Diagonalize whole Fock matrix
             else:
-                f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-                assert(abs(f.imag).max() < 1e-3), "max|Im(F)|= %.2e" % abs(f.imag).max()
-                e, C_gamma = scipy.linalg.eigh(f.real, ovlp, type=2)
-                print("Max error of MO energies= %.2e" % abs(E_g-e).max())
+                #f = np.dot(C_gamma * E_g, C_gamma.conj().T)
+                #f = np.linalg.multi_dot((ovlp, f, ovlp))
+
+                # f may be rank deficient, due to linear-dependency treatment
+                shift = 1.0 - min(E_g)
+                cs = np.dot(C_gamma.conj().T, ovlp)
+                f = np.dot(cs.T.conj() * (E_g + shift), cs)
+
+                fimag = abs(f.imag).max()
+                logger.debug(cell, "max|Im(F)|= %.2e", fimag)
+
+                #fimag = abs(np.dot(f, ovlp).imag).max()
+                #logger.debug(cell, "max|Im(F.S)|= %.2e", fimag)
+                #assert(abs(f.imag).max() < 1e-3), "max|Im(F)|= %.2e" % abs(f.imag).max()
+
+                #e, C_gamma = scipy.linalg.eigh(f.real, ovlp, type=2)
+                # Replace E_g - it is possible that additional MO are being removed due to linear dependency treatment
+                #E_g, C_gamma_out = eigh(f.real, ovlp)
+                e, C_gamma_out = scipy.linalg.eigh(f.real, ovlp)
                 #E_g = e
+                mask = (e > 0.5)
+                assert np.count_nonzero(mask) == len(E_g)
+                logger.debug(cell, "Max error of MO energies= %.2e", abs(E_g-(e[mask]-shift)).max())
+                C_gamma_out = C_gamma_out[:,mask].copy()
+
+
     # Degeneracy treatment based on DM
     elif degen_method == "dm":
+        raise NotImplementedError()
         assert cimag_nondegen < 1e-4
         print("Initial imaginary part in Gamma-point MO coefficients= %5.2e" % abs(C_gamma.imag).max())
         idx0 = 0
@@ -305,7 +351,8 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
                     continue
 
                 dm = np.dot(C_gamma[:,dspace], C_gamma[:,dspace].conj().T)
-                dimag = abs(dm.imag.max())
+                dimag = abs(dm.imag).max()
+                dimag2 = abs(np.dot(dm, ovlp).imag).max()
                 # comparison to Fock matrix
                 #shift = 1.0 - min(E_g[dspace])
                 #f = np.dot(C_gamma[:,dspace]*(E_g[dspace]+shift), C_gamma[:,dspace].conj().T)
@@ -313,8 +360,8 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
 
                 #print("Degenerate subspace of size= %2d at E= %12.8g (min= %12.8g max=%12.8g spread=%7.2g): max|Im(D)|= %7.2e max|Im(F)|= %7.2e" %
                 #        (dsize, emean, emin, emax, emax-emin, dimag, fimag))
-                logger.debug(cell, "Subspace of size= %2d at E= %12.8g (min= %12.8g max=%12.8g spread=%7.2g): max|Im(C)|= %7.2e max|Im(D)|= %7.2e" %
-                        (dsize, emean, emin, emax, emax-emin, cimag, dimag))
+                logger.debug(cell, "Subspace of size= %2d at E= %12.8g (min= %12.8g max=%12.8g spread=%7.2g): max|Im(C)|= %7.2e max|Im(D)|= %7.2e max|Im(D.S)|= %7.2e" %
+                        (dsize, emean, emin, emax, emax-emin, cimag, dimag, dimag2))
                 if dimag > 1e-4: logger.warn(cell, "Large imaginary component in DM: %7.2e !", dimag)
                 #assert (dimag < 1e-3), "max|Im(D)|= %.2e" % dimag
                 e, v = scipy.linalg.eigh(dm.real, ovlp, type=2)
@@ -322,7 +369,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
                 C_gamma[:,dspace] = v[:,e>1e-3]
 
         cimag = abs(C_gamma.imag).max()
-        print("Final imaginary part in Gamma-point MO coefficients= %7.2e" % cimag)
+        print("Final max|Im(C)| in Gamma-point MOs= %7.2e" % cimag)
         assert (cimag < 1e-3)
         C_gamma = C_gamma.real
     else:
@@ -336,14 +383,14 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="dm", d
     s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(Nk,Nao,NR*Nao)
     # The unitary transformation from k-adapted orbitals to gamma-point orbitals
     if Nmo_k is None:
-        mo_phase = lib.einsum('kum,kuv,vi->kmi', C_k.conj(), s_k_g, C_gamma)
+        mo_phase = lib.einsum('kum,kuv,vi->kmi', C_k.conj(), s_k_g, C_gamma_out)
     else:
         mo_phase = []
         for k in range(Nk):
-            mo_phase_k = lib.einsum('um,uv,vi->mi', mo_coeff[k].conj(), s_k_g[k], C_gamma)
+            mo_phase_k = lib.einsum('um,uv,vi->mi', mo_coeff[k].conj(), s_k_g[k], C_gamma_out)
             mo_phase.append(mo_phase_k)
 
-    return scell, E_g, C_gamma, mo_phase
+    return scell, E_g, C_gamma_out, mo_phase
 
 def k2gamma(kmf, kmesh=None):
     r'''
@@ -377,9 +424,13 @@ def k2gamma(kmf, kmesh=None):
     mf.mo_coeff = C_gamma
     mf.mo_energy = E_g
     mf.mo_occ = mo_occ
+    mf.converged = kmf.converged
+    # Scale energy by number of primitive cells within supercell
+    mf.e_tot = len(kmf.kpts)*kmf.e_tot
 
     # Use unfolded overlap matrix for better error cancellation
-    s_k = kmf.cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kmf.kpts, pbcopt=lib.c_null_ptr())
+    #s_k = kmf.cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kmf.kpts, pbcopt=lib.c_null_ptr())
+    s_k = kmf.get_ovlp()
     ovlp = to_supercell_ao_integrals(kmf.cell, kmf.kpts, s_k)
     assert np.allclose(ovlp, ovlp.T)
     ovlp = (ovlp + ovlp.T) / 2

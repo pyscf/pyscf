@@ -360,7 +360,7 @@ def get_frozen_mask(mp):
     elif len(mp.frozen) > 0:
         moidx[list(mp.frozen)] = False
     else:
-        raise NotImplementedError
+        raise NotImplementedError()
     return moidx
 
 

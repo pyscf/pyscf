@@ -650,7 +650,7 @@ class GDF(aft.AFTDF):
                 blksize = max_memory*1e6/16/(nao**2*2)
             blksize /= 2  # For prefetch
             blksize = max(16, min(int(blksize), self.blockdim))
-            logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
+            #logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
         def load(aux_slice):
             b0, b1 = aux_slice

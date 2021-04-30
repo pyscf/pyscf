@@ -70,4 +70,4 @@ log.info("  Author: Max Nusspickel")
 log.info("  Email: max.nusspickel@gmail.com")
 log.info("")
 
-from .embcc import *
+from .embcc import EmbCC

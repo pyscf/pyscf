@@ -10,11 +10,16 @@ import scipy.linalg
 import pyscf
 import pyscf.lo
 import pyscf.scf
+import pyscf.pbc
+import pyscf.pbc.tools
+#from pyscf.pbc.tools import k2gamma
+#from pyscf.mp.mp2 import _mo_without_core
 
 from .util import *
 from .cluster import Cluster
 from .localao import localize_ao
 from . import helper
+from .kao2gmo import gdf_to_pyscf_eris
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +38,7 @@ except (ImportError, ModuleNotFoundError):
     from timeit import default_timer as timer
 
 __all__ = ["EmbCC",]
+
 
 class EmbCC:
 
@@ -76,7 +82,6 @@ class EmbCC:
             #minao="minao",
             minao=None,
             #
-            ovlp=None,
             use_ref_orbitals_dmet=True,
             use_ref_orbitals_bath=False,
             mp2_correction=True,
@@ -96,14 +101,12 @@ class EmbCC:
             Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_bath_tol`,
             or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
 
-        ovlp : ndarray
-            AO overlap matrix - may be higher accuracy (eg. from k2gamma) than `mf.get_ovlp()`
-
         make_rdm1 : [True, False]
             Calculate RDM1 in cluster.
         eom_ccsd : [True, False, "IP", "EA"]
             Default: False.
         """
+        t_start = timer()
 
         log.info("INITIALIZING EmbCC")
         log.info("******************")
@@ -145,9 +148,10 @@ class EmbCC:
 
         # --- Check input
         if not mf.converged:
-            log.error("ERROR: Mean-field calculation not converged.")
             if self.opts.strict:
                 raise RuntimeError("ERROR: Mean-field calculation not converged.")
+            else:
+                log.error("ERROR: Mean-field calculation not converged.")
 
         # Local orbital types:
         # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
@@ -161,31 +165,30 @@ class EmbCC:
         if bath_type not in self.VALID_BATH_TYPES:
             raise ValueError("Unknown bath type: %s" % bath_type)
 
-        # TODO:
-        # Automatic conversion from k-point MF
-        # Convert KRHF to Gamma-point RHF
-        #if isinstance(mf, pyscf.pbc.scf.KRHF) or isinstance(mf.mo_coeff, list):
-        #    log.info("Converting KRHF to gamma-point RHF calculation")
-        #    assert np.allclose(mf.kpts[0], 0)
-        #    mf_g = pyscf.pbc.scf.RHF(mf.cell)
-        #    mf_g.kpts = mf.kpts[0]
-        #    mf_g.mo_energy = mf.mo_energy[0].copy()
-        #    mf_g.mo_occ = mf.mo_occ[0].copy()
-        #    mf_g.mo_coeff = mf.mo_coeff[0].copy()
-        #    mf_g.with_df = mf.with_df
-        #    mf = mf_g
-
+        # k-space unfolding
+        #if isinstance(mf, pyscf.pbc.scf.KRHF):
+        if hasattr(mf, "kpts") and mf.kpts is not None:
+            log.debug("Mean-field calculations has k-points; unfolding to supercell.")
+            t0 = timer()
+            self.kcell = mf.cell
+            self.kpts = mf.kpts
+            self.kdf = mf.with_df
+            assert (self.kcell == self.kdf.cell)
+            assert np.all(self.kpts == self.kdf.kpts)
+            mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
+            log.debug("Time for k->Gamma unfolding of mean-field: %s", get_time_string(timer()-t0))
+        else:
+            self.kcell = None
+            self.kpts = None
+            self.kdf = None
         self.mf = mf
 
         # AO overlap matrix
-        if ovlp is None: ovlp = mf.get_ovlp()
-        log.debug("Symmetry error of AO overlap matrix norm= %.2e max= %.2e", np.linalg.norm(ovlp-ovlp.T), abs(ovlp-ovlp.T).max())
-        self.ovlp = (ovlp + ovlp.T)/2
+        self.ovlp = self.mf.get_ovlp()
 
-        self.mo_energy = mf.mo_energy.copy()
-        self.mo_occ = mf.mo_occ.copy()
-        self.mo_coeff = mf.mo_coeff.copy()
-
+        self.mo_energy = self.mf.mo_energy.copy()
+        self.mo_occ = self.mf.mo_occ.copy()
+        self.mo_coeff = self.mf.mo_coeff.copy()
         self.max_memory = self.mf.max_memory
 
         self.local_orbital_type = local_type
@@ -245,25 +248,30 @@ class EmbCC:
             log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
         else:
             cs = np.dot(self.mo_coeff.T, self.ovlp)
-            #log.debug("SHAPES: %r %r %r %r", list(self.mo_coeff.shape), list(self.get_ovlp().shape), list(cs.shape), list(self.mo_energy.shape))
             self._fock = np.einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
 
         # Orthogonalize insufficiently orthogonal MOs
         # (For example as a result of k2gamma conversion with low cell.precision)
         c = self.mo_coeff.copy()
-        assert np.all(c.imag == 0)
+        assert np.all(c.imag == 0), "max|Im(C)|= %.2e" % abs(c.imag).max()
         ctsc = np.linalg.multi_dot((c.T, self.ovlp, c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
+            t0 = timer()
             log.info("Orthogonalizing orbitals...")
             self.mo_coeff = orthogonalize_mo(c, self.ovlp)
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.ovlp, c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
+            log.debug("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
+            t0 = timer()
             self.init_fragments()
+            log.debug("Time for fragment initialization: %s", get_time_string(timer()-t0))
+
+        log.debug("Time for EmbCC setup: %s", get_time_string(timer()-t_start))
 
         log.changeIndentLevel(-1)
 
@@ -328,11 +336,18 @@ class EmbCC:
         return self.mf.mol
 
     @property
+    def ncells(self):
+        """Number of primitive cells within simulated supercell."""
+        if self.kpts is None:
+            return 1
+        return len(self.kpts)
+
+    @property
     def norb(self):
+        """Number of atomic orbitals."""
         return self.mol.nao_nr()
 
     def get_ovlp(self):
-        log.warning("get_ovlp is deprecated.")
         return self.ovlp
 
     def get_hcore(self, *args, **kwargs):
@@ -340,6 +355,28 @@ class EmbCC:
 
     def get_fock(self):
         return self._fock
+
+    def get_eris(self, cm):
+        """Get ERIS for post-HF methods.
+
+        For unfolded PBC calculations, this folds the MO back into k-space
+        and contracts with the k-space three-center integrals..
+
+        Arguments
+        ---------
+        cm: pyscf.mp.mp2.MP2 or pyscf.cc.ccsd.CCSD
+            Correlated method, must have mo_coeff set.
+
+        Returns
+        -------
+        eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
+            ERIs which can be used for the respective correlated method.
+        """
+        if self.kcell is None:
+            return cm.ao2mo()
+
+        eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
+        return eris
 
     @property
     def nclusters(self):
@@ -349,7 +386,7 @@ class EmbCC:
     @property
     def e_tot(self):
         """Total energy."""
-        return self.mf.e_tot + self.e_corr
+        return self.mf.e_tot/self.ncells + self.e_corr
 
     # -------------------------------------------------------------------------------------------- #
 

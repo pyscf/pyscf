@@ -29,8 +29,6 @@ def k2gamma_gdf(mf, kpts, unfold_j3c=True, cderi_file=None):
     ncells = np.product(kpts)
     assert ncells == (mf_sc.cell.natm // mf.cell.natm)
     # Scale total energy to supercell size
-    mf_sc.e_tot = ncells * mf.e_tot
-    mf_sc.converged = mf.converged
     # k2gamma GDF
     if isinstance(mf.with_df, pyscf.pbc.df.GDF):
         mf_sc = mf_sc.density_fit()

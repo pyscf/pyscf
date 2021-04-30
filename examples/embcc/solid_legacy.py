@@ -34,7 +34,7 @@ def get_arguments():
     """Get arguments from command line."""
     parser = argparse.ArgumentParser(allow_abbrev=False)
     # System
-    parser.add_argument("--system", choices=["diamond", "graphite", "graphene", "perovskite"], default="diamond")
+    parser.add_argument("--system", choices=["diamond", "graphene", "perovskite"], default="diamond")
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzvp")
     parser.add_argument("--pseudopot", default="gth-pade")
@@ -64,6 +64,7 @@ def get_arguments():
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
+    parser.add_argument("--load-gdf-unfolded", action="store_true")
     # Embedded correlated calculation
     parser.add_argument("--solver", default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
@@ -86,6 +87,7 @@ def get_arguments():
     parser.add_argument("--dft-xc", nargs="*", default=[])
     parser.add_argument("--run-hf", type=int, default=1)
     parser.add_argument("--run-embcc", type=int, default=1)
+    parser.add_argument("--new-mode", action="store_true")
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -95,13 +97,6 @@ def get_arguments():
                 "atoms" : ["C", "C"],
                 "ndim" : 3,
                 "lattice_consts" : np.arange(3.4, 3.8+1e-12, 0.1),
-                }
-    elif args.system == "graphite":
-        defaults = {
-                "atoms" : ["C", "C", "C", "C"],
-                "ndim" : 3,
-                "lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
-                "vacuum_size" : 6.708,
                 }
     elif args.system == "graphene":
         defaults = {
@@ -140,7 +135,7 @@ def make_diamond(a, atoms=["C", "C"]):
     atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
-def make_graphene(a, c, atoms=["C", "C"]):
+def make_graphene(a, c, atoms):
     amat = np.asarray([
             [a, 0, 0],
             [a/2, a*np.sqrt(3.0)/2, 0],
@@ -152,27 +147,7 @@ def make_graphene(a, c, atoms=["C", "C"]):
     atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
-def make_graphite(a, c=6.708, atoms=["C", "C", "C", "C"]):
-    """a = 2.461 A , c = 6.708 A"""
-    #amat = np.asarray([
-    #        [a, 0, 0],
-    #        [a/2, a*np.sqrt(3.0)/2, 0],
-    #        [0, 0, c]])
-    amat = np.asarray([
-            [a/2, -a*np.sqrt(3.0)/2, 0],
-            [a/2, +a*np.sqrt(3.0)/2, 0],
-            [0, 0, c]])
-    coords_internal = np.asarray([
-        [0,     0,      1.0/4],
-        [2.0/3, 1.0/3,  1.0/4],
-        [0,     0,      3.0/4],
-        [1.0/3, 2.0/3,  3.0/4]])
-    coords = np.dot(coords_internal, amat)
-    atom = [(atoms[i], coords[i]) for i in range(4)]
-    return amat, atom
-
-
-def make_perovskite(a, atoms=["Sr", "Ti", "O"]):
+def make_perovskite(a, atoms):
     amat = a * np.eye(3)
     coords = np.asarray([
                 [0,     0,      0],
@@ -195,8 +170,6 @@ def make_cell(a, args, **kwargs):
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
-    elif args.system == "graphite":
-        cell.a, cell.atom = make_graphite(a, c=args.vacuum_size, atoms=args.atoms)
     elif args.system == "graphene":
         cell.a, cell.atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
     elif args.system == "perovskite":
@@ -303,13 +276,17 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
         load_gdf_ok = False
         # Load GDF
         if args.load_gdf is not None:
-            fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
-            log.info("Loading GDF from file %s...", fname)
-            if os.path.isfile(fname):
-                df._cderi = fname
-                load_gdf_ok = True
+            if not args.load_gdf_unfolded:
+                fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+                log.info("Loading GDF from file %s...", fname)
+                if os.path.isfile(fname):
+                    df._cderi = fname
+                    load_gdf_ok = True
+                else:
+                    log.error("Could not load GDF from file %s. File not found." % fname)
             else:
-                log.error("Could not load GDF from file %s. File not found." % fname)
+                log.info("Loading of unfolded GDF deferred.")
+                load_gdf_ok = True
         # Calculate GDF
         if not load_gdf_ok:
             if args.save_gdf is not None:
@@ -352,6 +329,27 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
         err = abs(csc-np.eye(c.shape[-1])).max()
         if err > 1e-6:
             log.error("MOs not orthogonal. Error= %.2e", err)
+
+    return mf
+
+def unfold_mf(mf, args, unfold_j3c=None):
+    if unfold_j3c is None:
+        unfold_j3c = args.run_embcc
+    if args.k_points is not None and np.product(args.k_points) > 1:
+        log.info("k2gamma...")
+        t0 = timer()
+        if args.load_gdf and args.load_gdf_unfolded:
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=False)
+            fname = (args.load_gdf % a) if ("%" in args.load_gdf) else args.load_gdf
+            log.info("Loading unfolded GDF from file %s...", fname)
+            mf.with_df._cderi = fname
+        else:
+            #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points)
+            mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=unfold_j3c)
+            #mf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(mf, args.k_points, unfold_j3c=unfold_j3c, cderi_file="gdf.h5")
+        log.info("Time for k2gamma: %.3f s", (timer()-t0))
+    else:
+        mf._eri = None
 
     return mf
 
@@ -408,6 +406,10 @@ for i, a in enumerate(args.lattice_consts):
     if args.run_hf:
         mf = run_mf(a, cell, args, kpts=kpts, dm_init=dm_init)
 
+    # In new mode use k-point MF to initialize EmbCC
+    if not args.new_mode:
+        mf = unfold_mf(mf, args)
+
     # Reuse DF
     #df = None
     for xc in args.dft_xc:
@@ -436,7 +438,10 @@ for i, a in enumerate(args.lattice_consts):
             ncells = np.product(args.k_points)
         else:
             ncells = 1
-        energies["hf"] = [mf.e_tot]
+        if args.new_mode:
+            energies["hf"] = [mf.e_tot]
+        else:
+            energies["hf"] = [mf.e_tot / ncells]
     if args.run_embcc:
         energies["ccsd"] = []
         energies["ccsd-dmp2"] = []
@@ -476,9 +481,13 @@ for i, a in enumerate(args.lattice_consts):
                 bath_type=args.bath_type, bath_tol=btol, mp2_correction=args.mp2_correction, **kwargs)
 
             # Define atomic fragments, first argument is atom index
-            if args.system == "graphite":
-                ccx.make_atom_cluster(0)
-                ccx.make_atom_cluster(1)
+            if args.new_mode:
+                efac = 1
+            else:
+                efac = ncells
+
+            if args.system == "diamond":
+                ccx.make_atom_cluster(0, symmetry_factor=efac)
             elif args.system == "graphene":
                 #for ix in range(2):
                 #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
@@ -487,29 +496,25 @@ for i, a in enumerate(args.lattice_consts):
                     ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
                 else:
                     ix = ncells-1    # Make cluster in center
-                ccx.make_atom_cluster(ix, **kwargs)
+                ccx.make_atom_cluster(ix, symmetry_factor=efac, **kwargs)
             elif args.system == "perovskite":
                 weights = args.bath_tol_fragment_weight
                 # Overwrites ccx.bath_tol per cluster
                 if weights is not None:
-                    ccx.make_atom_cluster(0, bath_tol=weights[0]*btol)
-                    ccx.make_atom_cluster(1, bath_tol=weights[1]*btol)
-                    ccx.make_atom_cluster(2, symmetry_factor=3, bath_tol=weights[2]*btol)
+                    for ix in range(5):
+                        ccx.make_atom_cluster(ix, symmetry_factor=efac, bath_tol=weights[ix]*btol)
                 else:
-                    ccx.make_atom_cluster(0)
-                    ccx.make_atom_cluster(1)
-                    ccx.make_atom_cluster(2, symmetry_factor=3)
-            else:
-                ccx.make_atom_cluster(0)
+                    for ix in range(5):
+                        ccx.make_atom_cluster(ix, symmetry_factor=efac)
 
             ccx.kernel()
 
             # Save energies
-            energies["ccsd"].append(ccx.e_tot)
-            energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2))
+            energies["ccsd"].append(ccx.e_tot / efac)
+            energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2) / efac)
             if args.solver == "CCSD(T)":
-                energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t))
-                energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t))
+                energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t) / efac)
+                energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t) / efac)
 
             del ccx
 

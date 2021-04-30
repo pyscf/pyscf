@@ -132,14 +132,21 @@ class ClusterSolver:
 
         # Integral transformation
         t0 = timer()
-        if self.pbc:
+        # New unfolding
+        if self.cluster.base.kcell is not None:
+            log.debug("ao2mo using base.get_eris")
+            eris = self.cluster.base.get_eris(cc)
+        elif self.pbc:
             mo_act = self.mo_coeff[:,self.active]
             f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
             if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
+                log.debug("ao2mo using ao2mo_j3c.ao2mo_ccsd")
                 eris = ao2mo_j3c.ao2mo_ccsd(cc, fock=f_act)
             else:
+                log.debug("ao2mo using cc.ao2mo_direct")
                 eris = cc.ao2mo_direct(fock=f_act)
         else:
+            log.debug("ao2mo using cc.ao2mo")
             eris = cc.ao2mo()
         self._eris = eris
         t = (timer()-t0)

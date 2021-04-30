@@ -44,6 +44,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
+from pyscf.gto import helper
 from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
@@ -2094,6 +2095,10 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
+
+        # Linear dependency treatment
+        self.lindep_threshold = None
+        self.lindep_method = 'canonical-orth'
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6), dtype=numpy.int32)
@@ -2618,6 +2623,33 @@ class Mole(lib.StreamObject):
 
         logger.info(self, 'CPU time: %12.2f', logger.process_clock())
         return self
+
+    def eigh_factory(self, lindep_threshold=None, lindep_method=None):
+        """Create generalized eigenproblem solver, with linear dependency treatment."""
+        ldt = lindep_threshold or self.lindep_threshold
+        ldm = lindep_method or self.lindep_method
+        # No linear-dependency treatment
+        if not ldt or not ldm:
+            return scipy.linalg.eigh
+        # Canonical orthogonalization
+        elif ldm.lower() == 'canonical-orth':
+            def eigh(a, ovlp=None, type=1):
+                if type != 1:
+                    raise NotImplementedError()
+                if ovlp is None:
+                    return np.linalg.eigh(a)
+                x = helper.canonical_orth(ovlp, threshold=ldt)
+                n0, n1 = x.shape
+                logger.debug(self, "Removing linearly dependent AOs: method= %s threshold= %.1e N(tot)= %4d N(del)= %3d", ldm, ldt, n0, (n0-n1))
+                xax = np.linalg.multi_dot((x.T.conj(), a, x))
+                e, c = np.linalg.eigh(xax)
+                c = np.dot(x, c)
+                return e, c
+        else:
+            raise NotImplementedError()
+
+        return eigh
+
 
     def set_common_origin(self, coord):
         '''Update common origin for integrals of dipole, rxp etc.

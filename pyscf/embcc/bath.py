@@ -465,11 +465,18 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
     # Integral transformation
     t0 = timer()
     if eris is None:
+
+        # New unfolding
+        if self.base.kcell is not None:
+            log.debug("ao2mo using base.get_eris")
+            eris = self.base.get_eris(mp2)
+
         # For PBC [direct_init to avoid expensive Fock rebuild]
-        if self.use_pbc:
+        elif self.use_pbc:
             fock = np.linalg.multi_dot((c_act.T, f, c_act))
             # TRY NEW
             if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
+                log.debug("ao2mo using ao2mo_j3c.ao2mo_mp2")
                 #eris = pbc_gdf_ao2mo.ao2mo(mp2, fock=fock, mp2=True)
                 # TEST NEW
                 #mo_energy = np.hstack((eo, ev))
@@ -479,17 +486,19 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
                 #assert np.allclose(eris.ovov, eris2.ovov)
 
             else:
+                log.debug("ao2mo using mp2.ao2mo(direct_init=True)")
                 mo_energy = np.hstack((eo, ev))
                 eris = mp2.ao2mo(direct_init=True, mo_energy=mo_energy, fock=fock)
         # For molecular calculations with DF
         elif hasattr(mp2, "with_df"):
+            log.debug("ao2mo using mp2.ao2mo(store_eris=True)")
             eris = mp2.ao2mo(store_eris=True)
         else:
+            log.debug("ao2mo using mp2.ao2mo")
             eris = mp2.ao2mo()
         # PySCF forgets to set this...
-        if eris.nocc is None:
-            eris.nocc = c_occ.shape[-1]
-        #log.debug("Made eris with no=%d nv=%d n=%d", c_occ.shape[-1], c_vir.shape[-1], eris.ovov[:].size)
+        if eris.nocc is None: eris.nocc = c_occ.shape[-1]
+
     # Reuse perviously obtained integral transformation into N^2 sized quantity (rather than N^4)
     else:
         log.debug("Transforming previous eris.")
@@ -500,15 +509,13 @@ def run_mp2(self, c_occ, c_vir, c_occenv=None, c_virenv=None, canonicalize=True,
         #log.debug("Eris difference=%.3e", np.linalg.norm(eris.ovov - eris2.ovov))
         #assert np.allclose(eris.ovov, eris2.ovov)
     t = (timer() - t0)
-    if t > 1:
-        log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+    log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
     assert (eris.ovov is not None)
 
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
     t = (timer() - t0)
-    if t > 10:
-        log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
+    log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
     e_mp2_full *= self.symmetry_factor
     log.debug("Full MP2 energy=  %12.8g htr", e_mp2_full)
 
@@ -898,9 +905,9 @@ def make_mp2_bath(self,
     dm_occ, dm_rot = dm_occ[::-1], dm_rot[:,::-1]
     c_rot = np.dot(c_env, dm_rot)
 
-    if False:
-        with open("MP2-natorb-%s-%s.txt" % (self.name, kind), "ab") as f:
-            np.savetxt(f, dm_occ[np.newaxis])
+    with open("bath-occupation.txt", "ab") as f:
+        #np.savetxt(f, dm_occ[np.newaxis], header="MP2 bath orbital occupation of cluster %s" % self.name)
+        np.savetxt(f, dm_occ, header="%s MP2 bath orbital occupation of cluster %s" % (kindname.title(), self.name))
 
     if self.opts.plot_orbitals:
         #bins = np.hstack((-np.inf, np.logspace(-9, -3, 9-3+1), np.inf))
@@ -1044,12 +1051,18 @@ def make_mp2_bath(self,
 
     # Output some information
     log.info("%s MP2 natural orbitals:" % kindname.title())
+    db = dm_occ[:nbath]
+    de = dm_occ[nbath:]
     if nbath > 0:
-        log.info("  * %3d bath orbitals:        largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
-            nbath, max(dm_occ[:nbath]), min(dm_occ[:nbath]), np.mean(dm_occ[:nbath]))
+        log.info("  Bath: N= %4d max=%6.3g min=%6.3g avg=%6.3g sum=%6.3g ( %.1f %% )",
+                nbath, max(db), min(db), np.mean(db), np.sum(db), 100*np.sum(db)/np.sum(dm_occ))
+    else:
+        log.info("  No bath orbitals")
     if nbath < nenv:
-        log.info("  * %3d environment orbitals: largest=%6.3g, smallest=%6.3g, mean=%6.3g.",
-                nenv-nbath, max(dm_occ[nbath:]), min(dm_occ[nbath:]), np.mean(dm_occ[nbath:]))
+        log.info("  Rest: N= %4d max=%6.3g min=%6.3g avg=%6.3g sum=%6.3g ( %.1f %% )",
+                nenv-nbath, max(de), min(de), np.mean(de), np.sum(de), 100*np.sum(de)/np.sum(dm_occ))
+    else:
+        log.info("  No remaining orbitals")
 
     # Delta MP2 correction - no correction if all natural orbitals are already included (0 environment orbitals)
     if mp2_correction and c_env.shape[-1] > 0:
