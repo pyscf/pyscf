@@ -203,6 +203,14 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     r'''
     Frozen natural orbitals
 
+    Attributes:
+        thresh : float
+            Threshold on NO occupation numbers. Default is 1e-6 (very conservative).
+        pct_occ : float
+            Percentage of total occupation number. Default is None. If present, overrides `thresh`.
+        nvir_act : int
+            Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
+
     Returns:
         frozen : list or ndarray
             List of orbitals to freeze

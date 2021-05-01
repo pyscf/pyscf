@@ -164,6 +164,7 @@ class KnownValues(unittest.TestCase):
 
     def test_nlc_coeff(self):
         self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.libxc.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.libxc.eval_xc('lda,', rho[0][:3], deriv=3)

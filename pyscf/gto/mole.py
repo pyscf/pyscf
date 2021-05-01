@@ -806,8 +806,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         if not b:  # == []
             continue
         angl = b[0]
-        #if angl in [6, 7]:
-        #    print('libcint may have large error for ERI of i function')
+        if angl > 14:
+            sys.stderr.write('Warning: integral library does not support basis '
+                             'with angular momentum > 14\n')
+
         if isinstance(b[1], int):
             kappa = b[1]
             b_coeff = numpy.array(sorted(list(b[2:]), reverse=True))
@@ -904,7 +906,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
             elif puresymb in _basdic:
                 b = _basdic[puresymb].copy()
             else:
-                sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
+                sys.stderr.write('Warning: Basis not found for atom %d %s\n' % (ia, symb))
                 continue
         b[:,ATOM_OF] = ia
         _bas.append(b)
