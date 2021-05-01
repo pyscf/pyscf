@@ -240,14 +240,19 @@ HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
 RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
-VV10_DAT = {
+VV10_XC = {
     'B97M_V'    : [6.0, 0.01],
     'WB97M_V'   : [6.0, 0.01],
     'WB97X_V'   : [6.0, 0.01],
     'VV10'      : [5.9, 0.0093],
     'LC_VV10'   : [6.3, 0.0089],
+    'REVSCAN_VV10': [9.8, 0.0093],
+    'SCAN_RVV10'  : [15.7, 0.0093],
+    'SCAN_VV10'   : [14.0, 0.0093],
+    'SCANL_RVV10' : [15.7, 0.0093],
+    'SCANL_VV10'  : [14.0, 0.0093],
 }
-VV10_XC = set(VV10_DAT.keys())
+VV10_XC.update([(key.replace('_', ''), val) for key, val in VV10_XC.items()])
 
 def xc_type(xc_code):
     if xc_code is None:
@@ -289,16 +294,26 @@ def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
-    return xc_code.upper() in VV10_XC
+    return '__VV10' in xc_code.upper()
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     xc_code = xc_code.upper()
-    if is_nlc(xc_code):
-        return VV10_DAT[xc_code]
+
+    nlc_part = None
+    if '__VV10' in xc_code:
+        xc_code, nlc_part = xc_code.split('__', 1)
+
+    if xc_code in VV10_XC:
+        return VV10_XC[xc_code]
+    elif nlc_part is not None:
+        # Use VV10 NLC parameters by default for the general case
+        return VV10_XC[nlc_part]
     else:
-        return 0, 0
+        raise NotImplementedError(
+            '%s does not have NLC part. Available functionals are %s' %
+            (xc_code, ', '.join(VV10_XC.keys())))
 
 def rsh_coeff(xc_code):
     '''Get Range-separated-hybrid coefficients

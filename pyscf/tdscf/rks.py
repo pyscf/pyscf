@@ -48,9 +48,11 @@ class TDDFT(rhf.TDHF):
 
 RPA = TDRKS = TDDFT
 
-class TDDFTNoHybrid(TDA):
+class TDDFTNoHybrid(TDDFT, TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
+    init_guess = TDA.init_guess
+
     def gen_vind(self, mf):
         wfnsym = self.wfnsym
         singlet = self.singlet
@@ -132,6 +134,7 @@ class TDDFTNoHybrid(TDA):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
+                              max_cycle=self.max_cycle,
                               max_space=self.max_space, pick=pickeig,
                               verbose=log)
 
@@ -159,7 +162,7 @@ class TDDFTNoHybrid(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
         log.timer('TDDFT', *cpu0)
-        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
+        self._finalize()
         return self.e, self.xy
 
     def nuc_grad_method(self):
@@ -213,68 +216,3 @@ dft.roks.ROKS.TDDFT         = dft.rks_symm.ROKS.TDDFT         = None
 dft.roks.ROKS.TDDFTNoHybrid = dft.rks_symm.ROKS.TDDFTNoHybrid = None
 dft.roks.ROKS.dTDA          = dft.rks_symm.ROKS.dTDA          = None
 dft.roks.ROKS.dRPA          = dft.rks_symm.ROKS.dRPA          = None
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import dft
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.basis = '631g'
-    mol.build()
-
-    mf = dft.RKS(mol)
-    mf.xc = 'lda, vwn_rpa'
-    mf.scf()
-    td = mf.TDDFTNoHybrid()
-    #td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.74227238   9.74227238  14.85153818  30.35019348  30.35019348]
-    td.singlet = False
-    print(td.kernel()[0] * 27.2114)
-# [  9.08754045   9.08754045  12.48375957  29.66870808  29.66870808]
-
-    mf = dft.RKS(mol)
-    mf.xc = 'b88,p86'
-    mf.scf()
-    td = mf.TDDFT()
-    td.nstates = 5
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.82204435   9.82204435  15.0410193   30.01373062  30.01373062]
-    td.singlet = False
-    print(td.kernel()[0] * 27.2114)
-# [  9.09322358   9.09322358  12.29843139  29.26731075  29.26731075]
-
-    mf = dft.RKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = mf.TDA()
-    print(td.kernel()[0] * 27.2114)
-# [  9.68872769   9.68872769  15.07122478]
-    td.singlet = False
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.0139312    9.0139312   12.42444659]
-
-    mf = dft.RKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = dRPA(mf)
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [ 10.00343861  10.00343861  15.62586305  30.69238874  30.69238874]
-
-    mf = dft.RKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = dTDA(mf)
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [ 10.05245288  10.05245288  16.03497655  30.7120363   30.7120363 ]
-

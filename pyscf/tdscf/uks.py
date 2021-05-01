@@ -46,9 +46,12 @@ class TDDFT(uhf.TDHF):
 RPA = TDUKS = TDDFT
 
 
-class TDDFTNoHybrid(TDA):
+class TDDFTNoHybrid(TDDFT, TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
+
+    init_guess = TDA.init_guess
+
     def get_vind(self, mf):
         wfnsym = self.wfnsym
 
@@ -149,6 +152,7 @@ class TDDFTNoHybrid(TDA):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
+                              max_cycle=self.max_cycle,
                               max_space=self.max_space, pick=pickeig,
                               verbose=log)
 
@@ -193,7 +197,7 @@ class TDDFTNoHybrid(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
         log.timer('TDDFT', *cpu0)
-        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
+        self._finalize()
         return self.e, self.xy
 
     def nuc_grad_method(self):
@@ -235,70 +239,3 @@ dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method
 dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = tddft
 dft.uks.UKS.dTDA          = dft.uks_symm.UKS.dTDA          = lib.class_as_method(dTDA)
 dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method(dRPA)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.basis = '631g'
-    mol.build()
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda, vwn_rpa'
-    mf.scf()
-    td = mf.TDDFTNoHybrid()
-    #td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.08754011   9.08754011   9.7422721    9.7422721   12.48375928]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'b88,p86'
-    mf.scf()
-    td = mf.TDDFT()
-    td.nstates = 5
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.09321047   9.09321047   9.82203065   9.82203065  12.29842071]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = mf.TDA()
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.01393088   9.01393088   9.68872733   9.68872733  12.42444633]
-
-    mol.spin = 2
-    mf = dft.UKS(mol)
-    mf.xc = 'lda, vwn_rpa'
-    mf.scf()
-    td = TDDFTNoHybrid(mf)
-    #td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.0765857    3.16823079  15.20150204  18.40379107  21.11477253]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'b88,p86'
-    mf.scf()
-    td = TDDFT(mf)
-    td.nstates = 5
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.05161674   3.57883843  15.0960023   18.33537454  20.76914967]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = TDA(mf)
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.16142061   3.22811366  14.98443928  18.29273507  21.18410081]
-

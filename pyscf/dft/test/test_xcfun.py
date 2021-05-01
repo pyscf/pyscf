@@ -133,20 +133,21 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.xcfun.is_meta_gga('m05'))
         self.assertFalse(dft.xcfun.is_meta_gga('pbe0'))
         self.assertFalse(dft.xcfun.is_meta_gga('tf,'))
-        self.assertFalse(dft.xcfun.is_meta_gga('vv10'))
+        #self.assertFalse(dft.xcfun.is_meta_gga('vv10'))
         self.assertTrue (dft.xcfun.is_gga('PBE0'))
         self.assertFalse(dft.xcfun.is_gga('m05'))
         self.assertFalse(dft.xcfun.is_gga('tf,'))
         self.assertTrue (dft.xcfun.is_lda('tf,'))
-        self.assertFalse(dft.xcfun.is_lda('vv10'))
+        #self.assertFalse(dft.xcfun.is_lda('vv10'))
         self.assertTrue (dft.xcfun.is_hybrid_xc('m05'))
         self.assertTrue (dft.xcfun.is_hybrid_xc('pbe0,'))
         self.assertFalse(dft.xcfun.is_hybrid_xc('m05,'))
-        self.assertFalse(dft.xcfun.is_hybrid_xc('vv10'))
-        self.assertTrue (dft.xcfun.is_hybrid_xc(('b3lyp',4,'vv10')))
+        #self.assertFalse(dft.xcfun.is_hybrid_xc('vv10'))
+        self.assertTrue (dft.xcfun.is_hybrid_xc(('b3lyp', 4, 'vv10')))
 
     def test_nlc_coeff(self):
-        self.assertEqual(dft.xcfun.nlc_coeff('vv10'), [5.9, 0.0093])
+        #self.assertEqual(dft.xcfun.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.xcfun.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.xcfun.eval_xc('lda,', rho[0][:3], deriv=3)
