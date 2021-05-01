@@ -6,11 +6,13 @@ Email:  max.nusspickel@gmail.com
 
 # Standard
 from timeit import default_timer as timer
+import ctypes
 import logging
 # External
 import numpy as np
 # PySCF
 import pyscf
+import pyscf.lib
 from pyscf.mp.mp2 import _mo_without_core
 import pyscf.pbc
 import pyscf.pbc.tools
@@ -104,11 +106,12 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
         Dict of supercell ERIs. Has elements "ovov" `if only_ovov == True`
         and "oooo", "ovoo", "oovv", "ovov", "ovvo", "ovvv", and "vvvv" otherwise.
     """
+    # If GDF was loaded from hdf5 file:
+    if gdf.auxcell is None: gdf.build(with_j3c=False)
     cell = gdf.cell
     kpts = gdf.kpts
     phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
-    nr, nk = phase.shape
-    assert len(kpts) == nk == nr
+    nk = len(kpts)
     nmo = mo_coeff.shape[-1]
     nao = cell.nao_nr()         # Atomic orbitals in primitive cell
     naux = gdf.auxcell.nao_nr()  # Auxiliary size in primitive cell
@@ -124,76 +127,22 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     log.debug("Memory needed for kAO->GMO: temporary= %s final= %s",
             memory_string(max(mem_j3c, mem_j3c/2+mem_eris)), memory_string(mem_eris))
 
-    mo_coeff = mo_coeff.reshape(nr, nao, nmo)
+    # Transform: (l|ka,qb) -> (Rl|i,j)
+    mo_coeff = mo_coeff.reshape(nk, nao, nmo)
     ck_o = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,o])
     ck_v = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,v])
-
-    kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
-
     t0 = timer()
-    j3c_ov = np.zeros((nk, naux, nocc, nvir), dtype=np.complex)
-    if not only_ovov:
-        j3c_oo = np.zeros((nk, naux, nocc, nocc), dtype=np.complex)
-        j3c_vv = np.zeros((nk, naux, nvir, nvir), dtype=np.complex)
-    for ki in range(nk):
-        for kj in range(nk):
-            kij = (kpts[ki], kpts[kj])
-            kk = kconserv[ki,kj]
-            blk0 = 0
-            for lr, li, sign in gdf.sr_loop(kij, compact=False):
-                assert (sign == 1)
-                blksize = lr.shape[0]
-                blk = np.s_[blk0:blk0+blksize]
-                blk0 += blksize
-
-                j3c_kij = (lr+1j*li).reshape(blksize, nao, nao) / np.sqrt(nk)
-
-                j3c_ov[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, ck_o[ki].conj(), ck_v[kj])      # O(Nk^2 * Nocc * Nvir)
-                if only_ovov: continue
-                j3c_oo[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, ck_o[ki].conj(), ck_o[kj])      # O(Nk^2 * Nocc * Nocc)
-                j3c_vv[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, ck_v[ki].conj(), ck_v[kj])      # O(Nk^2 * Nvir * Nvir)
+    j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(gdf, ck_o, ck_v, only_ov=only_ovov, factor=1/np.sqrt(nk))
     t_trafo = (timer()-t0)
-
-    t0 = timer()
-    eris = {}
-    # FT auxiliary index : kR * k -> R
-    j3c_ov = np.tensordot(phase, j3c_ov, axes=1)
-    imag = abs(j3c_ov.imag).max()
-    if imag > 1e-5:
-        log.warning("WARNING: max|Im(j3c_ov)|= %.2e", imag)
-    else:
-        log.debug("max|Im(j3c_ov)|= %.2e", imag)
-    j3c_ov = j3c_ov.real
+    # Composite auxiliary index: Rl -> L
+    j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
     if not only_ovov:
-        j3c_oo = np.tensordot(phase, j3c_oo, axes=1)
-        j3c_vv = np.tensordot(phase, j3c_vv, axes=1)
-        imag = abs(j3c_oo.imag).max()
-        if imag > 1e-5:
-            log.warning("WARNING: max|Im(j3c_oo)|= %.2e", imag)
-        else:
-            log.debug("max|Im(j3c_oo)|= %.2e", imag)
-        imag = abs(j3c_vv.imag).max()
-        if imag > 1e-5:
-            log.warning("WARNING: max|Im(j3c_vv)|= %.2e", imag)
-        else:
-            log.debug("max|Im(j3c_vv)|= %.2e", imag)
-        j3c_oo = j3c_oo.real
-        j3c_vv = j3c_vv.real
-
-
-    j3c_ov2, j3c_oo2, j3c_vv2 = j3c_kao2gmo(gdf, ck_o, ck_v, only_ov=only_ovov)
-    assert np.allclose(j3c_ov, j3c_ov2)
-    if j3c_oo2 is not None:
-        assert np.allclose(j3c_oo, j3c_oo2)
-        assert np.allclose(j3c_vv, j3c_vv2)
-
-    j3c_ov = j3c_ov.reshape(nr*naux, nocc, nvir)
-    if not only_ovov:
-        j3c_oo = j3c_oo.reshape(nr*naux, nocc, nocc)
-        j3c_vv = j3c_vv.reshape(nr*naux, nvir, nvir)
+        j3c_oo = j3c_oo.reshape(nk*naux, nocc, nocc)
+        j3c_vv = j3c_vv.reshape(nk*naux, nvir, nvir)
 
     # Contract Lij,Lkl->ijkl
-    eris["ovov"] = np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))
+    t0 = timer()
+    eris = {"ovov" : np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))}
     if not only_ovov:
         eris["oooo"] = np.tensordot(j3c_oo, j3c_oo, axes=(0, 0))
         eris["ovoo"] = np.tensordot(j3c_ov, j3c_oo, axes=(0, 0))
@@ -208,7 +157,8 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     return eris
 
 
-def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True):
+#def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='python', factor=1):
+def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='c', factor=1):
     cell = gdf.cell
     kpts = gdf.kpts
     nk = len(kpts)
@@ -224,25 +174,73 @@ def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True):
         j3c_vv = np.zeros((nk, naux, nvir, nvir), dtype=np.complex)
     else:
         j3c_oo = j3c_vv = None
-    for ki in range(nk):
-        for kj in range(nk):
-            kij = (kpts[ki], kpts[kj])
-            kk = kconserv[ki,kj]
-            blk0 = 0
-            for lr, li, sign in gdf.sr_loop(kij, compact=False):
-                assert (sign == 1)
-                blksize = lr.shape[0]
-                blk = np.s_[blk0:blk0+blksize]
-                blk0 += blksize
 
-                j3c_kij = (lr+1j*li).reshape(blksize, nao, nao) / np.sqrt(nk)
+    if driver.lower() == 'python':
+        for ki in range(nk):
+            for kj in range(nk):
+                kij = (kpts[ki], kpts[kj])
+                kk = kconserv[ki,kj]
+                blk0 = 0
+                for lr, li, sign in gdf.sr_loop(kij, compact=False):
+                    assert (sign == 1)
+                    blksize = lr.shape[0]
+                    blk = np.s_[blk0:blk0+blksize]
+                    blk0 += blksize
 
-                j3c_ov[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cvir[kj])      # O(Nk^2 * Nocc * Nvir)
-                if only_ov: continue
-                j3c_oo[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cocc[kj])      # O(Nk^2 * Nocc * Nocc)
-                j3c_vv[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cvir[ki].conj(), cvir[kj])      # O(Nk^2 * Nvir * Nvir)
+                    j3c_kij = (lr+1j*li).reshape(blksize, nao, nao) * factor
+
+                    j3c_ov[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cvir[kj])      # O(Nk^2 * Nocc * Nvir)
+                    if only_ov: continue
+                    j3c_oo[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cocc[kj])      # O(Nk^2 * Nocc * Nocc)
+                    j3c_vv[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cvir[ki].conj(), cvir[kj])      # O(Nk^2 * Nvir * Nvir)
+
+    elif driver.lower() == 'c':
+        # Load j3c into memory
+        t0 = timer()
+        #j3c = np.zeros((nk, nk, naux, nao, nao), dtype=np.complex)
+        #for ki in range(nk):
+        #    for kj in range(nk):
+        #        kij = (kpts[ki], kpts[kj])
+        #        blk0 = 0
+        #        for lr, li, sign in gdf.sr_loop(kij, compact=False, blksize=int(1e9)):
+        #            assert (sign == 1)
+        #            blksize = lr.shape[0]
+        #            blk = np.s_[blk0:blk0+blksize]
+        #            blk0 += blksize
+        #            j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, nao, nao) * factor
+        j3c = load_j3c(gdf, factor=factor)
+
+        if only_ov:
+            j3c_oo_pt = j3c_vv_pt = ctypes.POINTER(ctypes.c_void_p)()
+        else:
+            j3c_oo_pt = j3c_oo.ctypes.data_as(ctypes.c_void_p)
+            j3c_vv_pt = j3c_vv.ctypes.data_as(ctypes.c_void_p)
+        log.debug("Time to load j3c from file: %.2f", timer()-t0)
+
+        cocc = cocc.copy()
+        cvir = cvir.copy()
+
+        libpbc = pyscf.lib.load_library("libpbc")
+        t0 = timer()
+        ierr = libpbc.j3c_kao2gmo(
+                ctypes.c_int64(nk),
+                ctypes.c_int64(nao),
+                ctypes.c_int64(nocc),
+                ctypes.c_int64(nvir),
+                ctypes.c_int64(naux),
+                kconserv.ctypes.data_as(ctypes.c_void_p),
+                cocc.ctypes.data_as(ctypes.c_void_p),
+                cvir.ctypes.data_as(ctypes.c_void_p),
+                j3c.ctypes.data_as(ctypes.c_void_p),
+                # Out
+                j3c_ov.ctypes.data_as(ctypes.c_void_p),
+                j3c_oo_pt,
+                j3c_vv_pt)
+        log.debug("Time in j3c_kao2gamo in C: %.2f", timer()-t0)
+        assert (ierr == 0)
 
     if make_real:
+        t0 = timer()
         phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
         j3c_ov = np.tensordot(phase, j3c_ov, axes=1)
         imag = abs(j3c_ov.imag).max()
@@ -266,5 +264,29 @@ def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True):
                 log.debug("max|Im(j3c_vv)|= %.2e", imag)
             j3c_oo = j3c_oo.real
             j3c_vv = j3c_vv.real
+        log.debug("Time to rotate to real: %.2f", timer()-t0)
 
     return j3c_ov, j3c_oo, j3c_vv
+
+def load_j3c(gdf, factor=1):
+    kpts = gdf.kpts
+    nk = len(kpts)
+    naux = gdf.auxcell.nao_nr()
+    nao = gdf.cell.nao_nr()
+
+    #if isinstance(gdf._cderi, np.ndarray):
+    #    return gdf._cderi
+
+    j3c = np.zeros((nk, nk, naux, nao, nao), dtype=np.complex)
+    for ki in range(nk):
+        for kj in range(nk):
+            kij = (kpts[ki], kpts[kj])
+            blk0 = 0
+            for lr, li, sign in gdf.sr_loop(kij, compact=False, blksize=int(1e9)):
+                assert (sign == 1)
+                blksize = lr.shape[0]
+                blk = np.s_[blk0:blk0+blksize]
+                blk0 += blksize
+                j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, nao, nao) * factor
+
+    return j3c

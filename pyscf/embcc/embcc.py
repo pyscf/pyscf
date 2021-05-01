@@ -123,7 +123,7 @@ class EmbCC:
                 "prim_mp2_bath_tol_vir" : False,
                 "orbfile" : None,         # Filename for orbital coefficients
                 #"orthogonal_mo_tol" : False,
-                "orthogonal_mo_tol" : 1e-8,
+                "orthogonal_mo_tol" : 1e-7,
                 # Population analysis
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis
@@ -173,6 +173,8 @@ class EmbCC:
             self.kcell = mf.cell
             self.kpts = mf.kpts
             self.kdf = mf.with_df
+            # DEBUG:
+            log.debug("GDF._cderi= %r", self.kdf._cderi)
             assert (self.kcell == self.kdf.cell)
             assert np.all(self.kpts == self.kdf.kpts)
             mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
@@ -236,34 +238,35 @@ class EmbCC:
         self.tccT1 = None
         self.tccT2 = None
 
-        # Fock matrix
-        # These two Fock matrices are different for loose values of cell.precision
-        # Which should be used?
-        # (We only need Fock matrix for canonicalization, therefore not too important to be accurate for CCSD.
-        # However, what about MP2 & CCSD(T)?)
-        recalc_fock = False
-        if recalc_fock:
-            t0 = timer()
-            self._fock = self.mf.get_fock()
-            log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
-        else:
-            cs = np.dot(self.mo_coeff.T, self.ovlp)
-            self._fock = np.einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
-
         # Orthogonalize insufficiently orthogonal MOs
         # (For example as a result of k2gamma conversion with low cell.precision)
         c = self.mo_coeff.copy()
         assert np.all(c.imag == 0), "max|Im(C)|= %.2e" % abs(c.imag).max()
         ctsc = np.linalg.multi_dot((c.T, self.ovlp, c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
-        log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-4 else "")
+        log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-5 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             t0 = timer()
             log.info("Orthogonalizing orbitals...")
             self.mo_coeff = orthogonalize_mo(c, self.ovlp)
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.ovlp, c)))-1)
-            log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-2 else "")
+            log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
             log.debug("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
+
+        # Fock matrix
+        # These two Fock matrices are different for loose values of cell.precision
+        # Which should be used?
+        # (We only need Fock matrix for canonicalization, therefore not too important to be accurate for CCSD.
+        # However, what about MP2 & CCSD(T)?)
+        recalc_fock = False
+        t0 = timer()
+        if recalc_fock:
+            self._fock = self.mf.get_fock()
+        else:
+            cs = np.dot(self.mo_coeff.T, self.ovlp)
+            #self._fock = einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
+            self._fock = np.dot(cs*self.mo_energy, cs.T)
+        log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):

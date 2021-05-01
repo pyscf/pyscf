@@ -144,7 +144,7 @@ def make_modchg_basis(auxcell, smooth_eta):
 
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
-def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
+def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file, incore=False):
     t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
@@ -239,7 +239,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
 
-    feri = h5py.File(cderi_file, 'w')
+    if incore:
+        feri = {}
+    else:
+        feri = h5py.File(cderi_file, 'w')
     feri['j3c-kptij'] = kptij_lst
     nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id, cholesky_j2c):
@@ -411,13 +414,14 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 make_kpt(uniq_kptji_id, cholesky_j2c)
         done[uniq_kptji_ids] = True
 
-    feri.close()
+    if not incore:
+        feri.close()
 
 
 class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+    def __init__(self, cell, kpts=numpy.zeros((1,3)), incore=True):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
@@ -462,6 +466,7 @@ class GDF(aft.AFTDF):
         self.auxcell = None
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
+        self.incore = incore
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -509,6 +514,7 @@ class GDF(aft.AFTDF):
             log.info('auxbasis = %s', self.auxcell.basis)
         log.info('eta = %s', self.eta)
         log.info('exp_to_discard = %s', self.exp_to_discard)
+        log.info('incore = %s', self.incore)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
                      self._cderi)
@@ -777,7 +783,7 @@ class GDF(aft.AFTDF):
             self.build()
         # self._cderi['j3c/k_id/seg_id']
         with addons.load(self._cderi, 'j3c/0') as feri:
-            if isinstance(feri, h5py.Group):
+            if isinstance(feri, h5py.Group) or self.incore:
                 naux = feri['0'].shape[0]
             else:
                 naux = feri.shape[0]
@@ -885,7 +891,11 @@ class _load3c(object):
         self.ignore_key_error = ignore_key_error
 
     def __enter__(self):
-        self.feri = h5py.File(self.cderi, 'r')
+        # Incore
+        if isinstance(self.cderi, dict):
+            self.feri = self.cderi
+        else:
+            self.feri = h5py.File(self.cderi, 'r')
         if self.label not in self.feri:
             # Return a size-0 array to skip the loop in sr_loop
             if self.ignore_key_error:
@@ -899,6 +909,8 @@ class _load3c(object):
                         self.ignore_key_error)
 
     def __exit__(self, type, value, traceback):
+        if isinstance(self.feri, dict):
+            return
         self.feri.close()
 
 def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
@@ -939,16 +951,17 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
 
 #TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
 # the 3D tensor if it is too big.
-        dat = _load_and_unpack(h5group[key])
+        dat = _load_and_unpack(h5group[key], incore=isinstance(h5group, dict))
     return dat
 
 class _load_and_unpack(object):
     '''Load data lazily'''
-    def __init__(self, dat):
+    def __init__(self, dat, incore=False):
         self.dat = dat
+        self.incore = incore
     def __getitem__(self, s):
         dat = self.dat
-        if isinstance(dat, h5py.Group):
+        if isinstance(dat, h5py.Group) or incore:
             v = numpy.hstack([dat[str(i)][s] for i in range(len(dat))])
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
@@ -963,7 +976,7 @@ class _load_and_unpack(object):
     @property
     def shape(self):
         dat = self.dat
-        if isinstance(dat, h5py.Group):
+        if isinstance(dat, h5py.Group) or incore:
             all_shape = [dat[str(i)].shape for i in range(len(dat))]
             shape = all_shape[0][:-1] + (sum(x[-1] for x in all_shape),)
             return shape

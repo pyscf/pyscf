@@ -1053,14 +1053,13 @@ def make_mp2_bath(self,
     log.info("%s MP2 natural orbitals:" % kindname.title())
     db = dm_occ[:nbath]
     de = dm_occ[nbath:]
+    fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  avg= %8.3g  sum= %8.3g ( %6.2f %%)"
     if nbath > 0:
-        log.info("  Bath: N= %4d max=%6.3g min=%6.3g avg=%6.3g sum=%6.3g ( %.1f %% )",
-                nbath, max(db), min(db), np.mean(db), np.sum(db), 100*np.sum(db)/np.sum(dm_occ))
+        log.info(fmt, "Bath", nbath, max(db), min(db), np.mean(db), np.sum(db), 100*np.sum(db)/np.sum(dm_occ))
     else:
         log.info("  No bath orbitals")
     if nbath < nenv:
-        log.info("  Rest: N= %4d max=%6.3g min=%6.3g avg=%6.3g sum=%6.3g ( %.1f %% )",
-                nenv-nbath, max(de), min(de), np.mean(de), np.sum(de), 100*np.sum(de)/np.sum(dm_occ))
+        log.info(fmt, "Rest", nenv-nbath, max(de), min(de), np.mean(de), np.sum(de), 100*np.sum(de)/np.sum(dm_occ))
     else:
         log.info("  No remaining orbitals")
 
