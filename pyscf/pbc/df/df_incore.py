@@ -16,7 +16,7 @@ from pyscf.ao2mo.outcore import balance_partition
 from pyscf.pbc.df import incore, ft_ao
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, \
-                                      unique, KPT_DIFF_TOL
+                                      unique, KPT_DIFF_TOL, get_kconserv
 from pyscf.pbc.df.df import make_modrho_basis, GDF, fuse_auxcell
 
 
@@ -69,7 +69,7 @@ def _get_3c2e(
     of Eq. 31.
     '''
 
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
 
     nkij = len(kptij_lst)
     nao = cell.nao_nr()
@@ -267,24 +267,28 @@ def _get_j3c(
             if j2ctag == 'CD':
                 v = scipy.linalg.solve_triangular(j2c, v, lower=True, 
                                                   overwrite_b=True)
-                out[ji,:v.shape[0]] += v.reshape(-1, nao*nao)
-            else:
+            elif j2ctag == 'eig':
                 v = lib.dot(j2c, v)
-                out[ji,:v.shape[0]] += v.reshape(-1, nao*nao)
+            # else, j2ctag == None, don't include j2c contribution
+
+            out[ji,:v.shape[0]] += v.reshape(-1, nao*nao)
 
         j3cR = j3cI = None
 
     if out is None:
         out = numpy.zeros((len(kptij_lst), naux, nao*nao), dtype=numpy.complex128)
 
+    cholesky_j2c = None, None
+
     for k in mpi_helper.nrange(len(uniq_kpts)):
         kpt = uniq_kpts[k]
         # ensure k/-k symmetry in j2c dims:
         uniq_kptji_id = _kconserve_indices(cell, uniq_kpts, -kpt)[0]
 
-        log.debug1('Cholesky decomposition for j2c at kpt %s', k)
-        cholesky_j2c = _cholesky_decomposed_metric(mydf, cell, j2c, 
-                                                   uniq_kptji_id, log)
+        if j2c is not None:
+            log.debug1('Cholesky decomposition for j2c at kpt %s', k)
+            cholesky_j2c = _cholesky_decomposed_metric(mydf, cell, j2c, 
+                                                       uniq_kptji_id, log)
 
         log.debug1("make_kpt for kpt %s", k)
         make_kpt(k, cholesky_j2c)
@@ -305,8 +309,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     fused_cell: auxcell and chgcell combined
     '''
 
-    t1 = (time.clock(), time.time())
     log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (logger.process_clock(), logger.perf_counter())
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
 
     if cell.dimension < 3:
@@ -349,6 +353,111 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         feri['j3c-kptij-hash'][val] = feri['j3c-kptij-hash'].get(val, []) + [k,]
 
     return feri
+
+
+def _make_eri(mydf, kpts, kconserv=None, out=None):
+    ''' Build the 4c ERIs without needing a Cholesky decomposition.
+    '''
+
+    t1 = (time.clock(), time.time())
+    log = logger.Logger(mydf.stdout, mydf.verbose)
+    if mydf.auxcell is None:
+        mydf.auxcell = make_modrho_basis(mydf.cell, mydf.auxbasis,
+                                         mydf.exp_to_discard)
+    cell, auxcell = mydf.cell, mydf.auxcell
+    fused_cell, fuse = fuse_auxcell(mydf, auxcell)
+    nao, nkpts = cell.nao, len(mydf.kpts)
+
+    if kconserv is None:
+        kconserv = get_kconserv(cell, kpts)
+
+    if cell.dimension < 3:
+        raise ValueError('IncoreGDF does not support low-dimension cells')
+
+    if not (mydf.kpts_band is None or numpy.allclose(mydf.kpts, mydf.kpts_band)):
+        raise NotImplementedError("_make_eri for kpts_band")
+
+    uniq_idx = unique(mydf.kpts)[1]
+    kpts = numpy.asarray(mydf.kpts)[uniq_idx]
+    kband_uniq = numpy.zeros((0,3))
+    kptij_lst = [(ki, kpts[j]) for i, ki in enumerate(kpts) for j in range(i+1)]
+    kptij_lst = numpy.asarray(kptij_lst)
+    kptij_hash = { _get_kpt_hash(kpt): k for k, kpt in enumerate(kptij_lst) }
+
+    kptis = kptij_lst[:,0]
+    kptjs = kptij_lst[:,1]
+    kpt_ji = kptjs - kptis
+    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+
+    log.debug('Num uniq kpts %d', len(uniq_kpts))
+    log.debug2('uniq_kpts %s', uniq_kpts)
+
+    # Get the 3c2e interaction:
+    int3c2e = _get_3c2e(cell, fused_cell, kptij_lst, log)
+    t1 = log.timer_debug1('_get_3c2e', *t1)
+
+    # Get the 2c2e interaction:
+    int2c2e = _get_2c2e(fused_cell, kpt_ji, log)
+    t1 = log.timer_debug1('_get_2c2e', *t1)
+
+    # Get j2c:
+    j2c = _get_j2c(mydf, cell, auxcell, fused_cell,
+                   fuse, int2c2e, kpt_ji, log)
+    t1 = log.timer_debug1('_get_j2c', *t1)
+
+    # Get j3c without j2c scaling:
+    j3c = _get_j3c(mydf, cell, auxcell, fused_cell, fuse, None, int3c2e,
+                   uniq_kpts, uniq_inverse, kptij_lst, log)
+    t1 = log.timer_debug1('_get_j3c', *t1)
+
+    # Build the ERI using the unscaled j3c and j2c:
+    if out is None:
+        out = numpy.zeros((nkpts**3 * nao**4), dtype=numpy.complex128)
+    out = out.reshape(nkpts, nkpts, nkpts, nao, nao, nao, nao)
+
+    #TODO: I think that this loop should be able to be O(Nk) i.e. loop
+    # over kpti-kptj, but not sure how to handle the .conj() in j2c
+    for kij in mpi_helper.nrange(nkpts**2):
+        ki, kj = divmod(kij, nkpts)
+        kpti, kptj = kpts[ki], kpts[kj]
+
+        if kj < ki:
+            uid = kptij_hash[_get_kpt_hash([kpti, kptj])]
+            j3c_ij = j3c[uid].copy()
+        else:
+            uid = kptij_hash[_get_kpt_hash([kptj, kpti])]
+            j3c_ij = j3c[uid].reshape(-1, nao, nao)
+            j3c_ij = lib.transpose(j3c_ij, axes=(0,2,1)).conj()
+            j3c_ij = j3c_ij.reshape(-1, nao*nao)
+
+        j3c_ij = scipy.linalg.solve(
+                j2c[uid], j3c_ij,
+                overwrite_b=True,
+                assume_a='pos',
+                #NOTE: I think j2c should always be positive definite,
+                # but may not be due to numerical inaccuracies?
+        )
+
+        for kk, kptk in enumerate(kpts):
+            kl = kconserv[ki,kj,kk]
+            kptl = kpts[kl]
+
+            if kl < kk:
+                uid = kptij_hash[_get_kpt_hash([kptk, kptl])]
+                j3c_kl = j3c[uid]
+            else:
+                uid = kptij_hash[_get_kpt_hash([kptl, kptk])]
+                j3c_kl = j3c[uid].reshape(-1, nao, nao)
+                j3c_kl = lib.transpose(j3c_kl, axes=(0,2,1)).conj()
+                j3c_kl = j3c_kl.reshape(-1, nao*nao)
+
+            v = lib.dot(j3c_ij.T, j3c_kl, alpha=1/nkpts)
+            out[ki,kj,kk] = v.reshape(nao, nao, nao, nao)
+
+    mpi_helper.barrier()
+    mpi_helper.allreduce_safe_inplace(out)
+
+    return out
 
 
 class IncoreGDF(GDF):
@@ -408,9 +517,11 @@ class IncoreGDF(GDF):
                     logger.warn(self, 'Value of ._cderi is ignored. '
                                 'DF integrals will be saved in file %s .',
                                 cderi)
-            t1 = (time.clock(), time.time())
+            t1 = (logger.process_clock(), logger.perf_counter())
             self._cderi = self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
+
+            self.blockdim = self.get_naoaux() # default to one block
 
         return self
 
