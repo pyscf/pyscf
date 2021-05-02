@@ -265,7 +265,7 @@ class EmbCC:
         else:
             cs = np.dot(self.mo_coeff.T, self.ovlp)
             #self._fock = einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
-            self._fock = np.dot(cs*self.mo_energy, cs.T)
+            self._fock = np.dot(cs.T*self.mo_energy, cs)
         log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
 
         # Prepare fragments
