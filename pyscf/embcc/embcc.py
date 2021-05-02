@@ -174,7 +174,7 @@ class EmbCC:
             self.kpts = mf.kpts
             self.kdf = mf.with_df
             # DEBUG:
-            log.debug("GDF._cderi= %r", self.kdf._cderi)
+            log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             assert (self.kcell == self.kdf.cell)
             assert np.all(self.kpts == self.kdf.kpts)
             mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)

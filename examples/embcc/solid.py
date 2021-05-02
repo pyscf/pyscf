@@ -12,6 +12,9 @@ import pyscf.pbc
 import pyscf.pbc.dft
 import pyscf.pbc.tools
 import pyscf.pbc.mp
+import pyscf.pbc.df
+# Olli's incore GDF
+from pyscf.pbc.df.df_incore import IncoreGDF
 
 import pyscf.embcc
 import pyscf.embcc.k2gamma_gdf
@@ -59,7 +62,7 @@ def get_arguments():
     # MP
     parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
     # Density-fitting
-    parser.add_argument("--df", choices=["FFTDF", "GDF"], default="GDF", help="Density-fitting method")
+    parser.add_argument("--df", choices=["FFTDF", "GDF", "IncoreGDF"], default="GDF", help="Density-fitting method")
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
@@ -289,8 +292,12 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
     # Density-fitting
     if df is not None:
         mf.with_df = df
-    elif args.df == "GDF":
-        mf = mf.density_fit()
+    #elif args.df == "GDF":
+    elif args.df in ("GDF", "IncoreGDF"):
+        if args.df == "GDF":
+            mf = mf.density_fit()
+        elif args.df == "IncoreGDF":
+            mf.with_df = IncoreGDF(cell, kpts)
         df = mf.with_df
         # TEST
 
