@@ -421,7 +421,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file, incore=False):
 class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3)), incore=True):
+    def __init__(self, cell, kpts=numpy.zeros((1,3)), incore=False):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose

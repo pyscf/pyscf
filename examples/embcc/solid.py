@@ -100,7 +100,7 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C", "C", "C"],
                 "ndim" : 3,
-                "lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
+                "lattice_consts" : np.arange(2.35, 2.55+1e-12, 0.05),
                 "vacuum_size" : 6.708,
                 }
     elif args.system == "graphene":
