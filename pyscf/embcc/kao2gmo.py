@@ -157,8 +157,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     return eris
 
 
-#def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='c', factor=1):
-def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='python', factor=1):
+def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='c', factor=1):
     cell = gdf.cell
     kpts = gdf.kpts
     nk = len(kpts)

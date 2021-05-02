@@ -299,7 +299,7 @@ def _get_j3c(
     return out
 
 
-def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
+def _make_j3c(mydf, cell, auxcell, kptij_lst):
     '''
     Build the j3c array.
 
@@ -505,20 +505,9 @@ class IncoreGDF(GDF):
         if with_j3c:
             #TODO what to do with this? allow pickling?
             if isinstance(self._cderi_to_save, str):
-                cderi = self._cderi_to_save
-            else:
-                cderi = self._cderi_to_save.name
-            if isinstance(self._cderi, str):
-                if self._cderi == cderi and os.path.isfile(cderi):
-                    logger.warn(self, 'DF integrals in %s (specified by '
-                                '._cderi) is overwritten by GDF '
-                                'initialization. ', cderi)
-                else:
-                    logger.warn(self, 'Value of ._cderi is ignored. '
-                                'DF integrals will be saved in file %s .',
-                                cderi)
+                logger.warn("Setting _cderi_to_save has no effect in IncoreGDF")
             t1 = (logger.process_clock(), logger.perf_counter())
-            self._cderi = self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
+            self._cderi = self._make_j3c(self.cell, self.auxcell, kptij_lst)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
 
             self.blockdim = self.get_naoaux() # default to one block
