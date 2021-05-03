@@ -25,7 +25,8 @@ import scipy
 from pyscf import lib
 from pyscf import scf
 from pyscf import df
-from pyscf.mp.dfmp2_native import DFRMP2, ints3c_cholesky
+from pyscf.scf import ucphf
+from pyscf.mp.dfmp2_native import DFRMP2, ints3c_cholesky, orbgrad_from_Gamma
 
 
 class DFUMP2(DFRMP2):
@@ -160,7 +161,7 @@ class DFUMP2(DFRMP2):
         else:
             return rdm1_mo
 
-    def make_natorbs(self, rdm1_mo=None):
+    def make_natorbs(self, rdm1_mo=None, relaxed=False):
         '''
         Calculate natural orbitals.
         Note: the most occupied orbitals come first (left)
@@ -169,12 +170,13 @@ class DFUMP2(DFRMP2):
         Args:
             rdm1_mo : 1-RDM in MO basis
                       the function calculates a density matrix if none is provided
+            relaxed : calculated relaxed or unrelaxed density matrix
 
         Returns:
             natural occupation numbers, natural orbitals
         '''
         if rdm1_mo is None:
-            dm = self.make_rdm1(ao_repr=False)
+            dm = self.make_rdm1(ao_repr=False, relaxed=relaxed)
         elif isinstance(rdm1_mo, np.ndarray):
             dm = rdm1_mo
         else:
@@ -334,7 +336,7 @@ def make_rdm1(mp2, relaxed):
     Calculates the unrelaxed or relaxed MP2 density matrix.
 
     Args:
-        mp2 : DFRMP2 instance
+        mp2 : DFUMP2 instance
         relaxed : relaxed density if True, unrelaxed density if False
     
     Returns:
@@ -345,17 +347,45 @@ def make_rdm1(mp2, relaxed):
 
     # Calculate the unrelaxed 1-RDM.
     logger = lib.logger.new_logger(mp2)
-    rdm1_mo, GammaFile = ump2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
-        mp2.max_memory, logger, calcGamma=relaxed, ps=mp2.ps, pt=mp2.pt)
+    rdm1, GammaFile = ump2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
+        mp2.max_memory, logger, calcGamma=relaxed, auxmol=mp2.auxmol, ps=mp2.ps, pt=mp2.pt)
 
     if relaxed:
-        raise NotImplementedError
+
+        Lvo = [None, None]
+        for s, sstr in [(0, 'alpha'), (1, 'beta')]:
+
+            # right-hand side for the CPHF equation
+            Gamma = GammaFile['Gamma_'+sstr]
+            Lvo[s], Lfo_s = orbgrad_from_Gamma(mp2.mol, mp2.auxmol, Gamma, \
+                mp2.mo_coeff[s], mp2.frozen_mask[s], mp2.max_memory, logger)
+
+            # frozen core orbital relaxation contribution
+            frozen_list = np.arange(mp2.nmo)[mp2.frozen_mask[s]]
+            for fm, f in enumerate(frozen_list):
+                for i in np.arange(mp2.nmo)[mp2.occ_mask[s]]:
+                    zfo = Lfo_s[fm, i] / (mp2.mo_energy[s, f] - mp2.mo_energy[s, i])
+                    rdm1[s, f, i] += 0.5 * zfo
+                    rdm1[s, i, f] += 0.5 * zfo
+
+        # Fock response
+        Lvo_a, Lvo_b = fock_response_uhf(mp2._scf, rdm1)
+        Lvo[0] -= Lvo_a
+        Lvo[1] -= Lvo_b
+        # solving the CPHF equations
+        minusLvo = [-Lvo[0], -Lvo[1]]
+        zvo = solve_cphf_uhf(mp2._scf, minusLvo, mp2.cphf_max_cycle, mp2.cphf_tol, logger)
+
+        # add the relaxation contribution to the density
+        for s in 0, 1:
+            rdm1[s, mp2.nocc[s]:, :mp2.nocc[s]] += 0.5 * zvo[s]
+            rdm1[s, :mp2.nocc[s], mp2.nocc[s]:] += 0.5 * zvo[s].T
 
     # HF contribution
     for s in 0, 1:
-        rdm1_mo[s, :mp2.nocc[s], :mp2.nocc[s]] += np.eye(mp2.nocc[s])
-    
-    return rdm1_mo
+        rdm1[s, :mp2.nocc[s], :mp2.nocc[s]] += np.eye(mp2.nocc[s])
+
+    return rdm1
 
 
 def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logger, \
@@ -407,8 +437,8 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
             raise RuntimeError('auxmol needs to be specified for relaxed density computation')
         # create temporary file to store the two-body density Gamma
         GammaFile = lib.H5TmpFile(libver='latest')
-        GammaFile.create_dataset('Gamma_alpha', (nocc_act[0], naux, nvirt[0]))
-        GammaFile.create_dataset('Gamma_beta', (nocc_act[1], naux, nvirt[1]))
+        GammaFile.create_dataset('Gamma_alpha', (nocc_act[0], naux, nvirt[0]), dtype='f8')
+        GammaFile.create_dataset('Gamma_beta', (nocc_act[1], naux, nvirt[1]), dtype='f8')
         logger.info('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
         # We will need LT = L^T, where L L^T = V
         LT = scipy.linalg.cholesky(auxmol.intor('int2c2e'), lower=False)
@@ -497,10 +527,11 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     if s1 == s2:
                         prefactor = 2.0 * pt
                     else:
-                        prefactor = ps
+                        prefactor = 2.0 * ps
                     for jstart in range(0, nocc_act[s2], batchsize):
                         jend = min(jstart+batchsize, nocc_act[s2])
                         tbatch = tiset[jstart:jend, :, :]
+                        # Here, we collect two-body density contributions for spin s2
                         Gbatch = Gamma[jstart:jend, :, :]
                         for jj in range(jend-jstart):
                             Tijab = tbatch[jj]
@@ -517,6 +548,74 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
 
     logger.info('*** Density matrix contributions calculation finished')
     return P, GammaFile
+
+
+def fock_response_uhf(mf, dm, full=True):
+    '''
+    Calculate the unrestricted Fock response function for a given density matrix.
+
+    Args:
+        mf : UHF instance
+        dm : density matrix in MO basis
+        full : full MO density matrix if True, [virt. x occ., virt. x occ.] if False
+    
+    Returns:
+        Fock response in MO basis. Shape: [virt. x occ., virt. x occ.]
+    '''
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
+    nao = mf.mol.nao
+    dmao = np.zeros((2, nao, nao))
+    for s in 0, 1:
+        if full:
+            dmao[s, :, :] = np.linalg.multi_dot([mo_coeff[s], dm[s], mo_coeff[s].T])
+        else:
+            Ci = mo_coeff[s][:, mo_occ[s]>0]
+            Ca = mo_coeff[s][:, mo_occ[s]==0]
+            dmao[s, :, :] = np.linalg.multi_dot([Ca, dm[s], Ci.T])
+    rao = mf.get_veff(dm=dmao+dmao.transpose((0, 2, 1)))
+    rvo = [None, None]
+    for s in 0, 1:
+        Ci = mo_coeff[s][:, mo_occ[s]>0]
+        Ca = mo_coeff[s][:, mo_occ[s]==0]
+        rvo[s] = np.linalg.multi_dot([Ca.T, rao[s], Ci])
+    return rvo
+
+
+def solve_cphf_uhf(mf, Lvo, max_cycle, tol, logger):
+    '''
+    Solve the CPHF equations.
+
+    Args:
+        mf : a UHF object
+        Lvo : right-hand side the the response equation
+        max_cycle : number of iterations for the CPHF solver
+        tol : convergence tolerance for the CPHF solver
+        logger : Logger object
+    '''
+    logger.info('')
+    logger.info('*** Solving the CPHF response equations')
+    logger.info('    Max. iterations: {0:d}'.format(max_cycle))
+    logger.info('    Convergence tolerance: {0:.3g}'.format(tol))
+
+    # Currently we need to make the CPHF solver somewhat more talkative to see anything at all.
+    cphf_verbose = logger.verbose
+    if logger.verbose == lib.logger.INFO:
+        cphf_verbose = lib.logger.DEBUG
+
+    nva, noa = Lvo[0].shape
+    nvb, nob = Lvo[1].shape
+    def fvind(zflat):
+        za = zflat[0, :noa*nva].reshape(nva, noa)
+        zb = zflat[0, -nob*nvb:].reshape(nvb, nob)
+        ra, rb = fock_response_uhf(mf, [za, zb], full=False)
+        rflat = np.hstack([ra.reshape((1, noa*nva)), rb.reshape((1, nob*nvb))])
+        return rflat
+
+    zvo = ucphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lvo, \
+        max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
+    logger.info('*** CPHF iterations finished')
+    return zvo
 
 
 if __name__ == '__main__':

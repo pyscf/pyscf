@@ -228,9 +228,10 @@ class KnownValues(unittest.TestCase):
                 pass
         with fakeDFMP2(self.mf) as pt:
             E, natocc_ur, natocc_re = None, None, None
+            pt.cphf_tol = 1e-12
             # Try very low amounts of memory (in kB) until there is no failure.
             # Assume it should certainly work before 1 MB is reached.
-            for m in range(50, 1000, 50):
+            for m in range(20, 1000, 20):
                 pt._mem_kb = m
                 try:
                     E = pt.kernel()
@@ -238,7 +239,7 @@ class KnownValues(unittest.TestCase):
                     pass
                 else:
                     break
-            for m in range(20, 1000, 20):
+            for m in range(4, 1000, 4):
                 pt._mem_kb = m
                 try:
                     natocc_ur = pt.make_natorbs()[0]
@@ -276,6 +277,19 @@ class KnownValues(unittest.TestCase):
             check_orth(self, mol, natorb)
             # selected values
             self.assertAlmostEqual(natocc[7], 1.9377896388, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[8], 0.0483792759, delta=1.0e-7)
+
+    def test_scs_natorbs_relaxed(self):
+        mol = self.mf.mol
+        with SCSMP2(self.mf) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbitals orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[7], 1.9379674743, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0483792759, delta=1.0e-7)
 
 

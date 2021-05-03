@@ -141,6 +141,65 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[9], 0.0477790944, delta=1.0e-7)
             self.assertAlmostEqual(natocc[27], 0.0002307322, delta=1.0e-7)
 
+    def test_natorbs_relaxed(self):
+        mol = self.mf.mol
+        with DFUMP2(self.mf) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbitals orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[0], 1.9999198031, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[6], 1.9478407509, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.0169668947, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[8], 1.0169668947, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[9], 0.0453923546, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[27], 0.0002225494, delta=1.0e-7)
+
+    def test_natorbs_relaxed_fc(self):
+        mol = self.mf.mol
+        with DFUMP2(self.mf, frozen=2) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbital orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[0], 2.0000050774, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[1], 2.0000042352, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[2], 1.9889171379, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[6], 1.9478689720, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.0169674773, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[8], 1.0169674773, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[9], 0.0453427169, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[27], 0.0002207476, delta=1.0e-7)
+
+    def test_natorbs_relaxed_fclist(self):
+        self.mf.mo_coeff[0, :, [0, 5]] = self.mf.mo_coeff[0, :, [5, 0]]
+        self.mf.mo_energy[0, [0, 5]] = self.mf.mo_energy[0, [5, 0]]
+        self.mf.mo_coeff[1, :, [1, 4]] = self.mf.mo_coeff[1, :, [4, 1]]
+        self.mf.mo_energy[1, [1, 4]] = self.mf.mo_energy[1, [4, 1]]
+        mol = self.mf.mol
+        with DFUMP2(self.mf, frozen=[[1, 5], [0, 4]]) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbital orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[0], 2.0000050774, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[1], 2.0000042352, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[2], 1.9889171379, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[6], 1.9478689720, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.0169674773, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[8], 1.0169674773, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[9], 0.0453427169, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[27], 0.0002207476, delta=1.0e-7)
+
     def test_memory(self):
         # Dummy class to set a very low memory limit.
         class fakeDFUMP2(DFUMP2):
@@ -152,10 +211,11 @@ class KnownValues(unittest.TestCase):
             def max_memory(self, val):
                 pass
         with fakeDFUMP2(self.mf) as pt:
-            E, natocc = None, None
+            E, natocc_ur, natocc_re = None, None, None
+            pt.cphf_tol = 1e-12
             # Try very low amounts of memory (in kB) until there is no failure.
             # Assume it should certainly work before 1 MB is reached.
-            for m in range(20, 1000, 10):
+            for m in range(8, 1000, 8):
                 pt._mem_kb = m
                 try:
                     E = pt.kernel()
@@ -163,18 +223,29 @@ class KnownValues(unittest.TestCase):
                     pass
                 else:
                     break
-            for m in range(4, 1000, 1):
+            for m in range(4, 1000, 4):
                 pt._mem_kb = m
                 try:
-                    natocc = pt.make_natorbs()[0]
+                    natocc_ur = pt.make_natorbs()[0]
                 except MemoryError:
                     pass
                 else:
                     break
-            self.assertAlmostEqual(E, -0.347887316046, delta=1.0e-8)
-            self.assertAlmostEqual(natocc[6], 1.9473283296, delta=1.0e-7)
-            self.assertAlmostEqual(natocc[7], 1.0168954406, delta=1.0e-7)
-            self.assertAlmostEqual(natocc[9], 0.0478262909, delta=1.0e-7)
+            for m in range(20, 1000, 20):
+                pt._mem_kb = m
+                try:
+                    natocc_re = pt.make_natorbs(relaxed=True)[0]
+                except MemoryError:
+                    pass
+                else:
+                    break
+        self.assertAlmostEqual(E, -0.347887316046, delta=1.0e-8)
+        self.assertAlmostEqual(natocc_ur[6], 1.9473283296, delta=1.0e-7)
+        self.assertAlmostEqual(natocc_ur[7], 1.0168954406, delta=1.0e-7)
+        self.assertAlmostEqual(natocc_ur[9], 0.0478262909, delta=1.0e-7)
+        self.assertAlmostEqual(natocc_re[6], 1.9478407509, delta=1.0e-7)
+        self.assertAlmostEqual(natocc_re[7], 1.0169668947, delta=1.0e-7)
+        self.assertAlmostEqual(natocc_re[9], 0.0453923546, delta=1.0e-7)
 
     def test_scs_energy(self):
         with SCSUMP2(self.mf) as pt:
@@ -194,6 +265,20 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(natocc[6], 1.9512132898, delta=1.0e-7)
             self.assertAlmostEqual(natocc[7], 1.0092563934, delta=1.0e-7)
             self.assertAlmostEqual(natocc[9], 0.0451631109, delta=1.0e-7)
+
+    def test_scs_natorbs_relaxed(self):
+        mol = self.mf.mol
+        with SCSUMP2(self.mf) as pt:
+            pt.cphf_tol = 1e-12
+            natocc, natorb = pt.make_natorbs(relaxed=True)
+            # number of electrons conserved
+            self.assertAlmostEqual(numpy.sum(natocc), mol.nelectron, delta=1.0e-10)
+            # orbitals orthogonal
+            check_orth(self, mol, natorb)
+            # selected values
+            self.assertAlmostEqual(natocc[6], 1.9516484920, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.0093068572, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[9], 0.0434261850, delta=1.0e-7)
 
 
 if __name__ == "__main__":
