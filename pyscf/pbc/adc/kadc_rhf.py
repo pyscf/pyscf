@@ -59,7 +59,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     if kptlist is None:
         kptlist = range(nkpts)
-
+    
     #if dtype is None:
     dtype = np.result_type(adc.t2[0])
 
@@ -81,11 +81,11 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.U = np.array(evecs).T.copy()
 
-    P,X = adc.get_properties(nroots)
+    #P,X = adc.get_properties(nroots)
 
-    print (evals)
-    print (P)
-    exit()
+    #print (evals)
+    #print (P)
+    #exit()
 
 #    adc.U = np.array(U).T.copy()
 #
