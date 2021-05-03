@@ -126,84 +126,41 @@ class DFRMP2(lib.StreamObject):
         '''
         Calculates the MP2 correlation energy.
         '''
-        if not self._intsfile:
+        if not self.has_ints:
             self.calculate_integrals_()
 
-        mo_energy = self.mo_energy[~self.frozen_mask]
         logger = lib.logger.new_logger(self)
-        self.e_corr = emp2_rhf(self._intsfile, mo_energy, logger, ps=self.ps, pt=self.pt)
+        self.e_corr = emp2_rhf(self._intsfile, self.mo_energy, self.frozen_mask, \
+            logger, ps=self.ps, pt=self.pt)
         return self.e_corr
 
-    def make_rdm1(self, ao_repr=False):
+    def make_rdm1(self, relaxed=False, ao_repr=False):
         '''
-        Calculates the unrelaxed MP2 density matrix.
+        Calculates the MP2 1-RDM.
+        - The relaxed density matrix is suitable to calculate properties of systems
+          for which MP2 is well-behaved.
+        - The unrelaxed density is less suited to calculate properties accurately,
+          but it can be used to calculate CASSCF starting orbitals.
 
         Args:
+            relaxed : relaxed density if True, unrelaxed density if False
             ao_repr : density in AO or in MO basis
 
         Returns:
             the 1-RDM
         '''
-        if not self._intsfile:
-            self.calculate_integrals_()
-
-        # Calculate the unrelaxed 1-RDM.
-        logger = lib.logger.new_logger(self)
-        rdm1_mo = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
-            self.max_memory, logger, ps=self.ps, pt=self.pt)[0]
-
-        # HF contribution
-        rdm1_mo[:self.nocc, :self.nocc] += 2.0 * np.eye(self.nocc)
-
+        rdm1_mo = make_rdm1(self, relaxed)
         if ao_repr:
-            return np.linalg.multi_dot([self.mo_coeff, rdm1_mo, self.mo_coeff.T])
+            rdm1_ao = np.linalg.multi_dot([self.mo_coeff, rdm1_mo, self.mo_coeff.T])
+            return rdm1_ao
         else:
             return rdm1_mo
-
-    def make_response_dm(self, ao_repr=False):
-        '''
-        Calculates the relaxed MP2 density matrix.
-
-        Args:
-            ao_repr : density in AO or in MO basis
-        
-        Returns:
-            the relaxed 1-RDM
-        '''
-        # get the unrelaxed 1-RDM and the 3-center-2-electron density
-        if not self._intsfile:
-            self.calculate_integrals_()
-        logger = lib.logger.new_logger(self)
-        rdm1_noz, GammaFile = mp2_rhf_densities(self._intsfile, self.mo_energy, self.frozen_mask,
-            self.max_memory, logger, calcGamma=True, auxmol=self.auxmol, ps=self.ps, pt=self.pt)
-
-        # right-hand side for the CPHF equation
-        Lvo, Lfo = orbgrad_from_Gamma(self.mol, self.auxmol, GammaFile['Gamma'], \
-            self.mo_coeff, self.frozen_mask, self.max_memory, logger)
-
-        # frozen core contribution
-        frozen_list = np.arange(self.nmo)[self.frozen_mask]
-        for fm, f in enumerate(frozen_list):
-            for i in np.arange(self.nmo)[self.occ_mask]:
-                zfo = Lfo[fm, i] / (self.mo_energy[f] - self.mo_energy[i])
-                rdm1_noz[f, i] += 0.5 * zfo
-                rdm1_noz[i, f] += 0.5 * zfo
-
-        # Fock response
-        Lvo -= fock_response_rhf(self._scf, rdm1_noz)
-        # solving the CPHF equations
-        zvo = solve_cphf_rhf(self._scf, -Lvo, self.cphf_max_cycle, self.cphf_tol, logger)
-
-        # add the relaxation contribution to the density
-        rdm1_re = rdm1_noz
-        rdm1_re[self.nocc:, :self.nocc] += 0.5 * zvo
-        rdm1_re[:self.nocc, self.nocc:] += 0.5 * zvo.T
-        rdm1_re[:self.nocc, :self.nocc] += 2.0 * np.eye(self.nocc)
-
-        if ao_repr:
-            return np.linalg.multi_dot([self.mo_coeff, rdm1_re, self.mo_coeff.T])
-        else:
-            return rdm1_re
+    
+    def make_rdm1_unrelaxed(self, ao_repr=False):
+        return self.make_rdm1(relaxed=False, ao_repr=ao_repr)
+    
+    def make_rdm1_relaxed(self, ao_repr=True):
+        return self.make_rdm1(relaxed=True, ao_repr=ao_repr)
 
     def make_natorbs(self, rdm1_mo=None, relaxed=False):
         '''
@@ -220,10 +177,7 @@ class DFRMP2(lib.StreamObject):
             natural occupation numbers, natural orbitals
         '''
         if rdm1_mo is None:
-            if relaxed:
-                dm = self.make_response_dm(ao_repr=False)
-            else:
-                dm = self.make_rdm1(ao_repr=False)
+            dm = self.make_rdm1(relaxed=relaxed, ao_repr=False)
         elif isinstance(rdm1_mo, np.ndarray):
             dm = rdm1_mo
         else:
@@ -233,6 +187,10 @@ class DFRMP2(lib.StreamObject):
         natocc = np.flip(eigval)
         natorb = np.dot(self.mo_coeff, np.fliplr(eigvec))
         return natocc, natorb
+    
+    @property
+    def has_ints(self):
+        return bool(self._intsfile)
 
     def calculate_integrals_(self):
         '''
@@ -263,6 +221,9 @@ class DFRMP2(lib.StreamObject):
         '''
         self.dump_flags()
         return self.calculate_energy()
+    
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 
 MP2 = RMP2 = DFMP2 = DFRMP2
@@ -388,13 +349,14 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     return intsfile_cho
 
 
-def emp2_rhf(intsfile, mo_energy, logger, ps=1.0, pt=1.0):
+def emp2_rhf(intsfile, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
     '''
     Calculates the DF-MP2 energy with an RHF reference.
 
     Args:
         intsfile : contains the three center integrals in MO basis
         mo_energy : energies of the molecular orbitals
+        frozen_mask : boolean mask for frozen orbitals
         logger : Logger instance
         ps : SCS factor for opposite-spin contributions
         pt : SCS factor for same-spin contributions
@@ -403,13 +365,18 @@ def emp2_rhf(intsfile, mo_energy, logger, ps=1.0, pt=1.0):
         the MP2 correlation energy
     '''
     ints = intsfile['ints_cholesky']
-    nocc, _, nvirt = ints.shape
+    nocc_act, _, nvirt = ints.shape
+    nfrozen = np.count_nonzero(frozen_mask)
+    nocc = nocc_act + nfrozen
 
     logger.info('')
     logger.info('*** DF-MP2 energy')
-    logger.info('    Occupied correlated orbitals: {0:d}'.format(nocc))
-    logger.info('    Virtual correlated orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Occupied orbitals: {0:d}'.format(nocc))
+    logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
     logger.info('    Integrals from file: {0:s}'.format(intsfile.filename))
+
+    mo_energy_masked = mo_energy[~frozen_mask]
 
     # Somewhat awkward workaround to perform division in the MP2 energy expression
     # through numpy routines. We precompute Eab[a, b] = mo_energy[a] + mo_energy[b].
@@ -419,19 +386,19 @@ def emp2_rhf(intsfile, mo_energy, logger, ps=1.0, pt=1.0):
         Eab[:, a] += mo_energy[nocc + a]
 
     energy = 0.0
-    for i in range(nocc):
+    for i in range(nocc_act):
         ints3c_ia = ints[i, :, :]
         # contributions for occupied orbitals j < i
         for j in range(i):
             ints3c_jb = ints[j, :, :]
             Kab = np.matmul(ints3c_ia.T, ints3c_jb)
-            DE = mo_energy[i] + mo_energy[j] - Eab
+            DE = mo_energy_masked[i] + mo_energy_masked[j] - Eab
             Tab = Kab / DE
             energy += 2.0 * (ps + pt) * np.einsum('ab,ab', Tab, Kab)
             energy -= 2.0 * pt * np.einsum('ab,ba', Tab, Kab)
         # contribution for j == i
         Kab = np.matmul(ints3c_ia.T, ints3c_ia)
-        DE = 2.0 * mo_energy[i] - Eab
+        DE = 2.0 * mo_energy_masked[i] - Eab
         Tab = Kab / DE
         energy += ps * np.einsum('ab,ab', Tab, Kab)
 
@@ -439,7 +406,53 @@ def emp2_rhf(intsfile, mo_energy, logger, ps=1.0, pt=1.0):
     return energy
 
 
-def mp2_rhf_densities(intsfile, mo_energy, frozen_mask, max_memory, logger, \
+def make_rdm1(mp2, relaxed):
+    '''
+    Calculates the unrelaxed or relaxed MP2 density matrix.
+
+    Args:
+        mp2 : DFRMP2 instance
+        relaxed : relaxed density if True, unrelaxed density if False
+    
+    Returns:
+        the 1-RDM in MO basis
+    '''
+    if not mp2.has_ints:
+        mp2.calculate_integrals_()
+
+    logger = lib.logger.new_logger(mp2)
+    rdm1, GammaFile = rmp2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
+        mp2.max_memory, logger, calcGamma=relaxed, auxmol=mp2.auxmol, ps=mp2.ps, pt=mp2.pt)
+
+    if relaxed:
+
+        # right-hand side for the CPHF equation
+        Lvo, Lfo = orbgrad_from_Gamma(mp2.mol, mp2.auxmol, GammaFile['Gamma'], \
+            mp2.mo_coeff, mp2.frozen_mask, mp2.max_memory, logger)
+
+        # frozen core orbital relaxation contribution
+        frozen_list = np.arange(mp2.nmo)[mp2.frozen_mask]
+        for fm, f in enumerate(frozen_list):
+            for i in np.arange(mp2.nmo)[mp2.occ_mask]:
+                zfo = Lfo[fm, i] / (mp2.mo_energy[f] - mp2.mo_energy[i])
+                rdm1[f, i] += 0.5 * zfo
+                rdm1[i, f] += 0.5 * zfo
+
+        # Fock response
+        Lvo -= fock_response_rhf(mp2._scf, rdm1)
+        # solving the CPHF equations
+        zvo = solve_cphf_rhf(mp2._scf, -Lvo, mp2.cphf_max_cycle, mp2.cphf_tol, logger)
+
+        # add the relaxation contribution to the density
+        rdm1[mp2.nocc:, :mp2.nocc] += 0.5 * zvo
+        rdm1[:mp2.nocc, mp2.nocc:] += 0.5 * zvo.T
+
+    # SCF part of the density
+    rdm1[:mp2.nocc, :mp2.nocc] += 2.0 * np.eye(mp2.nocc)
+    return rdm1
+
+
+def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger, \
     calcGamma=False, auxmol=None, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix contribution with an RHF reference.

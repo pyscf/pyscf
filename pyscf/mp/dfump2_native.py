@@ -51,6 +51,7 @@ class DFUMP2(DFRMP2):
         # UHF MO coefficient matrix shape: (2, number of AOs, number of MOs)
         self.nmo = self.mo_coeff.shape[2]
         self.e_scf = mf.e_tot
+        self._scf = mf
 
         # Process the frozen core option correctly as either an integer or two lists (alpha, beta).
         # self.frozen_mask sets a flag for each orbital if it is frozen (True) or not (False).
@@ -99,6 +100,9 @@ class DFUMP2(DFRMP2):
         self.ps = 1.0
         self.pt = 1.0
 
+        self.cphf_max_cycle = 100
+        self.cphf_tol = mf.conv_tol
+
     def dump_flags(self, logger=None):
         '''
         Prints selected information.
@@ -127,36 +131,30 @@ class DFUMP2(DFRMP2):
         '''
         Calculates the MP2 correlation energy.
         '''
-        if not self._intsfile:
+        if not self.has_ints:
             self.calculate_integrals_()
 
-        mo_energy = np.array([self.mo_energy[s, ~self.frozen_mask[s]] for s in (0, 1)])
         logger = lib.logger.new_logger(self)
-        self.e_corr = emp2_uhf(self._intsfile, mo_energy, logger, ps=self.ps, pt=self.pt)
+        self.e_corr = emp2_uhf(self._intsfile, self.mo_energy, self.frozen_mask,
+            logger, ps=self.ps, pt=self.pt)
         return self.e_corr
 
-    def make_rdm1(self, ao_repr=False):
+    def make_rdm1(self, relaxed=False, ao_repr=False):
         '''
-        Calculates the unrelaxed MP2 density matrix.
+        Calculates the MP2 1-RDM.
+        - The relaxed density matrix is suitable to calculate properties of systems
+          for which MP2 is well-behaved.
+        - The unrelaxed density is less suited to calculate properties accurately,
+          but it can be used to calculate CASSCF starting orbitals.
 
         Args:
+            relaxed : relaxed density if True, unrelaxed density if False
             ao_repr : density in AO or in MO basis
 
         Returns:
-            1-RDM in shape (2, nmo, nmo) containing the spin-up and spin-down components
+            the 1-RDM
         '''
-        if not self._intsfile:
-            self.calculate_integrals_()
-
-        # Calculate the unrelaxed 1-RDM.
-        logger = lib.logger.new_logger(self)
-        rdm1_mo= mp2_uhf_densities(self._intsfile, self.mo_energy, self.frozen_mask, \
-            self.max_memory, logger, ps=self.ps, pt=self.pt)[0]
-
-        # HF contribution
-        for s in 0, 1:
-            rdm1_mo[s, :self.nocc[s], :self.nocc[s]] += np.eye(self.nocc[s])
-
+        rdm1_mo = make_rdm1(self, relaxed)
         if ao_repr:
             return np.einsum('sxp,spq,syq->sxy', self.mo_coeff, rdm1_mo, self.mo_coeff)
         else:
@@ -244,13 +242,14 @@ class SCSDFUMP2(DFUMP2):
 SCSMP2 = SCSUMP2 = SCSDFMP2 = SCSDFUMP2
 
 
-def emp2_uhf(intsfiles, mo_energy, logger, ps=1.0, pt=1.0):
+def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
     '''
     Calculates the DF-MP2 energy with an UHF reference.
 
     Args:
         intsfiles : contains the three center integrals in MO basis
         mo_energy : energies of the molecular orbitals
+        frozen_mask : boolean mask for frozen orbitals
         logger : Logger instance
         ps : SCS factor for opposite-spin contributions
         pt : SCS factor for same-spin contributions
@@ -260,15 +259,22 @@ def emp2_uhf(intsfiles, mo_energy, logger, ps=1.0, pt=1.0):
     '''
     ints_a = intsfiles[0]['ints_cholesky']
     ints_b = intsfiles[1]['ints_cholesky']
-    nocc = np.array([ints_a.shape[0], ints_b.shape[0]])
+    nocc_act = np.array([ints_a.shape[0], ints_b.shape[0]])
+    nfrozen = np.count_nonzero(frozen_mask[0])
+    if np.count_nonzero(frozen_mask[1]) != nfrozen:
+        raise ValueError('number of frozen alpha and beta orbitals differs')
+    nocc = nocc_act + nfrozen
     nvirt = np.array([ints_a.shape[2], ints_b.shape[2]])
 
     logger.info('')
     logger.info('*** DF-MP2 energy')
-    logger.info('    Occupied correlated orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
-    logger.info('    Virtual correlated orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
+    logger.info('    Occupied orbitals: {0:d}, {1:d}'.format(nocc[0], nocc[1]))
+    logger.info('    Virtual orbitals:  {0:d}, {1:d}'.format(nvirt[0], nvirt[1]))
+    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
     logger.info('    Integrals (alpha) from file: {0:s}'.format(intsfiles[0].filename))
     logger.info('    Integrals (beta)  from file: {0:s}'.format(intsfiles[1].filename))
+
+    mo_energy_masked = mo_energy[~frozen_mask].reshape((2, -1))
 
     energy_total = 0.0
 
@@ -287,12 +293,12 @@ def emp2_uhf(intsfiles, mo_energy, logger, ps=1.0, pt=1.0):
             Eab[a, :] += mo_energy[s, nocc[s]+a]
             Eab[:, a] += mo_energy[s, nocc[s]+a]
         # loop over j < i
-        for i in range(nocc[s]):
+        for i in range(nocc_act[s]):
             ints3c_ia = ints[i, :, :]
             for j in range(i):
                 ints3c_jb = ints[j, :, :]
                 Kab = np.matmul(ints3c_ia.T, ints3c_jb)
-                DE = mo_energy[s, i] + mo_energy[s, j] - Eab
+                DE = mo_energy_masked[s, i] + mo_energy_masked[s, j] - Eab
                 Tab = (Kab - Kab.T) / DE
                 energy_contrib += pt * np.einsum('ab,ab', Tab, Kab)
         logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
@@ -308,12 +314,12 @@ def emp2_uhf(intsfiles, mo_energy, logger, ps=1.0, pt=1.0):
         Eab[:, b] += mo_energy[1, nocc[1]+b]
     # loop over i(alpha), j(beta)
     energy_contrib = 0.0
-    for i in range(nocc[0]):
+    for i in range(nocc_act[0]):
         ints3c_ia = ints_a[i, :, :]
-        for j in range(nocc[1]):
+        for j in range(nocc_act[1]):
             ints3c_jb = ints_b[j, :, :]
             Kab = np.matmul(ints3c_ia.T, ints3c_jb)
-            DE = mo_energy[0, i] + mo_energy[1, j] - Eab
+            DE = mo_energy_masked[0, i] + mo_energy_masked[1, j] - Eab
             Tab = Kab / DE
             energy_contrib += ps * np.einsum('ab,ab', Tab, Kab)
     logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
@@ -323,7 +329,36 @@ def emp2_uhf(intsfiles, mo_energy, logger, ps=1.0, pt=1.0):
     return energy_total
 
 
-def mp2_uhf_densities(intsfiles, mo_energy, frozen_mask, max_memory, logger, \
+def make_rdm1(mp2, relaxed):
+    '''
+    Calculates the unrelaxed or relaxed MP2 density matrix.
+
+    Args:
+        mp2 : DFRMP2 instance
+        relaxed : relaxed density if True, unrelaxed density if False
+    
+    Returns:
+        the 1-RDM in MO basis
+    '''
+    if not mp2.has_ints:
+        mp2.calculate_integrals_()
+
+    # Calculate the unrelaxed 1-RDM.
+    logger = lib.logger.new_logger(mp2)
+    rdm1_mo, GammaFile = ump2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
+        mp2.max_memory, logger, calcGamma=relaxed, ps=mp2.ps, pt=mp2.pt)
+
+    if relaxed:
+        raise NotImplementedError
+
+    # HF contribution
+    for s in 0, 1:
+        rdm1_mo[s, :mp2.nocc[s], :mp2.nocc[s]] += np.eye(mp2.nocc[s])
+    
+    return rdm1_mo
+
+
+def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logger, \
     calcGamma=False, auxmol=None, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix contribution with a UHF reference.
