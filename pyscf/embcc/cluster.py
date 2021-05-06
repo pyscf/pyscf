@@ -20,6 +20,7 @@ from pyscf.pbc.tools import cubegen
 # Local modules
 from .solver import ClusterSolver
 from .util import *
+from .dmet_bath import make_dmet_bath, project_ref_orbitals
 from .bath import *
 from .energy import *
 from . import ccsd_t

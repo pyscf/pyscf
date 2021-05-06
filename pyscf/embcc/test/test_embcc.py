@@ -89,42 +89,6 @@ def test_helium():
     print("SC-CCSD E= %16.8g" % scc.e_tot)
     assert np.isclose(scc.e_tot, -22.8671)
 
-def test_diamond_old():
-
-    a = 3.5
-    kmesh = [2, 2, 2]
-    cell = make_diamond(a)
-    kpts = cell.make_kpts(kmesh)
-    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
-    kmf = kmf.density_fit()
-    kmf.kernel()
-
-    # Unfold
-    kmf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(kmf, kmesh)
-
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=1e-4)
-    kcc.opts.popfile = None
-    kcc.opts.orbfile = None
-    kcc.opts.eom_ccsd = True
-    kcc.make_atom_cluster(0, symmetry_factor=2)
-    kcc.kernel()
-    print("K-CCSD E= %16.8g" % kcc.e_tot)
-    assert np.isclose(kcc.e_tot, -88.109215)
-
-
-    scell = make_diamond(a, supercell=kmesh)
-    smf = pyscf.pbc.scf.RHF(scell)
-    smf = smf.density_fit()
-    smf.kernel()
-
-    scc = pyscf.embcc.EmbCC(smf, bath_tol=1e-4)
-    scc.opts.popfile = None
-    scc.opts.orbfile = None
-    scc.opts.eom_ccsd = True
-    scc.make_atom_cluster(0, symmetry_factor=2)
-    scc.kernel()
-    print("SC-CCSD E= %16.8g" % scc.e_tot)
-    assert np.isclose(scc.e_tot, -88.109215)
 
 def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4):
 
@@ -215,9 +179,9 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
     #test_helium()
-    test_full_ccsd_limit(-11.170842)
     test_diamond(-11.138309)
     test_diamond(-11.164555, bath_tol=1e-6)
+    test_full_ccsd_limit(-11.170842)
 
 if __name__ == "__main__":
     run_test()
