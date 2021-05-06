@@ -11,8 +11,6 @@ import pyscf.pbc.mp
 import pyscf.ao2mo
 
 from .util import *
-from .tests import *
-#from . import pbc_gdf_ao2mo
 from . import ao2mo_j3c
 
 __all__ = [
@@ -905,9 +903,9 @@ def make_mp2_bath(self,
     dm_occ, dm_rot = dm_occ[::-1], dm_rot[:,::-1]
     c_rot = np.dot(c_env, dm_rot)
 
-    with open("bath-occupation.txt", "ab") as f:
+    with open("mp2-bath-occupation.txt", "ab") as f:
         #np.savetxt(f, dm_occ[np.newaxis], header="MP2 bath orbital occupation of cluster %s" % self.name)
-        np.savetxt(f, dm_occ, header="%s MP2 bath orbital occupation of cluster %s" % (kindname.title(), self.name))
+        np.savetxt(f, dm_occ, fmt="%.10e", header="%s MP2 bath orbital occupation of cluster %s" % (kindname.title(), self.name))
 
     if self.opts.plot_orbitals:
         #bins = np.hstack((-np.inf, np.logspace(-9, -3, 9-3+1), np.inf))
@@ -972,22 +970,23 @@ def make_mp2_bath(self,
         nbath = min(nbath, len(dm_occ))
     # Determine number of bath orbitals based on occupation tolerance
     elif tol is not None:
-        if tol >= 0.0:
-            nbath = sum(dm_occ >= tol)
-        # Changed behavior!!!
-        else:
-            tol = 1+tol
-            assert ((tol >= 0.0) and (tol <= 1.0))
-            dm_occ_tot = np.sum(dm_occ)
-            # Add bath orbitals
-            for n in range(len(dm_occ)+1):
-                dm_occ_n = np.sum(dm_occ[:n])
-                if (dm_occ_n / dm_occ_tot) >= tol:
-                    break
-            nbath = n
-            log.info("(De)occupation of environment space: all %d orbitals= %.5f  %d bath orbitals= %.5f ( %.3f%% )",
-                    len(dm_occ), dm_occ_tot, nbath, dm_occ_n, 100.0*dm_occ_n/dm_occ_tot)
-            assert (nbath <= len(dm_occ))
+        nbath = sum(dm_occ >= tol)
+        #if tol >= 0.0:
+        #    nbath = sum(dm_occ >= tol)
+        ## Changed behavior!!!
+        #else:
+        #    tol = 1+tol
+        #    assert ((tol >= 0.0) and (tol <= 1.0))
+        #    dm_occ_tot = np.sum(dm_occ)
+        #    # Add bath orbitals
+        #    for n in range(len(dm_occ)+1):
+        #        dm_occ_n = np.sum(dm_occ[:n])
+        #        if (dm_occ_n / dm_occ_tot) >= tol:
+        #            break
+        #    nbath = n
+        #    log.info("(De)occupation of environment space: all %d orbitals= %.5f  %d bath orbitals= %.5f ( %.3f%% )",
+        #            len(dm_occ), dm_occ_tot, nbath, dm_occ_n, 100.0*dm_occ_n/dm_occ_tot)
+        #    assert (nbath <= len(dm_occ))
 
     # Determine number of bath orbitals based on energy tolerance
     elif energy_tol is not None:

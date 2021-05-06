@@ -11,7 +11,6 @@ import pyscf.lo
 import pyscf.pbc
 import pyscf.pbc.dft
 import pyscf.pbc.tools
-import pyscf.pbc.mp
 import pyscf.pbc.df
 # Olli's incore GDF
 from pyscf.pbc.df.df_incore import IncoreGDF
@@ -59,8 +58,6 @@ def get_arguments():
     parser.add_argument("--hf-init-guess-basis")
     #parser.add_argument("--remove-linear-dep", type=float)
     parser.add_argument("--lindep-threshold", type=float)
-    # MP
-    parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
     # Density-fitting
     parser.add_argument("--df", choices=["FFTDF", "GDF", "IncoreGDF"], default="GDF", help="Density-fitting method")
     parser.add_argument("--auxbasis", help="Auxiliary basis. Only works for those known to PySCF.")
@@ -89,6 +86,11 @@ def get_arguments():
     parser.add_argument("--dft-xc", nargs="*", default=[])
     parser.add_argument("--run-hf", type=int, default=1)
     parser.add_argument("--run-embcc", type=int, default=1)
+
+    # Benchmark
+    parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
+    parser.add_argument("--canonical-ccsd", action="store_true", help="Perform canonical CCSD calculation.")
+
     args, restargs = parser.parse_known_args()
     sys.argv[1:] = restargs
 
@@ -157,10 +159,6 @@ def make_graphene(a, c, atoms=["C", "C"]):
 
 def make_graphite(a, c=6.708, atoms=["C", "C", "C", "C"]):
     """a = 2.461 A , c = 6.708 A"""
-    #amat = np.asarray([
-    #        [a, 0, 0],
-    #        [a/2, a*np.sqrt(3.0)/2, 0],
-    #        [0, 0, c]])
     amat = np.asarray([
             [a/2, -a*np.sqrt(3.0)/2, 0],
             [a/2, +a*np.sqrt(3.0)/2, 0],
@@ -251,13 +249,13 @@ def pop_analysis(mf, filename=None, mode="a"):
 
 def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_early=False):
     if kpts is None:
-        if xc == "hf":
+        if xc.lower() == "hf":
             mf = pyscf.pbc.scf.RHF(cell)
         else:
             mf = pyscf.pbc.dft.RKS(cell)
             mf.xc = xc
     else:
-        if xc == "hf":
+        if xc.lower() == "hf":
             mf = pyscf.pbc.scf.KRHF(cell, kpts)
         else:
             mf = pyscf.pbc.dft.KRKS(cell, kpts)
@@ -362,6 +360,41 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
 
     return mf
 
+def run_benchmarks(mf, args, ncells):
+    energies = {}
+    # Canonical MP2
+    if args.canonical_mp2:
+        import pyscf.pbc.mp
+        try:
+            t0 = timer()
+            if hasattr(mf, "kpts"):
+                raise NotImplementedError()
+            else:
+                mp2 = pyscf.pbc.mp.MP2(mf)
+            mp2.kernel()
+            log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
+            log.info("Time for canonical MP2: %.3f s", (timer()-t0))
+            energies["mp2"] = [mp2.e_tot / ncells]
+        except Exception as e:
+            log.error("Error in canonical MP2 calculation: %s", e)
+
+    # Canonical CCSD
+    if args.canonical_ccsd:
+        import pyscf.pbc.cc
+        try:
+            t0 = timer()
+            if hasattr(mf, "kpts"):
+                cc = pyscf.pbc.cc.KCCSD(mf)
+            else:
+                raise NotImplementedError()
+            cc.kernel()
+            log.info("Ecorr(CCSD)= %.8g", cc.e_corr)
+            log.info("Time for canonical CCSD: %.3f s", (timer()-t0))
+            energies["cc"] = [cc.e_tot]
+        except Exception as e:
+            log.error("Error in canonical CCSD calculation: %s", e)
+    return energies
+
 
 args = get_arguments()
 
@@ -444,26 +477,16 @@ for i, a in enumerate(args.lattice_consts):
         else:
             ncells = 1
         energies["hf"] = [mf.e_tot]
+
+    # Post-HF benchmarks
+    energies.update(run_benchmarks(mf, args, ncells))
+
     if args.run_embcc:
         energies["ccsd"] = []
         energies["ccsd-dmp2"] = []
         if args.solver == "CCSD(T)":
             energies["ccsdt"] = []
             energies["ccsdt-dmp2"] = []
-
-    # Canonical full system MP2
-    if args.canonical_mp2:
-        try:
-            t0 = timer()
-            mp2 = pyscf.pbc.mp.MP2(mf)
-            mp2.kernel()
-            log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
-            log.info("Time for canonical MP2: %.3f s", (timer()-t0))
-            energies["mp2"] = [mp2.e_tot / ncells]
-        except Exception as e:
-            log.error("Error in canonical MP2 calculation: %s", e)
-
-    if args.run_embcc:
         # Embedding calculations
         # ----------------------
         # Loop over bath tolerances
@@ -483,9 +506,11 @@ for i, a in enumerate(args.lattice_consts):
                 bath_type=args.bath_type, bath_tol=btol, mp2_correction=args.mp2_correction, **kwargs)
 
             # Define atomic fragments, first argument is atom index
-            if args.system == "graphite":
-                ccx.make_atom_cluster(0)
-                ccx.make_atom_cluster(1)
+            if args.system == "diamond":
+                ccx.make_atom_cluster(0, symmetry_factor=2)
+            elif args.system == "graphite":
+                ccx.make_atom_cluster(0, symmetry_factor=2)
+                ccx.make_atom_cluster(1, symmetry_factor=2)
             elif args.system == "graphene":
                 #for ix in range(2):
                 #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
@@ -494,7 +519,7 @@ for i, a in enumerate(args.lattice_consts):
                     ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
                 else:
                     ix = ncells-1    # Make cluster in center
-                ccx.make_atom_cluster(ix, **kwargs)
+                ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
             elif args.system == "perovskite":
                 weights = args.bath_tol_fragment_weight
                 # Overwrites ccx.bath_tol per cluster
@@ -507,7 +532,7 @@ for i, a in enumerate(args.lattice_consts):
                     ccx.make_atom_cluster(1)
                     ccx.make_atom_cluster(2, symmetry_factor=3)
             else:
-                ccx.make_atom_cluster(0)
+                raise SystemError()
 
             ccx.kernel()
 

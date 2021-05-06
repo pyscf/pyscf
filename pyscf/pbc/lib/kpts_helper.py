@@ -59,7 +59,7 @@ def loop_kkk(nkpts):
     range_nkpts = range(nkpts)
     return itertools.product(range_nkpts, range_nkpts, range_nkpts)
 
-def get_kconserv(cell, kpts):
+def get_kconserv(cell, kpts, n=3):
     r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
@@ -74,14 +74,26 @@ def get_kconserv(cell, kpts):
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2*np.pi)
 
-    kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
-    kvKLM = kpts[:,None,None,:] - kpts[:,None,:] + kpts
-    for N, kvN in enumerate(kpts):
-        kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN)
-        # check whether (1/(2pi) k_{KLMN} dot a) is an integer
-        kvKLMN_int = np.rint(kvKLMN)
-        mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int)) < 1e-9
-        kconserv[mask] = N
+    if n == 2:
+        kconserv = np.zeros((nkpts,nkpts), dtype=int)
+        kvKL = kpts[:,None,:] - kpts
+        for N, kvN in enumerate(kpts):
+            kvKLN = np.einsum('wx,klx->wkl', a, kvKL - kvN, optimize=True)
+            # check whether (1/(2pi) k_{KLN} dot a) is an integer
+            kvKLN_int = np.rint(kvKLN)
+            mask = np.einsum('wkl->kl', abs(kvKLN - kvKLN_int), optimize=True) < 1e-9
+            kconserv[mask] = N
+    elif n == 3:
+        kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
+        kvKLM = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+        for N, kvN in enumerate(kpts):
+            kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN, optimize=True)
+            # check whether (1/(2pi) k_{KLMN} dot a) is an integer
+            kvKLMN_int = np.rint(kvKLMN)
+            mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int), optimize=True) < 1e-9
+            kconserv[mask] = N
+    else:
+        raise NotImplementedError()
     return kconserv
 
 

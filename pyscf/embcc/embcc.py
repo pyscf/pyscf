@@ -168,11 +168,11 @@ class EmbCC:
         # k-space unfolding
         #if isinstance(mf, pyscf.pbc.scf.KRHF):
         if hasattr(mf, "kpts") and mf.kpts is not None:
-            log.debug("Mean-field calculations has k-points; unfolding to supercell.")
             t0 = timer()
             self.kcell = mf.cell
             self.kpts = mf.kpts
             self.kdf = mf.with_df
+            log.debug("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
             # DEBUG:
             log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             assert (self.kcell == self.kdf.cell)
@@ -184,6 +184,7 @@ class EmbCC:
             self.kpts = None
             self.kdf = None
         self.mf = mf
+        log.info("Mean-field energy= %.8e", mf.e_tot)
 
         # AO overlap matrix
         self.ovlp = self.mf.get_ovlp()

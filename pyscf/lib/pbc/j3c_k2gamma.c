@@ -14,25 +14,6 @@
 #include <omp.h>
 #include <cblas.h>
 
-void make_tril_indices(size_t n, size_t *tril_indices)
-{
-
-    size_t i, j, ij;
-    size_t idx = 0;
-    for (ij = 0, i = 0; i < n; i++) {
-        for (j = 0; j < n; j++, ij++) {
-            if (i >= j) {
-                tril_indices[ij] = idx++;
-            // No valid tril index
-            } else {
-                tril_indices[ij] = -1;
-            }
-        }
-    }
-    assert (idx == n*(n+1)/2);
-}
-
-
 int64_t j3c_k2gamma(
         /* In */
         int64_t nk,                 // Number of k-points
@@ -83,7 +64,7 @@ int64_t j3c_k2gamma(
 
         memset(work1, 0, K3N2 * sizeof(double complex));
 
-        // Copy j3c_kpts(L,a,b,ki,kj) -> work1(kk,L,a,b,ki,kj)
+        // Copy j3c_kpts(L|a,b,ki,kj) -> work1(kk,L,a,b,ki,kj)
         for (ki = 0; ki < nk; ki++) {
         for (kj = 0; kj < nk; kj++) {
             kk = kconserv[ki*K + kj];
@@ -158,10 +139,11 @@ int64_t j3c_kao2gmo(
         int64_t nvir,               // Number of virtual orbitals in supercell
         int64_t naux,               // Number of auxiliary basis functions in primitive cell
         int64_t *kconserv,          // (nk, nk) Momentum conserving k-point for each ki,kj
+        int64_t *kuniqmap,          // (nk, nk) mapping from (ki,kj) -> unique(ki-kj); if NULL, ki*nk+kj is used
         double complex *cocc,       // (nk, nao, nocc) Occupied MO coefficients in k-space representation
         double complex *cvir,       // (nk, nao, nvir) Virtual MO coefficients in k-space representation
-        double complex *j3c,        // (nk, nk, naux, nao, nao) k-point sampled 3c-integrals. TODO: Read directly from HDF5 file?
-        //double complex *phase,    // (nk, nk) exp^{iR.K}
+        double complex *j3c,        // (nkuniq, naux, nao, nao) k-point sampled 3c-integrals. nkuniq is nk**2 if kuniqmap==NULL, or nk*(nk+1)/2 else
+        //double complex *phase,    // (nk, nk) exp^{iR.K} // TODO
         /*** Inout ***/
         double complex *j3c_ov,     // (nk,naux,nocc,nvir) Three-center integrals (kL|ia)
         double complex *j3c_oo,     // (nk,naux,nocc,nocc) Three-center integrals (kL|ij) (Will not be calculated if NULL on entry)
@@ -176,81 +158,115 @@ int64_t j3c_kao2gmo(
     /* Dummy indices */
     size_t l;           // DF basis
     size_t ki, kj, kk;  // k-points
+    int64_t kij;        // ki,kj index
+    size_t a, b;        // atomic orbitals
 #ifdef USE_BLAS
     const double complex Z1 = 1.0;
 #else
     /* Dummy indices */
-    size_t a, b;        // atomic orbitals
     size_t i, j;        // occupied molecular orbitals
     size_t p, q;        // virtual molecular orbitals
 #endif
     double complex *j3c_pt = NULL;
     double complex *work = malloc(nmax*nao * sizeof(double complex));
-
+    double complex *work2 = malloc(nao*nao * sizeof(double complex));
+    if (!(work && work2)) {
+        printf("Error allocating temporary memory in j3c_kao2gamma. Exiting.\n");
+        ierr = 1;
+    }
+// Do not perform calculation if any threads did not get memory
+#pragma omp barrier
+    if (ierr != 0) goto EXIT;
 /* Parallelize over auxiliary index guarantees thread-safety (not atomic pragmas needed)
  * However Parallelizing over final k-point kk would also be thread-safe and possibly more efficient
  * (L can be included in the ZGEMMs) */
 #pragma omp for
     for (l = 0; l < naux; l++) {
+        //printf("l= %ld on thread %d / %d...\n", l, omp_get_thread_num(), omp_get_num_threads());
         for (ki = 0; ki < nk; ki++) {
         for (kj = 0; kj < nk; kj++) {
-            kk = kconserv[ki*nk + kj];
-            j3c_pt = &(j3c[(ki*nk*naux + kj*naux + l)*nao*nao]);
 
-            /* occ-vir
+            kij = ki*nk + kj;
+            kk = kconserv[kij];
+            if (kuniqmap) {
+                kij = kuniqmap[kij];
+            }
+            j3c_pt = &(j3c[(labs(kij)*naux + l)*nao*nao]);
+            // Tranpose AOs if kij negative
+            if (kij < 0) {
+                for (a = 0; a < nao; a++) {
+                for (b = 0; b < nao; b++) {
+                    work2[b*nao+a] = conj(j3c_pt[a*nao+b]);
+                }}
+                j3c_pt = work2;
+            }
+            /* (L|occ,vir)
              * For occ-vir three-center integrals, the contraction order can make a big difference in FLOPs!
-             * Choose best contraction order automatically: */
+             * Choose best contraction order automatically */
+
+            /* Contract occupieds, then virtuals */
             if (nocc <= nvir || j3c_oo) {
                 memset(work, 0, nocc*nao * sizeof(double complex));
 #ifdef USE_BLAS
+                // (L|ao,ao) -> (L|occ,ao)
                 cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, nocc, nao, nao,
                         &Z1, &(cocc[ki*nao*nocc]), nocc, j3c_pt, nao,
                         &Z1, work, nao);
+                // (L|occ,ao) -> (L|occ,vir)
                 cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nocc, nvir, nao,
                         &Z1, work, nao, &cvir[kj*nao*nvir], nvir,
                         &Z1, &(j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc]), nvir);
 #else
+                // (L|ao,ao) -> (L|occ,ao)
                 for (a = 0; a < nao; a++) {
                 for (b = 0; b < nao; b++) {
                 for (i = 0; i < nocc; i++) {
                     work[i*nao + b] += j3c_pt[a*nao + b] * conj(cocc[ki*nao*nocc + a*nocc + i]);
                 }}}
+                // (L|occ,ao) -> (L|occ,vir)
                 for (b = 0; b < nao; b++) {
                 for (i = 0; i < nocc; i++) {
                 for (p = 0; p < nvir; p++) {
-                j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc + i*nvir + p] += work[i*nao + b] * cvir[kj*nao*nvir + b*nvir + p];
+                    j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc + i*nvir + p] += work[i*nao + b] * cvir[kj*nao*nvir + b*nvir + p];
                 }}}
 #endif
+            /* Contract virtuals, then occupieds */
             } else {
                 memset(work, 0, nao*nvir * sizeof(double complex));
 #ifdef USE_BLAS
+                // (L|ao,ao) -> (L|ao,vir)
                 cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nao, nvir, nao,
                         &Z1, j3c_pt, nao, &cvir[kj*nao*nvir], nvir,
                         &Z1, work, nvir);
+                // (L|ao,vir) -> (L|occ,vir)
                 cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, nocc, nvir, nao,
                         &Z1, &(cocc[ki*nao*nocc]), nocc, work, nvir,
                         &Z1, &(j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc]), nvir);
 #else
+                // (L|ao,ao) -> (L|ao,vir)
                 for (a = 0; a < nao; a++) {
                 for (b = 0; b < nao; b++) {
                 for (p = 0; p < nvir; p++) {
                     work[a*nvir + p] += j3c_pt[a*nao + b] * cvir[kj*nao*nvir + b*nvir + p];
                 }}}
+                // (L|ao,vir) -> (L|occ,vir)
                 for (a = 0; a < nao; a++) {
                 for (i = 0; i < nocc; i++) {
                 for (p = 0; p < nvir; p++) {
-                j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc + i*nvir + p] += work[a*nvir + p] * conj(cocc[ki*nao*nocc + a*nocc + i]);
+                    j3c_ov[kk*nvir*nocc*naux + l*nvir*nocc + i*nvir + p] += work[a*nvir + p] * conj(cocc[ki*nao*nocc + a*nocc + i]);
                 }}}
 #endif
             }
 
-            /* occ-occ */
+            /* (L|occ,occ) */
             if (j3c_oo) {
 #ifdef USE_BLAS
+            // (L|occ,ao) -> (L|occ,occ)
             cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nocc, nocc, nao,
                     &Z1, work, nao, &cocc[kj*nao*nocc], nocc,
                     &Z1, &(j3c_oo[kk*nocc*nocc*naux + l*nocc*nocc]), nocc);
 #else
+            // (L|occ,ao) -> (L|occ,occ)
             for (b = 0; b < nao; b++) {
             for (i = 0; i < nocc; i++) {
             for (j = 0; j < nocc; j++) {
@@ -259,22 +275,26 @@ int64_t j3c_kao2gmo(
 #endif
             }
 
-            /* vir-vir */
+            /* (L|vir,vir) */
             if (j3c_vv) {
             memset(work, 0, nvir*nao * sizeof(double complex));
 #ifdef USE_BLAS
+            // (L|ao,ao) -> (L|vir,ao)
             cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans, nvir, nao, nao,
                     &Z1, &(cvir[ki*nao*nvir]), nvir, j3c_pt, nao,
                     &Z1, work, nao);
+            // (L|vir,ao) -> (L|vir,vir)
             cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nvir, nvir, nao,
                     &Z1, work, nao, &cvir[kj*nao*nvir], nvir,
                     &Z1, &(j3c_vv[kk*nvir*nvir*naux + l*nvir*nvir]), nvir);
 #else
+            // (L|ao,ao) -> (L|vir,ao)
             for (a = 0; a < nao; a++) {
             for (b = 0; b < nao; b++) {
             for (p = 0; p < nvir; p++) {
                 work[p*nao + b] += j3c_pt[a*nao + b] * conj(cvir[ki*nao*nvir + a*nvir + p]);
             }}}
+            // (L|vir,ao) -> (L|vir,vir)
             for (b = 0; b < nao; b++) {
             for (p = 0; p < nvir; p++) {
             for (q = 0; q < nvir; q++) {
@@ -283,8 +303,10 @@ int64_t j3c_kao2gmo(
 #endif
             }
         }}
-    }
+    } // loop over l
+    //} // end if(work)
 
+    //TODO
     ///* Rotate to real values */
     //if (phase) {
     //    *work = realloc(nk*nmax*nmax * sizeof(double complex));
@@ -294,16 +316,13 @@ int64_t j3c_kao2gmo(
     //    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nk, nocc*nvir, nk,
     //            &Z1, phase, nk, work, nocc*nvir,
     //            &Z1, j3c_oc, nao);
-
-
-
-
-
-
     //}
 
+EXIT:
     free(work);
-    }
+    free(work2);
+    } // end of parallel region
 
+    //printf("Returning to python...\n");
     return ierr;
 }
