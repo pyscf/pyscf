@@ -45,7 +45,7 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
         ERIs which can be used for the respective correlated method.
     """
-    log.debug("Correlated method in eris_kao2gmo= %s", type(cm))
+    #log.debug("Correlated method in eris_kao2gmo= %s", type(cm))
 
     if fock is None: fock = mf.get_fock()
 
@@ -358,11 +358,12 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
         t0 = timer()
         phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
         j3c_ov = np.tensordot(phase, j3c_ov, axes=1)
-        imag = abs(j3c_ov.imag).max()
-        if imag > 1e-5:
-            log.warning("WARNING: max|Im(j3c_ov)|= %.2e", imag)
-        else:
-            log.debug("max|Im(j3c_ov)|= %.2e", imag)
+        if j3c_ov.size > 0:
+            imag = abs(j3c_ov.imag).max()
+            if imag > 1e-5:
+                log.warning("WARNING: max|Im(j3c_ov)|= %.2e", imag)
+            else:
+                log.debug("max|Im(j3c_ov)|= %.2e", imag)
         j3c_ov = j3c_ov.real
         if not only_ov:
             j3c_oo = np.tensordot(phase, j3c_oo, axes=1)

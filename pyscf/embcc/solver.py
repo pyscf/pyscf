@@ -3,57 +3,64 @@ import numpy as np
 from timeit import default_timer as timer
 
 import pyscf
-import pyscf.lo
-import pyscf.scf
-import pyscf.mp
-import pyscf.ci
-import pyscf.cc
 import pyscf.pbc
-import pyscf.pbc.mp
-import pyscf.pbc.ci
-import pyscf.pbc.cc
 
 from .util import einsum, get_time_string
-from . import ao2mo_j3c
 
 log = logging.getLogger(__name__)
 
 class ClusterSolver:
 
-    def __init__(self, cluster, solver, mo_coeff, mo_occ, active, frozen):
-        self.cluster = cluster
-        self.mf = self.cluster.mf
+    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen):
+        """
 
+        Arguments
+        ---------
+        nocc_frozen : int
+            Number of frozen occupied orbitals. Need to be at the start of mo_coeff.
+        nvir_frozen : int
+            Number of frozen virtual orbitals. Need to be at the end of mo_coeff.
+        """
+        # Input
+        self.cluster = cluster
         self.solver = solver
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
-        self.active = active
-        self.frozen = frozen
-
-        self.pbc = hasattr(self.mf.mol, "a")
-        self.fock = self.cluster.base.get_fock()
+        self.nocc_frozen = nocc_frozen
+        self.nvir_frozen = nvir_frozen
         # Intermediates
         self._eris = None
         self._solver = None
-        # Standard output values
-        self.c1 = None
-        self.c2 = None
-        self.t1 = None
-        self.t2 = None
+        # Output
+        self.c1 = self.c2 = None
+        self.t1 = self.t2 = None
         self.converged = False
         self.e_corr = 0.0           # Note that this is the full correlation energy
-        # Optional output values
+        # Optional output
         self.dm1 = None
         self.ip_energy = None
         self.ip_coeff = None
         self.ea_energy = None
         self.ea_coeff = None
 
-    def run(self):
+    @property
+    def base(self):
+        return self.cluster.base
 
-        if len(self.active) == 1:
-            log.info("Only one orbital in cluster; no correlation energy.")
-            self.solver = None
+    @property
+    def mf(self):
+        return self.cluster.mf
+
+    def get_active_slice(self):
+        slc = np.s_[self.nocc_frozen:-self.nvir_frozen]
+        return slc
+
+    def get_frozen_indices(self):
+        nmo = self.mo_coeff.shape[-1]
+        idx = list(range(self.nocc_frozen)) + list(range(nmo-self.nvir_frozen, nmo))
+        return idx
+
+    def kernel(self):
 
         if self.solver is None:
             pass
@@ -77,30 +84,31 @@ class ClusterSolver:
 
 
     def run_mp2(self):
-        cls = pyscf.pbc.mp.MP2 if self.pbc else pyscf.mp.MP2
-        mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.frozen)
+        if self.base.has_pbc:
+            import pyscf.pbc.mp
+            cls = pyscf.pbc.mp.MP2
+        else:
+            import pyscf.mp
+            cls = pyscf.mp.MP2
+        mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         self._solver = mp2
 
         t0 = timer()
-        if self.pbc:
-            mo_act = self.mo_coeff[:,self.active]
-            f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
-            eris = mp2.ao2mo(direct_init=True, mo_energy=np.diag(f_act), fock=fock)
-        elif hasattr(mp2, "with_df"):
-            eris = mp2.ao2mo(store_eris=True)
-        else:
-            eris = mp2.ao2mo()
-        self._eris = eris
+        eris = self.base.get_eris(mp2)
         t = (timer()-t0)
         log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+        self._eris = eris
 
         self.e_corr, self.c2 = mp2.kernel(eris=eris, hf_reference=True)
         self.converged = True
 
     def run_cisd(self):
-        # NOT MAINTAINED
-        cls = pyscf.pbc.ci.CISD if self.pbc else pyscf.ci.CISD
-        ci = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.frozen)
+        # NOT MAINTAINED!!!
+        import pyscf.ci
+        import pyscf.pbc.ci
+
+        cls = pyscf.pbc.ci.CISD if self.base.has_pbc else pyscf.ci.CISD
+        ci = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         self._solver = ci
 
         # Integral transformation
@@ -126,31 +134,21 @@ class ClusterSolver:
         self.c2 = c2/c0
 
     def run_ccsd(self):
-        cls = pyscf.pbc.cc.CCSD if self.pbc else pyscf.cc.CCSD
-        cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.frozen)
+        if self.base.has_pbc:
+            import pyscf.pbc.cc
+            cls = pyscf.pbc.cc.CCSD
+        else:
+            import pyscf.cc
+            cls = pyscf.cc.CCSD
+        cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         self._solver = cc
 
         # Integral transformation
         t0 = timer()
-        # New unfolding
-        if self.cluster.base.kcell is not None:
-            log.debug("ao2mo using base.get_eris")
-            eris = self.cluster.base.get_eris(cc)
-        elif self.pbc:
-            mo_act = self.mo_coeff[:,self.active]
-            f_act = np.linalg.multi_dot((mo_act.T, self.fock, mo_act))
-            if hasattr(self.mf.with_df, "_cderi") and isinstance(self.mf.with_df._cderi, np.ndarray):
-                log.debug("ao2mo using ao2mo_j3c.ao2mo_ccsd")
-                eris = ao2mo_j3c.ao2mo_ccsd(cc, fock=f_act)
-            else:
-                log.debug("ao2mo using cc.ao2mo_direct")
-                eris = cc.ao2mo_direct(fock=f_act)
-        else:
-            log.debug("ao2mo using cc.ao2mo")
-            eris = cc.ao2mo()
-        self._eris = eris
+        eris = self.base.get_eris(cc)
         t = (timer()-t0)
         log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
+        self._eris = eris
 
         t0 = timer()
         log.info("Running CCSD...")

@@ -377,6 +377,9 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
 
     logger.debug(cell, "Time for degeneracy treatment= %.2f s", (timer()-t0))
 
+    assert np.allclose(C_gamma_out.imag, 0)
+    C_gamma_out = C_gamma_out.real
+
     #s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     #s_k = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=lib.c_null_ptr())
     # overlap between k-point unitcell and gamma-point supercell

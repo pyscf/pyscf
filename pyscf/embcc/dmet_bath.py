@@ -67,7 +67,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-4, reftol=0.8):
     C_virenv : ndarray
         Virtual environment orbitals.
     """
-    C_env = self.C_env
+    C_env = self.c_env
     # Divide by 2 to get eigenvalues in [0,1]
     sc = np.dot(self.base.ovlp, C_env)
     D_env = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
@@ -178,6 +178,6 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-4, reftol=0.8):
             raise RuntimeError(err)
 
     # There should never be more DMET bath orbitals than fragment orbitals
-    assert nbath <= self.C_local.shape[-1]
+    assert nbath <= self.c_frag.shape[-1]
 
     return C_bath, C_occenv, C_virenv

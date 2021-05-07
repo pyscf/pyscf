@@ -22,8 +22,10 @@ from .solver import ClusterSolver
 from .util import *
 from .dmet_bath import make_dmet_bath, project_ref_orbitals
 from .bath import *
+from .mp2_bath import make_mp2_bno
 from .energy import *
 from . import ccsd_t
+from . import helper
 
 __all__ = [
         "Cluster",
@@ -35,11 +37,12 @@ class Cluster:
 
     def __init__(self, base, cluster_id, name,
             #indices, C_local, C_env,
-            C_local, C_env,
+            c_frag, c_env,
             ao_indices=None,
             solver="CCSD",
             # Bath
             bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4, bath_energy_tol=None,
+            bno_threshold=None,
             **kwargs):
         """
         Parameters
@@ -65,24 +68,20 @@ class Cluster:
         log.info("  * Local orbital type= %s", self.local_orbital_type)     # depends on self.base
 
         # NEW: local and environment orbitals
-        if C_local.shape[-1] == 0:
+        if c_frag.shape[-1] == 0:
             raise ValueError("No local orbitals in cluster %d:%s" % (self.id, self.name))
 
-        self.C_local = C_local
-        self.C_env = C_env
-        log.info("  * Size= %d", self.size)     # depends on self.C_local
+        self.c_frag = c_frag
+        self.c_env = c_env
+        log.info("  * Size= %d", self.size) # depends on self.c_frag
 
         # Determine number of mean-field electrons in fragment space
-        sc = np.dot(self.base.ovlp, self.C_local)
+        sc = np.dot(self.base.ovlp, self.c_frag)
         dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         self.nelec_mf_frag = np.trace(dm)
         log.info("  * Mean-field electrons= %.5f", self.nelec_mf_frag)
 
-        #assert self.nlocal == len(self.indices)
-        #assert (self.size == len(self.indices) or self.local_orbital_type in ("NonOrth-IAO", "PMO"))
-
         # Options
-
         if solver not in self.base.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
@@ -110,6 +109,8 @@ class Cluster:
         assert len(self.bath_target_size) == 2
         assert len(self.bath_tol) == 2
         assert len(self.bath_energy_tol) == 2
+
+        self.bno_threshold = bno_threshold or self.base.bno_threshold
 
         # Other options from kwargs:
         self.solver_options = kwargs.get("solver_options", {})
@@ -168,7 +169,7 @@ class Cluster:
             os.makedirs(self.base.opts.plot_orbitals_dir, exist_ok=True)
             name = "%s.cube" % os.path.join(self.base.opts.plot_orbitals_dir, self.name)
             self.cubefile = cubegen.CubeFile(self.mol, filename=name, **self.base.opts.plot_orbitals_kwargs)
-            self.cubefile.add_orbital(self.C_local.copy())
+            self.cubefile.add_orbital(self.c_frag.copy())
 
         self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 200)
 
@@ -178,29 +179,30 @@ class Cluster:
         """Set default attributes of cluster object."""
 
         # Orbitals [set when running solver]
-        self.C_bath = None      # DMET bath orbitals
-        self.C_occclst = None   # Occupied cluster orbitals
-        self.C_virclst = None   # Virtual cluster orbitals
-        self.C_occbath = None   # Occupied bath orbitals
-        self.C_virbath = None   # Virtual bath orbitals
-        #self.nfrozen = None
-        self.e_delta_mp2 = 0.0
+        ####self.C_bath = None      # DMET bath orbitals
+        ####self.C_occclst = None   # Occupied cluster orbitals
+        ####self.C_virclst = None   # Virtual cluster orbitals
+        ####self.C_occbath = None   # Occupied bath orbitals
+        ####self.C_virbath = None   # Virtual bath orbitals
 
-        self.active = []
-        self.active_occ = []
-        self.active_vir = []
-        self.frozen = []
-        self.frozen_occ = []
-        self.frozen_vir = []
+        self.nactive = 0
+        self.nfrozen = 0
+
+        ###self.active = []
+        ###self.active_occ = []
+        ###self.active_vir = []
+        ###self.frozen = []
+        ###self.frozen_occ = []
+        ###self.frozen_vir = []
 
         # These are used by the solver
-        self.mo_coeff = None
-        self.mo_occ = None
-        self.eris = None
+        ##self.mo_coeff = None
+        ##self.mo_occ = None
+        ##self.eris = None
 
         # Local amplitudes [C1, C2] can be stored here and
         # used by other fragments
-        self.amplitudes = {}
+        ##self.amplitudes = {}
 
         # Orbitals sizes
         #self.nbath0 = 0
@@ -208,22 +210,28 @@ class Cluster:
         #self.nfrozen = 0
         # Calculation results
 
+        # Intermediate values
+        self.c_no_occ = self.c_no_vir = None
+        self.n_no_occ = self.n_no_vir = None
+
+        # Save correlation energies for different BNO thresholds
+        self.e_corrs = {}
+
         self.iteration = 0
 
         # Output values
         self.converged = False
-        self.e_corr = 0.0
+        #self.e_corr = 0.0
+        self.e_delta_mp2 = 0.0
         self.e_pert_t = 0.0
-        self.e_pert_t2 = 0.0
         self.e_corr_dmp2 = 0.0
 
         # For testing:
         # Full cluster correlation energy
-        self.e_corr_full = 0.0
-        self.e_corr_v = 0.0
-        self.e_corr_d = 0.0
-
-        self.e_dmet = 0.0
+        #self.e_corr_full = 0.0
+        #self.e_corr_v = 0.0
+        #self.e_corr_d = 0.0
+        #self.e_dmet = 0.0
 
         # For EMO-CCSD
         self.eom_ip_energy = None
@@ -242,32 +250,38 @@ class Cluster:
     @property
     def size(self):
         """Number of local (fragment) orbitals."""
-        return self.C_local.shape[-1]
+        return self.c_frag.shape[-1]
+
+    ##@property
+    ##def ndmetbath(self):
+    ##    """Number of DMET bath orbitals."""
+    ##    return self.C_bath.shape[-1]
+
+    ##@property
+    ##def noccbath(self):
+    ##    """Number of occupied bath orbitals."""
+    ##    return self.C_occbath.shape[-1]
+
+    ##@property
+    ##def nvirbath(self):
+    ##    """Number of virtual bath orbitals."""
+    ##    return self.C_virbath.shape[-1]
+
+    ##@property
+    ##def nactive(self):
+    ##    """Number of active orbitals."""
+    ##    return len(self.active)
+
+    ##@property
+    ##def nfrozen(self):
+    ##    """Number of frozen environment orbitals."""
+    ##    return len(self.frozen)
 
     @property
-    def ndmetbath(self):
-        """Number of DMET bath orbitals."""
-        return self.C_bath.shape[-1]
-
-    @property
-    def noccbath(self):
-        """Number of occupied bath orbitals."""
-        return self.C_occbath.shape[-1]
-
-    @property
-    def nvirbath(self):
-        """Number of virtual bath orbitals."""
-        return self.C_virbath.shape[-1]
-
-    @property
-    def nactive(self):
-        """Number of active orbitals."""
-        return len(self.active)
-
-    @property
-    def nfrozen(self):
-        """Number of frozen environment orbitals."""
-        return len(self.frozen)
+    def e_corr(self):
+        """Best guess for correlation energy, using the lowest BNO threshold."""
+        key = min(list(self.e_corrs.keys()))
+        return self.e_corrs[key]
 
     def loop_clusters(self, exclude_self=False):
         """Loop over all clusters."""
@@ -303,12 +317,6 @@ class Cluster:
     @property
     def has_pbc(self):
         return isinstance(self.mol, pyscf.pbc.gto.Cell)
-
-    #def madelung(self):
-    #    """Madelung constant for PBC systems."""
-    #    from pyscf.pbc import tools
-    #    mad = tools.madelung(self.mol, self.mf.kpt)
-    #    return mad
 
     @property
     def local_orbital_type(self):
@@ -396,7 +404,7 @@ class Cluster:
         C_virclst : ndarray
             Virtual cluster orbitals.
         """
-        C_clst = np.hstack((self.C_local, C_bath))
+        C_clst = np.hstack((self.c_frag, C_bath))
         sc = np.dot(self.base.ovlp, C_clst)
         D_clst = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
         e, R = np.linalg.eigh(D_clst)
@@ -413,35 +421,37 @@ class Cluster:
 
         return C_occclst, C_virclst
 
-    def canonicalize(self, *C, eigenvalues=False):
+    def canonicalize(self, *mo_coeff, eigenvalues=False):
         """Diagonalize Fock matrix within subspace.
 
         Parameters
         ----------
-        *C : ndarrays
+        *mo_coeff : ndarrays
             Orbital coefficients.
+        eigenvalues : ndarray
+            Return MO energies of canonicalized orbitals.
 
         Returns
         -------
-        C : ndarray
+        mo_canon : ndarray
             Canonicalized orbital coefficients.
+        rot : ndarray
+            Rotation matrix: np.dot(mo_coeff, rot) = mo_canon.
         """
-        C = np.hstack(C)
-        #F = np.linalg.multi_dot((C.T, self.mf.get_fock(), C))
-        #F = np.linalg.multi_dot((C.T, self.base.fock, C))
-        F = np.linalg.multi_dot((C.T, self.base.get_fock(), C))
-        e, R = np.linalg.eigh(F)
-        C = np.dot(C, R)
+        mo_coeff = np.hstack(mo_coeff)
+        fock = np.linalg.multi_dot((mo_coeff.T, self.base.get_fock(), mo_coeff))
+        mo_energy, rot = np.linalg.eigh(fock)
+        mo_canon = np.dot(mo_coeff, rot)
         if eigenvalues:
-            return C, e
-        return C
+            return mo_canon, rot, mo_energy
+        return mo_canon, rot
 
-    def get_occup(self, coeff):
+    def get_occup(self, mo_coeff):
         """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
 
         Parameters
         ----------
-        coeff : ndarray, shape(N, M)
+        mo_coeff : ndarray, shape(N, M)
             Orbital coefficients.
 
         Returns
@@ -449,7 +459,7 @@ class Cluster:
         occ : ndarray, shape(M)
             Occupation numbers of orbitals.
         """
-        sc = np.dot(self.base.ovlp, coeff)
+        sc = np.dot(self.base.ovlp, mo_coeff)
         dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         occ = np.diag(dm)
         return occ
@@ -476,7 +486,7 @@ class Cluster:
         # Project onto space of local (fragment) orbitals.
         #if self.local_orbital_type in ("IAO", "LAO"):
         if self.local_orbital_type in ("IAO", "LAO", "PMO"):
-            CSC = np.linalg.multi_dot((C.T, S, self.C_local))
+            CSC = np.linalg.multi_dot((C.T, S, self.c_frag))
             P = np.dot(CSC, CSC.T)
 
         # Project onto space of local atomic orbitals.
@@ -588,38 +598,37 @@ class Cluster:
         return c_bath, c_occenv, c_virenv
 
 
-    def run(self, solver=None):
+    def kernel(self, solver=None, bno_threshold=None):
         """Construct bath orbitals and run solver.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         solver : str
             Method ["MP2", "CISD", "CCSD", "CCSD(T)", "FCI"]
-
-        Returns
-        -------
-        converged : bool
+        bno_threshold : list
+            List of bath natural orbital (BNO) thresholds.
         """
 
         solver = solver or self.solver
+        if bno_threshold is None:
+            bno_threshold = self.bno_threshold
 
         t0_bath = t0 = timer()
         log.info("MAKING DMET BATH")
         log.info("****************")
         log.changeIndentLevel(1)
-        C_bath, C_occenv, C_virenv = self.make_dmet_bath(tol=self.opts.dmet_bath_tol)
+        c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_bath_tol)
         log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
-        log.changeIndentLevel(-1)
-
         # Plotting of DMET bath orbitals
         if self.opts.plot_orbitals:
-            self.cubefile.add_orbital(C_bath.copy(), dset_idx=1001)
+            self.cubefile.add_orbital(c_dmet.copy(), dset_idx=1001)
+        log.changeIndentLevel(-1)
 
         # Add additional orbitals to cluster [optional]
-        C_bath, C_occenv, C_virenv = self.additional_bath_for_cluster(C_bath, C_occenv, C_virenv)
+        c_dmet, c_env_occ, c_env_vir = self.additional_bath_for_cluster(c_dmet, c_env_occ, c_env_vir)
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
-        C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
+        self.c_cluster_occ, self.c_cluster_vir = self.diagonalize_cluster_dm(c_dmet)
 
         # Add cluster orbitals to plot
         #if self.opts.plot_orbitals:
@@ -627,39 +636,30 @@ class Cluster:
         #    self.cubefile.add_orbital(C_virclst.copy(), dset_idx=3001)
 
         # Primary MP2 bath orbitals
-        if True:
-            if self.opts.prim_mp2_bath_tol_occ:
-                log.info("Adding primary occupied MP2 bath orbitals")
-                C_add_o, C_rest_o, *_ = self.make_mp2_bath(C_occclst, C_virclst, "occ",
-                        c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
-                        mp2_correction=False)
-            if self.opts.prim_mp2_bath_tol_vir:
-                log.info("Adding primary virtual MP2 bath orbitals")
-                C_add_v, C_rest_v, *_ = self.make_mp2_bath(C_occclst, C_virclst, "vir",
-                        c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
-                        mp2_correction=False)
-            # Combine
-            if self.opts.prim_mp2_bath_tol_occ:
-                C_bath = np.hstack((C_add_o, C_bath))
-                C_occenv = C_rest_o
-            if self.opts.prim_mp2_bath_tol_vir:
-                C_bath = np.hstack((C_bath, C_add_v))
-                C_virenv = C_rest_v
+        # TODO NOT MAINTAINED
+        #if True:
+        #    if self.opts.prim_mp2_bath_tol_occ:
+        #        log.info("Adding primary occupied MP2 bath orbitals")
+        #        C_add_o, C_rest_o, *_ = self.make_mp2_bath(C_occclst, C_virclst, "occ",
+        #                c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
+        #                mp2_correction=False)
+        #    if self.opts.prim_mp2_bath_tol_vir:
+        #        log.info("Adding primary virtual MP2 bath orbitals")
+        #        C_add_v, C_rest_v, *_ = self.make_mp2_bath(C_occclst, C_virclst, "vir",
+        #                c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
+        #                mp2_correction=False)
+        #    # Combine
+        #    if self.opts.prim_mp2_bath_tol_occ:
+        #        C_bath = np.hstack((C_add_o, C_bath))
+        #        C_occenv = C_rest_o
+        #    if self.opts.prim_mp2_bath_tol_vir:
+        #        C_bath = np.hstack((C_bath, C_add_v))
+        #        C_virenv = C_rest_v
 
-            # Re-diagonalize cluster DM to separate cluster occupied and virtual
-            C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
+        #    # Re-diagonalize cluster DM to separate cluster occupied and virtual
+        #    C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
 
-        self.C_bath = C_bath
-
-        # Canonicalize cluster
-        if False:
-            C_occclst, e = self.canonicalize(C_occclst, eigenvalues=True)
-            log.debug("Occupied cluster Fock eigenvalues: %r", e)
-            C_virclst, e = self.canonicalize(C_virclst, eigenvalues=True)
-            log.debug("Virtual cluster Fock eigenvalues: %r", e)
-
-        self.C_occclst = C_occclst
-        self.C_virclst = C_virclst
+        #self.C_bath = C_bath
 
         # === Additional bath orbitals
 
@@ -667,11 +667,16 @@ class Cluster:
         log.info("********************")
         t0 = timer()
         log.changeIndentLevel(1)
-        C_occbath, C_occenv2, e_delta_occ, _ = self.make_bath(
-                C_occenv, self.bath_type, "occ",
-                # New for MP2 bath:
-                C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[0], tol=self.bath_tol[0])
+        #C_occbath, C_occenv2, e_delta_occ, _ = self.make_bath(
+        #        C_occenv, self.bath_type, "occ",
+        #        # New for MP2 bath:
+        #        C_occenv=C_occenv, C_virenv=C_virenv,
+        #        nbath=self.bath_target_size[0], tol=self.bath_tol[0])
+
+        self.c_no_occ, self.n_no_occ = make_mp2_bno(
+                #self, "occ", np.hstack((self.c_cluster_occ, c_env_occ)), self.c_cluster_vir,
+                self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
+
         log.debug("Time for occupied %r bath: %s", self.bath_type, get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
@@ -679,13 +684,21 @@ class Cluster:
         log.info("*******************")
         t0 = timer()
         log.changeIndentLevel(1)
-        C_virbath, C_virenv2, e_delta_vir, _ = self.make_bath(
-                C_virenv, self.bath_type, "vir",
-                # New for MP2 bath:
-                C_occenv=C_occenv, C_virenv=C_virenv,
-                nbath=self.bath_target_size[1], tol=self.bath_tol[1])
+        #C_virbath, C_virenv2, e_delta_vir, _ = self.make_bath(
+        #        C_virenv, self.bath_type, "vir",
+        #        # New for MP2 bath:
+        #        C_occenv=C_occenv, C_virenv=C_virenv,
+        #        nbath=self.bath_target_size[1], tol=self.bath_tol[1])
+
+        self.c_no_vir, self.n_no_vir = make_mp2_bno(
+                #self, "vir", self.c_cluster_occ, np.hstack((self.c_cluster_vir, c_env_vir)),
+                self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
+                #c_occ_frozen=c_env_occ)
+
         log.debug("Time for virtual %r bath: %s", self.bath_type, get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
+
+        # TODO PLOTS
 
         # Plot orbitals
         if self.opts.plot_orbitals:
@@ -694,66 +707,100 @@ class Cluster:
             # Write cube-file:
             self.cubefile.write()
 
-        C_occenv, C_virenv = C_occenv2, C_virenv2
-        self.C_occbath = C_occbath
-        self.C_virbath = C_virbath
-        self.C_occenv = C_occenv
-        self.C_virenv = C_virenv
+        #C_occenv, C_virenv = C_occenv2, C_virenv2
+        #self.C_occbath = C_occbath
+        #self.C_virbath = C_virbath
+        #self.C_occenv = C_occenv
+        #self.C_virenv = C_virenv
+        log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
 
-        self.e_delta_mp2 = e_delta_occ + e_delta_vir
-        log.debug("MP2 correction = %.8g", self.e_delta_mp2)
+        for icalc, bno_thr in enumerate(bno_threshold):
+            log.info("CALCULATION %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
+            log.info("***************************************")
+            log.changeIndentLevel(1)
+            e_corr = self.run_bno_threshold(solver, bno_thr)
+            log.info("E(corr) for BNO threshold= %.1e :  %-16.8g Ha", bno_thr, e_corr)
+            self.e_corrs[bno_thr] = e_corr
+            log.changeIndentLevel(-1)
 
-        # FULL MP2 correction [TESTING]
-        #Co1 = np.hstack((C_occclst, C_occenv))
-        #Cv1 = np.hstack((C_virclst, C_virenv))
-        #Co2 = np.hstack((C_occclst, C_occbath))
-        #Cv2 = np.hstack((C_virclst, C_virbath))
-        #self.e_delta_mp2 = self.get_mp2_correction(Co1, Cv1, Co2, Cv2)
-        #log.debug("Full MP2 correction = %.8g", self.e_delta_mp2)
 
-        # === Canonicalize orbitals
-        C_occact = self.canonicalize(C_occclst, C_occbath)
-        C_viract = self.canonicalize(C_virclst, C_virbath)
-        #C_occact = np.hstack((C_occclst, C_occbath))
-        #C_viract = np.hstack((C_virclst, C_virbath))
-        self.C_occact = C_occact
-        self.C_viract = C_viract
+    def apply_bno_threshold(self, c_no, n_no, bno_thr):
+        """Split natural orbitals (NO) into bath and rest."""
+        n_bno = sum(n_no >= bno_thr)
+        n_rest = len(n_no)-n_bno
+        n_in, n_cut = np.split(n_no, [n_bno])
+        # Logging
+        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %6.2f %%)"
+        if n_bno > 0:
+            log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
+        else:
+            log.info(fmt[:13], 0)
+        if n_rest > 0:
+            log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
+        else:
+            log.info(fmt[:13], 0)
 
-        # Combine, important to keep occupied orbitals first
+        c_bno, c_rest = np.hsplit(c_no, [n_bno])
+        return c_bno, c_rest
+
+
+    def run_bno_threshold(self, solver, bno_thr):
+        #self.e_delta_mp2 = e_delta_occ + e_delta_vir
+        #log.debug("MP2 correction = %.8g", self.e_delta_mp2)
+
+        assert (self.c_no_occ is not None)
+        assert (self.c_no_vir is not None)
+
+        log.info("Occupied MP2 BNOs:")
+        c_nbo_occ, c_frozen_occ = self.apply_bno_threshold(self.c_no_occ, self.n_no_occ, bno_thr)
+        log.info("Virtual MP2 BNOs:")
+        c_nbo_vir, c_frozen_vir = self.apply_bno_threshold(self.c_no_vir, self.n_no_vir, bno_thr)
+
+        # Canonicalize orbitals
+        c_active_occ = self.canonicalize(self.c_cluster_occ, c_nbo_occ)[0]
+        c_active_vir = self.canonicalize(self.c_cluster_vir, c_nbo_vir)[0]
+
+        # NEEDED???
+        #self.C_occact = C_occact
+        #self.C_viract = C_viract
+
+        # Combine, important to keep occupied orbitals first!
         # Put frozen (occenv, virenv) orbitals to the front and back
         # and active orbitals (occact, viract) in the middle
-        Co = np.hstack((C_occenv, C_occact))
-        Cv = np.hstack((C_viract, C_virenv))
-        mo_coeff = np.hstack((Co, Cv))
-        No = Co.shape[-1]
-        Nv = Cv.shape[-1]
-        # Check occupations
-        assert np.allclose(self.get_occup(Co), 2, atol=2*self.opts.dmet_bath_tol), "%r" % self.get_occup(Co)
-        assert np.allclose(self.get_occup(Cv), 0, atol=2*self.opts.dmet_bath_tol), "%r" % self.get_occup(Cv)
-        mo_occ = np.asarray(No*[2] + Nv*[0])
+        c_occ = np.hstack((c_frozen_occ, c_active_occ))
+        c_vir = np.hstack((c_active_vir, c_frozen_vir))
+        nocc, nvir = c_occ.shape[-1], c_vir.shape[-1]
+        mo_coeff = np.hstack((c_occ, c_vir))
 
-        frozen_occ = list(range(C_occenv.shape[-1]))
-        active_occ = list(range(C_occenv.shape[-1], No))
-        active_vir = list(range(No, No+C_viract.shape[-1]))
-        frozen_vir = list(range(No+C_viract.shape[-1], No+Nv))
-        active = active_occ + active_vir
-        frozen = frozen_occ + frozen_vir
+        # Check occupations
+        n_occ = self.get_occup(c_occ)
+        if not np.allclose(n_occ, 2, atol=2*self.opts.dmet_bath_tol):
+            raise RuntimeError("Incorrect occupation of occupied orbitals:\n%r" % n_occ)
+        n_vir = self.get_occup(c_vir)
+        if not np.allclose(n_vir, 0, atol=2*self.opts.dmet_bath_tol):
+            raise RuntimeError("Incorrect occupation of virtual orbitals:\n%r" % n_vir)
+        mo_occ = np.asarray(nocc*[2] + nvir*[0])
+
         # Run solver
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
-        self.active = active
-        self.active_occ = active_occ
-        self.active_vir = active_vir
-        self.frozen = frozen
-        self.frozen_occ = frozen_occ
-        self.frozen_vir = frozen_vir
-        log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
+        #self.mo_coeff = mo_coeff
+        #self.mo_occ = mo_occ
+        #self.active = active
+        #self.active_occ = active_occ
+        #self.active_vir = active_vir
+        #self.frozen = frozen
+        #self.frozen_occ = frozen_occ
+        #self.frozen_vir = frozen_vir
+
+        nocc_frozen = c_frozen_occ.shape[-1]
+        nvir_frozen = c_frozen_vir.shape[-1]
+        nfrozen = nocc_frozen + nvir_frozen
+        nactive = c_active_occ.shape[-1] + c_active_vir.shape[-1]
 
         log.info("ORBITALS")
         log.info("********")
-        log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", len(active_occ), len(frozen_occ), len(active_occ)+len(frozen_occ))
-        log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", len(active_vir), len(frozen_vir), len(active_vir)+len(frozen_vir))
-        log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", self.nactive, self.nfrozen, self.nactive+self.nfrozen)
+        log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", c_active_occ.shape[-1], nocc_frozen, c_occ.shape[-1])
+        log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", c_active_vir.shape[-1], nvir_frozen, c_vir.shape[-1])
+        log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", nactive, nfrozen, mo_coeff.shape[-1])
 
         log.info("RUNNING %s SOLVER", solver)
         log.info((len(solver)+15)*"*")
@@ -761,15 +808,14 @@ class Cluster:
         # Create solver object
         t0 = timer()
         log.changeIndentLevel(1)
-        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, active=active, frozen=frozen)
-        csolver.run()
+        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen)
+        csolver.kernel()
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         log.debug("Wall time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
 
         pc1, pc2 = self.get_local_amplitudes(csolver._solver, csolver.c1, csolver.c2)
-        self.e_corr = self.get_local_energy(csolver._solver, pc1, pc2, eris=csolver._eris)
-
+        e_corr = self.get_local_energy(csolver._solver, pc1, pc2, eris=csolver._eris)
         # Population analysis
         if self.opts.make_rdm1 and csolver.dm1 is not None:
             try:
@@ -784,7 +830,8 @@ class Cluster:
 
         log.changeIndentLevel(-1)
 
-        return self.converged, self.e_corr
+        return e_corr
+
 
     def pop_analysis(self, dm1, filename=None, mode="a", sig_tol=0.01):
         """Perform population analsis for the given density-matrix and compare to the MF."""

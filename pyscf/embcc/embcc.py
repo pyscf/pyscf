@@ -79,6 +79,8 @@ class EmbCC:
             bath_tol=None,
             #bath_tol_per_electron=False,
             bath_energy_tol=1e-3,
+            # New bath tolerance
+            bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
             #minao="minao",
             minao=None,
             #
@@ -208,6 +210,11 @@ class EmbCC:
 
         # Options
         self.solver = solver
+
+        # Bath natural orbital threshold
+        if np.isscalar(bno_threshold):
+            bno_threshold = [bno_threshold]
+        self.bno_threshold = bno_threshold
 
         self.bath_type = bath_type
         self.bath_size = bath_size
@@ -350,6 +357,10 @@ class EmbCC:
     def norb(self):
         """Number of atomic orbitals."""
         return self.mol.nao_nr()
+
+    @property
+    def has_pbc(self):
+        return isinstance(self.mol, pyscf.pbc.gto.Cell)
 
     def get_ovlp(self):
         return self.ovlp
@@ -607,7 +618,7 @@ class EmbCC:
         #cluster = Cluster(self, cluster_id=cluster_id, name=name, C_local=C_local, C_env=C_env, **kwargs)
         cluster = Cluster(self, cluster_id=cluster_id, name=name,
                 #indices=indices,
-                C_local=C_local, C_env=C_env, **kwargs)
+                c_frag=C_local, c_env=C_env, **kwargs)
         self.clusters.append(cluster)
         return cluster
 
@@ -998,16 +1009,19 @@ class EmbCC:
             log.info(msg)
             log.info(len(msg)*"*")
             log.changeIndentLevel(1)
-            cluster.run(**kwargs)
+            cluster.kernel(**kwargs)
             log.info("Cluster %3d: %s%s is done.", cluster.id, cluster.name, mpi_info)
             log.changeIndentLevel(-1)
 
         #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
-        attributes = ["converged", "e_corr", "e_pert_t",
-                #"e_pert_t2",
-                "e_delta_mp2",
-                "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d",
-                "nactive", "nfrozen"]
+        #attributes = ["converged", "e_corr", "e_pert_t",
+        #        #"e_pert_t2",
+        #        "e_delta_mp2",
+        #        "e_dmet", "e_corr_full", "e_corr_v", "e_corr_d",
+        #        "nactive", "nfrozen"]
+
+        attributes = ["converged", "e_corr", "e_delta_mp2", "e_pert_t", "nactive", "nfrozen"]
+
         results = self.collect_results(*attributes)
         if MPI_rank == 0 and not np.all(results["converged"]):
             log.critical("CRITICAL: The following fragments did not converge:")
@@ -1018,16 +1032,11 @@ class EmbCC:
                 raise RuntimeError("Not all cluster converged")
 
         self.e_corr = sum(results["e_corr"])
-        self.e_pert_t = sum(results["e_pert_t"])
+        #self.e_pert_t = sum(results["e_pert_t"])
         #self.e_pert_t2 = sum(results["e_pert_t2"])
         self.e_delta_mp2 = sum(results["e_delta_mp2"])
 
-        self.e_dmet = sum(results["e_dmet"]) + self.mol.energy_nuc()
-
-        self.e_corr_full = sum(results["e_corr_full"])
-
-        self.e_corr_v = sum(results["e_corr_v"])
-        self.e_corr_d = sum(results["e_corr_d"])
+        #self.e_corr_full = sum(results["e_corr_full"])
 
         if MPI_rank == 0:
             self.print_results(results)

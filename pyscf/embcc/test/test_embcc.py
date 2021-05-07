@@ -24,7 +24,7 @@ def make_cubic(a, atom="He", supercell=False):
     cell.basis = "gth-dzv"
     cell.pseudo = "gth-pade"
     cell.precision = 1e-5
-    cell.verbose = 0
+    cell.verbose = 10
     cell.build()
     if supercell:
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
@@ -50,47 +50,36 @@ def make_diamond(a, atoms=["C1", "C2"], supercell=False):
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
-def test_helium():
+def test_helium(EXPECTED=-22.8671, kmesh=[2,2,2]):
 
     a = 2.0
-    kmesh = [2, 2, 2]
     cell = make_cubic(a, "He")
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
     kmf.kernel()
 
-    # Unfold
-    kmf = pyscf.embcc.k2gamma_gdf.k2gamma_gdf(kmf, kmesh)
-
     kcc = pyscf.embcc.EmbCC(kmf, bath_tol=1e-4)
-    kcc.opts.popfile = None
-    kcc.opts.eom_ccsd = True
-    kcc.opts.prim_mp2_bath_tol_occ = 1e-3
-    kcc.opts.prim_mp2_bath_tol_vir = 1e-3
     kcc.make_atom_cluster(0, symmetry_factor=2)
     kcc.kernel()
     print("K-CCSD E= %16.8g" % kcc.e_tot)
-    assert np.isclose(kcc.e_tot, -22.8671)
+    if EXPECTED:
+        assert np.isclose(kcc.e_tot, EXPECTED)
 
 
-    scell = make_cubic(a, "He", supercell=kmesh)
-    smf = pyscf.pbc.scf.RHF(scell)
-    smf = smf.density_fit()
-    smf.kernel()
+    #scell = make_cubic(a, "He", supercell=kmesh)
+    #smf = pyscf.pbc.scf.RHF(scell)
+    #smf = smf.density_fit()
+    #smf.kernel()
 
-    scc = pyscf.embcc.EmbCC(smf, bath_tol=1e-4)
-    scc.opts.popfile = None
-    scc.opts.eom_ccsd = True
-    scc.opts.prim_mp2_bath_tol_occ = 1e-3
-    scc.opts.prim_mp2_bath_tol_vir = 1e-3
-    scc.make_atom_cluster(0, symmetry_factor=2)
-    scc.kernel()
-    print("SC-CCSD E= %16.8g" % scc.e_tot)
-    assert np.isclose(scc.e_tot, -22.8671)
+    #scc = pyscf.embcc.EmbCC(smf, bath_tol=1e-4)
+    #scc.make_atom_cluster(0, symmetry_factor=2)
+    #scc.kernel()
+    #print("SC-CCSD E= %16.8g" % scc.e_tot)
+    #if EXPECTED:
+    #    assert np.isclose(scc.e_tot, EXPECTED)
 
-
-def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4):
+def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
 
     a = 3.5
     ncells = np.product(kmesh)
@@ -102,7 +91,28 @@ def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4):
     kmf = kmf.density_fit()
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol)
+    kcc = pyscf.embcc.EmbCC(kmf)
+    kcc.make_atom_cluster(0, symmetry_factor=2)
+    t0 = timer()
+    kcc.kernel()
+    print("Time for k-EmbCC= %.3f" % (timer()-t0))
+    print("k-EmbCC E= %16.8g" % kcc.e_tot)
+    if EXPECTED:
+        assert np.isclose(kcc.e_tot, EXPECTED)
+
+def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
+
+    a = 3.5
+    ncells = np.product(kmesh)
+
+    # k-point calculation
+    cell = make_diamond(a)
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+
+    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
     kcc.opts.popfile = None
     kcc.opts.orbfile = None
     kcc.make_atom_cluster(0, symmetry_factor=2)
@@ -121,7 +131,7 @@ def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4):
     smf = smf.density_fit()
     smf.kernel()
 
-    scc = pyscf.embcc.EmbCC(smf, bath_tol=bath_tol)
+    scc = pyscf.embcc.EmbCC(smf, bath_tol=bath_tol, bno_threshold=bno_threshold)
     scc.opts.popfile = None
     scc.opts.orbfile = None
     scc.make_atom_cluster(0, symmetry_factor=2*ncells)
@@ -139,7 +149,7 @@ def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4):
     kmf.with_df = IncoreGDF(cell, kpts)
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol)
+    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
     kcc.opts.popfile = None
     kcc.opts.orbfile = None
     kcc.make_atom_cluster(0, symmetry_factor=2)
@@ -169,7 +179,8 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
     assert np.allclose(ccsd.e_tot, EXPECTED)
 
     # bath_tol=-1 -> complete environment as bath
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=-1)
+    #kcc = pyscf.embcc.EmbCC(kmf, bath_tol=-1)
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=[-1])
     kcc.opts.popfile = None
     kcc.opts.orbfile = None
     kcc.make_atom_cluster(0, symmetry_factor=2)
@@ -179,9 +190,12 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
     #test_helium()
-    test_diamond(-11.138309)
-    test_diamond(-11.164555, bath_tol=1e-6)
-    test_full_ccsd_limit(-11.170842)
+    #test_helium(kmesh=[2,1,1])
+    test_diamond_kpts()
+    #test_diamond(-11.138309)
+    #test_diamond(-11.164555, bath_tol=1e-6)
+    #test_diamond(-11.164555, bno_threshold=1e-6)
+    #test_full_ccsd_limit(-11.170842)
 
 if __name__ == "__main__":
     run_test()
