@@ -186,7 +186,7 @@ class EmbCC:
             self.kpts = None
             self.kdf = None
         self.mf = mf
-        log.info("Mean-field energy= %.8e", mf.e_tot)
+        log.info("Mean-field energy= %-16.8f", mf.e_tot)
 
         # AO overlap matrix
         self.ovlp = self.mf.get_ovlp()
@@ -399,9 +399,14 @@ class EmbCC:
         return len(self.clusters)
 
     @property
+    def e_mf(self):
+        """Total mean-field energy."""
+        return self.mf.e_tot/self.ncells
+
+    @property
     def e_tot(self):
         """Total energy."""
-        return self.mf.e_tot/self.ncells + self.e_corr
+        return self.e_mf + self.e_corr
 
     # -------------------------------------------------------------------------------------------- #
 
@@ -1103,15 +1108,23 @@ class EmbCC:
         log.info("CLUSTER ENERGIES")
         log.info("****************")
         log.info("CCSD / CCSD+dMP2 / CCSD+dMP2+(T)")
-        fmtstr = "  * %3d %-10s  :  %16.8g  %16.8g  %16.8g"
+        fmtstr = "  * %3d %-10s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha"
         for i, x in enumerate(self.clusters):
             e_corr = results["e_corr"][i]
             e_pert_t = results["e_pert_t"][i]
             e_delta_mp2 = results["e_delta_mp2"][i]
             log.info(fmtstr, x.id, x.trimmed_name(10), e_corr, e_corr+e_delta_mp2, e_corr+e_delta_mp2+e_pert_t)
 
-        log.info("  * %-14s  :  %16.8g  %16.8g  %16.8g", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
-        #log.info("E(DMET) = %16.8g htr", self.e_dmet)
+        log.info("  * %-14s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
+        log.info("E(corr)= %+16.8g Ha", self.e_corr)
+        log.info("E(tot)=  %+16.8g Ha", self.e_tot)
+
+    def get_energies(self):
+        energies = np.zeros(len(self.bno_threshold))
+        energies[:] = self.e_mf
+        for x in self.clusters:
+            energies += x.e_corrs
+        return energies
 
     def reset(self, mf=None, **kwargs):
         if mf:

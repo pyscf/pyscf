@@ -77,6 +77,10 @@ def get_arguments():
             help="""Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.
             If negative, the bath is extended until it contains 100*(1-|tol|)% of all electrons/holes of the environment
             on the MP2 level.""")
+    parser.add_argument("--bno-threshold", type=float, nargs="*",
+            default=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
+            help="Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.")
+
     parser.add_argument("--bath-tol-fragment-weight", type=float, nargs="*", help="Adjust the bath tolerance per fragment.")
     parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other type of bath orbitals (pre MP2-natorb)
@@ -489,61 +493,65 @@ for i, a in enumerate(args.lattice_consts):
             energies["ccsdt-dmp2"] = []
         # Embedding calculations
         # ----------------------
-        # Loop over bath tolerances
-        for j, btol in enumerate(args.bath_tol):
 
-            kwargs = {opt : True for opt in args.opts}
-            if args.prim_mp2_bath_tol_occ:
-                kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
-            if args.prim_mp2_bath_tol_vir:
-                kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
-            if args.plot_orbitals_crop_c:
-                kwargs["plot_orbitals_kwargs"] = {
-                        "c0" : args.plot_orbitals_crop_c[0],
-                        "c1" : args.plot_orbitals_crop_c[1]}
+        kwargs = {opt : True for opt in args.opts}
+        if args.prim_mp2_bath_tol_occ:
+            kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
+        if args.prim_mp2_bath_tol_vir:
+            kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
+        if args.plot_orbitals_crop_c:
+            kwargs["plot_orbitals_kwargs"] = {
+                    "c0" : args.plot_orbitals_crop_c[0],
+                    "c1" : args.plot_orbitals_crop_c[1]}
 
-            ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
-                bath_type=args.bath_type, bath_tol=btol, mp2_correction=args.mp2_correction, **kwargs)
+        ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
+            bno_threshold=args.bno_threshold, mp2_correction=args.mp2_correction, **kwargs)
 
-            # Define atomic fragments, first argument is atom index
-            if args.system == "diamond":
-                ccx.make_atom_cluster(0, symmetry_factor=2)
-            elif args.system == "graphite":
-                ccx.make_atom_cluster(0, symmetry_factor=2)
-                ccx.make_atom_cluster(1, symmetry_factor=2)
-            elif args.system == "graphene":
-                #for ix in range(2):
-                #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
-                if ncells % 2 == 0:
-                    nx, ny = args.supercell[:2]
-                    ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
-                else:
-                    ix = ncells-1    # Make cluster in center
-                ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
-            elif args.system == "perovskite":
-                weights = args.bath_tol_fragment_weight
-                # Overwrites ccx.bath_tol per cluster
-                if weights is not None:
-                    ccx.make_atom_cluster(0, bath_tol=weights[0]*btol)
-                    ccx.make_atom_cluster(1, bath_tol=weights[1]*btol)
-                    ccx.make_atom_cluster(2, symmetry_factor=3, bath_tol=weights[2]*btol)
-                else:
-                    ccx.make_atom_cluster(0)
-                    ccx.make_atom_cluster(1)
-                    ccx.make_atom_cluster(2, symmetry_factor=3)
+        # Define atomic fragments, first argument is atom index
+        if args.system == "diamond":
+            ccx.make_atom_cluster(0, symmetry_factor=2)
+        elif args.system == "graphite":
+            ccx.make_atom_cluster(0, symmetry_factor=2)
+            ccx.make_atom_cluster(1, symmetry_factor=2)
+        elif args.system == "graphene":
+            #for ix in range(2):
+            #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
+            if ncells % 2 == 0:
+                nx, ny = args.supercell[:2]
+                ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
             else:
-                raise SystemError()
+                ix = ncells-1    # Make cluster in center
+            ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
+        elif args.system == "perovskite":
+            ccx.make_atom_cluster(0)
+            # Ti needs larger threshold
+            ccx.make_atom_cluster(1, bno_threshold_factor=10)
+            ccx.make_atom_cluster(2, symmetry_factor=3)
 
-            ccx.kernel()
+            #weights = args.bath_tol_fragment_weight
+            ## Overwrites ccx.bath_tol per cluster
+            #if weights is not None:
+            #    ccx.make_atom_cluster(0, bath_tol=weights[0]*btol)
+            #    ccx.make_atom_cluster(1, bath_tol=weights[1]*btol)
+            #    ccx.make_atom_cluster(2, symmetry_factor=3, bath_tol=weights[2]*btol)
+            #else:
+            #    ccx.make_atom_cluster(0)
+            #    ccx.make_atom_cluster(1)
+            #    ccx.make_atom_cluster(2, symmetry_factor=3)
+        else:
+            raise SystemError()
 
-            # Save energies
-            energies["ccsd"].append(ccx.e_tot)
-            energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2))
-            if args.solver == "CCSD(T)":
-                energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t))
-                energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t))
+        ccx.kernel()
 
-            del ccx
+        energies["ccsd"] = ccx.get_energies()
+
+        # Save energies
+        #energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2))
+        #if args.solver == "CCSD(T)":
+        #    energies["ccsdt"].append((ccx.e_tot + ccx.e_pert_t))
+        #    energies["ccsdt-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2 + ccx.e_pert_t))
+
+        del ccx
 
     if args.run_hf: del mf
     del cell
@@ -551,7 +559,7 @@ for i, a in enumerate(args.lattice_consts):
     # Write energies to files
     if MPI_rank == 0:
         for key, val in energies.items():
-            if val:
+            if len(val) > 0:
                 fname = "%s.txt" % key
                 log.info("Writing to file %s", fname)
                 with open(fname, "a") as f:

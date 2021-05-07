@@ -42,7 +42,7 @@ class Cluster:
             solver="CCSD",
             # Bath
             bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4, bath_energy_tol=None,
-            bno_threshold=None,
+            bno_threshold=None, bno_threshold_factor=1,
             **kwargs):
         """
         Parameters
@@ -110,7 +110,11 @@ class Cluster:
         assert len(self.bath_tol) == 2
         assert len(self.bath_energy_tol) == 2
 
-        self.bno_threshold = bno_threshold or self.base.bno_threshold
+        # Bath natural orbital (BNO) threshold
+        if bno_threshold is None:
+            bno_threshold = self.base.bno_threshold
+        assert len(bno_threshold) == len(self.base.bno_threshold)
+        self.bno_threshold = bno_threshold_factor*np.asarray(bno_threshold)
 
         # Other options from kwargs:
         self.solver_options = kwargs.get("solver_options", {})
@@ -215,7 +219,8 @@ class Cluster:
         self.n_no_occ = self.n_no_vir = None
 
         # Save correlation energies for different BNO thresholds
-        self.e_corrs = {}
+        #self.e_corrs = {}
+        self.e_corrs = len(self.bno_threshold)*[None]
 
         self.iteration = 0
 
@@ -280,8 +285,10 @@ class Cluster:
     @property
     def e_corr(self):
         """Best guess for correlation energy, using the lowest BNO threshold."""
-        key = min(list(self.e_corrs.keys()))
-        return self.e_corrs[key]
+        #key = min(list(self.e_corrs.keys()))
+        #return self.e_corrs[key]
+        idx = np.argmin(self.bno_threshold)
+        return self.e_corrs[idx]
 
     def loop_clusters(self, exclude_self=False):
         """Loop over all clusters."""
@@ -719,8 +726,9 @@ class Cluster:
             log.info("***************************************")
             log.changeIndentLevel(1)
             e_corr = self.run_bno_threshold(solver, bno_thr)
-            log.info("E(corr) for BNO threshold= %.1e :  %-16.8g Ha", bno_thr, e_corr)
-            self.e_corrs[bno_thr] = e_corr
+            log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)
+            #self.e_corrs[bno_thr] = e_corr
+            self.e_corrs[icalc] = e_corr
             log.changeIndentLevel(-1)
 
 
@@ -734,11 +742,11 @@ class Cluster:
         if n_bno > 0:
             log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
         else:
-            log.info(fmt[:13], 0)
+            log.info(fmt[:13], "Bath", 0)
         if n_rest > 0:
             log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
         else:
-            log.info(fmt[:13], 0)
+            log.info(fmt[:13], "Rest", 0)
 
         c_bno, c_rest = np.hsplit(c_no, [n_bno])
         return c_bno, c_rest

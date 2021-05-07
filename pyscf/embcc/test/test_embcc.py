@@ -92,11 +92,14 @@ def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
     kmf.kernel()
 
     kcc = pyscf.embcc.EmbCC(kmf)
-    kcc.make_atom_cluster(0, symmetry_factor=2)
+    kcc.make_atom_cluster(0, symmetry_factor=1)
+    kcc.make_atom_cluster(1, symmetry_factor=1)
     t0 = timer()
     kcc.kernel()
     print("Time for k-EmbCC= %.3f" % (timer()-t0))
     print("k-EmbCC E= %16.8g" % kcc.e_tot)
+    energies = kcc.get_energies()
+    print(energies)
     if EXPECTED:
         assert np.isclose(kcc.e_tot, EXPECTED)
 
