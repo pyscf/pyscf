@@ -87,11 +87,11 @@ def get_arguments():
     parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
     parser.add_argument("--prim-mp2-bath-tol-vir", type=float, default=False)
     # Other
-    parser.add_argument("--dft-xc", nargs="*", default=[])
     parser.add_argument("--run-hf", type=int, default=1)
     parser.add_argument("--run-embcc", type=int, default=1)
 
     # Benchmark
+    parser.add_argument("--dft-xc", nargs="*", default=[])
     parser.add_argument("--canonical-mp2", action="store_true", help="Perform canonical MP2 calculation.")
     parser.add_argument("--canonical-ccsd", action="store_true", help="Perform canonical CCSD calculation.")
 
@@ -253,13 +253,13 @@ def pop_analysis(mf, filename=None, mode="a"):
 
 def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_early=False):
     if kpts is None:
-        if xc.lower() == "hf":
+        if xc is None or xc.lower() == "hf":
             mf = pyscf.pbc.scf.RHF(cell)
         else:
             mf = pyscf.pbc.dft.RKS(cell)
             mf.xc = xc
     else:
-        if xc.lower() == "hf":
+        if xc is None or xc.lower() == "hf":
             mf = pyscf.pbc.scf.KRHF(cell, kpts)
         else:
             mf = pyscf.pbc.dft.KRKS(cell, kpts)
@@ -364,8 +364,14 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
 
     return mf
 
-def run_benchmarks(mf, args, ncells):
+def run_benchmarks(a, cell, mf, kpts, args, ncells):
     energies = {}
+
+    # DFT
+    for xc in args.dft_xc:
+        dft = run_mf(a, cell, args, kpts=kpts, xc=xc)
+        energies[xc] = [dft.e_tot]
+
     # Canonical MP2
     if args.canonical_mp2:
         import pyscf.pbc.mp
@@ -451,19 +457,8 @@ for i, a in enumerate(args.lattice_consts):
     # Mean-field
     if args.run_hf:
         mf = run_mf(a, cell, args, kpts=kpts, dm_init=dm_init)
-
-    # Reuse DF
-    #df = None
-    for xc in args.dft_xc:
-        dft = run_mf(a, cell, args, kpts=kpts, xc=xc)
-        #dft = run_mf(a, cell, args, xc=xc, df=df)
-        #df = dft.with_df
-        energies[xc] = [dft.e_tot]
-
-        # Population analysis
-        if False:
-            dft = unfold_mf(dft, args, unfold_j3c=False)
-            pop_analysis(dft, filename="pop-%s-%.2f.txt" % (xc, a))
+    else:
+        mf = None
 
     if args.run_hf:
         with open("mo-energies.txt", "a") as f:
@@ -474,16 +469,18 @@ for i, a in enumerate(args.lattice_consts):
                     np.savetxt(f, mok, fmt="%.10e", header="MO energies at a=%.2f kpt= %d" % (a, k))
 
         #    np.savetxt(f, np.asarray(mf.mo_energy).T, fmt="%.10e", header="MO energies at a=%.2f" % a)
-        if args.supercell is not None:
-            ncells = np.product(args.supercell)
-        elif args.k_points is not None:
-            ncells = np.product(args.k_points)
-        else:
-            ncells = 1
         energies["hf"] = [mf.e_tot]
 
-    # Post-HF benchmarks
-    energies.update(run_benchmarks(mf, args, ncells))
+    if args.supercell is not None:
+        ncells = np.product(args.supercell)
+    elif args.k_points is not None:
+        ncells = np.product(args.k_points)
+    else:
+        ncells = 1
+
+
+    # DFT and Post-HF benchmarks
+    energies.update(run_benchmarks(a, cell, mf, kpts, args, ncells))
 
     if args.run_embcc:
         energies["ccsd"] = []

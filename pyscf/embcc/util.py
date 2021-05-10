@@ -128,7 +128,8 @@ def orthogonalize_mo(c, s, tol=1e-6):
     # Check orthogonality within tol
     nonorth = abs(chi_out - np.eye(chi_out.shape[-1])).max()
     if tol is not None and nonorth > tol:
-        raise RuntimeError("ERROR: Orbital non-orthogonality= %.3e" % nonorth)
+        #raise RuntimeError("ERROR: Orbital non-orthogonality= %.3e" % nonorth)
+        log.error("ERROR: Orbital non-orthogonality= %.1e", nonorth)
 
     return c_out
 

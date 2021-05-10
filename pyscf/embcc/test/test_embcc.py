@@ -41,10 +41,10 @@ def make_diamond(a, atoms=["C1", "C2"], supercell=False):
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
-    cell.basis = "gth-dzv"
+    cell.basis = "gth-tzvp"
     cell.pseudo = "gth-pade"
-    cell.precision = 1e-5
-    cell.verbose = 0
+    cell.precision = 1e-8
+    cell.verbose = 10
     cell.build()
     if supercell:
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
@@ -81,7 +81,9 @@ def test_helium(EXPECTED=-22.8671, kmesh=[2,2,2]):
 
 def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
 
-    a = 3.5
+    #a = 3.5
+    a = 3.2
+    #a = 2.5
     ncells = np.product(kmesh)
 
     # k-point calculation
@@ -91,15 +93,13 @@ def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
     kmf = kmf.density_fit()
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf)
-    kcc.make_atom_cluster(0, symmetry_factor=1)
-    kcc.make_atom_cluster(1, symmetry_factor=1)
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=1e-5)
+    kcc.make_atom_cluster(0, symmetry_factor=2)
+    #kcc.make_atom_cluster(1, symmetry_factor=1)
     t0 = timer()
     kcc.kernel()
     print("Time for k-EmbCC= %.3f" % (timer()-t0))
     print("k-EmbCC E= %16.8g" % kcc.e_tot)
-    energies = kcc.get_energies()
-    print(energies)
     if EXPECTED:
         assert np.isclose(kcc.e_tot, EXPECTED)
 
@@ -194,7 +194,7 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 def run_test():
     #test_helium()
     #test_helium(kmesh=[2,1,1])
-    test_diamond_kpts()
+    test_diamond_kpts(kmesh=[2,2,2])
     #test_diamond(-11.138309)
     #test_diamond(-11.164555, bath_tol=1e-6)
     #test_diamond(-11.164555, bno_threshold=1e-6)

@@ -141,7 +141,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     t0 = timer()
     j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov)
     t_trafo = (timer()-t0)
-    # Composite auxiliary index: Rl -> L
+    # Composite auxiliary index: R,l -> L
     j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
     if not only_ovov:
         j3c_oo = j3c_oo.reshape(nk*naux, nocc, nocc)
@@ -150,16 +150,62 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     # Contract Lij,Lkl->ijkl
     # TODO: Parallelize in C
     t0 = timer()
-    eris = {"ovov" : np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))}
-    if not only_ovov:
-        eris["oooo"] = np.tensordot(j3c_oo, j3c_oo, axes=(0, 0))
-        eris["ovoo"] = np.tensordot(j3c_ov, j3c_oo, axes=(0, 0))
-        eris["oovv"] = np.tensordot(j3c_oo, j3c_vv, axes=(0, 0))
-        eris["ovvo"] = np.tensordot(j3c_ov, j3c_ov.transpose(0, 2, 1), axes=(0, 0))
-        eris["ovvv"] = np.tensordot(j3c_ov, j3c_vv, axes=(0, 0))
-        eris["vvvv"] = np.tensordot(j3c_vv, j3c_vv, axes=(0, 0))
+    eris = {}
+
+    make_real = True
+    if make_real:
+        if not only_ovov:
+            eris["vvvv"] = np.tensordot(j3c_vv, j3c_vv, axes=(0, 0))
+            eris["ovvv"] = np.tensordot(j3c_ov, j3c_vv, axes=(0, 0))
+            eris["oovv"] = np.tensordot(j3c_oo, j3c_vv, axes=(0, 0))
+        del j3c_vv
+        eris = {"ovov" : np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))}
+        if not only_ovov:
+            eris["ovoo"] = np.tensordot(j3c_ov, j3c_oo, axes=(0, 0))
+            eris["ovvo"] = np.tensordot(j3c_ov, j3c_ov.transpose(0, 2, 1), axes=(0, 0))
+            del j3c_ov
+            eris["oooo"] = np.tensordot(j3c_oo, j3c_oo, axes=(0, 0))
+            del j3c_oo
+
+    # TEST: Do not make real
+    else:
+        j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=False)
+        t_trafo = (timer()-t0)
+        # Composite auxiliary index: R,l -> L
+        j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
+        if not only_ovov:
+            j3c_oo = j3c_oo.reshape(nk*naux, nocc, nocc)
+            j3c_vv = j3c_vv.reshape(nk*naux, nvir, nvir)
+
+        # Contract Lij,Lkl->ijkl
+        # TODO: Parallelize in C
+        erisz = {"ovov" : np.tensordot(j3c_ov.conj(), j3c_ov, axes=(0, 0))}
+        if not only_ovov:
+            erisz["oooo"] = np.tensordot(j3c_oo.conj(), j3c_oo, axes=(0, 0))
+            erisz["ovoo"] = np.tensordot(j3c_ov.conj(), j3c_oo, axes=(0, 0))
+            erisz["oovv"] = np.tensordot(j3c_oo.conj(), j3c_vv, axes=(0, 0))
+            erisz["ovvo"] = np.tensordot(j3c_ov.conj(), j3c_ov.transpose(0, 2, 1), axes=(0, 0))
+            erisz["ovvv"] = np.tensordot(j3c_ov.conj(), j3c_vv, axes=(0, 0))
+            erisz["vvvv"] = np.tensordot(j3c_vv.conj(), j3c_vv, axes=(0, 0))
+        log.debug("Timings for kAO->GMO [s]: trafo= %.2f contract= %.2f", t_trafo, t_contract)
+
+        for key in list(erisz.keys()):
+            inorm = np.linalg.norm(erisz[key].imag)
+            imax = abs(erisz[key].imag).max()
+            log.debug("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], inorm, imax)
+            erisz[key] = erisz[key].real
+
+        # Difference to above
+        for key, val in erisz.items():
+            delta = (val - eris[key])
+            log.debug("delta(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], np.linalg.norm(delta), abs(delta).max())
+
+        del eris
+        eris = erisz
+
     t_contract = (timer()-t0)
     log.debug("Timings for kAO->GMO [s]: trafo= %.2f contract= %.2f", t_trafo, t_contract)
+
 
     return eris
 
@@ -224,6 +270,8 @@ class ThreeCenterInts:
                         blk = np.s_[blk0:blk0+blksize]
                         blk0 += blksize
                         j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
+                    if blk0 != self.naux:
+                        log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
 
         # Can access array directly
         #if isinstance(self.df, pyscf.pbc.df.df_incore.IncoreGDF):
@@ -278,12 +326,9 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
     cell, kpts, nk, naux = ints3c.cell, ints3c.kpts, ints3c.nk, ints3c.naux
     nao = cell.nao_nr()
     t0 = timer()
-    kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
+    #kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
+    kconserv = kpts_helper.get_kconserv(cell, kpts, n=2)
     log.debug("Time to make kconserv: %.2f", timer()-t0)
-    t0 = timer()
-    kconserv2 = kpts_helper.get_kconserv(cell, kpts, n=2)
-    log.debug("Time to make kconserv: %.2f", timer()-t0)
-    log.debug("kconserv close? %r", np.allclose(kconserv, kconserv2))
 
     j3c_ov = np.zeros((nk, naux, nocc, nvir), dtype=complex)
     if not only_ov:
@@ -359,25 +404,28 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
         phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
         j3c_ov = np.tensordot(phase, j3c_ov, axes=1)
         if j3c_ov.size > 0:
-            imag = abs(j3c_ov.imag).max()
-            if imag > 1e-5:
-                log.warning("WARNING: max|Im(j3c_ov)|= %.2e", imag)
+            inorm = np.linalg.norm(j3c_ov.imag)
+            imax = abs(j3c_ov.imag).max()
+            if max(inorm, imax) > 1e-5:
+                log.warning("WARNING: Im(L|ov):  norm= %.2e  max= %.2e", inorm, imax)
             else:
-                log.debug("max|Im(j3c_ov)|= %.2e", imag)
+                log.debug("Im(L|ov):  norm= %.2e  max= %.2e", inorm, imax)
         j3c_ov = j3c_ov.real
         if not only_ov:
             j3c_oo = np.tensordot(phase, j3c_oo, axes=1)
             j3c_vv = np.tensordot(phase, j3c_vv, axes=1)
-            imag = abs(j3c_oo.imag).max()
-            if imag > 1e-5:
-                log.warning("WARNING: max|Im(j3c_oo)|= %.2e", imag)
+            inorm = np.linalg.norm(j3c_oo.imag)
+            imax = abs(j3c_oo.imag).max()
+            if max(inorm, imax) > 1e-5:
+                log.warning("WARNING: Im(L|oo):  norm= %.2e  max= %.2e", inorm, imax)
             else:
-                log.debug("max|Im(j3c_oo)|= %.2e", imag)
-            imag = abs(j3c_vv.imag).max()
-            if imag > 1e-5:
-                log.warning("WARNING: max|Im(j3c_vv)|= %.2e", imag)
+                log.debug("Im(L|oo):  norm= %.2e  max= %.2e", inorm, imax)
+            inorm = np.linalg.norm(j3c_vv.imag)
+            imax = abs(j3c_vv.imag).max()
+            if max(inorm, imax) > 1e-5:
+                log.warning("WARNING: Im(L|vv):  norm= %.2e  max= %.2e", inorm, imax)
             else:
-                log.debug("max|Im(j3c_vv)|= %.2e", imag)
+                log.debug("Im(L|vv):  norm= %.2e  max= %.2e", inorm, imax)
             j3c_oo = j3c_oo.real
             j3c_vv = j3c_vv.real
         log.debug("Time to rotate to real: %.2f", timer()-t0)
