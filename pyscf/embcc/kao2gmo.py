@@ -149,26 +149,27 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
 
     # Contract Lij,Lkl->ijkl
     # TODO: Parallelize in C
-    t0 = timer()
     eris = {}
-
     make_real = True
     if make_real:
+        t0 = timer()
         if not only_ovov:
             eris["vvvv"] = np.tensordot(j3c_vv, j3c_vv, axes=(0, 0))
             eris["ovvv"] = np.tensordot(j3c_ov, j3c_vv, axes=(0, 0))
             eris["oovv"] = np.tensordot(j3c_oo, j3c_vv, axes=(0, 0))
         del j3c_vv
-        eris = {"ovov" : np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))}
+        eris["ovov"] = np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))
         if not only_ovov:
             eris["ovoo"] = np.tensordot(j3c_ov, j3c_oo, axes=(0, 0))
             eris["ovvo"] = np.tensordot(j3c_ov, j3c_ov.transpose(0, 2, 1), axes=(0, 0))
             del j3c_ov
             eris["oooo"] = np.tensordot(j3c_oo, j3c_oo, axes=(0, 0))
             del j3c_oo
+        t_contract = (timer()-t0)
 
     # TEST: Do not make real
     else:
+        t0 = timer()
         j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=False)
         t_trafo = (timer()-t0)
         # Composite auxiliary index: R,l -> L
@@ -179,15 +180,21 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
 
         # Contract Lij,Lkl->ijkl
         # TODO: Parallelize in C
-        erisz = {"ovov" : np.tensordot(j3c_ov.conj(), j3c_ov, axes=(0, 0))}
+        t0 = timer()
+        erisz = {}
         if not only_ovov:
-            erisz["oooo"] = np.tensordot(j3c_oo.conj(), j3c_oo, axes=(0, 0))
-            erisz["ovoo"] = np.tensordot(j3c_ov.conj(), j3c_oo, axes=(0, 0))
-            erisz["oovv"] = np.tensordot(j3c_oo.conj(), j3c_vv, axes=(0, 0))
-            erisz["ovvo"] = np.tensordot(j3c_ov.conj(), j3c_ov.transpose(0, 2, 1), axes=(0, 0))
-            erisz["ovvv"] = np.tensordot(j3c_ov.conj(), j3c_vv, axes=(0, 0))
             erisz["vvvv"] = np.tensordot(j3c_vv.conj(), j3c_vv, axes=(0, 0))
-        log.debug("Timings for kAO->GMO [s]: trafo= %.2f contract= %.2f", t_trafo, t_contract)
+            erisz["ovvv"] = np.tensordot(j3c_ov.conj(), j3c_vv, axes=(0, 0))
+            erisz["oovv"] = np.tensordot(j3c_oo.conj(), j3c_vv, axes=(0, 0))
+        del j3c_vv
+        erisz["ovov"] = np.tensordot(j3c_ov.conj(), j3c_ov, axes=(0, 0))
+        if not only_ovov:
+            erisz["ovvo"] = np.tensordot(j3c_ov.conj(), j3c_ov.transpose(0, 2, 1), axes=(0, 0))
+            erisz["ovoo"] = np.tensordot(j3c_ov.conj(), j3c_oo, axes=(0, 0))
+            del j3c_ov
+            erisz["oooo"] = np.tensordot(j3c_oo.conj(), j3c_oo, axes=(0, 0))
+            del j3c_oo
+        t_contract = (timer()-t0)
 
         for key in list(erisz.keys()):
             inorm = np.linalg.norm(erisz[key].imag)
@@ -203,9 +210,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
         del eris
         eris = erisz
 
-    t_contract = (timer()-t0)
     log.debug("Timings for kAO->GMO [s]: trafo= %.2f contract= %.2f", t_trafo, t_contract)
-
 
     return eris
 
