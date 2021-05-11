@@ -147,8 +147,66 @@ class VHFOpt(object):
         return numpy.ctypeslib.as_array(data, shape=shape)
     dm_cond = property(get_dm_cond)
 
+
+class SGXOpt(VHFOpt):
+    def __init__(self, mol, intor=None,
+                 prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+        super(SGXOpt, self).__init__(mol, intor, prescreen, qcondname, dmcondname)
+        self.is_allocd = False
+
+    def set_dm(self, dm, atm, bas, env):
+        if self._dmcondname is not None:
+            c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+            c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+            c_env = numpy.asarray(env, dtype=numpy.double, order='C')
+            natm = ctypes.c_int(c_atm.shape[0])
+            nbas = ctypes.c_int(c_bas.shape[0])
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+                n_dm = 1
+                ngrids = dm.shape[0]
+            else:
+                n_dm = len(dm)
+                ngrids = dm.shape[1]
+            dm = numpy.asarray(dm, order='C')
+            ao_loc = make_loc(c_bas, self._intor)
+            if isinstance(self._dmcondname, ctypes._CFuncPtr):
+                fsetdm = self._dmcondname
+            else:
+                fsetdm = getattr(libcvhf, self._dmcondname)
+            if self._dmcondname == 'SGXsetnr_direct_scf_dm':
+                fsetdm(self._this,
+                       dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+                       ao_loc.ctypes.data_as(ctypes.c_void_p),
+                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                       c_env.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_int(ngrids),
+                       ctypes.c_int(0 if self.is_allocd else 1))
+                self.ngrids = ngrids
+            else:
+                fsetdm(self._this,
+                       dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+                       ao_loc.ctypes.data_as(ctypes.c_void_p),
+                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                       c_env.ctypes.data_as(ctypes.c_void_p))
+
+    def get_dm_cond(self):
+        '''Return an array associated to dm_cond. Contents of dm_cond can be
+        modified through this array
+        '''
+        nbas = self._this.contents.nbas
+        shape = (nbas, self.ngrids)
+        data = ctypes.cast(self._this.contents.dm_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    dm_cond = property(get_dm_cond)
+
+
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),
+                ('ngrids', ctypes.c_int),
+                ('pscreen', ctypes.c_int),
                 ('_padding', ctypes.c_int),
                 ('direct_scf_cutoff', ctypes.c_double),
                 ('q_cond', ctypes.c_void_p),

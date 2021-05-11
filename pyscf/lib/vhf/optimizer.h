@@ -20,6 +20,8 @@
 #define HAVE_DEFINED_CVHFOPT_H
 typedef struct CVHFOpt_struct {
     int nbas;
+    int ngrids;
+    int pscreen;
     int _padding;
     double direct_scf_cutoff;
     double *q_cond;
