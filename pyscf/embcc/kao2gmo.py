@@ -82,7 +82,7 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     return eris
 
 
-def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
+def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=False):
     """Make supercell ERIs from k-point sampled, density-fitted three-center integrals.
 
     Arguments
@@ -139,7 +139,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
     ck_o = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,o]) / np.power(nk, 0.25)
     ck_v = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,v]) / np.power(nk, 0.25)
     t0 = timer()
-    j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov)
+    j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=real_j3c)
     t_trafo = (timer()-t0)
     # Composite auxiliary index: R,l -> L
     j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
@@ -148,69 +148,36 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False):
         j3c_vv = j3c_vv.reshape(nk*naux, nvir, nvir)
 
     # Contract Lij,Lkl->ijkl
-    # TODO: Parallelize in C
+    # TODO: Parallelize in C / numba?
+    t0 = timer()
     eris = {}
-    make_real = True
-    if make_real:
-        t0 = timer()
-        if not only_ovov:
-            eris["vvvv"] = np.tensordot(j3c_vv, j3c_vv, axes=(0, 0))
-            eris["ovvv"] = np.tensordot(j3c_ov, j3c_vv, axes=(0, 0))
-            eris["oovv"] = np.tensordot(j3c_oo, j3c_vv, axes=(0, 0))
+    contract = lambda l, r : np.tensordot(l.conj(), r, axes=(0, 0))
+    if not only_ovov:
+        eris["vvvv"] = contract(j3c_vv, j3c_vv)
+        eris["ovvv"] = contract(j3c_ov, j3c_vv)
+        eris["oovv"] = contract(j3c_oo, j3c_vv)
         del j3c_vv
-        eris["ovov"] = np.tensordot(j3c_ov, j3c_ov, axes=(0, 0))
-        if not only_ovov:
-            eris["ovoo"] = np.tensordot(j3c_ov, j3c_oo, axes=(0, 0))
-            eris["ovvo"] = np.tensordot(j3c_ov, j3c_ov.transpose(0, 2, 1), axes=(0, 0))
-            del j3c_ov
-            eris["oooo"] = np.tensordot(j3c_oo, j3c_oo, axes=(0, 0))
-            del j3c_oo
-        t_contract = (timer()-t0)
+    eris["ovov"] = contract(j3c_ov, j3c_ov)
+    if not only_ovov:
+        eris["ovvo"] = contract(j3c_ov, j3c_ov.transpose(0, 2, 1))
+        eris["ovoo"] = contract(j3c_ov, j3c_oo)
+        del j3c_ov
+        eris["oooo"] = contract(j3c_oo.conj(), j3c_oo)
+        del j3c_oo
+    t_contract = (timer()-t0)
 
-    # TEST: Do not make real
-    else:
-        t0 = timer()
-        j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=False)
-        t_trafo = (timer()-t0)
-        # Composite auxiliary index: R,l -> L
-        j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
-        if not only_ovov:
-            j3c_oo = j3c_oo.reshape(nk*naux, nocc, nocc)
-            j3c_vv = j3c_vv.reshape(nk*naux, nvir, nvir)
+    if not real_j3c:
+        for key in list(eris.keys()):
+            val = eris[key]
+            inorm = np.linalg.norm(val.imag)
+            imax = abs(val.imag).max()
+            if max(inorm, imax) > 1e-5:
+                log.warning("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e !", key[:2], key[2:], inorm, imax)
+            else:
+                log.debug("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], inorm, imax)
+            eris[key] = val.real
 
-        # Contract Lij,Lkl->ijkl
-        # TODO: Parallelize in C
-        t0 = timer()
-        erisz = {}
-        if not only_ovov:
-            erisz["vvvv"] = np.tensordot(j3c_vv.conj(), j3c_vv, axes=(0, 0))
-            erisz["ovvv"] = np.tensordot(j3c_ov.conj(), j3c_vv, axes=(0, 0))
-            erisz["oovv"] = np.tensordot(j3c_oo.conj(), j3c_vv, axes=(0, 0))
-        del j3c_vv
-        erisz["ovov"] = np.tensordot(j3c_ov.conj(), j3c_ov, axes=(0, 0))
-        if not only_ovov:
-            erisz["ovvo"] = np.tensordot(j3c_ov.conj(), j3c_ov.transpose(0, 2, 1), axes=(0, 0))
-            erisz["ovoo"] = np.tensordot(j3c_ov.conj(), j3c_oo, axes=(0, 0))
-            del j3c_ov
-            erisz["oooo"] = np.tensordot(j3c_oo.conj(), j3c_oo, axes=(0, 0))
-            del j3c_oo
-        t_contract = (timer()-t0)
-
-        for key in list(erisz.keys()):
-            inorm = np.linalg.norm(erisz[key].imag)
-            imax = abs(erisz[key].imag).max()
-            log.debug("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], inorm, imax)
-            erisz[key] = erisz[key].real
-
-        # Difference to above
-        for key, val in erisz.items():
-            delta = (val - eris[key])
-            log.debug("delta(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], np.linalg.norm(delta), abs(delta).max())
-
-        del eris
-        eris = erisz
-
-    log.debug("Timings for kAO->GMO [s]: trafo= %.2f contract= %.2f", t_trafo, t_contract)
+    log.debug("Timings for kAO->GMO [s]: transform= %.2f  contract= %.2f", t_trafo, t_contract)
 
     return eris
 
@@ -249,12 +216,11 @@ class ThreeCenterInts:
     def sr_loop(self, *args, **kwargs):
         return self.df.sr_loop(*args, **kwargs)
 
-    def get_array(self):
+    def get_array(self, kptsym=True):
+
         if self.values is not None:
             return self.values, None
 
-        #elif isinstance(self.df, (pyscf.pbc.df.df.GDF, pyscf.pbc.df.df_incore.IncoreGDF)):
-        #elif isinstance(self.df, pyscf.pbc.df.df.GDF):
         elif isinstance(self.df._cderi, str):
             #import h5py
             #with h5py.File(self.df._cderi) as f:
@@ -263,20 +229,49 @@ class ThreeCenterInts:
             #    log.info("h5py keys of j3c: %r", list(f["j3c"].keys()))
             #    log.info("h5py kptij: %r", list(f["j3c-kptij"].shape))
 
-            kuniq_map = None
-            j3c = np.zeros((self.nk, self.nk, self.naux, self.nao, self.nao), dtype=complex)
-            for ki in range(self.nk):
-                for kj in range(self.nk):
-                    kij = (self.kpts[ki], self.kpts[kj])
-                    blk0 = 0
-                    for lr, li, sign in self.df.sr_loop(kij, compact=False, blksize=int(1e9)):
-                        assert (sign == 1)
-                        blksize = lr.shape[0]
-                        blk = np.s_[blk0:blk0+blksize]
-                        blk0 += blksize
-                        j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
-                    if blk0 != self.naux:
-                        log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
+            if kptsym:
+                nkij = self.nk*(self.nk+1)//2
+                j3c = np.zeros((nkij, self.naux, self.nao, self.nao), dtype=complex)
+                kuniq_map = np.zeros((self.nk, self.nk), dtype=np.int)
+                kij = 0
+                for ki in range(self.nk):
+                    for kj in range(ki+1):
+                        kuniq_map[ki,kj] = kij
+                        kpts_ij = (self.kpts[ki], self.kpts[kj])
+                        blk0 = 0
+                        for lr, li, sign in self.df.sr_loop(kpts_ij, compact=False, blksize=int(1e9)):
+                            assert (sign == 1)
+                            blksize = lr.shape[0]
+                            blk = np.s_[blk0:blk0+blksize]
+                            blk0 += blksize
+                            j3c[kij,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
+                        if blk0 != self.naux:
+                            log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
+                        kij += 1
+
+                # At this point, all kj <= ki are set
+                # Here we loop over kj > ki
+                for ki in range(self.nk):
+                    for kj in range(ki+1, self.nk):
+                        kuniq_map[ki,kj] = -kuniq_map[kj,ki]
+                assert np.all(kuniq_map < nkij)
+                assert np.all(kuniq_map > -nkij)
+
+            else:
+                j3c = np.zeros((self.nk, self.nk, self.naux, self.nao, self.nao), dtype=complex)
+                kuniq_map = None
+                for ki in range(self.nk):
+                    for kj in range(self.nk):
+                        kij = (self.kpts[ki], self.kpts[kj])
+                        blk0 = 0
+                        for lr, li, sign in self.df.sr_loop(kij, compact=False, blksize=int(1e9)):
+                            assert (sign == 1)
+                            blksize = lr.shape[0]
+                            blk = np.s_[blk0:blk0+blksize]
+                            blk0 += blksize
+                            j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
+                        if blk0 != self.naux:
+                            log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
 
         # Can access array directly
         #if isinstance(self.df, pyscf.pbc.df.df_incore.IncoreGDF):

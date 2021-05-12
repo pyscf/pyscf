@@ -722,8 +722,8 @@ class Cluster:
         log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
 
         for icalc, bno_thr in enumerate(bno_threshold):
-            log.info("CALCULATION %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
-            log.info("***************************************")
+            log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
+            log.info("*******************************")
             log.changeIndentLevel(1)
             e_corr = self.run_bno_threshold(solver, bno_thr)
             log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)

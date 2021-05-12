@@ -41,7 +41,8 @@ def make_diamond(a, atoms=["C1", "C2"], supercell=False):
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
-    cell.basis = "gth-tzvp"
+    cell.basis = "gth-dzv"
+    #cell.basis = "gth-tzvp"
     cell.pseudo = "gth-pade"
     cell.precision = 1e-8
     cell.verbose = 10
@@ -195,6 +196,7 @@ def run_test():
     #test_helium()
     #test_helium(kmesh=[2,1,1])
     test_diamond_kpts(kmesh=[2,2,2])
+    #test_diamond_kpts(kmesh=[3,3,3])
     #test_diamond(-11.138309)
     #test_diamond(-11.164555, bath_tol=1e-6)
     #test_diamond(-11.164555, bno_threshold=1e-6)
