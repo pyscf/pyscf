@@ -112,7 +112,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             return mf_class.reset(self, mol)
 
         def pre_kernel(self, envs):
-            self._in_scf = True
+            if self.with_df.grids_level_i != self.with_df.grids_level_f:
+                self._in_scf = True
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
