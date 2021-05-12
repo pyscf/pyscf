@@ -121,6 +121,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     t0 = timer()
     kcc.kernel()
     print("Time for k-EmbCC= %.3f" % (timer()-t0))
+    print("N(EmbCC) = %r" % kcc.get_cluster_sizes())
     print("E(EmbCC) = %r" % kcc.get_energies())
 
 def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):

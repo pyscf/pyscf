@@ -544,6 +544,13 @@ for i, a in enumerate(args.lattice_consts):
 
         energies["ccsd"] = ccx.get_energies()
 
+        # Write cluster sizes to file
+        for x in ccx.cluster:
+            fname = "cluster-%d%s-size.txt" % (ccx.id, ccx.name)
+            val = x.n_active
+            with open(fname, "a") as f:
+                f.write(("%6.3f" + len(val)*"  %3d" + "\n") % (a, *val))
+
         # Save energies
         #energies["ccsd-dmp2"].append((ccx.e_tot + ccx.e_delta_mp2))
         #if args.solver == "CCSD(T)":

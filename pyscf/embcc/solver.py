@@ -60,14 +60,14 @@ class ClusterSolver:
         idx = list(range(self.nocc_frozen)) + list(range(nmo-self.nvir_frozen, nmo))
         return idx
 
-    def kernel(self):
+    def kernel(self, init_guess=None):
 
         if self.solver is None:
             pass
         elif self.solver == "MP2":
             self.run_mp2()
         elif self.solver in ("CCSD", "CCSD(T)"):
-            self.run_ccsd()
+            self.run_ccsd(init_guess=init_guess)
         elif self.solver == "CISD":
             # Currently not maintained
             self.run_cisd()
@@ -80,8 +80,7 @@ class ClusterSolver:
         if self.solver in ("CCSD", "CCSD(T)"):
             self.print_t_diagnostic()
 
-        log.debug("Full cluster correlation energy = %.10g htr", self.e_corr)
-
+        log.info("Full cluster E(corr)= %16.8g Ha", self.e_corr)
 
     def run_mp2(self):
         if self.base.has_pbc:
@@ -133,7 +132,7 @@ class ClusterSolver:
         self.c1 = c1/c0
         self.c2 = c2/c0
 
-    def run_ccsd(self):
+    def run_ccsd(self, init_guess=None):
         if self.base.has_pbc:
             import pyscf.pbc.cc
             cls = pyscf.pbc.cc.CCSD
@@ -151,8 +150,12 @@ class ClusterSolver:
             log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
 
         t0 = timer()
-        log.info("Running CCSD...")
-        cc.kernel(eris=self._eris)
+        if init_guess:
+            log.info("Running CCSD with initial guess for %r..." % list(init_guess.keys()))
+            cc.kernel(eris=self._eris, **init_guess)
+        else:
+            log.info("Running CCSD...")
+            cc.kernel(eris=self._eris)
         log.info("CCSD done. converged: %r", cc.converged)
         t = (timer()-t0)
         log.info("Time for CCSD: %.3f (%s)", t, get_time_string(t))

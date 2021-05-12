@@ -115,8 +115,9 @@ class Cluster:
         if bno_threshold is None:
             bno_threshold = self.base.bno_threshold
         assert len(bno_threshold) == len(self.base.bno_threshold)
+        self.bno_threshold = bno_threshold_factor*np.asarray(bno_threshold)
         # Sort so that most expensive calculation comes first (allows projecting ERIs)
-        self.bno_threshold = (bno_threshold_factor*np.asarray(bno_threshold)).sort()
+        self.bno_threshold.sort()
 
         # Other options from kwargs:
         self.solver_options = kwargs.get("solver_options", {})
@@ -223,6 +224,7 @@ class Cluster:
         # Save correlation energies for different BNO thresholds
         #self.e_corrs = {}
         self.e_corrs = len(self.bno_threshold)*[None]
+        self.n_active = len(self.bno_threshold)*[None]
 
         self.iteration = 0
 
@@ -576,14 +578,6 @@ class Cluster:
 
         return pT1, pT2
 
-    def transform_amplitudes(self, Ro, Rv, T1, T2):
-        if T1 is not None:
-            T1 = einsum("xi,ya,ia->xy", Ro, Rv, T1)
-        else:
-            T1 = None
-        T2 = einsum("xi,yj,za,wb,ijab->xyzw", Ro, Ro, Rv, Rv, T2)
-        return T1, T2
-
     def additional_bath_for_cluster(self, c_bath, c_occenv, c_virenv):
         """Add additional bath orbitals to cluster (fragment+DMET bath)."""
         if self.power1_occ_bath_tol is not False:
@@ -724,19 +718,20 @@ class Cluster:
         #self.C_virenv = C_virenv
         log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
 
-        eris = None
+        init_guess = eris = None
         for icalc, bno_thr in enumerate(bno_threshold):
             log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
             log.info("*******************************")
             log.changeIndentLevel(1)
-            e_corr, eris = self.run_bno_threshold(solver, bno_thr, eris=eris)
+            e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
             log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)
             #self.e_corrs[bno_thr] = e_corr
             self.e_corrs[icalc] = e_corr
+            self.n_active[icalc] = n_active
             log.changeIndentLevel(-1)
 
 
-    def run_bno_threshold(self, solver, bno_thr, eris=None):
+    def run_bno_threshold(self, solver, bno_thr, init_guess=None, eris=None):
         #self.e_delta_mp2 = e_delta_occ + e_delta_vir
         #log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
@@ -797,21 +792,33 @@ class Cluster:
         log.info("RUNNING %s SOLVER", solver)
         log.info((len(solver)+15)*"*")
 
+        # Use initial guess from previous calculations
+        if init_guess is not None:
+            # Projectors for occupied and virtual orbitals
+            p_occ = np.linalg.multi_dot((init_guess.pop("c_occ").T, self.base.ovlp, c_active_occ))
+            p_vir = np.linalg.multi_dot((init_guess.pop("c_vir").T, self.base.ovlp, c_active_vir))
+            t1, t2 = init_guess.pop("t1"), init_guess.pop("t2")
+            t1, t2 = helper.transform_amplitudes(t1, t2, p_occ, p_vir)
+            init_guess["t1"] = t1
+            init_guess["t2"] = t2
+
         # If superspace ERIs were calculated before, they can be transformed and used again
         if eris is not None:
-            log.debug("Projecting previous ERIs onto subspace")
             t0 = timer()
+            log.debug("Projecting previous ERIs onto subspace")
             eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.ovlp)
             log.debug("Time to project ERIs: %s", get_time_string(timer()-t0))
 
         # Create solver object
         t0 = timer()
         csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
-        csolver.kernel()
+        csolver.kernel(init_guess=init_guess)
+        log.debug("Time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
+        # ERIs and initial guess for next calculations
         eris = csolver._eris
-        log.debug("Time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
+        init_guess = {"t1" : csolver.t1, "t2" : csolver.t2, "c_occ" : c_active_occ, "c_vir" : c_active_vir}
 
         pc1, pc2 = self.get_local_amplitudes(csolver._solver, csolver.c1, csolver.c2)
         e_corr = self.get_local_energy(csolver._solver, pc1, pc2, eris=csolver._eris)
@@ -827,7 +834,7 @@ class Cluster:
         if self.opts.eom_ccsd in (True, "EA"):
             self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
 
-        return e_corr, eris
+        return e_corr, nactive, init_guess, eris
 
     def apply_bno_threshold(self, c_no, n_no, bno_thr):
         """Split natural orbitals (NO) into bath and rest."""

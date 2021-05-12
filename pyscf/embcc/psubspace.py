@@ -48,6 +48,10 @@ def project_eris(eris, c_occ, c_vir, ovlp, check_subspace=True):
     else:
         r_vir = np.eye(nvir)
 
+    # Do nothing
+    if not (transform_occ or transform_vir):
+        return eris
+
     # Check that c_occ and c_vir form a subspace of eris.mo_coeff
     # If not return None
     if check_subspace:

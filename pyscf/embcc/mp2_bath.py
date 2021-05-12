@@ -10,7 +10,7 @@ import pyscf.pbc
 import pyscf.pbc.mp
 
 from .util import *
-from .ao2mo_helper import transform_mp2_eris
+from .psubspace import transform_mp2_eris
 
 log = logging.getLogger(__name__)
 

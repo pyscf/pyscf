@@ -399,6 +399,11 @@ class EmbCC:
         return len(self.clusters)
 
     @property
+    def ncalc(self):
+        """Number of calculations in each cluster."""
+        return len(self.bno_threshold)
+
+    @property
     def e_mf(self):
         """Total mean-field energy."""
         return self.mf.e_tot/self.ncells
@@ -1120,11 +1125,17 @@ class EmbCC:
         log.info("E(tot)=  %+16.8g Ha", self.e_tot)
 
     def get_energies(self):
-        energies = np.zeros(len(self.bno_threshold))
+        energies = np.zeros(self.ncalc)
         energies[:] = self.e_mf
         for x in self.clusters:
             energies += x.e_corrs
         return energies
+
+    def get_cluster_sizes(self):
+        sizes = np.zeros((self.nclusters, self.ncalc), dtype=np.int)
+        for ix, x in enumerate(self.clusters):
+            sizes[ix] = x.n_active
+        return sizes
 
     def reset(self, mf=None, **kwargs):
         if mf:
