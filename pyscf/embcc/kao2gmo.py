@@ -131,8 +131,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=False):
     else:
         mem_j3c = nk*naux*(nocc*nvir + nocc*nocc + nvir*nvir) * 16
         mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4)*8
-    log.debug("Memory needed for kAO->GMO: temporary= %s final= %s",
-            memory_string(max(mem_j3c, mem_j3c/2+mem_eris)), memory_string(mem_eris))
+    log.debug("Memory needed for kAO->GMO: (L|ab)= %s (ij|kl)= %s", memory_string(mem_j3c), memory_string(mem_eris))
 
     # Transform: (l|ka,qb) -> (Rl|i,j)
     mo_coeff = mo_coeff.reshape(nk, nao, nmo)

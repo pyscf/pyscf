@@ -21,11 +21,12 @@ from pyscf.pbc.tools import cubegen
 from .solver import ClusterSolver
 from .util import *
 from .dmet_bath import make_dmet_bath, project_ref_orbitals
-from .bath import *
+#from .bath import *
 from .mp2_bath import make_mp2_bno
 from .energy import *
 from . import ccsd_t
 from . import helper
+from . import psubspace
 
 __all__ = [
         "Cluster",
@@ -114,7 +115,8 @@ class Cluster:
         if bno_threshold is None:
             bno_threshold = self.base.bno_threshold
         assert len(bno_threshold) == len(self.base.bno_threshold)
-        self.bno_threshold = bno_threshold_factor*np.asarray(bno_threshold)
+        # Sort so that most expensive calculation comes first (allows projecting ERIs)
+        self.bno_threshold = (bno_threshold_factor*np.asarray(bno_threshold)).sort()
 
         # Other options from kwargs:
         self.solver_options = kwargs.get("solver_options", {})
@@ -334,16 +336,17 @@ class Cluster:
         return self.symmetry_factor
 
     # Register frunctions of bath.py as methods
-    project_ref_orbitals = project_ref_orbitals
     make_dmet_bath = make_dmet_bath
-    make_bath = make_bath
-    make_local_bath = make_local_bath
-    make_mf_bath = make_mf_bath
-    make_mp2_bath = make_mp2_bath
-    get_mp2_correction = get_mp2_correction
-    transform_mp2_eris = transform_mp2_eris
-    run_mp2 = run_mp2
-    run_mp2_general = run_mp2_general
+    # OLD
+    #project_ref_orbitals = project_ref_orbitals
+    #make_bath = make_bath
+    #make_local_bath = make_local_bath
+    #make_mf_bath = make_mf_bath
+    #make_mp2_bath = make_mp2_bath
+    #get_mp2_correction = get_mp2_correction
+    #transform_mp2_eris = transform_mp2_eris
+    #run_mp2 = run_mp2
+    #run_mp2_general = run_mp2_general
 
     # Register frunctions of energy.py as methods
     get_local_amplitudes = get_local_amplitudes
@@ -721,38 +724,19 @@ class Cluster:
         #self.C_virenv = C_virenv
         log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
 
+        eris = None
         for icalc, bno_thr in enumerate(bno_threshold):
             log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
             log.info("*******************************")
             log.changeIndentLevel(1)
-            e_corr = self.run_bno_threshold(solver, bno_thr)
+            e_corr, eris = self.run_bno_threshold(solver, bno_thr, eris=eris)
             log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)
             #self.e_corrs[bno_thr] = e_corr
             self.e_corrs[icalc] = e_corr
             log.changeIndentLevel(-1)
 
 
-    def apply_bno_threshold(self, c_no, n_no, bno_thr):
-        """Split natural orbitals (NO) into bath and rest."""
-        n_bno = sum(n_no >= bno_thr)
-        n_rest = len(n_no)-n_bno
-        n_in, n_cut = np.split(n_no, [n_bno])
-        # Logging
-        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %6.2f %%)"
-        if n_bno > 0:
-            log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
-        else:
-            log.info(fmt[:13], "Bath", 0)
-        if n_rest > 0:
-            log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
-        else:
-            log.info(fmt[:13], "Rest", 0)
-
-        c_bno, c_rest = np.hsplit(c_no, [n_bno])
-        return c_bno, c_rest
-
-
-    def run_bno_threshold(self, solver, bno_thr):
+    def run_bno_threshold(self, solver, bno_thr, eris=None):
         #self.e_delta_mp2 = e_delta_occ + e_delta_vir
         #log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
@@ -813,14 +797,21 @@ class Cluster:
         log.info("RUNNING %s SOLVER", solver)
         log.info((len(solver)+15)*"*")
 
+        # If superspace ERIs were calculated before, they can be transformed and used again
+        if eris is not None:
+            log.debug("Projecting previous ERIs onto subspace")
+            t0 = timer()
+            eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.ovlp)
+            log.debug("Time to project ERIs: %s", get_time_string(timer()-t0))
+
         # Create solver object
         t0 = timer()
-        log.changeIndentLevel(1)
-        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen)
+        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
         csolver.kernel()
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
-        log.debug("Wall time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
+        eris = csolver._eris
+        log.debug("Time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
 
         pc1, pc2 = self.get_local_amplitudes(csolver._solver, csolver.c1, csolver.c2)
         e_corr = self.get_local_energy(csolver._solver, pc1, pc2, eris=csolver._eris)
@@ -836,9 +827,26 @@ class Cluster:
         if self.opts.eom_ccsd in (True, "EA"):
             self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
 
-        log.changeIndentLevel(-1)
+        return e_corr, eris
 
-        return e_corr
+    def apply_bno_threshold(self, c_no, n_no, bno_thr):
+        """Split natural orbitals (NO) into bath and rest."""
+        n_bno = sum(n_no >= bno_thr)
+        n_rest = len(n_no)-n_bno
+        n_in, n_cut = np.split(n_no, [n_bno])
+        # Logging
+        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %6.2f %%)"
+        if n_bno > 0:
+            log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
+        else:
+            log.info(fmt[:13], "Bath", 0)
+        if n_rest > 0:
+            log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
+        else:
+            log.info(fmt[:13], "Rest", 0)
+
+        c_bno, c_rest = np.hsplit(c_no, [n_bno])
+        return c_bno, c_rest
 
 
     def pop_analysis(self, dm1, filename=None, mode="a", sig_tol=0.01):

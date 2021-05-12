@@ -104,6 +104,25 @@ def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
     if EXPECTED:
         assert np.isclose(kcc.e_tot, EXPECTED)
 
+def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2, 2, 2]):
+
+    a = 3.5
+    ncells = np.product(kmesh)
+
+    # k-point calculation
+    cell = make_diamond(a)
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold[::-1])
+    kcc.make_atom_cluster(0, symmetry_factor=2)
+    t0 = timer()
+    kcc.kernel()
+    print("Time for k-EmbCC= %.3f" % (timer()-t0))
+    print("E(EmbCC) = %r" % kcc.get_energies())
+
 def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
 
     a = 3.5
@@ -195,7 +214,8 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 def run_test():
     #test_helium()
     #test_helium(kmesh=[2,1,1])
-    test_diamond_kpts(kmesh=[2,2,2])
+    #test_diamond_kpts(kmesh=[2,2,2])
+    test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_diamond_kpts(kmesh=[3,3,3])
     #test_diamond(-11.138309)
     #test_diamond(-11.164555, bath_tol=1e-6)

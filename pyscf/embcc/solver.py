@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 class ClusterSolver:
 
-    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen):
+    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen, eris=None):
         """
 
         Arguments
@@ -29,7 +29,7 @@ class ClusterSolver:
         self.nocc_frozen = nocc_frozen
         self.nvir_frozen = nvir_frozen
         # Intermediates
-        self._eris = None
+        self._eris = eris
         self._solver = None
         # Output
         self.c1 = self.c2 = None
@@ -93,13 +93,13 @@ class ClusterSolver:
         mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         self._solver = mp2
 
-        t0 = timer()
-        eris = self.base.get_eris(mp2)
-        t = (timer()-t0)
-        log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
-        self._eris = eris
+        if self._eris is None:
+            t0 = timer()
+            self._eris = self.base.get_eris(mp2)
+            t = (timer()-t0)
+            log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
 
-        self.e_corr, self.c2 = mp2.kernel(eris=eris, hf_reference=True)
+        self.e_corr, self.c2 = mp2.kernel(eris=self._eris, hf_reference=True)
         self.converged = True
 
     def run_cisd(self):
@@ -116,7 +116,7 @@ class ClusterSolver:
         eris = ci.ao2mo()
         self._eris = eris
         t = (timer()-t0)
-        log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+        log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
 
         t0 = timer()
         log.info("Running CISD...")
@@ -144,15 +144,15 @@ class ClusterSolver:
         self._solver = cc
 
         # Integral transformation
-        t0 = timer()
-        eris = self.base.get_eris(cc)
-        t = (timer()-t0)
-        log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
-        self._eris = eris
+        if self._eris is None:
+            t0 = timer()
+            self._eris = self.base.get_eris(cc)
+            t = (timer()-t0)
+            log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
 
         t0 = timer()
         log.info("Running CCSD...")
-        cc.kernel(eris=eris)
+        cc.kernel(eris=self._eris)
         log.info("CCSD done. converged: %r", cc.converged)
         t = (timer()-t0)
         log.info("Time for CCSD: %.3f (%s)", t, get_time_string(t))
@@ -168,7 +168,7 @@ class ClusterSolver:
             try:
                 t0 = timer()
                 log.info("Making RDM1...")
-                self.dm1 = cc.make_rdm1(eris=eris, ao_repr=True)
+                self.dm1 = cc.make_rdm1(eris=self._eris, ao_repr=True)
                 log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
                 if not cc.converged_lambda:
                     log.warning("WARNING: Solution of lambda equation not converged!")
@@ -183,7 +183,7 @@ class ClusterSolver:
             log.info("Running %s-EOM-CCSD (nroots=%d)...", kind, nroots)
             eom_funcs = {"IP" : cc.ipccsd , "EA" : cc.eaccsd}
             t0 = timer()
-            e, c = eom_funcs[kind](nroots=nroots, eris=eris)
+            e, c = eom_funcs[kind](nroots=nroots, eris=self._eris)
             t = (timer()-t0)
             log.info("Time for %s-EOM-CCSD: %.3f (%s)", kind, t, get_time_string(t))
             if nroots == 1:

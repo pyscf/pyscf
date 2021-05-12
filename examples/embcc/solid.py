@@ -103,7 +103,9 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C"],
                 "ndim" : 3,
-                "lattice_consts" : np.arange(3.4, 3.8+1e-12, 0.1),
+                #"lattice_consts" : np.arange(3.4, 3.8+1e-12, 0.1),
+                # a0 ~ 3.56
+                "lattice_consts" : np.arange(3.4, 3.7+1e-12, 0.05),
                 }
     elif args.system == "graphite":
         defaults = {

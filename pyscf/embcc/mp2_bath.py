@@ -10,6 +10,7 @@ import pyscf.pbc
 import pyscf.pbc.mp
 
 from .util import *
+from .ao2mo_helper import transform_mp2_eris
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     # Reuse previously obtained integral transformation into N^2 sized quantity (rather than N^4)
     else:
         log.debug("Transforming previous eris.")
-        eris = self.transform_mp2_eris(eris, c_occ, c_vir)
+        eris = transform_mp2_eris(eris, c_occ, c_vir, ovlp=self.base.ovlp)
     t = (timer() - t0)
     log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
     assert (eris.ovov is not None)
@@ -151,46 +152,6 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     c_no = np.dot(c_env, c_no)
 
     return c_no, n_no
-
-# ================================================================================================ #
-
-def transform_mp2_eris(self, eris, c_occ, c_vir):
-    """Transform eris of kind (ov|ov) (occupied-virtual-occupied-virtual)"""
-    assert (eris is not None)
-    assert (eris.ovov is not None)
-
-    ovlp = self.base.ovlp
-    c_occ0, c_vir0 = np.hsplit(eris.mo_coeff, [eris.nocc])
-    nocc0, nvir0 = c_occ0.shape[-1], c_vir0.shape[-1]
-    nocc, nvir = c_occ.shape[-1], c_vir.shape[-1]
-
-    transform_occ = (nocc1 != nocc0 or not np.allclose(c_occ, c_occ0))
-    if transform_occ:
-        r_occ = np.linalg.multi_dot((c_occ.T, ovlp, c_occ0))
-    else:
-        r_occ = np.eye(nocc)
-    transform_vir = (nvir != nvir0 or not np.allclose(c_vir, c_vir0))
-    if transform_vir:
-        r_vir = np.linalg.multi_dot((c_vir.T, ovlp, c_vir0))
-    else:
-        r_vir = np.eye(nvir)
-    r_all = np.block([
-        [r_occ, np.zeros((nocc, nvir0))],
-        [np.zeros((nvir, nocc0)), r_vir]])
-
-    # eris.ovov may be hfd5 dataset on disk -> allocate in memory with [:]
-    govov = eris.ovov[:].reshape(nocc0, nvir0, nocc0, nvir0)
-    if transform_occ and transform_vir:
-        govov = einsum("iajb,xi,ya,zj,wb->xyzw", govov, r_occ, r_vir, r_occ, r_vir)
-    elif transform_occ:
-        govov = einsum("iajb,xi,zj->xazb", govov, r_occ, r_occ)
-    elif transform_vir:
-        govov = einsum("iajb,ya,wb->iyjw", govov, r_vir, r_vir)
-    eris.ovov = govov.reshape((nocc*nvir, nocc*nvir))
-    eris.mo_coeff = np.hstack((c_occ, c_vir))
-    eris.fock = np.linalg.multi_dot((r_all, eris.fock, r_all.T))
-    eris.mo_energy = np.diag(eris.fock)
-    return eris
 
 # ================================================================================================ #
 
