@@ -289,7 +289,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
         size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
                                         cache_row_a, cache_col_a,
                                         cache_row_b, cache_col_b, sizeof(double));
-        double fvohalf[nvir*nocc];
+        double *fvohalf = malloc(sizeof(double) * nvir*nocc);
         int i;
         for (i = 0; i < nvir*nocc; i++) {
                 fvohalf[i] = fvo[i] * .5;
@@ -322,6 +322,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(fvohalf);
 }
 
 
@@ -332,7 +333,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
  *************************************************/
 static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
                        int nocca, int noccb, int nvira, int nvirb,
-                       int a, int b, int c)
+                       int a, int b, int c, double *cache1)
 {
         double *fvo = vs_ts[2];
         double *fVO = vs_ts[3];
@@ -400,9 +401,9 @@ static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
                &D2, vooo+c*nooo, &noo, t2abT+b*(size_t)nVoO+a*nOo, &noccb,
                &D1, w, &noo);
 
-        double t1aT2[nocca];
-        double fvo2[nocca];
-        double fVOhalf[noccb];
+        double *t1aT2 = cache1;
+        double *fvo2 = t1aT2 + nocca;
+        double *fVOhalf = fvo2 + nocca;
         for (i = 0; i < nocca; i++) {
                 t1aT2[i] = t1aT[b*nocca+i] * 2;
                 fvo2[i] = fvo[b*nocca+i] * 2;
@@ -468,9 +469,10 @@ static double contract6_baa(int nocca, int noccb, int nvira, int nvirb,
         double *w1 = w0 + nOoo;
         double *z0 = w1 + nOoo;
         double *z1 = v0;
+        cache1 += nOoo * 5; 
 
-        get_wv_baa(w0, v0, vs_ts, ((double **)cache)  , nocca, noccb, nvira, nvirb, a, b, c);
-        get_wv_baa(w1, v1, vs_ts, ((double **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b);
+        get_wv_baa(w0, v0, vs_ts, ((double **)cache)  , nocca, noccb, nvira, nvirb, a, b, c, cache1);
+        get_wv_baa(w1, v1, vs_ts, ((double **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b, cache1);
         permute_baa(z0, v0, nocca, noccb);
         permute_baa(z1, v1, nocca, noccb);
 
@@ -545,7 +547,8 @@ void CCuccsd_t_baa(double complex *e_tot,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1));
+        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1 +
+                                                  nocca*2+noccb*2));
         double e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
@@ -680,7 +683,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
                                         cache_row_a, cache_col_a,
                                         cache_row_b, cache_col_b,
                                         sizeof(double complex));
-        double complex fvohalf[nvir*nocc];
+        double complex *fvohalf = malloc(sizeof(double complex) * nvir*nocc);
         int i;
         for (i = 0; i < nvir*nocc; i++) {
                 fvohalf[i] = fvo[i] * .5;
@@ -714,6 +717,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(fvohalf);
 }
 
 
@@ -725,7 +729,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
 static void zget_wv_baa(double complex *w, double complex *v,
                         double complex **vs_ts, double complex **cache,
                         int nocca, int noccb, int nvira, int nvirb,
-                        int a, int b, int c)
+                        int a, int b, int c, double complex *cache1)
 {
         double complex *fvo = vs_ts[2];
         double complex *fVO = vs_ts[3];
@@ -779,9 +783,9 @@ static void zget_wv_baa(double complex *w, double complex *v,
                &D2, vooo+c*nooo, &noo, t2abT+b*(size_t)nVoO+a*nOo, &noccb,
                &D1, w, &noo);
 
-        double complex t1aT2[nocca];
-        double complex fvo2[nocca];
-        double complex fVOhalf[noccb];
+        double complex *t1aT2 = cache1;
+        double complex *fvo2 = t1aT2 + nocca;
+        double complex *fVOhalf = fvo2 + nocca;
         for (i = 0; i < nocca; i++) {
                 t1aT2[i] = t1aT[b*nocca+i] * 2;
                 fvo2[i] = fvo[b*nocca+i] * 2;
@@ -850,9 +854,10 @@ zcontract6_baa(int nocca, int noccb, int nvira, int nvirb,
         double complex *w1 = w0 + nOoo;
         double complex *z0 = w1 + nOoo;
         double complex *z1 = v0;
+        cache1 += nOoo * 5;
 
-        zget_wv_baa(w0, v0, vs_ts, ((double complex **)cache)  , nocca, noccb, nvira, nvirb, a, b, c);
-        zget_wv_baa(w1, v1, vs_ts, ((double complex **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b);
+        zget_wv_baa(w0, v0, vs_ts, ((double complex **)cache)  , nocca, noccb, nvira, nvirb, a, b, c, cache1);
+        zget_wv_baa(w1, v1, vs_ts, ((double complex **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b, cache1);
         zpermute_baa(z0, v0, nocca, noccb);
         zpermute_baa(z1, v1, nocca, noccb);
 
@@ -897,7 +902,8 @@ void CCuccsd_t_zbaa(double complex *e_tot,
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
-                                        (noccb*nocca*nocca*5+1));
+                                        (noccb*nocca*nocca*5+1 +
+                                         nocca*2+noccb*2));
         double complex e = 0;
 #pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
