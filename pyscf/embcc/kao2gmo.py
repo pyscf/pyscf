@@ -75,6 +75,14 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
         for i in range(eris.nocc):
             eris.fock[i,i] += madelung
 
+    # TEST: compare real_j3c = True and False
+    #g_r = gdf_to_eris(gdf, mo_coeff, cm.nocc, only_ovov=only_ovov, real_j3c=True)
+    #g_i = gdf_to_eris(gdf, mo_coeff, cm.nocc, only_ovov=only_ovov, real_j3c=False)
+    #for key, val in g_r.items():
+    #    norm = np.linalg.norm(val - g_i[key])
+    #    mx = abs(val - g_i[key]).max()
+    #    log.debug("Difference in (%2s|%2s):  max= %.3e  norm= %.3e", key[:2], key[2:], mx, norm)
+
     g = gdf_to_eris(gdf, mo_coeff, cm.nocc, only_ovov=only_ovov)
     for key, val in g.items():
         setattr(eris, key, val)
@@ -82,7 +90,7 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     return eris
 
 
-def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=False):
+def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
     """Make supercell ERIs from k-point sampled, density-fitted three-center integrals.
 
     Arguments
@@ -161,7 +169,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=False):
         eris["ovvo"] = contract(j3c_ov, j3c_ov.transpose(0, 2, 1))
         eris["ovoo"] = contract(j3c_ov, j3c_oo)
         del j3c_ov
-        eris["oooo"] = contract(j3c_oo.conj(), j3c_oo)
+        eris["oooo"] = contract(j3c_oo, j3c_oo)
         del j3c_oo
     t_contract = (timer()-t0)
 

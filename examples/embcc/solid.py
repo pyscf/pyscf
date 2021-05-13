@@ -70,18 +70,10 @@ def get_arguments():
     parser.add_argument("--opts", nargs="*", default=[])
     parser.add_argument("--plot-orbitals-crop-c", type=float, nargs=2)
     # Bath specific
-    parser.add_argument("--bath-type", default="mp2-natorb", help="Type of additional bath orbitals.")
-    parser.add_argument("--dmet-bath-tol", type=float, default=1e-4, help="Tolerance for DMET bath orbitals. Default=1e-4")
-    parser.add_argument("--bath-tol", type=float, nargs="*",
-            default=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
-            help="""Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.
-            If negative, the bath is extended until it contains 100*(1-|tol|)% of all electrons/holes of the environment
-            on the MP2 level.""")
+    parser.add_argument("--dmet-threshold", type=float, default=1e-4, help="Threshold for DMET bath orbitals. Default= 1e-4")
     parser.add_argument("--bno-threshold", type=float, nargs="*",
             default=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
             help="Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.")
-
-    parser.add_argument("--bath-tol-fragment-weight", type=float, nargs="*", help="Adjust the bath tolerance per fragment.")
     parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other type of bath orbitals (pre MP2-natorb)
     parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
@@ -342,8 +334,8 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
         t0 = timer()
         mf.kernel(dm0=dm_init)
         log.info("Time for HF: %.3f s", (timer()-t0))
-    log.info("HF converged: %r", mf.converged)
-    log.info("HF energy: %.8e", mf.e_tot)
+    log.info("HF converged= %r", mf.converged)
+    log.info("E(HF)= %+16.8e Ha", mf.e_tot)
     if not mf.converged:
         log.warning("WARNING: mean-field not converged!!!")
 
@@ -400,7 +392,7 @@ def run_benchmarks(a, cell, mf, kpts, args, ncells):
             else:
                 raise NotImplementedError()
             cc.kernel()
-            log.info("Ecorr(CCSD)= %.8g", cc.e_corr)
+            log.info("Canonical CCSD: E(corr)= %+16.8g Ha", cc.e_corr)
             log.info("Time for canonical CCSD: %.3f s", (timer()-t0))
             energies["cc"] = [cc.e_tot]
         except Exception as e:
@@ -503,7 +495,7 @@ for i, a in enumerate(args.lattice_consts):
                     "c0" : args.plot_orbitals_crop_c[0],
                     "c1" : args.plot_orbitals_crop_c[1]}
 
-        ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_bath_tol=args.dmet_bath_tol,
+        ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_threshold=args.dmet_threshold,
             bno_threshold=args.bno_threshold, mp2_correction=args.mp2_correction, **kwargs)
 
         # Define atomic fragments, first argument is atom index
@@ -526,17 +518,6 @@ for i, a in enumerate(args.lattice_consts):
             # Ti needs larger threshold
             ccx.make_atom_cluster(1, bno_threshold_factor=10)
             ccx.make_atom_cluster(2, symmetry_factor=3)
-
-            #weights = args.bath_tol_fragment_weight
-            ## Overwrites ccx.bath_tol per cluster
-            #if weights is not None:
-            #    ccx.make_atom_cluster(0, bath_tol=weights[0]*btol)
-            #    ccx.make_atom_cluster(1, bath_tol=weights[1]*btol)
-            #    ccx.make_atom_cluster(2, symmetry_factor=3, bath_tol=weights[2]*btol)
-            #else:
-            #    ccx.make_atom_cluster(0)
-            #    ccx.make_atom_cluster(1)
-            #    ccx.make_atom_cluster(2, symmetry_factor=3)
         else:
             raise SystemError()
 
@@ -545,8 +526,8 @@ for i, a in enumerate(args.lattice_consts):
         energies["ccsd"] = ccx.get_energies()
 
         # Write cluster sizes to file
-        for x in ccx.cluster:
-            fname = "cluster-%d%s-size.txt" % (ccx.id, ccx.name)
+        for x in ccx.clusters:
+            fname = "cluster-%s-size.txt" % x.id_name
             val = x.n_active
             with open(fname, "a") as f:
                 f.write(("%6.3f" + len(val)*"  %3d" + "\n") % (a, *val))
@@ -569,7 +550,7 @@ for i, a in enumerate(args.lattice_consts):
                 fname = "%s.txt" % key
                 log.info("Writing to file %s", fname)
                 with open(fname, "a") as f:
-                    f.write(("%6.3f" + len(val)*"  %+16.12e" + "\n") % (a, *val))
+                    f.write(("%6.3f" + len(val)*"  %+16.8e" + "\n") % (a, *val))
 
     log.info("Total time for lattice constant %.2f= %.3f s", a, (timer()-t0))
     log.changeIndentLevel(-1)

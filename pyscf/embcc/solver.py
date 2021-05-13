@@ -80,7 +80,7 @@ class ClusterSolver:
         if self.solver in ("CCSD", "CCSD(T)"):
             self.print_t_diagnostic()
 
-        log.info("Full cluster E(corr)= %16.8g Ha", self.e_corr)
+        log.debug("E(full corr)= %16.8g Ha", self.e_corr)
 
     def run_mp2(self):
         if self.base.has_pbc:

@@ -16,9 +16,8 @@ log = logging.getLogger(__name__)
 
 # ================================================================================================ #
 
-#def make_mp2_bno(self, kind, c_occ, c_vir, c_occ_frozen=None, c_vir_frozen=None,
 def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
-        canonicalize=True, eris=None, local_dm=False):
+        canonicalize=True, local_dm=False, eris=None):
     """Select virtual space from MP2 natural orbitals (NOs) according to occupation number.
 
     Parameters
@@ -99,40 +98,42 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
     t = (timer() - t0)
-    log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
-    e_mp2_full *= self.symmetry_factor
-    log.debug("Full MP2 energy=  %16.8g Ha", e_mp2_full)
-
     nocc, nvir = t2.shape[0], t2.shape[2]
     assert (c_occ.shape[-1] == nocc)
     assert (c_vir.shape[-1] == nvir)
+    log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
 
-    # Project first occupied index onto local space
-    _, t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)
-
+    # Energies
+    e_mp2_full *= self.symmetry_factor
+    t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)[1]
     e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
-    log.debug("Local MP2 energy= %16.8g Ha", e_mp2)
+    log.debug("Bath E(MP2):  Cluster= %+16.8g Ha  Fragment= %+16.8g Ha", e_mp2_full, e_mp2)
 
     # MP2 density matrix
     #dm_occ = dm_vir = None
-    if local_dm is True:
-        log.debug("Constructing DM from local T2 amplitudes.")
-        t2l, t2r = t2loc, t2loc
-    elif local_dm == "semi":
-        log.debug("Constructing DM from semi-local T2 amplitudes.")
-        t2l, t2r = t2loc, t2
-    elif local_dm is False:
+    if local_dm is False:
         log.debug("Constructing DM from full T2 amplitudes.")
         t2l, t2r = t2, t2
         # This is equivalent to:
         # do, dv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
         # do, dv = -2*do, 2*dv
+    elif local_dm is True:
+        # LOCAL DM IS NOT RECOMMENDED - USE SEMI OR FALSE
+        log.warning("WARNING: using local_dm = True is not recommended - use 'semi' or False")
+        log.debug("Constructing DM from local T2 amplitudes.")
+        t2l, t2r = t2loc, t2loc
+    elif local_dm == "semi":
+        log.debug("Constructing DM from semi-local T2 amplitudes.")
+        t2l, t2r = t2loc, t2
     else:
         raise ValueError("Unknown value for local_dm: %r" % local_dm)
 
     if kind == "occ":
         dm = 2*(2*einsum("ikab,jkab->ij", t2l, t2r)
                 - einsum("ikab,kjab->ij", t2l, t2r))
+        # This turns out to be equivalent:
+        #dm = 2*(2*einsum("kiba,kjba->ij", t2l, t2r)
+        #        - einsum("kiba,kjab->ij", t2l, t2r))
     else:
         dm = 2*(2*einsum("ijac,ijbc->ab", t2l, t2r)
                 - einsum("ijac,ijcb->ab", t2l, t2r))

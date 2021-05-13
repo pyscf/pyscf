@@ -161,7 +161,7 @@ class Cluster:
         #self.make_rdm1 = kwargs.get("make_rdm1", False)     # Calculate RDM1 in cluster?
 
         opts = Options()
-        opts.dmet_bath_tol = self.base.opts.get("dmet_bath_tol", 1e-4)
+        opts.dmet_threshold = self.base.opts.get("dmet_threshold", 1e-4)
         opts.bath_tol_per_elec = self.base.opts.get("bath_tol_per_elec", False)
         opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
         opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
@@ -246,51 +246,24 @@ class Cluster:
         self.eom_ip_energy = None
         self.eom_ea_energy = None
 
-    #@property
-    #def nlocal(self):
-    #    """Number of local (fragment) orbitals."""
-    #    return self.C_local.shape[-1]
-
     def trimmed_name(self, length=10):
         if len(self.name) <= length:
             return self.name
         return self.name[:(length-3)] + "..."
 
     @property
+    def id_name(self):
+        """Use this whenever a unique name is needed (for example to open a file)."""
+        return "%d:%s" % (self.id, self.trimmed_name())
+
+    @property
     def size(self):
         """Number of local (fragment) orbitals."""
         return self.c_frag.shape[-1]
 
-    ##@property
-    ##def ndmetbath(self):
-    ##    """Number of DMET bath orbitals."""
-    ##    return self.C_bath.shape[-1]
-
-    ##@property
-    ##def noccbath(self):
-    ##    """Number of occupied bath orbitals."""
-    ##    return self.C_occbath.shape[-1]
-
-    ##@property
-    ##def nvirbath(self):
-    ##    """Number of virtual bath orbitals."""
-    ##    return self.C_virbath.shape[-1]
-
-    ##@property
-    ##def nactive(self):
-    ##    """Number of active orbitals."""
-    ##    return len(self.active)
-
-    ##@property
-    ##def nfrozen(self):
-    ##    """Number of frozen environment orbitals."""
-    ##    return len(self.frozen)
-
     @property
     def e_corr(self):
         """Best guess for correlation energy, using the lowest BNO threshold."""
-        #key = min(list(self.e_corrs.keys()))
-        #return self.e_corrs[key]
         idx = np.argmin(self.bno_threshold)
         return self.e_corrs[idx]
 
@@ -420,7 +393,7 @@ class Cluster:
         sc = np.dot(self.base.ovlp, C_clst)
         D_clst = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
         e, R = np.linalg.eigh(D_clst)
-        tol = self.opts.dmet_bath_tol
+        tol = self.opts.dmet_threshold
         if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=tol, rtol=0):
             raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
         e, R = e[::-1], R[:,::-1]
@@ -621,7 +594,7 @@ class Cluster:
         log.info("MAKING DMET BATH")
         log.info("****************")
         log.changeIndentLevel(1)
-        c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_bath_tol)
+        c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_threshold)
         log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
         # Plotting of DMET bath orbitals
         if self.opts.plot_orbitals:
@@ -761,10 +734,10 @@ class Cluster:
 
         # Check occupations
         n_occ = self.get_occup(c_occ)
-        if not np.allclose(n_occ, 2, atol=2*self.opts.dmet_bath_tol):
+        if not np.allclose(n_occ, 2, atol=2*self.opts.dmet_threshold):
             raise RuntimeError("Incorrect occupation of occupied orbitals:\n%r" % n_occ)
         n_vir = self.get_occup(c_vir)
-        if not np.allclose(n_vir, 0, atol=2*self.opts.dmet_bath_tol):
+        if not np.allclose(n_vir, 0, atol=2*self.opts.dmet_threshold):
             raise RuntimeError("Incorrect occupation of virtual orbitals:\n%r" % n_vir)
         mo_occ = np.asarray(nocc*[2] + nvir*[0])
 

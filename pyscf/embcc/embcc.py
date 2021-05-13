@@ -99,9 +99,9 @@ class EmbCC:
             Converged mean-field object.
         minao :
             Minimal basis for intrinsic atomic orbitals (IAO).
-        dmet_bath_tol : float, optional
-            Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_bath_tol`,
-            or smaller than 1-`dmet_bath_tol` are included as bath orbitals.
+        dmet_threshold : float, optional
+            Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_threshold`,
+            or smaller than 1-`dmet_threshold` are included as bath orbitals.
 
         make_rdm1 : [True, False]
             Calculate RDM1 in cluster.
@@ -119,7 +119,7 @@ class EmbCC:
                 # Fragment settings
                 "localize_fragment" : False,    # Perform numerical localization on fragment orbitals
                 # Bath settings
-                "dmet_bath_tol" : 1e-4,
+                "dmet_threshold" : 1e-4,
                 "bath_tol_per_elec" : False,
                 "prim_mp2_bath_tol_occ" : False,
                 "prim_mp2_bath_tol_vir" : False,
@@ -186,7 +186,7 @@ class EmbCC:
             self.kpts = None
             self.kdf = None
         self.mf = mf
-        log.info("Mean-field energy= %-16.8f", mf.e_tot)
+        log.info("Mean-field E(tot)= %+16.8g Ha", mf.e_tot)
 
         # AO overlap matrix
         self.ovlp = self.mf.get_ovlp()
