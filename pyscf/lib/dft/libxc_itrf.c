@@ -776,6 +776,9 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 // func->cam_beta does not update the coefficients accordingly.
                 //func->cam_alpha = alpha;
                 //func->cam_beta  = beta;
+                // However, the parameters can be set with the libxc function
+                //void xc_func_set_ext_params_name(xc_func_type *p, const char *name, double par);
+                // since libxc 5.1.0
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
 #endif
