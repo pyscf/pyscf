@@ -61,10 +61,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
-    str = ("\n*************************************************************"
-           "\n            ADC calculation summary"
-           "\n*************************************************************")
-    logger.info(adc, str)
+    header = ("\n*************************************************************"
+              "\n            ADC calculation summary"
+              "\n*************************************************************")
+    logger.info(adc, header)
 
     if nfalse >= 1:
         logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
@@ -515,19 +515,19 @@ def density_matrix(myadc, T=None):
 
 def analyze(myadc):
 
-    str = ("\n*************************************************************"
-           "\n           Eigenvector analysis summary"
-           "\n*************************************************************")
-    logger.info(myadc, str)
+    header = ("\n*************************************************************"
+              "\n           Eigenvector analysis summary"
+              "\n*************************************************************")
+    logger.info(myadc, header)
 
     myadc.analyze_eigenvector()
 
     if myadc.compute_properties:
 
-        str = ("\n*************************************************************"
-               "\n            Spectroscopic factors analysis summary"
-               "\n*************************************************************")
-        logger.info(myadc, str)
+        header = ("\n*************************************************************"
+                  "\n            Spectroscopic factors analysis summary"
+                  "\n*************************************************************")
+        logger.info(myadc, header)
 
         myadc.analyze_spec_factor()
 
