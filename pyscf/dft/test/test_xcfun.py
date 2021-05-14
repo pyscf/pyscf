@@ -277,7 +277,7 @@ class KnownValues(unittest.TestCase):
         check('TPSS,' ,                               f_place=-3, k_place=-4)
         #check('REVTPSS,', deriv=1)  # xcfun crash
         check('APBE,')
-        check('BLOC,' , deriv=2)
+        #check('BLOC,' , deriv=2)
         check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
 
         check(',vwn3')
@@ -372,7 +372,7 @@ class KnownValues(unittest.TestCase):
         check('TPSS,' ,                               f_place=-4, k_place=-4)
         #check('REVTPSS,', deriv=1)  # xcfun crash
         check('APBE,')
-        check('BLOC,' , deriv=2)
+        #check('BLOC,' , deriv=2)
         check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
 
         check(',vwn3', e_place=2, v_place=1, f_place=1, k_place=0)

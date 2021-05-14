@@ -102,7 +102,7 @@ XC = XC_CODES = {
 'APBEC'         : 67,  #APBE correlation functional.
 'APBEX'         : 68,  #APBE Exchange Functional
 'ZVPBESOLC'     : 69,  #zvPBEsol correlation Functional
-'BLOCX'         : 70,  #BLOC exchange functional
+#'BLOCX'         : 70,  #BLOC exchange functional
 'PBEINTC'       : 71,  #PBEint correlation Functional
 'PBEINTX'       : 72,  #PBEint Exchange Functional
 'PBELOCC'       : 73,  #PBEloc correlation functional.
@@ -185,7 +185,7 @@ XC_ALIAS = {
     'REVTPSS'           : 'REVTPSS,REVTPSS',
     'SCAN'              : 'SCAN,SCAN',
 #    'SOGGA'             : 'SOGGA,PBE',
-    'BLOC'              : 'BLOC,TPSSLOC',
+    #'BLOC'              : 'BLOC,TPSSLOC',
     'OLYP'              : 'OPTX,LYP',
     'RPBE'              : 'RPBE,PBE',
     'BPBE'              : 'B88,PBE',
