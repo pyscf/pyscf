@@ -21,9 +21,7 @@
 #include <complex.h>
 #include "config.h"
 #include "cint.h"
-
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
+#include "gto/gto.h"
 
 /*
  * out[naoi,naoj,naok,comp] in F-order

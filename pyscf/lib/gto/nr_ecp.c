@@ -31,7 +31,6 @@
 #define ECP_LMAX        5
 //#define PTR_EXP         5
 //#define PTR_COEFF       6
-#define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
