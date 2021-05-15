@@ -53,8 +53,7 @@ _itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 _itrf.LIBXC_version.restype = ctypes.c_char_p
 _itrf.LIBXC_reference.restype = ctypes.c_char_p
 _itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
-_itrf.LIBXC_xc_reference.restype = ctypes.c_char_p
-_itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)]
+_itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
 
 def libxc_version():
     '''Returns the version of libxc'''

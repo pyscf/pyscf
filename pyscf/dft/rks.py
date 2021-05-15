@@ -367,9 +367,11 @@ class KohnShamDFT(object):
                  self._numint.libxc.__version__,
                  self._numint.libxc.__reference__)
 
-        log.info('XC functionals = %s', self.xc)
-        if hasattr(self._numint.libxc, 'xc_reference'):
-            log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
+        if log.verbose >= logger.INFO:
+            log.info('XC functionals = %s', self.xc)
+            if hasattr(self._numint.libxc, 'xc_reference'):
+                log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
+
         if self.nlc!='':
             log.info('NLC functional = %s', self.nlc)
 

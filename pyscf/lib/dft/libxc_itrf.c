@@ -867,11 +867,10 @@ void LIBXC_xc_reference(int xc_id, const char **refs)
 
         int i;
         for (i = 0; i < XC_MAX_REFERENCES; i++) {
-                if (func.info->refs[i] == NULL) {
+                if (func.info->refs[i] == NULL || func.info->refs[i]->ref == NULL) {
                         refs[i] = NULL;
                         break;
                 }
                 refs[i] = func.info->refs[i]->ref;
         }
-        return;
 }
