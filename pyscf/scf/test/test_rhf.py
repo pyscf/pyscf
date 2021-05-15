@@ -22,6 +22,7 @@ import unittest
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf.scf import atom_hf
 
 mol = gto.M(
     verbose = 7,
@@ -201,6 +202,17 @@ class KnownValues(unittest.TestCase):
         dm = scf.hf.get_init_guess(re_ecp2, key='atom')
         self.assertAlmostEqual(lib.fp(dm), -14.083500177270547, 9)
         self.assertAlmostEqual(numpy.einsum('ij,ji->', dm, s), 57, 9)
+
+    def test_atom_hf_with_ecp(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom  = 'Cu 0 0 0; Ba 0 0 2',
+            basis = {'Ba': 'def2-svp', 'Cu': 'lanl2dz'},
+            ecp   = {'Ba':'def2-svp', 'Cu': 'lanl2dz' }, spin=None)
+        scf_result = atom_hf.get_atm_nrhf(mol)
+        self.assertAlmostEqual(scf_result['Ba'][0], -25.07089468572715, 9)
+        self.assertAlmostEqual(scf_result['Cu'][0], -194.92388639203045, 9)
 
     def test_init_guess_chk(self):
         dm = scf.hf.SCF(mol).get_init_guess(mol, key='chkfile')
