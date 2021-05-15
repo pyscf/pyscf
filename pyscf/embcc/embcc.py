@@ -43,7 +43,7 @@ __all__ = ["EmbCC",]
 class EmbCC:
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
-    VALID_SOLVERS = [None, "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
+    VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
     VALID_BATH_TYPES = [
             None,
             "local",
@@ -186,7 +186,7 @@ class EmbCC:
             self.kpts = None
             self.kdf = None
         self.mf = mf
-        log.info("Mean-field E(tot)= %+16.8g Ha", mf.e_tot)
+        log.info("E(MF)= %+16.8f Ha", self.e_mf)
 
         # AO overlap matrix
         self.ovlp = self.mf.get_ovlp()
@@ -1121,8 +1121,8 @@ class EmbCC:
             log.info(fmtstr, x.id, x.trimmed_name(10), e_corr, e_corr+e_delta_mp2, e_corr+e_delta_mp2+e_pert_t)
 
         log.info("  * %-14s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
-        log.info("E(corr)= %+16.8g Ha", self.e_corr)
-        log.info("E(tot)=  %+16.8g Ha", self.e_tot)
+        log.info("E(corr)= %+16.8f Ha", self.e_corr)
+        log.info("E(tot)=  %+16.8f Ha", self.e_tot)
 
     def get_energies(self):
         energies = np.zeros(self.ncalc)

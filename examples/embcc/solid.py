@@ -32,6 +32,11 @@ except (ImportError, ModuleNotFoundError) as e:
 
 log = pyscf.embcc.log
 
+def str_or_none(s):
+    if s.lower() in ["none", ""]:
+        return None
+    return s
+
 def get_arguments():
     """Get arguments from command line."""
     parser = argparse.ArgumentParser(allow_abbrev=False)
@@ -65,14 +70,14 @@ def get_arguments():
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
     # Embedded correlated calculation
-    parser.add_argument("--solver", default="CCSD")
+    parser.add_argument("--solver", type=str_or_none, default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
     parser.add_argument("--opts", nargs="*", default=[])
     parser.add_argument("--plot-orbitals-crop-c", type=float, nargs=2)
     # Bath specific
     parser.add_argument("--dmet-threshold", type=float, default=1e-4, help="Threshold for DMET bath orbitals. Default= 1e-4")
     parser.add_argument("--bno-threshold", type=float, nargs="*",
-            default=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
+            default=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3],
             help="Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.")
     parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other type of bath orbitals (pre MP2-natorb)
@@ -127,8 +132,8 @@ def get_arguments():
     args.lattice_consts = np.asarray(args.lattice_consts)[args.skip:]
 
     if MPI_rank == 0:
-        log.info("PARAMETERS")
-        log.info("**********")
+        log.info("PARAMETERS IN INPUT SCRIPT")
+        log.info("**************************")
         for name, value in sorted(vars(args).items()):
             log.info("  * %-32s: %r", name, value)
 
@@ -335,7 +340,7 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
         mf.kernel(dm0=dm_init)
         log.info("Time for HF: %.3f s", (timer()-t0))
     log.info("HF converged= %r", mf.converged)
-    log.info("E(HF)= %+16.8e Ha", mf.e_tot)
+    log.info("E(HF)= %+16.8f Ha", mf.e_tot)
     if not mf.converged:
         log.warning("WARNING: mean-field not converged!!!")
 
@@ -358,7 +363,7 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
 
     return mf
 
-def run_benchmarks(a, cell, mf, kpts, args, ncells):
+def run_benchmarks(a, cell, mf, kpts, args):
     energies = {}
 
     # DFT
@@ -378,7 +383,7 @@ def run_benchmarks(a, cell, mf, kpts, args, ncells):
             mp2.kernel()
             log.info("Ecorr(MP2)= %.8g", mp2.e_corr)
             log.info("Time for canonical MP2: %.3f s", (timer()-t0))
-            energies["mp2"] = [mp2.e_tot / ncells]
+            energies["mp2"] = [mp2.e_tot]
         except Exception as e:
             log.error("Error in canonical MP2 calculation: %s", e)
 
@@ -465,16 +470,19 @@ for i, a in enumerate(args.lattice_consts):
         #    np.savetxt(f, np.asarray(mf.mo_energy).T, fmt="%.10e", header="MO energies at a=%.2f" % a)
         energies["hf"] = [mf.e_tot]
 
+
     if args.supercell is not None:
         ncells = np.product(args.supercell)
-    elif args.k_points is not None:
-        ncells = np.product(args.k_points)
     else:
         ncells = 1
 
+    #elif args.k_points is not None:
+    #    nkpts = np.product(args.k_points)
+    #else:
+    #    nkpts = 1
 
     # DFT and Post-HF benchmarks
-    energies.update(run_benchmarks(a, cell, mf, kpts, args, ncells))
+    energies.update(run_benchmarks(a, cell, mf, kpts, args))
 
     if args.run_embcc:
         energies["ccsd"] = []
@@ -507,12 +515,19 @@ for i, a in enumerate(args.lattice_consts):
         elif args.system == "graphene":
             #for ix in range(2):
             #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
-            if ncells % 2 == 0:
-                nx, ny = args.supercell[:2]
-                ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
+            #if ncells % 2 == 0:
+            #    nx, ny = args.supercell[:2]
+            #    ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
+            #else:
+            #    ix = ncells-1    # Make cluster in center
+            #ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
+
+            if args.atoms[0] == args.atoms[1]:
+                ccx.make_atom_cluster(0, symmetry_factor=2*ncells, **kwargs)
             else:
-                ix = ncells-1    # Make cluster in center
-            ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
+                ccx.make_atom_cluster(0, symmetry_factor=ncells, **kwargs)
+                ccx.make_atom_cluster(1, symmetry_factor=ncells, **kwargs)
+
         elif args.system == "perovskite":
             ccx.make_atom_cluster(0)
             # Ti needs larger threshold

@@ -125,13 +125,13 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     print("E(EmbCC) = %r" % kcc.get_energies())
 
     # For [2,2,2], gth-dzv, a=3.5
-    if kmesh = [2,2,2]:
+    if kmesh == [2,2,2]:
         N_EXPECTED = np.array([[77, 52, 39, 14]])
         E_EXPECTED = np.array([-11.16455488, -11.15595256, -11.1383086 , -11.09207628])
         np.all(kcc.get_cluster_sizes() == N_EXPECTED)
         np.allclose(kcc.get_energies(), E_EXPECTED)
     # For [3,3,3], gth-dzv, a=3.5
-    elif kmesh = [3,3,3]:
+    elif kmesh == [3,3,3]:
         N_EXPECTED = np.array([[89, 61, 39, 14]])
         E_EXPECTED = np.array([-11.22353507, -11.21390107, -11.19618965, -11.15312301])
         np.all(kcc.get_cluster_sizes() == N_EXPECTED)
@@ -229,8 +229,8 @@ def run_test():
     #test_helium()
     #test_helium(kmesh=[2,1,1])
     #test_diamond_kpts(kmesh=[2,2,2])
-    #test_diamond_bno_threshold(kmesh=[2,2,2])
-    test_diamond_bno_threshold(kmesh=[3,3,3])
+    test_diamond_bno_threshold(kmesh=[2,2,2])
+    #test_diamond_bno_threshold(kmesh=[3,3,3])
     #test_diamond_kpts(kmesh=[3,3,3])
     #test_diamond(-11.138309)
     #test_diamond(-11.164555, bath_tol=1e-6)

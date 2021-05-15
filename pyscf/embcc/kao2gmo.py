@@ -99,7 +99,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         Primitive unit cell, not supercell!
     gdf : pyscf.pbc.df.GDF
         Density fitting object of primitive cell, with k-points.
-    mo_coeff : (Nr*Naux, Nmo) array
+    mo_coeff : (Nr*Nao, Nmo) array
         MO coefficients in supercell. The AOs in the supercell must be ordered
         in the same way as the k-points in the primitive cell!
     nocc : int
@@ -118,18 +118,10 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
     # DF compatiblity layer
     ints3c = ThreeCenterInts.init_from_gdf(gdf)
 
-    # If GDF was loaded from hdf5 file:
-
-    #if gdf.auxcell is None: gdf.build(with_j3c=False)
-    #cell = gdf.cell
-    #kpts = gdf.kpts
     cell, kpts, nk, nao, naux = ints3c.cell, ints3c.kpts, ints3c.nk, ints3c.nao, ints3c.naux
 
     phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
-    #nk = len(kpts)
     nmo = mo_coeff.shape[-1]
-    #nao = cell.nao_nr()         # Atomic orbitals in primitive cell
-    #naux = gdf.auxcell.nao_nr()  # Auxiliary size in primitive cell
     nvir = nmo - nocc
     o, v = np.s_[:nocc], np.s_[nocc:]
 
@@ -146,34 +138,55 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
     ck_o = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,o]) / np.power(nk, 0.25)
     ck_v = einsum("Rk,Rai->kai", phase.conj(), mo_coeff[:,:,v]) / np.power(nk, 0.25)
     t0 = timer()
-    j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=real_j3c)
+    j3c = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=only_ovov, make_real=real_j3c)
     t_trafo = (timer()-t0)
-    # Composite auxiliary index: R,l -> L
-    j3c_ov = j3c_ov.reshape(nk*naux, nocc, nvir)
-    if not only_ovov:
-        j3c_oo = j3c_oo.reshape(nk*naux, nocc, nocc)
-        j3c_vv = j3c_vv.reshape(nk*naux, nvir, nvir)
 
-    # Contract Lij,Lkl->ijkl
-    # TODO: Parallelize in C / numba?
-    t0 = timer()
+    # Composite auxiliary index: R,l -> L
+    j3c["ov"] = j3c["ov"].reshape(nk*naux, nocc, nvir)
+    if not only_ovov:
+        j3c["oo"] = j3c["oo"].reshape(nk*naux, nocc, nocc)
+        j3c["vv"] = j3c["vv"].reshape(nk*naux, nvir, nvir)
+
+    def contract(kind):
+        """Contract (ij|L)(L|kl) -> (ij|kl)"""
+        left, right = kind[:2], kind[2:]
+        # We do not store "vo" only "ov":
+        right_t = "ov" if right == "vo" else right
+        l, r = j3c[left], j3c[right_t]
+        # For 2D systems
+        if left + "-" in j3c:
+            ln, rn = j3c[left + "-"], j3c[right_t + "-"]
+        else:
+            ln = rn = None
+        if right == "vo":
+            r = r.transpose(0, 2, 1)
+            if rn is not None:
+                rn = rn.T
+        c = np.tensordot(l.conj(), r, axes=(0, 0))
+        if ln is not None:
+            c -= einsum("ab,cd->abcd", ln.conj(), rn)
+        return c
+
     eris = {}
-    contract = lambda l, r : np.tensordot(l.conj(), r, axes=(0, 0))
+    # (L|vv) dependend
+    t0 = timer()
     if not only_ovov:
-        eris["vvvv"] = contract(j3c_vv, j3c_vv)
-        eris["ovvv"] = contract(j3c_ov, j3c_vv)
-        eris["oovv"] = contract(j3c_oo, j3c_vv)
-        del j3c_vv
-    eris["ovov"] = contract(j3c_ov, j3c_ov)
+        eris["vvvv"] = contract("vvvv")
+        eris["ovvv"] = contract("ovvv")
+        eris["oovv"] = contract("oovv")
+        del j3c["vv"]
+    # (L|ov) dependend
+    eris["ovov"] = contract("ovov")
     if not only_ovov:
-        eris["ovvo"] = contract(j3c_ov, j3c_ov.transpose(0, 2, 1))
-        eris["ovoo"] = contract(j3c_ov, j3c_oo)
-        del j3c_ov
-        eris["oooo"] = contract(j3c_oo, j3c_oo)
-        del j3c_oo
+        eris["ovvo"] = contract("ovvo")
+        eris["ovoo"] = contract("ovoo")
+        del j3c["ov"]
+    # (L|oo) dependend
+        eris["oooo"] = contract("oooo")
+        del j3c["oo"]
     t_contract = (timer()-t0)
 
-    if not real_j3c:
+    if np.iscomplexobj(eris["ovov"]):
         for key in list(eris.keys()):
             val = eris[key]
             inorm = np.linalg.norm(val.imag)
@@ -206,12 +219,6 @@ class ThreeCenterInts:
     def nao(self):
         return self.cell.nao_nr()
 
-    #def memory_ov(self, nocc, nvir):
-    #    return self.nk*self.naux*nocc*nvir * 16
-
-    #def memory(self, nocc, nvir):
-    #    return self.nk*self.naux*(nocc*nvir + nocc*nocc + nvir*nvir) * 16
-
     @classmethod
     def init_from_gdf(cls, gdf):
         if gdf.auxcell is None:
@@ -226,7 +233,7 @@ class ThreeCenterInts:
     def get_array(self, kptsym=True):
 
         if self.values is not None:
-            return self.values, None
+            return self.values, None, None
 
         elif isinstance(self.df._cderi, str):
             #import h5py
@@ -240,22 +247,44 @@ class ThreeCenterInts:
                 nkij = self.nk*(self.nk+1)//2
                 j3c = np.zeros((nkij, self.naux, self.nao, self.nao), dtype=complex)
                 kuniq_map = np.zeros((self.nk, self.nk), dtype=np.int)
-                kij = 0
-                for ki in range(self.nk):
-                    for kj in range(ki+1):
-                        kuniq_map[ki,kj] = kij
-                        kpts_ij = (self.kpts[ki], self.kpts[kj])
-                        blk0 = 0
-                        for lr, li, sign in self.df.sr_loop(kpts_ij, compact=False, blksize=int(1e9)):
-                            assert (sign == 1)
-                            blksize = lr.shape[0]
-                            blk = np.s_[blk0:blk0+blksize]
-                            blk0 += blksize
-                            j3c[kij,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
-                        if blk0 != self.naux:
-                            log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
-                        kij += 1
+            else:
+                j3c = np.zeros((self.nk, self.nk, self.naux, self.nao, self.nao), dtype=complex)
+                kuniq_map = None
 
+            if self.cell.dimension < 3:
+                j3c_neg = np.zeros((self.nk, self.nao, self.nao), dtype=complex)
+            else:
+                j3c_neg = None
+
+            kij = 0
+            for ki in range(self.nk):
+                kjmax = (ki+1) if kptsym else self.nk
+                for kj in range(kjmax):
+                    if kptsym:
+                        kuniq_map[ki,kj] = kij
+                    kpts_ij = (self.kpts[ki], self.kpts[kj])
+                    if kptsym:
+                        j3c_kij = j3c[kij]
+                    else:
+                        j3c_kij = j3c[ki,kj]
+                    blk0 = 0
+                    for lr, li, sign in self.df.sr_loop(kpts_ij, compact=False, blksize=int(1e9)):
+                        blksize = lr.shape[0]
+                        blk = np.s_[blk0:blk0+blksize]
+                        blk0 += blksize
+                        if (sign == 1):
+                            j3c_kij[blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao)
+                        # For 2D systems:
+                        else:
+                            assert (sign == -1) and (blksize == 1) and (ki == kj)
+                            j3c_neg[ki] += (lr+1j*li)[0].reshape(self.nao, self.nao)
+
+                    #if blk0 != self.naux:
+                    #    log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
+
+                    kij += 1
+
+            if kptsym:
                 # At this point, all kj <= ki are set
                 # Here we loop over kj > ki
                 for ki in range(self.nk):
@@ -264,33 +293,16 @@ class ThreeCenterInts:
                 assert np.all(kuniq_map < nkij)
                 assert np.all(kuniq_map > -nkij)
 
-            else:
-                j3c = np.zeros((self.nk, self.nk, self.naux, self.nao, self.nao), dtype=complex)
-                kuniq_map = None
-                for ki in range(self.nk):
-                    for kj in range(self.nk):
-                        kij = (self.kpts[ki], self.kpts[kj])
-                        blk0 = 0
-                        for lr, li, sign in self.df.sr_loop(kij, compact=False, blksize=int(1e9)):
-                            assert (sign == 1)
-                            blksize = lr.shape[0]
-                            blk = np.s_[blk0:blk0+blksize]
-                            blk0 += blksize
-                            j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, self.nao, self.nao) #* factor
-                        if blk0 != self.naux:
-                            log.info("Naux(ki= %3d, kj= %3d)= %4d", ki, kj, blk0)
-
-        # Can access array directly
-        #if isinstance(self.df, pyscf.pbc.df.df_incore.IncoreGDF):
+        # In IncoreGDF, we can access the array directly
         elif isinstance(self.df, pyscf.pbc.df.df_incore.IncoreGDF):
-            #j3c = self.df._cderi["j3c"].reshape(-1, self.naux, self.nao, self.nao).copy()
             j3c = self.df._cderi["j3c"].reshape(-1, self.naux, self.nao, self.nao)
-            #log.info("N uniq(ki-kj)= %d", j3c.shape[0])
             nkuniq = j3c.shape[0]
             log.info("Nkuniq= %3d", nkuniq)
             # Check map
             _get_kpt_hash = pyscf.pbc.df.df_incore._get_kpt_hash
             kuniq_map = np.zeros((self.nk, self.nk), dtype=np.int)
+            # 2D systems not supported in incore version:
+            j3c_neg = None
             for ki in range(self.nk):
                 for kj in range(self.nk):
                     kij = np.asarray((self.kpts[ki], self.kpts[kj]))
@@ -303,85 +315,90 @@ class ThreeCenterInts:
                         # negative to indicate transpose needed
                         kij_id = -kij_id[0]
                     assert (abs(kij_id) < nkuniq)
-
-                    #tmp = j3c2[abs(kij_id)].reshape(self.naux,self.nao,self.nao)
-                    #if kij_id < 0:
-                    #    tmp = tmp.transpose(0,2,1).conj()
-
-                    #log.debug("ki= %d kj= %d kij= %d", ki, kj, kij_id)
-                    #assert np.allclose(j3c[ki,kj], tmp)
-
                     kuniq_map[ki,kj] = kij_id
 
-            #for ki in range(self.nk):
-            #    for kj in range(self.nk):
-            #        log.info("ki= %3d kj= %3d -> kij= %3d", ki, kj, kuniq_map[ki,kj])
-
-        return j3c, kuniq_map
+        return j3c, j3c_neg, kuniq_map
 
 
-
-#def j3c_kao2gmo(gdf, cocc, cvir, only_ov=False, make_real=True, driver='c', factor=1):
-#def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c', factor=1):
 def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
-    #cell = gdf.cell
-    #kpts = gdf.kpts
-    #nk = len(kpts)
+    """Transform three-center integrals from k-space AO to supercell MO basis.
+
+    Returns
+    -------
+    j3c_ov : (Nk, Naux, Nocc, Nvir) array
+        Supercell occupied-virtual three-center integrals.
+    j3c_oo : (Nk, Naux, Nocc, Nocc) array or None
+        Supercell occupied-occupied three-center integrals.
+    j3c_vv : (Nk, Naux, Nvir, Nvir) array or None
+        Supercell virtual-virtual three-center integrals.
+    j3cn_ov : (Nocc, Nvir) array
+        Negative supercell occupied-virtual three-center integrals.
+    j3cn_oo : (Nocc, Nocc) array or None
+        Negative supercell occupied-occupied three-center integrals.
+    j3cn_vv : (Nvir, Nvir) array or None
+        Negative supercell virtual-virtual three-center integrals.
+    """
     nocc = cocc.shape[-1]
     nvir = cvir.shape[-1]
-    #naux = gdf.auxcell.nao_nr()
     cell, kpts, nk, naux = ints3c.cell, ints3c.kpts, ints3c.nk, ints3c.naux
     nao = cell.nao_nr()
-    t0 = timer()
-    #kconserv = kpts_helper.get_kconserv(cell, kpts)[:,:,0].copy()
     kconserv = kpts_helper.get_kconserv(cell, kpts, n=2)
-    log.debug("Time to make kconserv: %.2f", timer()-t0)
 
-    j3c_ov = np.zeros((nk, naux, nocc, nvir), dtype=complex)
+    j3c = {}
+    j3c["ov"] = np.zeros((nk, naux, nocc, nvir), dtype=complex)
+    #j3c_oo = j3c_vv = j3cn_ov = j3cn_oo = j3cn_vv = None
     if not only_ov:
-        j3c_oo = np.zeros((nk, naux, nocc, nocc), dtype=complex)
-        j3c_vv = np.zeros((nk, naux, nvir, nvir), dtype=complex)
-    else:
-        j3c_oo = j3c_vv = None
+        j3c["oo"] = np.zeros((nk, naux, nocc, nocc), dtype=complex)
+        j3c["vv"] = np.zeros((nk, naux, nvir, nvir), dtype=complex)
 
     if driver.lower() == 'python':
+
+        if cell.dimension < 3:
+            j3c["ov-"] = np.zeros((nocc, nvir), dtype=complex)
+            if not only_ov:
+                j3c["oo-"] = np.zeros((nocc, nocc), dtype=complex)
+                j3c["vv-"] = np.zeros((nvir, nvir), dtype=complex)
+
         for ki in range(nk):
             for kj in range(nk):
                 kij = (kpts[ki], kpts[kj])
                 kk = kconserv[ki,kj]
                 blk0 = 0
-                #for lr, li, sign in gdf.sr_loop(kij, compact=False):
                 for lr, li, sign in ints3c.sr_loop(kij, compact=False):
-                    assert (sign == 1)
                     blksize = lr.shape[0]
                     blk = np.s_[blk0:blk0+blksize]
                     blk0 += blksize
-
-                    j3c_kij = (lr+1j*li).reshape(blksize, nao, nao) #* factor
-
-                    j3c_ov[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cvir[kj])      # O(Nk^2 * Nocc * Nvir)
-                    if only_ov: continue
-                    j3c_oo[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cocc[kj])      # O(Nk^2 * Nocc * Nocc)
-                    j3c_vv[kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cvir[ki].conj(), cvir[kj])      # O(Nk^2 * Nvir * Nvir)
+                    j3c_kij = (lr+1j*li).reshape(blksize, nao, nao)
+                    if sign == 1:
+                        j3c["ov"][kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cvir[kj])      # O(Nk^2 * Nocc * Nvir)
+                        if only_ov: continue
+                        j3c["oo"][kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cocc[ki].conj(), cocc[kj])      # O(Nk^2 * Nocc * Nocc)
+                        j3c["vv"][kk,blk] += einsum("Lab,ai,bj->Lij", j3c_kij, cvir[ki].conj(), cvir[kj])      # O(Nk^2 * Nvir * Nvir)
+                    # For 2D systems
+                    else:
+                        assert (sign == -1) and (ki == kj) and (kk == 0) and (blksize == 1)
+                        j3c["ov-"] += einsum("ab,ai,bj->ij", j3c_kij[0], cocc[ki].conj(), cvir[kj])
+                        if only_ov: continue
+                        j3c["oo-"] += einsum("ab,ai,bj->ij", j3c_kij[0], cocc[ki].conj(), cocc[kj])
+                        j3c["vv-"] += einsum("ab,ai,bj->ij", j3c_kij[0], cvir[ki].conj(), cvir[kj])
 
     elif driver.lower() == 'c':
         # Load j3c into memory
         t0 = timer()
-        #j3c, kunique = load_j3c(gdf, factor=factor)
-        #j3c = ints3c.get_array(factor=factor)
-        j3c, kunique = ints3c.get_array()
+        j3c_kpts, j3c_neg, kunique = ints3c.get_array()
+        log.debug("Time to load k-point sampled three-center integrals: %.2f", timer()-t0)
 
         # Mapping from (ki,kj) -> unique(ki-kj)
-        if kunique is None:
-            kunique_pt = ctypes.POINTER(ctypes.c_void_p)()
-        else:
-            kunique_pt = kunique.ctypes.data_as(ctypes.c_void_p)
-        if only_ov:
-            j3c_oo_pt = j3c_vv_pt = ctypes.POINTER(ctypes.c_void_p)()
-        else:
-            j3c_oo_pt = j3c_oo.ctypes.data_as(ctypes.c_void_p)
-            j3c_vv_pt = j3c_vv.ctypes.data_as(ctypes.c_void_p)
-        log.debug("Time to load j3c from file: %.2f", timer()-t0)
+        #if kunique is None:
+        #    kunique_pt = ctypes.POINTER(ctypes.c_void_p)()
+        #else:
+        #    kunique_pt = kunique.ctypes.data_as(ctypes.c_void_p)
+
+        #if only_ov:
+        #    j3c_oo_pt = j3c_vv_pt = ctypes.POINTER(ctypes.c_void_p)()
+        #else:
+        #    j3c_oo_pt = j3c["oo"].ctypes.data_as(ctypes.c_void_p)
+        #    j3c_vv_pt = j3c["vv"].ctypes.data_as(ctypes.c_void_p)
 
         cocc = cocc.copy()
         cvir = cvir.copy()
@@ -395,174 +412,71 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
                 ctypes.c_int64(nvir),
                 ctypes.c_int64(naux),
                 kconserv.ctypes.data_as(ctypes.c_void_p),
-                kunique_pt,
+                #kunique_pt,
+                kunique.ctypes.data_as(ctypes.c_void_p) if kunique is not None else ctypes.POINTER(ctypes.c_void_p)(),
                 cocc.ctypes.data_as(ctypes.c_void_p),
                 cvir.ctypes.data_as(ctypes.c_void_p),
-                j3c.ctypes.data_as(ctypes.c_void_p),
-                # Out
-                j3c_ov.ctypes.data_as(ctypes.c_void_p),
-                j3c_oo_pt,
-                j3c_vv_pt)
+                j3c_kpts.ctypes.data_as(ctypes.c_void_p),
+                # In-out
+                j3c["ov"].ctypes.data_as(ctypes.c_void_p),
+                j3c["oo"].ctypes.data_as(ctypes.c_void_p) if "oo" in j3c else ctypes.POINTER(ctypes.c_void_p)(),
+                j3c["vv"].ctypes.data_as(ctypes.c_void_p) if "vv" in j3c else ctypes.POINTER(ctypes.c_void_p)())
         log.debug("Time in j3c_kao2gamo in C: %.2f", timer()-t0)
         assert (ierr == 0)
+
+        # Do the negative part for 2D systems in python (only one auxiliary function and ki==kj)
+        if j3c_neg is not None:
+            j3c["ov-"] = einsum("kab,kai,kbj->ij", j3c_neg, cocc.conj(), cvir)      # O(Nk * Nocc * Nvir)
+            if not only_ov:
+                j3c["oo-"] = einsum("kab,kai,kbj->ij", j3c_neg, cocc.conj(), cocc)      # O(Nk * Nocc * Nocc)
+                j3c["vv-"] = einsum("kab,kai,kbj->ij", j3c_neg, cvir.conj(), cvir)      # O(Nk * Nvir * Nvir)
 
     if make_real:
         t0 = timer()
         phase = pyscf.pbc.tools.k2gamma.get_phase(cell, kpts)[1]
-        j3c_ov = np.tensordot(phase, j3c_ov, axes=1)
-        if j3c_ov.size > 0:
-            inorm = np.linalg.norm(j3c_ov.imag)
-            imax = abs(j3c_ov.imag).max()
-            if max(inorm, imax) > 1e-5:
-                log.warning("WARNING: Im(L|ov):  norm= %.2e  max= %.2e", inorm, imax)
+
+        def ft_auxiliary_basis(j, key):
+            pj = np.tensordot(phase, j, axes=1)
+            if pj.size > 0:
+                inorm = np.linalg.norm(pj.imag)
+                imax = abs(pj.imag).max()
+                if max(inorm, imax) > 1e-5:
+                    log.warning("WARNING: Im(L|%2s):     norm= %.2e  max= %.2e", key, inorm, imax)
+                else:
+                    log.debug("Im(L|%2s):     norm= %.2e  max= %.2e", key, inorm, imax)
+            return pj.real
+
+        def check_real(j, key):
+            pj = j
+            if pj.size > 0:
+                inorm = np.linalg.norm(pj.imag)
+                imax = abs(pj.imag).max()
+                if max(inorm, imax) > 1e-5:
+                    log.warning("WARNING: Im(L|%2s)(-):  norm= %.2e  max= %.2e", key[:2], inorm, imax)
+                else:
+                    log.debug("Im(L|%2s)(-):  norm= %.2e  max= %.2e", key[:2], inorm, imax)
+            return pj.real
+
+        for key in list(j3c.keys()):
+            if key[-1] == "-":
+                # Should already be real
+                j3c[key] = check_real(j3c[key], key)
             else:
-                log.debug("Im(L|ov):  norm= %.2e  max= %.2e", inorm, imax)
-        j3c_ov = j3c_ov.real
-        if not only_ov:
-            j3c_oo = np.tensordot(phase, j3c_oo, axes=1)
-            j3c_vv = np.tensordot(phase, j3c_vv, axes=1)
-            inorm = np.linalg.norm(j3c_oo.imag)
-            imax = abs(j3c_oo.imag).max()
-            if max(inorm, imax) > 1e-5:
-                log.warning("WARNING: Im(L|oo):  norm= %.2e  max= %.2e", inorm, imax)
-            else:
-                log.debug("Im(L|oo):  norm= %.2e  max= %.2e", inorm, imax)
-            inorm = np.linalg.norm(j3c_vv.imag)
-            imax = abs(j3c_vv.imag).max()
-            if max(inorm, imax) > 1e-5:
-                log.warning("WARNING: Im(L|vv):  norm= %.2e  max= %.2e", inorm, imax)
-            else:
-                log.debug("Im(L|vv):  norm= %.2e  max= %.2e", inorm, imax)
-            j3c_oo = j3c_oo.real
-            j3c_vv = j3c_vv.real
+                j3c[key] = ft_auxiliary_basis(j3c[key], key)
+
+
+        #j3c["ov"] = ft_auxiliary_basis(j3c["ov"], "ov")
+        #if not only_ov:
+        #    j3c_oo = ft_auxiliary_basis(j3c["oo"], "oo")
+        #    j3c_vv = ft_auxiliary_basis(j3c["vv"], "vv")
+        #if cell.dimension < 3:
+
+
+        #    j3cn_ov = check_real(j3cn_ov, "ov")
+        #    if not only_ov:
+        #        j3cn_oo = check_real(j3cn_oo, "oo")
+        #        j3cn_vv = check_real(j3cn_vv, "vv")
+
         log.debug("Time to rotate to real: %.2f", timer()-t0)
 
-    return j3c_ov, j3c_oo, j3c_vv
-
-#def load_j3c(gdf, factor=1):
-#    kpts = gdf.kpts
-#    nk = len(kpts)
-#    naux = gdf.auxcell.nao_nr()
-#    nao = gdf.cell.nao_nr()
-#
-#    #if isinstance(gdf._cderi, np.ndarray):
-#    #    return gdf._cderi
-#
-#    j3c = np.zeros((nk, nk, naux, nao, nao), dtype=complex)
-#    for ki in range(nk):
-#        for kj in range(nk):
-#            kij = (kpts[ki], kpts[kj])
-#            blk0 = 0
-#            for lr, li, sign in gdf.sr_loop(kij, compact=False, blksize=int(1e9)):
-#                assert (sign == 1)
-#                blksize = lr.shape[0]
-#                blk = np.s_[blk0:blk0+blksize]
-#                blk0 += blksize
-#                j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, nao, nao) * factor
-#    kuniq_map = None
-#
-#    if False and isinstance(gdf, pyscf.pbc.df.df_incore.IncoreGDF):
-#        log.debug("IncoreGDF detected - trying to access j3c directly")
-#        j3c2 = (gdf._cderi["j3c"]*factor).reshape(-1, naux, nao, nao).copy()
-#        log.debug("j3c.flags= %r", j3c2.flags)
-#        log.debug("j3c.shape=  %r", tuple(j3c.shape))
-#        log.debug("j3c2.shape= %r", tuple(j3c2.shape))
-#
-#        # This is wrong?
-#        #kdij = []
-#        #for ki in range(nk):
-#        #    for kj in range(nk):
-#        #        kdij.append(kpts[ki]-kpts[kj])
-#        #kdij = np.asarray(kdij)
-#        #kuniq_map = pyscf.pbc.lib.kpts_helper.unique(kdij)[2].reshape(nk, nk)
-#        #log.debug("K-map:\n%r", kuniq_map)
-#
-#        # Check map
-#        _get_kpt_hash = pyscf.pbc.df.df_incore._get_kpt_hash
-#        kuniq_map = np.zeros((nk, nk), dtype=np.int)
-#        for ki in range(nk):
-#            for kj in range(nk):
-#                kij = np.asarray((kpts[ki], kpts[kj]))
-#                kij_id = gdf._cderi['j3c-kptij-hash'].get(_get_kpt_hash(kij), [None])
-#                assert len(kij_id) == 1
-#                kij_id = kij_id[0]
-#                if kij_id is None:
-#                    kij_id = gdf._cderi['j3c-kptij-hash'][_get_kpt_hash(kij[[1,0]])]
-#                    assert len(kij_id) == 1
-#                    # negative to indicate transpose needed
-#                    kij_id = -kij_id[0]
-#
-#                tmp = j3c2[abs(kij_id)].reshape(naux,nao,nao)
-#                if kij_id < 0:
-#                    tmp = tmp.transpose(0,2,1).conj()
-#
-#                log.debug("ki= %d kj= %d kij= %d", ki, kj, kij_id)
-#                assert np.allclose(j3c[ki,kj], tmp)
-#
-#                kuniq_map[ki,kj] = kij_id
-#
-#        for ki in range(nk):
-#            for kj in range(nk):
-#                kij = abs(kuniq_map[ki,kj])
-#                log.debug("First elements of ki= %d kj= %d kij= %d -> %f %f vs %f %f", ki, kj, kij, j3c[ki,kj,0,0,0].real, j3c[ki,kj,0,0,0].imag, j3c2[kij,0,0,0].real, j3c2[kij,0,0,0].imag)
-#
-#        #log.debug("K-map:\n%r", kuniq_map)
-#
-#        #log.debug("j3c[0,0]:\n%r", j3c[0,0])
-#        #log.debug("j3c2[0]:\n%r", j3c2[0].reshape(naux,nao,nao))
-#
-#        #log.debug("j3c[0,1]:\n%r", j3c[0,1])
-#        #idx = gdf._cderi['j3c-kptij-hash'].get(_get_kpt_hash((kpts[0], kpts[1])), None)
-#        #if idx is None:
-#        #    idx = gdf._cderi['j3c-kptij-hash'].get(_get_kpt_hash((kpts[1], kpts[0])), None)
-#        #idx = idx[0]
-#        #log.debug("j3c2[1]:\n%r", j3c2[idx].reshape(naux,nao,nao).transpose(0, 2, 1).conj())
-#
-#    else:
-#        pass
-#        #j3c = np.zeros((nk, nk, naux, nao, nao), dtype=complex)
-#        #for ki in range(nk):
-#        #    for kj in range(nk):
-#        #        kij = (kpts[ki], kpts[kj])
-#        #        blk0 = 0
-#        #        for lr, li, sign in gdf.sr_loop(kij, compact=False, blksize=int(1e9)):
-#        #            assert (sign == 1)
-#        #            blksize = lr.shape[0]
-#        #            blk = np.s_[blk0:blk0+blksize]
-#        #            blk0 += blksize
-#        #            j3c[ki,kj,blk] = (lr+1j*li).reshape(blksize, nao, nao) * factor
-#        #kuniq_map = None
-#
-#    return j3c, kuniq_map
-#
-#
-#
-#if __name__ == "__main__":
-#    from test_systems import graphite
-#    cell = graphite(basis="gth-dzvp")
-#    kmesh = [6, 6, 3]
-#    #kmesh = [2, 2, 1]
-#    kpts = cell.make_kpts(kmesh)
-#    nk = len(kpts)
-#    nao = cell.nao_nr()
-#    naux = 336
-#
-#    ints3c = ThreeCenterInts(cell, kpts, naux)
-#    print("Random values...")
-#    #ints3c.values = (np.random.rand(nk, nk, naux, nao, nao)
-#    #               + np.random.rand(nk, nk, naux, nao, nao)*1j)
-#    ints3c.values = np.zeros((nk, nk, naux, nao, nao), dtype=complex)
-#    ints3c.values[:] = 2.0
-#    print("Size of ints3c: %.2f GB" % (ints3c.values.nbytes/1e9))
-#
-#    #nocc = 860
-#    #nvir = 4
-#    nocc = 4
-#    nvir = 4748
-#    ck_o = np.random.rand(nk, nao, nocc) + np.random.rand(nk, nao, nocc)*1j
-#    ck_v = np.random.rand(nk, nao, nvir) + np.random.rand(nk, nao, nvir)*1j
-#
-#    #print("Occupieds")
-#    print("Virtuals")
-#    j3c_ov, j3c_oo, j3c_vv = j3c_kao2gmo(ints3c, ck_o, ck_v, only_ov=True)
-#    print("Done!")
+    return j3c

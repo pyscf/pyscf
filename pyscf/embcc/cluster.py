@@ -762,6 +762,12 @@ class Cluster:
         log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", c_active_vir.shape[-1], nvir_frozen, c_vir.shape[-1])
         log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", nactive, nfrozen, mo_coeff.shape[-1])
 
+        # If solver is not set
+        if not solver:
+            log.info("Solver set to None. Skipping calculation.")
+            self.converged = True
+            return 0, nactive, None, None
+
         log.info("RUNNING %s SOLVER", solver)
         log.info((len(solver)+15)*"*")
 
