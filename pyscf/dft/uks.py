@@ -190,20 +190,3 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = UKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753
-
