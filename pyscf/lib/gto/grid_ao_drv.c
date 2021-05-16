@@ -25,7 +25,6 @@
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
-double exp_cephes(double x);
 double CINTcommon_fac_sp(int l);
 
 void GTOnabla1(double *fx1, double *fy1, double *fz1,
@@ -90,7 +89,7 @@ int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
                 for (i = 0; i < ngrids; i++) {
                         arr = alpha[j] * rr[i];
                         if (arr-logcoeff[j] < EXPCUTOFF) {
-                                eprim[j*BLKSIZE+i] = exp_cephes(-arr) * fac;
+                                eprim[j*BLKSIZE+i] = exp(-arr) * fac;
                                 not0 = 1;
                         } else {
                                 eprim[j*BLKSIZE+i] = 0;

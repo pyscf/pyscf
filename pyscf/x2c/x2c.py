@@ -514,6 +514,7 @@ try:
 
     class X2C_RKS(X2C_UKS):
         def __init__(self, mol):
+            X2C_UKS.__init__(self, mol)
             if dhf.zquatev is None:
                 raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
 

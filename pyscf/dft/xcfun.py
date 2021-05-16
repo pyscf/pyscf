@@ -31,6 +31,12 @@ from pyscf.dft.xc.utils import remove_dup, format_xc_code
 
 _itrf = lib.load_library('libxcfun_itrf')
 
+_itrf.xcfun_splash.restype = ctypes.c_char_p
+_itrf.xcfun_version.restype = ctypes.c_char_p
+
+__version__ = _itrf.xcfun_version().decode("UTF-8")
+__reference__ = _itrf.xcfun_splash().decode("UTF-8")
+
 XC = XC_CODES = {
 'SLATERX'       :  0,  #Slater LDA exchange
 'PW86X'         :  1,  #PW86 exchange
@@ -102,7 +108,7 @@ XC = XC_CODES = {
 'APBEC'         : 67,  #APBE correlation functional.
 'APBEX'         : 68,  #APBE Exchange Functional
 'ZVPBESOLC'     : 69,  #zvPBEsol correlation Functional
-'BLOCX'         : 70,  #BLOC exchange functional
+#'BLOCX'         : 70,  #BLOC exchange functional
 'PBEINTC'       : 71,  #PBEint correlation Functional
 'PBEINTX'       : 72,  #PBEint Exchange Functional
 'PBELOCC'       : 73,  #PBEloc correlation functional.
@@ -185,7 +191,7 @@ XC_ALIAS = {
     'REVTPSS'           : 'REVTPSS,REVTPSS',
     'SCAN'              : 'SCAN,SCAN',
 #    'SOGGA'             : 'SOGGA,PBE',
-    'BLOC'              : 'BLOC,TPSSLOC',
+    #'BLOC'              : 'BLOC,TPSSLOC',
     'OLYP'              : 'OPTX,LYP',
     'RPBE'              : 'RPBE,PBE',
     'BPBE'              : 'B88,PBE',
@@ -1025,22 +1031,3 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
-
-
-if __name__ == '__main__':
-    from pyscf import gto, dft
-    mol = gto.M(
-        atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6311g',)
-    mf = dft.RKS(mol)
-    mf._numint.libxc = dft.xcfun
-    print(mf.kernel() - -75.8503877483363)
-
-    mf.xc = 'b88,lyp'
-    print(mf.kernel() - -76.3969707800463)
-
-    mf.xc = 'b3lyp'
-    print(mf.kernel() - -76.3777689410509)
