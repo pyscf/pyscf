@@ -934,7 +934,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
         int ish, jsh, ij;
         double *env_loc = malloc(sizeof(double)*nenv);
         NPdcopy(env_loc, env, nenv);
-        double *buf = malloc(sizeof(double)*(count+cache_size+1000000));
+        double *buf = malloc(sizeof(double)*(count+cache_size));
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;
@@ -1108,7 +1108,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
         double *env_loc = malloc(sizeof(double)*nenv);
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;
-        double *buf = malloc(sizeof(double)*(count*INTBUFMAX10*comp+cache_size+1000000));
+        double *buf = malloc(sizeof(double)*(count*INTBUFMAX10*comp+cache_size));
 #pragma omp for schedule(dynamic)
         for (jsh = 0; jsh < njsh; jsh++) {
                 (*fill)(intor, out, nkpts, comp, nimgs, jsh,
