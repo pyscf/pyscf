@@ -112,8 +112,11 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             return mf_class.reset(self, mol)
 
         def pre_kernel(self, envs):
+            self.direct_scf = False # should always be False
             if self.with_df.grids_level_i != self.with_df.grids_level_f:
                 self._in_scf = True
+            if self.with_df.pjs:
+                self.with_df.dfj = True # no SGX-J allowed if P-junction screening on
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
                    omega=None):
@@ -121,6 +124,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             with_df = self.with_df
             if not with_df:
                 return mf_class.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
+            if self.opt is None and self.with_df.direct_j and (not self.with_df.dfj):
+                self.opt = self.init_direct_scf(mol)
 
             if self._in_scf and not self.direct_scf:
                 if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
@@ -132,7 +137,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                     self._last_vk = 0
 
             if self.direct_scf_sgx:
-                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, with_j, with_k,
+                vj, vk = with_df.get_jk(dm-self._last_dm, hermi, self.opt,
+                                        with_j, with_k,
                                         self.direct_scf_tol, omega)
 
                 vj += self._last_vj
@@ -144,7 +150,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
 
             else:
                 self._last_dm = numpy.asarray(dm)
-                vj, vk = with_df.get_jk(dm, hermi, with_j, with_k,
+                vj, vk = with_df.get_jk(dm, hermi, self.opt, with_j, with_k,
                                         self.direct_scf_tol, omega)
 
             return vj, vk
@@ -209,6 +215,7 @@ class SGX(lib.StreamObject):
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
         self.dfj = False
+        self.direct_j = False
         self._auxbasis = auxbasis
         self.pjs = pjs
 
@@ -281,7 +288,7 @@ class SGX(lib.StreamObject):
         self._rsh_df = {}
         return self
 
-    def get_jk(self, dm, hermi=1, with_j=True, with_k=True,
+    def get_jk(self, dm, hermi=1, with_j=True, with_k=True, vhfopt=None,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
         if omega is not None:
@@ -304,6 +311,13 @@ class SGX(lib.StreamObject):
 
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
+            if with_k:
+                vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
+            else:
+                vk = None
+        elif with_j and self.direct_j:
+            vj = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
+                             vhfopt, hermi, mol.cart, True, False)
             if with_k:
                 vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
             else:
