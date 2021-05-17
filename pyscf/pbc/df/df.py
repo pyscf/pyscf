@@ -221,7 +221,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         except scipy.linalg.LinAlgError:
             j2ctag = None
         # Try regularized Cholesky decomposition if linear_dep_method == "regularize"
-        if not j2ctag and if mydf.linear_dep_method == 'regularize':
+        if not j2ctag and mydf.linear_dep_method == 'regularize':
             try:
                 eps = 1e-14
                 j2c = scipy.linalg.cholesky(j2c + eps*numpy.eye(j2c.shape[-1]), lower=True)
