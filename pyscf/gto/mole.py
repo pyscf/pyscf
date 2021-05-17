@@ -2646,6 +2646,11 @@ class Mole(lib.StreamObject):
                 xax = np.linalg.multi_dot((x.T.conj(), a, x))
                 e, c = np.linalg.eigh(xax)
                 c = np.dot(x, c)
+                # PySCF sign convention
+                idx = numpy.argmax(abs(c.real), axis=0)
+                switch = c[idx,np.arange(len(e))].real < 0
+                c[:,switch] *= -1
+
                 return e, c
         else:
             raise NotImplementedError()

@@ -61,6 +61,8 @@ def get_arguments():
     parser.add_argument("--load-scf-init-guess")
     parser.add_argument("--exxdiv-none", action="store_true")
     parser.add_argument("--hf-init-guess-basis")
+    parser.add_argument("--scf-conv-tol", type=float)
+    parser.add_argument("--scf-max-cycle", type=int, default=100)
     #parser.add_argument("--remove-linear-dep", type=float)
     parser.add_argument("--lindep-threshold", type=float)
     # Density-fitting
@@ -69,6 +71,7 @@ def get_arguments():
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
+    parser.add_argument("--df-lindep-method")
     # Embedded correlated calculation
     parser.add_argument("--solver", type=str_or_none, default="CCSD")
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
@@ -265,6 +268,10 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
             mf.xc = xc
     if args.exxdiv_none:
         mf.exxdiv = None
+    if args.scf_conv_tol is not None:
+        mf.conv_tol = args.scf_conv_tol
+    if args.scf_max_cycle is not None:
+        mf.max_cycle = args.scf_max_cycle
     # Load SCF from checkpoint file
     load_scf_ok = False
     if args.load_scf:
@@ -301,6 +308,8 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
             mf.with_df = IncoreGDF(cell, kpts)
         df = mf.with_df
         # TEST
+        if args.df_lindep_method is not None:
+            df.linear_dep_method = args.df_lindep_method
 
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
@@ -397,7 +406,7 @@ def run_benchmarks(a, cell, mf, kpts, args):
             else:
                 raise NotImplementedError()
             cc.kernel()
-            log.info("Canonical CCSD: E(corr)= %+16.8g Ha", cc.e_corr)
+            log.info("Canonical CCSD: E(corr)= %+16.8f Ha", cc.e_corr)
             log.info("Time for canonical CCSD: %.3f s", (timer()-t0))
             energies["cc"] = [cc.e_tot]
         except Exception as e:

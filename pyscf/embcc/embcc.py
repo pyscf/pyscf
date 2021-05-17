@@ -44,14 +44,6 @@ class EmbCC:
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
-    VALID_BATH_TYPES = [
-            None,
-            "local",
-            "power", "matsubara",
-            "mp2-natorb",
-            #"mp2-natorb-2", "mp2-natorb-3",
-            #"mp2-natorb-4",
-            "full", "random"]
 
     # These optionals are automatically transferred to any created cluster object
     default_options = [
@@ -59,12 +51,6 @@ class EmbCC:
             "use_ref_orbitals_dmet",
             "use_ref_orbitals_bath",
             "mp2_correction",
-            # BATH
-            "bath_type",
-            "bath_size",
-            "bath_tol",
-            #"bath_tol_per_electron",
-            "bath_energy_tol",
             "power1_occ_bath_tol",
             "power1_vir_bath_tol",
             "local_occ_bath_tol",
@@ -74,14 +60,7 @@ class EmbCC:
     def __init__(self, mf,
             local_type="IAO",       # TODO: rename -> fragment_type?
             solver="CCSD",
-            bath_type="mp2-natorb",
-            bath_size=None,
-            bath_tol=None,
-            #bath_tol_per_electron=False,
-            bath_energy_tol=1e-3,
-            # New bath tolerance
-            bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
-            #minao="minao",
+            bno_threshold=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3],
             minao=None,
             #
             use_ref_orbitals_dmet=True,
@@ -163,19 +142,14 @@ class EmbCC:
             raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in self.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
-        #if bath_type not in (None, "power", "matsubara", "uncontracted", "mp2-natorb"):
-        if bath_type not in self.VALID_BATH_TYPES:
-            raise ValueError("Unknown bath type: %s" % bath_type)
 
         # k-space unfolding
-        #if isinstance(mf, pyscf.pbc.scf.KRHF):
         if hasattr(mf, "kpts") and mf.kpts is not None:
             t0 = timer()
             self.kcell = mf.cell
             self.kpts = mf.kpts
             self.kdf = mf.with_df
             log.debug("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
-            # DEBUG:
             log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             assert (self.kcell == self.kdf.cell)
             assert np.all(self.kpts == self.kdf.kpts)
@@ -215,11 +189,6 @@ class EmbCC:
         if np.isscalar(bno_threshold):
             bno_threshold = [bno_threshold]
         self.bno_threshold = bno_threshold
-
-        self.bath_type = bath_type
-        self.bath_size = bath_size
-        self.bath_tol = bath_tol
-        self.bath_energy_tol = bath_energy_tol
         self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
         self.use_ref_orbitals_bath = use_ref_orbitals_bath
         self.mp2_correction = mp2_correction
@@ -611,21 +580,23 @@ class EmbCC:
         cluster_id = len(self.clusters) + 1
         # Check that ID is unique
         for cluster in self.clusters:
-            assert (cluster_id != cluster.id)
-        # Make name unique
-        for i in range(1, 100):
-            name_i = name if i == 1 else "%s%d" % (name, i)
-            if name_i not in [x.name for x in self.clusters]:
-                name = name_i
-                break
-        else:
-            raise ValueError("Cluster with name %s already exists." % name)
+            if (cluster_id == cluster.id):
+                raise RuntimeError("Cluster with ID %d already exists: %s" % (cluster_id, cluster.id_name))
+
+        # Make name unique [Names can now be duplicated]
+        #for i in range(1, 100):
+        #    name_i = name if i == 1 else "%s%d" % (name, i)
+        #    if name_i not in [x.name for x in self.clusters]:
+        #        name = name_i
+        #        break
+        #else:
+        #    raise ValueError("Cluster with name %s already exists." % name)
         # Pass options to cluster object via keyword arguments
         for opt in self.default_options:
             kwargs[opt] = kwargs.get(opt, getattr(self, opt))
-        # Symmetry factor, if symmetry related clusters exist in molecule (e.g. hydrogen rings)
+        # Symmetry factor, if symmetry related fragments exist
+        # TODO: Determine symmetry automatically
         kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
-        #cluster = Cluster(self, cluster_id=cluster_id, name=name, C_local=C_local, C_env=C_env, **kwargs)
         cluster = Cluster(self, cluster_id=cluster_id, name=name,
                 #indices=indices,
                 c_frag=C_local, c_env=C_env, **kwargs)

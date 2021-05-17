@@ -1485,14 +1485,17 @@ class SCF(lib.StreamObject):
 
 
     def _eigh(self, h, s):
-        return eig(h, s)
+        #return eig(h, s)
+        # Eigenvalue solver with linear dependency treatment if needed:
+        eigh = self.mol.eigh_factory()
+        return eigh(h, s)
 
     @lib.with_doc(eig.__doc__)
     def eig(self, h, s):
         # An intermediate call to self._eigh so that the modification to eig function
         # can be applied on different level.  Different SCF modules like RHF/UHF
         # redefine only the eig solver and leave the other modifications (like removing
-        # linear dependence, sorting eigenvlaue) to low level ._eigh
+        # linear dependence, sorting eigenvalues) to low level ._eigh
         return self._eigh(h, s)
 
     def get_hcore(self, mol=None):

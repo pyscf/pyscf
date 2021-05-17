@@ -14,23 +14,41 @@ from pyscf.pbc.df.df_incore import IncoreGDF
 import pyscf.embcc
 import pyscf.embcc.k2gamma_gdf
 
-def make_cubic(a, atom="He", supercell=False):
+def make_cubic(a, atom="He", basis="gth-dzv", supercell=False):
     amat = a * np.eye(3)
     atom = "%s %f %f %f" % (atom, a/2, a/2, a/2)
 
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
-    cell.basis = "gth-dzv"
+    cell.basis = basis
     cell.pseudo = "gth-pade"
-    cell.precision = 1e-5
+    #cell.precision = 1e-5
     cell.verbose = 10
     cell.build()
     if supercell:
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
-def make_diamond(a, atoms=["C1", "C2"], supercell=False):
+def make_tetragonal(a, c, atoms=["H", "H"], basis="gth-dzv", supercell=False, output=None):
+    amat = a * np.eye(3)
+    amat[2,2] = c
+    atom = "%s %f %f %f ; %s %f %f %f" % (atoms[0], 0, 0, 0, atoms[1], a/2, a/2, c/2)
+    cell = pyscf.pbc.gto.Cell()
+    cell.a = amat
+    cell.atom = atom
+    cell.basis = basis
+    cell.pseudo = "gth-pade"
+    #cell.precision = 1e-5
+    cell.verbose = 10
+    if output is not None:
+        cell.output = output
+    cell.build()
+    if supercell:
+        cell = pyscf.pbc.tools.super_cell(cell, supercell)
+    return cell
+
+def make_diamond(a, atoms=["C1", "C2"], basis="gth-dzv", supercell=False):
     amat = a * np.asarray([
         [0.5, 0.5, 0.0],
         [0.0, 0.5, 0.5],
@@ -41,10 +59,9 @@ def make_diamond(a, atoms=["C1", "C2"], supercell=False):
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
-    cell.basis = "gth-dzv"
-    #cell.basis = "gth-tzvp"
+    cell.basis = basis
     cell.pseudo = "gth-pade"
-    cell.precision = 1e-8
+    #cell.precision = 1e-8
     cell.verbose = 10
     cell.build()
     if supercell:
@@ -80,6 +97,57 @@ def test_helium(EXPECTED=-22.8671, kmesh=[2,2,2]):
     #if EXPECTED:
     #    assert np.isclose(scc.e_tot, EXPECTED)
 
+def test_canonical_orth(c=1.2, lindep_threshold=1e-8, kmesh=[1,1,2], output=None):
+
+    a = 4.0
+    basis = "gth-aug-dzvp"
+    cell = make_tetragonal(a, c, basis=basis, output=output)
+    kpts = cell.make_kpts(kmesh)
+
+    # Canonical Orth
+    cell.lindep_threshold = lindep_threshold
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    try:
+        kmf.kernel()
+    except Exception as e:
+        print("Exception: %r" % e)
+        return np.nan, np.nan
+
+    # Canonical CCSD
+    kcc = pyscf.pbc.cc.KCCSD(kmf)
+    try:
+        kcc.kernel()
+    except Exception as e:
+        print("Exception: %r" % e)
+        return kmf.e_tot, np.nan
+
+    print("CCSD E= %16.8g" % kcc.e_tot)
+
+    #kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=-1)
+    #kcc.make_atom_cluster(0)
+    #kcc.kernel()
+    #print("Emb-CCSD E= %16.8g" % kcc.e_tot)
+
+    return kmf.e_tot, kcc.e_tot
+
+def sample_canonical_orth():
+    #cs = [4.0, 3.0, 2.6, 2.4, 2.2, 2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8]
+    cs = [2.0, 1.9, 1.8, 1.7, 1.6]
+    threshs = [None, 1e-10, 1e-8, 1e-6, 1e-4]
+
+    for i, thresh in enumerate(threshs):
+        e_hfs = []
+        e_ccs = []
+        for j, c in enumerate(cs):
+            out = "t-%r-c-%.1f.txt" % (thresh, c)
+            e_hf, e_cc = test_canonical_orth(c, thresh, output=out)
+            e_hfs.append(e_hf)
+            e_ccs.append(e_cc)
+
+        data = np.stack((cs, e_hfs, e_ccs), axis=1)
+        np.savetxt(("threshold-%r.txt" % thresh), data)
+
 def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
 
     #a = 3.5
@@ -104,6 +172,8 @@ def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
     if EXPECTED:
         assert np.isclose(kcc.e_tot, EXPECTED)
 
+
+
 def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2, 2, 2]):
 
     a = 3.5
@@ -114,6 +184,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
+    kmf.with_df.linear_dep_method = "regularize"
     kmf.kernel()
 
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold[::-1])
@@ -128,14 +199,23 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     if kmesh == [2,2,2]:
         N_EXPECTED = np.array([[77, 52, 39, 14]])
         E_EXPECTED = np.array([-11.16455488, -11.15595256, -11.1383086 , -11.09207628])
-        np.all(kcc.get_cluster_sizes() == N_EXPECTED)
-        np.allclose(kcc.get_energies(), E_EXPECTED)
+        e = kcc.get_energies()
+        if not np.allclose(e, E_EXPECTED):
+            print("Got:      %r", e)
+            print("Expected: %r", E_EXPECTED)
+
+            print("Cluster sizes: %r", kcc.get_cluster_sizes())
+            print("Expected:      %r", N_EXPECTED)
+            raise RuntimeError()
+
+        #assert np.allclose(kcc.get_energies(), E_EXPECTED)
+        #assert np.all(kcc.get_cluster_sizes() == N_EXPECTED)
     # For [3,3,3], gth-dzv, a=3.5
     elif kmesh == [3,3,3]:
         N_EXPECTED = np.array([[89, 61, 39, 14]])
         E_EXPECTED = np.array([-11.22353507, -11.21390107, -11.19618965, -11.15312301])
-        np.all(kcc.get_cluster_sizes() == N_EXPECTED)
-        np.allclose(kcc.get_energies(), E_EXPECTED)
+        assert np.all(kcc.get_cluster_sizes() == N_EXPECTED)
+        assert np.allclose(kcc.get_energies(), E_EXPECTED)
 
 def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
 
@@ -230,6 +310,8 @@ def run_test():
     #test_helium(kmesh=[2,1,1])
     #test_diamond_kpts(kmesh=[2,2,2])
     test_diamond_bno_threshold(kmesh=[2,2,2])
+    #test_canonical_orth()
+    #sample_canonical_orth()
     #test_diamond_bno_threshold(kmesh=[3,3,3])
     #test_diamond_kpts(kmesh=[3,3,3])
     #test_diamond(-11.138309)

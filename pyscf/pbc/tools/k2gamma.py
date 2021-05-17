@@ -171,9 +171,11 @@ def rotate_mo_to_real(cell, mo_energy, mo_coeff, ovlp, degen_tol=1e-3, rotate_de
         # Only perform rotation if imaginary norm is decreased
         if (norm1 < norm0):
             mo_coeff_rot[:,mo] = mo_c1
-            logger.debug(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e -> %.2e (phase= %+.8f)", mo, mo_e, degen, norm0, norm1, phase)
+            if norm1 < 1e-8:
+                logger.debug(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e -> %.2e (phase= %+.8f)", mo, mo_e, degen, norm0, norm1, phase)
         else:
-            logger.debug(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e", mo, mo_e, degen, norm0)
+            if norm0 > 1e-8 and not degen:
+                logger.warn(cell, "MO %4d at E=%+12.8e: degen= %5r |Im C|= %.2e", mo, mo_e, degen, norm0)
 
     return mo_coeff_rot
 
@@ -218,21 +220,11 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
     # Determine overlap by unfolding for better error cancelation?
     s_k = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=lib.c_null_ptr())
     ovlp = to_supercell_ao_integrals(cell, kpts, s_k)
-    #logger.debug(cell, "Difference between overlap matrixes: norm= %.2e max= %.2e", np.linalg.norm(s2-s), abs(s2-s).max())
 
-    #assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-    #           - np.eye(Nmo*Nk)).max() < 1e-5)
     ortherr = abs(np.linalg.multi_dot((C_gamma.conj().T, ovlp, C_gamma)) - np.eye(C_gamma.shape[-1])).max()
     logger.debug(cell, "Orthogonality error= %.2e" % ortherr)
     if ortherr > 1e-4:
         logger.error(cell, "ERROR: Unfolded MOs are not orthogonal!")
-
-    #ortherr = abs(np.linalg.multi_dot((C_gamma.conj().T, s2, C_gamma)) - np.eye(Nmo*Nk)).max()
-    #logger.debug(cell, "Orthogonality error= %.2e" % ortherr)
-    #if ortherr > 1e-4:
-    #    logger.error(cell, "ERROR: Unfolded MOs are not orthogonal!")
-
-    #assert ortherr < 1e-5
 
     # For degenerated MOs, the transformed orbitals in super cell may not be
     # real. Construct a sub Fock matrix in super-cell to find a proper
@@ -255,8 +247,8 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
         degen_method = "fock"
         print("Significant imaginary parts - changing degen_method to %s" % degen_method)
 
-    # Eigenvalue solver with linear-dependency treatment
-    #eigh = scell.eigh_factory()
+    # Get eigenvalue solver with linear-dependency treatment
+    eigh = cell.eigh_factory()
 
     t0 = timer()
     if degen_method == "fock":
@@ -267,25 +259,15 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
 
                 # Shift all MOs above the eig=0 subspace (so they can be identified later)
                 shift = 1.0 - min(E_g[degen_mask])
-                #f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] + shift), C_gamma[:,degen_mask].conj().T)
-                #f = np.linalg.multi_dot((ovlp, f, ovlp))
                 cs = np.dot(C_gamma[:,degen_mask].conj().T, ovlp)
                 f = np.dot(cs.T.conj() * (E_g[degen_mask] + shift), cs)
                 fimag = abs(f.imag).max()
                 logger.debug(cell, "max|Im(F)|= %.2e", fimag)
 
-                #fimag = abs(np.dot(f, ovlp).imag).max()
-                #logger.debug(cell, "max|Im(F.S)|= %.2e", fimag)
-
-                #assert(abs(f.imag).max() < 1e-3), "max|Im(F)| = %.2e" % abs(f.imag).max()
-
-                #e, na_orb = scipy.linalg.eigh(f.real, ovlp, type=2)
-                e, na_orb = scipy.linalg.eigh(f.real, ovlp)
-                #e, na_orb = eigh(f.real, ovlp)
+                e, na_orb = eigh(f.real, ovlp)
 
                 # Extract MOs from rank-deficient fock matrix
                 mask = (e > 0.5)
-                #logger.debug(cell, "Eigenvalues > 1e-14: %r", e[abs(e) > 1e-14])
                 assert np.count_nonzero(mask) == np.count_nonzero(degen_mask)
                 logger.debug(cell, "Max error of MO energies= %.2e", abs(E_g[degen_mask]-(e[mask]-shift)).max())
                 #E_g[degen_mask] = e+shift
@@ -293,9 +275,6 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
                 C_gamma_out[:,degen_mask] = na_orb[:,mask]
             # Diagonalize whole Fock matrix
             else:
-                #f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-                #f = np.linalg.multi_dot((ovlp, f, ovlp))
-
                 # f may be rank deficient, due to linear-dependency treatment
                 shift = 1.0 - min(E_g)
                 cs = np.dot(C_gamma.conj().T, ovlp)
@@ -304,14 +283,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
                 fimag = abs(f.imag).max()
                 logger.debug(cell, "max|Im(F)|= %.2e", fimag)
 
-                #fimag = abs(np.dot(f, ovlp).imag).max()
-                #logger.debug(cell, "max|Im(F.S)|= %.2e", fimag)
-                #assert(abs(f.imag).max() < 1e-3), "max|Im(F)|= %.2e" % abs(f.imag).max()
-
-                #e, C_gamma = scipy.linalg.eigh(f.real, ovlp, type=2)
-                # Replace E_g - it is possible that additional MO are being removed due to linear dependency treatment
-                #E_g, C_gamma_out = eigh(f.real, ovlp)
-                e, C_gamma_out = scipy.linalg.eigh(f.real, ovlp)
+                e, C_gamma_out = eigh(f.real, ovlp)
                 #E_g = e
                 mask = (e > 0.5)
                 assert np.count_nonzero(mask) == len(E_g)
@@ -380,8 +352,6 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
     assert np.allclose(C_gamma_out.imag, 0)
     C_gamma_out = C_gamma_out.real
 
-    #s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
-    #s_k = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=lib.c_null_ptr())
     # overlap between k-point unitcell and gamma-point supercell
     s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(Nk,Nao,NR*Nao)
     # The unitary transformation from k-adapted orbitals to gamma-point orbitals

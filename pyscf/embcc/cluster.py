@@ -21,7 +21,6 @@ from pyscf.pbc.tools import cubegen
 from .solver import ClusterSolver
 from .util import *
 from .dmet_bath import make_dmet_bath, project_ref_orbitals
-#from .bath import *
 from .mp2_bath import make_mp2_bno
 from .energy import *
 from . import ccsd_t
@@ -36,13 +35,9 @@ log = logging.getLogger(__name__)
 
 class Cluster:
 
-    def __init__(self, base, cluster_id, name,
-            #indices, C_local, C_env,
-            c_frag, c_env,
+    def __init__(self, base, cluster_id, name, c_frag, c_env,
             ao_indices=None,
             solver="CCSD",
-            # Bath
-            bath_type="mp2-natorb", bath_size=None, bath_tol=1e-4, bath_energy_tol=None,
             bno_threshold=None, bno_threshold_factor=1,
             **kwargs):
         """
@@ -61,12 +56,12 @@ class Cluster:
         self.base = base
         self.id = cluster_id
         self.name = name
-        #self.indices = indices
+        # What is this for?:
         self.ao_indices = ao_indices
         msg = "CREATING CLUSTER %d: %s" % (self.id, self.name)
         log.info(msg)
         log.info(len(msg)*"*")
-        log.info("  * Local orbital type= %s", self.local_orbital_type)     # depends on self.base
+        log.info("  * Fragment orbital type= %s", self.local_orbital_type)     # depends on self.base
 
         # NEW: local and environment orbitals
         if c_frag.shape[-1] == 0:
@@ -74,13 +69,13 @@ class Cluster:
 
         self.c_frag = c_frag
         self.c_env = c_env
-        log.info("  * Size= %d", self.size) # depends on self.c_frag
+        log.info("  * Number of fragment orbitals= %d", self.size) # depends on self.c_frag
 
         # Determine number of mean-field electrons in fragment space
         sc = np.dot(self.base.ovlp, self.c_frag)
         dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         self.nelec_mf_frag = np.trace(dm)
-        log.info("  * Mean-field electrons= %.5f", self.nelec_mf_frag)
+        log.info("  * Number of mean-field electrons= %.6f", self.nelec_mf_frag)
 
         # Options
         if solver not in self.base.VALID_SOLVERS:
@@ -88,35 +83,13 @@ class Cluster:
         self.solver = solver
         log.info("  * Solver= %s", self.solver)
 
-        #if not hasattr(bath_size, "__getitem__"):
-        if not has_length(bath_size, 2):
-            bath_size = (bath_size, bath_size)
-        #if not hasattr(bath_tol, "__getitem__"):
-        if not has_length(bath_tol, 2):
-            bath_tol = (bath_tol, bath_tol)
-        #if not hasattr(bath_energy_tol, "__getitem__"):
-        if not has_length(bath_energy_tol, 2):
-            bath_energy_tol = (bath_energy_tol, bath_energy_tol)
-
-        #assert bath_type in (None, "full", "power", "matsubara", "mp2-natorb")
-        if bath_type not in self.base.VALID_BATH_TYPES:
-            raise ValueError("Unknown bath type: %s" % bath_type)
-
-        self.bath_type = bath_type
-        self.bath_target_size = bath_size
-        self.bath_tol = bath_tol
-        self.bath_energy_tol = bath_energy_tol
-
-        assert len(self.bath_target_size) == 2
-        assert len(self.bath_tol) == 2
-        assert len(self.bath_energy_tol) == 2
-
         # Bath natural orbital (BNO) threshold
         if bno_threshold is None:
             bno_threshold = self.base.bno_threshold
         assert len(bno_threshold) == len(self.base.bno_threshold)
         self.bno_threshold = bno_threshold_factor*np.asarray(bno_threshold)
-        # Sort so that most expensive calculation comes first (allows projecting ERIs)
+        # Sort such that most expensive calculation (smallest threshold) comes first
+        # (allows projecting down ERIs and initial guess for subsequent calculations)
         self.bno_threshold.sort()
 
         # Other options from kwargs:
@@ -129,7 +102,8 @@ class Cluster:
 
         # Bath parameters
 
-        self.coupled_bath = kwargs.get("coupled_bath", False)
+        # OLD [TCC]
+        #self.coupled_bath = kwargs.get("coupled_bath", False)
 
         # Add additional orbitals to 0-cluster
         # Add first-order power orbitals
@@ -143,22 +117,19 @@ class Cluster:
         self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
         log.info("  * Symmetry factor= %f", self.symmetry_factor)
 
-        # Restart solver from previous solution [True/False]
-        #self.restart_solver = kwargs.get("restart_solver", True)
-        self.restart_solver = kwargs.get("restart_solver", False)
-        # Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
-        self.restart_params = kwargs.get("restart_params", {})
+        ## Restart solver from previous solution [True/False]
+        ##self.restart_solver = kwargs.get("restart_solver", True)
+        #self.restart_solver = kwargs.get("restart_solver", False)
+        ## Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
+        #self.restart_params = kwargs.get("restart_params", {})
 
-        # By default use PBC code if self.mol has attribute "cell"
-        #self.use_pbc = kwargs.get("use_pbc", False)
+        # By default use PBC code if self.mol is "pbc.gto.Cell"
         self.use_pbc = kwargs.get("use_pbc", self.has_pbc)
 
-
-        self.nelectron_target = kwargs.get("nelectron_target", None)
+        # OLD
+        #self.nelectron_target = kwargs.get("nelectron_target", None)
 
         self.use_energy_tol_as_delta_mp2 = kwargs.get("use_energy_tol_as_delta_mp2", False)
-
-        #self.make_rdm1 = kwargs.get("make_rdm1", False)     # Calculate RDM1 in cluster?
 
         opts = Options()
         opts.dmet_threshold = self.base.opts.get("dmet_threshold", 1e-4)
@@ -170,78 +141,25 @@ class Cluster:
         opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
         self.opts = opts
 
-        #self.project_type = kwargs.get("project_type", "first-occ")
-
-        if self.opts.plot_orbitals:
-            os.makedirs(self.base.opts.plot_orbitals_dir, exist_ok=True)
-            name = "%s.cube" % os.path.join(self.base.opts.plot_orbitals_dir, self.name)
-            self.cubefile = cubegen.CubeFile(self.mol, filename=name, **self.base.opts.plot_orbitals_kwargs)
-            self.cubefile.add_orbital(self.c_frag.copy())
-
+        # Do NOT perform (T)-correction for cluster problems above this size:
         self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 200)
 
-        self.set_default_attributes()
-
-    def set_default_attributes(self):
-        """Set default attributes of cluster object."""
-
-        # Orbitals [set when running solver]
-        ####self.C_bath = None      # DMET bath orbitals
-        ####self.C_occclst = None   # Occupied cluster orbitals
-        ####self.C_virclst = None   # Virtual cluster orbitals
-        ####self.C_occbath = None   # Occupied bath orbitals
-        ####self.C_virbath = None   # Virtual bath orbitals
-
+        # Some default attributes:
         self.nactive = 0
         self.nfrozen = 0
-
-        ###self.active = []
-        ###self.active_occ = []
-        ###self.active_vir = []
-        ###self.frozen = []
-        ###self.frozen_occ = []
-        ###self.frozen_vir = []
-
-        # These are used by the solver
-        ##self.mo_coeff = None
-        ##self.mo_occ = None
-        ##self.eris = None
-
-        # Local amplitudes [C1, C2] can be stored here and
-        # used by other fragments
-        ##self.amplitudes = {}
-
-        # Orbitals sizes
-        #self.nbath0 = 0
-        #self.nbath = 0
-        #self.nfrozen = 0
-        # Calculation results
-
         # Intermediate values
         self.c_no_occ = self.c_no_vir = None
         self.n_no_occ = self.n_no_vir = None
-
         # Save correlation energies for different BNO thresholds
-        #self.e_corrs = {}
         self.e_corrs = len(self.bno_threshold)*[None]
         self.n_active = len(self.bno_threshold)*[None]
-
         self.iteration = 0
-
         # Output values
         self.converged = False
         #self.e_corr = 0.0
         self.e_delta_mp2 = 0.0
         self.e_pert_t = 0.0
         self.e_corr_dmp2 = 0.0
-
-        # For testing:
-        # Full cluster correlation energy
-        #self.e_corr_full = 0.0
-        #self.e_corr_v = 0.0
-        #self.e_corr_d = 0.0
-        #self.e_dmet = 0.0
-
         # For EMO-CCSD
         self.eom_ip_energy = None
         self.eom_ea_energy = None
@@ -254,7 +172,7 @@ class Cluster:
     @property
     def id_name(self):
         """Use this whenever a unique name is needed (for example to open a file)."""
-        return "%d:%s" % (self.id, self.trimmed_name())
+        return "%dx%s" % (self.id, self.trimmed_name())
 
     @property
     def size(self):
@@ -310,18 +228,8 @@ class Cluster:
     def energy_factor(self):
         return self.symmetry_factor
 
-    # Register frunctions of bath.py as methods
+    # Register frunctions of dmet_bath.py as methods
     make_dmet_bath = make_dmet_bath
-    # OLD
-    #project_ref_orbitals = project_ref_orbitals
-    #make_bath = make_bath
-    #make_local_bath = make_local_bath
-    #make_mf_bath = make_mf_bath
-    #make_mp2_bath = make_mp2_bath
-    #get_mp2_correction = get_mp2_correction
-    #transform_mp2_eris = transform_mp2_eris
-    #run_mp2 = run_mp2
-    #run_mp2_general = run_mp2_general
 
     # Register frunctions of energy.py as methods
     get_local_amplitudes = get_local_amplitudes
@@ -596,10 +504,15 @@ class Cluster:
         log.changeIndentLevel(1)
         c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_threshold)
         log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
-        # Plotting of DMET bath orbitals
-        if self.opts.plot_orbitals:
-            self.cubefile.add_orbital(c_dmet.copy(), dset_idx=1001)
         log.changeIndentLevel(-1)
+
+        # Add fragment and DMET orbitals for cube file plots
+        if self.opts.plot_orbitals:
+            os.makedirs(self.base.opts.plot_orbitals_dir, exist_ok=True)
+            name = "%s.cube" % os.path.join(self.base.opts.plot_orbitals_dir, self.name)
+            self.cubefile = cubegen.CubeFile(self.mol, filename=name, **self.base.opts.plot_orbitals_kwargs)
+            self.cubefile.add_orbital(self.c_frag.copy())
+            self.cubefile.add_orbital(c_dmet.copy(), dset_idx=1001)
 
         # Add additional orbitals to cluster [optional]
         c_dmet, c_env_occ, c_env_vir = self.additional_bath_for_cluster(c_dmet, c_env_occ, c_env_vir)
@@ -638,57 +551,31 @@ class Cluster:
 
         #self.C_bath = C_bath
 
-        # === Additional bath orbitals
+        # Bath natural orbitals (GNO) 
 
-        log.info("MAKING OCCUPIED BATH")
+        log.info("MAKING OCCUPIED BNOs")
         log.info("********************")
         t0 = timer()
         log.changeIndentLevel(1)
-        #C_occbath, C_occenv2, e_delta_occ, _ = self.make_bath(
-        #        C_occenv, self.bath_type, "occ",
-        #        # New for MP2 bath:
-        #        C_occenv=C_occenv, C_virenv=C_virenv,
-        #        nbath=self.bath_target_size[0], tol=self.bath_tol[0])
-
         self.c_no_occ, self.n_no_occ = make_mp2_bno(
-                #self, "occ", np.hstack((self.c_cluster_occ, c_env_occ)), self.c_cluster_vir,
                 self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-
-        log.debug("Time for occupied %r bath: %s", self.bath_type, get_time_string(timer()-t0))
+        log.debug("Time for occupied BNOs: %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
-        log.info("MAKING VIRTUAL BATH")
+        log.info("MAKING VIRTUAL BNOs")
         log.info("*******************")
         t0 = timer()
         log.changeIndentLevel(1)
-        #C_virbath, C_virenv2, e_delta_vir, _ = self.make_bath(
-        #        C_virenv, self.bath_type, "vir",
-        #        # New for MP2 bath:
-        #        C_occenv=C_occenv, C_virenv=C_virenv,
-        #        nbath=self.bath_target_size[1], tol=self.bath_tol[1])
-
         self.c_no_vir, self.n_no_vir = make_mp2_bno(
-                #self, "vir", self.c_cluster_occ, np.hstack((self.c_cluster_vir, c_env_vir)),
                 self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-                #c_occ_frozen=c_env_occ)
-
-        log.debug("Time for virtual %r bath: %s", self.bath_type, get_time_string(timer()-t0))
+        log.debug("Time for virtual BNOs:  %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
-
-        # TODO PLOTS
 
         # Plot orbitals
         if self.opts.plot_orbitals:
             # Save state of cubefile, in case a replot of the same data is required later:
             self.cubefile.save_state("%s.pkl" % self.cubefile.filename)
-            # Write cube-file:
             self.cubefile.write()
-
-        #C_occenv, C_virenv = C_occenv2, C_virenv2
-        #self.C_occbath = C_occbath
-        #self.C_virbath = C_virbath
-        #self.C_occenv = C_occenv
-        #self.C_virenv = C_virenv
         log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
 
         init_guess = eris = None
@@ -698,7 +585,6 @@ class Cluster:
             log.changeIndentLevel(1)
             e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
             log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)
-            #self.e_corrs[bno_thr] = e_corr
             self.e_corrs[icalc] = e_corr
             self.n_active[icalc] = n_active
             log.changeIndentLevel(-1)
@@ -711,18 +597,14 @@ class Cluster:
         assert (self.c_no_occ is not None)
         assert (self.c_no_vir is not None)
 
-        log.info("Occupied MP2 BNOs:")
+        log.info("Occupied BNOs:")
         c_nbo_occ, c_frozen_occ = self.apply_bno_threshold(self.c_no_occ, self.n_no_occ, bno_thr)
-        log.info("Virtual MP2 BNOs:")
+        log.info("Virtual BNOs:")
         c_nbo_vir, c_frozen_vir = self.apply_bno_threshold(self.c_no_vir, self.n_no_vir, bno_thr)
 
         # Canonicalize orbitals
         c_active_occ = self.canonicalize(self.c_cluster_occ, c_nbo_occ)[0]
         c_active_vir = self.canonicalize(self.c_cluster_vir, c_nbo_vir)[0]
-
-        # NEEDED???
-        #self.C_occact = C_occact
-        #self.C_viract = C_viract
 
         # Combine, important to keep occupied orbitals first!
         # Put frozen (occenv, virenv) orbitals to the front and back
@@ -740,16 +622,6 @@ class Cluster:
         if not np.allclose(n_vir, 0, atol=2*self.opts.dmet_threshold):
             raise RuntimeError("Incorrect occupation of virtual orbitals:\n%r" % n_vir)
         mo_occ = np.asarray(nocc*[2] + nvir*[0])
-
-        # Run solver
-        #self.mo_coeff = mo_coeff
-        #self.mo_occ = mo_occ
-        #self.active = active
-        #self.active_occ = active_occ
-        #self.active_vir = active_vir
-        #self.frozen = frozen
-        #self.frozen_occ = frozen_occ
-        #self.frozen_vir = frozen_vir
 
         nocc_frozen = c_frozen_occ.shape[-1]
         nvir_frozen = c_frozen_vir.shape[-1]
@@ -821,7 +693,7 @@ class Cluster:
         n_rest = len(n_no)-n_bno
         n_in, n_cut = np.split(n_no, [n_bno])
         # Logging
-        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %6.2f %%)"
+        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %7.3f %%)"
         if n_bno > 0:
             log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
         else:

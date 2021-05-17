@@ -58,6 +58,8 @@ from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+#LINEAR_DEP_METHOD = getattr(__config__, 'pbc_df_df_DF_lindep_method', "canonical-orth")
+LINEAR_DEP_METHOD = getattr(__config__, 'pbc_df_df_DF_lindep_method', 'regularize')
 LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
@@ -212,30 +214,88 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         j2c_negative = None
+        # Try Cholesky decomposition
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
         except scipy.linalg.LinAlgError:
-            #msg =('===================================\n'
-            #      'J-metric not positive definite.\n'
-            #      'It is likely that mesh is not enough.\n'
-            #      '===================================')
-            #log.error(msg)
-            #raise scipy.linalg.LinAlgError('\n'.join([str(e), msg]))
+            j2ctag = None
+        # Try regularized Cholesky decomposition if linear_dep_method == "regularize"
+        if not j2ctag and if mydf.linear_dep_method == 'regularize':
+            try:
+                eps = 1e-14
+                j2c = scipy.linalg.cholesky(j2c + eps*numpy.eye(j2c.shape[-1]), lower=True)
+                j2ctag = 'CD'
+                log.debug("Using regularized Cholesky decomposition for kpt %s", uniq_kptji_id)
+            except scipy.linalg.LinAlgError:
+                j2ctag = None
+        # Use canonical orthogonalization (for 2D and bad linear-dependence)
+        if not j2ctag:
             w, v = scipy.linalg.eigh(j2c)
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
-            log.debug('cond = %.4g, drop %d bfns',
-                      w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-            v1 = v[:,w>mydf.linear_dep_threshold].conj().T
-            v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+            log.debug('cond = %.4g, drop %d bfns', w[-1]/w[0], numpy.count_nonzero(w <= mydf.linear_dep_threshold))
+            keep = w > mydf.linear_dep_threshold
+            v1 = v[:,keep].conj().T
+            v1 /= numpy.sqrt(w[keep]).reshape(-1,1)
             j2c = v1
             if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
                 idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
                 if len(idx) > 0:
+                    log.debug('2D system: Adding %d bfns to j2c_negative', len(idx))
                     j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
             w = v = None
             j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
+
+    #def cholesky_decomposed_metric(uniq_kptji_id):
+    #    j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
+    #    j2c_negative = None
+    #    # Try Cholesky decomposition
+    #    try:
+    #        # TEST
+    #        #raise scipy.linalg.LinAlgError
+    #        #w, v = numpy.linalg.eigh(j2c)
+    #        #j2c2 = numpy.einsum("ai,i,bi->ab", v, w, v.conj())
+    #        #print("ERROR: %e", numpy.linalg.norm(j2c-j2c2))
+    #        #j2c = scipy.linalg.cholesky(j2c + 1e-14*numpy.eye(j2c.shape[-1]), lower=True)
+
+    #        j2c = scipy.linalg.cholesky(j2c, lower=True)
+    #        return j2c, j2c_negative, 'CD'
+    #    except scipy.linalg.LinAlgError:
+    #        pass
+    #    #raise RuntimeError()
+    #    # Eigendecomposition
+    #    w, v = numpy.linalg.eigh(j2c)
+    #    log.debug("Negative and close to 0 eigenvalues: %r", w[w<1e-14])
+    #    if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+    #        log.debug("2D system: negative eigenvalues of j2c: %r", w[w<0])
+    #        # We only expect a single negative mode (only at Gamma point)
+    #        idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
+    #        if len(idx) > 0:
+    #            log.debug("2D system: negative eigenvalues use for j2c_neg: %r", w[idx])
+    #            j2c_negative = (v[:,idx] / numpy.sqrt(-w[idx])).T.conj()
+    #    # Try regularized CD
+    #    if mydf.linear_dep_method == 'regularize':
+    #        eps = 1e-14
+    #        wreg = w.copy()
+    #        wreg[wreg < eps] = eps
+    #        j2c = numpy.einsum("ai,i,bi->ab", v, wreg, v.conj())
+    #        try:
+    #            j2c = scipy.linalg.cholesky(j2c, lower=True)
+    #            log.debug("Regularizing %d eigenvalues for Cholesky decomposition", numpy.count_nonzero(w < eps))
+    #            return j2c, j2c_negative, 'CD'
+    #        except scipy.linalg.LinAlgError:
+    #            pass
+    #    # Use eigendecomposition
+    #    log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
+    #    log.debug('cond = %.4g, drop %d bfns', w[-1]/w[0], numpy.count_nonzero(w <= mydf.linear_dep_threshold))
+    #    keep = w > mydf.linear_dep_threshold
+    #    v1 = v[:,keep].conj().T
+    #    v1 /= numpy.sqrt(w[keep]).reshape(-1,1)
+    #    j2c = v1
+    #    w = v = None
+    #    return j2c, j2c_negative, 'eig'
+
 
     feri = h5py.File(cderi_file, 'w')
     feri['j3c-kptij'] = kptij_lst
@@ -344,8 +404,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 else:
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
                 if j2ctag == 'CD':
-                    v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
-                    feri['j3c/%d/%d'%(ji,istep)] = v
+                    v2 = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v2
                 else:
                     feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
 
@@ -460,6 +520,7 @@ class GDF(aft.AFTDF):
         self.auxcell = None
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
+        self.linear_dep_method = LINEAR_DEP_METHOD
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -648,7 +709,8 @@ class GDF(aft.AFTDF):
                 blksize = max_memory*1e6/16/(nao**2*2)
             blksize /= 2  # For prefetch
             blksize = max(16, min(int(blksize), self.blockdim))
-            logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
+            # Stop the spam!
+            #logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
         def load(aux_slice):
             b0, b1 = aux_slice
