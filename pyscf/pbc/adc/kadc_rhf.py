@@ -1069,14 +1069,13 @@ def get_imds_ea(adc, eris=None):
                 #M_ab[ka] -=      lib.einsum('mlbd,mlad->ab',t2_1[km,kl,kb].conj(), temp_t2_v_10, optimize=True)
                 del temp_t2_v_10
 
-                ko = kconserv[kn,ka,kd]
                 temp_t2_v_10_1 = np.zeros_like((eris_oovv))
-                #temp_t2_v_10_1[kl,km,ka] = lib.einsum('onad,mnol->mlad',t2_1[ko,kn,ka], eris_oooo[km,kn,ko],optimize=True)
-                temp_t2_v_10_1[kl,km,kd] = lib.einsum('onad,mnol->lmda',t2_1[ko,kn,ka].conj(), eris_oooo[km,kn,ko].conj(),optimize=True)
+                temp_t2_v_10_1[kl,km,ka] = lib.einsum('onad,mnol->lmad',t2_1[ko,kn,ka], eris_oooo[km,kn,ko].conj(),optimize=True)
+                #temp_t2_v_10_1[kl,km,ka] += lib.einsum('noad,nmol->lmad',t2_1[kn,ko,ka], eris_oooo[kn,km,ko],optimize=True)
                 #M_ab[ka] += 0.25*lib.einsum('mlbd,onad,mnol->ab',t2_1[km,kl,kb].conj(), t2_1[ko,kn,ka].conj(), eris_oooo[km,kn,ko].conj(), optimize=True)
                 #M_ab[ka] += 0.25*lib.einsum('mlbd,lmda->ab',t2_1[km,kl,kb].conj(), temp_t2_v_10_1[kl,km,kd].conj(), optimize=True)
-                #M_ab[kb] += 0.25*lib.einsum('mlbd,lmad->ba',t2_1[km,kl,kb].conj(), temp_t2_v_10_1[kl,km,ka].conj(), optimize=True)
-                #M_ab[ka] -= 0.25*lib.einsum('lmbd,lmad->ab',t2_1[kl,km,kb].conj(), temp_t2_v_10_1[kl,km,ka], optimize=True)
+                #M_ab[ka] += 0.25*lib.einsum('mlbd,lmad->ab',t2_1[km,kl,kb].conj(), temp_t2_v_10_1[kl,km,ka].conj(), optimize=True)
+                #M_ab[ka] -= 0.25*lib.einsum('lmbd,lmad->ab',t2_1[kl,km,kb].conj(), temp_t2_v_10_1[kl,km,ka].conj(), optimize=True)
                 #del temp_t2_v_10_1
 
                 temp_t2_v_11 = np.zeros_like((eris_oovv))
@@ -1088,12 +1087,12 @@ def get_imds_ea(adc, eris=None):
                 del temp_t2_v_11
 
                 temp_t2_v_11 = np.zeros_like((eris_oovv))
-                temp_t2_v_11[kl,km,ka] = lib.einsum('noad,mnol->lmad',t2_1[kn,ko,ka], eris_oooo[km,kn,ko],optimize=True)
+                temp_t2_v_11[kl,km,ka] = lib.einsum('noad,mnol->lmad',t2_1[kn,ko,ka], eris_oooo[km,kn,ko].conj(),optimize=True)
                 #M_ab[ka] -= 0.25*lib.einsum('mlbd,noad,nlom->ab',t2_1[km,kl,kb].conj(), t2_1[kn,ko,ka].conj(), eris_oooo[kn,kl,ko], optimize=True)
                 #M_ab[ka] += 0.25*lib.einsum('lmbd,noad,nlom->ab',t2_1[kl,km,kb].conj(), t2_1[kn,ko,ka], eris_oooo[km,kn,ko].conj(), optimize=True)
-                #M_ab[ka] -= 0.25*lib.einsum('mlbd,lmad->ab',t2_1[km,kl,kb].conj(), temp_t2_v_11[kl,km,ka], optimize=True)
+                #M_ab[ka] -= 0.25*lib.einsum('mlbd,lmad->ab',t2_1[km,kl,kb].conj(), temp_t2_v_11[kl,km,ka].conj(), optimize=True)
                 #M_ab[ka] += 0.25*lib.einsum('lmbd,lmad->ab',t2_1[kl,km,kb].conj(), temp_t2_v_11[kl,km,ka].conj(), optimize=True)
-                #del temp_t2_v_11
+                del temp_t2_v_11
 
             log.timer_debug1("Completed M_ab ADC(3) small integrals calculation")
 
