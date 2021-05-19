@@ -212,6 +212,9 @@ class DFUMP2(DFRMP2):
         '''
         self._intsfile = []
 
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
 
 MP2 = UMP2 = DFMP2 = DFUMP2
 
