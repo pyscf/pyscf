@@ -125,7 +125,8 @@ def get_arguments():
         defaults = {
                 "atoms" : ["Sr", "Ti", "O"],
                 "ndim" : 3,
-                "lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
+                #"lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
+                "lattice_consts" : np.arange(3.8, 4.0+1e-12, 0.5),
                 }
 
     for key, val in defaults.items():
@@ -347,9 +348,9 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
 
         t0 = timer()
         mf.kernel(dm0=dm_init)
-        log.info("Time for HF: %.3f s", (timer()-t0))
-    log.info("HF converged= %r", mf.converged)
-    log.info("E(HF)= %+16.8f Ha", mf.e_tot)
+        log.info("Time for MF: %.3f s", (timer()-t0))
+    log.info("MF converged= %r", mf.converged)
+    log.info("E(MF)= %+16.8f Ha", mf.e_tot)
     if not mf.converged:
         log.warning("WARNING: mean-field not converged!!!")
 
@@ -376,8 +377,11 @@ def run_benchmarks(a, cell, mf, kpts, args):
     energies = {}
 
     # DFT
+    df = None
     for xc in args.dft_xc:
-        dft = run_mf(a, cell, args, kpts=kpts, xc=xc)
+        dft = run_mf(a, cell, args, kpts=kpts, xc=xc, df=df)
+        if df is None:
+            df = dft.with_df
         energies[xc] = [dft.e_tot]
 
     # Canonical MP2
@@ -465,10 +469,7 @@ for i, a in enumerate(args.lattice_consts):
     # Mean-field
     if args.run_hf:
         mf = run_mf(a, cell, args, kpts=kpts, dm_init=dm_init)
-    else:
-        mf = None
 
-    if args.run_hf:
         with open("mo-energies.txt", "a") as f:
             if not isinstance(mf.mo_energy, list):
                 np.savetxt(f, mf.mo_energy, fmt="%.10e", header="MO energies at a=%.2f" % a)
@@ -478,7 +479,8 @@ for i, a in enumerate(args.lattice_consts):
 
         #    np.savetxt(f, np.asarray(mf.mo_energy).T, fmt="%.10e", header="MO energies at a=%.2f" % a)
         energies["hf"] = [mf.e_tot]
-
+    else:
+        mf = None
 
     if args.supercell is not None:
         ncells = np.product(args.supercell)
