@@ -293,9 +293,9 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
             load_scf_ok = True
             log.info("SCF loaded successfully.")
 
-    if args.lindep_threshold:
-        log.debug("Adding remove_linear_dep_ to mf object with threshold= %.2e", args.lindep_threshold)
-        mf = pyscf.scf.addons.remove_linear_dep_(mf, threshold=args.lindep_threshold)
+    #if args.lindep_threshold:
+    #    log.debug("Adding remove_linear_dep_ to mf object with threshold= %.2e", args.lindep_threshold)
+    #    mf = pyscf.scf.addons.remove_linear_dep_(mf, threshold=args.lindep_threshold)
 
     # Density-fitting
     if df is not None:
