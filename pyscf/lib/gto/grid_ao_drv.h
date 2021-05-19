@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <complex.h>
 #include <math.h>
 #include "cint.h"
@@ -30,7 +31,7 @@
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
 #define NPRIMAX         40
-#define BLKSIZE         128
+#define BLKSIZE         104
 #define EXPCUTOFF       50  // 1e-22
 #define NOTZERO(e)      (fabs(e)>1e-18)
 
@@ -96,3 +97,5 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         fx##o = fx##i + SIMDD; \
         fy##o = fy##i + SIMDD; \
         fz##o = fz##i + SIMDD
+
+#define ALIGN8_UP(buf) (void *)(((uintptr_t)buf + 7) & (-(uintptr_t)8))

@@ -25,10 +25,7 @@
 #include "optimizer.h"
 #include "nr_direct.h"
 #include "np_helper/np_helper.h"
-
-int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
+#include "gto/gto.h"
 
 #define AO_BLOCK_SIZE   32
 
@@ -231,7 +228,7 @@ static JKArray *allocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc, i
                           (shls_slice[oket+1] - shls_slice[oket]));
         int *outptr = malloc(sizeof(int) * outptr_size);
         jkarray->outptr = outptr;
-        size_t i;
+        int i;
         for (i = 0; i < outptr_size; i++) {
                 outptr[i] = NOVALUE;
         }
@@ -384,9 +381,9 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
                                                         shls_slice, ao_loc);
         }
 
-        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                                 atm, natm, bas, nbas, env);
+        const size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        const size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                                    atm, natm, bas, nbas, env);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];

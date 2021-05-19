@@ -84,6 +84,8 @@ PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
 PTR_GTG_ZETA    = 10
+NGRIDS          = 11
+PTR_GRIDS       = 12
 AS_RINV_ORIG_ATOM = 17
 AS_ECPBAS_OFFSET = 18
 AS_NECPBAS      = 19
@@ -721,7 +723,7 @@ def conc_mol(mol1, mol2):
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
-def intor_cross(intor, mol1, mol2, comp=None):
+def intor_cross(intor, mol1, mol2, comp=None, grids=None):
     r'''1-electron integrals from two molecules like
 
     .. math::
@@ -740,6 +742,8 @@ def intor_cross(intor, mol1, mol2, comp=None):
     Kwargs:
         comp : int
             Components of the integrals, e.g. int1e_ipovlp_sph has 3 components
+        grids : ndarray
+            Coordinates of grids for the int1e_grids integrals
 
     Returns:
         ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -757,6 +761,12 @@ def intor_cross(intor, mol1, mol2, comp=None):
     nbas2 = len(mol2._bas)
     atmc, basc, envc = conc_env(mol1._atm, mol1._bas, mol1._env,
                                 mol2._atm, mol2._bas, mol2._env)
+    if '_grids' in intor:
+        assert grids is not None
+        envc = numpy.append(envc, grids.ravel())
+        envc[NGRIDS] = grids.shape[0]
+        envc[PTR_GRIDS] = envc.size - grids.size
+
     shls_slice = (0, nbas1, nbas1, nbas1+nbas2)
 
     if (intor.endswith('_sph') or intor.startswith('cint') or
@@ -805,8 +815,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         if not b:  # == []
             continue
         angl = b[0]
-        #if angl in [6, 7]:
-        #    print('libcint may have large error for ERI of i function')
+        if angl > 14:
+            sys.stderr.write('Warning: integral library does not support basis '
+                             'with angular momentum > 14\n')
+
         if isinstance(b[1], int):
             kappa = b[1]
             b_coeff = numpy.array(sorted(list(b[2:]), reverse=True))
@@ -903,7 +915,7 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
             elif puresymb in _basdic:
                 b = _basdic[puresymb].copy()
             else:
-                sys.stderr.write('Warn: Basis not found for atom %d %s\n' % (ia, symb))
+                sys.stderr.write('Warning: Basis not found for atom %d %s\n' % (ia, symb))
                 continue
         b[:,ATOM_OF] = ia
         _bas.append(b)
@@ -1642,7 +1654,12 @@ def aoslice_by_atom(mol, ao_loc=None):
     '''
     if ao_loc is None:
         ao_loc = mol.ao_loc_nr()
+
     aorange = numpy.empty((mol.natm,4), dtype=int)
+
+    if mol.natm == 0:
+        return aorange
+
     bas_atom = mol._bas[:,ATOM_OF]
     delimiter = numpy.where(bas_atom[0:-1] != bas_atom[1:])[0] + 1
 
@@ -3203,7 +3220,7 @@ class Mole(lib.StreamObject):
         return self
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
-              shls_slice=None):
+              shls_slice=None, grids=None):
         '''Integral generator.
 
         Args:
@@ -3220,6 +3237,9 @@ class Mole(lib.StreamObject):
                 | 0 : no symmetry assumed (default)
                 | 1 : hermitian
                 | 2 : anti-hermitian
+
+            grids : ndarray
+                Coordinates of grids for the int1e_grids integrals
 
         Returns:
             ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -3246,16 +3266,21 @@ class Mole(lib.StreamObject):
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)
         intor = self._add_suffix(intor)
+        bas = self._bas
+        env = self._env
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
-            self._env[AS_ECPBAS_OFFSET] = len(self._bas)
-            self._env[AS_NECPBAS] = len(self._ecpbas)
+            env[AS_ECPBAS_OFFSET] = len(self._bas)
+            env[AS_NECPBAS] = len(self._ecpbas)
             if shls_slice is None:
                 shls_slice = (0, self.nbas, 0, self.nbas)
-        else:
-            bas = self._bas
-        return moleintor.getints(intor, self._atm, bas, self._env,
+        elif '_grids' in intor:
+            assert grids is not None
+            env = numpy.append(env, grids.ravel())
+            env[NGRIDS] = grids.shape[0]
+            env[PTR_GRIDS] = env.size - grids.size
+        return moleintor.getints(intor, self._atm, bas, env,
                                  shls_slice, comp, hermi, aosym, out=out)
 
     def _add_suffix(self, intor, cart=None):
@@ -3269,7 +3294,7 @@ class Mole(lib.StreamObject):
                 intor = intor + '_sph'
         return intor
 
-    def intor_symmetric(self, intor, comp=None):
+    def intor_symmetric(self, intor, comp=None, grids=None):
         '''One-electron integral generator. The integrals are assumed to be hermitian
 
         Args:
@@ -3280,6 +3305,8 @@ class Mole(lib.StreamObject):
         Kwargs:
             comp : int
                 Components of the integrals, e.g. int1e_ipovlp_sph has 3 components.
+            grids : ndarray
+                Coordinates of grids for the int1e_grids integrals
 
         Returns:
             ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -3293,9 +3320,9 @@ class Mole(lib.StreamObject):
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return self.intor(intor, comp, 1, aosym='s4')
+        return self.intor(intor, comp, 1, aosym='s4', grids=grids)
 
-    def intor_asymmetric(self, intor, comp=None):
+    def intor_asymmetric(self, intor, comp=None, grids=None):
         '''One-electron integral generator. The integrals are assumed to be anti-hermitian
 
         Args:
@@ -3306,6 +3333,8 @@ class Mole(lib.StreamObject):
         Kwargs:
             comp : int
                 Components of the integrals, e.g. int1e_ipovlp has 3 components.
+            grids : ndarray
+                Coordinates of grids for the int1e_grids integrals
 
         Returns:
             ndarray of 1-electron integrals, can be either 2-dim or 3-dim, depending on comp
@@ -3319,10 +3348,10 @@ class Mole(lib.StreamObject):
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        return self.intor(intor, comp, 2, aosym='a4')
+        return self.intor(intor, comp, 2, aosym='a4', grids=grids)
 
     @lib.with_doc(moleintor.getints_by_shell.__doc__)
-    def intor_by_shell(self, intor, shells, comp=None):
+    def intor_by_shell(self, intor, shells, comp=None, grids=None):
         intor = self._add_suffix(intor)
         if 'ECP' in intor:
             assert(self._ecp is not None)

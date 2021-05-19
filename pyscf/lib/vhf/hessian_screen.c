@@ -25,15 +25,13 @@
 #include "cvhf.h"
 #include "optimizer.h"
 #include "np_helper/np_helper.h"
-
+#include "gto/gto.h"
 
 int int2e_sph();
 int int2e_cart();
 int int2e_ipvip1_cart();
 int int2e_spsp1spsp2_cart();
 int int2e_spsp1spsp2_sph();
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 /*
  * Gradients screening for grad/rhf.py
@@ -77,14 +75,16 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                 free(opt->q_cond);
         }
         nbas = opt->nbas;
+        size_t Nbas = nbas;
+        size_t Nbas2 = Nbas * Nbas;
         // First n*n elements for derivatives, the next n*n elements for regular ERIs
-        opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
+        opt->q_cond = (double *)malloc(sizeof(double) * Nbas2*2);
 
         if (ao_loc[nbas] == CINTtot_cgto_spheric(bas, nbas)) {
-                CVHFset_int2e_q_cond(int2e_sph, NULL, opt->q_cond+nbas*nbas, ao_loc,
+                CVHFset_int2e_q_cond(int2e_sph, NULL, opt->q_cond+Nbas2, ao_loc,
                                      atm, natm, bas, nbas, env);
         } else {
-                CVHFset_int2e_q_cond(int2e_cart, NULL, opt->q_cond+nbas*nbas, ao_loc,
+                CVHFset_int2e_q_cond(int2e_cart, NULL, opt->q_cond+Nbas2, ao_loc,
                                      atm, natm, bas, nbas, env);
         }
 
@@ -95,7 +95,8 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp;
-        int ij, i, j, iijj, di, dj, ish, jsh;
+        int i, j, iijj, di, dj, ish, jsh;
+        size_t ij;
         int shls[4];
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
@@ -107,9 +108,9 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         double *bufx = buf;
         double *bufy, *bufz;
 #pragma omp for schedule(dynamic, 4)
-        for (ij = 0; ij < nbas*nbas; ij++) {
-                ish = ij / nbas;
-                jsh = ij - ish * nbas;
+        for (ij = 0; ij < Nbas2; ij++) {
+                ish = ij / Nbas;
+                jsh = ij - ish * Nbas;
                 di = ao_loc[ish+1] - ao_loc[ish];
                 dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;
@@ -144,8 +145,9 @@ void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                 free(opt->dm_cond);
         }
         nbas = opt->nbas;
+        size_t Nbas = nbas;
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*nbas);
-        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas);
+        NPdset0(opt->dm_cond, Nbas * Nbas);
 
         const size_t nao = ao_loc[nbas];
         double dmax;
@@ -162,7 +164,7 @@ void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                                 dmax = MAX(dmax, fabs(pdm[i*nao+j]));
                         } }
                 }
-                opt->dm_cond[ish*nbas+jsh] = dmax;
+                opt->dm_cond[ish*Nbas+jsh] = dmax;
         } }
 }
 
@@ -253,14 +255,16 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                 free(opt->q_cond);
         }
         nbas = opt->nbas;
+        size_t Nbas = nbas;
+        size_t Nbas2 = Nbas * Nbas;
         // First n*n elements for derivatives, the next n*n elements for regular ERIs
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
 
         if (ao_loc[nbas] == CINTtot_cgto_spheric(bas, nbas)) {
-                CVHFset_int2e_q_cond(int2e_sph, NULL, opt->q_cond+nbas*nbas, ao_loc,
+                CVHFset_int2e_q_cond(int2e_sph, NULL, opt->q_cond+Nbas2, ao_loc,
                                      atm, natm, bas, nbas, env);
         } else {
-                CVHFset_int2e_q_cond(int2e_cart, NULL, opt->q_cond+nbas*nbas, ao_loc,
+                CVHFset_int2e_q_cond(int2e_cart, NULL, opt->q_cond+Nbas2, ao_loc,
                                      atm, natm, bas, nbas, env);
         }
 
@@ -271,7 +275,8 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         shared(opt, intor, cintopt, ao_loc, atm, natm, bas, nbas, env)
 {
         double qtmp;
-        int ij, i, j, iijj, di, dj, ish, jsh;
+        int i, j, iijj, di, dj, ish, jsh;
+        size_t ij;
         int shls[4];
         double *cache = malloc(sizeof(double) * cache_size);
         di = 0;
@@ -283,9 +288,9 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         double *bufxx = buf;
         double *bufxy, *bufxz, *bufyx, *bufyy, *bufyz, *bufzx, *bufzy, *bufzz;
 #pragma omp for schedule(dynamic, 4)
-        for (ij = 0; ij < nbas*nbas; ij++) {
-                ish = ij / nbas;
-                jsh = ij - ish * nbas;
+        for (ij = 0; ij < Nbas2; ij++) {
+                ish = ij / Nbas;
+                jsh = ij - ish * Nbas;
                 di = ao_loc[ish+1] - ao_loc[ish];
                 dj = ao_loc[jsh+1] - ao_loc[jsh];
                 shls[0] = ish;

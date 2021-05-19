@@ -23,7 +23,6 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
-#define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200

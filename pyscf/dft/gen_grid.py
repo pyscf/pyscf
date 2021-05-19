@@ -29,12 +29,12 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import gto
 from pyscf.dft import radi
+from pyscf import gto
+from pyscf.gto.eval_gto import BLKSIZE
 from pyscf import __config__
 
 libdft = lib.load_library('libdft')
-BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
 
 # ~= (L+1)**2/3
 LEBEDEV_ORDER = {

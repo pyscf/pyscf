@@ -20,11 +20,10 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto import moleintor
-from pyscf.gto.eval_gto import _get_intor_and_comp
+from pyscf.gto.eval_gto import _get_intor_and_comp, BLKSIZE
 from pyscf.pbc.gto import _pbcintor
 from pyscf import __config__
 
-BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc

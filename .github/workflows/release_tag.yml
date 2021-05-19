@@ -25,5 +25,6 @@ jobs:
           tag_name: ${{ steps.release_info.outputs.version_tag }}
           release_name: PySCF ${{ steps.release_info.outputs.version_tag }} release
           body_path: RELEASE.md
+          prerelease: true
           # draft: true
 

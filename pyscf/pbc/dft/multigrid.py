@@ -26,7 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
-from pyscf.dft.numint import libdft
+from pyscf.dft.numint import libdft, BLKSIZE
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
@@ -40,7 +40,6 @@ from pyscf import __config__
 #sys.stderr.write('WARN: multigrid is an experimental feature. It is still in '
 #                 'testing\nFeatures and APIs may be changed in the future.\n')
 
-BLKSIZE = numint.BLKSIZE
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 TO_EVEN_GRIDS = getattr(__config__, 'pbc_dft_multigrid_to_even', False)
 RMAX_FACTOR_ORTH = getattr(__config__, 'pbc_dft_multigrid_rmax_factor_orth', 1.1)

@@ -16,6 +16,7 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <math.h>
 #define MIN(X,Y)        ((X)<(Y) ? (X) : (Y))
 #define MAX(X,Y)        ((X)>(Y) ? (X) : (Y))
@@ -35,7 +36,8 @@
 void NPcondense(double (*op)(double *, int, int, int), double *out, double *a,
                 int *loc_x, int *loc_y, int nloc_x, int nloc_y)
 {
-        const int nj = loc_y[nloc_y];
+        const size_t nj = loc_y[nloc_y];
+        const size_t Nloc_y = nloc_y;
 #pragma omp parallel
 {
         int i, j, i0, j0, di, dj;
@@ -46,7 +48,7 @@ void NPcondense(double (*op)(double *, int, int, int), double *out, double *a,
                 for (j = 0; j < nloc_y; j++) {
                         j0 = loc_y[j];
                         dj = loc_y[j+1] - j0;
-                        out[i*nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
+                        out[i*Nloc_y+j] = op(a+i0*nj+j0, nj, di, dj);
                 }
         }
 }

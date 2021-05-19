@@ -22,6 +22,6 @@ for PYVERSION in cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39; do
     "${PYBIN}/pip" wheel -v --no-deps --no-clean -w /root/wheelhouse $src
 
     # Bundle external shared libraries into the wheels
-    whl=`ls wheelhouse/pyscf-*-$PYVERSION-linux_x86_64.whl`
+    whl=`ls /root/wheelhouse/pyscf-*-$PYVERSION-linux_x86_64.whl`
     auditwheel -v repair "$whl" --lib-sdir /lib -w $dst
 done

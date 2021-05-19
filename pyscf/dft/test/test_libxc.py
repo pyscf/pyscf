@@ -40,10 +40,6 @@ def tearDownModule():
     global mol, mf, ao, rho
     del mol, mf, ao, rho
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(w, a.ravel())
-
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
@@ -164,22 +160,23 @@ class KnownValues(unittest.TestCase):
 
     def test_nlc_coeff(self):
         self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.libxc.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.libxc.eval_xc('lda,', rho[0][:3], deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0]), -1.1414693830969338, 8)
-        self.assertAlmostEqual(lib.finger(k[0]),  4.1402447248393921, 8)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0]), -1.1414693830969338, 8)
+        self.assertAlmostEqual(lib.fp(k[0]),  4.1402447248393921, 8)
 
         e,v,f,k = dft.libxc.eval_xc('lda,', [rho[0][:3]*.5]*2, spin=1, deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[1]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[0]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 7)
-        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[1]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[0]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[2]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(k[0].T[0]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(k[0].T[3]),  4.1402447248393921*4, 7)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]
@@ -218,9 +215,9 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         rho = numpy.random.random((4,10))
         exc, vxc = ni.eval_xc(None, rho, 0, deriv=1)[:2]
-        self.assertAlmostEqual(lib.finger(exc), 0.0012441814416833327, 9)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 0.0065565189784811129, 9)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 0.0049270110162854116, 9)
+        self.assertAlmostEqual(lib.fp(exc), 0.0012441814416833327, 9)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
 
         mf = mf.define_xc_('0.5*B3LYP+0.5*B3LYP')
         exc0, vxc0 = mf._numint.eval_xc(None, rho, 0, deriv=1)[:2]
@@ -230,6 +227,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vxc0[1]-vxc1[1]).max(), 0, 9)
 
         self.assertRaises(ValueError, dft.libxc.define_xc, mf._numint, 0.1)
+
+        ni = dft.libxc.define_xc(mf._numint, 'PBE')
+        exc1, vxc1 = dft.libxc.eval_xc('PBE', rho, 0, deriv=1)[:2]
+        exc0, vxc0 = ni.eval_xc(None, rho, 0, deriv=1)[:2]
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
+        self.assertAlmostEqual(abs(vxc0[0]-vxc1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(vxc0[1]-vxc1[1]).max(), 0, 9)
 
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),

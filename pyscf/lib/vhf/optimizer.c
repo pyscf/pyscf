@@ -23,10 +23,9 @@
 #include "cvhf.h"
 #include "optimizer.h"
 #include "np_helper/np_helper.h"
+#include "gto/gto.h"
 
 int int2e_sph();
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
                         int *bas, int nbas, double *env)

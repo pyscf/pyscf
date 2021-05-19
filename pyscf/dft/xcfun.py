@@ -31,6 +31,12 @@ from pyscf.dft.xc.utils import remove_dup, format_xc_code
 
 _itrf = lib.load_library('libxcfun_itrf')
 
+_itrf.xcfun_splash.restype = ctypes.c_char_p
+_itrf.xcfun_version.restype = ctypes.c_char_p
+
+__version__ = _itrf.xcfun_version().decode("UTF-8")
+__reference__ = _itrf.xcfun_splash().decode("UTF-8")
+
 XC = XC_CODES = {
 'SLATERX'       :  0,  #Slater LDA exchange
 'PW86X'         :  1,  #PW86 exchange
@@ -102,7 +108,7 @@ XC = XC_CODES = {
 'APBEC'         : 67,  #APBE correlation functional.
 'APBEX'         : 68,  #APBE Exchange Functional
 'ZVPBESOLC'     : 69,  #zvPBEsol correlation Functional
-'BLOCX'         : 70,  #BLOC exchange functional
+#'BLOCX'         : 70,  #BLOC exchange functional
 'PBEINTC'       : 71,  #PBEint correlation Functional
 'PBEINTX'       : 72,  #PBEint Exchange Functional
 'PBELOCC'       : 73,  #PBEloc correlation functional.
@@ -185,7 +191,7 @@ XC_ALIAS = {
     'REVTPSS'           : 'REVTPSS,REVTPSS',
     'SCAN'              : 'SCAN,SCAN',
 #    'SOGGA'             : 'SOGGA,PBE',
-    'BLOC'              : 'BLOC,TPSSLOC',
+    #'BLOC'              : 'BLOC,TPSSLOC',
     'OLYP'              : 'OPTX,LYP',
     'RPBE'              : 'RPBE,PBE',
     'BPBE'              : 'B88,PBE',
@@ -240,14 +246,19 @@ HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
 RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
-VV10_DAT = {
+VV10_XC = {
     'B97M_V'    : [6.0, 0.01],
     'WB97M_V'   : [6.0, 0.01],
     'WB97X_V'   : [6.0, 0.01],
     'VV10'      : [5.9, 0.0093],
     'LC_VV10'   : [6.3, 0.0089],
+    'REVSCAN_VV10': [9.8, 0.0093],
+    'SCAN_RVV10'  : [15.7, 0.0093],
+    'SCAN_VV10'   : [14.0, 0.0093],
+    'SCANL_RVV10' : [15.7, 0.0093],
+    'SCANL_VV10'  : [14.0, 0.0093],
 }
-VV10_XC = set(VV10_DAT.keys())
+VV10_XC.update([(key.replace('_', ''), val) for key, val in VV10_XC.items()])
 
 def xc_type(xc_code):
     if xc_code is None:
@@ -289,16 +300,26 @@ def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
-    return xc_code.upper() in VV10_XC
+    return '__VV10' in xc_code.upper()
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
     xc_code = xc_code.upper()
-    if is_nlc(xc_code):
-        return VV10_DAT[xc_code]
+
+    nlc_part = None
+    if '__VV10' in xc_code:
+        xc_code, nlc_part = xc_code.split('__', 1)
+
+    if xc_code in VV10_XC:
+        return VV10_XC[xc_code]
+    elif nlc_part is not None:
+        # Use VV10 NLC parameters by default for the general case
+        return VV10_XC[nlc_part]
     else:
-        return 0, 0
+        raise NotImplementedError(
+            '%s does not have NLC part. Available functionals are %s' %
+            (xc_code, ', '.join(VV10_XC.keys())))
 
 def rsh_coeff(xc_code):
     '''Get Range-separated-hybrid coefficients
@@ -1010,22 +1031,3 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
-
-
-if __name__ == '__main__':
-    from pyscf import gto, dft
-    mol = gto.M(
-        atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6311g',)
-    mf = dft.RKS(mol)
-    mf._numint.libxc = dft.xcfun
-    print(mf.kernel() - -75.8503877483363)
-
-    mf.xc = 'b88,lyp'
-    print(mf.kernel() - -76.3969707800463)
-
-    mf.xc = 'b3lyp'
-    print(mf.kernel() - -76.3777689410509)

@@ -751,7 +751,7 @@ class CASSCF(casci.CASCI):
         log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian ah_linear dependence = %g', self.ah_lindep)
-        log.info('augmented hessian ah_level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian ah_level shift = %g', self.ah_level_shift)
         log.info('augmented hessian ah_start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian ah_start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian ah_grad_trust_region = %g', self.ah_grad_trust_region)

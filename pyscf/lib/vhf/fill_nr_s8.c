@@ -24,12 +24,10 @@
 #include "cvhf.h"
 #include "nr_direct.h"
 #include "optimizer.h"
+#include "gto/gto.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 
-int GTOmax_shell_dim(int *ao_loc, int *shls, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 void int2e_optimizer(CINTOpt **opt, int *atm, int natm, int *bas, int nbas, double *env);
 /*
  * 8-fold symmetry, k>=l, k>=i>=j, 
@@ -112,7 +110,7 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
 void GTO2e_cart_or_sph(int (*intor)(), CINTOpt *cintopt, double *eri, int *ao_loc,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         IntorEnvs envs = {natm, nbas, atm, bas, env, NULL, ao_loc, NULL,
                 cintopt, 1};
         CVHFOpt *vhfopt;
@@ -120,8 +118,8 @@ void GTO2e_cart_or_sph(int (*intor)(), CINTOpt *cintopt, double *eri, int *ao_lo
         vhfopt->fprescreen = CVHFnr_schwarz_cond;
         int shls_slice[] = {0, nbas};
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 1);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 1,
-                                                 atm, natm, bas, nbas, env);
+        const size_t cache_size = GTOmax_cache_size(intor, shls_slice, 1,
+                                                    atm, natm, bas, nbas, env);
 
 #pragma omp parallel
 {

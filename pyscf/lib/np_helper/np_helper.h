@@ -18,7 +18,7 @@
 
 #include <complex.h>
 
-#define BLOCK_DIM    120
+#define BLOCK_DIM    104
 
 #define HERMITIAN    1
 #define ANTIHERMI    2

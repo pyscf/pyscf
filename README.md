@@ -11,7 +11,7 @@ Python-based Simulations of Chemistry Framework
 
 * [Stable release 1.7.6](https://github.com/pyscf/pyscf/releases/tag/v1.7.6)
 * [Changelog](../master/CHANGELOG)
-* [Documentation](http://www.pyscf.org/pyscf)
+* [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
 
@@ -34,18 +34,7 @@ Installation
         pip install pyscf[dftd3]
 
 * More details of custom install can be found in
-  [installation manual](http://pyscf.org/pyscf/install.html#compiling-from-source-code)
-
-Tutorials
----------
-* A user-guide written in Ipython notebook can be found in https://github.com/pyscf/PySCF_Tutorial.
-  This repository documents the basic structure of PySCF input script and the
-  use of regular methods which were routinely executed in most quantum chemistry
-  packages.  It also provides an implementation to drive PySCF program in a
-  simple manner.
-* Developer's tutorial can be found in the online documentation
-  http://pyscf.org/pyscf/tutorial.html#tutorial and the repository above
-  https://github.com/pyscf/PySCF_Tutorial/blob/master/dev_guide.ipynb
+  [installation manual](http://pyscf.org/install.html#compiling-from-source-code)
 
 
 Citing PySCF

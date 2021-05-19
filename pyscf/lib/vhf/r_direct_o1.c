@@ -27,10 +27,7 @@
 #include "nr_direct.h"
 #include "time_rev.h"
 #include "np_helper/np_helper.h"
-
-int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
+#include "gto/gto.h"
 
 #define MAX(X,Y)        ((X) > (Y) ? (X) : (Y))
 
@@ -289,21 +286,23 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,
                 cintopt, ncomp};
 
-        NPzset0(vjk, nao*nao*n_dm*ncomp);
+        const size_t nbas2 = ((size_t)nbas) * nbas;
+        const size_t jk_size = nao * nao * n_dm * ncomp;
+        NPzset0(vjk, jk_size);
 
-        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+        const size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        const size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
                                                  atm, natm, bas, nbas, env);
 #pragma omp parallel
 {
-        int i, j, ij;
-        double complex *v_priv = malloc(sizeof(double complex)*nao*nao*n_dm*ncomp);
-        NPzset0(v_priv, nao*nao*n_dm*ncomp);
-        int bufsize = di*di*di*di*ncomp;
+        size_t i, j, ij;
+        double complex *v_priv = malloc(sizeof(double complex) * jk_size);
+        NPzset0(v_priv, jk_size);
+        size_t bufsize = di*di*di*di*ncomp;
         bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
 #pragma omp for nowait schedule(dynamic)
-        for (ij = 0; ij < nbas*nbas; ij++) {
+        for (ij = 0; ij < nbas2; ij++) {
                 i = ij / nbas;
                 j = ij - i * nbas;
                 (*fdot)(intor, fjk, dms, v_priv, buf, n_dm, ncomp, i, j,
@@ -311,7 +310,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         }
 #pragma omp critical
         {
-                for (i = 0; i < nao*nao*n_dm*ncomp; i++) {
+                for (i = 0; i < jk_size; i++) {
                         vjk[i] += v_priv[i];
                 }
         }
