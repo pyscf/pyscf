@@ -192,8 +192,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     dtype = numpy.result_type(phase, *mos)
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
-    #blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
-    blksize = int(max(nmoi,nmok))
+    blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
     assert blksize > 0
     buf0 = numpy.empty((blksize,max(nmoj,nmol),ngrids), dtype=dtype)
     buf1 = numpy.ndarray((blksize,nmoj,ngrids), dtype=dtype, buffer=buf0)
