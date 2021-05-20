@@ -264,10 +264,19 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
                 fimag = abs(f.imag).max()
                 logger.debug(cell, "max|Im(F)|= %.2e", fimag)
 
-                e, na_orb = eigh(f.real, ovlp)
+                #e, na_orb = eigh(f.real, ovlp)
+                try:
+                    e, na_orb = scipy.linalg.eigh(f.real, ovlp)
+                except scipy.linalg.LinAlgError:
+                    logger.debug(cell, "FC = SCe failed -> regularizing S")
+                    e, na_orb = scipy.linalg.eigh(f.real, ovlp + 1e-14*np.eye(ovlp.shape[-1]))
 
                 # Extract MOs from rank-deficient fock matrix
                 mask = (e > 0.5)
+                if np.count_nonzero(mask) != len(E_g[degen_mask]):
+                    logger.debug(cell, "N(e > 0.5)= %d len(E_g)= %d", np.count_nonzero(mask), len(E_g[degen_mask]))
+                    logger.debug(cell, "e:\n%r", e)
+                    logger.debug(cell, "E_g:\n%r", E_g[degen_mask])
                 assert np.count_nonzero(mask) == np.count_nonzero(degen_mask)
                 logger.debug(cell, "Max error of MO energies= %.2e", abs(E_g[degen_mask]-(e[mask]-shift)).max())
                 #E_g[degen_mask] = e+shift
@@ -283,9 +292,19 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_method="fock",
                 fimag = abs(f.imag).max()
                 logger.debug(cell, "max|Im(F)|= %.2e", fimag)
 
-                e, C_gamma_out = eigh(f.real, ovlp)
+                #e, C_gamma_out = eigh(f.real, ovlp)
+                try:
+                    e, C_gamma_out = scipy.linalg.eigh(f.real, ovlp)
+                except scipy.linalg.LinAlgError:
+                    logger.debug(cell, "FC = SCe failed -> regularizing S")
+                    e, C_gamma_out = scipy.linalg.eigh(f.real, ovlp + 1e-14*np.eye(ovlp.shape[-1]))
+
                 #E_g = e
                 mask = (e > 0.5)
+                if np.count_nonzero(mask) != len(E_g):
+                    logger.debug(cell, "N(e > 0.5)= %d len(E_g)= %d", np.count_nonzero(mask), len(E_g))
+                    logger.debug(cell, "e:\n%r", e)
+                    logger.debug(cell, "E_g:\n%r", E_g)
                 assert np.count_nonzero(mask) == len(E_g)
                 logger.debug(cell, "Max error of MO energies= %.2e", abs(E_g-(e[mask]-shift)).max())
                 C_gamma_out = C_gamma_out[:,mask].copy()

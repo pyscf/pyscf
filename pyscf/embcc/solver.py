@@ -147,7 +147,13 @@ class ClusterSolver:
             t0 = timer()
             self._eris = self.base.get_eris(cc)
             t = (timer()-t0)
-            log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
+            log.debug("Time for AO->MO of (ij|kl): %.3f (%s)", t, get_time_string(t))
+        #else:
+        #    # DEBUG:
+        #    eris = self.base.get_eris(cc)
+        #    for kind in ["oooo", "ovoo", "ovvo", "oovv", "ovov", "ovvv", "vvvv"]:
+        #        diff = getattr(self._eris, kind) - getattr(eris, kind)
+        #        log.debug("Difference (%2s|%2s): max= %.2e norm= %.2e", kind[:2], kind[2:], abs(diff).max(), np.linalg.norm(diff))
 
         t0 = timer()
         if init_guess:

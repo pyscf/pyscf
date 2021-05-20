@@ -103,6 +103,9 @@ class EmbCC:
                 "prim_mp2_bath_tol_occ" : False,
                 "prim_mp2_bath_tol_vir" : False,
                 "orbfile" : None,         # Filename for orbital coefficients
+                # If multiple bno thresholds are to be calculated, we can project integrals and amplitudes from a previous larger cluster:
+                "project_eris" : False,         # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
+                "project_init_guess" : True,    # Project converted T1,T2 amplitudes from a previous larger cluster
                 #"orthogonal_mo_tol" : False,
                 "orthogonal_mo_tol" : 1e-7,
                 # Population analysis
@@ -161,6 +164,7 @@ class EmbCC:
             self.kdf = None
         self.mf = mf
         log.info("E(MF)= %+16.8f Ha", self.e_mf)
+        log.info("N(AO)= %4d  N(MO)= %4d", *self.mf.mo_coeff.shape)
 
         # AO overlap matrix
         self.ovlp = self.mf.get_ovlp()

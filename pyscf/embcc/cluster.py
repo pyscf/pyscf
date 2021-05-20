@@ -628,23 +628,21 @@ class Cluster:
         nfrozen = nocc_frozen + nvir_frozen
         nactive = c_active_occ.shape[-1] + c_active_vir.shape[-1]
 
-        log.info("ORBITALS")
-        log.info("********")
+        log.info("ORBITALS FOR CLUSTER %3d", self.id)
+        log.info("************************")
         log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", c_active_occ.shape[-1], nocc_frozen, c_occ.shape[-1])
         log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", c_active_vir.shape[-1], nvir_frozen, c_vir.shape[-1])
         log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", nactive, nfrozen, mo_coeff.shape[-1])
 
-        # If solver is not set
+        # --- Do nothing if solver is not set
         if not solver:
             log.info("Solver set to None. Skipping calculation.")
             self.converged = True
             return 0, nactive, None, None
 
-        log.info("RUNNING %s SOLVER", solver)
-        log.info((len(solver)+15)*"*")
-
+        # --- Project initial guess and integrals from previous cluster calculation with smaller eta:
         # Use initial guess from previous calculations
-        if init_guess is not None:
+        if self.base.opts.project_init_guess and init_guess is not None:
             # Projectors for occupied and virtual orbitals
             p_occ = np.linalg.multi_dot((init_guess.pop("c_occ").T, self.base.ovlp, c_active_occ))
             p_vir = np.linalg.multi_dot((init_guess.pop("c_vir").T, self.base.ovlp, c_active_vir))
@@ -652,15 +650,20 @@ class Cluster:
             t1, t2 = helper.transform_amplitudes(t1, t2, p_occ, p_vir)
             init_guess["t1"] = t1
             init_guess["t2"] = t2
-
+        else:
+            init_guess = None
         # If superspace ERIs were calculated before, they can be transformed and used again
-        if eris is not None:
+        if self.base.opts.project_eris and eris is not None:
             t0 = timer()
             log.debug("Projecting previous ERIs onto subspace")
             eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.ovlp)
             log.debug("Time to project ERIs: %s", get_time_string(timer()-t0))
+        else:
+            eris = None
 
         # Create solver object
+        log.info("RUNNING %s SOLVER", solver)
+        log.info((len(solver)+15)*"*")
         t0 = timer()
         csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
         csolver.kernel(init_guess=init_guess)
