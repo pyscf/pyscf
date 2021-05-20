@@ -133,8 +133,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                                 g[n] = (3 - g[n]*g[n]) * g[n] * .5;
                         }
                         for (n = 0; n < ngs; n++) {
-                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                                g[n] *= .5;
+                                g[n] = ((3 - g[n]*g[n]) * g[n] * .5) * .5;
                         }
                         for (n = 0; n < ngs; n++) {
                                 buf[i*GRIDS_BLOCK+n] *= .5 - g[n];

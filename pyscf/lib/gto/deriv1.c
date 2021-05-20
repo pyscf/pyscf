@@ -1,11 +1,11 @@
 /* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,7 +25,6 @@
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
-double exp_cephes(double x);
 double CINTcommon_fac_sp(int l);
 
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
@@ -61,7 +60,7 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
                 arr = alpha[j] * rr[i];
                 if (arr-logcoeff[j] < EXPCUTOFF) {
                         not0 = 1;
-                        eprim = exp_cephes(-arr) * fac;
+                        eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {
                                 ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
                         }
@@ -89,11 +88,10 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 {
         int lx, ly, lz;
         size_t i, k;
-        double e, rx, ry, rz;
-        double ce[3];
-        double xpows[8*blksize];
-        double ypows[8*blksize];
-        double zpows[8*blksize];
+        double buf[24 * BLKSIZE + 8];
+        double *xpows = ALIGN8_UP(buf);
+        double *ypows = xpows + 8 * BLKSIZE;
+        double *zpows = ypows + 8 * BLKSIZE;
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -109,10 +107,13 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
         case 1:
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
-                                e = exps[k*BLKSIZE+i];
-                                gto[         i] = gridx[i] * e;
-                                gto[1*ngrids+i] = gridy[i] * e;
-                                gto[2*ngrids+i] = gridz[i] * e;
+                                gto[         i] = gridx[i] * exps[k*BLKSIZE+i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[1*ngrids+i] = gridy[i] * exps[k*BLKSIZE+i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[2*ngrids+i] = gridz[i] * exps[k*BLKSIZE+i];
                         }
                         gto += ngrids * 3;
                 }
@@ -120,28 +121,22 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
         case 2:
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
-                                if (NOTZERO(exps[k*BLKSIZE+i])) {
-                                        e = exps[k*BLKSIZE+i];
-                                        rx = gridx[i];
-                                        ry = gridy[i];
-                                        rz = gridz[i];
-                                        ce[0] = rx * e;
-                                        ce[1] = ry * e;
-                                        ce[2] = rz * e;
-                                        gto[         i] = ce[0] * rx; // xx
-                                        gto[1*ngrids+i] = ce[0] * ry; // xy
-                                        gto[2*ngrids+i] = ce[0] * rz; // xz
-                                        gto[3*ngrids+i] = ce[1] * ry; // yy
-                                        gto[4*ngrids+i] = ce[1] * rz; // yz
-                                        gto[5*ngrids+i] = ce[2] * rz; // zz
-                                } else {
-                                        gto[         i] = 0;
-                                        gto[1*ngrids+i] = 0;
-                                        gto[2*ngrids+i] = 0;
-                                        gto[3*ngrids+i] = 0;
-                                        gto[4*ngrids+i] = 0;
-                                        gto[5*ngrids+i] = 0;
-                                }
+                                gto[         i] = exps[k*BLKSIZE+i] * gridx[i] * gridx[i]; // xx
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[1*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridy[i]; // xy
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[2*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridz[i]; // xz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[3*ngrids+i] = exps[k*BLKSIZE+i] * gridy[i] * gridy[i]; // yy
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[4*ngrids+i] = exps[k*BLKSIZE+i] * gridy[i] * gridz[i]; // yz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[5*ngrids+i] = exps[k*BLKSIZE+i] * gridz[i] * gridz[i]; // zz
                         }
                         gto += ngrids * 6;
                 }
@@ -149,36 +144,34 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
         case 3:
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
-                                if (NOTZERO(exps[k*BLKSIZE+i])) {
-                                        e = exps[k*BLKSIZE+i];
-                                        rx = gridx[i];
-                                        ry = gridy[i];
-                                        rz = gridz[i];
-                                        ce[0] = rx * rx * e;
-                                        ce[1] = ry * ry * e;
-                                        ce[2] = rz * rz * e;
-                                        gto[         i] = ce[0] * rx; // xxx
-                                        gto[1*ngrids+i] = ce[0] * ry; // xxy
-                                        gto[2*ngrids+i] = ce[0] * rz; // xxz
-                                        gto[3*ngrids+i] = rx * ce[1]; // xyy
-                                        gto[4*ngrids+i] = rx*ry*rz * e; // xyz
-                                        gto[5*ngrids+i] = rx * ce[2]; // xzz
-                                        gto[6*ngrids+i] = ce[1] * ry; // yyy
-                                        gto[7*ngrids+i] = ce[1] * rz; // yyz
-                                        gto[8*ngrids+i] = ry * ce[2]; // yzz
-                                        gto[9*ngrids+i] = rz * ce[2]; // zzz
-                                } else {
-                                        gto[         i] = 0;
-                                        gto[1*ngrids+i] = 0;
-                                        gto[2*ngrids+i] = 0;
-                                        gto[3*ngrids+i] = 0;
-                                        gto[4*ngrids+i] = 0;
-                                        gto[5*ngrids+i] = 0;
-                                        gto[6*ngrids+i] = 0;
-                                        gto[7*ngrids+i] = 0;
-                                        gto[8*ngrids+i] = 0;
-                                        gto[9*ngrids+i] = 0;
-                                }
+                                gto[         i] = exps[k*BLKSIZE+i] * gridx[i] * gridx[i] * gridx[i]; // xxx
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[1*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridx[i] * gridy[i]; // xxy
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[2*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridx[i] * gridz[i]; // xxz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[3*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridy[i] * gridy[i]; // xyy
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[4*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridy[i] * gridz[i]; // xyz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[5*ngrids+i] = exps[k*BLKSIZE+i] * gridx[i] * gridz[i] * gridz[i]; // xzz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[6*ngrids+i] = exps[k*BLKSIZE+i] * gridy[i] * gridy[i] * gridy[i]; // yyy
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[7*ngrids+i] = exps[k*BLKSIZE+i] * gridy[i] * gridy[i] * gridz[i]; // yyz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[8*ngrids+i] = exps[k*BLKSIZE+i] * gridy[i] * gridz[i] * gridz[i]; // yzz
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gto[9*ngrids+i] = exps[k*BLKSIZE+i] * gridz[i] * gridz[i] * gridz[i]; // zzz
                         }
                         gto += ngrids * 10;
                 }
@@ -192,18 +185,22 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                         }
                         for (lx = 1; lx < l+1; lx++) {
                                 for (i = 0; i < blksize; i++) {
-                                        xpows[lx*blksize+i] = xpows[(lx-1)*blksize+i] * gridx[i];
-                                        ypows[lx*blksize+i] = ypows[(lx-1)*blksize+i] * gridy[i];
-                                        zpows[lx*blksize+i] = zpows[(lx-1)*blksize+i] * gridz[i];
+                                        xpows[lx*BLKSIZE+i] = xpows[(lx-1)*BLKSIZE+i] * gridx[i];
+                                }
+                                for (i = 0; i < blksize; i++) {
+                                        ypows[lx*BLKSIZE+i] = ypows[(lx-1)*BLKSIZE+i] * gridy[i];
+                                }
+                                for (i = 0; i < blksize; i++) {
+                                        zpows[lx*BLKSIZE+i] = zpows[(lx-1)*BLKSIZE+i] * gridz[i];
                                 }
                         }
                         for (lx = l; lx >= 0; lx--) {
                         for (ly = l - lx; ly >= 0; ly--) {
                                 lz = l - lx - ly;
                                 for (i = 0; i < blksize; i++) {
-                                        gto[i] = xpows[lx*blksize+i]
-                                               * ypows[ly*blksize+i]
-                                               * zpows[lz*blksize+i]*exps[k*BLKSIZE+i];
+                                        gto[i] = xpows[lx*BLKSIZE+i]
+                                               * ypows[ly*BLKSIZE+i]
+                                               * zpows[lz*BLKSIZE+i]*exps[k*BLKSIZE+i];
                                 }
                                 gto += ngrids;
                         } }
@@ -253,7 +250,7 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
                 arr = alpha[j] * rr[i];
                 if (arr-logcoeff[j] < EXPCUTOFF) {
                         not0 = 1;
-                        eprim = exp_cephes(-arr) * fac;
+                        eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {
                                 ectr   [k*BLKSIZE+i] += eprim * coeff  [k*nprim+j];
                                 ectr_2a[k*BLKSIZE+i] += eprim * coeff2a[k*nprim+j];
@@ -293,10 +290,13 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         case 0:
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
-                                e2a = exps_2a[k*BLKSIZE+i];
-                                gtox[i] = e2a * gridx[i];
-                                gtoy[i] = e2a * gridy[i];
-                                gtoz[i] = e2a * gridz[i];
+                                gtox[i] = exps_2a[k*BLKSIZE+i] * gridx[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoy[i] = exps_2a[k*BLKSIZE+i] * gridy[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoz[i] = exps_2a[k*BLKSIZE+i] * gridz[i];
                         }
                         gtox += ngrids;
                         gtoy += ngrids;
@@ -306,35 +306,31 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         case 1:
                 for (k = 0; k < nc; k++) {
                         for (i = 0; i < blksize; i++) {
-                                if (NOTZERO(exps[k*BLKSIZE+i])) {
-                                        e = exps[k*BLKSIZE+i];
-                                        e2a = exps_2a[k*BLKSIZE+i];
-                                        rx = gridx[i];
-                                        ry = gridy[i];
-                                        rz = gridz[i];
-                                        ax = e2a * rx;
-                                        ay = e2a * ry;
-                                        az = e2a * rz;
-                                        gtox[         i] = ax * rx + e;
-                                        gtox[1*ngrids+i] = ax * ry;
-                                        gtox[2*ngrids+i] = ax * rz;
-                                        gtoy[         i] = ay * rx;
-                                        gtoy[1*ngrids+i] = ay * ry + e;
-                                        gtoy[2*ngrids+i] = ay * rz;
-                                        gtoz[         i] = az * rx;
-                                        gtoz[1*ngrids+i] = az * ry;
-                                        gtoz[2*ngrids+i] = az * rz + e;
-                                } else {
-                                        gtox[         i] = 0;
-                                        gtox[1*ngrids+i] = 0;
-                                        gtox[2*ngrids+i] = 0;
-                                        gtoy[         i] = 0;
-                                        gtoy[1*ngrids+i] = 0;
-                                        gtoy[2*ngrids+i] = 0;
-                                        gtoz[         i] = 0;
-                                        gtoz[1*ngrids+i] = 0;
-                                        gtoz[2*ngrids+i] = 0;
-                                }
+                                gtox[         i] = exps_2a[k*BLKSIZE+i] * gridx[i] * gridx[i] + exps[k*BLKSIZE+i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtox[1*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridx[i] * gridy[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtox[2*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridx[i] * gridz[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoy[         i] = exps_2a[k*BLKSIZE+i] * gridy[i] * gridx[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoy[1*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridy[i] * gridy[i] + exps[k*BLKSIZE+i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoy[2*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridy[i] * gridz[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoz[         i] = exps_2a[k*BLKSIZE+i] * gridz[i] * gridx[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoz[1*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridz[i] * gridy[i];
+                        }
+                        for (i = 0; i < blksize; i++) {
+                                gtoz[2*ngrids+i] = exps_2a[k*BLKSIZE+i] * gridz[i] * gridz[i] + exps[k*BLKSIZE+i];
                         }
                         gtox += ngrids * 3;
                         gtoy += ngrids * 3;

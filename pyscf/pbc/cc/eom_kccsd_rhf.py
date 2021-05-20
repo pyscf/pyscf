@@ -858,8 +858,6 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
         r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
             be accessed via r2[k_i, k_j, k_a, i, j, a, b]
     '''
-    cput0 = (logger.process_clock(), logger.perf_counter())
-    log = logger.Logger(sys.stdout, logger.DEBUG)
     nvir = nmo - nocc
     nov = nocc*nvir
 
@@ -891,8 +889,6 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
     # r2 indices (old): (k_i, k_a), (k_J), (i, a), (J, B)
     # r2 indices (new): k_i, k_J, k_a, i, J, a, B
     r2 = r2.reshape(nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir).transpose(0,2,1,3,5,4,6)
-
-    log.timer("vector_to_amplitudes_singlet", *cput0)
     return [r1, r2]
 
 
@@ -906,8 +902,6 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
         return: a vector with all r1 elements, and r2 elements whose indices
     satisfy (i k_i a k_a) >= (j k_j b k_b)
     '''
-    cput0 = (logger.process_clock(), logger.perf_counter())
-    log = logger.Logger(sys.stdout, logger.DEBUG)
     # r1 indices: k_i, i, a
     nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
     nov = nocc * nvir
@@ -935,7 +929,6 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
             offset += nov2
 
     vector = np.hstack((r1.ravel(), vector[:offset]))
-    log.timer("amplitudes_to_vector_singlet", *cput0)
     return vector
 
 
@@ -988,7 +981,9 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     kconserv = imds.kconserv
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
     kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
+    cput1 = (logger.process_clock(), logger.perf_counter())
     r1, r2 = vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv_r2)
+    cput1 = log.timer_debug1("vector_to_amplitudes_singlet", *cput1)
 
     # Build antisymmetrized tensors that will be used later
     #   antisymmetrized r2   : rbar_ijab = 2 r_ijab - r_ijba
@@ -1218,7 +1213,9 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
         kf = kconserv[ki, ka, kj]
         Hr2[ki, kj, ka] += einsum('fb,ijaf->ijab', wr1_vv[kf], imds.t2[ki, kj, ka])
 
+    cput1 = log.timer_debug1("contraction", *cput1)
     vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
+    log.timer_debug1("amplitudes_to_vector_singlet", *cput1)
     log.timer("matvec EOMEE Singlet", *cput0)
     return vector
 

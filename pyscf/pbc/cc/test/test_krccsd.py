@@ -423,6 +423,7 @@ class KnownValues(unittest.TestCase):
         kmf.mo_occ = kmf.get_occ()
 
         # Run CC calculations
+        # FIXME: IP from differnt initial guess not matching
         self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
 
     def test_ccsd_t_non_hf(self):
@@ -589,7 +590,7 @@ class KnownValues(unittest.TestCase):
     def test_rccsd_t_hf_against_so(self):
         '''Tests restricted ccsd and ccsd_t for Hartree-Fock references against
         the general spin-orbital implementation.'''
-        n = 7
+        n = 15
         cell = make_test_cell.test_cell_n3([n]*3)
         #import sys
         #cell.stdout = sys.stdout
@@ -600,6 +601,7 @@ class KnownValues(unittest.TestCase):
         kpts -= kpts[0]
         kks = pbcscf.KRHF(cell, kpts=kpts)
         ekks = kks.kernel()
+        self.assertAlmostEqual(ekks, -10.530978858287662, 8)
 
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)
@@ -614,13 +616,13 @@ class KnownValues(unittest.TestCase):
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)
 
-        self.assertAlmostEqual(ekrcc_t, -0.0021667871077339, 6)
+        self.assertAlmostEqual(ekrcc_t, -0.0011112985234012498, 6)
         self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
 
     def test_rccsd_t_non_hf_against_so(self):
         '''Tests restricted ccsd and ccsd_t for non Hartree-Fock references against
         the general spin-orbital implementation.'''
-        n = 7
+        n = 15
         cell = make_test_cell.test_cell_n3([n]*3)
         #import sys
         #cell.stdout = sys.stdout
@@ -631,6 +633,7 @@ class KnownValues(unittest.TestCase):
         kpts -= kpts[0]
         kks = pbcscf.KRKS(cell, kpts=kpts)
         ekks = kks.kernel()
+        self.assertAlmostEqual(ekks, -10.756720842215906, 8)
 
         khf = pbcscf.KRHF(cell)
         khf.__dict__.update(kks.__dict__)
@@ -645,12 +648,12 @@ class KnownValues(unittest.TestCase):
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)
 
-        self.assertAlmostEqual(ekrcc_t, -0.0021709465899365336, 6)
+        self.assertAlmostEqual(ekrcc_t, -0.0011462802739579888, 6)
         self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
 
     def test_rccsd_t_non_hf_against_so_frozen(self):
         '''Tests rccsd_t with gccsd_t with frozen orbitals.'''
-        n = 7
+        n = 15
         cell = make_test_cell.test_cell_n3([n]*3)
         #import sys
         #cell.stdout = sys.stdout
@@ -675,7 +678,7 @@ class KnownValues(unittest.TestCase):
         ekrcc, t1, t2 = mycc.kernel(eris=eris)
         ekrcc_t = mycc.ccsd_t(eris=eris)
 
-        self.assertAlmostEqual(ekrcc_t, -0.0018712836246782309, 6)
+        self.assertAlmostEqual(ekrcc_t, -0.0008839412571610861, 6)
         self.assertAlmostEqual(ekrcc_t, ekgcc_t, 6)
 
     def test_ccsd_t_high_cost(self):

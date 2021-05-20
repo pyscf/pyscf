@@ -18,16 +18,16 @@ kmf.scf()
 
 def tearDownModule():
     global cell_n3d, kmf
+    cell_n3d.stdout.close()
     del cell_n3d, kmf
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
         self.assertAlmostEqual(kmf.e_tot, -6.1870676561721227, 6)
-        cell = make_test_cell.test_cell_n3_diffuse()
-        nmp = [1,1,2]
         '''
+        nmp = [1,1,2]
         # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
+        supcell = super_cell(cell_n3d,nmp)
         gmf  = scf.UHF(supcell,exxdiv=None)
         ehf  = gmf.kernel()
         gcc  = cc.UCCSD(gmf)

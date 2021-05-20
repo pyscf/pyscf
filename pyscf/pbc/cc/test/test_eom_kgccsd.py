@@ -21,6 +21,7 @@ eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc.nkpts)]
 
 def tearDownModule():
     global cell, kmf, mycc, eris
+    cell.stdout.close()
     del cell, kmf, mycc, eris
 
 class KnownValues(unittest.TestCase):
