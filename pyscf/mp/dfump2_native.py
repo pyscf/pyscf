@@ -143,7 +143,7 @@ class DFUMP2(DFRMP2):
     def make_rdm1(self, relaxed=False, ao_repr=False):
         '''
         Calculates the MP2 1-RDM.
-        - The relaxed density matrix is suitable to calculate properties of systems
+        - The relaxed density matrix can be used to calculate properties of systems
           for which MP2 is well-behaved.
         - The unrelaxed density is less suited to calculate properties accurately,
           but it can be used to calculate CASSCF starting orbitals.
@@ -157,7 +157,7 @@ class DFUMP2(DFRMP2):
         '''
         rdm1_mo = make_rdm1(self, relaxed)
         if ao_repr:
-            return np.einsum('sxp,spq,syq->sxy', self.mo_coeff, rdm1_mo, self.mo_coeff)
+            return lib.einsum('sxp,spq,syq->sxy', self.mo_coeff, rdm1_mo, self.mo_coeff)
         else:
             return rdm1_mo
 
@@ -184,13 +184,13 @@ class DFUMP2(DFRMP2):
 
         # Transform the beta component to the alpha basis and sum both together.
         SAO = self.mol.intor_symmetric('int1e_ovlp')
-        Sab = np.linalg.multi_dot([self.mo_coeff[0, :, :].T, SAO, self.mo_coeff[1, :, :]])
-        rdm1_abas = dm[0, :, :] + np.linalg.multi_dot([Sab, dm[1, :, :], Sab.T])
+        Sab = lib.einsum('xp,xy,yq->pq', self.mo_coeff[0, :, :], SAO, self.mo_coeff[1, :, :])
+        rdm1_abas = dm[0, :, :] + lib.einsum('pr,rs,qs->pq', Sab, dm[1, :, :], Sab)
 
         # Diagonalize the spin-traced 1-RDM in alpha basis to get the natural orbitals.
         eigval, eigvec = np.linalg.eigh(rdm1_abas)
         natocc = np.flip(eigval)
-        natorb = np.dot(self.mo_coeff[0, :, :], np.fliplr(eigvec))
+        natorb = lib.dot(self.mo_coeff[0, :, :], np.fliplr(eigvec))
         return natocc, natorb
     
     def calculate_integrals_(self):
@@ -302,10 +302,10 @@ def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
             ints3c_ia = ints[i, :, :]
             for j in range(i):
                 ints3c_jb = ints[j, :, :]
-                Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+                Kab = lib.dot(ints3c_ia.T, ints3c_jb)
                 DE = mo_energy_masked[s, i] + mo_energy_masked[s, j] - Eab
                 Tab = (Kab - Kab.T) / DE
-                energy_contrib += pt * np.einsum('ab,ab', Tab, Kab)
+                energy_contrib += pt * lib.einsum('ab,ab', Tab, Kab)
         logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
         energy_total += energy_contrib
 
@@ -323,10 +323,10 @@ def emp2_uhf(intsfiles, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
         ints3c_ia = ints_a[i, :, :]
         for j in range(nocc_act[1]):
             ints3c_jb = ints_b[j, :, :]
-            Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+            Kab = lib.dot(ints3c_ia.T, ints3c_jb)
             DE = mo_energy_masked[0, i] + mo_energy_masked[1, j] - Eab
             Tab = Kab / DE
-            energy_contrib += ps * np.einsum('ab,ab', Tab, Kab)
+            energy_contrib += ps * lib.einsum('ab,ab', Tab, Kab)
     logger.info('      E = {0:.14f} Eh'.format(energy_contrib))
     energy_total += energy_contrib
 
@@ -480,7 +480,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                 # and all j (s2), a (s1) and b (s2). These amplitudes are stored on disk.
                 for j in range(nocc_act[s2]):
                     ints3c_jb = ints[s2][j, :, :]
-                    Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+                    Kab = lib.dot(ints3c_ia.T, ints3c_jb)
                     DE = mo_energy_masked[s1, i] + mo_energy_masked[s2, j] - Eab
                     if s1 == s2:
                         numerator = Kab - Kab.T
@@ -491,7 +491,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     Tab = numerator / DE
                     tiset[j, :, :] = Tab
                     # virtual 1-RDM contribution
-                    P[s1, nocc[s1]:, nocc[s1]:] += prefactor * np.matmul(Tab, Tab.T)
+                    P[s1, nocc[s1]:, nocc[s1]:] += prefactor * lib.dot(Tab, Tab.T)
                 del ints3c_jb, Kab, DE, numerator, Tab
 
                 # Batches of amplitudes are read from disk to calculate the occupied
@@ -511,7 +511,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     else:
                         prefactor = ps
                     P[s2, nfrozen:nocc[s2], nfrozen:nocc[s2]] -= \
-                        prefactor * np.einsum('iab,jab->ij', tbatch, tbatch)
+                        prefactor * lib.einsum('iab,jab->ij', tbatch, tbatch)
                 del tbatch
 
                 if calcGamma:
@@ -538,7 +538,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                         Gbatch = Gamma[jstart:jend, :, :]
                         for jj in range(jend-jstart):
                             Tijab = tbatch[jj]
-                            Gbatch[jj] += prefactor * np.matmul(ints3cV1_ia, Tijab)
+                            Gbatch[jj] += prefactor * lib.dot(ints3cV1_ia, Tijab)
                         Gamma[jstart:jend, :, :] = Gbatch
                     del tbatch, Gbatch
 
@@ -571,17 +571,17 @@ def fock_response_uhf(mf, dm, full=True):
     dmao = np.zeros((2, nao, nao))
     for s in 0, 1:
         if full:
-            dmao[s, :, :] = np.linalg.multi_dot([mo_coeff[s], dm[s], mo_coeff[s].T])
+            dmao[s, :, :] = lib.einsum('xp,pq,yq->xy', mo_coeff[s], dm[s], mo_coeff[s])
         else:
             Ci = mo_coeff[s][:, mo_occ[s]>0]
             Ca = mo_coeff[s][:, mo_occ[s]==0]
-            dmao[s, :, :] = np.linalg.multi_dot([Ca, dm[s], Ci.T])
+            dmao[s, :, :] = lib.einsum('xa,ai,yi->xy', Ca, dm[s], Ci)
     rao = mf.get_veff(dm=dmao+dmao.transpose((0, 2, 1)))
     rvo = [None, None]
     for s in 0, 1:
         Ci = mo_coeff[s][:, mo_occ[s]>0]
         Ca = mo_coeff[s][:, mo_occ[s]==0]
-        rvo[s] = np.linalg.multi_dot([Ca.T, rao[s], Ci])
+        rvo[s] = lib.einsum('xa,xy,yi->ai', Ca, rao[s], Ci)
     return rvo
 
 

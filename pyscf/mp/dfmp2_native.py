@@ -137,7 +137,7 @@ class DFRMP2(lib.StreamObject):
     def make_rdm1(self, relaxed=False, ao_repr=False):
         '''
         Calculates the MP2 1-RDM.
-        - The relaxed density matrix is suitable to calculate properties of systems
+        - The relaxed density matrix can be used to calculate properties of systems
           for which MP2 is well-behaved.
         - The unrelaxed density is less suited to calculate properties accurately,
           but it can be used to calculate CASSCF starting orbitals.
@@ -151,7 +151,7 @@ class DFRMP2(lib.StreamObject):
         '''
         rdm1_mo = make_rdm1(self, relaxed)
         if ao_repr:
-            rdm1_ao = np.linalg.multi_dot([self.mo_coeff, rdm1_mo, self.mo_coeff.T])
+            rdm1_ao = lib.einsum('xp,pq,yq->xy', self.mo_coeff, rdm1_mo, self.mo_coeff)
             return rdm1_ao
         else:
             return rdm1_mo
@@ -159,7 +159,7 @@ class DFRMP2(lib.StreamObject):
     def make_rdm1_unrelaxed(self, ao_repr=False):
         return self.make_rdm1(relaxed=False, ao_repr=ao_repr)
     
-    def make_rdm1_relaxed(self, ao_repr=True):
+    def make_rdm1_relaxed(self, ao_repr=False):
         return self.make_rdm1(relaxed=True, ao_repr=ao_repr)
 
     def make_natorbs(self, rdm1_mo=None, relaxed=False):
@@ -185,7 +185,7 @@ class DFRMP2(lib.StreamObject):
 
         eigval, eigvec = np.linalg.eigh(dm)
         natocc = np.flip(eigval)
-        natorb = np.dot(self.mo_coeff, np.fliplr(eigvec))
+        natorb = lib.dot(self.mo_coeff, np.fliplr(eigvec))
         return natocc, natorb
     
     @property
@@ -308,9 +308,9 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
             for m in range(aoints_auxshell.shape[2]):
                 aoints = aoints_auxshell[:, :, m]
                 if nmo1 <= nmo2:
-                    moints = np.matmul(np.matmul(mo_coeff1.T, aoints), mo_coeff2)
+                    moints = lib.dot(lib.dot(mo_coeff1.T, aoints), mo_coeff2)
                 else:
-                    moints = np.matmul(mo_coeff1.T, np.matmul(aoints, mo_coeff2))
+                    moints = lib.dot(mo_coeff1.T, lib.dot(aoints, mo_coeff2))
                 ints_3c[aux_ctr, :, :] = moints
                 aux_ctr += 1
 
@@ -391,16 +391,16 @@ def emp2_rhf(intsfile, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
         # contributions for occupied orbitals j < i
         for j in range(i):
             ints3c_jb = ints[j, :, :]
-            Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+            Kab = lib.dot(ints3c_ia.T, ints3c_jb)
             DE = mo_energy_masked[i] + mo_energy_masked[j] - Eab
             Tab = Kab / DE
-            energy += 2.0 * (ps + pt) * np.einsum('ab,ab', Tab, Kab)
-            energy -= 2.0 * pt * np.einsum('ab,ba', Tab, Kab)
+            energy += 2.0 * (ps + pt) * lib.einsum('ab,ab', Tab, Kab)
+            energy -= 2.0 * pt * lib.einsum('ab,ba', Tab, Kab)
         # contribution for j == i
-        Kab = np.matmul(ints3c_ia.T, ints3c_ia)
+        Kab = lib.dot(ints3c_ia.T, ints3c_ia)
         DE = 2.0 * mo_energy_masked[i] - Eab
         Tab = Kab / DE
-        energy += ps * np.einsum('ab,ab', Tab, Kab)
+        energy += ps * lib.einsum('ab,ab', Tab, Kab)
 
     logger.note('*** DF-MP2 correlation energy: {0:.14f} Eh'.format(energy))
     return energy
@@ -524,13 +524,13 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
             # Store the amplitudes in a file.
             for j in range(nocc_act):
                 ints3c_jb = ints[j, :, :]
-                Kab = np.matmul(ints3c_ia.T, ints3c_jb)
+                Kab = lib.dot(ints3c_ia.T, ints3c_jb)
                 DE = mo_energy_masked[i] + mo_energy_masked[j] - Eab
                 Tab = Kab / DE
                 TCab = 2.0 * (ps + pt) * Tab - 2.0 * pt * Tab.T
                 tiset[j, :, :] = Tab
                 # virtual 1-RDM contribution
-                P[nocc:, nocc:] += np.matmul(Tab, TCab.T)
+                P[nocc:, nocc:] += lib.dot(Tab, TCab.T)
             del ints3c_jb, Kab, DE, Tab, TCab
 
             # Read batches of amplitudes from disk and calculate the occupied 1-RDM.
@@ -545,8 +545,8 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
                 tbatch1 = tiset[:, astart:aend, :]
                 tbatch2 = tiset[:, :, astart:aend]
                 P[nfrozen:nocc, nfrozen:nocc] += \
-                    - 2.0 * (ps + pt) * np.einsum('iab,jab->ij', tbatch1, tbatch1) \
-                    + 2.0 * pt * np.einsum('iab,jba->ij', tbatch1, tbatch2)
+                    - 2.0 * (ps + pt) * lib.einsum('iab,jab->ij', tbatch1, tbatch1) \
+                    + 2.0 * pt * lib.einsum('iab,jba->ij', tbatch1, tbatch2)
             del tbatch1, tbatch2
             
             if calcGamma:
@@ -566,7 +566,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
                     Gbatch = Gamma[jstart:jend, :, :]
                     for jj in range(jend-jstart):
                         TCijab_scal = 4.0 * (pt + pt) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
-                        Gbatch[jj] += np.matmul(ints3cV1_ia, TCijab_scal)
+                        Gbatch[jj] += lib.dot(ints3cV1_ia, TCijab_scal)
                     Gamma[jstart:jend, :, :] = Gbatch
                 del ints3cV1_ia, tbatch, Gbatch, TCijab_scal
     
@@ -673,17 +673,17 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
             GiKa = Gamma[:, aux_start:aux_stop, :]
             for m in range(aux_stop - aux_start):
                 # Half-transformed Gamma for specific auxiliary function m
-                G12 = np.matmul(GiKa[:, m, :], mo_coeff[:, nocc:].T)
+                G12 = lib.dot(GiKa[:, m, :], mo_coeff[:, nocc:].T)
                 # product of Gamma with integrals: one index still in AO basis
-                Gints = np.matmul(G12, aoints_auxshell[:, :, m])
+                Gints = lib.dot(G12, aoints_auxshell[:, :, m])
                 # 3c2e integrals in occupied MO basis
-                intso12 = np.matmul(aoints_auxshell[:, :, m], mo_coeff[:, occ_mask])
-                intsoo = np.matmul(mo_coeff[:, occ_mask].T, intso12)
-                intsfo = np.matmul(mo_coeff[:, frozen_mask].T, intso12)
+                intso12 = lib.dot(aoints_auxshell[:, :, m], mo_coeff[:, occ_mask])
+                intsoo = lib.dot(mo_coeff[:, occ_mask].T, intso12)
+                intsfo = lib.dot(mo_coeff[:, frozen_mask].T, intso12)
                 # contributions to the orbital gradient
-                Lov_act += np.matmul(intsoo, GiKa[:, m, :]) - np.matmul(Gints, mo_coeff[:, nocc:])
-                Lof_act -= np.matmul(Gints, mo_coeff[:, frozen_mask])
-                Lfv += np.matmul(intsfo, GiKa[:, m, :])
+                Lov_act += lib.dot(intsoo, GiKa[:, m, :]) - lib.dot(Gints, mo_coeff[:, nocc:])
+                Lof_act -= lib.dot(Gints, mo_coeff[:, frozen_mask])
+                Lfv += lib.dot(intsfo, GiKa[:, m, :])
             del GiKa, aoints_auxshell
 
     except BatchSizeError:
@@ -719,11 +719,11 @@ def fock_response_rhf(mf, dm, full=True):
     Ci = mo_coeff[:, mo_occ>0]
     Ca = mo_coeff[:, mo_occ==0]
     if full:
-        dmao = np.linalg.multi_dot([mo_coeff, dm, mo_coeff.T])
+        dmao = lib.einsum('xp,pq,yq->xy', mo_coeff, dm, mo_coeff)
     else:
-        dmao = np.linalg.multi_dot([Ca, dm, Ci.T])
+        dmao = lib.einsum('xa,ai,yi->xy', Ca, dm, Ci)
     rao = 2.0 * mf.get_veff(dm=dmao+dmao.T)
-    rvo = np.linalg.multi_dot([Ca.T, rao, Ci])
+    rvo = lib.einsum('xa,xy,yi->ai', Ca, rao, Ci)
     return rvo
 
 
