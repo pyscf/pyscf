@@ -19,9 +19,10 @@
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.pbc import scf
-from pyscf.pbc.tdscf.krhf import _get_e_ia
+from pyscf.pbc.tdscf.krhf import _get_e_ia, purify_krlyov_heff
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
@@ -45,7 +46,7 @@ class TDA(uhf.TDA):
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        nkpts = len(mo_occ)
+        nkpts = len(mo_occ[0])
         nao, nmo = mo_coeff[0][0].shape
         occidxa = [numpy.where(mo_occ[0][k]> 0)[0] for k in range(nkpts)]
         occidxb = [numpy.where(mo_occ[1][k]> 0)[0] for k in range(nkpts)]
@@ -104,12 +105,17 @@ class TDA(uhf.TDA):
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
         e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
+
+        e_ia_max = e_ia.max()
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia)
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
+        # Handle degeneracy
+        e_threshold += 1e-6
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None):
@@ -123,11 +129,20 @@ class TDA(uhf.TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD)[0]
+            return w[idx], v[:,idx], idx
+
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+        hermi = 1
+
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=self.nstates, lindep=self.lindep,
-                              max_space=self.max_space,
+                              max_space=self.max_space, pick=pickeig,
+                              fill_heff=purify_krlyov_heff(precision, hermi, log),
                               verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
@@ -144,7 +159,7 @@ class TDHF(TDA):
         mo_coeff = mf.mo_coeff
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        nkpts = len(mo_occ)
+        nkpts = len(mo_occ[0])
         nao, nmo = mo_coeff[0][0].shape
         occidxa = [numpy.where(mo_occ[0][k]> 0)[0] for k in range(nkpts)]
         occidxb = [numpy.where(mo_occ[1][k]> 0)[0] for k in range(nkpts)]
@@ -158,7 +173,7 @@ class TDHF(TDA):
         e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
         e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
         hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
-        hdiag = numpy.hstack((hdiag, hdiag))
+        hdiag = numpy.hstack((hdiag, -hdiag))
         tot_x_a = sum(x.size for x in e_ia_a)
         tot_x_b = sum(x.size for x in e_ia_b)
         tot_x = tot_x_a + tot_x_b
@@ -239,11 +254,15 @@ class TDHF(TDA):
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
+                                    fill_heff=purify_krlyov_heff(precision, 0, log),
                                     verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ

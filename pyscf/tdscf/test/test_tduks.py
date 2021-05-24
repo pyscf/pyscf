@@ -319,12 +319,11 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
             td_hf.analyze()
         ref = [(),
-               (1, 2.057393343331977, 602.6275818634069, 0.1605980834206071),
-               (2, 2.280659766638949, 543.6330282886508, 0.0016221163442707552),
-               (3, 6.37244518162562, 194.5629880048233, 9.923201744400984e-31)]
-
+               (1, 2.057393297642004, 602.6275952463794, 0.1605980834206071),
+               (2, 2.2806597448158272, 543.6330334905534, 0.0016221163442707552),
+               (3, 6.372445278065303, 194.56298506033463, 0)]
         self.assertAlmostEqual(abs(numpy.hstack(ref) -
-                                   numpy.hstack(note_args)).max(), 0, 7)
+                                   numpy.hstack(note_args)).max(), 0, 6)
 
     def test_init(self):
         hf = scf.UHF(mol)
@@ -389,7 +388,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(note_args[3][1], 'B1')
         self.assertAlmostEqual(abs(numpy.hstack((ref[1][2:], ref[2][2:], ref[3][2:])) -
                                    numpy.hstack((note_args[1][2:], note_args[2][2:], note_args[3][2:]))).max(),
-                               0, 7)
+                               0, 6)
 
     def test_tddft_with_wfnsym(self):
         pmol = mol.copy()

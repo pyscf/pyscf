@@ -253,7 +253,7 @@ class KnownValues(unittest.TestCase):
         f = td_hf.oscillator_strength(gauge='length')
         self.assertAlmostEqual(lib.fp(f), -0.13908774016795605, 7)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
-        self.assertAlmostEqual(lib.fp(f), -0.096991134490587522, 7)
+        self.assertAlmostEqual(lib.fp(f), -0.096991134490587522, 6)
 
         note_args = []
         def temp_logger_note(rec, msg, *args):
@@ -265,7 +265,7 @@ class KnownValues(unittest.TestCase):
                (2, 11.834865910142618, 104.76181013351919, 0.010753590745567499),
                (3, 16.66308427853695, 74.40651170629978, 0.3740302871966713)]
         self.assertAlmostEqual(abs(numpy.hstack(ref) -
-                                   numpy.hstack(note_args)).max(), 0, 7)
+                                   numpy.hstack(note_args)).max(), 0, 6)
 
         self.assertEqual(td_hf.nroots, td_hf.nstates)
         self.assertAlmostEqual(lib.fp(td_hf.e_tot-mf.e_tot), 0.41508325757603637, 6)
