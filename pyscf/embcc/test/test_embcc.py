@@ -70,16 +70,22 @@ def make_diamond(a, atoms=["C1", "C2"], basis="gth-dzv", supercell=False):
 
 def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
 
+    t0 = timer()
     cell = make_cubic(a, "He")
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
     kmf.kernel()
+    t_hf = timer()-t0
 
+    t0 = timer()
     ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
     ecc.make_atom_cluster(0)
     ecc.kernel()
+    t_ecc = timer()-t0
     print("E(Emb-CCSD)= %+16.8f Ha" % ecc.e_tot)
+
+    print("T(HF)= %.2f s  T(Emb-CCSD)= %.2f s" % (t_hf, t_ecc))
 
     if bno_threshold <= 0:
         kcc = pyscf.pbc.cc.KCCSD(kmf)
@@ -298,10 +304,10 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 def run_test():
 
     #test_helium(kmesh=[2,3,4], bno_threshold=1e-7)
-    # test_helium()
+    test_helium()
     #test_helium(kmesh=[2,1,1])
     #test_diamond_kpts(kmesh=[2,2,2])
-    test_diamond_bno_threshold(kmesh=[2,2,2])
+    #test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_canonical_orth()
     #sample_canonical_orth()
     #test_diamond_bno_threshold(kmesh=[3,3,3])
