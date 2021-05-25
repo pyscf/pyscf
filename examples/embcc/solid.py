@@ -118,7 +118,8 @@ def get_arguments():
         defaults = {
                 "atoms" : ["C", "C"],
                 "ndim" : 2,
-                "lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
+                #"lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
+                "lattice_consts" : np.asarray([2.4, 2.425, 2.45, 2.475, 2.5, 2.525]),
                 "vacuum_size" : 20.0
                 }
     elif args.system == "perovskite":

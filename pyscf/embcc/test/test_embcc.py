@@ -68,34 +68,24 @@ def make_diamond(a, atoms=["C1", "C2"], basis="gth-dzv", supercell=False):
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
-def test_helium(EXPECTED=-22.8671, kmesh=[2,2,2]):
+def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
 
-    a = 2.0
     cell = make_cubic(a, "He")
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=1e-4)
-    kcc.make_atom_cluster(0, symmetry_factor=2)
-    kcc.kernel()
-    print("K-CCSD E= %16.8g" % kcc.e_tot)
-    if EXPECTED:
-        assert np.isclose(kcc.e_tot, EXPECTED)
+    ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    ecc.make_atom_cluster(0)
+    ecc.kernel()
+    print("E(Emb-CCSD)= %+16.8f Ha" % ecc.e_tot)
 
-
-    #scell = make_cubic(a, "He", supercell=kmesh)
-    #smf = pyscf.pbc.scf.RHF(scell)
-    #smf = smf.density_fit()
-    #smf.kernel()
-
-    #scc = pyscf.embcc.EmbCC(smf, bath_tol=1e-4)
-    #scc.make_atom_cluster(0, symmetry_factor=2)
-    #scc.kernel()
-    #print("SC-CCSD E= %16.8g" % scc.e_tot)
-    #if EXPECTED:
-    #    assert np.isclose(scc.e_tot, EXPECTED)
+    if bno_threshold <= 0:
+        kcc = pyscf.pbc.cc.KCCSD(kmf)
+        kcc.kernel()
+        print("E(k-CCSD)=   %+16.8f Ha" % kcc.e_tot)
+        assert np.allclose(kcc.e_tot, ecc.e_tot)
 
 def test_canonical_orth(c=1.2, lindep_threshold=1e-8, kmesh=[1,1,2], output=None):
 
@@ -306,7 +296,9 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
     assert np.allclose(ccsd.e_tot, EXPECTED)
 
 def run_test():
-    #test_helium()
+
+    #test_helium(kmesh=[2,3,4], bno_threshold=1e-7)
+    # test_helium()
     #test_helium(kmesh=[2,1,1])
     #test_diamond_kpts(kmesh=[2,2,2])
     test_diamond_bno_threshold(kmesh=[2,2,2])

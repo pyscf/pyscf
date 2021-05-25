@@ -7,7 +7,7 @@ def canonical_orth(ovlp, threshold=1e-7):
     novlp = np.linalg.multi_dot((normlz, ovlp, normlz))
     # Form vectors for normalized overlap matrix
     se, sv = np.linalg.eigh(novlp)
-    keep = (se>=threshold)
+    keep = (se >= threshold)
     x = sv[:,keep] / np.sqrt(se[keep])
     # Plug normalization back in
     x = np.dot(normlz, x)

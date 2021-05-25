@@ -2626,31 +2626,55 @@ class Mole(lib.StreamObject):
         logger.info(self, 'CPU time: %12.2f', logger.process_clock())
         return self
 
-    def eigh_factory(self, lindep_threshold=None, lindep_method=None):
-        """Create generalized eigenproblem solver, with linear dependency treatment."""
+    def eigh_factory(self, lindep_threshold=None, lindep_method=None, fallback_mode=False):
+        """Create generalized eigenproblem solver, with linear dependency treatment.
+
+        Parameters
+        ----------
+        lindep_threshold : float, optional
+        lindep_method : str, optional
+        fallback_mode : bool, optional
+
+        Returns
+        -------
+        eigh : function
+            Diagonalizer.
+        """
+
+        # Get default values from Mole object:
         ldt = lindep_threshold or self.lindep_threshold
         ldm = lindep_method or self.lindep_method
+
         # No linear-dependency treatment
         if not ldt or not ldm:
             return scipy.linalg.eigh
+
         # Canonical orthogonalization
         elif ldm.lower() == 'canonical-orth':
-            def eigh(a, ovlp=None, type=1):
-                if type != 1:
-                    raise NotImplementedError()
-                if ovlp is None:
-                    return np.linalg.eigh(a)
-                x = helper.canonical_orth(ovlp, threshold=ldt)
-                n0, n1 = x.shape
-                logger.debug(self, "Removing linearly dependent AOs: method= %s threshold= %.1e N(tot)= %4d N(del)= %3d", ldm, ldt, n0, (n0-n1))
-                xax = np.linalg.multi_dot((x.T.conj(), a, x))
-                e, c = np.linalg.eigh(xax)
-                c = np.dot(x, c)
+            def eigh(a, b=None, type=1):
+                # If fallback_mode is true, attempt a normal eigh first:
+                e = c = None
+                if fallback_mode:
+                    try:
+                        e, c = scipy.linalg.eigh(a, b, type=type)
+                    except scipy.linalg.LinAlgError:
+                        pass
+                # Use canonical orthogonalization
+                if e is None:
+                    if type != 1:
+                        raise NotImplementedError()
+                    if b is None:
+                        return np.linalg.eigh(a)
+                    x = helper.canonical_orth(b, threshold=ldt)
+                    n0, n1 = x.shape
+                    logger.debug(self, "Removing linearly dependent bfns: method= %s threshold= %.1e N(tot)= %4d N(removed)= %3d", ldm, ldt, n0, (n0-n1))
+                    xax = np.linalg.multi_dot((x.T.conj(), a, x))
+                    e, c = np.linalg.eigh(xax)
+                    c = np.dot(x, c)
                 # PySCF sign convention
-                idx = numpy.argmax(abs(c.real), axis=0)
-                switch = c[idx,np.arange(len(e))].real < 0
+                argmax = numpy.argmax(abs(c.real), axis=0)
+                switch = c[argmax,np.arange(len(e))].real < 0
                 c[:,switch] *= -1
-
                 return e, c
         else:
             raise NotImplementedError()
