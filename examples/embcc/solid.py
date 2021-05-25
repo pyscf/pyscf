@@ -50,6 +50,7 @@ def get_arguments():
     parser.add_argument("--k-points", type=int, nargs=3)
     parser.add_argument("--lattice-consts", type=float, nargs="*")
     parser.add_argument("--skip", type=int, default=0)
+    parser.add_argument("--only", type=int, nargs="*")
     parser.add_argument("--ndim", type=int)
     parser.add_argument("--vacuum-size", type=float)                    # For 2D
     parser.add_argument("--precision", type=float, default=1e-8)
@@ -135,6 +136,8 @@ def get_arguments():
             setattr(args, key, val)
 
     args.lattice_consts = np.asarray(args.lattice_consts)[args.skip:]
+    if args.only is not None:
+        args.lattice_consts = args.lattice_consts[args.only]
 
     if MPI_rank == 0:
         log.info("PARAMETERS IN INPUT SCRIPT")
