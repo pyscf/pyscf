@@ -22,7 +22,7 @@ def get_logname(basename):
     return name
 
 LOGNAME = get_logname("embcc")
-ERRNAME = get_logname("errors")
+ERRNAME = get_logname("warnings")
 LOGLEVEL = logging.DEBUG if __debug__ else logging.INFO
 
 # Note that indents are only tracked for the root logger
