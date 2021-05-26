@@ -106,8 +106,8 @@ class EmbCC:
                 # If multiple bno thresholds are to be calculated, we can project integrals and amplitudes from a previous larger cluster:
                 "project_eris" : False,         # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
                 "project_init_guess" : True,    # Project converted T1,T2 amplitudes from a previous larger cluster
-                #"orthogonal_mo_tol" : False,
-                "orthogonal_mo_tol" : 1e-7,
+                "orthogonal_mo_tol" : False,
+                #"orthogonal_mo_tol" : 1e-7,
                 # Population analysis
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis

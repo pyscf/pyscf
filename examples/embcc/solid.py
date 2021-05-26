@@ -41,7 +41,7 @@ def get_arguments():
     """Get arguments from command line."""
     parser = argparse.ArgumentParser(allow_abbrev=False)
     # System
-    parser.add_argument("--system", choices=["diamond", "graphite", "graphene", "perovskite"], default="diamond")
+    parser.add_argument("--system", choices=["diamond", "graphite", "graphene", "hbn", "perovskite"], default="diamond")
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzvp")
     parser.add_argument("--pseudopot", default="gth-pade")
@@ -121,6 +121,13 @@ def get_arguments():
                 "ndim" : 2,
                 #"lattice_consts" : np.arange(2.35, 2.6+1e-12, 0.05),
                 "lattice_consts" : np.asarray([2.4, 2.425, 2.45, 2.475, 2.5, 2.525]),
+                "vacuum_size" : 20.0
+                }
+    elif args.system == "hbn":
+        defaults = {
+                "atoms" : ["B", "N"],
+                "ndim" : 2,
+                "lattice_consts" : np.asarray([2.45, 2.475, 2.5, 2.525, 2.55, 2.575]),
                 "vacuum_size" : 20.0
                 }
     elif args.system == "perovskite":
@@ -209,7 +216,7 @@ def make_cell(a, args, **kwargs):
         cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
     elif args.system == "graphite":
         cell.a, cell.atom = make_graphite(a, c=args.vacuum_size, atoms=args.atoms)
-    elif args.system == "graphene":
+    elif args.system in ("graphene", "hbn"):
         cell.a, cell.atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
     elif args.system == "perovskite":
         cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
@@ -527,7 +534,7 @@ for i, a in enumerate(args.lattice_consts):
         elif args.system == "graphite":
             ccx.make_atom_cluster(0, symmetry_factor=2)
             ccx.make_atom_cluster(1, symmetry_factor=2)
-        elif args.system == "graphene":
+        elif args.system in ("graphene", "hbn"):
             #for ix in range(2):
             #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
             #if ncells % 2 == 0:
