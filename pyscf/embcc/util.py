@@ -128,8 +128,7 @@ def orthogonalize_mo(c, s, tol=1e-6):
     # Check orthogonality within tol
     nonorth = abs(chi_out - np.eye(chi_out.shape[-1])).max()
     if tol is not None and nonorth > tol:
-        #raise RuntimeError("ERROR: Orbital non-orthogonality= %.3e" % nonorth)
-        log.error("ERROR: Orbital non-orthogonality= %.1e", nonorth)
+        log.error("Orbital non-orthogonality= %.1e", nonorth)
 
     return c_out
 
@@ -161,7 +160,8 @@ def reorder_columns(a, *args):
     assert b.shape == a.shape
     return b
 
-def get_time_string(seconds, show_zeros=True):
+
+def time_string(seconds, show_zeros=False):
     m, s = divmod(seconds, 60)
     if seconds >= 3600 or show_zeros:
         tstr = "%.0f h %.0f min %.0f s" % (divmod(m, 60) + (s,))
@@ -170,6 +170,8 @@ def get_time_string(seconds, show_zeros=True):
     else:
         tstr = "%.2f s" % s
     return tstr
+
+get_time_string = time_string
 
 def atom_labels_to_ao_indices(mol, atom_labels):
     """Convert atom labels to AO indices of mol object."""

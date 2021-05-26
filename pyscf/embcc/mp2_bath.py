@@ -91,17 +91,15 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     else:
         log.debug("Transforming previous eris.")
         eris = transform_mp2_eris(eris, c_occ, c_vir, ovlp=self.base.get_ovlp())
-    t = (timer() - t0)
-    log.debug("Time for integral transformation [s]: %.3f (%s)", t, get_time_string(t))
+    log.timing("Time for integral transformation:  %s", get_time_string(timer()-t0))
     assert (eris.ovov is not None)
 
     t0 = timer()
     e_mp2_full, t2 = mp2.kernel(eris=eris, hf_reference=True)
-    t = (timer() - t0)
     nocc, nvir = t2.shape[0], t2.shape[2]
     assert (c_occ.shape[-1] == nocc)
     assert (c_vir.shape[-1] == nvir)
-    log.debug("Time for MP2 kernel [s]: %.3f (%s)", t, get_time_string(t))
+    log.timing("Time for MP2 kernel:  %s", get_time_string(timer()-t0))
 
     # Energies
     e_mp2_full *= self.symmetry_factor
@@ -119,7 +117,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
         # do, dv = -2*do, 2*dv
     elif local_dm is True:
         # LOCAL DM IS NOT RECOMMENDED - USE SEMI OR FALSE
-        log.warning("WARNING: using local_dm = True is not recommended - use 'semi' or False")
+        log.warning("Using local_dm = True is not recommended - use 'semi' or False")
         log.debug("Constructing DM from local T2 amplitudes.")
         t2l, t2r = t2loc, t2loc
     elif local_dm == "semi":

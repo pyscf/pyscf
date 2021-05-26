@@ -502,7 +502,7 @@ class Cluster:
         log.info("****************")
         log.changeIndentLevel(1)
         c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_threshold)
-        log.debug("Time for DMET bath: %s", get_time_string(timer()-t0))
+        log.timing("Time for DMET bath:  %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
         # Add fragment and DMET orbitals for cube file plots
@@ -558,7 +558,7 @@ class Cluster:
         log.changeIndentLevel(1)
         self.c_no_occ, self.n_no_occ = make_mp2_bno(
                 self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.debug("Time for occupied BNOs: %s", get_time_string(timer()-t0))
+        log.timing("Time for occupied BNOs:  %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
         log.info("MAKING VIRTUAL BNOs")
@@ -567,7 +567,7 @@ class Cluster:
         log.changeIndentLevel(1)
         self.c_no_vir, self.n_no_vir = make_mp2_bno(
                 self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.debug("Time for virtual BNOs:  %s", get_time_string(timer()-t0))
+        log.timing("Time for virtual BNOs:   %s", get_time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
         # Plot orbitals
@@ -575,7 +575,7 @@ class Cluster:
             # Save state of cubefile, in case a replot of the same data is required later:
             self.cubefile.save_state("%s.pkl" % self.cubefile.filename)
             self.cubefile.write()
-        log.debug("Wall time for bath: %s", get_time_string(timer()-t0_bath))
+        log.timing("Time for bath:  %s", get_time_string(timer()-t0_bath))
 
         init_guess = eris = None
         for icalc, bno_thr in enumerate(bno_threshold):
@@ -656,7 +656,7 @@ class Cluster:
             t0 = timer()
             log.debug("Projecting previous ERIs onto subspace")
             eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.get_ovlp())
-            log.debug("Time to project ERIs: %s", get_time_string(timer()-t0))
+            log.timing("Time to project ERIs:  %s", get_time_string(timer()-t0))
         else:
             eris = None
 
@@ -666,7 +666,7 @@ class Cluster:
         t0 = timer()
         csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
         csolver.kernel(init_guess=init_guess)
-        log.debug("Time for %s solver: %s", csolver.solver, get_time_string(timer()-t0))
+        log.timing("Time for %s solver:  %s", csolver.solver, get_time_string(timer()-t0))
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         # ERIs and initial guess for next calculations
@@ -680,7 +680,7 @@ class Cluster:
             try:
                 self.pop_analysis(csolver.dm1)
             except Exception as e:
-                log.error("ERROR in population analysis: %s", e)
+                log.error("Exception in population analysis: %s", e)
         # EOM analysis
         if self.opts.eom_ccsd in (True, "IP"):
             self.eom_ip_energy, _ = self.eom_analysis(csolver, "IP")

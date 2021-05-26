@@ -26,7 +26,7 @@ class QEmbeddingMethod:
             log.info("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
             log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
-            log.debug("Time for k->Gamma unfolding of mean-field calculation: %s", get_time_string(timer()-t0))
+            log.timing("Time for k->Gamma unfolding of mean-field calculation:  %s", get_time_string(timer()-t0))
         else:
             self.kdf = None
         self.mf = mf
@@ -38,7 +38,7 @@ class QEmbeddingMethod:
         self._ovlp = self.mf.get_ovlp()
         # Recalcution of Fock matrix expensive for PBC!
         # => avoid self._fock = self.mf.get_fock()
-        # (however, loss of accuracy for large cell.precision!)
+        # (however, loss of accuracy for large values for cell.precision!)
         cs = np.dot(self.mo_coeff.T, self._ovlp)
         self._fock = np.dot(cs.T*self.mo_energy, cs)
 
@@ -190,11 +190,11 @@ class QEmbeddingMethod:
         if np.any(abs(e_iao) > 1e-3):
             log.error("CRITICAL: Some IAO eigenvalues of 1-P_IAO are not close to 0:\n%r", e_iao)
         elif np.any(abs(e_iao) > 1e-6):
-            log.warn("Some IAO eigenvalues of 1-P_IAO are not close to 0: N= %d max|e|= %.2e ", len(e_iao), abs(e_iao).max())
+            log.warning("Some IAO eigenvalues of 1-P_IAO are not close to 0: N= %d max|e|= %.2e ", len(e_iao), abs(e_iao).max())
         if np.any(abs(1-e_rest) > 1e-3):
             log.error("CRITICAL: Some non-IAO eigenvalues of 1-P_IAO are not close to 1:\n%r", e_rest)
         elif np.any(abs(1-e_rest) > 1e-6):
-            log.warn("Some non-IAO eigenvalues of 1-P_IAO are not close to 1: N= %d max|1-e|= %.2e ", len(e_rest), abs(1-e_rest).max())
+            log.warning("Some non-IAO eigenvalues of 1-P_IAO are not close to 1: N= %d max|1-e|= %.2e ", len(e_rest), abs(1-e_rest).max())
 
         if not (np.sum(mask_rest) + niao == self.nmo):
             log.critical("Error in construction of remaining virtual orbitals! Eigenvalues of projector 1-P_IAO:\n%r", e)
@@ -229,6 +229,7 @@ class QEmbeddingMethod:
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
             n_occ.append(np.diag(dm_iao[mask][:,mask]))
+
         # Check lattice symmetry if k-point mf object was used
         tsym = False
         if self.ncells > 1:
@@ -239,6 +240,7 @@ class QEmbeddingMethod:
                 log.error("IAOs are not translationally symmetric!")
             else:
                 tsym = True
+
         # Print occupations of IAOs
         log.info("IAO MEAN-FIELD OCCUPANCY PER ATOM")
         log.info("*********************************")

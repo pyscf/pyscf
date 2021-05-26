@@ -19,7 +19,7 @@ import pyscf.pbc.df
 import pyscf.pbc.tools
 from pyscf.pbc.lib import kpts_helper
 # Package
-from .util import einsum, memory_string
+from .util import einsum, memory_string, time_string
 
 log = logging.getLogger(__name__)
 
@@ -130,7 +130,8 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         mem_eris = nocc**2*nvir**2 * 8
     else:
         mem_j3c = nk*naux*(nocc*nvir + nocc*nocc + nvir*nvir) * 16
-        mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4)*8
+        nvir_pair = nvir*(nvir+1)//2
+        mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir_pair**2) * 8
     log.debug("Memory needed for kAO->GMO: (L|ab)= %s (ij|kl)= %s", memory_string(mem_j3c), memory_string(mem_eris))
 
     # Transform: (l|ka,qb) -> (Rl|i,j)
@@ -153,7 +154,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         # We do not store "vo" only "ov":
         right_t = "ov" if right == "vo" else right
         l, r = j3c[left], j3c[right_t]
-        # For 2D systems
+        # For 2D systems we have negative parts
         if left + "-" in j3c:
             ln, rn = j3c[left + "-"], j3c[right_t + "-"]
         else:
@@ -183,6 +184,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             c = np.dot(l.transpose(1,2,0).conj(), r)
             if ln is not None:
                 c -= np.dot(ln.transpose(1,2,0).conj(), rn)
+        # No permutation symmetry
         else:
             c = np.tensordot(l.conj(), r, axes=(0, 0))
             if ln is not None:
@@ -194,7 +196,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
     t0 = timer()
     if not only_ovov:
         #eris["vvvv"] = contract("vvvv")
-        # Only permutation symmetry allowed by cc.RCCSD:
+        # Only permutation symmetry allowed by cc.RCCSD is in (vv|vv):
         eris["vvvv"] = contract("vvvv", symmetry=4)
         eris["ovvv"] = contract("ovvv")
         eris["oovv"] = contract("oovv")
@@ -217,12 +219,12 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             inorm = np.linalg.norm(val.imag)
             imax = abs(val.imag).max()
             if max(inorm, imax) > 1e-5:
-                log.warning("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e !", key[:2], key[2:], inorm, imax)
+                log.warning("Norm of Im(%2s|%2s):  L2= %.2e  Linf= %.2e", key[:2], key[2:], inorm, imax)
             else:
-                log.debug("Im(%2s|%2s):  ||x||= %.2e  max(|x|)= %.2e", key[:2], key[2:], inorm, imax)
+                log.debug("Norm of Im(%2s|%2s):  L2= %.2e  Linf= %.2e", key[:2], key[2:], inorm, imax)
             eris[key] = val.real
 
-    log.debug("Timings for kAO->GMO [s]: transform= %.2f  contract= %.2f", t_trafo, t_contract)
+    log.timing("Timings for kAO->GMO [s]: transform=  %s  contract= %s", time_string(t_trafo), time_string(t_contract))
 
     mem_eris = sum([x.nbytes for x in eris.values()])
     log.debug("Memory for (ij|kl)= %s", memory_string(mem_eris))
@@ -414,7 +416,7 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
         # Load j3c into memory
         t0 = timer()
         j3c_kpts, j3c_neg, kunique = ints3c.get_array()
-        log.debug("Time to load k-point sampled three-center integrals: %.2f", timer()-t0)
+        log.timing("Time to load k-point sampled 3c-integrals:  %s", time_string(timer()-t0))
 
         cocc = cocc.copy()
         cvir = cvir.copy()
@@ -436,7 +438,7 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
                 j3c["ov"].ctypes.data_as(ctypes.c_void_p),
                 j3c["oo"].ctypes.data_as(ctypes.c_void_p) if "oo" in j3c else ctypes.POINTER(ctypes.c_void_p)(),
                 j3c["vv"].ctypes.data_as(ctypes.c_void_p) if "vv" in j3c else ctypes.POINTER(ctypes.c_void_p)())
-        log.debug("Time in j3c_kao2gamo in C: %.2f", timer()-t0)
+        log.timing("Time in j3c_kao2gamo in C:  %s", time_string(timer()-t0))
         assert (ierr == 0)
 
         # Do the negative part for 2D systems in python (only one auxiliary function and ki==kj)
@@ -456,9 +458,9 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
                 inorm = np.linalg.norm(pj.imag)
                 imax = abs(pj.imag).max()
                 if max(inorm, imax) > 1e-5:
-                    log.warning("WARNING: Im(L|%2s):     norm= %.2e  max= %.2e", key, inorm, imax)
+                    log.warning("Norm of Im(L|%2s):     L2= %.2e  Linf= %.2e", key, inorm, imax)
                 else:
-                    log.debug("Im(L|%2s):     norm= %.2e  max= %.2e", key, inorm, imax)
+                    log.debug("Norm of Im(L|%2s):     L2= %.2e  Linf= %.2e", key, inorm, imax)
             return pj.real
 
         def check_real(j, key):
@@ -467,9 +469,9 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
                 inorm = np.linalg.norm(pj.imag)
                 imax = abs(pj.imag).max()
                 if max(inorm, imax) > 1e-5:
-                    log.warning("WARNING: Im(L|%2s)(-):  norm= %.2e  max= %.2e", key[:2], inorm, imax)
+                    log.warning("Norm of Im(L|%2s)(-):  L2= %.2e  Linf= %.2e", key[:2], inorm, imax)
                 else:
-                    log.debug("Im(L|%2s)(-):  norm= %.2e  max= %.2e", key[:2], inorm, imax)
+                    log.debug("Norm of Im(L|%2s)(-):  L2= %.2e  Linf= %.2e", key[:2], inorm, imax)
             return pj.real
 
         for key in list(j3c.keys()):
@@ -479,6 +481,6 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
             else:
                 j3c[key] = ft_auxiliary_basis(j3c[key], key)
 
-        log.debug("Time to rotate to real: %.2f", timer()-t0)
+        log.timing("Time to rotate to real:  %s", time_string(timer()-t0))
 
     return j3c

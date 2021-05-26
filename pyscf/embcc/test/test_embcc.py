@@ -303,8 +303,8 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    #test_helium()
-    test_diamond_bno_threshold(kmesh=[2,2,2])
+    test_helium()
+    #test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_canonical_orth()
     #sample_canonical_orth()
     #test_full_ccsd_limit(-11.170842)

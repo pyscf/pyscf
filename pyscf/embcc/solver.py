@@ -95,8 +95,7 @@ class ClusterSolver:
         if self._eris is None:
             t0 = timer()
             self._eris = self.base.get_eris(mp2)
-            t = (timer()-t0)
-            log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
+            log.timing("Time for AO->MO:  %s", get_time_string(timer()-t0))
 
         self.e_corr, self.c2 = mp2.kernel(eris=self._eris, hf_reference=True)
         self.converged = True
@@ -114,15 +113,13 @@ class ClusterSolver:
         t0 = timer()
         eris = ci.ao2mo()
         self._eris = eris
-        t = (timer()-t0)
-        log.debug("Time for AO->MO: %.3f (%s)", t, get_time_string(t))
+        log.timing("Time for AO->MO:  %s", get_time_string(timer()-t0))
 
         t0 = timer()
         log.info("Running CISD...")
         ci.kernel(eris=eris)
         log.info("CISD done. converged: %r", ci.converged)
-        t = (timer()-t0)
-        log.debug("Time for CISD [s]: %.3f (%s)", t, get_time_string(t))
+        log.timing("Time for CISD [s]: %.3f (%s)", get_time_string(timer()-t0))
 
         self.converged = ci.converged
         self.e_corr = ci.e_corr
@@ -146,8 +143,7 @@ class ClusterSolver:
         if self._eris is None:
             t0 = timer()
             self._eris = self.base.get_eris(cc)
-            t = (timer()-t0)
-            log.debug("Time for AO->MO of (ij|kl): %.3f (%s)", t, get_time_string(t))
+            log.timing("Time for AO->MO of (ij|kl):  %s", get_time_string(timer()-t0))
         #else:
         #    # DEBUG:
         #    eris = self.base.get_eris(cc)
@@ -163,8 +159,7 @@ class ClusterSolver:
             log.info("Running CCSD...")
             cc.kernel(eris=self._eris)
         log.info("CCSD done. converged: %r", cc.converged)
-        t = (timer()-t0)
-        log.info("Time for CCSD: %.3f (%s)", t, get_time_string(t))
+        log.timing("Time for CCSD:  %s", get_time_string(timer()-t0))
 
         self.converged = cc.converged
         self.e_corr = cc.e_corr
@@ -180,11 +175,10 @@ class ClusterSolver:
                 self.dm1 = cc.make_rdm1(eris=self._eris, ao_repr=True)
                 log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
                 if not cc.converged_lambda:
-                    log.warning("WARNING: Solution of lambda equation not converged!")
-                t = (timer()-t0)
-                log.info("Time for RDM1: %.3f (%s)", t, get_time_string(t))
+                    log.warning("Solution of lambda equation not converged!")
+                log.timing("Time for RDM1:  %s", get_time_string(timer()-t0))
             except Exception as e:
-                log.error("ERROR while making RDM1: %s", e)
+                log.error("Exception while making RDM1: %s", e)
 
         def eom_ccsd(kind, nroots=3):
             kind = kind.upper()
@@ -193,8 +187,7 @@ class ClusterSolver:
             eom_funcs = {"IP" : cc.ipccsd , "EA" : cc.eaccsd}
             t0 = timer()
             e, c = eom_funcs[kind](nroots=nroots, eris=self._eris)
-            t = (timer()-t0)
-            log.info("Time for %s-EOM-CCSD: %.3f (%s)", kind, t, get_time_string(t))
+            log.timing("Time for %s-EOM-CCSD:  %s", kind, get_time_string(timer()-t0))
             if nroots == 1:
                 e, c = [e], [c]
             return e, c
@@ -325,11 +318,11 @@ class ClusterSolver:
             dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
             dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
             dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
-            fmtstr = "  * %2s=%6g (%s)"
+            fmtstr = "  * %2s= %6g (%s)"
             log.info(fmtstr, "T1", dg_t1, dg_t1_msg)
             log.info(fmtstr, "D1", dg_d1, dg_d1_msg)
             log.info(fmtstr, "D2", dg_d2, dg_d2_msg)
             if dg_t1 > 0.02 or dg_d1 > 0.05 or dg_d2 > 0.18:
-                log.warning("  WARNING: some diagnostic(s) indicate CCSD may not be adequate.")
+                log.warning("  some diagnostic(s) indicate CCSD may not be adequate.")
         except Exception as e:
-            log.error("ERROR in T-diagnostic: %s", e)
+            log.error("Exception in T-diagnostic: %s", e)

@@ -17,27 +17,21 @@ from .util import *
 from .cluster import Cluster
 from .localao import localize_ao
 from . import helper
-from .kao2gmo import gdf_to_pyscf_eris
 from .qemb import QEmbeddingMethod
-
-log = logging.getLogger(__name__)
 
 try:
     from mpi4py import MPI
     MPI_comm = MPI.COMM_WORLD
     MPI_rank = MPI_comm.Get_rank()
     MPI_size = MPI_comm.Get_size()
-    log.debug("mpi4py found. MPI rank/size= %3d / %3d", MPI_rank, MPI_size)
     timer = MPI.Wtime
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     MPI = False
     MPI_rank = 0
     MPI_size = 1
-    log.debug("mpi4py not found.")
     from timeit import default_timer as timer
 
-__all__ = ["EmbCC",]
-
+log = logging.getLogger(__name__)
 
 class EmbCC(QEmbeddingMethod):
 
@@ -205,15 +199,15 @@ class EmbCC(QEmbeddingMethod):
             self.mo_coeff = orthogonalize_mo(c, self.get_ovlp())
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
-            log.debug("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
+            log.timing("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
             t0 = timer()
             self.init_fragments()
-            log.debug("Time for fragment initialization: %s", get_time_string(timer()-t0))
+            log.timing("Time for fragment initialization: %s", get_time_string(timer()-t0))
 
-        log.debug("Time for EmbCC setup: %s", get_time_string(timer()-t_start))
+        log.timing("Time for EmbCC setup: %s", get_time_string(timer()-t_start))
 
         log.changeIndentLevel(-1)
 
@@ -254,7 +248,7 @@ class EmbCC(QEmbeddingMethod):
                 C_loc = localize_ao(self.mol, self.C_ao, centers)
 
             #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
-            log.debug("Time for orbital localization: %s", get_time_string(timer()-t0))
+            log.timing("Time for orbital localization: %s", get_time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
             chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
@@ -273,27 +267,6 @@ class EmbCC(QEmbeddingMethod):
             #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized")
             create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized", filetype="cube")
 
-    #def get_eris(self, cm):
-    #    """Get ERIS for post-HF methods.
-
-    #    For unfolded PBC calculations, this folds the MO back into k-space
-    #    and contracts with the k-space three-center integrals..
-
-    #    Arguments
-    #    ---------
-    #    cm: pyscf.mp.mp2.MP2 or pyscf.cc.ccsd.CCSD
-    #        Correlated method, must have mo_coeff set.
-
-    #    Returns
-    #    -------
-    #    eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
-    #        ERIs which can be used for the respective correlated method.
-    #    """
-    #    if self.kdf is None:
-    #        return cm.ao2mo()
-
-    #    eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
-    #    return eris
 
     @property
     def nclusters(self):
@@ -792,7 +765,7 @@ class EmbCC(QEmbeddingMethod):
         nelec_frags = sum([x.symmetry_factor*x.nelec_mf_frag for x in self.clusters])
         log.info("Total number of mean-field electrons over all fragments= %.8f", nelec_frags)
         if abs(nelec_frags - np.rint(nelec_frags)) > 1e-4:
-            log.warning("WARNING: Number of electrons not integer!")
+            log.warning("Number of electrons not integer!")
 
         for idx, cluster in enumerate(self.clusters):
             if MPI_rank != (idx % MPI_size):
@@ -836,9 +809,7 @@ class EmbCC(QEmbeddingMethod):
             self.print_results(results)
 
         if MPI: MPI_comm.Barrier()
-        #log.info("Total wall time for EmbCC: %s", get_time_string(MPI.Wtime()-t_start))
-        t_tot = (timer() - t_start)
-        log.info("Total wall time [s]: %.5g (%s)", t_tot, get_time_string(t_tot))
+        log.info("Total wall time:  %s", get_time_string(timer()-t_start))
 
         log.info("All done.")
 
