@@ -12,14 +12,13 @@ import pyscf.lo
 import pyscf.scf
 import pyscf.pbc
 import pyscf.pbc.tools
-#from pyscf.pbc.tools import k2gamma
-#from pyscf.mp.mp2 import _mo_without_core
 
 from .util import *
 from .cluster import Cluster
 from .localao import localize_ao
 from . import helper
 from .kao2gmo import gdf_to_pyscf_eris
+from .qemb import QEmbeddingMethod
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ except (ImportError, ModuleNotFoundError):
 __all__ = ["EmbCC",]
 
 
-class EmbCC:
+class EmbCC(QEmbeddingMethod):
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
@@ -93,6 +92,7 @@ class EmbCC:
         log.info("******************")
         log.changeIndentLevel(1)
 
+
         # TODO: Change other options to here
         default_opts = {
                 # Fragment settings
@@ -107,7 +107,6 @@ class EmbCC:
                 "project_eris" : False,         # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
                 "project_init_guess" : True,    # Project converted T1,T2 amplitudes from a previous larger cluster
                 "orthogonal_mo_tol" : False,
-                #"orthogonal_mo_tol" : 1e-7,
                 # Population analysis
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis
@@ -130,12 +129,14 @@ class EmbCC:
         if kwargs:
             raise ValueError("Unknown arguments: %r" % kwargs.keys())
 
+        super(EmbCC, self).__init__(mf)
+
         # --- Check input
         if not mf.converged:
             if self.opts.strict:
-                raise RuntimeError("ERROR: Mean-field calculation not converged.")
+                raise RuntimeError("Mean-field calculation not converged.")
             else:
-                log.error("ERROR: Mean-field calculation not converged.")
+                log.error("Mean-field calculation not converged.")
 
         # Local orbital types:
         # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
@@ -145,34 +146,6 @@ class EmbCC:
             raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in self.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
-
-        # k-space unfolding
-        if hasattr(mf, "kpts") and mf.kpts is not None:
-            t0 = timer()
-            self.kcell = mf.cell
-            self.kpts = mf.kpts
-            self.kdf = mf.with_df
-            log.debug("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
-            log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
-            assert (self.kcell == self.kdf.cell)
-            assert np.all(self.kpts == self.kdf.kpts)
-            mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
-            log.debug("Time for k->Gamma unfolding of mean-field: %s", get_time_string(timer()-t0))
-        else:
-            self.kcell = None
-            self.kpts = None
-            self.kdf = None
-        self.mf = mf
-        log.info("E(MF)= %+16.8f Ha", self.e_mf)
-        log.info("N(AO)= %4d  N(MO)= %4d", *self.mf.mo_coeff.shape)
-
-        # AO overlap matrix
-        self.ovlp = self.mf.get_ovlp()
-
-        self.mo_energy = self.mf.mo_energy.copy()
-        self.mo_occ = self.mf.mo_occ.copy()
-        self.mo_coeff = self.mf.mo_coeff.copy()
-        self.max_memory = self.mf.max_memory
 
         self.local_orbital_type = local_type
 
@@ -223,31 +196,16 @@ class EmbCC:
         # (For example as a result of k2gamma conversion with low cell.precision)
         c = self.mo_coeff.copy()
         assert np.all(c.imag == 0), "max|Im(C)|= %.2e" % abs(c.imag).max()
-        ctsc = np.linalg.multi_dot((c.T, self.ovlp, c))
+        ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
         log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-5 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             t0 = timer()
             log.info("Orthogonalizing orbitals...")
-            self.mo_coeff = orthogonalize_mo(c, self.ovlp)
-            change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.ovlp, c)))-1)
+            self.mo_coeff = orthogonalize_mo(c, self.get_ovlp())
+            change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
             log.debug("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
-
-        # Fock matrix
-        # These two Fock matrices are different for loose values of cell.precision
-        # Which should be used?
-        # (We only need Fock matrix for canonicalization, therefore not too important to be accurate for CCSD.
-        # However, what about MP2 & CCSD(T)?)
-        recalc_fock = False
-        t0 = timer()
-        if recalc_fock:
-            self._fock = self.mf.get_fock()
-        else:
-            cs = np.dot(self.mo_coeff.T, self.ovlp)
-            #self._fock = einsum("ia,i,ib->ab", cs, self.mo_energy, cs)
-            self._fock = np.dot(cs.T*self.mo_energy, cs)
-        log.debug("Time for Fock matrix: %s", get_time_string(timer()-t0))
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
@@ -299,7 +257,7 @@ class EmbCC:
             log.debug("Time for orbital localization: %s", get_time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
-            chi = np.einsum("ai,ab,bi->i", self.C_ao, self.ovlp, C_loc)
+            chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
             log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
             log.info("Smallest value: %.3g" % np.amin(chi))
             #assert np.all(chi > 0.5)
@@ -315,56 +273,27 @@ class EmbCC:
             #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized")
             create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized", filetype="cube")
 
-    @property
-    def mol(self):
-        return self.mf.mol
+    #def get_eris(self, cm):
+    #    """Get ERIS for post-HF methods.
 
-    @property
-    def ncells(self):
-        """Number of primitive cells within simulated supercell."""
-        if self.kpts is None:
-            return 1
-        return len(self.kpts)
+    #    For unfolded PBC calculations, this folds the MO back into k-space
+    #    and contracts with the k-space three-center integrals..
 
-    @property
-    def norb(self):
-        """Number of atomic orbitals."""
-        return self.mol.nao_nr()
+    #    Arguments
+    #    ---------
+    #    cm: pyscf.mp.mp2.MP2 or pyscf.cc.ccsd.CCSD
+    #        Correlated method, must have mo_coeff set.
 
-    @property
-    def has_pbc(self):
-        return isinstance(self.mol, pyscf.pbc.gto.Cell)
+    #    Returns
+    #    -------
+    #    eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
+    #        ERIs which can be used for the respective correlated method.
+    #    """
+    #    if self.kdf is None:
+    #        return cm.ao2mo()
 
-    def get_ovlp(self):
-        return self.ovlp
-
-    def get_hcore(self, *args, **kwargs):
-        return self.mf.get_hcore(*args, **kwargs)
-
-    def get_fock(self):
-        return self._fock
-
-    def get_eris(self, cm):
-        """Get ERIS for post-HF methods.
-
-        For unfolded PBC calculations, this folds the MO back into k-space
-        and contracts with the k-space three-center integrals..
-
-        Arguments
-        ---------
-        cm: pyscf.mp.mp2.MP2 or pyscf.cc.ccsd.CCSD
-            Correlated method, must have mo_coeff set.
-
-        Returns
-        -------
-        eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
-            ERIs which can be used for the respective correlated method.
-        """
-        if self.kcell is None:
-            return cm.ao2mo()
-
-        eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
-        return eris
+    #    eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
+    #    return eris
 
     @property
     def nclusters(self):
@@ -375,11 +304,6 @@ class EmbCC:
     def ncalc(self):
         """Number of calculations in each cluster."""
         return len(self.bno_threshold)
-
-    @property
-    def e_mf(self):
-        """Total mean-field energy."""
-        return self.mf.e_tot/self.ncells
 
     @property
     def e_tot(self):
@@ -403,8 +327,7 @@ class EmbCC:
         P : ndarray
             Projector into AO subspace.
         """
-        #S1 = self.mf.get_ovlp()
-        S1 = self.ovlp
+        S1 = self.get_ovlp()
         S2 = S1[np.ix_(ao_indices, ao_indices)]
         S21 = S1[ao_indices]
         P21 = scipy.linalg.solve(S2, S21, assume_a="pos")
@@ -432,7 +355,7 @@ class EmbCC:
             Projector into AO space.
         """
         mol1 = self.mol
-        s1 = self.ovlp
+        s1 = self.get_ovlp()
         if basis2 is not None:
             mol2 = mol1.copy()
             if getattr(mol2, 'rcut', None) is not None:
@@ -442,10 +365,8 @@ class EmbCC:
             if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
                 #from pyscf.pbc import gto as pbcgto
                 # At the moment: Gamma point only
-                kpts = None
-                #s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
-                s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
-                s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=kpts))
+                s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
+                s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=None))
                 assert s1.ndim == 2
                 #s1, s2, s12 = s1[0], s2[0], s12[0]
             else:
@@ -486,7 +407,7 @@ class EmbCC:
 
     def make_local_ao_orbitals(self, ao_indices):
         #S = self.mf.get_ovlp()
-        S = self.ovlp
+        S = self.get_ovlp()
         nao = S.shape[-1]
         P = self.make_ao_projector(ao_indices)
         e, C = scipy.linalg.eigh(P, b=S)
@@ -536,7 +457,7 @@ class EmbCC:
         C_local = C_ao[:,loc]
         # Orthogonalize locally
         #S = self.mf.get_ovlp()
-        S = self.ovlp
+        S = self.get_ovlp()
         C_local = pyscf.lo.vec_lowdin(C_local, S)
 
         # Add remaining space
@@ -783,121 +704,9 @@ class EmbCC:
         ne = sum(ne.values())
         return ne
 
-    #def get_orbitals(self):
-    #    """Get orbitals of each cluster."""
-    #    orbitals = {}
-    #    for cluster in self.clusters:
-    #        orbitals[cluster.name] = cluster.get_orbitals()
-    #    return orbitals
-
-    #def set_reference_orbitals(self, ref_orbitals):
-    #    return self.set_cluster_attributes("ref_orbitals", ref_orbitals)
-
-    def get_refdata(self):
-        """Get refdata for future calculations."""
-        refdata = {}
-        for cluster in self.clusters:
-            refdata[cluster.name] = cluster.get_refdata()
-        return refdata
-
-    def set_refdata(self, refdata):
-        """Get refdata from previous calculations."""
-        if refdata is None:
-            return False
-        for cluster in self.clusters:
-            cluster.set_refdata(refdata[cluster.name])
-        return True
-
-    def make_iao(self, minao="minao"):
-        """Make intrinsic atomic orbitals.
-
-        Parameters
-        ----------
-        minao : str, optional
-            Minimal basis set for IAOs.
-
-        Returns
-        -------
-        C_iao : ndarray
-            IAO coefficients.
-        C_env : ndarray
-            Remaining orbital coefficients.
-        iao_atoms : list
-            Atom ID for each IAO.
-        """
-        # Orthogonality of input mo_coeff
-        mo_coeff = self.mo_coeff
-        norb = mo_coeff.shape[-1]
-        S = self.ovlp
-        nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
-        log.debug("Max orthogonality error in canonical basis = %.1e" % nonorthmax)
-
-        C_occ = self.mo_coeff[:,self.mo_occ>0]
-        C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
-        niao = C_iao.shape[-1]
-        log.debug("Total number of IAOs= %4d", niao)
-
-        # Orthogonalize IAO
-        C_iao = pyscf.lo.vec_lowdin(C_iao, S)
-
-        # Add remaining virtual space
-        C_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_iao)) # Transform IAOs to MO basis
-        # Get eigenvectors of projector into complement
-        P_iao = np.dot(C_iao_mo, C_iao_mo.T)
-        P_env = np.eye(norb) - P_iao
-        e, C = np.linalg.eigh(P_env)
-        # Ideally, all eigenvalues of P_env should be 0 (IAOs) or 1 (environment)
-        # Error if > 1e-3
-        mask = np.fmin(abs(e), abs(1-e)) > 1e-3
-        if np.any(mask):
-            log.error("CRITICAL: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
-            raise RuntimeError()
-        # Warning if > 1e-6
-        mask = np.fmin(abs(e), abs(1-e)) > 1e-6
-        if np.any(mask):
-            log.warning("WARNING: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
-        mask_env = (e > 0.5)
-        if not (np.sum(mask_env) + niao == norb):
-            log.critical("CRITICAL: Error in construction of environment orbitals")
-            log.critical("CRITICAL: Eigenvalues of projector 1-P_IAO:\n%r", e)
-            log.critical("CRITICAL: Number of eigenvalues above 0.5 = %d", np.sum(mask_env))
-            log.critical("CRITICAL: Total number of orbitals = %d", norb)
-            raise RuntimeError("Incorrect number of environment orbitals")
-        C_env = np.dot(self.mo_coeff, C[:,mask_env])        # Transform back to AO basis
-
-        # Get base atoms of IAOs
-        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
-        iao_labels = refmol.ao_labels(None)
-        #iao_labels = refmol.ao_labels()
-        assert len(iao_labels) == C_iao.shape[-1]
-
-        # Test orthogonality
-        C = np.hstack((C_iao, C_env))
-        ortherr = abs(C.T.dot(S).dot(C) - np.eye(norb)).max()
-        log.debug("Max orthogonality error in rotated basis = %.1e" % ortherr)
-        #assert (ortherr < max(10*nonorthmax, 1e-6))
-        assert (ortherr < 1e-5)
-
-        # Check that all electrons are in IAO DM
-        dm_iao = np.linalg.multi_dot((C_iao.T, S, self.mf.make_rdm1(), S, C_iao))
-        nelec_iao = np.trace(dm_iao)
-        log.debug("Total number of electrons in IAOs: %.8f", nelec_iao)
-        if abs(nelec_iao - self.mol.nelectron) > 1e-4:
-            log.error("ERROR: IAOs do not span entire occupied space.")
-
-        # Print electron distribution
-        log.info("MEAN-FIELD OCCUPANCY PER ATOM")
-        log.info("*****************************")
-        iao_atoms = np.asarray([i[0] for i in iao_labels])
-        for a in range(self.mol.natm):
-            mask = np.where(iao_atoms == a)[0]
-            n_diag = np.diag(dm_iao[mask][:,mask]).tolist()
-            log.info("  * %3d: %-6s=  %r  sum= %.8f", a, self.mol.atom_symbol(a), n_diag, np.sum(n_diag))
-
-        return C_iao, C_env, iao_labels
 
     def make_lowdin_ao(self):
-        S = self.ovlp
+        S = self.get_ovlp()
         C_lao = pyscf.lo.vec_lowdin(np.eye(S.shape[-1]), S)
         lao_labels = self.mol.ao_labels(None)
         #lao_labels = self.mol.ao_labels()
@@ -908,7 +717,7 @@ class EmbCC:
 
     def make_lowdin_ao_per_atom(self):
         #S = self.mf.get_ovlp()
-        S = self.ovlp
+        S = self.get_ovlp()
         C_lao = np.zeros_like(S)
         aorange = self.mol.aoslice_by_atom()
         for atomid in range(self.mol.natm):
@@ -1065,7 +874,7 @@ class EmbCC:
         for i, x in enumerate(self.clusters):
             nactive = results["nactive"][i]
             nfrozen = results["nfrozen"][i]
-            log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.norb)
+            log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
             if i == 0:
                 continue
             if nactive > results["nactive"][imax[0]]:
@@ -1080,7 +889,7 @@ class EmbCC:
                 x = self.clusters[i]
                 nactive = results["nactive"][i]
                 nfrozen = results["nfrozen"][i]
-                log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.norb)
+                log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
 
     def print_results(self, results):
         self.show_cluster_sizes(results)
@@ -1100,6 +909,7 @@ class EmbCC:
         log.info("E(tot)=  %+16.8f Ha", self.e_tot)
 
     def get_energies(self):
+        """Get total energy."""
         energies = np.zeros(self.ncalc)
         energies[:] = self.e_mf
         for x in self.clusters:
@@ -1112,58 +922,12 @@ class EmbCC:
             sizes[ix] = x.n_active
         return sizes
 
-    def reset(self, mf=None, **kwargs):
-        if mf:
-            self.mf = mf
-        for cluster in self.clusters:
-            cluster.reset(**kwargs)
 
     def print_clusters(self):
         """Print fragments of calculations."""
         log.info("%3s  %20s  %8s  %4s", "ID", "Name", "Solver", "Size")
         for cluster in self.clusters:
             log.info("%3d  %20s  %8s  %4d", cluster.id, cluster.name, cluster.solver, cluster.size)
-
-
-    def print_clusters_orbitals(self, file=None, filemode="a"):
-        """Print clusters orbitals to log or file.
-
-        Parameters
-        ----------
-        file : str, optional
-            If not None, write output to file.
-        """
-        # Format strings
-        end = "\n" if file else ""
-        if self.local_orbital_type == "AO":
-            orbital_name = "atomic"
-        if self.local_orbital_type == "LAO":
-            orbital_name = "Lowdin orthogonalized atomic"
-        if self.local_orbital_type == "IAO":
-            orbital_name = "intrinsic atomic"
-
-        headfmt = "Cluster %3d: %s with %3d {} orbitals:".format(orbital_name) + end
-
-        linefmt = "%4d %5s %3s %10s" + end
-
-        if self.local_orbital_type == "AO":
-            labels = self.mol.ao_labels(None)
-        elif self.local_orbital_type == "LAO":
-            labels = self.lao_labels
-        elif self.local_orbital_type == "IAO":
-            labels = self.iao_labels
-
-        if file is None:
-            for cluster in self.clusters:
-                log.info(headfmt, cluster.id, cluster.name, cluster.size)
-                for idx in cluster.indices:
-                    log.info(linefmt, *labels[idx])
-        else:
-            with open(file, filemode) as f:
-                for cluster in self.clusters:
-                    f.write(headfmt % (cluster.id, cluster.name, cluster.size))
-                    for idx in cluster.indices:
-                        f.write(linefmt % labels[idx])
 
 
 

@@ -147,7 +147,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         j3c["oo"] = j3c["oo"].reshape(nk*naux, nocc, nocc)
         j3c["vv"] = j3c["vv"].reshape(nk*naux, nvir, nvir)
 
-    def contract(kind):
+    def contract(kind, symmetry=None):
         """Contract (ij|L)(L|kl) -> (ij|kl)"""
         left, right = kind[:2], kind[2:]
         # We do not store "vo" only "ov":
@@ -162,16 +162,40 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             r = r.transpose(0, 2, 1)
             if rn is not None:
                 rn = rn.T
-        c = np.tensordot(l.conj(), r, axes=(0, 0))
-        if ln is not None:
-            c -= einsum("ab,cd->abcd", ln.conj(), rn)
+
+        # Four-fold permutation symmetry
+        if symmetry == 4:
+            l = pyscf.lib.pack_tril(l)
+            r = pyscf.lib.pack_tril(r)
+            if ln is not None:
+                ln = pyscf.lib.pack_tril(ln)
+                rn = pyscf.lib.pack_tril(rn)
+
+            c = np.dot(l.T.conj(), r)
+            if ln is not None:
+                c -= np.dot(ln.T.conj(), rn)
+        # Permutation symmetry only on right side
+        elif symmetry == (0, 2):
+            r = pyscf.lib.pack_tril(r)
+            if ln is not None:
+                rn = pyscf.lib.pack_tril(rn)
+
+            c = np.dot(l.transpose(1,2,0).conj(), r)
+            if ln is not None:
+                c -= np.dot(ln.transpose(1,2,0).conj(), rn)
+        else:
+            c = np.tensordot(l.conj(), r, axes=(0, 0))
+            if ln is not None:
+                c -= einsum("ab,cd->abcd", ln.conj(), rn)
         return c
 
     eris = {}
     # (L|vv) dependend
     t0 = timer()
     if not only_ovov:
-        eris["vvvv"] = contract("vvvv")
+        #eris["vvvv"] = contract("vvvv")
+        # Only permutation symmetry allowed by cc.RCCSD:
+        eris["vvvv"] = contract("vvvv", symmetry=4)
         eris["ovvv"] = contract("ovvv")
         eris["oovv"] = contract("oovv")
         del j3c["vv"]
@@ -186,6 +210,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         del j3c["oo"]
     t_contract = (timer()-t0)
 
+    # Check that final 4c-integrals are real
     if np.iscomplexobj(eris["ovov"]):
         for key in list(eris.keys()):
             val = eris[key]
@@ -198,6 +223,9 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             eris[key] = val.real
 
     log.debug("Timings for kAO->GMO [s]: transform= %.2f  contract= %.2f", t_trafo, t_contract)
+
+    mem_eris = sum([x.nbytes for x in eris.values()])
+    log.debug("Memory for (ij|kl)= %s", memory_string(mem_eris))
 
     return eris
 
@@ -388,21 +416,8 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
         j3c_kpts, j3c_neg, kunique = ints3c.get_array()
         log.debug("Time to load k-point sampled three-center integrals: %.2f", timer()-t0)
 
-        # Mapping from (ki,kj) -> unique(ki-kj)
-        #if kunique is None:
-        #    kunique_pt = ctypes.POINTER(ctypes.c_void_p)()
-        #else:
-        #    kunique_pt = kunique.ctypes.data_as(ctypes.c_void_p)
-
-        #if only_ov:
-        #    j3c_oo_pt = j3c_vv_pt = ctypes.POINTER(ctypes.c_void_p)()
-        #else:
-        #    j3c_oo_pt = j3c["oo"].ctypes.data_as(ctypes.c_void_p)
-        #    j3c_vv_pt = j3c["vv"].ctypes.data_as(ctypes.c_void_p)
-
         cocc = cocc.copy()
         cvir = cvir.copy()
-
         libpbc = pyscf.lib.load_library("libpbc")
         t0 = timer()
         ierr = libpbc.j3c_kao2gmo(
@@ -463,19 +478,6 @@ def j3c_kao2gmo(ints3c, cocc, cvir, only_ov=False, make_real=True, driver='c'):
                 j3c[key] = check_real(j3c[key], key)
             else:
                 j3c[key] = ft_auxiliary_basis(j3c[key], key)
-
-
-        #j3c["ov"] = ft_auxiliary_basis(j3c["ov"], "ov")
-        #if not only_ov:
-        #    j3c_oo = ft_auxiliary_basis(j3c["oo"], "oo")
-        #    j3c_vv = ft_auxiliary_basis(j3c["vv"], "vv")
-        #if cell.dimension < 3:
-
-
-        #    j3cn_ov = check_real(j3cn_ov, "ov")
-        #    if not only_ov:
-        #        j3cn_oo = check_real(j3cn_oo, "oo")
-        #        j3cn_vv = check_real(j3cn_vv, "vv")
 
         log.debug("Time to rotate to real: %.2f", timer()-t0)
 

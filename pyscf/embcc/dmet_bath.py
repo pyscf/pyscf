@@ -26,7 +26,7 @@ def project_ref_orbitals(self, C_ref, C):
     assert (nref > 0)
     assert (C.shape[-1] > 0)
     log.debug("Projecting %d reference orbitals into space of %d orbitals", nref, C.shape[-1])
-    S = self.base.ovlp
+    S = self.base.get_ovlp()
     # Diagonalize reference orbitals among themselves (due to change in overlap matrix)
     C_ref_orth = pyscf.lo.vec_lowdin(C_ref, S)
     assert (C_ref_orth.shape == C_ref.shape)
@@ -69,7 +69,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-4, reftol=0.8):
     """
     C_env = self.c_env
     # Divide by 2 to get eigenvalues in [0,1]
-    sc = np.dot(self.base.ovlp, C_env)
+    sc = np.dot(self.base.get_ovlp(), C_env)
     D_env = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
     eig, R = np.linalg.eigh(D_env)
     eig, R = eig[::-1], R[:,::-1]

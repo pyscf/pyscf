@@ -72,7 +72,7 @@ class Cluster:
         log.info("  * Number of fragment orbitals= %d", self.size) # depends on self.c_frag
 
         # Determine number of mean-field electrons in fragment space
-        sc = np.dot(self.base.ovlp, self.c_frag)
+        sc = np.dot(self.base.get_ovlp(), self.c_frag)
         dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         self.nelec_mf_frag = np.trace(dm)
         log.info("  * Number of mean-field electrons= %.6f", self.nelec_mf_frag)
@@ -200,7 +200,6 @@ class Cluster:
 
         Accessed attributes and methods are:
         mf.get_ovlp()
-        mf.get_hcore()
         mf.get_fock()
         mf.make_rdm1()
         mf.mo_energy
@@ -251,7 +250,7 @@ class Cluster:
 
         # Calculate chi
         for ao in range(self.mol.nao_nr()):
-            S = self.base.ovlp
+            S = self.base.get_ovlp()
             S121 = 1/S[ao,ao] * np.outer(S[:,ao], S[:,ao])
             for ispace, space in enumerate(spaces):
                 C = orbitals.get_coeff(space)
@@ -298,7 +297,7 @@ class Cluster:
             Virtual cluster orbitals.
         """
         C_clst = np.hstack((self.c_frag, C_bath))
-        sc = np.dot(self.base.ovlp, C_clst)
+        sc = np.dot(self.base.get_ovlp(), C_clst)
         D_clst = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
         e, R = np.linalg.eigh(D_clst)
         tol = self.opts.dmet_threshold
@@ -352,7 +351,7 @@ class Cluster:
         occ : ndarray, shape(M)
             Occupation numbers of orbitals.
         """
-        sc = np.dot(self.base.ovlp, mo_coeff)
+        sc = np.dot(self.base.get_ovlp(), mo_coeff)
         dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         occ = np.diag(dm)
         return occ
@@ -374,7 +373,7 @@ class Cluster:
         P : ndarray, shape(M, M)
             Projection matrix.
         """
-        S = self.base.ovlp
+        S = self.base.get_ovlp()
 
         # Project onto space of local (fragment) orbitals.
         #if self.local_orbital_type in ("IAO", "LAO"):
@@ -644,8 +643,8 @@ class Cluster:
         # Use initial guess from previous calculations
         if self.base.opts.project_init_guess and init_guess is not None:
             # Projectors for occupied and virtual orbitals
-            p_occ = np.linalg.multi_dot((init_guess.pop("c_occ").T, self.base.ovlp, c_active_occ))
-            p_vir = np.linalg.multi_dot((init_guess.pop("c_vir").T, self.base.ovlp, c_active_vir))
+            p_occ = np.linalg.multi_dot((init_guess.pop("c_occ").T, self.base.get_ovlp(), c_active_occ))
+            p_vir = np.linalg.multi_dot((init_guess.pop("c_vir").T, self.base.get_ovlp(), c_active_vir))
             t1, t2 = init_guess.pop("t1"), init_guess.pop("t2")
             t1, t2 = helper.transform_amplitudes(t1, t2, p_occ, p_vir)
             init_guess["t1"] = t1
@@ -656,7 +655,7 @@ class Cluster:
         if self.base.opts.project_eris and eris is not None:
             t0 = timer()
             log.debug("Projecting previous ERIs onto subspace")
-            eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.ovlp)
+            eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.get_ovlp())
             log.debug("Time to project ERIs: %s", get_time_string(timer()-t0))
         else:
             eris = None
@@ -715,7 +714,7 @@ class Cluster:
         if filename is None:
             filename = "%s-%s.txt" % (self.base.opts.popfile, self.name)
 
-        sc = np.dot(self.base.ovlp, self.base.lo)
+        sc = np.dot(self.base.get_ovlp(), self.base.lo)
         dm1 = np.linalg.multi_dot((sc.T, dm1, sc))
         pop, chg = self.mf.mulliken_pop(dm=dm1, s=np.eye(dm1.shape[-1]))
         pop_mf = self.base.pop_mf
@@ -753,7 +752,7 @@ class Cluster:
         if filename is None:
             filename = "%s-%s.txt" % (self.base.opts.eomfile, self.name)
 
-        sc = np.dot(self.base.ovlp, self.base.lo)
+        sc = np.dot(self.base.get_ovlp(), self.base.lo)
         if kind == "IP":
             e, c = csolver.ip_energy, csolver.ip_coeff
         else:

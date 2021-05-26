@@ -161,9 +161,9 @@ def reorder_columns(a, *args):
     assert b.shape == a.shape
     return b
 
-def get_time_string(seconds, display_all=True):
+def get_time_string(seconds, show_zeros=True):
     m, s = divmod(seconds, 60)
-    if seconds >= 3600 or display_all:
+    if seconds >= 3600 or show_zeros:
         tstr = "%.0f h %.0f min %.0f s" % (divmod(m, 60) + (s,))
     elif seconds >= 60:
         tstr = "%.0f min %.1f s" % (m, s)
