@@ -725,13 +725,15 @@ class CASCI(lib.StreamObject):
     def ncore(self):
         if self._ncore is None:
             ncorelec = self.mol.nelectron - sum(self.nelecas)
-            assert(ncorelec % 2 == 0)
+            assert ncorelec % 2 == 0
+            assert ncorelec >= 0
             return ncorelec // 2
         else:
             return self._ncore
     @ncore.setter
     def ncore(self, x):
-        assert(x is None or isinstance(x, (int, numpy.integer)))
+        assert x is None or isinstance(x, (int, numpy.integer))
+        assert x is None or x >= 0
         self._ncore = x
 
     def dump_flags(self, verbose=None):
@@ -743,7 +745,6 @@ class CASCI(lib.StreamObject):
         nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
-        assert(self.ncas > 0)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
@@ -764,6 +765,17 @@ To enable the solvent model for CASCI, the following code needs to be called
         mc = solvent.ddCOSMO(mc)
 ''',
                      self._scf.with_solvent.__class__)
+        return self
+
+    def check_sanity(self):
+        assert self.ncas > 0
+        ncore = self.ncore
+        nvir = self.mo_coeff.shape[1] - ncore - self.ncas
+        assert ncore >= 0
+        assert nvir >= 0
+        assert ncore * 2 + sum(self.nelecas) == self.mol.nelectron
+        assert 0 <= self.nelecas[0] <= self.ncas
+        assert 0 <= self.nelecas[1] <= self.ncas
         return self
 
     def reset(self, mol=None):
@@ -864,8 +876,7 @@ To enable the solvent model for CASCI, the following code needs to be called
             ci0 = self.ci
         log = logger.new_logger(self, verbose)
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags(log)
 
         self.e_tot, self.e_cas, self.ci = \

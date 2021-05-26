@@ -453,8 +453,7 @@ class UCASSCF(ucasci.UCASCI):
             self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, self.e_cas, self.ci, self.mo_coeff = \
