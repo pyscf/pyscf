@@ -106,8 +106,7 @@ class EmbCC:
                 # If multiple bno thresholds are to be calculated, we can project integrals and amplitudes from a previous larger cluster:
                 "project_eris" : False,         # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
                 "project_init_guess" : True,    # Project converted T1,T2 amplitudes from a previous larger cluster
-                #"orthogonal_mo_tol" : False,
-                "orthogonal_mo_tol" : 1e-7,
+                "orthogonal_mo_tol" : False,
                 # Population analysis
                 "make_rdm1" : False,
                 "popfile" : "population",       # Filename for population analysis
@@ -403,7 +402,6 @@ class EmbCC:
         P : ndarray
             Projector into AO subspace.
         """
-        #S1 = self.mf.get_ovlp()
         S1 = self.ovlp
         S2 = S1[np.ix_(ao_indices, ao_indices)]
         S21 = S1[ao_indices]
@@ -443,7 +441,6 @@ class EmbCC:
                 #from pyscf.pbc import gto as pbcgto
                 # At the moment: Gamma point only
                 kpts = None
-                #s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
                 s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
                 s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=kpts))
                 assert s1.ndim == 2
@@ -808,7 +805,7 @@ class EmbCC:
             cluster.set_refdata(refdata[cluster.name])
         return True
 
-    def make_iao(self, minao="minao"):
+    def make_iao(self, minao='minao'):
         """Make intrinsic atomic orbitals.
 
         Parameters
@@ -818,9 +815,9 @@ class EmbCC:
 
         Returns
         -------
-        C_iao : ndarray
+        c_iao : array
             IAO coefficients.
-        C_env : ndarray
+        c_env : array
             Remaining orbital coefficients.
         iao_atoms : list
             Atom ID for each IAO.
@@ -828,58 +825,60 @@ class EmbCC:
         # Orthogonality of input mo_coeff
         mo_coeff = self.mo_coeff
         norb = mo_coeff.shape[-1]
-        S = self.ovlp
-        nonorthmax = abs(mo_coeff.T.dot(S).dot(mo_coeff) - np.eye(norb)).max()
-        log.debug("Max orthogonality error in canonical basis = %.1e" % nonorthmax)
+        ovlp = self.ovlp
+        err_orth = abs(mo_coeff.T.dot(ovlp).dot(mo_coeff) - np.eye(norb)).max()
+        log.debug("Max orthogonality error in canonical basis = %.2e", err_orth)
 
-        C_occ = self.mo_coeff[:,self.mo_occ>0]
-        C_iao = pyscf.lo.iao.iao(self.mol, C_occ, minao=minao)
-        niao = C_iao.shape[-1]
+        c_occ = self.mo_coeff[:,self.mo_occ>0]
+        c_iao = pyscf.lo.iao.iao(self.mol, c_occ, minao=minao)
+        niao = c_iao.shape[-1]
         log.debug("Total number of IAOs= %4d", niao)
 
         # Orthogonalize IAO
-        C_iao = pyscf.lo.vec_lowdin(C_iao, S)
+        c_iao = pyscf.lo.vec_lowdin(c_iao, ovlp)
 
         # Add remaining virtual space
-        C_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, S, C_iao)) # Transform IAOs to MO basis
+        c_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, ovlp, c_iao)) # Transform IAOs to MO basis
         # Get eigenvectors of projector into complement
-        P_iao = np.dot(C_iao_mo, C_iao_mo.T)
-        P_env = np.eye(norb) - P_iao
-        e, C = np.linalg.eigh(P_env)
+        p_iao = np.dot(c_iao_mo, c_iao_mo.T)
+        p_env = np.eye(norb) - p_iao
+        e, c = np.linalg.eigh(p_env)
         # Ideally, all eigenvalues of P_env should be 0 (IAOs) or 1 (environment)
         # Error if > 1e-3
-        mask = np.fmin(abs(e), abs(1-e)) > 1e-3
-        if np.any(mask):
-            log.error("CRITICAL: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
-            raise RuntimeError()
-        # Warning if > 1e-6
-        mask = np.fmin(abs(e), abs(1-e)) > 1e-6
-        if np.any(mask):
-            log.warning("WARNING: Some eigenvalues of Projector 1-P_IAO are not close to 0 or 1:\n%r", e[mask])
-        mask_env = (e > 0.5)
+        mask_iao, mask_env = (e <= 0.5), (e > 0.5)
+        e_iao, e_env = e[mask_iao], e[mask_env]
+        if np.any(abs(e_iao)) > 1e-3:
+            log.error("CRITICAL: Some IAO eigenvalues of 1-P_IAO are not close to 0:\n%r", e_iao)
+        elif np.any(abs(e_iao)) > 1e-6:
+            log.warn("Some IAO eigenvalues of 1-P_IAO are not close to 0: N= %d max|e|= %.2e ", len(e_iao), abs(e_iao).max())
+        if np.any(abs(1-e_env)) > 1e-3:
+            log.error("CRITICAL: Some env. eigenvalues of 1-P_IAO are not close to 1:\n%r", e_env)
+        elif np.any(abs(1-e_env)) > 1e-6:
+            log.warn("Some env. eigenvalues of 1-P_IAO are not close to 1: N= %d max|1-e|= %.2e ", len(e_env), abs(1-e_env).max())
+
         if not (np.sum(mask_env) + niao == norb):
             log.critical("CRITICAL: Error in construction of environment orbitals")
             log.critical("CRITICAL: Eigenvalues of projector 1-P_IAO:\n%r", e)
             log.critical("CRITICAL: Number of eigenvalues above 0.5 = %d", np.sum(mask_env))
             log.critical("CRITICAL: Total number of orbitals = %d", norb)
             raise RuntimeError("Incorrect number of environment orbitals")
-        C_env = np.dot(self.mo_coeff, C[:,mask_env])        # Transform back to AO basis
+        c_env = np.dot(self.mo_coeff, c[:,mask_env])        # Transform back to AO basis
 
         # Get base atoms of IAOs
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
         iao_labels = refmol.ao_labels(None)
         #iao_labels = refmol.ao_labels()
-        assert len(iao_labels) == C_iao.shape[-1]
+        assert len(iao_labels) == c_iao.shape[-1]
 
         # Test orthogonality
-        C = np.hstack((C_iao, C_env))
-        ortherr = abs(C.T.dot(S).dot(C) - np.eye(norb)).max()
+        c = np.hstack((c_iao, c_env))
+        ortherr = abs(c.T.dot(ovlp).dot(c) - np.eye(norb)).max()
         log.debug("Max orthogonality error in rotated basis = %.1e" % ortherr)
         #assert (ortherr < max(10*nonorthmax, 1e-6))
         assert (ortherr < 1e-5)
 
         # Check that all electrons are in IAO DM
-        dm_iao = np.linalg.multi_dot((C_iao.T, S, self.mf.make_rdm1(), S, C_iao))
+        dm_iao = np.linalg.multi_dot((c_iao.T, ovlp, self.mf.make_rdm1(), ovlp, c_iao))
         nelec_iao = np.trace(dm_iao)
         log.debug("Total number of electrons in IAOs: %.8f", nelec_iao)
         if abs(nelec_iao - self.mol.nelectron) > 1e-4:
@@ -894,7 +893,7 @@ class EmbCC:
             n_diag = np.diag(dm_iao[mask][:,mask]).tolist()
             log.info("  * %3d: %-6s=  %r  sum= %.8f", a, self.mol.atom_symbol(a), n_diag, np.sum(n_diag))
 
-        return C_iao, C_env, iao_labels
+        return c_iao, c_env, iao_labels
 
     def make_lowdin_ao(self):
         S = self.ovlp
@@ -1100,6 +1099,7 @@ class EmbCC:
         log.info("E(tot)=  %+16.8f Ha", self.e_tot)
 
     def get_energies(self):
+        """Get total energy."""
         energies = np.zeros(self.ncalc)
         energies[:] = self.e_mf
         for x in self.clusters:
@@ -1112,11 +1112,6 @@ class EmbCC:
             sizes[ix] = x.n_active
         return sizes
 
-    def reset(self, mf=None, **kwargs):
-        if mf:
-            self.mf = mf
-        for cluster in self.clusters:
-            cluster.reset(**kwargs)
 
     def print_clusters(self):
         """Print fragments of calculations."""
