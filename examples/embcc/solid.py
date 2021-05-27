@@ -75,6 +75,7 @@ def get_arguments():
     parser.add_argument("--df-lindep-method")
     # Embedded correlated calculation
     parser.add_argument("--solver", type=str_or_none, default="CCSD")
+    parser.add_argument("--ccsd-diis-start-cycle", type=int)
     parser.add_argument("--minao", default="gth-szv", help="Minimial basis set for IAOs.")
     parser.add_argument("--opts", nargs="*", default=[])
     parser.add_argument("--plot-orbitals-crop-c", type=float, nargs=2)
@@ -525,8 +526,13 @@ for i, a in enumerate(args.lattice_consts):
                     "c0" : args.plot_orbitals_crop_c[0],
                     "c1" : args.plot_orbitals_crop_c[1]}
 
+        solver_options = {}
+        if args.ccsd_diis_start_cycle is not None:
+            solver_options["diis_start_cycle"] = args.ccsd_diis_start_cycle
+
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, minao=args.minao, dmet_threshold=args.dmet_threshold,
-            bno_threshold=args.bno_threshold, mp2_correction=args.mp2_correction, **kwargs)
+            bno_threshold=args.bno_threshold, mp2_correction=args.mp2_correction, solver_options=solver_options,
+            **kwargs)
 
         # Define atomic fragments, first argument is atom index
         if args.system == "diamond":

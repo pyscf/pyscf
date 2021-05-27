@@ -140,6 +140,7 @@ class Cluster:
         opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
         opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
         opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
+        opts.solver_options = self.base.opts.solver_options
         self.opts = opts
 
         # Do NOT perform (T)-correction for cluster problems above this size:
@@ -667,7 +668,8 @@ class Cluster:
         log.info("RUNNING %s SOLVER", solver)
         log.info((len(solver)+15)*"*")
         t0 = timer()
-        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
+        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen,
+                eris=eris, options=self.opts.solver_options)
         csolver.kernel(init_guess=init_guess)
         log.timing("Time for %s solver:  %s", csolver.solver, time_string(timer()-t0))
         self.converged = csolver.converged

@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 
 class ClusterSolver:
 
-    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen, eris=None):
+    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen, eris=None, options=None):
         """
 
         Arguments
@@ -28,6 +28,7 @@ class ClusterSolver:
         self.mo_occ = mo_occ
         self.nocc_frozen = nocc_frozen
         self.nvir_frozen = nvir_frozen
+        self.options = options
         # Intermediates
         self._eris = eris
         self._solver = None
@@ -60,14 +61,16 @@ class ClusterSolver:
         idx = list(range(self.nocc_frozen)) + list(range(nmo-self.nvir_frozen, nmo))
         return idx
 
-    def kernel(self, init_guess=None):
+    def kernel(self, init_guess=None, options=None):
+
+        options = options or self.options
 
         if self.solver is None:
             pass
         elif self.solver == "MP2":
             self.run_mp2()
         elif self.solver in ("CCSD", "CCSD(T)"):
-            self.run_ccsd(init_guess=init_guess)
+            self.run_ccsd(init_guess=init_guess, options=options)
         elif self.solver == "CISD":
             # Currently not maintained
             self.run_cisd()
@@ -129,7 +132,7 @@ class ClusterSolver:
         self.c1 = c1/c0
         self.c2 = c2/c0
 
-    def run_ccsd(self, init_guess=None):
+    def run_ccsd(self, init_guess=None, options=None):
         if self.base.has_pbc:
             import pyscf.pbc.cc
             cls = pyscf.pbc.cc.CCSD
@@ -137,6 +140,11 @@ class ClusterSolver:
             import pyscf.cc
             cls = pyscf.cc.CCSD
         cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
+        # Additional solver options
+        if options:
+            for key, val in options.items():
+                setattr(cc, key, val)
+
         self._solver = cc
 
         # Integral transformation

@@ -80,6 +80,7 @@ def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
 
     t0 = timer()
     ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    #ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold, solver_options={"diis_start_cycle" : 4})
     ecc.make_atom_cluster(0)
     ecc.kernel()
     t_ecc = timer()-t0

@@ -87,7 +87,6 @@ class EmbCC(QEmbeddingMethod):
         log.info("******************")
         log.changeIndentLevel(1)
 
-
         # TODO: Change other options to here
         default_opts = {
                 # Fragment settings
@@ -112,6 +111,8 @@ class EmbCC(QEmbeddingMethod):
                 "plot_orbitals" : False,
                 "plot_orbitals_dir" : "orbitals",
                 "plot_orbitals_kwargs" : {},
+                # Solver
+                "solver_options" : None,
                 # Other
                 "strict" : False,               # Stop if cluster not converged
                 }
