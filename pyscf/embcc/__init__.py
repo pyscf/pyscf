@@ -8,7 +8,10 @@ import logging
 from .logg import init_logging
 
 log = logging.getLogger(__name__)
-init_logging(log)
+
+logname = "embcc"
+loglevel = logging.DEBUG if __debug__ else logging.INFO
+init_logging(log, logname, loglevel)
 
 log.info("+--------------------+")
 log.info("| Module pyscf.embcc |")
@@ -45,7 +48,7 @@ try:
     MPI_comm = MPI.COMM_WORLD
     MPI_rank = MPI_comm.Get_rank()
     MPI_size = MPI_comm.Get_size()
-    log.debug("MPI(rank= %d  size= %d)", MPI_rank, MPI_size)
+    log.debug("MPI(rank= %d , size= %d)", MPI_rank, MPI_size)
 except ImportError:
     log.debug("mpi4py not found.")
 log.changeIndentLevel(-1)

@@ -26,7 +26,7 @@ DEBUG           10      (active with -vv)
 DEBUGV  (*)      5      (active with -vvv)
 """
 
-def init_logging(log):
+def init_logging(log, logname, loglevel):
 
     # Verbose INFO and DEBUG + TIMING
     def add_log_level(level, name):
@@ -47,10 +47,9 @@ def init_logging(log):
         name = "%s%s.log" % (basename, ((".mpi%d" % MPI_rank) if MPI_rank > 0 else ""))
         return name
 
-    LOGNAME = get_logname("embcc")
-    ERRNAME = get_logname("warnings")
+    logname = get_logname(logname)
+    warnname = get_logname("warnings")
     #LOGLEVEL = logging.DEBUG if __debug__ else logging.INFO
-    LOGLEVEL = logging.DEBUGV if __debug__ else logging.INFO
 
     # Note that indents are only tracked for the root logger
     rootlog = logging.getLogger("")
@@ -106,14 +105,14 @@ def init_logging(log):
 
     #log = logging.getLogger(__name__)
     #log = embcc.log
-    log.setLevel(LOGLEVEL)
+    log.setLevel(loglevel)
     # Default log
-    fh = logging.FileHandler(LOGNAME)
+    fh = logging.FileHandler(logname)
     #fh.setFormatter(IndentFormatter())
     fh.setFormatter(IndentedFormatter())
     log.addHandler(fh)
     # Error log (for WARNING and above)
-    eh = logging.FileHandler(ERRNAME)
+    eh = logging.FileHandler(warnname)
     #eh.setFormatter(Formatter())
     eh.setLevel(logging.WARNING)
     log.addHandler(eh)
