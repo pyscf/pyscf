@@ -138,7 +138,7 @@ def get_arguments():
                 "atoms" : ["Sr", "Ti", "O"],
                 "ndim" : 3,
                 #"lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
-                "lattice_consts" : np.arange(3.8, 4.0+1e-12, 0.5),
+                "lattice_consts" : np.arange(3.8, 4.0+1e-12, 0.05),
                 }
 
     for key, val in defaults.items():

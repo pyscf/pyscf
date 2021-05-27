@@ -17,7 +17,7 @@ import pyscf.embcc.k2gamma_gdf
 def make_cubic(a, atom="He", basis="gth-dzv", supercell=False):
     amat = a * np.eye(3)
     atom = "%s %f %f %f" % (atom, a/2, a/2, a/2)
-
+    #atom = "%s %f %f %f ; %s %f %f %f" % (atom, 0, 0, 0, atom, a/2, a/2, a/2)
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
@@ -68,6 +68,35 @@ def make_diamond(a, atoms=["C1", "C2"], basis="gth-dzv", supercell=False):
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
+def make_perovskite(a, atoms=["Sr", "Ti", "O"], basis="gth-dzvp-molopt-sr", supercell=False):
+    amat = a * np.eye(3)
+    coords = np.asarray([
+                [0,     0,      0],
+                [a/2,   a/2,    a/2],
+                [0,     a/2,    a/2],
+                [a/2,   0,      a/2],
+                [a/2,   a/2,    0]
+                ])
+    atom = [
+        (atoms[0], coords[0]),
+        (atoms[1], coords[1]),
+        (atoms[2], coords[2]),
+        (atoms[2], coords[3]),
+        (atoms[2], coords[4]),
+        ]
+
+    cell = pyscf.pbc.gto.Cell()
+    cell.a = amat
+    cell.atom = atom
+    cell.basis = basis
+    cell.pseudo = "gth-pade"
+    cell.verbose = 10
+    cell.build()
+    if supercell:
+        cell = pyscf.pbc.tools.super_cell(cell, supercell)
+    return cell
+
+
 def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
 
     t0 = timer()
@@ -75,9 +104,9 @@ def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
-    kmf.with_df.linear_dep_threshold = 1e-7
-    kmf.with_df.linear_dep_method = 'canonical-orth'
-    kmf.with_df.linear_dep_always = True
+    #kmf.with_df.linear_dep_threshold = 1e-7
+    #kmf.with_df.linear_dep_method = 'canonical-orth'
+    #kmf.with_df.linear_dep_always = True
     kmf.kernel()
     t_hf = timer()-t0
 
@@ -95,6 +124,32 @@ def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
         kcc.kernel()
         print("E(k-CCSD)=   %+16.8f Ha" % kcc.e_tot)
         assert np.allclose(kcc.e_tot, ecc.e_tot)
+
+
+def test_perovskite(a=3.9, kmesh=[1,1,2], bno_threshold=1e-6):
+
+    t0 = timer()
+    cell = make_perovskite(a, ["He", "C", "O"], "gth-dzv")
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    #kmf.with_df.linear_dep_threshold = 1e-7
+    #kmf.with_df.linear_dep_method = 'canonical-orth'
+    #kmf.with_df.linear_dep_always = True
+    kmf.kernel()
+    t_hf = timer()-t0
+
+    t0 = timer()
+    ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    ecc.make_atom_cluster(0)
+    ecc.make_atom_cluster(1)
+    ecc.make_atom_cluster(2, symmetry_factor=3)
+    ecc.kernel()
+    t_ecc = timer()-t0
+    print("E(Emb-CCSD)= %+16.8f Ha" % ecc.e_tot)
+
+    print("T(HF)= %.2f s  T(Emb-CCSD)= %.2f s" % (t_hf, t_ecc))
+
 
 def test_canonical_orth(c=1.2, lindep_threshold=1e-8, kmesh=[1,1,2], output=None):
 
@@ -307,6 +362,7 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 def run_test():
 
     test_helium()
+    #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_diamond_bno_threshold(kmesh=[4,4,4])
     #test_canonical_orth()

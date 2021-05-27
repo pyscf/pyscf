@@ -231,17 +231,18 @@ class QEmbeddingMethod:
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
             n_occ.append(np.diag(dm_iao[mask][:,mask]))
+        log.debugv("n_occ: %r", n_occ)
 
         # Check lattice symmetry if k-point mf object was used
         tsym = False
         if self.ncells > 1:
             # IAO occupations per cell
-            n_occ_cell = np.split(np.asarray(n_occ), self.ncells)
+            n_occ_cell = np.split(np.hstack(n_occ), self.ncells)
+            log.debugv("n_occ_cell: %r", n_occ_cell)
             # Compare all cells to the primitive cell
-            if not np.all([np.allclose(n_occ_cell[i], n_occ_cell[0]) for i in range(self.ncells)]):
-                log.error("IAOs are not translationally symmetric!")
-            else:
-                tsym = True
+            log.debugv("list: %r", [np.allclose(n_occ_cell[i], n_occ_cell[0]) for i in range(self.ncells)])
+            tsym = np.all([np.allclose(n_occ_cell[i], n_occ_cell[0]) for i in range(self.ncells)])
+        log.debugv("tsym: %r", tsym)
 
         # Print occupations of IAOs
         log.info("IAO MEAN-FIELD OCCUPANCY PER ATOM")

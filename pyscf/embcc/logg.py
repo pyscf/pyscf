@@ -31,6 +31,7 @@ def init_logging(log):
     # Verbose INFO and DEBUG + TIMING
     def add_log_level(level, name):
         logging.addLevelName(level, name.upper())
+        setattr(logging, name.upper(), level)
         def logForLevel(self, message, *args, **kwargs):
             if self.isEnabledFor(level):
                 self._log(level, message, args, **kwargs)
@@ -48,7 +49,8 @@ def init_logging(log):
 
     LOGNAME = get_logname("embcc")
     ERRNAME = get_logname("warnings")
-    LOGLEVEL = logging.DEBUG if __debug__ else logging.INFO
+    #LOGLEVEL = logging.DEBUG if __debug__ else logging.INFO
+    LOGLEVEL = logging.DEBUGV if __debug__ else logging.INFO
 
     # Note that indents are only tracked for the root logger
     rootlog = logging.getLogger("")
@@ -81,7 +83,7 @@ def init_logging(log):
     #        return "\n".join([indent + x for x in msg.split("\n")])
 
     lvl2prefix = {
-            #"DEBUGV" : "**",
+            "DEBUGV" : "**",
             #"DEBUG" : "*",
             #"TIMING" : "T",
             "WARNING" : "WARNING",
@@ -97,7 +99,6 @@ def init_logging(log):
             prefix = lvl2prefix.get(record.levelname, "")
             if prefix:
                 prefix = "[%s]" % prefix
-                #prefix = ("\033[31m" + "[%s]" + "\033[0m") % prefix
             prefix = "%-10s|" % prefix
             lines = [indent + x for x in message.split("\n")]
             lines = [((prefix + "  " + line) if line else prefix) for line in lines]
