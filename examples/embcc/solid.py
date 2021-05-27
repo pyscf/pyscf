@@ -72,6 +72,7 @@ def get_arguments():
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
+    parser.add_argument("--df-lindep-threshold")
     parser.add_argument("--df-lindep-method")
     # Embedded correlated calculation
     parser.add_argument("--solver", type=str_or_none, default="CCSD")
@@ -323,6 +324,8 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
         # TEST
         if args.df_lindep_method is not None:
             df.linear_dep_method = args.df_lindep_method
+        if args.df_lindep_threshold is not None:
+            df.linear_dep_threshold = args.df_lindep_threshold
 
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
