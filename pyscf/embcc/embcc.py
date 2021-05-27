@@ -13,6 +13,7 @@ import pyscf.scf
 import pyscf.pbc
 import pyscf.pbc.tools
 
+from . import util
 from .util import *
 from .cluster import Cluster
 from .localao import localize_ao
@@ -196,18 +197,18 @@ class EmbCC(QEmbeddingMethod):
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             t0 = timer()
             log.info("Orthogonalizing orbitals...")
-            self.mo_coeff = orthogonalize_mo(c, self.get_ovlp())
+            self.mo_coeff = helper.orthogonalize_mo(c, self.get_ovlp())
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
             log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
-            log.timing("Time for orbital orthogonalization: %s", get_time_string(timer()-t0))
+            log.timing("Time for orbital orthogonalization: %s", time_string(timer()-t0))
 
         # Prepare fragments
         if self.local_orbital_type in ("IAO", "LAO"):
             t0 = timer()
             self.init_fragments()
-            log.timing("Time for fragment initialization: %s", get_time_string(timer()-t0))
+            log.timing("Time for fragment initialization: %s", time_string(timer()-t0))
 
-        log.timing("Time for EmbCC setup: %s", get_time_string(timer()-t_start))
+        log.timing("Time for EmbCC setup: %s", time_string(timer()-t_start))
 
         log.changeIndentLevel(-1)
 
@@ -248,7 +249,7 @@ class EmbCC(QEmbeddingMethod):
                 C_loc = localize_ao(self.mol, self.C_ao, centers)
 
             #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
-            log.timing("Time for orbital localization: %s", get_time_string(timer()-t0))
+            log.timing("Time for orbital localization: %s", time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
             chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
@@ -647,7 +648,7 @@ class EmbCC(QEmbeddingMethod):
 
         # TEMP
         #ao_indices = get_ao_indices_at_atoms(self.mol, atomids)
-        ao_indices = atom_labels_to_ao_indices(self.mol, atom_labels)
+        ao_indices = helper.atom_labels_to_ao_indices(self.mol, atom_labels)
         cluster.ao_indices = ao_indices
 
         return cluster
@@ -809,7 +810,7 @@ class EmbCC(QEmbeddingMethod):
             self.print_results(results)
 
         if MPI: MPI_comm.Barrier()
-        log.info("Total wall time:  %s", get_time_string(timer()-t_start))
+        log.info("Total wall time:  %s", time_string(timer()-t_start))
 
         log.info("All done.")
 

@@ -305,6 +305,7 @@ def run_test():
 
     test_helium()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
+    #test_diamond_bno_threshold(kmesh=[4,4,4])
     #test_canonical_orth()
     #sample_canonical_orth()
     #test_full_ccsd_limit(-11.170842)

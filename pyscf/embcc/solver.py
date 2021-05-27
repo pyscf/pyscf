@@ -5,7 +5,7 @@ from timeit import default_timer as timer
 import pyscf
 import pyscf.pbc
 
-from .util import einsum, get_time_string
+from .util import *
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ class ClusterSolver:
         if self._eris is None:
             t0 = timer()
             self._eris = self.base.get_eris(mp2)
-            log.timing("Time for AO->MO:  %s", get_time_string(timer()-t0))
+            log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
 
         self.e_corr, self.c2 = mp2.kernel(eris=self._eris, hf_reference=True)
         self.converged = True
@@ -113,13 +113,13 @@ class ClusterSolver:
         t0 = timer()
         eris = ci.ao2mo()
         self._eris = eris
-        log.timing("Time for AO->MO:  %s", get_time_string(timer()-t0))
+        log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
 
         t0 = timer()
         log.info("Running CISD...")
         ci.kernel(eris=eris)
         log.info("CISD done. converged: %r", ci.converged)
-        log.timing("Time for CISD [s]: %.3f (%s)", get_time_string(timer()-t0))
+        log.timing("Time for CISD [s]: %.3f (%s)", time_string(timer()-t0))
 
         self.converged = ci.converged
         self.e_corr = ci.e_corr
@@ -143,7 +143,7 @@ class ClusterSolver:
         if self._eris is None:
             t0 = timer()
             self._eris = self.base.get_eris(cc)
-            log.timing("Time for AO->MO of (ij|kl):  %s", get_time_string(timer()-t0))
+            log.timing("Time for AO->MO of (ij|kl):  %s", time_string(timer()-t0))
         #else:
         #    # DEBUG:
         #    eris = self.base.get_eris(cc)
@@ -159,7 +159,7 @@ class ClusterSolver:
             log.info("Running CCSD...")
             cc.kernel(eris=self._eris)
         log.info("CCSD done. converged: %r", cc.converged)
-        log.timing("Time for CCSD:  %s", get_time_string(timer()-t0))
+        log.timing("Time for CCSD:  %s", time_string(timer()-t0))
 
         self.converged = cc.converged
         self.e_corr = cc.e_corr
@@ -176,7 +176,7 @@ class ClusterSolver:
                 log.info("RDM1 done. Lambda converged: %r", cc.converged_lambda)
                 if not cc.converged_lambda:
                     log.warning("Solution of lambda equation not converged!")
-                log.timing("Time for RDM1:  %s", get_time_string(timer()-t0))
+                log.timing("Time for RDM1:  %s", time_string(timer()-t0))
             except Exception as e:
                 log.error("Exception while making RDM1: %s", e)
 
@@ -187,7 +187,7 @@ class ClusterSolver:
             eom_funcs = {"IP" : cc.ipccsd , "EA" : cc.eaccsd}
             t0 = timer()
             e, c = eom_funcs[kind](nroots=nroots, eris=self._eris)
-            log.timing("Time for %s-EOM-CCSD:  %s", kind, get_time_string(timer()-t0))
+            log.timing("Time for %s-EOM-CCSD:  %s", kind, time_string(timer()-t0))
             if nroots == 1:
                 e, c = [e], [c]
             return e, c
@@ -299,7 +299,7 @@ class ClusterSolver:
     #    if eris is None:
     #        t0 = MPI.Wtime()
     #        eris = cisd.ao2mo()
-    #        log.debug("Time for integral transformation: %s", get_time_string(MPI.Wtime()-t0))
+    #        log.debug("Time for integral transformation: %s", time_string(MPI.Wtime()-t0))
 
     #    pC1, pC2 = self.get_local_amplitudes(cisd, C1, C2)
     #    e_corr = self.get_local_energy(cisd, pC1, pC2, eris=eris)

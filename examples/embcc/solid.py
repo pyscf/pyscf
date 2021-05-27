@@ -587,7 +587,7 @@ for i, a in enumerate(args.lattice_consts):
                 fname = "%s.txt" % key
                 log.info("Writing to file %s", fname)
                 with open(fname, "a") as f:
-                    f.write(("%6.3f" + len(val)*"  %+16.8e" + "\n") % (a, *val))
+                    f.write(("%6.3f" + len(val)*"  %+16.8f" + "\n") % (a, *val))
 
     log.info("Total time for lattice constant %.2f= %.3f s", a, (timer()-t0))
     log.changeIndentLevel(-1)

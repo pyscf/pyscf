@@ -19,6 +19,7 @@ from pyscf.pbc.tools import cubegen
 
 # Local modules
 from .solver import ClusterSolver
+from . import util
 from .util import *
 from .dmet_bath import make_dmet_bath, project_ref_orbitals
 from .mp2_bath import make_mp2_bno
@@ -502,7 +503,7 @@ class Cluster:
         log.info("****************")
         log.changeIndentLevel(1)
         c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_threshold)
-        log.timing("Time for DMET bath:  %s", get_time_string(timer()-t0))
+        log.timing("Time for DMET bath:  %s", time_string(timer()-t0))
         log.changeIndentLevel(-1)
 
         # Add fragment and DMET orbitals for cube file plots
@@ -550,15 +551,15 @@ class Cluster:
 
         #self.C_bath = C_bath
 
-        # Bath natural orbitals (GNO) 
-
         log.info("MAKING OCCUPIED BNOs")
         log.info("********************")
         t0 = timer()
         log.changeIndentLevel(1)
         self.c_no_occ, self.n_no_occ = make_mp2_bno(
                 self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.timing("Time for occupied BNOs:  %s", get_time_string(timer()-t0))
+        log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
+        log.info("Occupied BNO histogram:")
+        helper.plot_histogram(self.n_no_occ)
         log.changeIndentLevel(-1)
 
         log.info("MAKING VIRTUAL BNOs")
@@ -567,7 +568,9 @@ class Cluster:
         log.changeIndentLevel(1)
         self.c_no_vir, self.n_no_vir = make_mp2_bno(
                 self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.timing("Time for virtual BNOs:   %s", get_time_string(timer()-t0))
+        log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
+        log.info("Virtual BNO histogram:")
+        helper.plot_histogram(self.n_no_vir)
         log.changeIndentLevel(-1)
 
         # Plot orbitals
@@ -575,7 +578,7 @@ class Cluster:
             # Save state of cubefile, in case a replot of the same data is required later:
             self.cubefile.save_state("%s.pkl" % self.cubefile.filename)
             self.cubefile.write()
-        log.timing("Time for bath:  %s", get_time_string(timer()-t0_bath))
+        log.timing("Time for bath:  %s", time_string(timer()-t0_bath))
 
         init_guess = eris = None
         for icalc, bno_thr in enumerate(bno_threshold):
@@ -656,7 +659,7 @@ class Cluster:
             t0 = timer()
             log.debug("Projecting previous ERIs onto subspace")
             eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.get_ovlp())
-            log.timing("Time to project ERIs:  %s", get_time_string(timer()-t0))
+            log.timing("Time to project ERIs:  %s", time_string(timer()-t0))
         else:
             eris = None
 
@@ -666,7 +669,7 @@ class Cluster:
         t0 = timer()
         csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen, eris=eris)
         csolver.kernel(init_guess=init_guess)
-        log.timing("Time for %s solver:  %s", csolver.solver, get_time_string(timer()-t0))
+        log.timing("Time for %s solver:  %s", csolver.solver, time_string(timer()-t0))
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         # ERIs and initial guess for next calculations
@@ -695,7 +698,7 @@ class Cluster:
         n_rest = len(n_no)-n_bno
         n_in, n_cut = np.split(n_no, [n_bno])
         # Logging
-        fmt = "  %4s: N= %4d  max= %8.3g  min= %8.3g  sum= %8.3g ( %7.3f %%)"
+        fmt = "  %4s: N= %4d  max= % 8.3g  min= % 8.3g  sum= % 8.3g ( %7.3f %%)"
         if n_bno > 0:
             log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
         else:

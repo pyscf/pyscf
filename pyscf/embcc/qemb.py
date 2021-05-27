@@ -10,7 +10,7 @@ import pyscf.lo
 import pyscf.pbc
 import pyscf.pbc.gto
 
-from .util import get_time_string
+from .util import *
 from .kao2gmo import gdf_to_pyscf_eris
 
 log = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class QEmbeddingMethod:
             log.info("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
             log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
-            log.timing("Time for k->Gamma unfolding of mean-field calculation:  %s", get_time_string(timer()-t0))
+            log.timing("Time for k->Gamma unfolding of mean-field calculation:  %s", time_string(timer()-t0))
         else:
             self.kdf = None
         self.mf = mf
@@ -190,11 +190,13 @@ class QEmbeddingMethod:
         if np.any(abs(e_iao) > 1e-3):
             log.error("CRITICAL: Some IAO eigenvalues of 1-P_IAO are not close to 0:\n%r", e_iao)
         elif np.any(abs(e_iao) > 1e-6):
-            log.warning("Some IAO eigenvalues of 1-P_IAO are not close to 0: N= %d max|e|= %.2e ", len(e_iao), abs(e_iao).max())
+            log.warning("Some IAO eigenvalues e of 1-P_IAO are not close to 0: n= %d max|e|= %.2e",
+                    np.count_nonzero(abs(e_iao) > 1e-6), abs(e_iao).max())
         if np.any(abs(1-e_rest) > 1e-3):
             log.error("CRITICAL: Some non-IAO eigenvalues of 1-P_IAO are not close to 1:\n%r", e_rest)
         elif np.any(abs(1-e_rest) > 1e-6):
-            log.warning("Some non-IAO eigenvalues of 1-P_IAO are not close to 1: N= %d max|1-e|= %.2e ", len(e_rest), abs(1-e_rest).max())
+            log.warning("Some non-IAO eigenvalues e of 1-P_IAO are not close to 1: n= %d max|1-e|= %.2e",
+                    np.count_nonzero(abs(1-e_rest) > 1e-6), abs(1-e_rest).max())
 
         if not (np.sum(mask_rest) + niao == self.nmo):
             log.critical("Error in construction of remaining virtual orbitals! Eigenvalues of projector 1-P_IAO:\n%r", e)

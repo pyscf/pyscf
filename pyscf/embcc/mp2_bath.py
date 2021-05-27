@@ -14,7 +14,6 @@ from .psubspace import transform_mp2_eris
 
 log = logging.getLogger(__name__)
 
-# ================================================================================================ #
 
 def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
         canonicalize=True, local_dm=False, eris=None):
@@ -91,7 +90,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     else:
         log.debug("Transforming previous eris.")
         eris = transform_mp2_eris(eris, c_occ, c_vir, ovlp=self.base.get_ovlp())
-    log.timing("Time for integral transformation:  %s", get_time_string(timer()-t0))
+    log.timing("Time for integral transformation:  %s", time_string(timer()-t0))
     assert (eris.ovov is not None)
 
     t0 = timer()
@@ -99,7 +98,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     nocc, nvir = t2.shape[0], t2.shape[2]
     assert (c_occ.shape[-1] == nocc)
     assert (c_vir.shape[-1] == nvir)
-    log.timing("Time for MP2 kernel:  %s", get_time_string(timer()-t0))
+    log.timing("Time for MP2 kernel:  %s", time_string(timer()-t0))
 
     # Energies
     e_mp2_full *= self.symmetry_factor
@@ -152,7 +151,6 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
 
     return c_no, n_no
 
-# ================================================================================================ #
 
 def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
     """Calculate delta MP2 correction."""
