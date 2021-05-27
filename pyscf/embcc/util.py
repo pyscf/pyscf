@@ -48,7 +48,7 @@ def memory_string(nbytes, fmt=".2f"):
     else:
         val = nbytes / 1e12
         mem = "TB"
-    return "{:{fmt}} {mem}".format(nbytes, mem=mem, fmt=fmt)
+    return "{:{fmt}} {mem}".format(val, mem=mem, fmt=fmt)
 
 
 class Options:

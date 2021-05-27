@@ -698,7 +698,7 @@ class Cluster:
         n_rest = len(n_no)-n_bno
         n_in, n_cut = np.split(n_no, [n_bno])
         # Logging
-        fmt = "  %4s: N= %4d  max= % 8.3g  min= % 8.3g  sum= % 8.3g ( %7.3f %%)"
+        fmt = "  %4s: N= %4d  max= % 9.3g  min= % 9.3g  sum= % 9.3g ( %7.3f %%)"
         if n_bno > 0:
             log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
         else:

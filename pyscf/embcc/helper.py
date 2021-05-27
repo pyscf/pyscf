@@ -37,14 +37,18 @@ def plot_histogram(values, bins=None, maxbarlength=50):
     bins = bins[::-1]
     hist = np.histogram(values, bins)[0]
     bins, hist = bins[::-1], hist[::-1]
+    cumsum = 0
+    #log.info("  %-13s  %-4s   %s", "Interval", "Sum", "Histogram")
+    log.info("  {:^13s}  {:^4s}   {:^51s}".format("Interval", "Sum", "Histogram").rstrip())
     for i, hval in enumerate(hist):
+        cumsum += hval
         barlength = int(maxbarlength * hval/hist.max())
         if hval == 0:
             bar = ""
         else:
             barlength = max(barlength, 1)
             bar = ((barlength-1) * "|") + "]" + ("  (%d)" % hval)
-        log.info("  %5.0e - %5.0e  |%s", bins[i], bins[i+1], bar)
+        log.info("  %5.0e - %5.0e  %4d   |%s", bins[i], bins[i+1], cumsum, bar)
 
 def atom_labels_to_ao_indices(mol, atom_labels):
     """Convert atom labels to AO indices of mol object."""
