@@ -72,8 +72,8 @@ def get_arguments():
     parser.add_argument("--auxbasis-file", help="Load auxiliary basis from file (NWChem format)")
     parser.add_argument("--save-gdf", help="Save primitive cell GDF") #, default="gdf-%.2f.h5")
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
-    parser.add_argument("--df-lindep-threshold")
     parser.add_argument("--df-lindep-method")
+    parser.add_argument("--df-lindep-threshold", type=float)
     # Embedded correlated calculation
     parser.add_argument("--solver", type=str_or_none, default="CCSD")
     parser.add_argument("--ccsd-diis-start-cycle", type=int)

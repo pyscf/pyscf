@@ -48,7 +48,7 @@ def plot_histogram(values, bins=None, maxbarlength=50):
         else:
             barlength = max(barlength, 1)
             bar = ((barlength-1) * "|") + "]" + ("  (%d)" % hval)
-        log.info("  %5.0e - %5.0e  %4d   |%s", bins[i], bins[i+1], cumsum, bar)
+        log.info("  %5.0e - %5.0e  %4d   |%s", bins[i+1], bins[i], cumsum, bar)
 
 def atom_labels_to_ao_indices(mol, atom_labels):
     """Convert atom labels to AO indices of mol object."""
