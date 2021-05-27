@@ -213,13 +213,14 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
-        j2c_negative = None
+        j2c_negative = j2ctag = None
         # Try Cholesky decomposition
-        try:
-            j2c = scipy.linalg.cholesky(j2c, lower=True)
-            j2ctag = 'CD'
-        except scipy.linalg.LinAlgError:
-            j2ctag = None
+        if not mydf.linear_dep_always:
+            try:
+                j2c = scipy.linalg.cholesky(j2c, lower=True)
+                j2ctag = 'CD'
+            except scipy.linalg.LinAlgError:
+                pass
         # Try regularized Cholesky decomposition if linear_dep_method == "regularize"
         if not j2ctag and mydf.linear_dep_method == 'regularize':
             try:
@@ -228,12 +229,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 j2ctag = 'CD'
                 log.debug("Using regularized Cholesky decomposition for kpt %s", uniq_kptji_id)
             except scipy.linalg.LinAlgError:
-                j2ctag = None
+                pass
         # Use canonical orthogonalization (for 2D and bad linear-dependence)
         if not j2ctag:
             w, v = scipy.linalg.eigh(j2c)
-            log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
-            log.debug('cond = %.4g, drop %d bfns', w[-1]/w[0], numpy.count_nonzero(w <= mydf.linear_dep_threshold))
+            log.debug('DF metric linear dependency for kpt %s: cond= %.4g dropping %d bfns', uniq_kptji_id,
+                    w[-1]/w[0], numpy.count_nonzero(w <= mydf.linear_dep_threshold))
             keep = w > mydf.linear_dep_threshold
             v1 = v[:,keep].conj().T
             v1 /= numpy.sqrt(w[keep]).reshape(-1,1)
@@ -521,6 +522,7 @@ class GDF(aft.AFTDF):
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
         self.linear_dep_method = LINEAR_DEP_METHOD
+        self.linear_dep_always = False
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)

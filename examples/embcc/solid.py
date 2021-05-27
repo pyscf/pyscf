@@ -74,6 +74,7 @@ def get_arguments():
     parser.add_argument("--load-gdf", help="Load primitive cell GDF")
     parser.add_argument("--df-lindep-method")
     parser.add_argument("--df-lindep-threshold", type=float)
+    parser.add_argument("--df-lindep-always", action="store_true")
     # Embedded correlated calculation
     parser.add_argument("--solver", type=str_or_none, default="CCSD")
     parser.add_argument("--ccsd-diis-start-cycle", type=int)
@@ -326,6 +327,9 @@ def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_ea
             df.linear_dep_method = args.df_lindep_method
         if args.df_lindep_threshold is not None:
             df.linear_dep_threshold = args.df_lindep_threshold
+        # Always remove linear-dependency (do not try CD)
+        if args.df_lindep_always:
+            df.linear_dep_always = args.df_lindep_always
 
         if args.auxbasis is not None:
             log.info("Loading auxbasis %s.", args.auxbasis)
