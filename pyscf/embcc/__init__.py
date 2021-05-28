@@ -5,13 +5,16 @@ Email:  max.nusspickel@gmail.com
 
 import os.path
 import logging
+
 from .logg import init_logging
+from . import cmdargs
 
+# Command line arguments
+args = cmdargs.parse_cmd_args()
+
+# Logging
 log = logging.getLogger(__name__)
-
-logname = "embcc"
-loglevel = logging.DEBUG if __debug__ else logging.INFO
-init_logging(log, logname, loglevel)
+init_logging(log, logname=args.logname, loglevel=args.loglevel)
 
 log.info("+--------------------+")
 log.info("| Module pyscf.embcc |")

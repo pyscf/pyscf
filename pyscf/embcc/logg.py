@@ -49,7 +49,6 @@ def init_logging(log, logname, loglevel):
 
     logname = get_logname(logname)
     warnname = get_logname("warnings")
-    #LOGLEVEL = logging.DEBUG if __debug__ else logging.INFO
 
     # Note that indents are only tracked for the root logger
     rootlog = logging.getLogger("")
@@ -103,16 +102,16 @@ def init_logging(log, logname, loglevel):
             lines = [((prefix + "  " + line) if line else prefix) for line in lines]
             return "\n".join(lines)
 
-    #log = logging.getLogger(__name__)
-    #log = embcc.log
     log.setLevel(loglevel)
     # Default log
     fh = logging.FileHandler(logname)
     #fh.setFormatter(IndentFormatter())
     fh.setFormatter(IndentedFormatter())
     log.addHandler(fh)
-    # Error log (for WARNING and above)
-    eh = logging.FileHandler(warnname)
+    # Warning log (for WARNING and above)
+    wh = logging.FileHandler(warnname)
     #eh.setFormatter(Formatter())
-    eh.setLevel(logging.WARNING)
-    log.addHandler(eh)
+    wh.setLevel(logging.WARNING)
+    log.addHandler(wh)
+
+    log.debugv("Created log file %s with level %d.", logname, loglevel)

@@ -586,11 +586,28 @@ class Cluster:
             log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
             log.info("*******************************")
             log.changeIndentLevel(1)
-            e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
-            log.info("BNO threshold= %.1e :  E(corr)= %+16.8f Ha", bno_thr, e_corr)
+            try:
+                e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
+                log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
+            except Exception as e:
+                log.error("Exception for BNO threshold= %.1e:\n%s", bno_thr, e)
+                e_corr = n_active = 0
+
             self.e_corrs[icalc] = e_corr
             self.n_active[icalc] = n_active
             log.changeIndentLevel(-1)
+
+        log.info("FRAGMENT CORRELATION ENERGIES")
+        log.info("*****************************")
+        for i in range(len(bno_threshold)):
+            icalc = -(i+1)
+            bno_thr = bno_threshold[icalc]
+            n_active = self.n_active[icalc]
+            e_corr = self.e_corrs[icalc]
+            if n_active > 0:
+                log.info("  * BNO threshold= %.1e :  n(active)= %4d  E(corr)= %+14.8f Ha", bno_thr, n_active, e_corr)
+            else:
+                log.info("  * BNO threshold= %.1e :  <Exception during calculation>", bno_thr)
 
 
     def run_bno_threshold(self, solver, bno_thr, init_guess=None, eris=None):
@@ -643,6 +660,10 @@ class Cluster:
             self.converged = True
             return 0, nactive, None, None
 
+        log.info("RUNNING %s SOLVER", solver)
+        log.info((len(solver)+15)*"*")
+        log.changeIndentLevel(1)
+
         # --- Project initial guess and integrals from previous cluster calculation with smaller eta:
         # Use initial guess from previous calculations
         if self.base.opts.project_init_guess and init_guess is not None:
@@ -665,8 +686,6 @@ class Cluster:
             eris = None
 
         # Create solver object
-        log.info("RUNNING %s SOLVER", solver)
-        log.info((len(solver)+15)*"*")
         t0 = timer()
         csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen,
                 eris=eris, options=self.opts.solver_options)
@@ -675,8 +694,14 @@ class Cluster:
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         # ERIs and initial guess for next calculations
-        eris = csolver._eris
-        init_guess = {"t1" : csolver.t1, "t2" : csolver.t2, "c_occ" : c_active_occ, "c_vir" : c_active_vir}
+        if self.base.opts.project_eris:
+            eris = csolver._eris
+        else:
+            eris = None
+        if self.base.opts.project_init_guess:
+            init_guess = {"t1" : csolver.t1, "t2" : csolver.t2, "c_occ" : c_active_occ, "c_vir" : c_active_vir}
+        else:
+            init_guess = None
 
         pc1, pc2 = self.get_local_amplitudes(csolver._solver, csolver.c1, csolver.c2)
         e_corr = self.get_local_energy(csolver._solver, pc1, pc2, eris=csolver._eris)
@@ -691,6 +716,8 @@ class Cluster:
             self.eom_ip_energy, _ = self.eom_analysis(csolver, "IP")
         if self.opts.eom_ccsd in (True, "EA"):
             self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
+
+        log.changeIndentLevel(-1)
 
         return e_corr, nactive, init_guess, eris
 

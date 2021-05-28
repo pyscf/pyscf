@@ -84,7 +84,7 @@ def get_arguments():
     # Bath specific
     parser.add_argument("--dmet-threshold", type=float, default=1e-4, help="Threshold for DMET bath orbitals. Default= 1e-4")
     parser.add_argument("--bno-threshold", type=float, nargs="*",
-            default=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3],
+            default=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4],
             help="Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.")
     parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other type of bath orbitals (pre MP2-natorb)
@@ -137,8 +137,8 @@ def get_arguments():
         defaults = {
                 "atoms" : ["Sr", "Ti", "O"],
                 "ndim" : 3,
-                #"lattice_consts" : np.arange(3.7, 4.2+1e-12, 0.1),
-                "lattice_consts" : np.arange(3.8, 4.0+1e-12, 0.05),
+                #"lattice_consts" : np.arange(3.8, 4.0+1e-12, 0.05),
+                "lattice_consts" : np.arange(3.825, 3.975+1e-12, 0.025),
                 }
 
     for key, val in defaults.items():
@@ -206,9 +206,9 @@ def make_perovskite(a, atoms=["Sr", "Ti", "O"]):
     atom = [
         (atoms[0], coords[0]),
         (atoms[1], coords[1]),
-        (atoms[2]+"@1", coords[2]),
-        (atoms[2]+"@2", coords[3]),
-        (atoms[2]+"@3", coords[4]),
+        (atoms[2], coords[2]),
+        (atoms[2], coords[3]),
+        (atoms[2], coords[4]),
         ]
     return amat, atom
 
@@ -564,10 +564,15 @@ for i, a in enumerate(args.lattice_consts):
                 ccx.make_atom_cluster(1, symmetry_factor=ncells, **kwargs)
 
         elif args.system == "perovskite":
-            ccx.make_atom_cluster(0)
+            #ccx.make_atom_cluster(0)
+            ## Ti needs larger threshold
+            #ccx.make_atom_cluster(1, bno_threshold_factor=10)
+            #ccx.make_atom_cluster(2, symmetry_factor=3)
+
             # Ti needs larger threshold
-            ccx.make_atom_cluster(1, bno_threshold_factor=10)
-            ccx.make_atom_cluster(2, symmetry_factor=3)
+            ccx.make_atom_cluster(0, bno_threshold_factor=0.3)
+            ccx.make_atom_cluster(1)
+            ccx.make_atom_cluster(2, bno_threshold_factor=0.03, symmetry_factor=3)
         else:
             raise SystemError()
 

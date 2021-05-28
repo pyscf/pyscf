@@ -223,11 +223,9 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             else:
                 log.debug("Norm of Im(%2s|%2s):  L2= %.2e  Linf= %.2e", key[:2], key[2:], inorm, imax)
             eris[key] = val.real
+    log.debugv("Actual memory for (ij|kl)= %s", memory_string(sum([x.nbytes for x in eris.values()])))
 
     log.timing("Timings for kAO->GMO [s]: transform=  %s  contract= %s", time_string(t_trafo), time_string(t_contract))
-
-    mem_eris = sum([x.nbytes for x in eris.values()])
-    log.debug("Memory for (ij|kl)= %s", memory_string(mem_eris))
 
     return eris
 
