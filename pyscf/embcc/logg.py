@@ -24,6 +24,7 @@ INFOV   (*)     15      (active with -v)
 TIMING  (*)     12      (active with -vv)
 DEBUG           10      (active with -vv)
 DEBUGV  (*)      5      (active with -vvv)
+TIMINGV (*)      2      (active with -vvv)
 """
 
 def init_logging(log, logname, loglevel):
@@ -42,6 +43,7 @@ def init_logging(log, logname, loglevel):
     add_log_level(15, "infov")
     add_log_level(12, "timing")
     add_log_level(5, "debugv")
+    add_log_level(2, "timingv")
 
     def get_logname(basename):
         name = "%s%s.log" % (basename, ((".mpi%d" % MPI_rank) if MPI_rank > 0 else ""))

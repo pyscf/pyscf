@@ -13,6 +13,7 @@ def parse_cmd_args():
     parser.add_argument('-v', action='store_const', dest='loglevel', const=15, default=DEFAULT_LOGLVL)
     parser.add_argument('-vv', action='store_const', dest='loglevel', const=10)
     parser.add_argument('-vvv', action='store_const', dest='loglevel', const=1)
+    parser.add_argument('--strict', action='store_true')
     args, unknown_args = parser.parse_known_args()
 
     # Remove known arguments:

@@ -5,6 +5,7 @@ from timeit import default_timer as timer
 import numpy as np
 
 import pyscf
+import pyscf.cc
 import pyscf.pbc
 import pyscf.pbc.cc
 import pyscf.pbc.tools
@@ -123,7 +124,13 @@ def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
         kcc = pyscf.pbc.cc.KCCSD(kmf)
         kcc.kernel()
         print("E(k-CCSD)=   %+16.8f Ha" % kcc.e_tot)
-        assert np.allclose(kcc.e_tot, ecc.e_tot)
+        #assert np.allclose(kcc.e_tot, ecc.e_tot)
+
+    #if bno_threshold <= 0:
+    #    cc = pyscf.cc.CCSD(kmf)
+    #    cc.kernel()
+    #    print("E(CCSD)=   %+16.8f Ha" % cc.e_tot)
+    #    #assert np.allclose(kcc.e_tot, ecc.e_tot)
 
 
 def test_perovskite(a=3.9, kmesh=[1,1,2], bno_threshold=1e-6):
@@ -241,7 +248,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     kmf.with_df.linear_dep_method = "regularize"
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold[::-1])
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
     kcc.make_atom_cluster(0, symmetry_factor=2)
     t0 = timer()
     kcc.kernel()
@@ -255,11 +262,11 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
         E_EXPECTED = np.array([-11.16455488, -11.15595256, -11.1383086 , -11.09207628])
         e = kcc.get_energies()
         if not np.allclose(e, E_EXPECTED):
-            print("Got:      %r", e)
-            print("Expected: %r", E_EXPECTED)
+            print("Got:      %r" % e)
+            print("Expected: %r" % E_EXPECTED)
 
-            print("Cluster sizes: %r", kcc.get_cluster_sizes())
-            print("Expected:      %r", N_EXPECTED)
+            print("Cluster sizes: %r" % kcc.get_cluster_sizes())
+            print("Expected:      %r" % N_EXPECTED)
             raise RuntimeError()
 
         #assert np.allclose(kcc.get_energies(), E_EXPECTED)
@@ -364,6 +371,7 @@ def run_test():
     test_helium()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
+    #test_diamond_bno_threshold(bno_threshold=-1, kmesh=[2,2,2])
     #test_diamond_bno_threshold(kmesh=[4,4,4])
     #test_canonical_orth()
     #sample_canonical_orth()

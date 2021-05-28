@@ -53,11 +53,19 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     if isinstance(cm, pyscf.mp.mp2.MP2):
         from pyscf.mp.mp2 import _ChemistsERIs
         eris = _ChemistsERIs()
+        sym = False
         only_ovov = True
     # Coupled-cluster ERIS
-    elif isinstance(cm, pyscf.cc.ccsd.CCSD):
+    elif isinstance(cm, pyscf.cc.rccsd.RCCSD):
         from pyscf.cc.rccsd import _ChemistsERIs
         eris = _ChemistsERIs()
+        sym = False
+        only_ovov = False
+    elif isinstance(cm, pyscf.cc.ccsd.CCSD):
+        #raise NotImplementedError()
+        from pyscf.cc.ccsd import _ChemistsERIs
+        eris = _ChemistsERIs()
+        sym = True
         only_ovov = False
     else:
         raise NotImplementedError("Unknown correlated method= %s" % type(cm))
@@ -83,14 +91,14 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     #    mx = abs(val - g_i[key]).max()
     #    log.debug("Difference in (%2s|%2s):  max= %.3e  norm= %.3e", key[:2], key[2:], mx, norm)
 
-    g = gdf_to_eris(gdf, mo_coeff, cm.nocc, only_ovov=only_ovov)
+    g = gdf_to_eris(gdf, mo_coeff, cm.nocc, only_ovov=only_ovov, symmetry=sym)
     for key, val in g.items():
         setattr(eris, key, val)
 
     return eris
 
 
-def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
+def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=False):
     """Make supercell ERIs from k-point sampled, density-fitted three-center integrals.
 
     Arguments
@@ -130,8 +138,11 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
         mem_eris = nocc**2*nvir**2 * 8
     else:
         mem_j3c = nk*naux*(nocc*nvir + nocc*nocc + nvir*nvir) * 16
-        nvir_pair = nvir*(nvir+1)//2
-        mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir_pair**2) * 8
+        if symmetry:
+            nvir_pair = nvir*(nvir+1)//2
+            mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir*nvir_pair + nvir_pair**2) * 8
+        else:
+            mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4) * 8
     log.debug("Memory needed for kAO->GMO: (L|ab)= %s (ij|kl)= %s", memory_string(mem_j3c), memory_string(mem_eris))
 
     # Transform: (l|ka,qb) -> (Rl|i,j)
@@ -150,6 +161,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
 
     def contract(kind, symmetry=None):
         """Contract (ij|L)(L|kl) -> (ij|kl)"""
+        t0 = timer()
         left, right = kind[:2], kind[2:]
         # We do not store "vo" only "ov":
         right_t = "ov" if right == "vo" else right
@@ -171,35 +183,37 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
             if ln is not None:
                 ln = pyscf.lib.pack_tril(ln)
                 rn = pyscf.lib.pack_tril(rn)
-
             c = np.dot(l.T.conj(), r)
             if ln is not None:
                 c -= np.dot(ln.T.conj(), rn)
         # Permutation symmetry only on right side
-        elif symmetry == (0, 2):
+        elif symmetry == (None, 2):
             r = pyscf.lib.pack_tril(r)
             if ln is not None:
                 rn = pyscf.lib.pack_tril(rn)
-
-            c = np.dot(l.transpose(1,2,0).conj(), r)
+            c = einsum('Lij,Lk->ijk', l.conj(), r)
             if ln is not None:
-                c -= np.dot(ln.transpose(1,2,0).conj(), rn)
+                c -= einsum('Lij,Lk->ijk', ln.conj(), rn)
         # No permutation symmetry
         else:
             c = np.tensordot(l.conj(), r, axes=(0, 0))
             if ln is not None:
                 c -= einsum("ab,cd->abcd", ln.conj(), rn)
+
+        log.timingv("Time to contract (%2s|%2s): %s", left, right, time_string(timer()-t0))
         return c
 
     eris = {}
     # (L|vv) dependend
     t0 = timer()
     if not only_ovov:
-        # Only permutation symmetry allowed by cc.RCCSD is in (vv|vv):
-        # THIS IS BUGGED:
-        #eris["vvvv"] = contract("vvvv", symmetry=4)
-        eris["vvvv"] = contract("vvvv")
-        eris["ovvv"] = contract("ovvv")
+        if symmetry:
+            # Do not use these symmetries for rccsd.rccsd (even vvvv)
+            eris["vvvv"] = contract("vvvv", symmetry=4)
+            eris["ovvv"] = contract("ovvv", symmetry=(None, 2))
+        else:
+            eris["vvvv"] = contract("vvvv")
+            eris["ovvv"] = contract("ovvv")
         eris["oovv"] = contract("oovv")
         del j3c["vv"]
     # (L|ov) dependend

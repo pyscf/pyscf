@@ -13,6 +13,7 @@ from . import cmdargs
 
 # Command line arguments
 args = cmdargs.parse_cmd_args()
+strict = args.strict
 
 # Logging
 log = logging.getLogger(__name__)

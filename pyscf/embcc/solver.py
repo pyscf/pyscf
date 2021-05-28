@@ -3,6 +3,7 @@ import numpy as np
 from timeit import default_timer as timer
 
 import pyscf
+import pyscf.cc
 import pyscf.pbc
 
 from .util import *
@@ -133,12 +134,14 @@ class ClusterSolver:
         self.c2 = c2/c0
 
     def run_ccsd(self, init_guess=None, options=None):
-        if self.base.has_pbc:
-            import pyscf.pbc.cc
-            cls = pyscf.pbc.cc.CCSD
-        else:
-            import pyscf.cc
-            cls = pyscf.cc.CCSD
+        # Do not use pbc.ccsd for Gamma point CCSD -> always use molecular code
+        #if self.base.has_pbc:
+        #    #import pyscf.pbc.cc
+        #    #cls = pyscf.pbc.cc.CCSD
+        #    cls = pyscf.cc.ccsd.CCSD
+        #else:
+        #    cls = pyscf.cc.CCSD
+        cls = pyscf.cc.ccsd.CCSD
         cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         # Additional solver options
         if options:
