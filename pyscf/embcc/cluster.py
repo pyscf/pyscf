@@ -590,7 +590,7 @@ class Cluster:
                 e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
                 log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
             except Exception as e:
-                log.error("Exception for BNO threshold= %.1e:\n%s", bno_thr, e)
+                log.error("Exception for BNO threshold= %.1e:\n%r", bno_thr, e)
                 e_corr = n_active = 0
 
             self.e_corrs[icalc] = e_corr
@@ -660,9 +660,9 @@ class Cluster:
             self.converged = True
             return 0, nactive, None, None
 
-        log.info("RUNNING %s SOLVER", solver)
-        log.info((len(solver)+15)*"*")
-        log.changeIndentLevel(1)
+        #log.info("RUNNING %s SOLVER", solver)
+        #log.info((len(solver)+15)*"*")
+        #log.changeIndentLevel(1)
 
         # --- Project initial guess and integrals from previous cluster calculation with smaller eta:
         # Use initial guess from previous calculations
@@ -717,7 +717,7 @@ class Cluster:
         if self.opts.eom_ccsd in (True, "EA"):
             self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
 
-        log.changeIndentLevel(-1)
+        #log.changeIndentLevel(-1)
 
         return e_corr, nactive, init_guess, eris
 
