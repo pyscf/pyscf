@@ -195,9 +195,10 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True):
     # (L|vv) dependend
     t0 = timer()
     if not only_ovov:
-        #eris["vvvv"] = contract("vvvv")
         # Only permutation symmetry allowed by cc.RCCSD is in (vv|vv):
-        eris["vvvv"] = contract("vvvv", symmetry=4)
+        # THIS IS BUGGED:
+        #eris["vvvv"] = contract("vvvv", symmetry=4)
+        eris["vvvv"] = contract("vvvv")
         eris["ovvv"] = contract("ovvv")
         eris["oovv"] = contract("oovv")
         del j3c["vv"]
