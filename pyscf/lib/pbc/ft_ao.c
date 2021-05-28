@@ -695,10 +695,10 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         int i, j, ij;
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        double *env_loc = malloc(sizeof(double)*nenv);
+        double *env_loc = malloc(sizeof(double)*nenv+400);
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + IMGBLK;
-        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
+        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
@@ -748,10 +748,10 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         int i, j, ij;
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        double *env_loc = malloc(sizeof(double)*nenv);
+        double *env_loc = malloc(sizeof(double)*nenv+400);
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + bvk_nimgs;
-        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp);
+        double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
