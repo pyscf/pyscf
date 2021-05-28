@@ -5,7 +5,9 @@ Email:  max.nusspickel@gmail.com
 
 import os.path
 import logging
+import subprocess
 
+import pyscf
 from .logg import init_logging
 from . import cmdargs
 
@@ -22,6 +24,13 @@ log.info("+--------------------+")
 log.info("  Author: Max Nusspickel")
 log.info("  Email:  max.nusspickel@gmail.com")
 log.info("")
+
+# Figure out git commit hash
+pyscf_dir = os.path.dirname(os.path.dirname(pyscf.__file__))
+git_dir = os.path.join(pyscf_dir, '.git')
+cmd = ['git', '--git-dir=%s' % git_dir, 'rev-parse', '--short', 'HEAD']
+githash = subprocess.check_output(cmd, universal_newlines=True)
+log.info("  Current git hash: %s", githash)
 
 # Required modules
 log.debug("Required modules:")
