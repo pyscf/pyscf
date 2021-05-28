@@ -12,8 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Author: Peter Pinski, HQS Quantum Simulations
 
 '''
 native implementation of DF-MP2/RI-MP2 with an RHF reference
@@ -130,8 +128,11 @@ class DFRMP2(lib.StreamObject):
             self.calculate_integrals_()
 
         logger = lib.logger.new_logger(self)
+        logger.info('')
+        logger.info('Calculating DF-MP2 energy')
         self.e_corr = emp2_rhf(self._intsfile, self.mo_energy, self.frozen_mask, \
             logger, ps=self.ps, pt=self.pt)
+        logger.note('DF-MP2 correlation energy: {0:.14f}'.format(self.e_corr))
         return self.e_corr
 
     def make_rdm1(self, relaxed=False, ao_repr=False):
@@ -149,7 +150,14 @@ class DFRMP2(lib.StreamObject):
         Returns:
             the 1-RDM
         '''
-        rdm1_mo = make_rdm1(self, relaxed)
+        logger = lib.logger.new_logger(self)
+        if relaxed:
+            logger.info('')
+            logger.info('DF-MP2 relaxed density calculation')
+        else:
+            logger.info('')
+            logger.info('DF-MP2 unrelaxed density calculation')
+        rdm1_mo = make_rdm1(self, relaxed, logger)
         if ao_repr:
             rdm1_ao = lib.einsum('xp,pq,yq->xy', self.mo_coeff, rdm1_mo, self.mo_coeff)
             return rdm1_ao
@@ -199,7 +207,10 @@ class DFRMP2(lib.StreamObject):
         Co = self.mo_coeff[:, self.occ_mask]
         Cv = self.mo_coeff[:, self.nocc:]
         logger = lib.logger.new_logger(self)
+        logger.info('')
+        logger.info('Calculating integrals')
         self._intsfile = ints3c_cholesky(self.mol, self.auxmol, Co, Cv, self.max_memory, logger)
+        logger.info('Stored in file: {0:s}'.format(self._intsfile.filename))
 
     def delete(self):
         '''
@@ -281,19 +292,18 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
     nmo2 = mo_coeff2.shape[1]
     nauxfcns = auxmol.nao
 
-    logger.info('')
-    logger.info('*** DF integral transformation')
-    logger.info('    MO dimensions: {0:d} x {1:d}'.format(nmo1, nmo2))
-    logger.info('    Aux functions: {0:d}'.format(nauxfcns))
+    logger.debug('    DF integral transformation')
+    logger.debug('    MO dimensions: {0:d} x {1:d}'.format(nmo1, nmo2))
+    logger.debug('    Aux functions: {0:d}'.format(nauxfcns))
 
     intsfile_cho = lib.H5TmpFile(libver='latest')
     with lib.H5TmpFile(libver='latest') as intsfile_tmp:
 
-        logger.info('  * Calculating three center integrals in MO basis.')
-        logger.info('    Temporary file: {0:s}'.format(intsfile_tmp.filename))
+        logger.debug('    Calculating three center integrals in MO basis.')
+        logger.debug('    Temporary file: {0:s}'.format(intsfile_tmp.filename))
 
         intor = mol._add_suffix('int3c2e')
-        logger.debug('    intor = {0:s}'.format(intor))
+        logger.debug2('    intor = {0:s}'.format(intor))
 
         # Loop over shells of auxiliary functions.
         # AO integrals are calculated in memory and directly transformed to MO basis.
@@ -314,8 +324,8 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
                 ints_3c[aux_ctr, :, :] = moints
                 aux_ctr += 1
 
-        logger.info('  * Calculating fitted three center integrals.')
-        logger.info('    Storage file: {0:s}'.format(intsfile_cho.filename))
+        logger.debug('    Calculating fitted three center integrals.')
+        logger.debug('    Storage file: {0:s}'.format(intsfile_cho.filename))
 
         # Typically we need the matrix for a specific occupied MO i in MP2.
         # => i is the leading index for optimal I/O.
@@ -345,7 +355,7 @@ def ints3c_cholesky(mol, auxmol, mo_coeff1, mo_coeff2, max_memory, logger):
             for i in range(istart, iend):
                 ints_cholesky[i, :, :] = scipy.linalg.solve_triangular(L, intsbuf[:, i-istart, :], lower=True)
 
-    logger.info('*** DF transformation finished')
+    logger.debug('    DF transformation finished')
     return intsfile_cho
 
 
@@ -369,12 +379,11 @@ def emp2_rhf(intsfile, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
     nfrozen = np.count_nonzero(frozen_mask)
     nocc = nocc_act + nfrozen
 
-    logger.info('')
-    logger.info('*** DF-MP2 energy')
-    logger.info('    Occupied orbitals: {0:d}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
-    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
-    logger.info('    Integrals from file: {0:s}'.format(intsfile.filename))
+    logger.debug('    RHF-DF-MP2 energy routine')
+    logger.debug('    Occupied orbitals: {0:d}'.format(nocc))
+    logger.debug('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.debug('    Frozen orbitals:   {0:d}'.format(nfrozen))
+    logger.debug('    Integrals from file: {0:s}'.format(intsfile.filename))
 
     mo_energy_masked = mo_energy[~frozen_mask]
 
@@ -402,25 +411,27 @@ def emp2_rhf(intsfile, mo_energy, frozen_mask, logger, ps=1.0, pt=1.0):
         Tab = Kab / DE
         energy += ps * lib.einsum('ab,ab', Tab, Kab)
 
-    logger.note('*** DF-MP2 correlation energy: {0:.14f} Eh'.format(energy))
+    logger.debug('    DF-MP2 correlation energy: {0:.14f}'.format(energy))
     return energy
 
 
-def make_rdm1(mp2, relaxed):
+def make_rdm1(mp2, relaxed, logger=None):
     '''
     Calculates the unrelaxed or relaxed MP2 density matrix.
 
     Args:
         mp2 : DFRMP2 instance
         relaxed : relaxed density if True, unrelaxed density if False
-    
+        logger : Logger instance
+
     Returns:
         the 1-RDM in MO basis
     '''
     if not mp2.has_ints:
         mp2.calculate_integrals_()
 
-    logger = lib.logger.new_logger(mp2)
+    if logger is None:
+        logger = lib.logger.new_logger(mp2)
     rdm1, GammaFile = rmp2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
         mp2.max_memory, logger, calcGamma=relaxed, auxmol=mp2.auxmol, ps=mp2.ps, pt=mp2.pt)
 
@@ -481,12 +492,11 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
     if nocc + nvirt != nmo:
         raise ValueError('numbers of frozen, occupied and virtual orbitals inconsistent')
 
-    logger.info('')
-    logger.info('*** Density matrix contributions for DF-MP2')
-    logger.info('    Occupied orbitals: {0:d}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
-    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
-    logger.info('    Three center integrals from file: {0:s}'.format(intsfile.filename))
+    logger.debug('    Density matrix contributions for DF-RMP2')
+    logger.debug('    Occupied orbitals: {0:d}'.format(nocc))
+    logger.debug('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.debug('    Frozen orbitals:   {0:d}'.format(nfrozen))
+    logger.debug('    Three center integrals from file: {0:s}'.format(intsfile.filename))
 
     # Precompute Eab[a, b] = mo_energy[a] + mo_energy[b] for division with numpy.
     Eab = np.zeros((nvirt, nvirt))
@@ -501,7 +511,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
         # create temporary file to store the two-body density Gamma
         GammaFile = lib.H5TmpFile(libver='latest')
         Gamma = GammaFile.create_dataset('Gamma', (nocc_act, naux, nvirt), dtype='f8')
-        logger.info('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
+        logger.debug('    Storing 3c2e density in file: {0:s}'.format(GammaFile.filename))
         # We will need LT = L^T, where L L^T = V
         LT = scipy.linalg.cholesky(auxmol.intor('int2c2e'), lower=False)
 
@@ -510,7 +520,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
     mo_energy_masked = mo_energy[~frozen_mask]
 
     with lib.H5TmpFile(libver='latest') as tfile:
-        logger.info('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
+        logger.debug('    Storing amplitudes in temporary file: {0:s}'.format(tfile.filename))
 
         # For each occupied orbital i, all amplitudes are calculated once and stored on disk.
         # The occupied 1-RDM contribution is calculated in a batched algorithm.
@@ -538,7 +548,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
             batchsize = min(nvirt, batchsize)
             if batchsize < 1:
                 raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-            logger.debug('      Pij formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+            logger.debug2('      Pij formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
                 format(i, batchsize, nvirt))
             for astart in range(0, nvirt, batchsize):
                 aend = min(astart+batchsize, nvirt)
@@ -558,7 +568,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
                 batchsize = min(nocc_act, batchsize)
                 if batchsize < 1:
                     raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                logger.debug('      Gamma formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
+                logger.debug2('      Gamma formation - MO {0:d}, batch size {1:d} (of {2:d})'. \
                     format(i, batchsize, nocc_act))
                 for jstart in range(0, nocc_act, batchsize):
                     jend = min(jstart+batchsize, nocc_act)
@@ -575,7 +585,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
     P[idx_reordered, :] = P.copy()
     P[:, idx_reordered] = P.copy()
 
-    logger.info('*** Density matrix contributions calculation finished')
+    logger.debug('    Density matrix contributions calculation finished')
     return P, GammaFile
 
 
@@ -640,16 +650,15 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
     occ_mask[:nocc] = True
     occ_mask[frozen_mask] = False
 
-    logger.info('')
-    logger.info('*** Contracting the two-body density with 3c2e integrals in memory')
-    logger.info('    Occupied orbitals: {0:d}'.format(nocc))
-    logger.info('    Virtual orbitals:  {0:d}'.format(nvirt))
-    logger.info('    Frozen orbitals:   {0:d}'.format(nfrozen))
+    logger.debug('    Contracting the two-body density with 3c2e integrals in memory')
+    logger.debug('    Occupied orbitals: {0:d}'.format(nocc))
+    logger.debug('    Virtual orbitals:  {0:d}'.format(nvirt))
+    logger.debug('    Frozen orbitals:   {0:d}'.format(nfrozen))
 
     atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env,\
         auxmol._atm, auxmol._bas, auxmol._env)
     intor = mol._add_suffix('int3c2e')
-    logger.debug('    intor = {0:s}'.format(intor))
+    logger.debug2('    intor = {0:s}'.format(intor))
 
     Lov_act = np.zeros((nocc_act, nvirt))
     Lof_act = np.zeros((nocc_act, nfrozen))
@@ -657,14 +666,14 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
     # process as many auxiliary functions in a go as possible: may reduce I/O cost
     size_per_aux = (nocc_act * nvirt + mol.nao ** 2) * 8
     naux_max = int((max_memory - lib.current_memory()[0]) * 1e6 / size_per_aux)
-    logger.debug('    Max. auxiliary functions per batch: {0:d}'.format(naux_max))
+    logger.debug2('    Max. auxiliary functions per batch: {0:d}'.format(naux_max))
     try:
 
         # loop over batches of auxiliary function shells
         for auxsh_range, aux_range in shellBatchGenerator(auxmol, naux_max):
             auxsh_start, auxsh_stop = auxsh_range
             aux_start, aux_stop = aux_range
-            logger.debug('      aux from {0:d} to {1:d}'.format(aux_start, aux_stop))
+            logger.debug2('      aux from {0:d} to {1:d}'.format(aux_start, aux_stop))
             # needs to follow the convention (AO, AO | Aux)
             shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas+auxsh_start, mol.nbas+auxsh_stop)
             # AO integrals
@@ -696,7 +705,7 @@ def orbgrad_from_Gamma(mol, auxmol, Gamma, mo_coeff, frozen_mask, max_memory, lo
     Lfo = np.zeros((nfrozen, nocc))
     Lfo[:, occ_mask[:nocc]] = Lof_act.T
 
-    logger.info('*** Finished integral contraction.')
+    logger.debug('    Finished integral contraction.')
 
     return Lvo, Lfo
 
@@ -739,10 +748,9 @@ def solve_cphf_rhf(mf, Lvo, max_cycle, tol, logger):
         tol : convergence tolerance for the CPHF solver
         logger : Logger object
     '''
-    logger.info('')
-    logger.info('*** Solving the CPHF response equations')
-    logger.info('    Max. iterations: {0:d}'.format(max_cycle))
-    logger.info('    Convergence tolerance: {0:.3g}'.format(tol))
+    logger.info('Solving the CPHF response equations')
+    logger.info('Max. iterations: {0:d}'.format(max_cycle))
+    logger.info('Convergence tolerance: {0:.3g}'.format(tol))
 
     # Currently we need to make the CPHF solver somewhat more talkative to see anything at all.
     cphf_verbose = logger.verbose
@@ -754,7 +762,7 @@ def solve_cphf_rhf(mf, Lvo, max_cycle, tol, logger):
 
     zvo = cphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lvo, \
         max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
-    logger.info('*** CPHF iterations finished')
+    logger.info('CPHF iterations finished')
     return zvo
 
 
