@@ -97,6 +97,32 @@ def make_perovskite(a, atoms=["Sr", "Ti", "O"], basis="gth-dzvp-molopt-sr", supe
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
+def test_fci_solver(a=2.0, kmesh=[2,2,2], bno_threshold=1e-4):
+
+    t0 = timer()
+    cell = make_cubic(a, "He")
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    #kmf.with_df.linear_dep_threshold = 1e-7
+    #kmf.with_df.linear_dep_method = 'canonical-orth'
+    #kmf.with_df.linear_dep_always = True
+    kmf.kernel()
+    t_hf = timer()-t0
+
+    t0 = timer()
+    ecc = pyscf.embcc.EmbCC(kmf, solver='FCI', bno_threshold=bno_threshold)
+    ecc.make_atom_cluster(0)
+    ecc.kernel()
+    t_ecc = timer()-t0
+    print("E(Emb-FCI)= %+16.8f Ha" % ecc.e_tot)
+
+    print("T(HF)= %.2f s  T(Emb-FCI)= %.2f s" % (t_hf, t_ecc))
+
+    kcc = pyscf.pbc.cc.KCCSD(kmf)
+    kcc.kernel()
+    print("E(k-CCSD)=   %+16.8f Ha" % kcc.e_tot)
+
 
 def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
 
@@ -368,7 +394,8 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    test_helium()
+    #test_helium()
+    test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_diamond_bno_threshold(bno_threshold=-1, kmesh=[2,2,2])

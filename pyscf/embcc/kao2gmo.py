@@ -193,7 +193,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
                 rn = pyscf.lib.pack_tril(rn)
             c = einsum('Lij,Lk->ijk', l.conj(), r)
             if ln is not None:
-                c -= einsum('Lij,Lk->ijk', ln.conj(), rn)
+                c -= einsum('ij,k->ijk', ln.conj(), rn)
         # No permutation symmetry
         else:
             c = np.tensordot(l.conj(), r, axes=(0, 0))
@@ -207,8 +207,8 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
     # (L|vv) dependend
     t0 = timer()
     if not only_ovov:
+        # These symmetries are used in ccsd.CCSD but not rccsd.RCCSD!
         if symmetry:
-            # Do not use these symmetries for rccsd.rccsd (even vvvv)
             eris["vvvv"] = contract("vvvv", symmetry=4)
             eris["ovvv"] = contract("ovvv", symmetry=(None, 2))
         else:

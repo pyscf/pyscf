@@ -10,9 +10,19 @@ from .util import *
 
 log = logging.getLogger(__name__)
 
-class ClusterSolver:
 
-    def __init__(self, cluster, solver, mo_coeff, mo_occ, nocc_frozen, nvir_frozen, eris=None, options=None):
+def get_solver_class(solver):
+    if solver.upper() in ('CCSD', 'CCSD(T)'):
+        return CCSDSolver
+    if solver.upper() == 'FCI':
+        return FCISolver
+
+    raise NotImplementedError("Unknown solver %s" % solver)
+
+class ClusterSolver:
+    """Base class for cluster solver"""
+
+    def __init__(self, cluster, mo_coeff, mo_occ, nocc_frozen, nvir_frozen, eris=None, options=None):
         """
 
         Arguments
@@ -24,7 +34,6 @@ class ClusterSolver:
         """
         # Input
         self.cluster = cluster
-        self.solver = solver
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.nocc_frozen = nocc_frozen
@@ -53,6 +62,18 @@ class ClusterSolver:
     def mf(self):
         return self.cluster.mf
 
+    @property
+    def nmo(self):
+        return self.mo_coeff.shape[-1]
+
+    @property
+    def nactive(self):
+        return self.nmo - self.nfrozen
+
+    @property
+    def nfrozen(self):
+        return self.nocc_frozen + self.nvir_frozen
+
     def get_active_slice(self):
         slc = np.s_[self.nocc_frozen:-self.nvir_frozen]
         return slc
@@ -62,78 +83,83 @@ class ClusterSolver:
         idx = list(range(self.nocc_frozen)) + list(range(nmo-self.nvir_frozen, nmo))
         return idx
 
+    #def kernel(self, init_guess=None, options=None):
+
+    #    options = options or self.options
+
+    #    if self.solver is None:
+    #        pass
+    #    elif self.solver == "MP2":
+    #        self.run_mp2()
+    #    elif self.solver in ("CCSD", "CCSD(T)"):
+    #        self.run_ccsd(init_guess=init_guess, options=options)
+    #    elif self.solver == "CISD":
+    #        # Currently not maintained
+    #        self.run_cisd()
+    #    elif self.solver in ("FCI-spin0", "FCI-spin1"):
+    #        raise NotImplementedError()
+    #        self.run_fci()
+    #    else:
+    #        raise ValueError("Unknown solver: %s" % self.solver)
+
+    #    if self.solver in ("CCSD", "CCSD(T)"):
+    #        self.print_t_diagnostic()
+
+    #    log.debug("E(full corr)= %16.8g Ha", self.e_corr)
+
+    #def run_mp2(self):
+    #    if self.base.has_pbc:
+    #        import pyscf.pbc.mp
+    #        cls = pyscf.pbc.mp.MP2
+    #    else:
+    #        import pyscf.mp
+    #        cls = pyscf.mp.MP2
+    #    mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
+    #    self._solver = mp2
+
+    #    if self._eris is None:
+    #        t0 = timer()
+    #        self._eris = self.base.get_eris(mp2)
+    #        log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
+
+    #    self.e_corr, self.c2 = mp2.kernel(eris=self._eris, hf_reference=True)
+    #    self.converged = True
+
+    #def run_cisd(self):
+    #    # NOT MAINTAINED!!!
+    #    import pyscf.ci
+    #    import pyscf.pbc.ci
+
+    #    cls = pyscf.pbc.ci.CISD if self.base.has_pbc else pyscf.ci.CISD
+    #    ci = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
+    #    self._solver = ci
+
+    #    # Integral transformation
+    #    t0 = timer()
+    #    eris = ci.ao2mo()
+    #    self._eris = eris
+    #    log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
+
+    #    t0 = timer()
+    #    log.info("Running CISD...")
+    #    ci.kernel(eris=eris)
+    #    log.info("CISD done. converged: %r", ci.converged)
+    #    log.timing("Time for CISD [s]: %.3f (%s)", time_string(timer()-t0))
+
+    #    self.converged = ci.converged
+    #    self.e_corr = ci.e_corr
+
+    #    # Renormalize
+    #    c0, c1, c2 = pyscf.ci.cisdvec_to_amplitudes(ci.ci)
+    #    self.c1 = c1/c0
+    #    self.c2 = c2/c0
+
+class CCSDSolver(ClusterSolver):
+
     def kernel(self, init_guess=None, options=None):
 
         options = options or self.options
 
-        if self.solver is None:
-            pass
-        elif self.solver == "MP2":
-            self.run_mp2()
-        elif self.solver in ("CCSD", "CCSD(T)"):
-            self.run_ccsd(init_guess=init_guess, options=options)
-        elif self.solver == "CISD":
-            # Currently not maintained
-            self.run_cisd()
-        elif self.solver in ("FCI-spin0", "FCI-spin1"):
-            raise NotImplementedError()
-            self.run_fci()
-        else:
-            raise ValueError("Unknown solver: %s" % self.solver)
-
-        if self.solver in ("CCSD", "CCSD(T)"):
-            self.print_t_diagnostic()
-
-        log.debug("E(full corr)= %16.8g Ha", self.e_corr)
-
-    def run_mp2(self):
-        if self.base.has_pbc:
-            import pyscf.pbc.mp
-            cls = pyscf.pbc.mp.MP2
-        else:
-            import pyscf.mp
-            cls = pyscf.mp.MP2
-        mp2 = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
-        self._solver = mp2
-
-        if self._eris is None:
-            t0 = timer()
-            self._eris = self.base.get_eris(mp2)
-            log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
-
-        self.e_corr, self.c2 = mp2.kernel(eris=self._eris, hf_reference=True)
-        self.converged = True
-
-    def run_cisd(self):
-        # NOT MAINTAINED!!!
-        import pyscf.ci
-        import pyscf.pbc.ci
-
-        cls = pyscf.pbc.ci.CISD if self.base.has_pbc else pyscf.ci.CISD
-        ci = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
-        self._solver = ci
-
-        # Integral transformation
-        t0 = timer()
-        eris = ci.ao2mo()
-        self._eris = eris
-        log.timing("Time for AO->MO:  %s", time_string(timer()-t0))
-
-        t0 = timer()
-        log.info("Running CISD...")
-        ci.kernel(eris=eris)
-        log.info("CISD done. converged: %r", ci.converged)
-        log.timing("Time for CISD [s]: %.3f (%s)", time_string(timer()-t0))
-
-        self.converged = ci.converged
-        self.e_corr = ci.e_corr
-
-        # Renormalize
-        c0, c1, c2 = pyscf.ci.cisdvec_to_amplitudes(ci.ci)
-        self.c1 = c1/c0
-        self.c2 = c2/c0
-
-    def run_ccsd(self, init_guess=None, options=None):
         # Do not use pbc.ccsd for Gamma point CCSD -> always use molecular code
         #if self.base.has_pbc:
         #    #import pyscf.pbc.cc
@@ -170,6 +196,7 @@ class ClusterSolver:
             log.info("Running CCSD...")
             cc.kernel(eris=self._eris)
         log.info("CCSD done. converged: %r", cc.converged)
+        log.debug("E(full corr)= % 16.8f Ha", cc.e_corr)
         log.timing("Time for CCSD:  %s", time_string(timer()-t0))
 
         self.converged = cc.converged
@@ -207,6 +234,71 @@ class ClusterSolver:
             self.ip_energy, self.ip_coeff = eom_ccsd("IP")
         if self.cluster.opts.eom_ccsd in (True, "EA"):
             self.ea_energy, self.ea_coeff = eom_ccsd("EA")
+
+        self.print_t_diagnostic()
+
+
+    def print_t_diagnostic(self):
+        log.info("Diagnostic")
+        log.info("**********")
+        try:
+            dg_t1 = self._solver.get_t1_diagnostic()
+            dg_d1 = self._solver.get_d1_diagnostic()
+            dg_d2 = self._solver.get_d2_diagnostic()
+            log.info("  (T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
+            log.info("  (good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
+            dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
+            dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
+            dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
+            fmtstr = "  * %2s= %6g (%s)"
+            log.info(fmtstr, "T1", dg_t1, dg_t1_msg)
+            log.info(fmtstr, "D1", dg_d1, dg_d1_msg)
+            log.info(fmtstr, "D2", dg_d2, dg_d2_msg)
+            if dg_t1 > 0.02 or dg_d1 > 0.05 or dg_d2 > 0.18:
+                log.warning("  some diagnostic(s) indicate CCSD may not be adequate.")
+        except Exception as e:
+            log.error("Exception in T-diagnostic: %s", e)
+
+
+class FCISolver(ClusterSolver):
+    """Not tested"""
+
+
+    def kernel(self, init_guess=None, options=None):
+        import pyscf.mcscf
+        import pyscf.ci
+
+        options = options or self.options
+
+        nelectron = sum(self.mo_occ[self.get_active_slice()])
+        casci = pyscf.mcscf.CASCI(self.mf, self.nactive, nelectron)
+        casci.canonicalization = False
+
+        e_tot, e_cas, wf, *_ = casci.kernel(mo_coeff=self.mo_coeff)
+        log.debug("FCI done. converged: %r", casci.converged)
+
+        cisdvec = pyscf.ci.cisd.from_fcivec(wf, self.nactive, nelectron)
+        nocc_active = nelectron // 2
+        c0, c1, c2 = pyscf.ci.cisd.cisdvec_to_amplitudes(cisdvec, self.nactive, nocc_active)
+        # Intermediate normalization
+        log.debug("Weight of reference determinant= %.8e", c0)
+        c1 /= c0
+        c2 /= c0
+        self.c1 = c1
+        self.c2 = c2
+
+        self.converged = casci.converged
+        self.e_corr = (e_tot - self.mf.e_tot)
+        log.debug("E(full corr)= % 16.8f Ha", self.e_corr)
+
+        ## Create fake CISD object
+        #cisd = pyscf.ci.CISD(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
+
+        ## Get eris somewhere else?
+        #t0 = timer()
+        #eris = cisd.ao2mo()
+        #log.debug("Time for integral transformation: %s", time_string(timer()-t0))
+
 
     #def run_fci(self):
     #    nocc_active = len(self.active_occ)
@@ -317,23 +409,4 @@ class ClusterSolver:
 
 
 
-    def print_t_diagnostic(self):
-        log.info("Diagnostic")
-        log.info("**********")
-        try:
-            dg_t1 = self._solver.get_t1_diagnostic()
-            dg_d1 = self._solver.get_d1_diagnostic()
-            dg_d2 = self._solver.get_d2_diagnostic()
-            log.info("  (T1<0.02: good / D1<0.02: good, D1<0.05: fair / D2<0.15: good, D2<0.18: fair)")
-            log.info("  (good: MP2~CCSD~CCSD(T) / fair: use MP2/CCSD with caution)")
-            dg_t1_msg = "good" if dg_t1 <= 0.02 else "inadequate!"
-            dg_d1_msg = "good" if dg_d1 <= 0.02 else ("fair" if dg_d1 <= 0.05 else "inadequate!")
-            dg_d2_msg = "good" if dg_d2 <= 0.15 else ("fair" if dg_d2 <= 0.18 else "inadequate!")
-            fmtstr = "  * %2s= %6g (%s)"
-            log.info(fmtstr, "T1", dg_t1, dg_t1_msg)
-            log.info(fmtstr, "D1", dg_d1, dg_d1_msg)
-            log.info(fmtstr, "D2", dg_d2, dg_d2_msg)
-            if dg_t1 > 0.02 or dg_d1 > 0.05 or dg_d2 > 0.18:
-                log.warning("  some diagnostic(s) indicate CCSD may not be adequate.")
-        except Exception as e:
-            log.error("Exception in T-diagnostic: %s", e)
+

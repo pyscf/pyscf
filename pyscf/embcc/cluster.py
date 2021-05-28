@@ -18,7 +18,7 @@ import pyscf.pbc
 from pyscf.pbc.tools import cubegen
 
 # Local modules
-from .solver import ClusterSolver
+from .solver import get_solver_class
 from . import util
 from .util import *
 from .dmet_bath import make_dmet_bath, project_ref_orbitals
@@ -586,12 +586,17 @@ class Cluster:
             log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
             log.info("*******************************")
             log.changeIndentLevel(1)
-            try:
+
+            if True:
                 e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
                 log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
-            except Exception as e:
-                log.error("Exception for BNO threshold= %.1e:\n%r", bno_thr, e)
-                e_corr = n_active = 0
+            else:
+                try:
+                    e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
+                    log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
+                except Exception as e:
+                    log.error("Exception for BNO threshold= %.1e:\n%r", bno_thr, e)
+                    e_corr = n_active = 0
 
             self.e_corrs[icalc] = e_corr
             self.n_active[icalc] = n_active
@@ -687,10 +692,10 @@ class Cluster:
 
         # Create solver object
         t0 = timer()
-        csolver = ClusterSolver(self, solver, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen,
+        csolver = get_solver_class(solver)(self, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen,
                 eris=eris, options=self.opts.solver_options)
         csolver.kernel(init_guess=init_guess)
-        log.timing("Time for %s solver:  %s", csolver.solver, time_string(timer()-t0))
+        log.timing("Time for %s solver:  %s", solver, time_string(timer()-t0))
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         # ERIs and initial guess for next calculations

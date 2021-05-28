@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 class EmbCC(QEmbeddingMethod):
 
     VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
-    VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", "FCI-spin0", "FCI-spin1"]
+    VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", 'FCI', "FCI-spin0", "FCI-spin1"]
 
     # These optionals are automatically transferred to any created cluster object
     default_options = [
