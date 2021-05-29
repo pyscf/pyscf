@@ -161,14 +161,19 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
         j3c["vv"] = j3c["vv"].reshape(nk*naux, nvir, nvir)
 
         # Check symmetry errors
-        if True:
+        if False:
             err_oo = np.linalg.norm(j3c['oo'] - j3c['oo'].transpose(0, 2, 1).conj())
             err_vv = np.linalg.norm(j3c['vv'] - j3c['vv'].transpose(0, 2, 1).conj())
             log.debug("Symmetry error of (L|ij) vs (L|ji)= %.2e", err_oo)
             log.debug("Symmetry error of (L|ab) vs (L|ba)= %.2e", err_vv)
             # Symmetrize
-            #j3c['oo'] = 0.5*(j3c['oo'] + j3c['oo'].transpose(0,2,1).conj())
-            #j3c['vv'] = 0.5*(j3c['vv'] + j3c['vv'].transpose(0,2,1).conj())
+            j3c['oo'] = 0.5*(j3c['oo'] + j3c['oo'].transpose(0,2,1).conj())
+            j3c['vv'] = 0.5*(j3c['vv'] + j3c['vv'].transpose(0,2,1).conj())
+
+            err_oo = np.linalg.norm(j3c['oo'] - j3c['oo'].transpose(0, 2, 1).conj())
+            err_vv = np.linalg.norm(j3c['vv'] - j3c['vv'].transpose(0, 2, 1).conj())
+            log.debug("Symmetry error of (L|ij) vs (L|ji)= %.2e", err_oo)
+            log.debug("Symmetry error of (L|ab) vs (L|ba)= %.2e", err_vv)
 
     for key, val in j3c.items():
         log.debugv("Memory for (L|%s)= %s", key, memory_string(val.nbytes))
@@ -177,19 +182,31 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
     norm_ov = np.linalg.norm(j3c['ov'], axis=(1,2))
     log.debug("Number of ov elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
             len(norm_ov), np.count_nonzero(norm_ov < 1e-14), np.count_nonzero(norm_ov < 1e-12),
-            np.count_nonzero(norm_ov < 1e-10), np.count_nonzero(norm_ov < 1e-8),
-            np.count_nonzero(norm_ov < 1e-6), np.count_nonzero(norm_ov < 1e-4))
+            np.count_nonzero(norm_ov < 1e-10), np.count_nonzero(norm_ov < 1e-8))
     if not only_ovov:
         norm_oo = np.linalg.norm(j3c['oo'], axis=(1,2))
         log.debug("Number of oo elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
                 len(norm_oo), np.count_nonzero(norm_oo < 1e-14), np.count_nonzero(norm_oo < 1e-12),
-                np.count_nonzero(norm_oo < 1e-10), np.count_nonzero(norm_oo < 1e-8),
-                np.count_nonzero(norm_oo < 1e-6), np.count_nonzero(norm_oo < 1e-4))
+                np.count_nonzero(norm_oo < 1e-10), np.count_nonzero(norm_oo < 1e-8))
         norm_vv = np.linalg.norm(j3c['vv'], axis=(1,2))
         log.debug("Number of vv elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
                 len(norm_vv), np.count_nonzero(norm_vv < 1e-14), np.count_nonzero(norm_vv < 1e-12),
-                np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8),
-                np.count_nonzero(norm_vv < 1e-6), np.count_nonzero(norm_vv < 1e-4))
+                np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8))
+
+    norm_ov = np.amax(abs(j3c['ov']), axis=(1,2))
+    log.debug("Number of ov elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+            len(norm_ov), np.count_nonzero(norm_ov < 1e-14), np.count_nonzero(norm_ov < 1e-12),
+            np.count_nonzero(norm_ov < 1e-10), np.count_nonzero(norm_ov < 1e-8))
+    if not only_ovov:
+        norm_oo = np.amax(abs(j3c['oo']), axis=(1,2))
+        log.debug("Number of oo elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+                len(norm_oo), np.count_nonzero(norm_oo < 1e-14), np.count_nonzero(norm_oo < 1e-12),
+                np.count_nonzero(norm_oo < 1e-10), np.count_nonzero(norm_oo < 1e-8))
+        norm_vv = np.amax(abs(j3c['vv']), axis=(1,2))
+        log.debug("Number of vv elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+                len(norm_vv), np.count_nonzero(norm_vv < 1e-14), np.count_nonzero(norm_vv < 1e-12),
+                np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8))
+
 
     def prune_aux_basis(key):
         norm = np.linalg.norm(j3c[key], axis=(1,2))
@@ -204,71 +221,29 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
             prune_aux_basis('oo')
             prune_aux_basis('vv')
 
-    def contract(kind, symmetry=None):
-        """Contract (ij|L)(L|kl) -> (ij|kl)"""
-        t0 = timer()
-        left, right = kind[:2], kind[2:]
-        # We do not store "vo" only "ov":
-        right_t = "ov" if right == "vo" else right
-        l, r = j3c[left], j3c[right_t]
-        # For 2D systems we have negative parts
-        if left + "-" in j3c:
-            ln, rn = j3c[left + "-"], j3c[right_t + "-"]
-        else:
-            ln = rn = None
-        if right == "vo":
-            r = r.transpose(0, 2, 1)
-            if rn is not None:
-                rn = rn.T
-
-        # Four-fold permutation symmetry
-        if symmetry == 4:
-            l = pyscf.lib.pack_tril(l)
-            r = pyscf.lib.pack_tril(r)
-            if ln is not None:
-                ln = pyscf.lib.pack_tril(ln)
-                rn = pyscf.lib.pack_tril(rn)
-            c = np.dot(l.T.conj(), r)
-            if ln is not None:
-                c -= np.dot(ln.T.conj(), rn)
-        # Permutation symmetry only on right side
-        elif symmetry == (None, 2):
-            r = pyscf.lib.pack_tril(r)
-            if ln is not None:
-                rn = pyscf.lib.pack_tril(rn)
-            c = einsum('Lij,Lk->ijk', l.conj(), r)
-            if ln is not None:
-                c -= einsum('ij,k->ijk', ln.conj(), rn)
-        # No permutation symmetry
-        else:
-            c = np.tensordot(l.conj(), r, axes=(0, 0))
-            if ln is not None:
-                c -= einsum("ab,cd->abcd", ln.conj(), rn)
-
-        log.timingv("Time to contract (%2s|%2s): %s", left, right, time_string(timer()-t0))
-        return c
-
+    # Contract (ij|L)(L|kl)->(ij|kl)
     eris = {}
-    # (L|vv) dependend
     t0 = timer()
     if not only_ovov:
+    # (L|vv) dependend
         # These symmetries are used in ccsd.CCSD but not rccsd.RCCSD!
         if symmetry:
-            eris["vvvv"] = contract("vvvv", symmetry=4)
-            eris["ovvv"] = contract("ovvv", symmetry=(None, 2))
+            eris["vvvv"] = contract_j3c(j3c, "vvvv", symmetry=4)
+            eris["ovvv"] = contract_j3c(j3c, "ovvv", symmetry=2)
         else:
-            eris["vvvv"] = contract("vvvv")
-            eris["ovvv"] = contract("ovvv")
-        eris["oovv"] = contract("oovv")
+            eris["vvvv"] = contract_j3c(j3c, "vvvv")
+            eris["ovvv"] = contract_j3c(j3c, "ovvv")
+
+        eris["oovv"] = contract_j3c(j3c, "oovv")
         del j3c["vv"]
     # (L|ov) dependend
-    eris["ovov"] = contract("ovov")
+    eris["ovov"] = contract_j3c(j3c, "ovov")
     if not only_ovov:
-        eris["ovvo"] = contract("ovvo")
-        eris["ovoo"] = contract("ovoo")
+        eris["ovvo"] = contract_j3c(j3c, "ovvo")
+        eris["ovoo"] = contract_j3c(j3c, "ovoo")
         del j3c["ov"]
     # (L|oo) dependend
-        eris["oooo"] = contract("oooo")
+        eris["oooo"] = contract_j3c(j3c, "oooo")
         del j3c["oo"]
     t_contract = (timer()-t0)
 
@@ -287,9 +262,53 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
     for key, val in eris.items():
         log.debugv("Memory for (%s|%s)= %s", key[:2], key[2:], memory_string(val.nbytes))
 
-    log.timing("Timings for kAO->GMO [s]: transform= %s  contract= %s", time_string(t_trafo), time_string(t_contract))
+    log.timing("Timings for kAO->GMO:  transform= %s  contract= %s", time_string(t_trafo), time_string(t_contract))
 
     return eris
+
+
+def contract_j3c(j3c, kind, symmetry=None):
+    """Contract (ij|L)(L|kl) -> (ij|kl)"""
+    t0 = timer()
+    left, right = kind[:2], kind[2:]
+    # We do not store "vo" only "ov":
+    right_t = "ov" if right == "vo" else right
+    l, r = j3c[left], j3c[right_t]
+    # For 2D systems we have negative parts
+    if left + "-" in j3c:
+        ln, rn = j3c[left + "-"], j3c[right_t + "-"]
+    else:
+        ln = rn = None
+    if right == "vo":
+        r = r.transpose(0, 2, 1)
+        if rn is not None:
+            rn = rn.T
+
+    # Four-fold permutation symmetry
+    if symmetry == 4:
+        l = pyscf.lib.pack_tril(l)
+        r = pyscf.lib.pack_tril(r)
+        c = np.dot(l.T.conj(), r)
+        if ln is not None:
+            ln = pyscf.lib.pack_tril(ln)
+            rn = pyscf.lib.pack_tril(rn)
+            c -= np.outer(ln.conj(), rn)
+    # Permutation symmetry only on right side
+    elif symmetry == 2:
+        r = pyscf.lib.pack_tril(r)
+        c = einsum('Lij,Lk->ijk', l.conj(), r)
+        if ln is not None:
+            rn = pyscf.lib.pack_tril(rn)
+            c -= einsum('ij,k->ijk', ln.conj(), rn)
+    # No permutation symmetry
+    else:
+        c = np.tensordot(l.conj(), r, axes=(0, 0))
+        if ln is not None:
+            c -= einsum("ab,cd->abcd", ln.conj(), rn)
+
+    log.timingv("Time to contract (%2s|%2s): %s", left, right, time_string(timer()-t0))
+    return c
+
 
 class ThreeCenterInts:
     """Interface class for DF classes."""

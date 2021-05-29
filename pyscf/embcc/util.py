@@ -29,7 +29,7 @@ def time_string(seconds, show_zeros=False):
 get_time_string = time_string
 
 
-def memory_string(nbytes, fmt=".2f"):
+def memory_string(nbytes, fmt='6.2f'):
     """String representation of nbytes"""
     if isinstance(nbytes, np.ndarray) and nbytes.size > 1:
         nbytes = nbytes.nbytes

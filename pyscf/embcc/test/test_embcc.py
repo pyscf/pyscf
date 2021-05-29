@@ -99,6 +99,29 @@ def make_diamond_cell(a, atoms=['C', 'C'], basis='gth-dzv', supercell=False):
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
+def make_graphene_cell(a, c, atoms=['C', 'C'], basis='gth-dzv', supercell=False):
+    amat = np.asarray([
+            [a, 0, 0],
+            [a/2, a*np.sqrt(3.0)/2, 0],
+            [0, 0, c]])
+    coords_internal = np.asarray([
+        [2.0, 2.0, 3.0],
+        [4.0, 4.0, 3.0]])/6
+    coords = np.dot(coords_internal, amat)
+    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+    cell = pyscf.pbc.gto.Cell()
+    cell.a = amat
+    cell.atom = atom
+    cell.basis = basis
+    cell.pseudo = "gth-pade"
+    cell.verbose = 10
+    cell.dimension = 2
+    cell.build()
+    if supercell:
+        cell = pyscf.pbc.tools.super_cell(cell, supercell)
+    return cell
+
+
 def make_perovskite(a, atoms=["Sr", "Ti", "O"], basis="gth-dzvp-molopt-sr", supercell=False):
     amat = a * np.eye(3)
     coords = np.asarray([
@@ -284,6 +307,25 @@ def test_diamond(a=3.56, basis='gth-dzv', kmesh=[2, 2, 2], bno_threshold=1e-6):
     print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
     print("T(EmbCC)= %.2f s" % (timer()-t0))
 
+def test_graphene(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshold=1e-8):
+
+    ncells = np.product(kmesh)
+
+    # k-point calculation
+    cell = make_graphene_cell(a, c, basis=basis)
+    cell.lindep_threshold = 1e-7
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    kcc.make_atom_cluster(0, symmetry_factor=2)
+    t0 = timer()
+    kcc.kernel()
+    print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
+    print("T(EmbCC)= %.2f s" % (timer()-t0))
+
 
 def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2, 2, 2]):
 
@@ -422,7 +464,8 @@ def run_test():
     #test_dimer(['Li', 'Li'], d=2.0)
     #test_cubic()
     #test_cubic('C', basis='gth-tzvp')
-    test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
+    #test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
+    test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
     #test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
