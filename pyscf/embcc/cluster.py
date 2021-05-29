@@ -559,8 +559,9 @@ class Cluster:
         self.c_no_occ, self.n_no_occ = make_mp2_bno(
                 self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
         log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
-        log.info("Occupied BNO histogram:")
-        helper.plot_histogram(self.n_no_occ)
+        if len(self.n_no_occ) > 0:
+            log.info("Occupied BNO histogram:")
+            helper.plot_histogram(self.n_no_occ)
         log.changeIndentLevel(-1)
 
         log.info("MAKING VIRTUAL BNOs")
@@ -570,8 +571,9 @@ class Cluster:
         self.c_no_vir, self.n_no_vir = make_mp2_bno(
                 self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
         log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
-        log.info("Virtual BNO histogram:")
-        helper.plot_histogram(self.n_no_vir)
+        if len(self.n_no_vir) > 0:
+            log.info("Virtual BNO histogram:")
+            helper.plot_histogram(self.n_no_vir)
         log.changeIndentLevel(-1)
 
         # Plot orbitals

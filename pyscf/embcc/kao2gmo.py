@@ -98,7 +98,7 @@ def gdf_to_pyscf_eris(mf, gdf, cm, fock=None):
     return eris
 
 
-def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=False):
+def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=False, j3c_threshold=None):
     """Make supercell ERIs from k-point sampled, density-fitted three-center integrals.
 
     Arguments
@@ -144,6 +144,7 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
         else:
             mem_eris = (nocc**4 + nocc**3*nvir + 3*nocc**2*nvir**2 + nocc*nvir**3 + nvir**4) * 8
     log.debug("Memory needed for kAO->GMO: (L|ab)= %s (ij|kl)= %s", memory_string(mem_j3c), memory_string(mem_eris))
+    log.debug("Symmetry (L|ij)=(L|ji): %r", symmetry)
 
     # Transform: (l|ka,qb) -> (Rl|i,j)
     mo_coeff = mo_coeff.reshape(nk, nao, nmo)
@@ -158,6 +159,50 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
     if not only_ovov:
         j3c["oo"] = j3c["oo"].reshape(nk*naux, nocc, nocc)
         j3c["vv"] = j3c["vv"].reshape(nk*naux, nvir, nvir)
+
+        # Check symmetry errors
+        if True:
+            err_oo = np.linalg.norm(j3c['oo'] - j3c['oo'].transpose(0, 2, 1).conj())
+            err_vv = np.linalg.norm(j3c['vv'] - j3c['vv'].transpose(0, 2, 1).conj())
+            log.debug("Symmetry error of (L|ij) vs (L|ji)= %.2e", err_oo)
+            log.debug("Symmetry error of (L|ab) vs (L|ba)= %.2e", err_vv)
+            # Symmetrize
+            #j3c['oo'] = 0.5*(j3c['oo'] + j3c['oo'].transpose(0,2,1).conj())
+            #j3c['vv'] = 0.5*(j3c['vv'] + j3c['vv'].transpose(0,2,1).conj())
+
+    for key, val in j3c.items():
+        log.debugv("Memory for (L|%s)= %s", key, memory_string(val.nbytes))
+
+    # Prune?
+    norm_ov = np.linalg.norm(j3c['ov'], axis=(1,2))
+    log.debug("Number of ov elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+            len(norm_ov), np.count_nonzero(norm_ov < 1e-14), np.count_nonzero(norm_ov < 1e-12),
+            np.count_nonzero(norm_ov < 1e-10), np.count_nonzero(norm_ov < 1e-8),
+            np.count_nonzero(norm_ov < 1e-6), np.count_nonzero(norm_ov < 1e-4))
+    if not only_ovov:
+        norm_oo = np.linalg.norm(j3c['oo'], axis=(1,2))
+        log.debug("Number of oo elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+                len(norm_oo), np.count_nonzero(norm_oo < 1e-14), np.count_nonzero(norm_oo < 1e-12),
+                np.count_nonzero(norm_oo < 1e-10), np.count_nonzero(norm_oo < 1e-8),
+                np.count_nonzero(norm_oo < 1e-6), np.count_nonzero(norm_oo < 1e-4))
+        norm_vv = np.linalg.norm(j3c['vv'], axis=(1,2))
+        log.debug("Number of vv elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
+                len(norm_vv), np.count_nonzero(norm_vv < 1e-14), np.count_nonzero(norm_vv < 1e-12),
+                np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8),
+                np.count_nonzero(norm_vv < 1e-6), np.count_nonzero(norm_vv < 1e-4))
+
+    def prune_aux_basis(key):
+        norm = np.linalg.norm(j3c[key], axis=(1,2))
+        assert (len(norm) == nk*naux)
+        keep = (norm > j3c_threshold)
+        log.debug("(L|%s): Keeping %3d out of %3d auxiliary basis funcions (threshold= %.1e)", key, np.count_nonzero(keep), len(norm), j3c_threshold)
+        j3c[key] = j3c[key][keep]
+
+    if j3c_threshold:
+        prune_aux_basis('ov')
+        if not only_ovov:
+            prune_aux_basis('oo')
+            prune_aux_basis('vv')
 
     def contract(kind, symmetry=None):
         """Contract (ij|L)(L|kl) -> (ij|kl)"""
@@ -238,9 +283,11 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
             else:
                 log.debug("Norm of Im(%2s|%2s):  L2= %.2e  Linf= %.2e", key[:2], key[2:], inorm, imax)
             eris[key] = val.real
-    log.debugv("Actual memory for (ij|kl)= %s", memory_string(sum([x.nbytes for x in eris.values()])))
 
-    log.timing("Timings for kAO->GMO [s]: transform=  %s  contract= %s", time_string(t_trafo), time_string(t_contract))
+    for key, val in eris.items():
+        log.debugv("Memory for (%s|%s)= %s", key[:2], key[2:], memory_string(val.nbytes))
+
+    log.timing("Timings for kAO->GMO [s]: transform= %s  contract= %s", time_string(t_trafo), time_string(t_contract))
 
     return eris
 

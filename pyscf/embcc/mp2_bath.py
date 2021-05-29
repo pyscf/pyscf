@@ -144,10 +144,24 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     elif kind == "vir" and canonicalize[1]:
         dm = np.linalg.multi_dot((r_vir, dm, r_vir.T))
 
-    env = np.s_[ncluster:]
-    n_no, c_no = np.linalg.eigh(dm[env,env])
-    n_no, c_no = n_no[::-1], c_no[:,::-1]
-    c_no = np.dot(c_env, c_no)
+    clt, env = np.s_[:ncluster], np.s_[ncluster:]
+    # TEST SVD of cluster-environment block
+    if False:
+        sv, c_svd = np.linalg.svd(dm[clt,env], full_matrices=False)[1:]
+        log.debug("Sqrt of singular values: %r", np.sqrt(sv))
+        #c_svd = np.dot(c_env, vh.T)
+        c_svd = c_svd.T
+        nsvd = np.sqrt(sv) > 1e-3
+
+        # Rotate environment
+        #dm_env = np.linalg.multi_dot((c_svd.T, dm[env,env] c_svd))
+        c_no = np.dot(c_env, c_svd)
+
+    else:
+
+        n_no, c_no = np.linalg.eigh(dm[env,env])
+        n_no, c_no = n_no[::-1], c_no[:,::-1]
+        c_no = np.dot(c_env, c_no)
 
     return c_no, n_no
 
@@ -160,6 +174,70 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
     log.debug("MP2 correction: all=%.4g, active=%.4g, correction=%+.4g",
             e_mp2_all, e_mp2_act, e_delta_mp2)
     return e_delta_mp2
+
+
+
+#def get_svd_orbitals(a, ncluster, threshold=1e-10, nsteps=100):
+#    #norb = a.shape[-1]
+#    #coeff = np.zeros((norb, norb))
+#
+#    #def block_svd(a, nsmall, ndone=0):
+#    #    todo = np.s_[ndone:]
+#    #    block = a[todo,todo]
+#    #    small, big = np.s_[:nsmall], np.s_[nsmall:]
+#    #    u, s, vh = np.linalg.svd(block[small,big])
+#    #    s = np.sqrt(s)
+#    #    v = vh.T
+#    #    add = (s > threshold)
+#    #    nadd = np.count_nonzero(add)
+#    #    log.debug("Step= %3d sqrt(s)= %r n(add)= %d", i, s, nadd)
+#
+#    #    # Rotate a
+#    #    arot = a.copy()
+#    #    arot[:,env] = np.dot(arot[:,env], coeff)
+#    #    arot[env,:] = np.dot(coeff.T, arot[env,:])
+#
+#    #    return s, v
+#
+#    def block_svd(block, nsmall):
+#        small, big = np.s_[:nsmall], np.s_[nsmall:]
+#        u, s, vh = np.linalg.svd(block[small,big])
+#        s = np.sqrt(s)
+#        v = vh.T
+#        add = (s > threshold)
+#        nadd = np.count_nonzero(add)
+#        return s, v, nadd
+#
+#    clt, env = np.s_[:ncluster], np.s_[ncluster:]
+#    sml, big = clt, env
+#
+#    block = a
+#    nsmall = ncluster
+#    for step in range(1, nsteps+1):
+#        #clt, env = np.s_[:n], np.s_[n:]
+#
+#        s, v, nadd = block_svd(block, nsmall)
+#        log.debug("Step= %3d Sqrt(s)= %r Adding %d orbitals", i, s, nadd)
+#
+#        if step == 1:
+#            coeff = v
+#        else:
+#            coeff[:,big] = np.dot(coeff[:,big], v)
+#
+#        # Update block
+#        block = a.copy()
+#        block[:,big] = np.dot(block[:,big], coeff)
+#        block[big,:] = np.dot(block.T, block[big,:])
+#
+#        block = block[
+#
+#        sml
+#        big 
+#
+#        n += nadd
+#
+#    return coeff, blocks
+
 
 # ================================================================================================ #
 

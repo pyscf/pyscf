@@ -5,6 +5,8 @@ from timeit import default_timer as timer
 import numpy as np
 
 import pyscf
+import pyscf.gto
+import pyscf.scf
 import pyscf.cc
 import pyscf.pbc
 import pyscf.pbc.cc
@@ -14,6 +16,36 @@ from pyscf.pbc.df.df_incore import IncoreGDF
 
 import pyscf.embcc
 import pyscf.embcc.k2gamma_gdf
+
+
+def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
+
+    t0 = timer()
+    mol = pyscf.gto.Mole(atom='%s 0 0 0 ; %s 0 0 %f' % (*atoms, d), basis=basis)
+    mol.build()
+    mf = pyscf.scf.RHF(mol)
+    #mf = mf.density_fit()
+    mf.kernel()
+    t_hf = timer()-t0
+
+    t0 = timer()
+    ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold)
+    if atoms[0] == atoms[1]:
+        ecc.make_atom_cluster(0, symmetry_factor=2)
+    else:
+        ecc.make_atom_cluster(0)
+        ecc.make_atom_cluster(1)
+    ecc.kernel()
+    t_ecc = timer()-t0
+    print("E(Emb-CCSD)= %+16.8f Ha" % ecc.e_tot)
+
+    print("T(HF)= %.2f s  T(Emb-CCSD)= %.2f s" % (t_hf, t_ecc))
+
+    if bno_threshold <= 0:
+        cc = pyscf.cc.CCSD(mf)
+        cc.kernel()
+        print("E(CCSD)=   %+16.8f Ha" % cc.e_tot)
+        assert np.allclose(cc.e_tot, ecc.e_tot)
 
 def make_cubic(a, atom="He", basis="gth-dzv", supercell=False):
     amat = a * np.eye(3)
@@ -49,20 +81,18 @@ def make_tetragonal(a, c, atoms=["H", "H"], basis="gth-dzv", supercell=False, ou
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
-def make_diamond(a, atoms=["C1", "C2"], basis="gth-dzv", supercell=False):
+def make_diamond_cell(a, atoms=['C', 'C'], basis='gth-dzv', supercell=False):
     amat = a * np.asarray([
         [0.5, 0.5, 0.0],
         [0.0, 0.5, 0.5],
         [0.5, 0.0, 0.5]])
     coords = a * np.asarray([[0, 0, 0], [1, 1, 1]])/4
     atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
-
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
     cell.basis = basis
     cell.pseudo = "gth-pade"
-    #cell.precision = 1e-8
     cell.verbose = 10
     cell.build()
     if supercell:
@@ -124,10 +154,10 @@ def test_fci_solver(a=2.0, kmesh=[2,2,2], bno_threshold=1e-4):
     print("E(k-CCSD)=   %+16.8f Ha" % kcc.e_tot)
 
 
-def test_helium(a=2.0, kmesh=[2,2,2], bno_threshold=-1):
+def test_cubic(atom='He', a=2.0, basis='gth-dzv', kmesh=[2,2,2], bno_threshold=1e-5):
 
     t0 = timer()
-    cell = make_cubic(a, "He")
+    cell = make_cubic(a, atom, basis=basis)
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
@@ -235,30 +265,24 @@ def sample_canonical_orth():
         data = np.stack((cs, e_hfs, e_ccs), axis=1)
         np.savetxt(("threshold-%r.txt" % thresh), data)
 
-def test_diamond_kpts(EXPECTED=None, kmesh=[2, 2, 2]):
+def test_diamond(a=3.56, basis='gth-dzv', kmesh=[2, 2, 2], bno_threshold=1e-6):
 
-    #a = 3.5
-    a = 3.2
-    #a = 2.5
     ncells = np.product(kmesh)
 
     # k-point calculation
-    cell = make_diamond(a)
+    cell = make_diamond_cell(a, basis=basis)
+    cell.lindep_threshold = 1e-7
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
     kmf.kernel()
 
-    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=1e-5)
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
     kcc.make_atom_cluster(0, symmetry_factor=2)
-    #kcc.make_atom_cluster(1, symmetry_factor=1)
     t0 = timer()
     kcc.kernel()
-    print("Time for k-EmbCC= %.3f" % (timer()-t0))
-    print("k-EmbCC E= %16.8g" % kcc.e_tot)
-    if EXPECTED:
-        assert np.isclose(kcc.e_tot, EXPECTED)
-
+    print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
+    print("T(EmbCC)= %.2f s" % (timer()-t0))
 
 
 def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2, 2, 2]):
@@ -267,7 +291,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     ncells = np.product(kmesh)
 
     # k-point calculation
-    cell = make_diamond(a)
+    cell = make_diamond_cell(a)
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
@@ -304,65 +328,65 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
         assert np.all(kcc.get_cluster_sizes() == N_EXPECTED)
         assert np.allclose(kcc.get_energies(), E_EXPECTED)
 
-def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
-
-    a = 3.5
-    ncells = np.product(kmesh)
-
-    # k-point calculation
-    cell = make_diamond(a)
-    kpts = cell.make_kpts(kmesh)
-    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
-    kmf = kmf.density_fit()
-    kmf.kernel()
-
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
-    kcc.opts.popfile = None
-    kcc.opts.orbfile = None
-    kcc.make_atom_cluster(0, symmetry_factor=2)
-    t0 = timer()
-    kcc.kernel()
-    print("Time for k-EmbCC= %.3f" % (timer()-t0))
-    print("k-EmbCC E= %16.8g" % kcc.e_tot)
-    if EXPECTED:
-        assert np.isclose(kcc.e_tot, EXPECTED)
-    else:
-        EXPECTED = kcc.e_tot
-
-    # Supercell calculations
-    scell = make_diamond(a, supercell=kmesh)
-    smf = pyscf.pbc.scf.RHF(scell)
-    smf = smf.density_fit()
-    smf.kernel()
-
-    scc = pyscf.embcc.EmbCC(smf, bath_tol=bath_tol, bno_threshold=bno_threshold)
-    scc.opts.popfile = None
-    scc.opts.orbfile = None
-    scc.make_atom_cluster(0, symmetry_factor=2*ncells)
-    t0 = timer()
-    scc.kernel()
-    print("Time for supercell-EmbCC= %.3f" % (timer()-t0))
-    print("SC-CCSD E= %16.8g" % (scc.e_tot/ncells))
-    if EXPECTED:
-        assert np.isclose(scc.e_tot/ncells, EXPECTED)
-
-    # k-point calculation + incore GDF
-    cell = make_diamond(a)
-    kpts = cell.make_kpts(kmesh)
-    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
-    kmf.with_df = IncoreGDF(cell, kpts)
-    kmf.kernel()
-
-    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
-    kcc.opts.popfile = None
-    kcc.opts.orbfile = None
-    kcc.make_atom_cluster(0, symmetry_factor=2)
-    t0 = timer()
-    kcc.kernel()
-    print("Time for k-EmbCC (incore GDF)= %.3f" % (timer()-t0))
-    print("k-EmbCC (incore GDF) E= %16.8g" % kcc.e_tot)
-    if EXPECTED:
-        assert np.isclose(kcc.e_tot, EXPECTED)
+#def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
+#
+#    a = 3.5
+#    ncells = np.product(kmesh)
+#
+#    # k-point calculation
+#    cell = make_diamond(a)
+#    kpts = cell.make_kpts(kmesh)
+#    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+#    kmf = kmf.density_fit()
+#    kmf.kernel()
+#
+#    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
+#    kcc.opts.popfile = None
+#    kcc.opts.orbfile = None
+#    kcc.make_atom_cluster(0, symmetry_factor=2)
+#    t0 = timer()
+#    kcc.kernel()
+#    print("Time for k-EmbCC= %.3f" % (timer()-t0))
+#    print("k-EmbCC E= %16.8g" % kcc.e_tot)
+#    if EXPECTED:
+#        assert np.isclose(kcc.e_tot, EXPECTED)
+#    else:
+#        EXPECTED = kcc.e_tot
+#
+#    # Supercell calculations
+#    scell = make_diamond(a, supercell=kmesh)
+#    smf = pyscf.pbc.scf.RHF(scell)
+#    smf = smf.density_fit()
+#    smf.kernel()
+#
+#    scc = pyscf.embcc.EmbCC(smf, bath_tol=bath_tol, bno_threshold=bno_threshold)
+#    scc.opts.popfile = None
+#    scc.opts.orbfile = None
+#    scc.make_atom_cluster(0, symmetry_factor=2*ncells)
+#    t0 = timer()
+#    scc.kernel()
+#    print("Time for supercell-EmbCC= %.3f" % (timer()-t0))
+#    print("SC-CCSD E= %16.8g" % (scc.e_tot/ncells))
+#    if EXPECTED:
+#        assert np.isclose(scc.e_tot/ncells, EXPECTED)
+#
+#    # k-point calculation + incore GDF
+#    cell = make_diamond(a)
+#    kpts = cell.make_kpts(kmesh)
+#    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+#    kmf.with_df = IncoreGDF(cell, kpts)
+#    kmf.kernel()
+#
+#    kcc = pyscf.embcc.EmbCC(kmf, bath_tol=bath_tol, bno_threshold=bno_threshold)
+#    kcc.opts.popfile = None
+#    kcc.opts.orbfile = None
+#    kcc.make_atom_cluster(0, symmetry_factor=2)
+#    t0 = timer()
+#    kcc.kernel()
+#    print("Time for k-EmbCC (incore GDF)= %.3f" % (timer()-t0))
+#    print("k-EmbCC (incore GDF) E= %16.8g" % kcc.e_tot)
+#    if EXPECTED:
+#        assert np.isclose(kcc.e_tot, EXPECTED)
 
 def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
@@ -370,7 +394,7 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
     ncells = np.product(kmesh)
 
     # k-point calculation
-    cell = make_diamond(a)
+    cell = make_diamond_cell(a)
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
@@ -394,8 +418,12 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    #test_helium()
-    test_fci_solver()
+    #test_dimer(['Li', 'H'], d=1.4)
+    #test_dimer(['Li', 'Li'], d=2.0)
+    #test_cubic()
+    #test_cubic('C', basis='gth-tzvp')
+    test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
+    #test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])
     #test_diamond_bno_threshold(bno_threshold=-1, kmesh=[2,2,2])
