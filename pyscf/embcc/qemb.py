@@ -118,12 +118,12 @@ class QEmbeddingMethod:
 
         Arguments
         ---------
-        cm: pyscf.mp.mp2.MP2 or pyscf.cc.ccsd.CCSD
+        cm: pyscf.mp.mp2.MP2, pyscf.cc.ccsd.CCSD, or pyscf.cc.rccsd.RCCSD
             Correlated method, must have mo_coeff set.
 
         Returns
         -------
-        eris: pyscf.mp.mp2._ChemistsERIs or pyscf.cc.rccsd._ChemistsERIs
+        eris: pyscf.mp.mp2._ChemistsERIs, pyscf.cc.ccsd._ChemistsERIs, or pyscf.cc.rccsd._ChemistsERIs
             ERIs which can be used for the respective correlated method.
         """
         # Molecules or supercell:
@@ -142,7 +142,7 @@ class QEmbeddingMethod:
     # --- Fragments ---
     # =================
 
-    def make_iao(self, minao='minao'):
+    def make_iao_coeffs(self, minao='minao'):
         """Make intrinsic atomic orbitals.
 
         Parameters
@@ -277,13 +277,32 @@ class QEmbeddingFragment:
         sym_factor : float, optional
             Symmetry factor (number of symmetry equivalent fragments).
         """
+        msg = "CREATING FRAGMENT %d: %s" % (fid, name)
+        log.info(msg)
+        log.info(len(msg)*"*")
+
         self.base = base
         self.id = fid
         self.name = name
 
+        if c_frag.shape[-1] == 0:
+            raise ValueError("No local orbitals in fragment")
+
         self.c_frag = c_frag
         self.c_env = c_env
         self.sym_factor = sym_factor
+
+        log.info("  * Number of fragment orbitals= %d", self.size)
+        log.info("  * Symmetry factor= %f", self.sym_factor)
+        log.info("  * Number of mean-field electrons= %.6f", self.nelectron)
+
+    @property
+    def mol(self):
+        return self.base.mol
+
+    @property
+    def mf(self):
+        return self.base.mf
 
     @property
     def size(self):
@@ -307,3 +326,36 @@ class QEmbeddingFragment:
     def id_name(self):
         """Use this whenever a unique name is needed (for example to open a seperate file for each fragment)."""
         return "%s-%s" % (self.id, self.trimmed_name())
+
+
+    def diagonalize_cluster_dm(self, c_bath, tol=1e-4):
+        """Diagonalize cluster (fragment+bath) DM to get fully occupied and virtual orbitals.
+
+        Parameters
+        ----------
+        c_bath : ndarray
+            Bath orbitals.
+        tol : float, optional
+            If set, check that all eigenvalues of the cluster DM are close
+            to 0 or 1, with the tolerance given by tol. Default= 1e-4.
+
+        Returns
+        -------
+        c_occclt : ndarray
+            Occupied cluster orbitals.
+        c_virclt : ndarray
+            Virtual cluster orbitals.
+        """
+        c_clt = np.hstack((self.c_frag, c_bath))
+        sc = np.dot(self.base.get_ovlp(), c_clt)
+        dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
+        e, v = np.linalg.eigh(dm)
+        if tol and not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=tol, rtol=0):
+            raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
+        e, v = e[::-1], v[:,::-1]
+        c_clt = np.dot(c_clt, v)
+        nocc = sum(e >= 0.5)
+        c_occclt, c_virclt = np.hsplit(c_clt, [nocc])
+        return c_occclt, c_virclt
+
+

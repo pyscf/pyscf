@@ -29,7 +29,7 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
     t_hf = timer()-t0
 
     t0 = timer()
-    ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold, dmet_threshold=1e-8, orbfile='orbitals')
+    ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold, dmet_threshold=2e-4, orbfile='orbitals')
     if atoms[0] == atoms[1]:
         ecc.make_atom_cluster(0, symmetry_factor=2)
     else:
@@ -461,8 +461,8 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    #test_dimer(['Li', 'H'], d=1.4)
-    test_dimer(['Li', 'Li'], d=2.0)
+    test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
+    #test_dimer(['Li', 'Li'], d=2.0)
     test_cubic(bno_threshold=-1)
     #test_cubic('C', basis='gth-tzvp')
     #test_diamond(basis='gth-tzvp', bno_threshold=1e-8)

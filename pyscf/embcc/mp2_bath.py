@@ -76,7 +76,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     nocc_frozen = c_occ_frozen.shape[-1]
     nvir_frozen = c_vir_frozen.shape[-1]
     frozen_indices = list(range(nocc_frozen)) + list(range(nmo-nvir_frozen, nmo))
-    if self.use_pbc:
+    if self.base.has_pbc:
         cls = pyscf.pbc.mp.MP2
     else:
         cls = pyscf.mp.MP2
@@ -101,9 +101,9 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     log.timing("Time for MP2 kernel:  %s", time_string(timer()-t0))
 
     # Energies
-    e_mp2_full *= self.symmetry_factor
+    e_mp2_full *= self.sym_factor
     t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)[1]
-    e_mp2 = self.symmetry_factor * mp2.energy(t2loc, eris)
+    e_mp2 = self.sym_factor * mp2.energy(t2loc, eris)
     log.debug("Bath E(MP2):  Cluster= %+16.8g Ha  Fragment= %+16.8g Ha", e_mp2_full, e_mp2)
 
     # MP2 density matrix

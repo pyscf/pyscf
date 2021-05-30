@@ -95,7 +95,7 @@ def make_dmet_bath(self, C_ref=None, nbath=None, tol=1e-4, reftol=0.8):
 
     noccenv = sum(mask_occenv)
     nvirenv = sum(mask_virenv)
-    log.info("DMET bath:  #bath= %4d  #occ-environment= %4d  #vir-environment= %4d", nbath, noccenv, nvirenv)
+    log.info("DMET bath:  n(Bath)= %4d  n(occ-Env)= %4d  n(vir-Env)= %4d", nbath, noccenv, nvirenv)
     assert (nbath + noccenv + nvirenv == C_env.shape[-1])
     C_bath = C_env[:,mask_bath].copy()
     C_occenv = C_env[:,mask_occenv].copy()

@@ -6,6 +6,8 @@ from collections import OrderedDict
 import functools
 from datetime import datetime
 from timeit import default_timer as timer
+import dataclasses
+import copy
 
 # External libaries
 import numpy as np
@@ -18,6 +20,7 @@ import pyscf.pbc
 from pyscf.pbc.tools import cubegen
 
 # Local modules
+from . import embcc
 from .solver import get_solver_class
 from . import util
 from .util import *
@@ -27,57 +30,45 @@ from .energy import *
 from . import ccsd_t
 from . import helper
 from . import psubspace
-
-__all__ = [
-        "Cluster",
-        ]
+from .qemb import QEmbeddingFragment
 
 log = logging.getLogger(__name__)
 
-class Cluster:
 
-    def __init__(self, base, cluster_id, name, c_frag, c_env,
-            ao_indices=None,
-            solver=None,
-            bno_threshold=None, bno_threshold_factor=1,
+class FROM_BASE: pass
+
+@dataclasses.dataclass
+class FragmentOptions(Options):
+    """Attributes set to `FROM_BASE` inherit their value from the parent EmbCC object."""
+    dmet_threshold : float = FROM_BASE
+    make_rdm1 : bool = FROM_BASE
+    eom_ccsd : bool = FROM_BASE
+    plot_orbitals : bool = FROM_BASE
+    solver_options : dict = FROM_BASE
+
+
+class Fragment(QEmbeddingFragment):
+
+    def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1,
+            solver=None, bno_threshold=None, bno_threshold_factor=1,
             **kwargs):
         """
         Parameters
         ----------
         base : EmbCC
             Base EmbCC object.
-        cluster_id : int
-            Unique ID of cluster.
+        fid : int
+            Unique ID of fragment.
         name :
-            Name of cluster.
+            Name of fragment.
         """
-        self.base = base
-        self.id = cluster_id
-        self.name = name
-        # What is this for?:
-        self.ao_indices = ao_indices
-        msg = "CREATING CLUSTER %d: %s" % (self.id, self.name)
-        log.info(msg)
-        log.info(len(msg)*"*")
 
-        # NEW: local and environment orbitals
-        if c_frag.shape[-1] == 0:
-            raise ValueError("No local orbitals in cluster %d:%s" % (self.id, self.name))
-
-        self.c_frag = c_frag
-        self.c_env = c_env
-        log.info("  * Number of fragment orbitals= %d", self.size) # depends on self.c_frag
-
-        # Determine number of mean-field electrons in fragment space
-        sc = np.dot(self.base.get_ovlp(), self.c_frag)
-        dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
-        self.nelec_mf_frag = np.trace(dm)
-        log.info("  * Number of mean-field electrons= %.6f", self.nelec_mf_frag)
+        super(Fragment, self).__init__(base, fid, name, c_frag, c_env, sym_factor)
 
         # Options
         if solver is None:
             solver = self.base.solver
-        if solver not in self.base.VALID_SOLVERS:
+        if solver not in embcc.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
         log.info("  * Solver= %s", self.solver)
@@ -93,49 +84,15 @@ class Cluster:
         # (allows projecting down ERIs and initial guess for subsequent calculations)
         self.bno_threshold.sort()
 
-        # Other options from kwargs:
+        self.opts = FragmentOptions(**kwargs)
+        for key, val in self.opts.items():
+            if val == FROM_BASE:
+                setattr(self.opts, key, copy.copy(getattr(self.base.opts, key)))
+        log.infov("Fragment parameters:")
+        for key, val in self.opts.items():
+            log.infov('  * %-24s %r', key + ':', val)
 
-        # Bath parameters
-
-        # OLD [TCC]
-        #self.coupled_bath = kwargs.get("coupled_bath", False)
-
-        # Other
-        self.symmetry_factor = kwargs.pop("symmetry_factor", 1.0)
-        log.info("  * Symmetry factor= %f", self.symmetry_factor)
-
-        ## Restart solver from previous solution [True/False]
-        ##self.restart_solver = kwargs.get("restart_solver", True)
-        #self.restart_solver = kwargs.get("restart_solver", False)
-        ## Parameters needed for restart (C0, C1, C2 for CISD; T1, T2 for CCSD) are saved here
-        #self.restart_params = kwargs.get("restart_params", {})
-
-        # By default use PBC code if self.mol is "pbc.gto.Cell"
-        self.use_pbc = kwargs.pop("use_pbc", self.has_pbc)
-
-        # OLD
-        #self.nelectron_target = kwargs.get("nelectron_target", None)
-
-        self.use_energy_tol_as_delta_mp2 = kwargs.pop("use_energy_tol_as_delta_mp2", False)
-
-        opts = Options()
-        opts.dmet_threshold = self.base.opts.get("dmet_threshold", 1e-4)
-        opts.bath_tol_per_elec = self.base.opts.get("bath_tol_per_elec", False)
-        opts.prim_mp2_bath_tol_occ = self.base.opts.get("prim_mp2_bath_tol_occ", False)
-        opts.prim_mp2_bath_tol_vir = self.base.opts.get("prim_mp2_bath_tol_vir", False)
-        opts.make_rdm1 = self.base.opts.get("make_rdm1", False)
-        opts.eom_ccsd = self.base.opts.get("eom_ccsd", False)
-        opts.plot_orbitals = self.base.opts.get("plot_orbitals", False)
-        opts.solver_options = self.base.opts.solver_options
-        self.opts = opts
-
-        # Do NOT perform (T)-correction for cluster problems above this size:
-        self.ccsd_t_max_orbitals = kwargs.pop("ccsd_t_max_orbitals", 200)
-
-        if kwargs:
-            raise ValueError("Unknown keyword arguments: %r" % list(kwargs.keys()))
-
-        # Some default attributes:
+        # Intermediate and output attributes:
         self.nactive = 0
         self.nfrozen = 0
         # Intermediate values
@@ -155,21 +112,6 @@ class Cluster:
         self.eom_ip_energy = None
         self.eom_ea_energy = None
 
-    def trimmed_name(self, length=10):
-        if len(self.name) <= length:
-            return self.name
-        return self.name[:(length-3)] + "..."
-
-    @property
-    def id_name(self):
-        """Use this whenever a unique name is needed (for example to open a file)."""
-        return "%dx%s" % (self.id, self.trimmed_name())
-
-    @property
-    def size(self):
-        """Number of local (fragment) orbitals."""
-        return self.c_frag.shape[-1]
-
     @property
     def e_corr(self):
         """Best guess for correlation energy, using the lowest BNO threshold."""
@@ -184,39 +126,8 @@ class Cluster:
             yield cluster
 
     @property
-    def mf(self):
-        """The underlying mean-field object is taken from self.base.
-        This is used throughout the construction of orbital spaces and as the reference for
-        the correlated solver.
-
-        Accessed attributes and methods are:
-        mf.get_ovlp()
-        mf.get_fock()
-        mf.make_rdm1()
-        mf.mo_energy
-        mf.mo_coeff
-        mf.mo_occ
-        mf.e_tot
-        """
-        return self.base.mf
-
-    @property
-    def mol(self):
-        """The molecule or cell object is taken from self.base.mol.
-        It should be the same as self.base.mf.mol by default."""
-        return self.base.mol
-
-    @property
-    def has_pbc(self):
-        return isinstance(self.mol, pyscf.pbc.gto.Cell)
-
-    @property
     def fragment_type(self):
         return self.base.opts.fragment_type
-
-    @property
-    def energy_factor(self):
-        return self.symmetry_factor
 
     # Register frunctions of dmet_bath.py as methods
     make_dmet_bath = make_dmet_bath
@@ -226,38 +137,6 @@ class Cluster:
     get_local_amplitudes_general = get_local_amplitudes_general
     get_local_energy = get_local_energy
 
-
-    def diagonalize_cluster_dm(self, C_bath):
-        """Diagonalize cluster DM to get fully occupied/virtual orbitals
-
-        Parameters
-        ----------
-        C_bath : ndarray
-            Bath orbitals.
-
-        Returns
-        -------
-        C_occclst : ndarray
-            Occupied cluster orbitals.
-        C_virclst : ndarray
-            Virtual cluster orbitals.
-        """
-        C_clst = np.hstack((self.c_frag, C_bath))
-        sc = np.dot(self.base.get_ovlp(), C_clst)
-        D_clst = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc)) / 2
-        e, R = np.linalg.eigh(D_clst)
-        tol = self.opts.dmet_threshold
-        if not np.allclose(np.fmin(abs(e), abs(e-1)), 0, atol=tol, rtol=0):
-            raise RuntimeError("Error while diagonalizing cluster DM: eigenvalues not all close to 0 or 1:\n%s", e)
-        e, R = e[::-1], R[:,::-1]
-        C_clst = np.dot(C_clst, R)
-        nocc_clst = sum(e > 0.5)
-        nvir_clst = sum(e < 0.5)
-        log.info("Number of cluster orbitals: occ=%3d, vir=%3d", nocc_clst, nvir_clst)
-
-        C_occclst, C_virclst = np.hsplit(C_clst, [nocc_clst])
-
-        return C_occclst, C_virclst
 
     def canonicalize(self, *mo_coeff, eigenvalues=False):
         """Diagonalize Fock matrix within subspace.
@@ -283,6 +162,7 @@ class Cluster:
         if eigenvalues:
             return mo_canon, rot, mo_energy
         return mo_canon, rot
+
 
     def get_occup(self, mo_coeff):
         """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
@@ -465,7 +345,8 @@ class Cluster:
         #c_dmet, c_env_occ, c_env_vir = self.additional_bath_for_cluster(c_dmet, c_env_occ, c_env_vir)
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
-        self.c_cluster_occ, self.c_cluster_vir = self.diagonalize_cluster_dm(c_dmet)
+        self.c_cluster_occ, self.c_cluster_vir = self.diagonalize_cluster_dm(c_dmet, tol=2*self.opts.dmet_threshold)
+        log.info("Cluster orbitals:  n(occ)= %3d  n(vir)= %3d", self.c_cluster_occ.shape[-1], self.c_cluster_vir.shape[-1])
 
         # Add cluster orbitals to plot
         #if self.opts.plot_orbitals:

@@ -194,7 +194,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
         log.warning("WARNING: Large E1 component!")
 
     # Symmetry factor if fragment is repeated in molecule, (e.g. in hydrogen rings: only calculate one fragment)
-    e_loc = self.symmetry_factor * (e1 + e2)
+    e_loc = self.sym_factor * (e1 + e2)
 
     return e_loc
 
