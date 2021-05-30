@@ -31,7 +31,7 @@ class QEmbeddingMethod:
             self.kdf = None
         self.mf = mf
 
-        # Attributes from mean-field:
+        # Copy MO attributes, so they can be modified later with no side-effects (updating the mean-field)
         self.mo_energy = self.mf.mo_energy.copy()
         self.mo_occ = self.mf.mo_occ.copy()
         self.mo_coeff = self.mf.mo_coeff.copy()

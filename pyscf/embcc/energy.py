@@ -38,7 +38,7 @@ def get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, part=None, symmetri
 
     # By default inherit from base object
     if part is None:
-        part = self.base.energy_part
+        part = self.base.opts.energy_partition
     #log.debug("Amplitude partitioning = %s", part)
     if part not in ("first-occ", "first-vir", "democratic"):
         raise ValueError("Unknown partitioning of amplitudes: %s", part)

@@ -38,7 +38,7 @@ class Cluster:
 
     def __init__(self, base, cluster_id, name, c_frag, c_env,
             ao_indices=None,
-            solver="CCSD",
+            solver=None,
             bno_threshold=None, bno_threshold_factor=1,
             **kwargs):
         """
@@ -50,9 +50,6 @@ class Cluster:
             Unique ID of cluster.
         name :
             Name of cluster.
-        indices:
-            Atomic orbital indices of cluster. [ local_orbital_type == "ao" ]
-            Intrinsic atomic orbital indices of cluster. [ local_orbital_type == "iao" ]
         """
         self.base = base
         self.id = cluster_id
@@ -62,7 +59,6 @@ class Cluster:
         msg = "CREATING CLUSTER %d: %s" % (self.id, self.name)
         log.info(msg)
         log.info(len(msg)*"*")
-        log.info("  * Fragment orbital type= %s", self.local_orbital_type)     # depends on self.base
 
         # NEW: local and environment orbitals
         if c_frag.shape[-1] == 0:
@@ -79,6 +75,8 @@ class Cluster:
         log.info("  * Number of mean-field electrons= %.6f", self.nelec_mf_frag)
 
         # Options
+        if solver is None:
+            solver = self.base.solver
         if solver not in self.base.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
@@ -87,6 +85,8 @@ class Cluster:
         # Bath natural orbital (BNO) threshold
         if bno_threshold is None:
             bno_threshold = self.base.bno_threshold
+        if np.isscalar(bno_threshold):
+            bno_threshold = [bno_threshold]
         assert len(bno_threshold) == len(self.base.bno_threshold)
         self.bno_threshold = bno_threshold_factor*np.asarray(bno_threshold)
         # Sort such that most expensive calculation (smallest threshold) comes first
@@ -94,28 +94,14 @@ class Cluster:
         self.bno_threshold.sort()
 
         # Other options from kwargs:
-        self.solver_options = kwargs.get("solver_options", {})
-
-        self.mp2_correction = kwargs.get("mp2_correction", True)
-        # Make MP2 correction tuple for (occupied, virtual) bath
-        if not hasattr(self.mp2_correction, "__getitem__"):
-            self.mp2_correction = (self.mp2_correction, self.mp2_correction)
 
         # Bath parameters
 
         # OLD [TCC]
         #self.coupled_bath = kwargs.get("coupled_bath", False)
 
-        # Add additional orbitals to 0-cluster
-        # Add first-order power orbitals
-        self.power1_occ_bath_tol = kwargs.get("power1_occ_bath_tol", False)
-        self.power1_vir_bath_tol = kwargs.get("power1_vir_bath_tol", False)
-        # Add local orbitals:
-        self.local_occ_bath_tol = kwargs.get("local_occ_bath_tol", False)
-        self.local_vir_bath_tol = kwargs.get("local_vir_bath_tol", False)
-
         # Other
-        self.symmetry_factor = kwargs.get("symmetry_factor", 1.0)
+        self.symmetry_factor = kwargs.pop("symmetry_factor", 1.0)
         log.info("  * Symmetry factor= %f", self.symmetry_factor)
 
         ## Restart solver from previous solution [True/False]
@@ -125,12 +111,12 @@ class Cluster:
         #self.restart_params = kwargs.get("restart_params", {})
 
         # By default use PBC code if self.mol is "pbc.gto.Cell"
-        self.use_pbc = kwargs.get("use_pbc", self.has_pbc)
+        self.use_pbc = kwargs.pop("use_pbc", self.has_pbc)
 
         # OLD
         #self.nelectron_target = kwargs.get("nelectron_target", None)
 
-        self.use_energy_tol_as_delta_mp2 = kwargs.get("use_energy_tol_as_delta_mp2", False)
+        self.use_energy_tol_as_delta_mp2 = kwargs.pop("use_energy_tol_as_delta_mp2", False)
 
         opts = Options()
         opts.dmet_threshold = self.base.opts.get("dmet_threshold", 1e-4)
@@ -144,7 +130,10 @@ class Cluster:
         self.opts = opts
 
         # Do NOT perform (T)-correction for cluster problems above this size:
-        self.ccsd_t_max_orbitals = kwargs.get("ccsd_t_max_orbitals", 200)
+        self.ccsd_t_max_orbitals = kwargs.pop("ccsd_t_max_orbitals", 200)
+
+        if kwargs:
+            raise ValueError("Unknown keyword arguments: %r" % list(kwargs.keys()))
 
         # Some default attributes:
         self.nactive = 0
@@ -222,8 +211,8 @@ class Cluster:
         return isinstance(self.mol, pyscf.pbc.gto.Cell)
 
     @property
-    def local_orbital_type(self):
-        return self.base.local_orbital_type
+    def fragment_type(self):
+        return self.base.opts.fragment_type
 
     @property
     def energy_factor(self):
@@ -236,51 +225,6 @@ class Cluster:
     get_local_amplitudes = get_local_amplitudes
     get_local_amplitudes_general = get_local_amplitudes_general
     get_local_energy = get_local_energy
-
-    def analyze_orbitals(self, orbitals=None, sort=True):
-        if self.local_orbital_type == "iao":
-            raise NotImplementedError()
-
-
-        if orbitals is None:
-            orbitals = self.orbitals
-
-        active_spaces = ["local", "dmet-bath", "occ-bath", "vir-bath"]
-        frozen_spaces = ["occ-env", "vir-env"]
-        spaces = [active_spaces, frozen_spaces, *active_spaces, *frozen_spaces]
-        chis = np.zeros((self.mol.nao_nr(), len(spaces)))
-
-        # Calculate chi
-        for ao in range(self.mol.nao_nr()):
-            S = self.base.get_ovlp()
-            S121 = 1/S[ao,ao] * np.outer(S[:,ao], S[:,ao])
-            for ispace, space in enumerate(spaces):
-                C = orbitals.get_coeff(space)
-                SC = np.dot(S121, C)
-                chi = np.sum(SC[ao]**2)
-                chis[ao,ispace] = chi
-
-        ao_labels = np.asarray(self.mol.ao_labels(None))
-        if sort:
-            sort = np.argsort(-np.around(chis[:,0], 3), kind="mergesort")
-            ao_labels = ao_labels[sort]
-            chis2 = chis[sort]
-        else:
-            chis2 = chis
-
-        # Output
-        log.info("Orbitals of cluster %s", self.name)
-        log.info("===================="+len(self.name)*"=")
-        log.info(("%18s" + " " + len(spaces)*"  %9s"), "Atomic orbital", "Active", "Frozen", "Local", "DMET bath", "Occ. bath", "Vir. bath", "Occ. env.", "Vir. env")
-        log.info((18*"-" + " " + len(spaces)*("  "+(9*"-"))))
-        for ao in range(self.mol.nao_nr()):
-            line = "[%3s %3s %2s %-5s]:" % tuple(ao_labels[ao])
-            for ispace, space in enumerate(spaces):
-                line += "  %9.3g" % chis2[ao,ispace]
-            log.info(line)
-
-        # Active chis
-        return chis[:,0]
 
 
     def diagonalize_cluster_dm(self, C_bath):
@@ -379,13 +323,13 @@ class Cluster:
 
         # Project onto space of local (fragment) orbitals.
         #if self.local_orbital_type in ("IAO", "LAO"):
-        if self.local_orbital_type in ("IAO", "LAO", "PMO"):
+        if self.fragment_type in ("IAO", "LAO", "PMO"):
             CSC = np.linalg.multi_dot((C.T, S, self.c_frag))
             P = np.dot(CSC, CSC.T)
 
         # Project onto space of local atomic orbitals.
         #elif self.local_orbital_type in ("AO", "NonOrth-IAO", "PMO"):
-        elif self.local_orbital_type in ("AO", "NonOrth-IAO"):
+        elif self.fragment_type in ("AO", "NonOrth-IAO"):
             #l = self.indices
             l = self.ao_indices
             # This is the "natural way" to truncate in AO basis
@@ -462,6 +406,8 @@ class Cluster:
 
     def additional_bath_for_cluster(self, c_bath, c_occenv, c_virenv):
         """Add additional bath orbitals to cluster (fragment+DMET bath)."""
+        # NOT MAINTAINED
+        raise NotImplementedError()
         if self.power1_occ_bath_tol is not False:
             c_add, c_occenv, _ = make_mf_bath(self, c_occenv, "occ", bathtype="power",
                     tol=self.power1_occ_bath_tol)
@@ -516,7 +462,7 @@ class Cluster:
             self.cubefile.add_orbital(c_dmet.copy(), dset_idx=1001)
 
         # Add additional orbitals to cluster [optional]
-        c_dmet, c_env_occ, c_env_vir = self.additional_bath_for_cluster(c_dmet, c_env_occ, c_env_vir)
+        #c_dmet, c_env_occ, c_env_vir = self.additional_bath_for_cluster(c_dmet, c_env_occ, c_env_vir)
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         self.c_cluster_occ, self.c_cluster_vir = self.diagonalize_cluster_dm(c_dmet)
@@ -549,7 +495,6 @@ class Cluster:
 
         #    # Re-diagonalize cluster DM to separate cluster occupied and virtual
         #    C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
-
         #self.C_bath = C_bath
 
         log.info("MAKING OCCUPIED BNOs")
@@ -834,3 +779,49 @@ class Cluster:
                                 (kind, root, lab, wgt))
 
         return e, c
+
+    def analyze_orbitals(self, orbitals=None, sort=True):
+        if self.fragment_type == "iao":
+            raise NotImplementedError()
+
+        if orbitals is None:
+            orbitals = self.orbitals
+
+        active_spaces = ["local", "dmet-bath", "occ-bath", "vir-bath"]
+        frozen_spaces = ["occ-env", "vir-env"]
+        spaces = [active_spaces, frozen_spaces, *active_spaces, *frozen_spaces]
+        chis = np.zeros((self.mol.nao_nr(), len(spaces)))
+
+        # Calculate chi
+        for ao in range(self.mol.nao_nr()):
+            S = self.base.get_ovlp()
+            S121 = 1/S[ao,ao] * np.outer(S[:,ao], S[:,ao])
+            for ispace, space in enumerate(spaces):
+                C = orbitals.get_coeff(space)
+                SC = np.dot(S121, C)
+                chi = np.sum(SC[ao]**2)
+                chis[ao,ispace] = chi
+
+        ao_labels = np.asarray(self.mol.ao_labels(None))
+        if sort:
+            sort = np.argsort(-np.around(chis[:,0], 3), kind="mergesort")
+            ao_labels = ao_labels[sort]
+            chis2 = chis[sort]
+        else:
+            chis2 = chis
+
+        # Output
+        log.info("Orbitals of cluster %s", self.name)
+        log.info("===================="+len(self.name)*"=")
+        log.info(("%18s" + " " + len(spaces)*"  %9s"), "Atomic orbital", "Active", "Frozen", "Local", "DMET bath", "Occ. bath", "Vir. bath", "Occ. env.", "Vir. env")
+        log.info((18*"-" + " " + len(spaces)*("  "+(9*"-"))))
+        for ao in range(self.mol.nao_nr()):
+            line = "[%3s %3s %2s %-5s]:" % tuple(ao_labels[ao])
+            for ispace, space in enumerate(spaces):
+                line += "  %9.3g" % chis2[ao,ispace]
+            log.info(line)
+
+        # Active chis
+        return chis[:,0]
+
+

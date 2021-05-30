@@ -2,6 +2,7 @@ import logging
 import os.path
 import functools
 from datetime import datetime
+import dataclasses
 
 import numpy as np
 import scipy
@@ -34,52 +35,50 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+
+@dataclasses.dataclass
+class EmbCCOptions(Options):
+    """Options for EmbCC calculations."""
+    # --- Fragment settings
+    fragment_type: str = 'IAO'
+    localize_fragment: bool = False     # Perform numerical localization on fragment orbitals
+    iao_minao : str = 'auto'            # Minimal basis for IAOs
+    # --- Bath settings
+    dmet_threshold: float = 1e-4
+    bath_tol_per_elec: bool = False
+    prim_mp2_bath_tol_occ: float = False
+    prim_mp2_bath_tol_vir: float = False
+    orbfile: str = None                 # Filename for orbital coefficients
+    # If multiple bno thresholds are to be calculated, we can project integrals and amplitudes from a previous larger cluster:
+    project_eris: bool = False          # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
+    project_init_guess: bool = True     # Project converted T1,T2 amplitudes from a previous larger cluster
+    orthogonal_mo_tol: float = False
+    #Orbital file
+    plot_orbitals: bool = False
+    plot_orbitals_dir: str = "orbitals"
+    plot_orbitals_kwargs: dict = dataclasses.field(default_factory=dict)
+    # --- Solver settings
+    solver_options: dict = dataclasses.field(default_factory=dict)
+    make_rdm1: bool = False
+    popfile: str = "population"         # Filename for population analysis
+    eom_ccsd: bool = False              # Perform EOM-CCSD in each cluster by default
+    eomfile: str = "eom-ccsd"           # Filename for EOM-CCSD states
+
+    # --- Other
+    energy_partition: str = 'first-occ'
+    strict: bool = False                # Stop if cluster not converged
+
+
 class EmbCC(QEmbeddingMethod):
 
-    VALID_LOCAL_TYPES = ["AO", "IAO", "LAO", "NonOrth-IAO", "PMO"]
     VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", 'FCI', "FCI-spin0", "FCI-spin1"]
 
-    # These optionals are automatically transferred to any created cluster object
-    default_options = [
-            "solver",
-            "use_ref_orbitals_dmet",
-            "use_ref_orbitals_bath",
-            "mp2_correction",
-            "power1_occ_bath_tol",
-            "power1_vir_bath_tol",
-            "local_occ_bath_tol",
-            "local_vir_bath_tol",
-            ]
-
-    def __init__(self, mf,
-            local_type="IAO",       # TODO: rename -> fragment_type?
-            solver="CCSD",
-            bno_threshold=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3],
-            minao=None,
-            #
-            use_ref_orbitals_dmet=True,
-            use_ref_orbitals_bath=False,
-            mp2_correction=True,
-            energy_part="first-occ",
-            # Additional bath orbitals
-            power1_occ_bath_tol=False, power1_vir_bath_tol=False, local_occ_bath_tol=False, local_vir_bath_tol=False,
-            **kwargs
-            ):
+    def __init__(self, mf, solver='CCSD', bno_threshold=1e-8, **kwargs):
         """
         Parameters
         ----------
         mf : pyscf.scf object
             Converged mean-field object.
-        minao :
-            Minimal basis for intrinsic atomic orbitals (IAO).
-        dmet_threshold : float, optional
-            Tolerance for DMET bath orbitals; orbitals with occupation larger than `dmet_threshold`,
-            or smaller than 1-`dmet_threshold` are included as bath orbitals.
-
-        make_rdm1 : [True, False]
-            Calculate RDM1 in cluster.
-        eom_ccsd : [True, False, "IP", "EA"]
-            Default: False.
         """
         t_start = timer()
 
@@ -87,43 +86,11 @@ class EmbCC(QEmbeddingMethod):
         log.info("******************")
         log.changeIndentLevel(1)
 
-        # TODO: Change other options to here
-        default_opts = {
-                # Fragment settings
-                "localize_fragment" : False,    # Perform numerical localization on fragment orbitals
-                # Bath settings
-                "dmet_threshold" : 1e-4,
-                "bath_tol_per_elec" : False,
-                "prim_mp2_bath_tol_occ" : False,
-                "prim_mp2_bath_tol_vir" : False,
-                "orbfile" : None,         # Filename for orbital coefficients
-                # If multiple bno thresholds are to be calculated, we can project integrals and amplitudes from a previous larger cluster:
-                "project_eris" : False,         # Project ERIs from a pervious larger cluster (corresponding to larger eta), can result in a loss of accuracy especially for large basis sets!
-                "project_init_guess" : True,    # Project converted T1,T2 amplitudes from a previous larger cluster
-                "orthogonal_mo_tol" : False,
-                # Population analysis
-                "make_rdm1" : False,
-                "popfile" : "population",       # Filename for population analysis
-                # EOM-CCSD
-                "eom_ccsd" : False,             # Perform EOM-CCSD in each cluster by default
-                "eomfile" : "eom-ccsd",         # Filename for EOM-CCSD states
-                #Orbital file
-                "plot_orbitals" : False,
-                "plot_orbitals_dir" : "orbitals",
-                "plot_orbitals_kwargs" : {},
-                # Solver
-                "solver_options" : None,
-                # Other
-                "strict" : False,               # Stop if cluster not converged
-                }
-        self.opts = Options()
+        self.opts = EmbCCOptions(**kwargs)
+
         if kwargs: log.info("EmbCC keyword arguments:")
-        for key, val in default_opts.items():
-            val = kwargs.pop(key, val)
-            log.info("  * %-24s= %r", key, val)
-            setattr(self.opts, key, val)
-        if kwargs:
-            raise ValueError("Unknown arguments: %r" % kwargs.keys())
+        for key, val in self.opts.items():
+            log.info('  * %-24s %r', key + ':', val)
 
         super(EmbCC, self).__init__(mf)
 
@@ -133,43 +100,25 @@ class EmbCC(QEmbeddingMethod):
                 raise RuntimeError("Mean-field calculation not converged.")
             else:
                 log.error("Mean-field calculation not converged.")
-
-        # Local orbital types:
-        # AO : Atomic orbitals non-orthogonal wrt to non-fragment AOs
-        # IAO : Intrinstric atom-orbitals
-        # LAO : Lowdin orthogonalized AOs
-        if local_type not in self.VALID_LOCAL_TYPES:
-            raise ValueError("Unknown local_type: %s" % local_type)
         if solver not in self.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
+        self.solver = solver
 
-        self.local_orbital_type = local_type
+        #self.local_orbital_type = local_type
 
         # Minimal basis for IAO
-        if minao is None:
-            minao = helper.get_minimal_basis(self.mol.basis)
-            log.warning("No minimal basis for IAOs specified. Basis %s was selected automatically.",  minao)
-        self.minao = minao
+        if self.opts.iao_minao == 'auto':
+            self.opts.iao_minao = helper.get_minimal_basis(self.mol.basis)
+            log.warning("Minimal basis set %s for IAOs was selected automatically.",  self.opts.iao_minao)
         log.info("Computational basis= %s", self.mol.basis)
-        log.info("Minimal basis=       %s", self.minao)
-
-        self.energy_part = energy_part
+        log.info("Minimal basis=       %s", self.opts.iao_minao)
 
         # Options
-        self.solver = solver
 
         # Bath natural orbital threshold
         if np.isscalar(bno_threshold):
             bno_threshold = [bno_threshold]
         self.bno_threshold = bno_threshold
-        self.use_ref_orbitals_dmet = use_ref_orbitals_dmet
-        self.use_ref_orbitals_bath = use_ref_orbitals_bath
-        self.mp2_correction = mp2_correction
-        # Additional bath orbitals
-        self.power1_occ_bath_tol = power1_occ_bath_tol
-        self.power1_vir_bath_tol = power1_vir_bath_tol
-        self.local_occ_bath_tol = local_occ_bath_tol
-        self.local_vir_bath_tol = local_vir_bath_tol
 
         self.clusters = []
 
@@ -204,7 +153,8 @@ class EmbCC(QEmbeddingMethod):
             log.timing("Time for orbital orthogonalization: %s", time_string(timer()-t0))
 
         # Prepare fragments
-        if self.local_orbital_type in ("IAO", "LAO"):
+        #if self.local_orbital_type in ("IAO", "LAO"):
+        if self.opts.fragment_type in ("IAO", "LAO"):
             t0 = timer()
             self.init_fragments()
             log.timing("Time for fragment initialization: %s", time_string(timer()-t0))
@@ -214,13 +164,13 @@ class EmbCC(QEmbeddingMethod):
         log.changeIndentLevel(-1)
 
     def init_fragments(self):
-        if self.local_orbital_type == "IAO":
-            self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.minao)
+        if self.opts.fragment_type == "IAO":
+            self.C_ao, self.C_env, self.iao_labels = self.make_iao(minao=self.opts.iao_minao)
             #log.debug("IAO labels:")
             #for ao in self.iao_labels:
             #    log.debug("%r", ao)
             self.ao_labels = self.iao_labels
-        elif self.local_orbital_type == "LAO":
+        elif self.opts.fragment_type == "LAO":
             self.C_ao, self.lao_labels = self.make_lowdin_ao()
             self.ao_labels = self.lao_labels
 
@@ -235,7 +185,7 @@ class EmbCC(QEmbeddingMethod):
             coeffs = self.C_ao
             names = [("%d-%s-%s-%s" % l).rstrip("-") for l in self.ao_labels]
             #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment")
-            create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment", filetype="cube")
+            create_orbital_file(self.mol, self.opts.fragment_type, coeffs, names, directory="fragment", filetype="cube")
 
             t0 = timer()
             if locmethod in ("BF", "ER", "PM"):
@@ -267,7 +217,7 @@ class EmbCC(QEmbeddingMethod):
             coeffs = self.C_ao
             names = [("%d-%s-%s-%s" % l).rstrip("-") for l in self.ao_labels]
             #create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized")
-            create_orbital_file(self.mol, self.local_orbital_type, coeffs, names, directory="fragment-localized", filetype="cube")
+            create_orbital_file(self.mol, self.opts.fragment_type, coeffs, names, directory="fragment-localized", filetype="cube")
 
 
     @property
@@ -483,17 +433,6 @@ class EmbCC(QEmbeddingMethod):
             if (cluster_id == cluster.id):
                 raise RuntimeError("Cluster with ID %d already exists: %s" % (cluster_id, cluster.id_name))
 
-        # Make name unique [Names can now be duplicated]
-        #for i in range(1, 100):
-        #    name_i = name if i == 1 else "%s%d" % (name, i)
-        #    if name_i not in [x.name for x in self.clusters]:
-        #        name = name_i
-        #        break
-        #else:
-        #    raise ValueError("Cluster with name %s already exists." % name)
-        # Pass options to cluster object via keyword arguments
-        for opt in self.default_options:
-            kwargs[opt] = kwargs.get(opt, getattr(self, opt))
         # Symmetry factor, if symmetry related fragments exist
         # TODO: Determine symmetry automatically
         kwargs["symmetry_factor"] = kwargs.get("symmetry_factor", 1.0)
@@ -517,10 +456,10 @@ class EmbCC(QEmbeddingMethod):
             name = ";".join([",".join(ao_label.split()) for ao_label in ao_labels])
 
         # Orthogonal intrinsic AOs
-        if self.local_orbital_type == "IAO":
+        if self.opts.fragment_type == "IAO":
 
             indices = []
-            refmol = pyscf.lo.iao.reference_mol(self.mol, minao=self.minao)
+            refmol = pyscf.lo.iao.reference_mol(self.mol, minao=self.opts.iao_minao)
             for ao in ao_labels:
                 ao_indices = refmol.search_ao_label(ao).tolist()
                 log.debug("IAOs for label %s: %r", ao, (np.asarray(refmol.ao_labels())[ao_indices]).tolist())
@@ -576,38 +515,34 @@ class EmbCC(QEmbeddingMethod):
         # Indices refers to AOs or IAOs, respectively
 
         # Non-orthogonal AOs
-        if self.local_orbital_type == "AO":
+        if self.opts.fragment_type == "AO":
             # Base atom for each AO
             ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
             indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
             C_local, C_env = self.make_local_ao_orbitals(indices)
 
         # Lowdin orthonalized AOs
-        elif self.local_orbital_type == "LAO":
+        elif self.opts.fragment_type == "LAO":
             lao_atoms = [lao[1] for lao in self.lao_labels]
             indices = np.nonzero(np.isin(lao_atoms, atom_labels))[0]
             C_local, C_env = self.make_local_lao_orbitals(indices)
 
         # Orthogonal intrinsic AOs
-        elif self.local_orbital_type == "IAO":
-            # Base atom for each IAO
-            #iao_atoms = [iao[1] for iao in self.iao_labels]
-            #indices = np.nonzero(np.isin(iao_atoms, atom_labels))[0]
-            # NEW: Atoms by index!
+        elif self.opts.fragment_type == "IAO":
             iao_atoms = [iao[0] for iao in self.iao_labels]
             indices = np.nonzero(np.isin(iao_atoms, atom_indices))[0]
 
             C_local, C_env = self.make_local_iao_orbitals(indices)
 
         # Non-orthogonal intrinsic AOs
-        elif self.local_orbital_type == "NonOrth-IAO":
+        elif self.opts.fragment_type == "NonOrth-IAO":
             ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
             indices = np.nonzero(np.isin(ao_atoms, atom_labels))[0]
-            C_local, C_env = self.make_local_nonorth_iao_orbitals(indices, minao=self.minao)
+            C_local, C_env = self.make_local_nonorth_iao_orbitals(indices, minao=self.opts.iao_minao)
 
         # Projected molecular orbitals
         # (AVAS paper)
-        elif self.local_orbital_type == "PMO":
+        elif self.opts.fragment_type == "PMO":
             #ao_atoms = np.asarray([ao[1] for ao in self.mol.ao_labels(None)])
             #indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
 

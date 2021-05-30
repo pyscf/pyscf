@@ -29,7 +29,7 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
     t_hf = timer()-t0
 
     t0 = timer()
-    ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold)
+    ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold, dmet_threshold=1e-8, orbfile='orbitals')
     if atoms[0] == atoms[1]:
         ecc.make_atom_cluster(0, symmetry_factor=2)
     else:
@@ -46,6 +46,7 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
         cc.kernel()
         print("E(CCSD)=   %+16.8f Ha" % cc.e_tot)
         assert np.allclose(cc.e_tot, ecc.e_tot)
+        print("SUCCESS")
 
 def make_cubic(a, atom="He", basis="gth-dzv", supercell=False):
     amat = a * np.eye(3)
@@ -461,11 +462,11 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 def run_test():
 
     #test_dimer(['Li', 'H'], d=1.4)
-    #test_dimer(['Li', 'Li'], d=2.0)
-    #test_cubic()
+    test_dimer(['Li', 'Li'], d=2.0)
+    test_cubic(bno_threshold=-1)
     #test_cubic('C', basis='gth-tzvp')
     #test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
-    test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
+    #test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
     #test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])

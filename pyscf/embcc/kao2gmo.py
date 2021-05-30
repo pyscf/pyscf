@@ -193,21 +193,6 @@ def gdf_to_eris(gdf, mo_coeff, nocc, only_ovov=False, real_j3c=True, symmetry=Fa
                 len(norm_vv), np.count_nonzero(norm_vv < 1e-14), np.count_nonzero(norm_vv < 1e-12),
                 np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8))
 
-    norm_ov = np.amax(abs(j3c['ov']), axis=(1,2))
-    log.debug("Number of ov elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
-            len(norm_ov), np.count_nonzero(norm_ov < 1e-14), np.count_nonzero(norm_ov < 1e-12),
-            np.count_nonzero(norm_ov < 1e-10), np.count_nonzero(norm_ov < 1e-8))
-    if not only_ovov:
-        norm_oo = np.amax(abs(j3c['oo']), axis=(1,2))
-        log.debug("Number of oo elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
-                len(norm_oo), np.count_nonzero(norm_oo < 1e-14), np.count_nonzero(norm_oo < 1e-12),
-                np.count_nonzero(norm_oo < 1e-10), np.count_nonzero(norm_oo < 1e-8))
-        norm_vv = np.amax(abs(j3c['vv']), axis=(1,2))
-        log.debug("Number of vv elements= %d - number of parts below 1E-14= %d  1E-12= %d  1E-10= %d  1E-8= %d",
-                len(norm_vv), np.count_nonzero(norm_vv < 1e-14), np.count_nonzero(norm_vv < 1e-12),
-                np.count_nonzero(norm_vv < 1e-10), np.count_nonzero(norm_vv < 1e-8))
-
-
     def prune_aux_basis(key):
         norm = np.linalg.norm(j3c[key], axis=(1,2))
         assert (len(norm) == nk*naux)

@@ -1,5 +1,6 @@
 import os
 import logging
+import dataclasses
 
 import numpy as np
 import scipy
@@ -7,11 +8,11 @@ import scipy.optimize
 
 log = logging.getLogger(__name__)
 
-__all__ = ["einsum", "time_string", "memory_string", "Options"]
+__all__ = ['einsum', 'time_string', 'memory_string', 'Options']
 
 
 def einsum(*args, **kwargs):
-    kwargs["optimize"] = kwargs.pop("optimize", True)
+    kwargs['optimize'] = kwargs.pop('optimize', True)
     return np.einsum(*args, **kwargs)
 
 
@@ -35,27 +36,31 @@ def memory_string(nbytes, fmt='6.2f'):
         nbytes = nbytes.nbytes
     if nbytes < 1e3:
         val = nbytes
-        mem = "B"
+        unit = "B"
     elif nbytes < 1e6:
         val = nbytes / 1e3
-        mem = "kB"
+        unit = "kB"
     elif nbytes < 1e9:
         val = nbytes / 1e6
-        mem = "MB"
+        unit = "MB"
     elif nbytes < 1e12:
         val = nbytes / 1e9
-        mem = "GB"
+        unit = "GB"
     else:
         val = nbytes / 1e12
-        mem = "TB"
-    return "{:{fmt}} {mem}".format(val, mem=mem, fmt=fmt)
+        unit = "TB"
+    return "{:{fmt}} {unit}".format(val, unit=unit, fmt=fmt)
 
 
 class Options:
+
     def get(self, attr, default=None):
         if hasattr(self, attr):
             return getattr(self, attr)
         return default
+
+    def items(self):
+        return dataclasses.asdict(self).items()
 
 
 def amplitudes_C2T(C1, C2):
