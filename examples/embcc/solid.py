@@ -530,36 +530,36 @@ for i, a in enumerate(args.lattice_consts):
 
         # Define atomic fragments, first argument is atom index
         if args.system == "diamond":
-            ccx.make_atom_cluster(0, symmetry_factor=2)
+            ccx.make_atom_cluster(0, sym_factor=2)
         elif args.system == "graphite":
-            ccx.make_atom_cluster(0, symmetry_factor=2)
-            ccx.make_atom_cluster(1, symmetry_factor=2)
+            ccx.make_atom_cluster(0, sym_factor=2)
+            ccx.make_atom_cluster(1, sym_factor=2)
         elif args.system in ("graphene", "hbn"):
             #for ix in range(2):
-            #    ccx.make_atom_cluster(ix, symmetry_factor=ncells, **kwargs)
+            #    ccx.make_atom_cluster(ix, sym_factor=ncells, **kwargs)
             #if ncells % 2 == 0:
             #    nx, ny = args.supercell[:2]
             #    ix = 2*np.arange(ncells).reshape(nx,ny)[nx//2,ny//2]
             #else:
             #    ix = ncells-1    # Make cluster in center
-            #ccx.make_atom_cluster(ix, symmetry_factor=2, **kwargs)
+            #ccx.make_atom_cluster(ix, sym_factor=2, **kwargs)
 
             if args.atoms[0] == args.atoms[1]:
-                ccx.make_atom_cluster(0, symmetry_factor=2*ncells, **kwargs)
+                ccx.make_atom_cluster(0, sym_factor=2*ncells, **kwargs)
             else:
-                ccx.make_atom_cluster(0, symmetry_factor=ncells, **kwargs)
-                ccx.make_atom_cluster(1, symmetry_factor=ncells, **kwargs)
+                ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
+                ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
 
         elif args.system == "perovskite":
             #ccx.make_atom_cluster(0)
             ## Ti needs larger threshold
             #ccx.make_atom_cluster(1, bno_threshold_factor=10)
-            #ccx.make_atom_cluster(2, symmetry_factor=3)
+            #ccx.make_atom_cluster(2, sym_factor=3)
 
             # Ti needs larger threshold
             ccx.make_atom_cluster(0, bno_threshold_factor=0.3)
             ccx.make_atom_cluster(1)
-            ccx.make_atom_cluster(2, bno_threshold_factor=0.03, symmetry_factor=3)
+            ccx.make_atom_cluster(2, bno_threshold_factor=0.03, sym_factor=3)
         else:
             raise SystemError()
 
