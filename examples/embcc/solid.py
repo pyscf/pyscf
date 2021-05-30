@@ -86,10 +86,7 @@ def get_arguments():
     parser.add_argument("--bno-threshold", type=float, nargs="*",
             default=[1e-8, 1e-7, 1e-6, 1e-5, 1e-4],
             help="Tolerance for additional bath orbitals. If positive, interpreted as an occupation number threshold.")
-    parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
-    # Other type of bath orbitals (pre MP2-natorb)
-    parser.add_argument("--prim-mp2-bath-tol-occ", type=float, default=False)
-    parser.add_argument("--prim-mp2-bath-tol-vir", type=float, default=False)
+    #parser.add_argument("--mp2-correction", type=int, choices=[0, 1], default=1, help="Calculate MP2 correction to energy.")
     # Other
     parser.add_argument("--run-hf", type=int, default=1)
     parser.add_argument("--run-embcc", type=int, default=1)
@@ -524,21 +521,11 @@ for i, a in enumerate(args.lattice_consts):
         # ----------------------
 
         kwargs = {opt : True for opt in args.opts}
-        if args.prim_mp2_bath_tol_occ:
-            kwargs["prim_mp2_bath_tol_occ"] = args.prim_mp2_bath_tol_occ
-        if args.prim_mp2_bath_tol_vir:
-            kwargs["prim_mp2_bath_tol_vir"] = args.prim_mp2_bath_tol_vir
-        if args.plot_orbitals_crop_c:
-            kwargs["plot_orbitals_kwargs"] = {
-                    "c0" : args.plot_orbitals_crop_c[0],
-                    "c1" : args.plot_orbitals_crop_c[1]}
-
         solver_options = {}
         if args.ccsd_diis_start_cycle is not None:
             solver_options["diis_start_cycle"] = args.ccsd_diis_start_cycle
-
         ccx = pyscf.embcc.EmbCC(mf, solver=args.solver, iao_minao=args.iao_minao, dmet_threshold=args.dmet_threshold,
-            bno_threshold=args.bno_threshold, mp2_correction=args.mp2_correction, solver_options=solver_options,
+            bno_threshold=args.bno_threshold, solver_options=solver_options,
             **kwargs)
 
         # Define atomic fragments, first argument is atom index
