@@ -58,9 +58,9 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     if canonicalize in (True, False):
         canonicalize = 2*[canonicalize]
     if canonicalize[0]:
-        c_occ, r_occ = self.canonicalize(c_occ)
+        c_occ, r_occ = self.canonicalize_mo(c_occ)
     if canonicalize[1]:
-        c_vir, r_vir = self.canonicalize(c_vir)
+        c_vir, r_vir = self.canonicalize_mo(c_vir)
 
     # Setup MP2 object
     nao = c_occ.shape[0]

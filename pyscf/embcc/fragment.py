@@ -138,49 +138,6 @@ class Fragment(QEmbeddingFragment):
     get_local_energy = get_local_energy
 
 
-    def canonicalize(self, *mo_coeff, eigenvalues=False):
-        """Diagonalize Fock matrix within subspace.
-
-        Parameters
-        ----------
-        *mo_coeff : ndarrays
-            Orbital coefficients.
-        eigenvalues : ndarray
-            Return MO energies of canonicalized orbitals.
-
-        Returns
-        -------
-        mo_canon : ndarray
-            Canonicalized orbital coefficients.
-        rot : ndarray
-            Rotation matrix: np.dot(mo_coeff, rot) = mo_canon.
-        """
-        mo_coeff = np.hstack(mo_coeff)
-        fock = np.linalg.multi_dot((mo_coeff.T, self.base.get_fock(), mo_coeff))
-        mo_energy, rot = np.linalg.eigh(fock)
-        mo_canon = np.dot(mo_coeff, rot)
-        if eigenvalues:
-            return mo_canon, rot, mo_energy
-        return mo_canon, rot
-
-
-    def get_occup(self, mo_coeff):
-        """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
-
-        Parameters
-        ----------
-        mo_coeff : ndarray, shape(N, M)
-            Orbital coefficients.
-
-        Returns
-        -------
-        occ : ndarray, shape(M)
-            Occupation numbers of orbitals.
-        """
-        sc = np.dot(self.base.get_ovlp(), mo_coeff)
-        dm = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
-        occ = np.diag(dm)
-        return occ
 
     def get_local_projector(self, C, kind="right", inverse=False):
         """Projector for one index of amplitudes local energy expression.
@@ -456,8 +413,8 @@ class Fragment(QEmbeddingFragment):
         c_nbo_vir, c_frozen_vir = self.apply_bno_threshold(self.c_no_vir, self.n_no_vir, bno_thr)
 
         # Canonicalize orbitals
-        c_active_occ = self.canonicalize(self.c_cluster_occ, c_nbo_occ)[0]
-        c_active_vir = self.canonicalize(self.c_cluster_vir, c_nbo_vir)[0]
+        c_active_occ = self.canonicalize_mo(self.c_cluster_occ, c_nbo_occ)[0]
+        c_active_vir = self.canonicalize_mo(self.c_cluster_vir, c_nbo_vir)[0]
 
         # Combine, important to keep occupied orbitals first!
         # Put frozen (occenv, virenv) orbitals to the front and back
@@ -468,10 +425,10 @@ class Fragment(QEmbeddingFragment):
         mo_coeff = np.hstack((c_occ, c_vir))
 
         # Check occupations
-        n_occ = self.get_occup(c_occ)
+        n_occ = self.get_mo_occupation(c_occ)
         if not np.allclose(n_occ, 2, atol=2*self.opts.dmet_threshold):
             raise RuntimeError("Incorrect occupation of occupied orbitals:\n%r" % n_occ)
-        n_vir = self.get_occup(c_vir)
+        n_vir = self.get_mo_occupation(c_vir)
         if not np.allclose(n_vir, 0, atol=2*self.opts.dmet_threshold):
             raise RuntimeError("Incorrect occupation of virtual orbitals:\n%r" % n_vir)
         mo_occ = np.asarray(nocc*[2] + nvir*[0])

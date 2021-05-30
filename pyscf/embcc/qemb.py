@@ -327,6 +327,49 @@ class QEmbeddingFragment:
         """Use this whenever a unique name is needed (for example to open a seperate file for each fragment)."""
         return "%s-%s" % (self.id, self.trimmed_name())
 
+    def get_mo_occupation(self, *mo_coeff):
+        """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
+
+        Parameters
+        ----------
+        mo_coeff : ndarray, shape(N, M)
+            Orbital coefficients.
+
+        Returns
+        -------
+        occ : ndarray, shape(M)
+            Occupation numbers of orbitals.
+        """
+        mo_coeff = np.hstack(mo_coeff)
+        sc = np.dot(self.base.get_ovlp(), mo_coeff)
+        occ = einsum('ai,ab,bi->i', sc, self.mf.make_rdm1(), sc)
+        return occ
+
+    def canonicalize_mo(self, *mo_coeff, eigenvalues=False):
+        """Diagonalize Fock matrix within subspace.
+
+        Parameters
+        ----------
+        *mo_coeff : ndarrays
+            Orbital coefficients.
+        eigenvalues : ndarray
+            Return MO energies of canonicalized orbitals.
+
+        Returns
+        -------
+        mo_canon : ndarray
+            Canonicalized orbital coefficients.
+        rot : ndarray
+            Rotation matrix: np.dot(mo_coeff, rot) = mo_canon.
+        """
+        mo_coeff = np.hstack(mo_coeff)
+        fock = np.linalg.multi_dot((mo_coeff.T, self.base.get_fock(), mo_coeff))
+        mo_energy, rot = np.linalg.eigh(fock)
+        mo_can = np.dot(mo_coeff, rot)
+        if eigenvalues:
+            return mo_can, rot, mo_energy
+        return mo_can, rot
+
 
     def diagonalize_cluster_dm(self, c_bath, tol=1e-4):
         """Diagonalize cluster (fragment+bath) DM to get fully occupied and virtual orbitals.
