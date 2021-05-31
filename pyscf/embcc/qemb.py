@@ -50,7 +50,7 @@ class QEmbeddingMethod:
             log.info("E(MF)= %+16.8f Ha", self.e_mf)
         else:
             log.warning("E(MF)= %+16.8f Ha (not converged!)", self.e_mf)
-        log.info("n(AO)= %4d  n(MO)= %4d", self.nao, self.nmo)
+        log.info("n(AO)= %4d  n(MO)= %4d  n(linear dep.)= %4d", self.nao, self.nmo, self.nao-self.nmo)
         idterr = self.mo_coeff.T.dot(self._ovlp).dot(self.mo_coeff) - np.eye(self.nmo)
         log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
                 "Orthogonality error of MF orbitals: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
@@ -205,9 +205,7 @@ class QEmbeddingMethod:
             raise RuntimeError("Incorrect number of remaining virtual orbitals")
         c_rest = np.dot(self.mo_coeff, c[:,mask_rest])        # Transform back to AO basis
 
-        # Get base atom of each IAO
-        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
-        iao_labels = refmol.ao_labels(None)
+        iao_labels = self.get_iao_labels(minao=minao)
         assert (len(iao_labels) == niao)
 
         # --- Some checks below:
@@ -222,12 +220,14 @@ class QEmbeddingMethod:
         sc = np.dot(ovlp, c_iao)
         dm_iao = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         nelec_iao = np.trace(dm_iao)
+        log.debugv('nelec_iao= %.8f', nelec_iao)
         if abs(nelec_iao - self.mol.nelectron) > 1e-5:
             log.error("IAOs do not contain the correct number of electrons: %.8f", nelec_iao)
 
         # Occupancy per atom
         n_occ = []
         iao_atoms = np.asarray([i[0] for i in iao_labels])
+        log.debugv('iao_atoms= %r', iao_atoms)
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
             n_occ.append(np.diag(dm_iao[mask][:,mask]))
@@ -249,12 +249,44 @@ class QEmbeddingMethod:
         log.info("*********************************")
         for a in range(self.mol.natm if not tsym else self.kcell.natm):
             mask = np.where(iao_atoms == a)[0]
-            fmt = "  * %3d: %-6s total= %12.8f" + len(n_occ[a])*"  %s= %10.8f"
+            log.debugv('mask= %r', mask)
+            fmt = "  * %3d: %-8s total= %12.8f" + len(n_occ[a])*"  %s= %10.8f"
             labels = [("_".join((x[2], x[3])) if x[3] else x[2]) for x in np.asarray(iao_labels)[mask]]
             vals = [val for pair in zip(labels, n_occ[a]) for val in pair]
             log.info(fmt, a, self.mol.atom_symbol(a), np.sum(n_occ[a]), *vals)
 
         return c_iao, c_rest, iao_labels
+
+
+    def get_iao_labels(self, minao):
+        """Get AO labels of IAOs"""
+        refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
+        iao_labels_refmol = refmol.ao_labels(None)
+        log.debugv('iao_labels_refmol: %r', iao_labels_refmol)
+        if refmol.natm == self.mol.natm:
+            iao_labels = iao_labels_refmol
+        # If there are ghost atoms in the system, they will be removed in refmol.
+        # For this reason, the atom IDs of mol and refmol will not agree anymore.
+        # Here we will correct the atom IDs of refmol to agree with mol
+        # (they will no longer be contiguous integers).
+        else:
+            ref2mol = []
+            for refatm in range(refmol.natm):
+                ref_coords = refmol.atom_coord(refatm)
+                for atm in range(self.mol.natm):
+                    coords = self.mol.atom_coord(atm)
+                    if np.allclose(coords, ref_coords):
+                        log.debugv('reference cell atom %r maps to atom %r', refatm, atm)
+                        ref2mol.append(atm)
+                        break
+                else:
+                    raise RuntimeError("No atom found with coordinates %r" % ref_coords)
+            iao_labels = []
+            for iao in iao_labels_refmol:
+                iao_labels.append((ref2mol[iao[0]], iao[1], iao[2], iao[3]))
+        log.debugv('iao_labels: %r', iao_labels)
+        assert (len(iao_labels_refmol) == len(iao_labels))
+        return iao_labels
 
 
 class QEmbeddingFragment:

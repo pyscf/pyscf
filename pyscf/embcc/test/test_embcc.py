@@ -31,7 +31,7 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
     t0 = timer()
     ecc = pyscf.embcc.EmbCC(mf, bno_threshold=bno_threshold, dmet_threshold=2e-4, orbfile='orbitals')
     if atoms[0] == atoms[1]:
-        ecc.make_atom_cluster(0, symmetry_factor=2)
+        ecc.make_atom_cluster(0, sym_factor=2)
     else:
         ecc.make_atom_cluster(0)
         ecc.make_atom_cluster(1)
@@ -109,7 +109,10 @@ def make_graphene_cell(a, c, atoms=['C', 'C'], basis='gth-dzv', supercell=False)
         [2.0, 2.0, 3.0],
         [4.0, 4.0, 3.0]])/6
     coords = np.dot(coords_internal, amat)
-    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+    atom = []
+    for i in range(len(atoms)):
+        if atoms[i] is not None:
+            atom.append((atoms[i], coords[i]))
     cell = pyscf.pbc.gto.Cell()
     cell.a = amat
     cell.atom = atom
@@ -230,7 +233,7 @@ def test_perovskite(a=3.9, kmesh=[1,1,2], bno_threshold=1e-6):
     ecc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
     ecc.make_atom_cluster(0)
     ecc.make_atom_cluster(1)
-    ecc.make_atom_cluster(2, symmetry_factor=3)
+    ecc.make_atom_cluster(2, sym_factor=3)
     ecc.kernel()
     t_ecc = timer()-t0
     print("E(Emb-CCSD)= %+16.8f Ha" % ecc.e_tot)
@@ -302,7 +305,7 @@ def test_diamond(a=3.56, basis='gth-dzv', kmesh=[2, 2, 2], bno_threshold=1e-6):
     kmf.kernel()
 
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
-    kcc.make_atom_cluster(0, symmetry_factor=2)
+    kcc.make_atom_cluster(0, sym_factor=2)
     t0 = timer()
     kcc.kernel()
     print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
@@ -321,11 +324,63 @@ def test_graphene(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshol
     kmf.kernel()
 
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
-    kcc.make_atom_cluster(0, symmetry_factor=2)
+    kcc.make_atom_cluster(0, sym_factor=2)
     t0 = timer()
     kcc.kernel()
     print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
     print("T(EmbCC)= %.2f s" % (timer()-t0))
+
+def test_graphene_bsse(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshold=1e-7):
+
+    ncells = np.product(kmesh)
+
+    # Monomer-basis
+    cell = make_graphene_cell(a, c, atoms=['C', None], basis=basis)
+    cell.lindep_threshold = 1e-7
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    kcc.make_atom_cluster(0)
+    kcc.kernel()
+    e_cp_mon = kcc.e_tot
+
+    # dimer-basis
+    cell = make_graphene_cell(a, c, atoms=['C', 'Ghost-C'], basis=basis)
+    cell.lindep_threshold = 1e-7
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    kcc.make_atom_cluster(0)
+    kcc.kernel()
+    e_cp_dim = kcc.e_tot
+
+    e_bsse = 2*(e_cp_dim-e_cp_mon)
+    print("E(monomer)= %16.8f Ha" % e_cp_mon)
+    print("E(dimer)=   %16.8f Ha" % e_cp_dim)
+    print("E(BSSE)=    %16.8f Ha" % e_bsse)
+    return
+
+    # Full
+    cell = make_graphene_cell(a, c, basis=basis)
+    cell.lindep_threshold = 1e-7
+    kpts = cell.make_kpts(kmesh)
+    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
+    kmf = kmf.density_fit()
+    kmf.kernel()
+    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
+    kcc.make_atom_cluster(0, sym_factor=2)
+    kcc.kernel()
+    e_tot = kcc.e_tot
+
+    print("E(EmbCC)=   %16.8f Ha" % e_tot)
+    print("E(monomer)= %16.8f Ha" % e_cp_mon)
+    print("E(dimer)=   %16.8f Ha" % e_cp_dim)
+    print("E(BSSE)=    %16.8f Ha" % e_bsse)
+
 
 
 def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2, 2, 2]):
@@ -342,7 +397,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
     kmf.kernel()
 
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
-    kcc.make_atom_cluster(0, symmetry_factor=2)
+    kcc.make_atom_cluster(0, sym_factor=2)
     t0 = timer()
     kcc.kernel()
     print("Time for k-EmbCC= %.3f" % (timer()-t0))
@@ -454,7 +509,7 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=[-1])
     kcc.opts.popfile = None
     kcc.opts.orbfile = None
-    kcc.make_atom_cluster(0, symmetry_factor=2)
+    kcc.make_atom_cluster(0, sym_factor=2)
     kcc.kernel()
     print("k-EmbCC E= %16.8g" % kcc.e_tot)
     assert np.allclose(ccsd.e_tot, EXPECTED)
@@ -463,10 +518,11 @@ def run_test():
 
     test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
     #test_dimer(['Li', 'Li'], d=2.0)
-    test_cubic(bno_threshold=-1)
+    #test_cubic(bno_threshold=-1)
     #test_cubic('C', basis='gth-tzvp')
     #test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
     #test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
+    #test_graphene_bsse(basis='gth-dzv', kmesh=[1,1,1])
     #test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])

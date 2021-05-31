@@ -45,6 +45,7 @@ def get_arguments():
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzvp")
     parser.add_argument("--pseudopot", type=str_or_none, default="gth-pade")
+    parser.add_argument("--counterpoise")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
@@ -123,6 +124,11 @@ def get_arguments():
                 "lattice_consts" : np.asarray([2.4, 2.425, 2.45, 2.475, 2.5, 2.525]),
                 "vacuum_size" : 20.0
                 }
+        if args.counterpoise == 'monomer-basis':
+            defaults['atoms'] = ['C', None]
+        elif args.counterpoise == 'dimer-basis':
+            defaults['atoms'] = ['C', 'Ghost-C']
+
     elif args.system == "hbn":
         defaults = {
                 "atoms" : ["B", "N"],
@@ -130,6 +136,15 @@ def get_arguments():
                 "lattice_consts" : np.asarray([2.45, 2.475, 2.5, 2.525, 2.55, 2.575]),
                 "vacuum_size" : 20.0
                 }
+        if args.counterpoise == 'monomer-basis-B':
+            defaults['atoms'] = ['B', None]
+        elif args.counterpoise == 'monomer-basis-N':
+            defaults['atoms'] = [None, 'N']
+        elif args.counterpoise == 'dimer-basis-B':
+            defaults['atoms'] = ['B', 'Ghost-N']
+        elif args.counterpoise == 'dimer-basis-N':
+            defaults['atoms'] = ['Ghost-B', 'N']
+
     elif args.system == "perovskite":
         defaults = {
                 "atoms" : ["Sr", "Ti", "O"],
@@ -163,7 +178,7 @@ def make_diamond(a, atoms=["C", "C"]):
     atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
-def make_graphene(a, c, atoms=["C", "C"]):
+def make_graphene(a, c, atoms=['C', 'C']):
     amat = np.asarray([
             [a, 0, 0],
             [a/2, a*np.sqrt(3.0)/2, 0],
@@ -172,7 +187,12 @@ def make_graphene(a, c, atoms=["C", "C"]):
         [2.0, 2.0, 3.0],
         [4.0, 4.0, 3.0]])/6
     coords = np.dot(coords_internal, amat)
-    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+
+    atom = []
+    for i in range(len(atoms)):
+        if atoms[i] is not None:
+            atom.append((atoms[i], coords[i]))
+    #atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
 def make_graphite(a, c=6.708, atoms=["C", "C", "C", "C"]):
@@ -441,8 +461,8 @@ for i, a in enumerate(args.lattice_consts):
     t0 = timer()
 
     if MPI_rank == 0:
-        log.info("LATTICE CONSTANT %.2f", a)
-        log.info("*********************")
+        log.info("LATTICE CONSTANT %.3f", a)
+        log.info("**********************")
         log.changeIndentLevel(1)
 
     energies = {}
@@ -530,10 +550,10 @@ for i, a in enumerate(args.lattice_consts):
 
         # Define atomic fragments, first argument is atom index
         if args.system == "diamond":
-            ccx.make_atom_cluster(0, sym_factor=2)
+            ccx.make_atom_cluster(0, sym_factor=2*ncells)
         elif args.system == "graphite":
-            ccx.make_atom_cluster(0, sym_factor=2)
-            ccx.make_atom_cluster(1, sym_factor=2)
+            ccx.make_atom_cluster(0, sym_factor=2*ncells)
+            ccx.make_atom_cluster(1, sym_factor=2*ncells)
         elif args.system in ("graphene", "hbn"):
             #for ix in range(2):
             #    ccx.make_atom_cluster(ix, sym_factor=ncells, **kwargs)
@@ -544,8 +564,13 @@ for i, a in enumerate(args.lattice_consts):
             #    ix = ncells-1    # Make cluster in center
             #ccx.make_atom_cluster(ix, sym_factor=2, **kwargs)
 
-            if args.atoms[0] == args.atoms[1]:
+            if (args.atoms[0] == args.atoms[1]):
                 ccx.make_atom_cluster(0, sym_factor=2*ncells, **kwargs)
+            # For counterpoise:
+            elif args.atoms[0] is None or args.atoms[0].lower().startswith('ghost'):
+                ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
+            elif args.atoms[1] is None or args.atoms[1].lower().startswith('ghost'):
+                ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
             else:
                 ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
                 ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
@@ -557,9 +582,9 @@ for i, a in enumerate(args.lattice_consts):
             #ccx.make_atom_cluster(2, sym_factor=3)
 
             # Ti needs larger threshold
-            ccx.make_atom_cluster(0, bno_threshold_factor=0.3)
-            ccx.make_atom_cluster(1)
-            ccx.make_atom_cluster(2, bno_threshold_factor=0.03, sym_factor=3)
+            ccx.make_atom_cluster(0, sym_factor=ncells, bno_threshold_factor=0.3)
+            ccx.make_atom_cluster(1, sym_factor=ncells)
+            ccx.make_atom_cluster(2, sym_factor=3*ncells, bno_threshold_factor=0.03)
         else:
             raise SystemError()
 
