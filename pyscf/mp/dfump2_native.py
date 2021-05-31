@@ -43,7 +43,7 @@ class DFUMP2(DFRMP2):
         if not isinstance(mf, scf.uhf.UHF):
             raise TypeError('Class initialization with non-UHF object')
 
-        # UHF quantities are stored as numpy arrays 
+        # UHF quantities are stored as numpy arrays
         self.mo_coeff = np.array(mf.mo_coeff)
         self.mo_energy = np.array(mf.mo_energy)
         self.nocc = np.array([np.count_nonzero(mf.mo_occ[0]), np.count_nonzero(mf.mo_occ[1])])
@@ -123,8 +123,8 @@ class DFUMP2(DFRMP2):
         logger.debug('frozen (beta) = {0}'.format(frozen_tmp))
         logger.info('basis = {0:s}'.format(repr(self.mol.basis)))
         logger.info('auxbasis = {0:s}'.format(repr(self.auxmol.basis)))
-        logger.info('max_memory = {0:.1f} MB (current use {1:.1f} MB)'. \
-            format(self.max_memory, lib.current_memory()[0]))
+        logger.info('max_memory = {0:.1f} MB (current use {1:.1f} MB)'.
+                    format(self.max_memory, lib.current_memory()[0]))
 
     def calculate_energy(self):
         '''
@@ -137,7 +137,7 @@ class DFUMP2(DFRMP2):
         logger.info('')
         logger.info('Calculating DF-MP2 energy')
         self.e_corr = emp2_uhf(self._intsfile, self.mo_energy, self.frozen_mask,
-            logger, ps=self.ps, pt=self.pt)
+                               logger, ps=self.ps, pt=self.pt)
         logger.note('DF-MP2 correlation energy: {0:.14f}'.format(self.e_corr))
         return self.e_corr
 
@@ -200,7 +200,7 @@ class DFUMP2(DFRMP2):
         natocc = np.flip(eigval)
         natorb = lib.dot(self.mo_coeff[0, :, :], np.fliplr(eigvec))
         return natocc, natorb
-    
+
     def calculate_integrals_(self):
         '''
         Calculates the three center integrals for MP2.
@@ -215,9 +215,9 @@ class DFUMP2(DFRMP2):
             f = ints3c_cholesky(self.mol, self.auxmol, Co, Cv, self.max_memory, logger)
             intsfile.append(f)
         self._intsfile = intsfile
-        logger.info('Stored in files:\n{0:s}\n{1:s}'.\
-            format(self._intsfile[0].filename, self._intsfile[1].filename))
-    
+        logger.info('Stored in files:\n{0:s}\n{1:s}'.
+                    format(self._intsfile[0].filename, self._intsfile[1].filename))
+
     def delete(self):
         '''
         Delete the temporary file(s).
@@ -363,8 +363,9 @@ def make_rdm1(mp2, relaxed, logger=None):
     # Calculate the unrelaxed 1-RDM.
     if logger is None:
         logger = lib.logger.new_logger(mp2)
-    rdm1, GammaFile = ump2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, \
-        mp2.max_memory, logger, calcGamma=relaxed, auxmol=mp2.auxmol, ps=mp2.ps, pt=mp2.pt)
+    rdm1, GammaFile = \
+        ump2_densities_contribs(mp2._intsfile, mp2.mo_energy, mp2.frozen_mask, mp2.max_memory,
+                                logger, calcGamma=relaxed, auxmol=mp2.auxmol, ps=mp2.ps, pt=mp2.pt)
 
     if relaxed:
 
@@ -373,8 +374,9 @@ def make_rdm1(mp2, relaxed, logger=None):
 
             # right-hand side for the CPHF equation
             Gamma = GammaFile['Gamma_'+sstr]
-            Lvo[s], Lfo_s = orbgrad_from_Gamma(mp2.mol, mp2.auxmol, Gamma, \
-                mp2.mo_coeff[s], mp2.frozen_mask[s], mp2.max_memory, logger)
+            Lvo[s], Lfo_s = \
+                orbgrad_from_Gamma(mp2.mol, mp2.auxmol, Gamma, mp2.mo_coeff[s], mp2.frozen_mask[s],
+                                   mp2.max_memory, logger)
 
             # frozen core orbital relaxation contribution
             frozen_list = np.arange(mp2.nmo)[mp2.frozen_mask[s]]
@@ -404,8 +406,8 @@ def make_rdm1(mp2, relaxed, logger=None):
     return rdm1
 
 
-def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logger, \
-    calcGamma=False, auxmol=None, ps=1.0, pt=1.0):
+def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logger,
+                            calcGamma=False, auxmol=None, ps=1.0, pt=1.0):
     '''
     Calculates the unrelaxed DF-MP2 density matrix contribution with a UHF reference.
     Note: this is the difference density, i.e. without HF contribution.A
@@ -421,7 +423,7 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
         auxmol : required if relaxed is True
         ps : SCS factor for opposite-spin contributions
         pt : SCS factor for same-spin contributions
-    
+
     Returns:
         matrix containing the 1-RDM contribution, file with 3c2e density if requested
     '''
@@ -513,8 +515,8 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                 if batchsize < 1:
                     raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
                 logger.debug2('    Batch size: {0:d} (of {1:d})'.format(batchsize, nvirt[s1]))
-                logger.debug2('      Pij formation - MO {0:d} ({1:s}), batch size {2:d} (of {3:d})'. \
-                    format(i, s1_str, batchsize, nvirt[s1]))
+                logger.debug2('      Pij formation - MO {0:d} ({1:s}), batch size {2:d} (of {3:d})'.
+                              format(i, s1_str, batchsize, nvirt[s1]))
                 for astart in range(0, nvirt[s1], batchsize):
                     aend = min(astart+batchsize, nvirt[s1])
                     tbatch = tiset[:, astart:aend, :]
@@ -537,8 +539,8 @@ def ump2_densities_contribs(intsfiles, mo_energy, frozen_mask, max_memory, logge
                     batchsize = min(nocc_act[s2], batchsize)
                     if batchsize < 1:
                         raise MemoryError('Insufficient memory (PYSCF_MAX_MEMORY).')
-                    logger.debug2('      Gamma ({0:s}) formation - MO {1:d} ({2:s}), batch size {3:d} (of {4:d})'. \
-                        format(s2_str, i, s1_str, batchsize, nocc_act[s2]))
+                    logger.debug2('      Gamma ({0:s}) formation - MO {1:d} ({2:s}), batch size {3:d} (of {4:d})'.
+                                  format(s2_str, i, s1_str, batchsize, nocc_act[s2]))
                     if s1 == s2:
                         prefactor = 2.0 * pt
                     else:
@@ -573,7 +575,7 @@ def fock_response_uhf(mf, dm, full=True):
         mf : UHF instance
         dm : density matrix in MO basis
         full : full MO density matrix if True, [virt. x occ., virt. x occ.] if False
-    
+
     Returns:
         Fock response in MO basis. Shape: [virt. x occ., virt. x occ.]
     '''
@@ -626,14 +628,14 @@ def solve_cphf_uhf(mf, Lvo, max_cycle, tol, logger):
         rflat = np.hstack([ra.reshape((1, noa*nva)), rb.reshape((1, nob*nvb))])
         return rflat
 
-    zvo = ucphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lvo, \
-        max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
+    zvo = ucphf.solve(fvind, mf.mo_energy, mf.mo_occ, Lvo,
+                      max_cycle=max_cycle, tol=tol, verbose=cphf_verbose)[0]
     logger.info('CPHF iterations finished')
     return zvo
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf, lib
+    from pyscf import gto
 
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],
