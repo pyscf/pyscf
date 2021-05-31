@@ -44,7 +44,7 @@ def get_arguments():
     parser.add_argument("--system", choices=["diamond", "graphite", "graphene", "hbn", "perovskite"], default="diamond")
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzvp")
-    parser.add_argument("--pseudopot", default="gth-pade")
+    parser.add_argument("--pseudopot", type=str_or_none, default="gth-pade")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
