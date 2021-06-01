@@ -1223,7 +1223,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
               ('norm_gorb0' in envs and
                envs['norm_gorb0'] < envs['conv_tol_grad'])):
             self._max_stepsize = (self._max_stepsize * self.min_stepsize)**.5
-            logger.info(self, 'align max_stepsize to %g', self._max_stepsize)
+            logger.debug(self, 'align max_stepsize to %g', self._max_stepsize)
         else:
             self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
         return self._max_stepsize
