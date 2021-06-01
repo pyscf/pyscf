@@ -196,7 +196,8 @@ class CCSDSolver(ClusterSolver):
         else:
             log.info("Running CCSD...")
             cc.kernel(eris=self._eris)
-        log.info("CCSD done. converged: %r", cc.converged)
+        #log.log((logging.INFO if cc.converged else logging.ERROR), "CCSD done. converged: %r", cc.converged)
+        (log.info if cc.converged else log.error)("CCSD done. converged: %r", cc.converged)
         log.debug("E(full corr)= % 16.8f Ha", cc.e_corr)
         log.timing("Time for CCSD:  %s", time_string(timer()-t0))
 

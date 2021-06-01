@@ -50,8 +50,9 @@ class FragmentOptions(Options):
 class Fragment(QEmbeddingFragment):
 
     def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1,
+            atoms=None,
             solver=None, bno_threshold=None, bno_threshold_factor=1,
-            **kwargs):
+            options=None, **kwargs):
         """
         Parameters
         ----------
@@ -63,7 +64,7 @@ class Fragment(QEmbeddingFragment):
             Name of fragment.
         """
 
-        super(Fragment, self).__init__(base, fid, name, c_frag, c_env, sym_factor)
+        super(Fragment, self).__init__(base, fid, name, c_frag, c_env, sym_factor=sym_factor, atoms=atoms)
 
         # Options
         if solver is None:
@@ -84,7 +85,11 @@ class Fragment(QEmbeddingFragment):
         # (allows projecting down ERIs and initial guess for subsequent calculations)
         self.bno_threshold.sort()
 
-        self.opts = FragmentOptions(**kwargs)
+        if options is None:
+            options = FragmentOptions(**kwargs)
+        else:
+            options = dataclasses.replace(options, **kwargs)
+        self.opts = options
         for key, val in self.opts.items():
             if val == FROM_BASE:
                 setattr(self.opts, key, copy.copy(getattr(self.base.opts, key)))
@@ -335,29 +340,38 @@ class Fragment(QEmbeddingFragment):
         #    C_occclst, C_virclst = self.diagonalize_cluster_dm(C_bath)
         #self.C_bath = C_bath
 
-        log.info("MAKING OCCUPIED BNOs")
-        log.info("********************")
-        t0 = timer()
-        log.changeIndentLevel(1)
-        self.c_no_occ, self.n_no_occ = make_mp2_bno(
-                self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
-        if len(self.n_no_occ) > 0:
-            log.info("Occupied BNO histogram:")
-            helper.plot_histogram(self.n_no_occ)
-        log.changeIndentLevel(-1)
+        if c_env_occ.shape[-1] > 0:
+            log.info("MAKING OCCUPIED BNOs")
+            log.info("********************")
+            t0 = timer()
+            log.changeIndentLevel(1)
+            self.c_no_occ, self.n_no_occ = make_mp2_bno(
+                    self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
+            log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
+            if len(self.n_no_occ) > 0:
+                log.info("Occupied BNO histogram:")
+                helper.plot_histogram(self.n_no_occ)
+            log.changeIndentLevel(-1)
+        else:
+            self.c_no_occ = c_env_occ
+            self.n_no_occ = np.zeros((0,))
 
-        log.info("MAKING VIRTUAL BNOs")
-        log.info("*******************")
-        t0 = timer()
-        log.changeIndentLevel(1)
-        self.c_no_vir, self.n_no_vir = make_mp2_bno(
-                self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-        log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
-        if len(self.n_no_vir) > 0:
-            log.info("Virtual BNO histogram:")
-            helper.plot_histogram(self.n_no_vir)
-        log.changeIndentLevel(-1)
+        if c_env_vir.shape[-1] > 0:
+            log.info("MAKING VIRTUAL BNOs")
+            log.info("*******************")
+            t0 = timer()
+            log.changeIndentLevel(1)
+            self.c_no_vir, self.n_no_vir = make_mp2_bno(
+                    self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
+            log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
+            if len(self.n_no_vir) > 0:
+                log.info("Virtual BNO histogram:")
+                helper.plot_histogram(self.n_no_vir)
+            log.changeIndentLevel(-1)
+        else:
+            self.c_no_vir = c_env_vir
+            self.n_no_vir = np.zeros((0,))
+
 
         # Plot orbitals
         if self.opts.plot_orbitals:
@@ -661,5 +675,59 @@ class Fragment(QEmbeddingFragment):
 
         # Active chis
         return chis[:,0]
+
+
+    def get_fragment_bsse(self, radius=100.0, unit='Ang'):
+        # Currently only PBC
+        if not self.has_pbc:
+            raise NotImplementedError()
+        cell = pyscf.pbc.tools.cell_plus_imgs(self.mol, 1)
+        mol = cell.to_mol() # Remove PBC
+        assert len(self.atoms) == 1
+        center = self.mol.atom_coord(self.atoms[0])
+        atoms = [self.atoms[0]]
+        for atm in range(cell.natm):
+            if atm == self.atoms[0]:
+                continue
+            coords = cell.atom_coord(atm, unit=unit)
+            if np.linalg.norm(coords - center) < radius:
+                atoms.append(atm)
+        log.debugv("Included atoms for BSSE calculation of atom %d= %r", atoms[0], atoms[1:])
+
+        # Atom in atom basis
+        mf = pyscf.scf.RHF(mol)
+        # TODO AUXBASIS ETC
+        mf = mf.density_fit()
+        mf.kernel()
+        log.debuv("Counterpoise: E(MF,atom)= % 16.8f Ha", mf.e_tot)
+
+        ccx = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
+        # Do not use sym factor here! We also have to scale the MF energy
+        ccx.add_atom_cluster(self.atoms[0], options=self.opts)
+        ccx.kernel()
+        log.debuv("Counterpoise: E(CC,atom)= %r", ccx.get_energies())
+
+        
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

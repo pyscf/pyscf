@@ -6,6 +6,7 @@ import scipy
 import scipy.linalg
 
 import pyscf
+import pyscf.mp
 import pyscf.lo
 import pyscf.pbc
 import pyscf.pbc.gto
@@ -64,7 +65,8 @@ class QEmbeddingMethod:
     @property
     def has_pbc(self):
         """If the system has periodic boundary conditions."""
-        return isinstance(self.mol, pyscf.pbc.gto.Cell)
+        #return isinstance(self.mol, pyscf.pbc.gto.Cell)
+        return hasattr(self.mol, 'a') and self.mol.a is not None
 
     @property
     def kpts(self):
@@ -128,7 +130,11 @@ class QEmbeddingMethod:
         """
         # Molecules or supercell:
         if self.kdf is None:
-            return cm.ao2mo()
+            log.debugv('ao2mo method: %r', cm.ao2mo)
+            if isinstance(cm, pyscf.mp.dfmp2.DFMP2):
+                return cm.ao2mo(store_eris=True)
+            else:
+                return cm.ao2mo()
         # k-point sampled primtive cell:
         eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
         return eris
@@ -292,7 +298,9 @@ class QEmbeddingMethod:
 class QEmbeddingFragment:
 
 
-    def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1.0):
+    def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1.0,
+            # Metadata
+            aos=None, atoms=None):
         """
         Parameters
         ----------
@@ -308,6 +316,8 @@ class QEmbeddingFragment:
             Environment (non-fragment) orbitals.
         sym_factor : float, optional
             Symmetry factor (number of symmetry equivalent fragments).
+        aos : list or int, optional
+        atoms : list or int, optional
         """
         msg = "CREATING FRAGMENT %d: %s" % (fid, name)
         log.info(msg)
@@ -316,17 +326,20 @@ class QEmbeddingFragment:
         self.base = base
         self.id = fid
         self.name = name
-
-        if c_frag.shape[-1] == 0:
-            raise ValueError("No local orbitals in fragment")
-
         self.c_frag = c_frag
         self.c_env = c_env
         self.sym_factor = sym_factor
+        self.aos = aos
+        self.atoms = atoms
 
+        # Some output
         log.info("  * Number of fragment orbitals= %d", self.size)
         log.info("  * Symmetry factor= %f", self.sym_factor)
         log.info("  * Number of mean-field electrons= %.6f", self.nelectron)
+        if self.aos:
+            log.info("  * Associated AOs= %r", self.aos)
+        if self.atoms:
+            log.info("  * Associated atoms= %r", self.atoms)
 
     @property
     def mol(self):

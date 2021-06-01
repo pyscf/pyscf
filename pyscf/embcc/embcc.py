@@ -71,7 +71,7 @@ VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", 'FCI', "FCI-spin0",
 class EmbCC(QEmbeddingMethod):
 
 
-    def __init__(self, mf, solver='CCSD', bno_threshold=1e-8, **kwargs):
+    def __init__(self, mf, solver='CCSD', bno_threshold=1e-8, options=None, **kwargs):
         """Embedded CCSD calcluation object.
 
         Parameters
@@ -91,7 +91,11 @@ class EmbCC(QEmbeddingMethod):
         log.info("******************")
         log.changeIndentLevel(1)
 
-        self.opts = EmbCCOptions(**kwargs)
+        if options is None:
+            options = EmbCCOptions(**kwargs)
+        else:
+            options = dataclasses.replace(options, **kwargs)
+        self.opts = options
         log.info("EmbCC parameters:")
         for key, val in self.opts.items():
             log.info('  * %-24s %r', key + ':', val)
@@ -394,16 +398,16 @@ class EmbCC(QEmbeddingMethod):
 
     # -------------------------------------------------------------------------------------------- #
 
-    def make_cluster(self, name, C_local, C_env, **kwargs):
-        """Create cluster object and add to list.
+    def make_fragment(self, name, c_frag, c_env, **kwargs):
+        """Create Fragment object and add to list.
 
         Parameters
         ----------
         name : str
             Unique name for cluster.
-        C_local : ndarray
+        c_frag : ndarray
             Local (fragment) orbitals of cluster.
-        C_env : ndarray
+        c_env : ndarray
             All environment (non-fragment) orbials.
 
         Returns
@@ -413,19 +417,17 @@ class EmbCC(QEmbeddingMethod):
         """
         #assert len(indices) > 0
         # Get new ID
-        cluster_id = len(self.clusters) + 1
+        fid = len(self.clusters) + 1
         # Check that ID is unique
-        for cluster in self.clusters:
-            if (cluster_id == cluster.id):
-                raise RuntimeError("Cluster with ID %d already exists: %s" % (cluster_id, cluster.id_name))
-
+        for f in self.clusters:
+            if (fid == f.id):
+                raise RuntimeError("Fragment with ID %d already exists: %s" % (fid, f.id_name))
         # Symmetry factor, if symmetry related fragments exist
         # TODO: Determine symmetry automatically
         kwargs["sym_factor"] = kwargs.get("sym_factor", 1.0)
-        cluster = Fragment(self, fid=cluster_id, name=name,
-                c_frag=C_local, c_env=C_env, **kwargs)
-        self.clusters.append(cluster)
-        return cluster
+        frag = Fragment(self, fid=fid, name=name, c_frag=c_frag, c_env=c_env, **kwargs)
+        self.clusters.append(frag)
+        return frag
 
     def make_custom_cluster(self, ao_labels, name=None, **kwargs):
         """Each AO label can have multiple space separated strings"""
@@ -460,7 +462,7 @@ class EmbCC(QEmbeddingMethod):
             raise NotImplementedError()
 
         #cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
-        cluster = self.make_cluster(name, C_local, C_env, **kwargs)
+        cluster = self.make_fragment(name, C_local, C_env, **kwargs)
         return cluster
 
     def make_atom_cluster(self, atoms, name=None, check_atoms=True, **kwargs):
@@ -473,8 +475,8 @@ class EmbCC(QEmbeddingMethod):
             Name of cluster.
         """
         # Atoms may be a single atom index/label
-        #if isinstance(atoms, int) or isinstance(atoms, str):
-        if not isinstance(atoms, (tuple, list, np.ndarray)):
+        #if not isinstance(atoms, (tuple, list, np.ndarray)):
+        if np.isscalar(atoms):
             atoms = [atoms]
 
         # Check if atoms are valid labels of molecule
@@ -515,9 +517,8 @@ class EmbCC(QEmbeddingMethod):
         # Orthogonal intrinsic AOs
         elif self.opts.fragment_type == "IAO":
             iao_atoms = [iao[0] for iao in self.iao_labels]
-            indices = np.nonzero(np.isin(iao_atoms, atom_indices))[0]
-
-            C_local, C_env = self.make_local_iao_orbitals(indices)
+            iao_indices = np.nonzero(np.isin(iao_atoms, atom_indices))[0]
+            C_local, C_env = self.make_local_iao_orbitals(iao_indices)
 
         # Non-orthogonal intrinsic AOs
         elif self.opts.fragment_type == "NonOrth-IAO":
@@ -561,11 +562,7 @@ class EmbCC(QEmbeddingMethod):
             log.debug("Number of local orbitals: %d", C_local.shape[-1])
             log.debug("Number of environment orbitals: %d", C_env.shape[-1])
 
-        #cluster = self.make_cluster(name, C_local, C_env, indices=indices, **kwargs)
-        #indices = None
-        #indices = list(range(C_local.shape[-1]))
-        #cluster = self.make_cluster(name, indices, C_local, C_env, **kwargs)
-        cluster = self.make_cluster(name, C_local, C_env, **kwargs)
+        cluster = self.make_fragment(name, C_local, C_env, atoms=atom_indices, **kwargs)
 
         # TEMP
         #ao_indices = get_ao_indices_at_atoms(self.mol, atomids)

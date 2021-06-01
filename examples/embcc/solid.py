@@ -7,7 +7,9 @@ from datetime import datetime
 import numpy as np
 # Internal
 import pyscf
+import pyscf.lib
 import pyscf.lo
+import pyscf.scf
 import pyscf.pbc
 import pyscf.pbc.dft
 import pyscf.pbc.tools
@@ -124,10 +126,11 @@ def get_arguments():
                 "lattice_consts" : np.asarray([2.4, 2.425, 2.45, 2.475, 2.5, 2.525]),
                 "vacuum_size" : 20.0
                 }
-        if args.counterpoise == 'monomer-basis':
-            defaults['atoms'] = ['C', None]
-        elif args.counterpoise == 'dimer-basis':
-            defaults['atoms'] = ['C', 'Ghost-C']
+        # This is not how we do it anymore
+        #if args.counterpoise == 'monomer-basis':
+        #    defaults['atoms'] = ['C', None]
+        #elif args.counterpoise == 'dimer-basis':
+        #    defaults['atoms'] = ['C', 'Ghost-C']
 
     elif args.system == "hbn":
         defaults = {
@@ -136,14 +139,15 @@ def get_arguments():
                 "lattice_consts" : np.asarray([2.45, 2.475, 2.5, 2.525, 2.55, 2.575]),
                 "vacuum_size" : 20.0
                 }
-        if args.counterpoise == 'monomer-basis-B':
-            defaults['atoms'] = ['B', None]
-        elif args.counterpoise == 'monomer-basis-N':
-            defaults['atoms'] = [None, 'N']
-        elif args.counterpoise == 'dimer-basis-B':
-            defaults['atoms'] = ['B', 'Ghost-N']
-        elif args.counterpoise == 'dimer-basis-N':
-            defaults['atoms'] = ['Ghost-B', 'N']
+        # This is not how we do it anymore
+        #if args.counterpoise == 'monomer-basis-B':
+        #    defaults['atoms'] = ['B', None]
+        #elif args.counterpoise == 'monomer-basis-N':
+        #    defaults['atoms'] = [None, 'N']
+        #elif args.counterpoise == 'dimer-basis-B':
+        #    defaults['atoms'] = ['B', 'Ghost-N']
+        #elif args.counterpoise == 'dimer-basis-N':
+        #    defaults['atoms'] = ['Ghost-B', 'N']
 
     elif args.system == "perovskite":
         defaults = {
@@ -175,7 +179,7 @@ def make_diamond(a, atoms=["C", "C"]):
         [0.0, 0.5, 0.5],
         [0.5, 0.0, 0.5]])
     coords = a * np.asarray([[0, 0, 0], [1, 1, 1]])/4
-    atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
+    atom = [[atoms[0], coords[0]], [atoms[1], coords[1]]]
     return amat, atom
 
 def make_graphene(a, c, atoms=['C', 'C']):
@@ -191,7 +195,7 @@ def make_graphene(a, c, atoms=['C', 'C']):
     atom = []
     for i in range(len(atoms)):
         if atoms[i] is not None:
-            atom.append((atoms[i], coords[i]))
+            atom.append([atoms[i], coords[i]])
     #atom = [(atoms[0], coords[0]), (atoms[1], coords[1])]
     return amat, atom
 
@@ -207,7 +211,7 @@ def make_graphite(a, c=6.708, atoms=["C", "C", "C", "C"]):
         [0,     0,      3.0/4],
         [1.0/3, 2.0/3,  3.0/4]])
     coords = np.dot(coords_internal, amat)
-    atom = [(atoms[i], coords[i]) for i in range(4)]
+    atom = [[atoms[i], coords[i]] for i in range(4)]
     return amat, atom
 
 
@@ -221,25 +225,27 @@ def make_perovskite(a, atoms=["Sr", "Ti", "O"]):
                 [a/2,   a/2,    0]
                 ])
     atom = [
-        (atoms[0], coords[0]),
-        (atoms[1], coords[1]),
-        (atoms[2], coords[2]),
-        (atoms[2], coords[3]),
-        (atoms[2], coords[4]),
+        [atoms[0], coords[0]],
+        [atoms[1], coords[1]],
+        [atoms[2], coords[2]],
+        [atoms[2], coords[3]],
+        [atoms[2], coords[4]],
         ]
     return amat, atom
+
 
 def make_cell(a, args, **kwargs):
 
     cell = pyscf.pbc.gto.Cell()
     if args.system == "diamond":
-        cell.a, cell.atom = make_diamond(a, atoms=args.atoms)
+        amat, atom = make_diamond(a, atoms=args.atoms)
     elif args.system == "graphite":
-        cell.a, cell.atom = make_graphite(a, c=args.vacuum_size, atoms=args.atoms)
+        amat, atom = make_graphite(a, c=args.vacuum_size, atoms=args.atoms)
     elif args.system in ("graphene", "hbn"):
-        cell.a, cell.atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
+        amat, atom = make_graphene(a, c=args.vacuum_size, atoms=args.atoms)
     elif args.system == "perovskite":
-        cell.a, cell.atom = make_perovskite(a, atoms=args.atoms)
+        amat, atom = make_perovskite(a, atoms=args.atoms)
+    cell.a, cell.atom = amat, atom
     cell.dimension = args.ndim
     cell.precision = args.precision
     cell.verbose = args.pyscf_verbose
@@ -252,10 +258,55 @@ def make_cell(a, args, **kwargs):
         cell.exp_to_discard = args.exp_to_discard
     if args.lindep_threshold:
         cell.lindep_threshold=args.lindep_threshold
-    cell.build()
-    if args.supercell and not np.all(args.supercell == 1):
-        cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
-
+    if args.counterpoise is None:
+        cell.build()
+        if args.supercell and not np.all(args.supercell == 1):
+            cell = pyscf.pbc.tools.super_cell(cell, args.supercell)
+    # Remove all but one atom
+    elif '*' not in args.counterpoise:
+        atmidx = int(args.counterpoise)
+        cell.atom = cell.atom[atmidx:atmidx+1]
+        #cell = cell.to_mol()
+        # If we leave it as a cell object and just set `.a` to None, we can still use PBC basis sets / PP
+        cell.a = None
+    # Remove all but one atom, but keep basis functions of the 26 (3D) or 8 (2D) neighboring cells
+    elif '*' in args.counterpoise:
+        maxr = 1000.0
+        atmidx = int(args.counterpoise.replace('*', ''))
+        atom = cell.atom.copy()
+        center = atom[atmidx][1]
+        # Make other atoms within unit cell to Ghost atoms
+        for idx in range(len(atom)):
+            if (idx != atmidx):
+                atom[idx][0] = 'Ghost-%s' % atom[idx][0]
+        # Add Ghost atoms in other cells
+        if cell.dimension == 2:
+            images = [1, 1, 0]
+        else:
+            images = [1, 1, 1]
+        for x in range(-images[0], images[0]+1):
+            for y in range(-images[1], images[1]+1):
+                for z in range(-images[2], images[2]+1):
+                    # Central unit cell already done; skip
+                    if abs(x)+abs(y)+abs(z) == 0:
+                        continue
+                    for atm in cell.atom:
+                        symb = atm[0] if atm[0].lower().startswith('ghost') else 'Ghost-%s' % atm[0]
+                        coord = atm[1] + x*cell.a[0] + y*cell.a[1] + z*cell.a[2]
+                        if np.linalg.norm(coord - center) < maxr:
+                            atom.append([symb, coord])
+                            log.debugv("Adding atom %r at %r with distance %.2f", symb, coord, np.linalg.norm(coord-center))
+                        else:
+                            log.debugv("Not adding atom %r at %r with distance %.2f", symb, coord, np.linalg.norm(coord-center))
+        cell.atom = atom
+        #cell = cell.to_mol()
+        # If we leave it as a cell object and just set `.a` to None, we can still use PBC basis sets / PP
+        cell.a = None
+        cell.ecp = cell.pseudo
+        #cell.pseudo = None
+        cell.build()
+    else:
+        raise ValueError()
     return cell
 
 def pop_analysis(mf, filename=None, mode="a"):
@@ -287,11 +338,18 @@ def pop_analysis(mf, filename=None, mode="a"):
 
 def run_mf(a, cell, args, kpts=None, dm_init=None, xc="hf", df=None, build_df_early=False):
     if kpts is None:
-        if xc is None or xc.lower() == "hf":
-            mf = pyscf.pbc.scf.RHF(cell)
+        if hasattr(cell, 'a') and cell.a is not None:
+            if xc is None or xc.lower() == "hf":
+                mf = pyscf.pbc.scf.RHF(cell)
+            else:
+                mf = pyscf.pbc.dft.RKS(cell)
+                mf.xc = xc
         else:
-            mf = pyscf.pbc.dft.RKS(cell)
-            mf.xc = xc
+            if xc is None or xc.lower() == "hf":
+                mf = pyscf.scf.RHF(cell)
+            else:
+                mf = pyscf.dft.RKS(cell)
+                mf.xc = xc
     else:
         if xc is None or xc.lower() == "hf":
             mf = pyscf.pbc.scf.KRHF(cell, kpts)
@@ -564,16 +622,20 @@ for i, a in enumerate(args.lattice_consts):
             #    ix = ncells-1    # Make cluster in center
             #ccx.make_atom_cluster(ix, sym_factor=2, **kwargs)
 
-            if (args.atoms[0] == args.atoms[1]):
-                ccx.make_atom_cluster(0, sym_factor=2*ncells, **kwargs)
-            # For counterpoise:
-            elif args.atoms[0] is None or args.atoms[0].lower().startswith('ghost'):
-                ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
-            elif args.atoms[1] is None or args.atoms[1].lower().startswith('ghost'):
-                ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
+            if args.counterpoise:
+                idx = int(args.counterpoise.replace('*', ''))
+                ccx.make_atom_cluster(idx, **kwargs)
             else:
-                ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
-                ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
+                if (args.atoms[0] == args.atoms[1]):
+                    ccx.make_atom_cluster(0, sym_factor=2*ncells, **kwargs)
+                # For counterpoise:
+                #elif args.atoms[0] is None or args.atoms[0].lower().startswith('ghost'):
+                #    ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
+                #elif args.atoms[1] is None or args.atoms[1].lower().startswith('ghost'):
+                #    ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
+                else:
+                    ccx.make_atom_cluster(0, sym_factor=ncells, **kwargs)
+                    ccx.make_atom_cluster(1, sym_factor=ncells, **kwargs)
 
         elif args.system == "perovskite":
             #ccx.make_atom_cluster(0)

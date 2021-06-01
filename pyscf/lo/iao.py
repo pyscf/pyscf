@@ -105,7 +105,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
     # s1 is the one electron overlap integrals (coulomb integrals)
     # s2 is the same as s1 except in minao
     # s12 are the overlap integrals of the two molecules
-    if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
+    #if getattr(mol, 'pbc_intor', None):  # cell object has pbc_intor method
+    if hasattr(mol, 'a') and mol.a is not None:
         from pyscf.pbc import gto as pbcgto
         s1 = numpy.asarray(mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
         s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=c_null_ptr()))
