@@ -28,7 +28,6 @@ from pyscf.mcscf import casci
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
-from pyscf.mcscf.addons import StateAverageMCSCFSolver
 from pyscf import ao2mo
 from pyscf import gto
 from pyscf import scf
@@ -433,24 +432,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
-        max_offdiag_u = numpy.abs(numpy.triu(u, 1)).max()
-        if max_offdiag_u < casscf.small_rot_tol:
-            small_rot = True
-            log.debug('Small orbital rotation, restart CI if supported by solver')
-        else:
-            small_rot = False
-        if not isinstance(casscf, StateAverageMCSCFSolver):
-            if not isinstance(fcivec, numpy.ndarray):
-                fcivec = small_rot
-        else:
-            newvecs = []
-            for subvec in fcivec:
-                if not isinstance(subvec, numpy.ndarray):
-                    newvecs.append(small_rot)
-                else:
-                    newvecs.append(subvec)
-            fcivec = newvecs
-
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
@@ -459,9 +440,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         t3m = t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
         de, elast = e_tot - elast, e_tot
-        if (abs(de) < tol and norm_gorb0 < conv_tol_grad and
-                norm_ddm < conv_tol_ddm and
-                (max_offdiag_u < casscf.small_rot_tol or casscf.small_rot_tol == 0)):
+        if (abs(de) < tol
+            and (norm_gorb0 < conv_tol_grad and norm_ddm < conv_tol_ddm)):
             conv = True
 
         if dump_chk:
@@ -589,11 +569,6 @@ class CASSCF(casci.CASCI):
             Max number of micro iterations in each macro iteration.  Depending on
             systems, increasing this value might reduce the total macro
             iterations.  Generally, 2 - 5 steps should be enough.  Default is 3.
-        small_rot_tol : float
-            Threshold for orbital rotation to be considered small. If the largest orbital
-            rotation is smaller than this value, the CI solver will restart from the
-            previous iteration if supported.
-            Default is 0.01
         ah_level_shift : float, for AH solver.
             Level shift for the Davidson diagonalization in AH solver.  Default is 1e-8.
         ah_conv_tol : float, for AH solver.
@@ -723,7 +698,6 @@ class CASSCF(casci.CASCI):
     canonicalization = getattr(__config__, 'mcscf_mc1step_CASSCF_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
     scale_restoration = getattr(__config__, 'mcscf_mc1step_CASSCF_scale_restoration', 0.5)
-    small_rot_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_small_rot_tol', 0.01)
 
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
@@ -775,7 +749,6 @@ class CASSCF(casci.CASCI):
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
         log.info('orbital rotation max_stepsize = %g', self.max_stepsize)
-        log.info('orbital rotation threshold for CI restart = %g', self.small_rot_tol)
         log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian ah_linear dependence = %g', self.ah_lindep)
@@ -891,12 +864,12 @@ To enable the solvent model for CASSCF, the following code needs to be called
                              e_tot, e_tot-envs['elast'], ss[0])
                 if 'norm_gci' in envs and envs['norm_gci'] is not None:
                     log.info('               |grad[o]|=%5.3g  '
-                             '|grad[c]|= %5.3g  |ddm|=%5.3g  |maxRot[o]|=%5.3g',
+                             '|grad[c]|= %5.3g  |ddm|=%5.3g',
                              envs['norm_gorb0'],
-                             envs['norm_gci'], envs['norm_ddm'], envs['max_offdiag_u'])
+                             envs['norm_gci'], envs['norm_ddm'])
                 else:
-                    log.info('               |grad[o]|=%5.3g  |ddm|=%5.3g  |maxRot[o]|=%5.3g',
-                             envs['norm_gorb0'], envs['norm_ddm'], envs['max_offdiag_u'])
+                    log.info('               |grad[o]|=%5.3g  |ddm|=%5.3g',
+                             envs['norm_gorb0'], envs['norm_ddm'])
             else:  # Initialization step
                 if ss is None:
                     log.info('CASCI E = %.15g', e_tot)

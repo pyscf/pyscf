@@ -20,7 +20,6 @@
 import numpy
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
-from pyscf.mcscf.addons import StateAverageMCSCFSolver
 
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
@@ -93,24 +92,6 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             eris = casscf.ao2mo(mo)
             t3m = log.timer('update eri', *t3m)
 
-            max_offdiag_u = numpy.abs(numpy.triu(u, 1)).max()
-            if max_offdiag_u < casscf.small_rot_tol:
-                small_rot = True
-                log.debug('Small orbital rotation, restart CI if supported by solver')
-            else:
-                small_rot = False
-            if not isinstance(casscf, StateAverageMCSCFSolver):
-                if not isinstance(fcivec, numpy.ndarray):
-                    fcivec = small_rot
-            else:
-                newvecs = []
-                for subvec in fcivec:
-                    if not isinstance(subvec, numpy.ndarray):
-                        newvecs.append(small_rot)
-                    else:
-                        newvecs.append(subvec)
-                fcivec = newvecs
-
             log.debug('micro %d  ~dE=%5.3g  |u-1|=%5.3g  |g[o]|=%5.3g  |dm1|=%5.3g',
                       imicro, de, norm_t, norm_gorb, norm_ddm)
 
@@ -130,8 +111,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
         de, elast = e_tot - elast, e_tot
         if (abs(de) < tol and
-                norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm and
-                (max_offdiag_u < casscf.small_rot_tol or casscf.small_rot_tol == 0)):
+            norm_gorb < conv_tol_grad and norm_ddm < conv_tol_ddm):
             conv = True
         else:
             elast = e_tot
