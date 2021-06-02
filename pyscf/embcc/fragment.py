@@ -45,6 +45,8 @@ class FragmentOptions(Options):
     eom_ccsd : bool = FROM_BASE
     plot_orbitals : bool = FROM_BASE
     solver_options : dict = FROM_BASE
+    bsse_correction : bool = FROM_BASE
+    bsse_range : float = FROM_BASE
 
 
 class Fragment(QEmbeddingFragment):
@@ -116,6 +118,9 @@ class Fragment(QEmbeddingFragment):
         # For EMO-CCSD
         self.eom_ip_energy = None
         self.eom_ea_energy = None
+
+        # BSSE energies
+        self.e_bsse = len(self.bno_threshold)*[None]
 
     @property
     def e_corr(self):
@@ -414,6 +419,7 @@ class Fragment(QEmbeddingFragment):
                 log.info("  * BNO threshold= %.1e :  <Exception during calculation>", bno_thr)
 
 
+
     def run_bno_threshold(self, solver, bno_thr, init_guess=None, eris=None):
         #self.e_delta_mp2 = e_delta_occ + e_delta_vir
         #log.debug("MP2 correction = %.8g", self.e_delta_mp2)
@@ -677,43 +683,64 @@ class Fragment(QEmbeddingFragment):
         return chis[:,0]
 
 
-    def get_fragment_bsse(self, radius=100.0, unit='Ang'):
+    def get_fragment_bsse(self, radius=None, unit='Ang'):
         # Currently only PBC
-        if not self.has_pbc:
+        if not self.boundary_cond == 'open':
             raise NotImplementedError()
-        cell = pyscf.pbc.tools.cell_plus_imgs(self.mol, 1)
-        mol = cell.to_mol() # Remove PBC
-        assert len(self.atoms) == 1
-        center = self.mol.atom_coord(self.atoms[0])
-        atoms = [self.atoms[0]]
-        for atm in range(cell.natm):
-            if atm == self.atoms[0]:
-                continue
-            coords = cell.atom_coord(atm, unit=unit)
-            if np.linalg.norm(coords - center) < radius:
-                atoms.append(atm)
-        log.debugv("Included atoms for BSSE calculation of atom %d= %r", atoms[0], atoms[1:])
+        if radius is None:
+            radius = self.opts.bsse_radius
 
-        # Atom in atom basis
-        mf = pyscf.scf.RHF(mol)
-        # TODO AUXBASIS ETC
-        mf = mf.density_fit()
+        # Atomic calculation:
+        mol = self.mol.copy()
+        atom = mol.atom[self.atoms]
+        log.debugv("Keeping atoms %r", atom)
+        mol.atom = atom
+        mol.a = None
+        mol.build(False, False)
+
+        mf = type(self.mf)(mol)
+        mf.conv_tol = self.mf.conv_tol
+        mf = mf.density_fit(auxbasis=self.mf.with_df.auxbasis)
         mf.kernel()
-        log.debuv("Counterpoise: E(MF,atom)= % 16.8f Ha", mf.e_tot)
 
-        ccx = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
-        # Do not use sym factor here! We also have to scale the MF energy
-        ccx.add_atom_cluster(self.atoms[0], options=self.opts)
-        ccx.kernel()
-        log.debuv("Counterpoise: E(CC,atom)= %r", ccx.get_energies())
+        ecc = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
+        ecc.add_atom_cluster(self.atoms, options=self.opts)
+        ecc.kernel()
 
-        
+        log.debugv("Counterpoise: E(corr)= % 16.8f Ha", ecc.e_tot)
+
+        # Extended calculation
+
+        scell = pyscf.pbc.tools.cell_plus_imgs(self.mol, [3,3,3])
+        assert len(self.atoms) == 1
+        center = scell.atom_coord(self.atoms[0], unit=unit)
 
 
 
-        
+        #mol = cell.to_mol() # Remove PBC
+        #assert len(self.atoms) == 1
+        #center = self.mol.atom_coord(self.atoms[0])
+        #atoms = [self.atoms[0]]
+        #for atm in range(cell.natm):
+        #    if atm == self.atoms[0]:
+        #        continue
+        #    coords = cell.atom_coord(atm, unit=unit)
+        #    if np.linalg.norm(coords - center) < radius:
+        #        atoms.append(atm)
+        #log.debugv("Included atoms for BSSE calculation of atom %d= %r", atoms[0], atoms[1:])
 
+        ## Atom in atom basis
+        #mf = pyscf.scf.RHF(mol)
+        ## TODO AUXBASIS ETC
+        #mf = mf.density_fit()
+        #mf.kernel()
+        #log.debuv("Counterpoise: E(MF,atom)= % 16.8f Ha", mf.e_tot)
 
+        #ccx = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
+        ## Do not use sym factor here! We also have to scale the MF energy
+        #ccx.add_atom_cluster(self.atoms[0], options=self.opts)
+        #ccx.kernel()
+        #log.debuv("Counterpoise: E(CC,atom)= %r", ccx.get_energies())
 
 
 

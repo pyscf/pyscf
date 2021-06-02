@@ -1,6 +1,7 @@
 # TODO
 # Make this a unittest module
 
+
 from timeit import default_timer as timer
 import numpy as np
 
@@ -330,6 +331,8 @@ def test_graphene(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshol
     print("E(EmbCC)= %16.8f Ha" % kcc.e_tot)
     print("T(EmbCC)= %.2f s" % (timer()-t0))
 
+    return kcc.e_tot
+
 def test_graphene_bsse(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshold=1e-7):
 
     ncells = np.product(kmesh)
@@ -416,6 +419,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
             print("Cluster sizes: %r" % kcc.get_cluster_sizes())
             print("Expected:      %r" % N_EXPECTED)
             raise RuntimeError()
+        print("SUCCESS")
 
         #assert np.allclose(kcc.get_energies(), E_EXPECTED)
         #assert np.all(kcc.get_cluster_sizes() == N_EXPECTED)
@@ -425,6 +429,7 @@ def test_diamond_bno_threshold(bno_threshold=[1e-3, 1e-4, 1e-5, 1e-6], kmesh=[2,
         E_EXPECTED = np.array([-11.22353507, -11.21390107, -11.19618965, -11.15312301])
         assert np.all(kcc.get_cluster_sizes() == N_EXPECTED)
         assert np.allclose(kcc.get_energies(), E_EXPECTED)
+        print("SUCCESS")
 
 #def test_diamond(EXPECTED=None, kmesh=[2, 2, 2], bath_tol=1e-4, bno_threshold=1e-4):
 #
@@ -516,11 +521,14 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
+    #test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
     #test_dimer(['Li', 'Li'], d=2.0)
     #test_cubic(bno_threshold=-1)
     #test_cubic('C', basis='gth-tzvp')
-    #test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
+   # test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
+    ecc = test_graphene(basis='gth-dzv', bno_threshold=1e-4)
+    #assert np.isclose(ecc, -10.89049556)   # threshold -1
+    assert np.isclose(ecc, -10.88016134)   # threshold 1e-4
     #test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
     #test_graphene_bsse(basis='gth-dzv', kmesh=[1,1,1])
     #test_fci_solver()

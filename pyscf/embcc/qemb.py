@@ -6,6 +6,7 @@ import scipy
 import scipy.linalg
 
 import pyscf
+import pyscf.gto
 import pyscf.mp
 import pyscf.lo
 import pyscf.pbc
@@ -16,12 +17,13 @@ from .kao2gmo import gdf_to_pyscf_eris
 
 log = logging.getLogger(__name__)
 
+
 class QEmbeddingMethod:
 
     def __init__(self, mf):
 
         # k-space unfolding
-        if hasattr(mf, "kpts") and mf.kpts is not None:
+        if hasattr(mf, 'kpts') and mf.kpts is not None:
             t0 = timer()
             self.kdf = mf.with_df
             log.info("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
@@ -57,20 +59,37 @@ class QEmbeddingMethod:
                 "Orthogonality error of MF orbitals: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
 
 
+    # --- Properties
+    # ==============
+
     @property
     def mol(self):
         """Mole or Cell object."""
         return self.mf.mol
 
     @property
-    def has_pbc(self):
-        """If the system has periodic boundary conditions."""
-        #return isinstance(self.mol, pyscf.pbc.gto.Cell)
-        return hasattr(self.mol, 'a') and self.mol.a is not None
+    def has_lattice_vectors(self):
+        """Flag if self.mol has lattice vectors defined."""
+        return (hasattr(self.mol, 'a') and self.mol.a is not None)
+
+    @property
+    def boundary_cond(self):
+        """Type of boundary condition."""
+        if not self.has_lattice_vectors:
+            return 'open'
+        if self.mol.dimension == 1:
+            return 'periodic-1D'
+        if self.mol.dimension == 2:
+            return 'periodic-2D'
+        return 'periodic'
 
     @property
     def kpts(self):
-        """k-points for periodic calculations."""
+        """k-points for periodic calculations.
+
+        TODO: for *not unfolded* Gamma-point calculations, does this return None?
+        Should it return [(0,0,0)]?
+        """
         if self.kdf is None:
             return None
         return self.kdf.kpts
@@ -104,6 +123,15 @@ class QEmbeddingMethod:
         """Number of fragments."""
         return len(self.fragments)
 
+    @property
+    def e_mf(self):
+        """Total mean-field energy."""
+        return self.mf.e_tot/self.ncells
+
+
+    # --- Integral methods
+    # ====================
+
     def get_ovlp(self):
         """AO overlap matrix."""
         return self._ovlp
@@ -130,8 +158,9 @@ class QEmbeddingMethod:
         """
         # Molecules or supercell:
         if self.kdf is None:
-            log.debugv('ao2mo method: %r', cm.ao2mo)
+            log.debugv("ao2mo method: %r", cm.ao2mo)
             if isinstance(cm, pyscf.mp.dfmp2.DFMP2):
+                # TODO: This is a hack, requiring modified PySCF - normal DFMP2 does not store 4c (ov|ov) integrals
                 return cm.ao2mo(store_eris=True)
             else:
                 return cm.ao2mo()
@@ -139,31 +168,38 @@ class QEmbeddingMethod:
         eris = gdf_to_pyscf_eris(self.mf, self.kdf, cm, fock=self.get_fock())
         return eris
 
-    @property
-    def e_mf(self):
-        """Total mean-field energy."""
-        return self.mf.e_tot/self.ncells
+
+    # --- Methods for fragmentation
+    # =============================
+    # 1)
+    # 2) IAO specific
+    # 3) AO specific
+
+    # 1)
 
 
-    # --- Fragments ---
-    # =================
 
-    def make_iao_coeffs(self, minao='minao'):
-        """Make intrinsic atomic orbitals.
+
+
+    # 2) IAO specific
+    # ---------------
+
+    def make_iao_coeffs(self, minao='minao', return_rest=True):
+        """Make intrinsic atomic orbitals (IAOs) and remaining virtual orbitals via projection.
 
         Parameters
         ----------
         minao : str, optional
             Minimal basis set for IAOs. Default: 'minao'.
+        return_rest : bool, optional
+            Return coefficients of remaining virtual orbitals. Default: `True`.
 
         Returns
         -------
-        c_iao : (N, M) array
+        c_iao : (nAO, nIAO) array
             IAO coefficients.
-        c_rest : (N, L) array
-            Remaining virtual orbital coefficients.
-        iao_labels : list
-            Orbital label (atom-id, atom symbol, nl string, m string) for each IAO.
+        c_rest : (nAO, nRest) array
+            Remaining virtual orbital coefficients. `None`, if `make_rest == False`.
         """
         mo_coeff = self.mo_coeff
         ovlp = self.get_ovlp()
@@ -176,8 +212,24 @@ class QEmbeddingMethod:
         # Orthogonalize IAO using symmetric orthogonalization
         c_iao = pyscf.lo.vec_lowdin(c_iao, ovlp)
 
+        # Check that all electrons are in IAO space
+        sc = np.dot(ovlp, c_iao)
+        dm_iao = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
+        nelec_iao = np.trace(dm_iao)
+        log.debugv('nelec_iao= %.8f', nelec_iao)
+        if abs(nelec_iao - self.mol.nelectron) > 1e-5:
+            log.error("IAOs do not contain the correct number of electrons: %.8f", nelec_iao)
+
+        # Test orthogonality of IAO
+        idterr = c_iao.T.dot(ovlp).dot(c_iao) - np.eye(niao)
+        log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
+                "Orthogonality error of IAO: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
+
+        if not return_rest:
+            return c_iao, None
+
         # Add remaining virtual space, work in MO space, so that we automatically get the
-        # correct linear dependency treatment, if n(MO) != n(AO)
+        # correct linear dependency treatment, if nMO < nAO
         c_iao_mo = np.linalg.multi_dot((self.mo_coeff.T, ovlp, c_iao))
         # Get eigenvectors of projector into complement
         p_iao = np.dot(c_iao_mo, c_iao_mo.T)
@@ -211,9 +263,6 @@ class QEmbeddingMethod:
             raise RuntimeError("Incorrect number of remaining virtual orbitals")
         c_rest = np.dot(self.mo_coeff, c[:,mask_rest])        # Transform back to AO basis
 
-        iao_labels = self.get_iao_labels(minao=minao)
-        assert (len(iao_labels) == niao)
-
         # --- Some checks below:
 
         # Test orthogonality of IAO + rest
@@ -222,32 +271,53 @@ class QEmbeddingMethod:
         log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
                 "Orthogonality error of IAO+vir. orbitals: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
 
-        # Check that all electrons are in IAO space
-        sc = np.dot(ovlp, c_iao)
-        dm_iao = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
-        nelec_iao = np.trace(dm_iao)
-        log.debugv('nelec_iao= %.8f', nelec_iao)
-        if abs(nelec_iao - self.mol.nelectron) > 1e-5:
-            log.error("IAOs do not contain the correct number of electrons: %.8f", nelec_iao)
+        return c_iao, c_rest
 
+
+    def get_iao_occupancy(self, c_iao, minao='minao', verbose=True):
+        """Get electron occupancy of IAOs.
+
+        Parameters
+        ----------
+        c_iao : (nAO, nIAO) array
+            IAO coefficients.
+        minao : str, optional
+            Minimal basis set, which was used to construct IAOs. Default: 'minao'.
+        verbose : bool, optional
+            Check lattice symmetry of IAOs and print occupations per atom.
+            Default: True.
+
+        Returns
+        -------
+        occ_iao : (nIAO,) array
+            Occupation of IAOs.
+        """
+        sc = np.dot(self.get_ovlp(), c_iao)
+        occ_iao = einsum('ai,ab,bi->i', sc, self.mf.make_rdm1(), sc)
+        if not verbose:
+            return occ_iao
+
+        iao_labels = self.get_iao_labels(minao)
+        if len(iao_labels) != c_iao.shape[-1]:
+            raise RuntimeError("Inconsistent number of IAOs. Were different minimal basis sets used?")
         # Occupancy per atom
-        n_occ = []
+        occ_atom = []
         iao_atoms = np.asarray([i[0] for i in iao_labels])
         log.debugv('iao_atoms= %r', iao_atoms)
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
-            n_occ.append(np.diag(dm_iao[mask][:,mask]))
-        log.debugv("n_occ: %r", n_occ)
+            occ_atom.append(occ_iao[mask])
+        log.debugv("occ_atom: %r", occ_atom)
 
         # Check lattice symmetry if k-point mf object was used
         tsym = False
         if self.ncells > 1:
             # IAO occupations per cell
-            n_occ_cell = np.split(np.hstack(n_occ), self.ncells)
-            log.debugv("n_occ_cell: %r", n_occ_cell)
+            occ_cell = np.split(np.hstack(occ_atom), self.ncells)
+            log.debugv("occ_cell: %r", occ_cell)
             # Compare all cells to the primitive cell
-            log.debugv("list: %r", [np.allclose(n_occ_cell[i], n_occ_cell[0]) for i in range(self.ncells)])
-            tsym = np.all([np.allclose(n_occ_cell[i], n_occ_cell[0]) for i in range(self.ncells)])
+            log.debugv("list: %r", [np.allclose(occ_cell[i], occ_cell[0]) for i in range(self.ncells)])
+            tsym = np.all([np.allclose(occ_cell[i], occ_cell[0]) for i in range(self.ncells)])
         log.debugv("tsym: %r", tsym)
 
         # Print occupations of IAOs
@@ -256,16 +326,27 @@ class QEmbeddingMethod:
         for a in range(self.mol.natm if not tsym else self.kcell.natm):
             mask = np.where(iao_atoms == a)[0]
             log.debugv('mask= %r', mask)
-            fmt = "  * %3d: %-8s total= %12.8f" + len(n_occ[a])*"  %s= %10.8f"
+            fmt = "  * %3d: %-8s total= %12.8f" + len(occ_atom[a])*"  %s= %10.8f"
             labels = [("_".join((x[2], x[3])) if x[3] else x[2]) for x in np.asarray(iao_labels)[mask]]
-            vals = [val for pair in zip(labels, n_occ[a]) for val in pair]
-            log.info(fmt, a, self.mol.atom_symbol(a), np.sum(n_occ[a]), *vals)
+            vals = [val for pair in zip(labels, occ_atom[a]) for val in pair]
+            log.info(fmt, a, self.mol.atom_symbol(a), np.sum(occ_atom[a]), *vals)
 
-        return c_iao, c_rest, iao_labels
+        return occ_iao
 
 
     def get_iao_labels(self, minao):
-        """Get AO labels of IAOs"""
+        """Get labels of IAOs
+
+        Parameters
+        ----------
+        minao : str, optional
+            Minimal basis set for IAOs. Default: 'minao'.
+
+        Returns
+        -------
+        iao_labels : list of length nIAO
+            Orbital label (atom-id, atom symbol, nl string, m string) for each IAO.
+        """
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
         iao_labels_refmol = refmol.ao_labels(None)
         log.debugv('iao_labels_refmol: %r', iao_labels_refmol)
@@ -293,6 +374,129 @@ class QEmbeddingMethod:
         log.debugv('iao_labels: %r', iao_labels)
         assert (len(iao_labels_refmol) == len(iao_labels))
         return iao_labels
+
+
+    # 3) AO specific
+    # --------------
+
+    def get_subset_ao_projector(self, aos):
+        """Get projector onto AO subspace in the non-orthogonal AO basis.
+
+        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
+        This is a special case of the more general `get_ao_projector`, which can also
+        handle a different AO basis set.
+
+        Parameters
+        ----------
+        aos : list of AO indices or AO labels or mask
+            List of indices/labels or mask of subspace AOs. If a list of labels is given,
+            it is converted to AO indices using the PySCF `search_ao_label` function.
+
+        Returns
+        -------
+        p : (nAO, nAO) array
+            Projector onto AO subspace.
+        """
+        s1 = self.get_ovlp()
+        if aos is None:
+            aos = np.s_[:]
+
+        if isinstance(aos, slice):
+            s2 = s1[aos,aos]
+        elif isinstance(aos[0], str):
+            log.debugv("Searching for AO indices of AOs %r", aos)
+            aos_idx = self.mol.search_ao_label(aos)
+            log.debugv("Found AO indices: %r", aos_idx)
+            log.debugv("Corresponding to AO labels: %r", np.asarray(self.mol.ao_labels())[aos_idx])
+            if len(aos_idx) == 0:
+                raise RuntimeError("No AOs with labels %r found" % aos)
+            aos = aos_idx
+            s2 = s1[np.ix_(aos, aos)]
+        else:
+            s2 = s1[np.ix_(aos, aos)]
+        s21 = s1[aos]
+        p21 = scipy.linalg.solve(s2, s21, assume_a="pos")
+        p = np.dot(s21.T, p21)
+        assert np.allclose(p, p.T)
+        return p
+
+
+    def get_ao_projector(self, aos, basis=None):
+        """Get projector onto AO subspace in the non-orthogonal AO basis.
+
+        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
+
+        TODO: This is probably not correct (check Ref. above) if basis is not fully contained
+        in the span of self.mol.basis. In this case a <1|2> is missing.
+
+        Parameters
+        ----------
+        aos : list of AO indices or AO labels or mask
+            List of indices/labels or mask of subspace AOs. If a list of labels is given,
+            it is converted to AO indices using the PySCF `search_ao_label` function.
+        basis : str, optional
+            Basis set for AO subspace. If `None`, the same basis set as that of `self.mol`
+            is used. Default: `None`.
+
+        Returns
+        -------
+        p : (nAO, nAO) array
+            Projector onto AO subspace.
+        """
+
+        mol1 = self.mol
+        s1 = self.get_ovlp()
+
+        # AOs are given in same basis as mol1
+        if basis is None:
+            mol2 = mol1
+            s2 = s21 = s1
+        # AOs of a different basis
+        else:
+            mol2 = mol1.copy()
+            # What was this for? - commented for now
+            #if getattr(mol2, 'rcut', None) is not None:
+            #    mol2.rcut = None
+            mol2.build(False, False, basis=basis2)
+
+            if self.boundary_cond == 'open':
+                s2 = mol2.intor_symmetric('int1e_ovlp')
+                s12 = pyscf.gto.mole.intor_cross('int1e_ovlp', mol1, mol2)
+            else:
+                s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
+                s21 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=None))
+        assert s1.ndim == 2
+        assert s2.ndim == 2
+        assert s21.ndim == 2
+
+        # All AOs
+        if aos is None:
+            aos = np.s_[:]
+
+        if isinstance(aos, slice):
+            s2 = s1[aos,aos]
+        elif isinstance(aos[0], str):
+            log.debugv("Searching for AO indices of AOs %r", aos)
+            aos_idx = mol2.search_ao_label(aos)
+            log.debugv("Found AO indices: %r", aos_idx)
+            log.debugv("Corresponding to AO labels: %r", np.asarray(mol2.ao_labels())[aos_idx])
+            if len(aos_idx) == 0:
+                raise RuntimeError("No AOs with labels %r found" % aos)
+            aos = aos_idx
+            s2 = s1[np.ix_(aos, aos)]
+        else:
+            s2 = s1[np.ix_(aos, aos)]
+
+        s21 = s21[aos]
+
+        p21 = scipy.linalg.solve(s2, s21, assume_a="pos")
+        p = np.dot(s21.T, p21)
+        assert np.allclose(p, p.T)
+        return p
+
+
+
+
 
 
 class QEmbeddingFragment:
@@ -390,7 +594,7 @@ class QEmbeddingFragment:
         occ = einsum('ai,ab,bi->i', sc, self.mf.make_rdm1(), sc)
         return occ
 
-    def canonicalize_mo(self, *mo_coeff, eigenvalues=False):
+    def canonicalize_mo(self, *mo_coeff, eigvals=False):
         """Diagonalize Fock matrix within subspace.
 
         Parameters
@@ -411,7 +615,7 @@ class QEmbeddingFragment:
         fock = np.linalg.multi_dot((mo_coeff.T, self.base.get_fock(), mo_coeff))
         mo_energy, rot = np.linalg.eigh(fock)
         mo_can = np.dot(mo_coeff, rot)
-        if eigenvalues:
+        if eigvals:
             return mo_can, rot, mo_energy
         return mo_can, rot
 

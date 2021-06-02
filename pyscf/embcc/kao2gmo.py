@@ -269,6 +269,9 @@ def contract_j3c(j3c, kind, symmetry=None):
         if rn is not None:
             rn = rn.T
 
+    # Allow ~1GB working memory
+    mem = 1e9
+
     # Four-fold permutation symmetry
     if symmetry == 4:
         l = pyscf.lib.pack_tril(l)
@@ -277,19 +280,42 @@ def contract_j3c(j3c, kind, symmetry=None):
         if ln is not None:
             ln = pyscf.lib.pack_tril(ln)
             rn = pyscf.lib.pack_tril(rn)
-            c -= np.outer(ln.conj(), rn)
+            # This uses to much memory...
+            #c -= np.outer(ln.conj(), rn)
+            size = ln.shape[0]
+            blksize = max(1, min(int(mem/(size*8*(1+np.iscomplexobj(ln)))), size))
+            log.debugv("blksize= %d out of %d (%d blocks)", blksize, size, int(np.ceil(size/blksize)))
+            for p0, p1 in pyscf.lib.prange(0, size, blksize):
+                blk = np.s_[p0:p1]
+                c[blk] -= np.outer(ln[blk].conj(), rn)
+
     # Permutation symmetry only on right side
     elif symmetry == 2:
         r = pyscf.lib.pack_tril(r)
         c = einsum('Lij,Lk->ijk', l.conj(), r)
         if ln is not None:
             rn = pyscf.lib.pack_tril(rn)
-            c -= einsum('ij,k->ijk', ln.conj(), rn)
+            # This uses to much memory...
+            #c -= einsum('ij,k->ijk', ln.conj(), rn)
+            size = ln.shape[0]
+            blksize = max(1, min(int(mem/(size*8*(1+np.iscomplexobj(ln)))), size))
+            log.debugv("blksize= %d out of %d (%d blocks)", blksize, size, int(np.ceil(size/blksize)))
+            for p0, p1 in pyscf.lib.prange(0, size, blksize):
+                blk = np.s_[p0:p1]
+                c[blk] -= einsum('ij,k->ijk', ln[blk].conj(), rn)
+
     # No permutation symmetry
     else:
         c = np.tensordot(l.conj(), r, axes=(0, 0))
         if ln is not None:
-            c -= einsum("ab,cd->abcd", ln.conj(), rn)
+            # This uses to much memory...
+            #c -= einsum("ab,cd->abcd", ln.conj(), rn)
+            size = ln.shape[0]
+            blksize = max(1, min(int(mem/(size*8*(1+np.iscomplexobj(ln)))), size))
+            log.debugv("blksize= %d out of %d (%d blocks)", blksize, size, int(np.ceil(size/blksize)))
+            for p0, p1 in pyscf.lib.prange(0, size, blksize):
+                blk = np.s_[p0:p1]
+                c[blk] -= einsum("ij,kl->ijkl", ln[blk].conj(), rn)
 
     log.timingv("Time to contract (%2s|%2s): %s", left, right, time_string(timer()-t0))
     return c

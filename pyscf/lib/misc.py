@@ -224,7 +224,7 @@ def flatten(lst):
     '''
     return list(itertools.chain.from_iterable(lst))
 
-def prange(start, end, step):
+def prange(start, end, step, minstep=1):
     '''This function splits the number sequence between "start" and "end"
     using uniform "step" length. It yields the boundary (start, end) for each
     fragment.
@@ -238,6 +238,10 @@ def prange(start, end, step):
     (4, 6)
     (6, 8)
     '''
+    if step > 0 and minstep is not None:
+        step = max(step, minstep)
+    # maxstep is `end` (see below)
+
     if start < end:
         for i in range(start, end, step):
             yield i, min(i+step, end)

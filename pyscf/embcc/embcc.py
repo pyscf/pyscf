@@ -63,6 +63,8 @@ class EmbCCOptions(Options):
 
     # --- Other
     energy_partition: str = 'first-occ'
+    bsse_correction: bool = True
+    bsse_range: float = 10.0
     strict: bool = False                # Stop if cluster not converged
 
 
@@ -157,10 +159,12 @@ class EmbCC(QEmbeddingMethod):
 
     def init_fragments(self):
         if self.opts.fragment_type == "IAO":
-            self.C_ao, self.C_env, self.iao_labels = self.make_iao_coeffs(minao=self.opts.iao_minao)
-            #log.debug("IAO labels:")
-            #for ao in self.iao_labels:
-            #    log.debug("%r", ao)
+            #self.C_ao, self.C_env, self.iao_labels = self.make_iao_coeffs(minao=self.opts.iao_minao)
+            minao=self.opts.iao_minao
+            self.C_ao, self.C_env = self.make_iao_coeffs(minao=minao)
+            self.iao_labels = self.get_iao_labels(minao=minao)
+            # Only for printing:
+            self.get_iao_occupancy(self.C_ao, minao=minao)
             self.ao_labels = self.iao_labels
         elif self.opts.fragment_type == "LAO":
             self.C_ao, self.lao_labels = self.make_lowdin_ao()
@@ -228,104 +232,12 @@ class EmbCC(QEmbeddingMethod):
 
     # -------------------------------------------------------------------------------------------- #
 
-    def make_ao_projector(self, ao_indices):
-        """Create projector into AO subspace.
-
-        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
-
-        Parameters
-        ----------
-        ao_indices : list
-            Indices of subspace AOs.
-
-        Returns
-        -------
-        P : ndarray
-            Projector into AO subspace.
-        """
-        S1 = self.get_ovlp()
-        S2 = S1[np.ix_(ao_indices, ao_indices)]
-        S21 = S1[ao_indices]
-        P21 = scipy.linalg.solve(S2, S21, assume_a="pos")
-        P = np.dot(S21.T, P21)
-        assert np.allclose(P, P.T)
-        return P
-
-    def make_ao_projector_general(self, ao_indices, ao_labels=None, basis2=None):
-        """Create projector into AO space.
-
-        Projector from large (1) to small (2) AO basis according to https://doi.org/10.1021/ct400687b
-
-        Parameters
-        ----------
-        ao_indices : list
-            Indices of AOs in space 2.
-        ao_labels : list, optional
-            Labels for AOs in space 2. If not None, `ao_indices` is ignored.
-        basis2 : str, optional
-            Basis of space 2. If none, the same basis is used.
-
-        Returns
-        -------
-        P : ndarray
-            Projector into AO space.
-        """
-        mol1 = self.mol
-        s1 = self.get_ovlp()
-        if basis2 is not None:
-            mol2 = mol1.copy()
-            if getattr(mol2, 'rcut', None) is not None:
-                mol2.rcut = None
-            mol2.build(False, False, basis=basis2)
-
-            if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
-                #from pyscf.pbc import gto as pbcgto
-                # At the moment: Gamma point only
-                s2 = np.asarray(mol2.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
-                s12 = np.asarray(pyscf.pbc.gto.cell.intor_cross('int1e_ovlp', mol1, mol2, kpts=None))
-                assert s1.ndim == 2
-                #s1, s2, s12 = s1[0], s2[0], s12[0]
-            else:
-                #s1 = mol1.intor_symmetric('int1e_ovlp')
-                s2 = mol2.intor_symmetric('int1e_ovlp')
-                s12 = pyscf.gto.mole.intor_cross('int1e_ovlp', mol1, mol2)
-        else:
-            mol2 = mol1
-            #if getattr(mol1, 'pbc_intor', None):  # cell object has pbc_intor method
-            #    s1 = np.asarray(mol1.pbc_intor('int1e_ovlp', hermi=1, kpts=None))
-            #else:
-            #    s1 = mol1.intor_symmetric('int1e_ovlp')
-            s2 = s12 = s1
-
-        # Convert AO labels to AO indices
-        if ao_labels is not None:
-            log.debug("AO labels:\n%r", ao_labels)
-            ao_indices = mol2.search_ao_label(ao_labels)
-        assert (ao_indices == np.sort(ao_indices)).all()
-        log.debug("Basis 2 contains AOs:\n%r", np.asarray(mol2.ao_labels())[ao_indices])
-
-        # Restrict basis function of space 2
-        s2 = s2[np.ix_(ao_indices, ao_indices)]
-        s12 = s12[:,ao_indices]
-        s21 = s12.T.conj()
-
-        p21 = scipy.linalg.solve(s2, s21, assume_a="pos")
-        p = np.dot(s21.T, p21)
-        assert np.allclose(p, p.T)
-
-        # TESTING
-        if basis2 is None:
-            p_test = self.make_ao_projector(ao_indices)
-            assert np.allclose(p, p_test)
-
-        return p
-
 
     def make_local_ao_orbitals(self, ao_indices):
         #S = self.mf.get_ovlp()
         S = self.get_ovlp()
         nao = S.shape[-1]
-        P = self.make_ao_projector(ao_indices)
+        P = self.get_ao_projector(ao_indices)
         e, C = scipy.linalg.eigh(P, b=S)
         e, C = e[::-1], C[:,::-1]
         size = len(e[e>1e-5])
@@ -534,9 +446,9 @@ class EmbCC(QEmbeddingMethod):
 
             # Use atom labels as AO labels
             log.debug("Making occupied projector.")
-            Po = self.make_ao_projector_general(None, ao_labels=atom_labels, basis2=kwargs.pop("basis_proj_occ", None))
+            Po = self.get_ao_projector(atom_labels, basis=kwargs.pop("basis_proj_occ", None))
             log.debug("Making virtual projector.")
-            Pv = self.make_ao_projector_general(None, ao_labels=atom_labels, basis2=kwargs.pop("basis_proj_vir", None))
+            Pv = self.get_ao_projector(atom_labels, basis=kwargs.pop("basis_proj_vir", None))
             log.debug("Done.")
 
             o = (self.mo_occ > 0)

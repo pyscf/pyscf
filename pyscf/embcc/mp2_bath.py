@@ -76,10 +76,10 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     nocc_frozen = c_occ_frozen.shape[-1]
     nvir_frozen = c_vir_frozen.shape[-1]
     frozen_indices = list(range(nocc_frozen)) + list(range(nmo-nvir_frozen, nmo))
-    if self.base.has_pbc:
-        cls = pyscf.pbc.mp.MP2
-    else:
+    if self.base.boundary_cond == 'open':
         cls = pyscf.mp.MP2
+    else:
+        cls = pyscf.pbc.mp.MP2
     mp2 = cls(self.mf, mo_coeff=c_all, frozen=frozen_indices)
 
     # Integral transformation

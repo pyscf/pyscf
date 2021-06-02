@@ -282,6 +282,7 @@ def make_cell(a, args, **kwargs):
         # Add Ghost atoms in other cells
         if cell.dimension == 2:
             images = [1, 1, 0]
+            #images = [2, 2, 0]
         else:
             images = [1, 1, 1]
         for x in range(-images[0], images[0]+1):
@@ -302,7 +303,7 @@ def make_cell(a, args, **kwargs):
         #cell = cell.to_mol()
         # If we leave it as a cell object and just set `.a` to None, we can still use PBC basis sets / PP
         cell.a = None
-        cell.ecp = cell.pseudo
+        #cell.ecp = cell.pseudo
         #cell.pseudo = None
         cell.build()
     else:

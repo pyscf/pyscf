@@ -161,12 +161,12 @@ class CCSDSolver(ClusterSolver):
         options = options or self.options
 
         # Do not use pbc.ccsd for Gamma point CCSD -> always use molecular code
-        #if self.base.has_pbc:
+        #if self.base.boundary_cond == 'open':
+        #    cls = pyscf.cc.CCSD
+        #else:
         #    import pyscf.pbc.cc
         #    cls = pyscf.pbc.cc.CCSD
         #    #cls = pyscf.cc.ccsd.CCSD
-        #else:
-        #    cls = pyscf.cc.CCSD
         cls = pyscf.cc.ccsd.CCSD
         log.debug("CCSD class= %r" % cls)
         cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
