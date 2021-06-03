@@ -61,12 +61,9 @@ def transform_integrals_incore(myadc):
      eris.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
      eris.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
      eris.ovoo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
-     eris.oovo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc), dtype=dtype)
      eris.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
      eris.ovvv = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
-
      eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
-     eris.voov = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
 
      for (ikp,ikq,ikr) in khelper.symm_map.keys():
           iks = kconserv[ikp,ikq,ikr]
@@ -79,12 +76,9 @@ def transform_integrals_incore(myadc):
               eris.oooo[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,:nocc]/nkpts 
               eris.oovv[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc, nocc:,nocc:]/nkpts
               eris.ovoo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,:nocc]/nkpts
-              eris.oovo[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,nocc:,:nocc]/nkpts
               eris.ovov[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,nocc:]/nkpts
               eris.ovvv[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,nocc:]/nkpts
-
               eris.ovvo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,:nocc]/nkpts
-              eris.voov[kp,kq,kr] = eri_kpt_symm[nocc:,:nocc,:nocc,nocc:]/nkpts
 
      if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
           eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
@@ -93,30 +87,302 @@ def transform_integrals_incore(myadc):
      return eris
 
 
+def transform_integrals_outcore(myadc):
 
-#    cput0 = (time.clock(), time.time())
-#    log = logger.Logger(myadc.stdout, myadc.verbose)
-#
-#    occ = myadc.mo_coeff[:,:myadc._nocc]
-#    vir = myadc.mo_coeff[:,myadc._nocc:]
-#
-#    nocc = occ.shape[1]
-#    nvir = vir.shape[1]
-#
-#    eris = lambda:None
-#
-#    # TODO: check if myadc._scf._eri is not None
-#
-#    eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()
-#    eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()
-#    eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()
-#    eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()
-#    eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()
-#
-#    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-#        eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
-#        eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3)) 
-#        eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
-#
-#    log.timer('ADC integral transformation', *cput0)
-#    return eris
+    from pyscf.pbc import tools
+    from pyscf.pbc.cc.ccsd import _adjust_occ
+    #if not (cc.frozen is None or cc.frozen == 0):
+    #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
+
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+    cell = myadc.cell
+    kpts = myadc.kpts
+    nkpts = myadc.nkpts
+    nocc = myadc.nocc
+    nmo = myadc.nmo
+    nvir = nmo - nocc
+
+    dtype = myadc.mo_coeff[0].dtype
+
+    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+
+    # Get location of padded elements in occupied and virtual space.
+    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
+    nonzero_padding = padding_k_idx(myadc, kind="joint")
+
+    fao2mo = myadc._scf.with_df.ao2mo
+
+    kconserv = myadc.khelper.kconserv
+    khelper = myadc.khelper
+
+    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
+    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
+
+    #if gamma_point(cc.kpts):
+    #    dtype = np.double
+    #else:
+    #    dtype = np.complex128
+    #dtype = np.result_type(dtype, *mo_coeff[0]).char
+
+    eris = lambda:None
+    eris.feri = feri = lib.H5TmpFile()
+
+    # The momentum conservation array
+    kconserv = myadc.khelper.kconserv
+    
+    eris.feri = feri = lib.H5TmpFile()
+    eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+    eris.oovv = feri.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+    eris.ovoo = feri.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+    eris.ovov = feri.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+    eris.ovvv = feri.create_dataset('ovvv', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
+    eris.ovvo = feri.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
+    #eris.vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+
+    cput1 = time.clock(), time.time()
+    for kp in range(nkpts):
+        for kq in range(nkpts):
+            for kr in range(nkpts):
+                ks = kconserv[kp, kq, kr]
+                orbo_p = mo_coeff[kp][:, :nocc]
+                orbo_q = mo_coeff[kq][:, :nocc]
+                buf_kpt = fao2mo((orbo_p, orbo_q, mo_coeff[kr], mo_coeff[ks]),
+                                 (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
+                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                buf_kpt = buf_kpt.reshape(nocc, nocc, nmo, nmo)
+                dtype = buf_kpt.dtype
+                eris.oooo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
+                eris.oovv[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, nocc:, nocc:] / nkpts
+    cput1 = log.timer_debug1('transforming oopq', *cput1)
+
+    # <ia|pq> = (ip|aq)
+    cput1 = time.clock(), time.time()
+    for kp in range(nkpts):
+        for kq in range(nkpts):
+            for kr in range(nkpts):
+                ks = kconserv[kp, kq, kr]
+                orbo_p = mo_coeff[kp][:, :nocc]
+                orbv_q = mo_coeff[kq][:, nocc:]
+                buf_kpt = fao2mo((orbo_p, orbv_q, mo_coeff[kr], mo_coeff[ks]),
+                                 (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
+                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                buf_kpt = buf_kpt.reshape(nocc,nvir,nmo, nmo)
+                eris.ovoo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
+                eris.ovov[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
+                eris.ovvo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, nocc:, :nocc] / nkpts
+                eris.ovvv[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, nocc:, nocc:] / nkpts
+            cput1 = log.timer_debug1('transforming ovpq', *cput1)
+
+    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+    #     cput1 = time.clock(), time.time()
+    #     mem_now = lib.current_memory()[0]
+    #     if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
+    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
+    #             iks = kconserv[ikp, ikq, ikr]
+    #             orbv_p = mo_coeff[ikp][:, nocc:]
+    #             orbv_q = mo_coeff[ikq][:, nocc:]
+    #             orbv_r = mo_coeff[ikr][:, nocc:]
+    #             orbv_s = mo_coeff[iks][:, nocc:]
+    #             # unit cell is small enough to handle vvvv in-core
+    #             buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
+    #                              kpts[[ikp,ikq,ikr,iks]], compact=False)
+    #             if dtype == np.float: buf_kpt = buf_kpt.real
+    #             buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
+    #             for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
+    #                 buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
+    #                 eris.vvvv[kp, kr, kq] = buf_kpt_symm / nkpts
+    #     else:
+    #         raise MemoryError('Minimal memory requirements %s MB'
+    #                           % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
+    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
+    #             for a in range(nvir):
+    #                 orbva_p = orbv_p[:, a].reshape(-1, 1)
+    #                 buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
+    #                                  (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
+    #                 if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+    #                 buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
+
+    #                 eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
+    #                 # Store symmetric permutations
+    #                 eris.vvvv[ikr, ikp, iks, :, a, :, :] = buf_kpt.transpose(1, 0, 3, 2)[:, 0, :, :] / nkpts
+    #                 eris.vvvv[ikq, iks, ikp, :, :, a, :] = buf_kpt.transpose(2, 3, 0, 1).conj()[:, :, 0, :] / nkpts
+    #                 eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[:, :, :, 0] / nkpts
+    #         cput1 = log.timer_debug1('transforming vvvv', *cput1)
+
+    #log.timer('CCSD integral transformation', *cput0)
+        eris.vvvv = []
+        vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+
+        cput3 = time.clock(), time.time()
+        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+        chnk_size = calculate_chunk_size(myadc)
+        a = 0
+        for (ikp, ikq, ikr) in khelper.symm_map.keys():
+            iks = kconserv[ikp, ikq, ikr]
+            orbv_p = mo_coeff[ikp][:, nocc:]
+            orbv_q = mo_coeff[ikq][:, nocc:]
+            orbv_r = mo_coeff[ikr][:, nocc:]
+            orbv_s = mo_coeff[iks][:, nocc:]
+
+            for p in range(0,nvir,chnk_size):
+
+                if chnk_size < nvir :
+                    orb_slice = orbv_p[:, p:p+chnk_size]
+                else :
+                    orb_slice = orbv_p[:, p:]
+
+                _, tmp = tempfile.mkstemp()
+                buf_kpt = fao2mo((orb_slice, orbv_q, orbv_r, orbv_s),
+                                      (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
+                buf_kpt = buf_kpt.reshape((-1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
+                k = orb_slice.shape[1]
+                vvvv[ikp,ikr,ikq,a:a+k,:,:,:] = buf_kpt/nkpts
+                eris.vvvv.append(vvvv)
+                #del eris.vvvv
+                a += k
+
+
+    #        cput3 = log.timer_debug1('transforming vvvv', *cput3)
+
+    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
+    #             for a in range(nvir):
+    #                 orbva_p = orbv_p[:, a].reshape(-1, 1)
+    #                 buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
+    #                                  (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
+    #                 if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+    #                 buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
+
+    #                 eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
+    return eris
+
+
+def transform_integrals_df(myadc):
+    from pyscf.pbc.df import df
+    from pyscf.ao2mo import _ao2mo
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+    cell = myadc.cell
+    kpts = myadc.kpts
+    nkpts = myadc.nkpts
+    nocc = myadc.nocc
+    nmo = myadc.nmo
+    nvir = nmo - nocc
+    nao = cell.nao_nr()
+
+    if myadc._scf.with_df._cderi is None:
+        myadc._scf.with_df.build()
+    dtype = myadc.mo_coeff[0].dtype
+
+    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+
+    # Get location of padded elements in occupied and virtual space.
+    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
+    nonzero_padding = padding_k_idx(myadc, kind="joint")
+
+    fao2mo = myadc._scf.with_df.ao2mo
+
+    kconserv = myadc.khelper.kconserv
+    khelper = myadc.khelper
+
+    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
+    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
+
+    #if gamma_point(cc.kpts):
+    #    dtype = np.double
+    #else:
+    #    dtype = np.complex128
+    #dtype = np.result_type(dtype, *mo_coeff[0]).char
+
+    #eris = lambda:None
+    #eris.feri = feri = lib.H5TmpFile()
+
+    # The momentum conservation array
+    kconserv = myadc.khelper.kconserv
+    
+    nvir_pair = nvir*(nvir+1)//2
+    with_df = myadc.with_df
+    naux = with_df.get_naoaux()
+    eris = lambda:None
+
+    #if gamma_point(kpts):
+    #    dtype = np.double
+    #else:
+    #    dtype = np.complex128
+
+    eris.dtype = dtype = np.result_type(dtype)
+    eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
+    Loo = np.empty((nkpts,nkpts,naux,nocc,nocc),dtype=dtype)
+    Lvo = np.empty((nkpts,nkpts,naux,nvir,nocc),dtype=dtype)
+    eris.Lvv = np.empty((nkpts,nkpts,naux,nvir,nvir),dtype=dtype)
+    eris.Lov = np.empty((nkpts,nkpts,naux,nocc,nvir),dtype=dtype)
+
+    eris.vvvv = None
+    eris.ovvv = None
+
+    cput0 = (time.clock(), time.time())
+
+    with h5py.File(myadc._scf.with_df._cderi, 'r') as f:
+        kptij_lst = f['j3c-kptij'][:]
+        tao = []
+        ao_loc = None
+        for ki, kpti in enumerate(kpts):
+            for kj, kptj in enumerate(kpts):
+                kpti_kptj = np.array((kpti, kptj))
+                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+
+                mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
+                mo = np.asarray(mo, dtype=dtype, order='F')
+                if dtype == np.double:
+                    out = _ao2mo.nr_e2(Lpq_ao, mo, (0, nmo, nmo, nmo+nmo), aosym='s2')
+                else:
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq_ao[0].size != nao**2:  # aosym = 's2'
+                        Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
+                    out = _ao2mo.r_e2(Lpq_ao, mo, (0, nmo, nmo, nmo+nmo), tao, ao_loc)
+                Lpq_mo[ki, kj] = out.reshape(-1, nmo, nmo)
+
+                Loo[ki,kj] = Lpq_mo[ki,kj][:,:nocc,:nocc]
+                eris.Lov[ki,kj] = Lpq_mo[ki,kj][:,:nocc,nocc:]
+                Lvo[ki,kj] = Lpq_mo[ki,kj][:,nocc:,:nocc]
+                eris.Lvv[ki,kj] = Lpq_mo[ki,kj][:,nocc:,nocc:]
+                
+    eris.feri = feri = lib.H5TmpFile()
+
+    eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+    eris.oovv = feri.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+    eris.ovoo = feri.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+    eris.ovov = feri.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+    eris.ovvo = feri.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
+    #eris.ovvv = feri.create_dataset('ovvv', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
+
+    for kp in range(nkpts):
+        for kq in range(nkpts):
+            for kr in range(nkpts):
+                ks = kconserv[kp,kq,kr]
+                eris.oooo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', Loo[kp,kq], Loo[kr,ks])/nkpts
+                eris.oovv[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', Loo[kp,kq], eris.Lvv[kr,ks])/nkpts
+                eris.ovoo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Loo[kr,ks])/nkpts
+                eris.ovov[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], eris.Lov[kr,ks])/nkpts
+                eris.ovvo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Lvo[kr,ks])/nkpts
+                #eris.ovvv[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Lvv[kr,ks])/nkpts
+
+    return eris
+
+
+def calculate_chunk_size(myadc):
+
+    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+    nocc = myadc.nocc
+    nmo = myadc.nmo
+    nvir = nmo - nocc
+    vvv_mem = (nvir**3) * 8/1e6
+
+    chnk_size =  int(avail_mem/vvv_mem)
+
+    if chnk_size <= 0 :
+        chnk_size = 1
+
+    return chnk_size
+
+
