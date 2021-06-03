@@ -2980,12 +2980,12 @@ class Mole(lib.StreamObject):
         if unit[:3].upper() == 'ANG':
             return self._env[ptr:ptr+3] * param.BOHR
         else:
-            return self._env[ptr:ptr+3]
+            return self._env[ptr:ptr+3].copy()
 
     def atom_coords(self, unit='Bohr'):
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
-        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+        c = self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T].copy()
         if unit[:3].upper() == 'ANG':
             c *= param.BOHR
         return c
@@ -3037,7 +3037,7 @@ class Mole(lib.StreamObject):
         '''
         atm_id = self.bas_atom(bas_id)
         ptr = self._atm[atm_id,PTR_COORD]
-        return self._env[ptr:ptr+3]
+        return self._env[ptr:ptr+3].copy()
 
     def bas_atom(self, bas_id):
         r'''The atom (0-based id) that the given basis sits on
@@ -3052,7 +3052,7 @@ class Mole(lib.StreamObject):
         >>> mol.bas_atom(7)
         1
         '''
-        return self._bas[bas_id,ATOM_OF]
+        return self._bas[bas_id,ATOM_OF].copy()
 
     def bas_angular(self, bas_id):
         r'''The angular momentum associated with the given basis
@@ -3067,7 +3067,7 @@ class Mole(lib.StreamObject):
         >>> mol.bas_atom(7)
         2
         '''
-        return self._bas[bas_id,ANG_OF]
+        return self._bas[bas_id,ANG_OF].copy()
 
     def bas_nctr(self, bas_id):
         r'''The number of contracted GTOs for the given shell
@@ -3082,7 +3082,7 @@ class Mole(lib.StreamObject):
         >>> mol.bas_atom(3)
         3
         '''
-        return self._bas[bas_id,NCTR_OF]
+        return self._bas[bas_id,NCTR_OF].copy()
 
     def bas_nprim(self, bas_id):
         r'''The number of primitive GTOs for the given shell
@@ -3097,7 +3097,7 @@ class Mole(lib.StreamObject):
         >>> mol.bas_atom(3)
         11
         '''
-        return self._bas[bas_id,NPRIM_OF]
+        return self._bas[bas_id,NPRIM_OF].copy()
 
     def bas_kappa(self, bas_id):
         r'''Kappa (if l < j, -l-1, else l) of the given shell
@@ -3112,7 +3112,7 @@ class Mole(lib.StreamObject):
         >>> mol.bas_kappa(3)
         0
         '''
-        return self._bas[bas_id,KAPPA_OF]
+        return self._bas[bas_id,KAPPA_OF].copy()
 
     def bas_exp(self, bas_id):
         r'''exponents (ndarray) of the given shell
@@ -3129,13 +3129,14 @@ class Mole(lib.StreamObject):
         '''
         nprim = self.bas_nprim(bas_id)
         ptr = self._bas[bas_id,PTR_EXP]
-        return self._env[ptr:ptr+nprim]
+        return self._env[ptr:ptr+nprim].copy()
 
     def _libcint_ctr_coeff(self, bas_id):
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
         ptr = self._bas[bas_id,PTR_COEFF]
         return self._env[ptr:ptr+nprim*nctr].reshape(nctr,nprim).T
+
     def bas_ctr_coeff(self, bas_id):
         r'''Contract coefficients (ndarray) of the given shell
 
