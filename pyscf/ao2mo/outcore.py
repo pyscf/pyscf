@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy
 import h5py
 from pyscf import gto
@@ -203,12 +203,14 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
-    time_0pass = (time.clock(), time.time())
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
+    time_0pass = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
 
@@ -246,11 +248,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         feri = erifile
 
     if comp == 1:
-        chunks = (nmoj,nmol)
-        shape = (nij_pair,nkl_pair)
+        chunks = (nmoj, nmol)
+        shape = (nij_pair, nkl_pair)
     else:
-        chunks = (1,nmoj,nmol)
-        shape = (comp,nij_pair,nkl_pair)
+        chunks = (1, nmoj, nmol)
+        shape = (comp, nij_pair, nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.create_dataset(dataname, shape, 'f8')
@@ -298,7 +300,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
               nao_pair, nkl_pair, iobuflen*nao_pair*8/1e6,
               iobuflen*nkl_pair*8/1e6)
 
-    klaoblks = len(fswap['0'])
+    #klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
     ao_loc = mol.ao_loc_nr('_cart' in intor)
     ti0 = time_1pass
@@ -322,10 +324,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
                     async_write(icomp, row0, row1, outbuf)
                     outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer
 
-                    ti1 = (time.clock(), time.time())
+                    ti1 = (logger.process_clock(), logger.perf_counter())
                     log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
                                istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
                     ti0 = ti1
+
     fswap = None
     if isinstance(erifile, str):
         feri.close()
@@ -391,8 +394,11 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    if any(c.dtype == numpy.complex for c in mo_coeffs):
+        raise NotImplementedError('Integral transformation for complex orbitals')
+
     intor = mol._add_suffix(intor)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     nao = mo_coeffs[0].shape[0]
@@ -427,7 +433,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     else:
         fswap = lib.H5TmpFile(swapfile)
     for icomp in range(comp):
-        g = fswap.create_group(str(icomp)) # for h5py old version
+        fswap.create_group(str(icomp)) # for h5py old version
 
     log.debug('step1: tmpfile %s  %.8g MB', fswap.filename, nij_pair*nao_pair*8/1e6)
     log.debug('step1: (ij,kl) = (%d,%d), mem cache %.8g MB, iobuf %.8g MB',
@@ -450,7 +456,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         fill = _ao2mo.nr_e1fill
         f_e1 = _ao2mo.nr_e1
         for istep,sh_range in enumerate(shranges):
-            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d', \
+            log.debug1('step 1 [%d/%d], AO [%d:%d], len(buf) = %d',
                        istep+1, nstep, *(sh_range[:3]))
             buflen = sh_range[2]
             iobuf = numpy.ndarray((comp,buflen,nij_pair), buffer=buf2)
@@ -472,14 +478,24 @@ def half_e1(mol, mo_coeffs, swapfile,
     fswap = None
     return swapfile
 
-def _load_from_h5g(h5group, row0, row1, out):
-    nrow = row1 - row0
-    col0 = 0
-    for key in range(len(h5group)):
-        dat = h5group[str(key)][row0:row1]
-        col1 = col0 + dat.shape[1]
-        out[:nrow,col0:col1] = dat
-        col0 = col1
+def _load_from_h5g(h5group, row0, row1, out=None):
+    nkeys = len(h5group)
+    dat = h5group['0']
+    ncol = sum(h5group[str(key)].shape[-1] for key in range(nkeys))
+    if dat.ndim == 2:
+        out = numpy.ndarray((row1-row0, ncol), dat.dtype, buffer=out)
+        col1 = 0
+        for key in range(nkeys):
+            dat = h5group[str(key)][row0:row1]
+            col0, col1 = col1, col1 + dat.shape[1]
+            out[:,col0:col1] = dat
+    else:  # multiple components
+        out = numpy.ndarray((dat.shape[0], row1-row0, ncol), dat.dtype, buffer=out)
+        col1 = 0
+        for key in range(nkeys):
+            dat = h5group[str(key)][:,row0:row1]
+            col0, col1 = col1, col1 + dat.shape[2]
+            out[:,:,col0:col1] = dat
     return out
 
 def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
@@ -729,7 +745,7 @@ def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
     if max_aobuf is not None:
         max_aobuf = max(1, max_aobuf)
         def div_each_iobuf(ijstart, ijstop, buflen):
-# to fill each iobuf, AO integrals may need to be fill to aobuf several times
+            # to fill each iobuf, AO integrals may need to be fill to aobuf several times
             return (ijstart, ijstop, buflen,
                     balance_partition(dij_loc, max_aobuf, ijstart, ijstop))
         ijsh_range = [div_each_iobuf(*x) for x in ijsh_range]
@@ -763,7 +779,6 @@ del(MAX_MEMORY)
 
 if __name__ == '__main__':
     from pyscf import scf
-    from pyscf import gto
     from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5
@@ -782,18 +797,18 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf()
 
-    print(time.clock())
+    print(logger.process_clock())
     full(mol, rhf.mo_coeff, 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    print(time.clock())
+    print(logger.process_clock())
     eri0 = incore.full(rhf._eri, rhf.mo_coeff)
     feri = h5py.File('h2oeri.h5', 'r')
     print('full', abs(eri0-feri['eri_mo']).sum())
     feri.close()
 
-    print(time.clock())
+    print(logger.process_clock())
     c = rhf.mo_coeff
     general(mol, (c,c,c,c), 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    print(time.clock())
+    print(logger.process_clock())
     feri = h5py.File('h2oeri.h5', 'r')
     print('general', abs(eri0-feri['eri_mo']).sum())
     feri.close()

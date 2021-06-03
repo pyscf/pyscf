@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,13 +21,11 @@ Extension to scipy.linalg module
 '''
 
 import sys
+import inspect
 import warnings
-import tempfile
 from functools import reduce
 import numpy
 import scipy.linalg
-import h5py
-from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
 from pyscf.lib import misc
@@ -171,7 +169,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
              follow_state=FOLLOW_STATE):
-    '''Davidson diagonalization method to solve  a c = e c.  Ref
+    r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
@@ -257,11 +255,11 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-             dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE, tol_residual=None):
-    '''Davidson diagonalization method to solve  a c = e c.  Ref
+              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+              dot=numpy.dot, callback=None,
+              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
+              follow_state=FOLLOW_STATE, tol_residual=None):
+    r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
 
@@ -370,8 +368,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     v = None
     conv = [False] * nroots
     emin = None
+    norm_min = 1
 
-    from pyscf import lib
     for icyc in range(max_cycle):
         if fresh_start:
             if _incore:
@@ -384,7 +382,14 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
+            x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
+            if len(xt) != x0len:
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
+                         x0len - len(xt))
+                if callable(pick):
+                    log.warn('Check to see if `pick` function %s is providing '
+                             'linear dependent vectors', pick.__name__)
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -506,6 +511,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
+                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
         xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
@@ -527,7 +533,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -538,6 +544,18 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             callback(locals())
 
     x0 = [x for x in x0]  # nparray -> list
+
+    # Check whether the solver finds enough eigenvectors.
+    h_dim = x0[0].size
+    if len(x0) < min(h_dim, nroots):
+        # Two possible reasons:
+        # 1. All the initial guess are the eigenvectors. No more trial vectors
+        # can be generated.
+        # 2. The initial guess sits in the subspace which is smaller than the
+        # required number of roots.
+        msg = 'Not enough eigenvectors (len(x0)=%d, nroots=%d)' % (len(x0), nroots)
+        warnings.warn(msg)
+
     return numpy.asarray(conv), e, x0
 
 
@@ -567,18 +585,21 @@ def pick_real_eigs(w, v, nroots, envs):
     '''This function searchs the real eigenvalues or eigenvalues with small
     imaginary component.
     '''
+    threshold = 1e-3
     abs_imag = abs(w.imag)
-    max_imag_tol = max(1e-3, min(abs_imag)*1.1)
-    realidx = numpy.where((abs_imag < max_imag_tol))[0]
-    if len(realidx) < nroots and w.size >= nroots:
-        warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
-                      numpy.count_nonzero(abs_imag > 1e-2))
+    # Grab `nroots` number of e with small(est) imaginary components
+    max_imag_tol = max(threshold, numpy.sort(abs_imag)[min(w.size,nroots)-1])
+    real_idx = numpy.where((abs_imag <= max_imag_tol))[0]
+    nbelow_thresh = numpy.count_nonzero(abs_imag[real_idx] < threshold)
+    if nbelow_thresh < nroots and w.size >= nroots:
+        warnings.warn('Only %d eigenvalues (out of %3d requested roots) with imaginary part < %4.3g.\n'
+                      % (nbelow_thresh, min(w.size,nroots), threshold))
 
     # Guess whether the matrix to diagonalize is real or complex
     if envs.get('dtype') == numpy.double:
-        w, v, idx = _eigs_cmplx2real(w, v, realidx, real_eigenvectors=True)
+        w, v, idx = _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True)
     else:
-        w, v, idx = _eigs_cmplx2real(w, v, realidx, real_eigenvectors=False)
+        w, v, idx = _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=False)
     return w, v, idx
 
 def _eigs_cmplx2real(w, v, real_idx, real_eigenvectors=True):
@@ -612,7 +633,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         dot=numpy.dot, callback=None,
         nroots=1, lessio=False, left=False, pick=pick_real_eigs,
         verbose=logger.WARN, follow_state=FOLLOW_STATE):
-    '''Davidson diagonalization to solve the non-symmetric eigenvalue problem
+    r'''Davidson diagonalization to solve the non-symmetric eigenvalue problem
 
     Args:
         aop : function([x]) => [array_like_x]
@@ -746,6 +767,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     v = None
     conv = [False] * nroots
     emin = None
+    norm_min = 1
 
     for icyc in range(max_cycle):
         if fresh_start:
@@ -759,7 +781,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
+            x0len = len(x0)
             xt, x0 = _qr(x0, dot, lindep)[0], None
+            if len(xt) != x0len:
+                log.warn('QR decomposition removed %d vectors.  The davidson may fail.'
+                         'Check to see if `pick` function :%s: is providing linear dependent '
+                         'vectors' % (x0len - len(xt), pick.__name__))
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -870,6 +897,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     xt[k] *= 1/numpy.sqrt(dot(xt[k].conj(), xt[k]).real)
                 else:
                     xt[k] = None
+                    log.debug1('Throwing out eigenvector %d with norm=%4.3g', k, dx_norm[k])
         else:
             for k, ek in enumerate(e):
                 if dx_norm[k]**2 > lindep:
@@ -898,7 +926,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -992,14 +1020,14 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     e, x = dgeev1(map_abop, x0, precond, type, tol, max_cycle, max_space, lindep,
                   max_memory, dot, callback, nroots, lessio, verbose)[1:]
     if nroots == 1:
-        return e[0], x0[0]
+        return e[0], x[0]
     else:
-        return e, x0
+        return e, x
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-          dot=numpy.dot, callback=None,
-          nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
+           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+           dot=numpy.dot, callback=None,
+           nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
     '''Davidson diagonalization method to solve  A c = e B c.
 
     Args:
@@ -1206,7 +1234,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max(dx_norm), e, de[ide], norm)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = all(norm < toloose for norm in dx_norm)
             break
 
@@ -1223,10 +1251,13 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     return conv, e, x0
 
 
+# TODO: new solver with Arnoldi iteration
+# The current implementation fails in polarizability. see
+# https://github.com/pyscf/pyscf/issues/507
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
            lindep=DSOLVE_LINDEP, callback=None, hermi=False,
            max_memory=MAX_MEMORY, verbose=logger.WARN):
-    '''Krylov subspace method to solve  (1+a) x = b.  Ref:
+    r'''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
     Args:
@@ -1293,7 +1324,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1[i] *= rmat[i,i]
 
     innerprod = [dot(xi.conj(), xi).real for xi in x1]
-    max_innerprod = max(innerprod)
+    if innerprod:
+        max_innerprod = max(innerprod)
+    else:
+        max_innerprod = 0
     if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)
@@ -1419,10 +1453,23 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     return xtrial
 
 
-def cho_solve(a, b):
-    '''Solve ax = b, where a is hermitian matrix
+def cho_solve(a, b, strict_sym_pos=True):
+    '''Solve ax = b, where a is a postive definite hermitian matrix
+
+    Kwargs:
+        strict_sym_pos (bool) : Whether to impose the strict positive definition
+            on matrix a
     '''
-    return scipy.linalg.solve(a, b, sym_pos=True)
+    try:
+        return scipy.linalg.solve(a, b, sym_pos=True)
+    except numpy.linalg.LinAlgError:
+        if strict_sym_pos:
+            raise
+        else:
+            fname, lineno = inspect.stack()[1][1:3]
+            warnings.warn('%s:%s: matrix a is not strictly postive definite' %
+                          (fname, lineno))
+            return scipy.linalg.solve(a, b)
 
 
 def _qr(xs, dot, lindep=1e-14):

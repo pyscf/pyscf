@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
-from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
+from pyscf.lib import logger
+from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
+from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
@@ -172,7 +174,7 @@ def ifft(g, mesh):
 
 
 def fftk(f, mesh, expmikr):
-    '''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
+    r'''Perform the 3D FFT of a real-space function which is (periodic*e^{ikr}).
 
     fk(k+G) = \sum_r fk(r) e^{-i(k+G)r} = \sum_r [f(k)e^{-ikr}] e^{-iGr}
     '''
@@ -180,7 +182,7 @@ def fftk(f, mesh, expmikr):
 
 
 def ifftk(g, mesh, expikr):
-    '''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
+    r'''Perform the 3D inverse FFT of f(k+G) into a function which is (periodic*e^{ikr}).
 
     fk(r) = (1/Ng) \sum_G fk(k+G) e^{i(k+G)r} = (1/Ng) \sum_G [fk(k+G)e^{iGr}] e^{ikr}
     '''
@@ -188,7 +190,7 @@ def ifftk(g, mesh, expikr):
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, **kwargs):
+              wrap_around=True, omega=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -203,13 +205,21 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             The Coulomb kernel.
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
-
+        omega : float
+            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
+            and erfc(|omega|*r12)/r12 if omega < 0.
+            Note this parameter is slightly different to setting cell.omega
+            for the treatment of exxdiv (at G0).  cell.omega affects Ewald
+            probe charge at G0. It is used mostly with RSH functional for
+            the long-range part of HF exchange. This parameter is used by
+            real-space JK builder which requires Ewald probe charge to be
+            computed with regular Coulomb interaction (1/r12) while the rest
+            coulG is scaled as long-range Coulomb kernel.
     '''
     exxdiv = exx
     if isinstance(exx, str):
         exxdiv = exx
     elif exx and mf is not None:
-# sys.stderr.write('pass exxdiv directly')
         exxdiv = mf.exxdiv
 
     if mesh is None:
@@ -266,6 +276,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         coulG[absG2==0] = 4*np.pi*0.5*Rc**2
 
+        if cell.dimension < 3:
+            raise NotImplementedError
+
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
@@ -287,10 +300,16 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         #qidx = [np.linalg.norm(exx_q-kGi,axis=1).argmin() for kGi in kG]
         maxqv = abs(exx_q).max(axis=0)
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
-        coulG = coulG.astype(np.complex128)
+        coulG = coulG.astype(exx_vq.dtype)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
 
+        if cell.dimension < 3:
+            raise NotImplementedError
+
     else:
+        # Ewald probe charge method to get the leading term of the finite size
+        # error in exchange integrals
+
         G0_idx = np.where(absG2==0)[0]
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
@@ -308,7 +327,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             with np.errstate(divide='ignore', invalid='ignore'):
                 coulG = weights*4*np.pi/absG2
             if len(G0_idx) > 0:
-                coulG[G0_idx] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
+                coulG[G0_idx] = -2*np.pi*Ld2**2 #-pi*L_z^2/2
 
         elif cell.dimension == 1:
             logger.warn(cell, 'No method for PBC dimension 1, dim-type %s.'
@@ -331,10 +350,28 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
 
+        # The divergent part of periodic summation of (ii|ii) integrals in
+        # Coulomb integrals were cancelled out by electron-nucleus
+        # interaction. The periodic part of (ii|ii) in exchange cannot be
+        # cancelled out by Coulomb integrals. Its leading term is calculated
+        # using Ewald probe charge (the function madelung below)
         if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
     coulG[equal2boundary] = 0
+
+    # Scale the coulG kernel for attenuated Coulomb integrals.
+    # * omega is used by RealSpaceJKBuilder which requires ewald probe charge
+    # being evaluated with regular Coulomb interaction (1/r12).
+    # * cell.omega, which affects the ewald probe charge, is often set by
+    # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
+    if omega is not None:
+        if omega > 0:
+            coulG *= np.exp(-.25/omega**2 * absG2)
+        else:
+            coulG *= (1 - np.exp(-.25/omega**2 * absG2))
+    elif cell.omega != 0:
+        coulG *= np.exp(-.25/cell.omega**2 * absG2)
 
     return coulG
 
@@ -359,16 +396,16 @@ def precompute_exx(cell, kpts):
     # ASE:
     alpha = 5./Rin # sqrt(-ln eps) / Rc, eps ~ 10^{-11}
     log.info("WS alpha = %s", alpha)
-    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [60,60,60]
+    kcell.mesh = np.array([4*int(L*alpha*3.0) for L in Lc])  # ~ [120,120,120]
     # QE:
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    kcell.build(False,False)
     rs = gen_grid.gen_uniform_grids(kcell)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
-    corners = np.dot(np.indices((2,2,2)).reshape((3,8)).T, kcell.a)
+    corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
+    corners = np.dot(corners_coord, kcell.a)
     #vR = np.empty(kngs)
     #for i, rv in enumerate(rs):
     #    # Minimum image convention to corners of kcell parallelepiped
@@ -381,10 +418,20 @@ def precompute_exx(cell, kpts):
     vR = scipy.special.erf(alpha*r) / (r+1e-200)
     vR[r<1e-9] = 2*alpha / np.sqrt(np.pi)
     vG = (kcell.vol/kngs) * fft(vR, kcell.mesh)
+
+    if abs(vG.imag).max() > 1e-6:
+        # vG should be real in regular lattice. If imaginary part is observed,
+        # this probably means a ws cell was built from a unconventional
+        # lattice. The SR potential erfc(alpha*r) for the charge in the center
+        # of ws cell decays to the region out of ws cell. The Ewald-sum based
+        # on the minimum image convention cannot be used to build the kernel
+        # Eq (12) of PRB 87, 165122
+        raise RuntimeError('Unconventional lattice was found')
+
     ws_exx = {'alpha': alpha,
               'kcell': kcell,
               'q'    : kcell.Gv,
-              'vq'   : vG}
+              'vq'   : vG.real.copy()}
     log.debug("# Finished precomputing")
     return ws_exx
 
@@ -392,16 +439,29 @@ def precompute_exx(cell, kpts):
 def madelung(cell, kpts):
     Nk = get_monkhorst_pack_size(cell, kpts)
     ecell = copy.copy(cell)
-    ecell._atm = np.array([[1, 0, 0, 0, 0, 0]])
-    ecell._env = np.array([0., 0., 0.])
+    ecell._atm = np.array([[1, cell._env.size, 0, 0, 0, 0]])
+    ecell._env = np.append(cell._env, [0., 0., 0.])
     ecell.unit = 'B'
     #ecell.verbose = 0
     ecell.a = np.einsum('xi,x->xi', cell.lattice_vectors(), Nk)
     ecell.mesh = np.asarray(cell.mesh) * Nk
-    ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-    lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                      Nk, ew_eta, ew_cut)
-    return -2*ecell.ewald(ew_eta, ew_cut)
+
+    if cell.omega == 0:
+        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
+        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
+                          Nk, ew_eta, ew_cut)
+        return -2*ecell.ewald(ew_eta, ew_cut)
+
+    else:
+        # cell.ewald function does not use the Coulomb kernel function
+        # get_coulG. When computing the nuclear interactions with attenuated
+        # Coulomb operator, the Ewald summation technique is not needed
+        # because the Coulomb kernel 4pi/G^2*exp(-G^2/4/omega**2) decays
+        # quickly.
+        Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
+        coulG = get_coulG(ecell, Gv=Gv)
+        ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
+        return -np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 
 
 def get_monkhorst_pack_size(cell, kpts):
@@ -410,7 +470,7 @@ def get_monkhorst_pack_size(cell, kpts):
     return Nk
 
 
-def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
+def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
     a = cell.lattice_vectors()
@@ -435,11 +495,14 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None):
     elif dimension == 2:
         nimgs = [nimgs[0], nimgs[1], 0]
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
-                             np.arange(-nimgs[1],nimgs[1]+1),
-                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
+                             np.arange(-nimgs[1], nimgs[1]+1),
+                             np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
+    if not discard:
+        return Ls
     idx = np.zeros(len(Ls), dtype=bool)
+    idx[len(Ls)//2] = True  # cell0 (Ls == 0) should always be included.
     for ax in (-a[0], 0, a[0]):
         for ay in (-a[1], 0, a[1]):
             for az in (-a[2], 0, a[2]):
@@ -460,7 +523,6 @@ def super_cell(cell, ncopy):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    supcell = cell.copy()
     a = cell.lattice_vectors()
     #:supcell.atom = []
     #:for Lx in range(ncopy[0]):
@@ -474,17 +536,12 @@ def super_cell(cell, ncopy):
                              np.arange(ncopy[1]),
                              np.arange(ncopy[2])))
     Ls = np.dot(Ts, a)
-    symbs = [atom[0] for atom in cell._atom] * len(Ls)
-    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
-    supcell.unit = 'B'
+    supcell = cell.copy()
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
                              ncopy[1]*cell.mesh[1],
                              ncopy[2]*cell.mesh[2]])
-    supcell.build(False, False, verbose=0)
-    supcell.verbose = cell.verbose
-    return supcell
+    return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
@@ -499,24 +556,49 @@ def cell_plus_imgs(cell, nimgs):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    supcell = cell.copy()
     a = cell.lattice_vectors()
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
-                             np.arange(-nimgs[1],nimgs[1]+1),
-                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
+                             np.arange(-nimgs[1], nimgs[1]+1),
+                             np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    symbs = [atom[0] for atom in cell._atom] * len(Ls)
-    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
-    supcell.unit = 'B'
+    supcell = cell.copy()
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
-    supcell.build(False, False, verbose=0)
-    supcell.verbose = cell.verbose
+    supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
+                             (nimgs[1]*2+1)*cell.mesh[1],
+                             (nimgs[2]*2+1)*cell.mesh[2]])
+    return _build_supcell_(supcell, cell, Ls)
+
+def _build_supcell_(supcell, cell, Ls):
+    '''
+    Construct supcell ._env directly without calling supcell.build() method.
+    This reserves the basis contraction coefficients defined in cell
+    '''
+    nimgs = len(Ls)
+    symbs = [atom[0] for atom in cell._atom] * nimgs
+    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    supcell.unit = 'B'
+
+    # Do not call supcell.build() since it may normalize the basis contraction
+    # coefficients
+    _env = np.append(cell._env, coords.ravel())
+    _atm = np.repeat(cell._atm[None,:,:], nimgs, axis=0)
+    _atm = _atm.reshape(-1, ATM_SLOTS)
+    # Point to the corrdinates appended to _env
+    _atm[:,PTR_COORD] = cell._env.size + np.arange(nimgs * cell.natm) * 3
+
+    _bas = np.repeat(cell._bas[None,:,:], nimgs, axis=0)
+    # For atom pointers in each image, shift natm*image_id
+    _bas[:,:,ATOM_OF] += np.arange(nimgs)[:,None] * cell.natm
+
+    supcell._atm = np.asarray(_atm, dtype=np.int32)
+    supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
+    supcell._env = _env
     return supcell
 
 
 def cutoff_to_mesh(a, cutoff):
-    '''
+    r'''
     Convert KE cutoff to FFT-mesh
 
         uses KE = k^2 / 2, where k_max ~ \pi / grid_spacing
@@ -532,6 +614,7 @@ def cutoff_to_mesh(a, cutoff):
         mesh : (3,) array
     '''
     b = 2 * np.pi * np.linalg.inv(a.T)
+    cutoff = cutoff * _cubic2nonorth_factor(a)
     mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
     return mesh
 
@@ -541,7 +624,23 @@ def mesh_to_cutoff(a, mesh):
     '''
     b = 2 * np.pi * np.linalg.inv(a.T)
     Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    return Gmax**2/2
+    ke_cutoff = Gmax**2/2
+    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
+    return ke_cutoff / _cubic2nonorth_factor(a)
+
+def _cubic2nonorth_factor(a):
+    '''The factors to transform the energy cutoff from cubic lattice to
+    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
+    It needs to be rescaled for the non-orthogonal lattice to ensure that the
+    minimal Gv vector in the reciprocal space is larger than the required
+    energy cutoff.
+    '''
+    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
+    # inside the box defined by Gv vectors
+    abase = a / np.linalg.norm(a, axis=1)[:,None]
+    bbase = np.linalg.inv(abase.T)
+    overlap = np.einsum('ix,ix->i', abase, bbase)
+    return 1./overlap**2
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''

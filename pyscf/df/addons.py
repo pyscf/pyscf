@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 import sys
 import copy
 import numpy
-from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
@@ -36,35 +35,35 @@ if sys.version_info >= (3,):
 
 # Obtained from http://www.psicode.org/psi4manual/master/basissets_byfamily.html
 DEFAULT_AUXBASIS = {
-# AO basis JK-fit MP2-fit
-'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-'ccpvdpdz'    : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
-'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
-'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
-'augccpvtz'   : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
-'ccpvqz'      : ('cc-pvqz-jkfit'          , 'cc-pvqz-ri'         ),
-'augccpvqz'   : ('aug-cc-pvqz-jkfit'      , 'aug-cc-pvqz-ri'     ),
-'ccpv5z'      : ('cc-pv5z-jkfit'          , 'cc-pv5z-ri'         ),
-'augccpv5z'   : ('aug-cc-pv5z-jkfit'      , 'aug-cc-pv5z-ri'     ),
-'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
-'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
-'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
-'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),
-'def2tzvpp'   : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
-'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
-'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
-'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
-'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
-'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
-'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
-'321g'        : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
-'631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-'631+g'       : ('heavy-aug-cc-pvdz-jkfit', 'heavyaug-cc-pvdz-ri'),
-'631++g'      : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
-'6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
-'6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
-'6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
+    # AO basis       JK-fit                     MP2-fit
+    'ccpvdz'      : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+    'ccpvdpdz'    : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+    'augccpvdz'   : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+    'augccpvdpdz' : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+    'ccpvtz'      : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
+    'augccpvtz'   : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
+    'ccpvqz'      : ('cc-pvqz-jkfit'          , 'cc-pvqz-ri'         ),
+    'augccpvqz'   : ('aug-cc-pvqz-jkfit'      , 'aug-cc-pvqz-ri'     ),
+    'ccpv5z'      : ('cc-pv5z-jkfit'          , 'cc-pv5z-ri'         ),
+    'augccpv5z'   : ('aug-cc-pv5z-jkfit'      , 'aug-cc-pv5z-ri'     ),
+    'def2svp'     : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
+    'def2svpd'    : ('def2-svp-jkfit'         , 'def2-svpd-ri'       ),
+    'def2tzvp'    : ('def2-tzvp-jkfit'        , 'def2-tzvp-ri'       ),
+    'def2tzvpd'   : ('def2-tzvp-jkfit'        , 'def2-tzvpd-ri'      ),
+    'def2tzvpp'   : ('def2-tzvpp-jkfit'       , 'def2-tzvpp-ri'      ),
+    'def2tzvppd'  : ('def2-tzvpp-jkfit'       , 'def2-tzvppd-ri'     ),
+    'def2qzvp'    : ('def2-qzvp-jkfit'        , 'def2-qzvp-ri'       ),
+    'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
+    'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
+    'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
+    'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
+    '321g'        : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
+    '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
+    '631+g'       : ('heavy-aug-cc-pvdz-jkfit', 'heavyaug-cc-pvdz-ri'),
+    '631++g'      : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
+    '6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
+    '6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
+    '6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
 }
 
 class load(ao2mo.load):
@@ -169,8 +168,8 @@ def make_auxbasis(mol, mp2fit=False):
                     auxb = DEFAULT_AUXBASIS[balias][0]
                 if auxb is not None and gto.basis.load(auxb, k):
                     auxbasis[k] = auxb
-                    logger.debug(mol, 'Default auxbasis %s is used for %s %s',
-                                 auxb, k, _basis[k])
+                    logger.info(mol, 'Default auxbasis %s is used for %s %s',
+                                auxb, k, _basis[k])
 
     if len(auxbasis) != len(_basis):
         # Some AO basis not found in DEFAULT_AUXBASIS

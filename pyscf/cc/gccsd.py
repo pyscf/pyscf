@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy as np
 from functools import reduce
 
@@ -22,7 +22,6 @@ from pyscf import ao2mo
 from pyscf import scf
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import addons
 from pyscf.cc import gintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf import __config__
@@ -117,7 +116,7 @@ class GCCSD(ccsd.CCSD):
     conv_tol = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
@@ -160,7 +159,6 @@ class GCCSD(ccsd.CCSD):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
 
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if getattr(eris, 'orbspin', None) is not None:
@@ -194,9 +192,9 @@ class GCCSD(ccsd.CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.converged_lambda, self.l1, self.l2 = \
                 gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                   max_cycle=self.max_cycle,
-                                   tol=self.conv_tol_normt,
-                                   verbose=self.verbose)
+                                    max_cycle=self.max_cycle,
+                                    tol=self.conv_tol_normt,
+                                    verbose=self.verbose)
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
@@ -244,7 +242,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -256,7 +254,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return gccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return gccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
@@ -294,10 +292,22 @@ class GCCSD(ccsd.CCSD):
     def nuc_grad_method(self):
         raise NotImplementedError
 
-CCSD = GCCSD
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_t1_diagnostic(t1)
 
-from pyscf import scf
-scf.ghf.GHF.CCSD = lib.class_as_method(CCSD)
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        raise NotImplementedError
+        #return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        raise NotImplementedError
+        #return get_d2_diagnostic(self.spin2spatial(t2))
+
+CCSD = GCCSD
 
 
 class _PhysicistsERIs:
@@ -307,6 +317,7 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
         self.orbspin = None
 
         self.oooo = None
@@ -324,19 +335,22 @@ class _PhysicistsERIs:
         if getattr(mo_coeff, 'orbspin', None) is not None:
             self.orbspin = mo_coeff.orbspin[mo_idx]
             mo_coeff = lib.tag_array(mo_coeff[:,mo_idx], orbspin=self.orbspin)
-            self.mo_coeff = mo_coeff
         else:
             orbspin = scf.ghf.guess_orbspin(mo_coeff)
-            self.mo_coeff = mo_coeff = mo_coeff[:,mo_idx]
+            mo_coeff = mo_coeff[:,mo_idx]
             if not np.any(orbspin == -1):
                 self.orbspin = orbspin[mo_idx]
-                self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+                mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
+        self.mo_coeff = mo_coeff
 
         # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         self.nocc = mycc.nocc
+        self.mol = mycc.mol
 
         mo_e = self.mo_energy = self.fock.diagonal().real
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
@@ -345,7 +359,6 @@ class _PhysicistsERIs:
         return self
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
     eris = _PhysicistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -390,7 +403,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
 
     eris = _PhysicistsERIs()
@@ -552,7 +565,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
 
 if __name__ == '__main__':
-    from pyscf import scf
     from pyscf import gto
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],

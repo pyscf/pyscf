@@ -18,7 +18,7 @@
 
 '''Density expansion on plane waves'''
 
-import time
+
 import copy
 import numpy
 from pyscf import lib
@@ -44,39 +44,82 @@ def estimate_eta(cell, cutoff=CUTOFF):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
-    # r^5 to guarantee at least up to f shell converging at boundary
-    lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 3)
+    lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 4)
+    # If lmax=3 (r^5 for radial part), this expression guarantees at least up
+    # to f shell the convergence at boundary
     eta = max(numpy.log(4*numpy.pi*cell.rcut**(lmax+2)/cutoff)/cell.rcut**2*2,
               ETA_MIN)
     return eta
 
 def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
-    '''Given ke_cutoff, the upper limit of eta to guarantee the required
-    precision in Coulomb integrals.
+    '''Given ke_cutoff, the upper bound of eta to produce the required
+    precision in AFTDF Coulomb integrals.
     '''
+    # search eta for interaction between GTO(eta) and point charge at the same
+    # location so that
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
+    # GTO(eta, k) = Fourier transform of Gaussian e^{-eta r^2}
+
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
     kmax = (ke_cutoff*2)**.5
-    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax*2-1)))
+    # The interaction between two s-type density distributions should be
+    # enough for the error estimation.  Put lmax here to increate Ecut for
+    # slightly better accuracy
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax-1)))
     log_eta = -1
     eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
 
 def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
-    '''Given eta, the lower limit of ke_cutoff to guarantee the required
-    precision in Coulomb integrals.
+    '''Given eta, the lower bound of ke_cutoff to produce the required
+    precision in AFTDF Coulomb integrals.
     '''
+    # estimate ke_cutoff for interaction between GTO(eta) and point charge at
+    # the same location so that
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k) < precision
+    # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 GTO(eta, k)
+    # ~ \int_kmax^infty 4*pi/k^2 GTO(eta,k) dk^3
+    # = (4*pi)^2 *2*eta/kmax^{n-1} e^{-kmax^2/4eta} + ... < precision
+
+    # The magic number 0.2 comes from AFTDF.__init__ and GDF.__init__
     eta = max(eta, 0.2)
-    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
-    log_k0 = 5 + numpy.log(eta) / 2
+    log_k0 = 3 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
-    Ecut = 2*eta * (log_k0*(lmax*2-1) - log_rest)
+    # The interaction between two s-type density distributions should be
+    # enough for the error estimation.  Put lmax here to increate Ecut for
+    # slightly better accuracy
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    Ecut = 2*eta * (log_k0*(lmax-1) - log_rest)
     Ecut = max(Ecut, .5)
     return Ecut
 
+# \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
+# ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
+# = 16 pi^{5/2} omega erfc(sqrt(ke_cutoff/(2*omega^2)))
+# ~ 16 pi^2 exp(-ke_cutoff/(2*omega^2)))
+def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
+    '''Energy cutoff to converge attenuated Coulomb in moment space
+    '''
+    if precision is None:
+        precision = cell.precision
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (32*omega**2*numpy.pi**2))
+    return ke_cutoff
+
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+    omega = (-.5 * ke_cutoff / numpy.log(precision / (32*numpy.pi**2)))**.5
+    return omega
+
 def get_nuc(mydf, kpts=None):
     # Pseudopotential is ignored when computing just the nuclear attraction
+    t0 = (logger.process_clock(), logger.perf_counter())
     with lib.temporary_env(mydf.cell, _pseudo={}):
-        return get_pp_loc_part1(mydf, kpts)
+        nuc = get_pp_loc_part1(mydf, kpts)
+    logger.timer(mydf, 'get_nuc', *t0)
+    return nuc
 
 def get_pp_loc_part1(mydf, kpts=None):
     cell = mydf.cell
@@ -86,7 +129,7 @@ def get_pp_loc_part1(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t0 = t1 = (time.clock(), time.time())
+    t0 = t1 = (logger.process_clock(), logger.perf_counter())
 
     mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
@@ -140,8 +183,8 @@ def get_pp_loc_part1(mydf, kpts=None):
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2'):
         for k, aoao in enumerate(aoaoks):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
+            # rho_ij(G) nuc(-G) / G^2
+            # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
             if gamma_point(kpts_lst[k]):
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
@@ -166,7 +209,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     cell = mydf.cell
     nkpts = len(kpts)
 
-# Use the 3c2e code with steep s gaussians to mimic nuclear density
+    # Use the 3c2e code with steep s gaussians to mimic nuclear density
     fakenuc = _fake_nuc(cell)
     fakenuc._atm, fakenuc._bas, fakenuc._env = \
             gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
@@ -212,6 +255,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
+    t0 = (logger.process_clock(), logger.perf_counter())
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -220,13 +264,17 @@ def get_pp(mydf, kpts=None):
     nkpts = len(kpts_lst)
 
     vloc1 = get_pp_loc_part1(mydf, kpts_lst)
+    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part1', *t0)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part2', *t1)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
         vpp[k] += vloc1[k] + vloc2[k]
+    t1 = logger.timer_debug1(mydf, 'get_pp_nl', *t1)
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
+    logger.timer(mydf, 'get_pp', *t0)
     return vpp
 
 def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
@@ -249,7 +297,7 @@ class AFTDF(lib.StreamObject):
         self.max_memory = cell.max_memory
         self.mesh = cell.mesh
 # For nuclear attraction integrals using Ewald-like technique.
-# Set to 0 to swith off Ewald tech and use the regular reciprocal space
+# Set to 0 to switch off Ewald tech and use the regular reciprocal space
 # method (solving Poisson equation of nuclear charges in reciprocal space).
         if cell.dimension == 0:
             self.eta = 0.2
@@ -264,7 +312,7 @@ class AFTDF(lib.StreamObject):
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
         # The following attributes are not input options.
-        self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self, verbose=None):
@@ -274,6 +322,12 @@ class AFTDF(lib.StreamObject):
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
+        return self
+
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        self._rsh_df = {}
         return self
 
     def check_sanity(self):
@@ -315,7 +369,7 @@ class AFTDF(lib.StreamObject):
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
-            if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
+            if any(x/meshz > 1.1 for x in cell.mesh[cell.dimension:]):
                 meshz = pbcgto.cell._mesh_inf_vaccum(cell)
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'
@@ -328,7 +382,7 @@ class AFTDF(lib.StreamObject):
 # TODO: Put Gv vector in the arguments
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None,
-                intor='GTO_ft_ovlp', comp=1):
+                intor='GTO_ft_ovlp', comp=1, bvk_kmesh=None):
         '''
         Fourier transform iterator for AO pair
         '''
@@ -372,9 +426,10 @@ class AFTDF(lib.StreamObject):
         for p0, p1 in self.prange(0, ngrids, blksize):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
             #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
-            aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                         b, gxyz[p0:p1], Gvbase, q,
-                                         kptj.reshape(1,3), intor, comp, out=buf)[0]
+            aoao = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                        b, gxyz[p0:p1], Gvbase, q,
+                                        kptj.reshape(1,3), intor, comp,
+                                        bvk_kmesh=bvk_kmesh, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
@@ -392,7 +447,8 @@ class AFTDF(lib.StreamObject):
                 yield (pqkR, pqkI, p0+i0, p0+i1)
 
     def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1,
+                bvk_kmesh=None):
         '''
         Fourier transform iterator for all kpti which satisfy
             2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
@@ -429,9 +485,9 @@ class AFTDF(lib.StreamObject):
         buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
 
         for p0, p1 in self.prange(0, ngrids, blksize):
-            dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                        b, gxyz[p0:p1], Gvbase, q, kpts,
-                                        intor, comp, out=buf)
+            dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                       b, gxyz[p0:p1], Gvbase, q, kpts,
+                                       intor, comp, bvk_kmesh=bvk_kmesh, out=buf)
             yield dat, p0, p1
 
     weighted_coulG = weighted_coulG
@@ -445,13 +501,18 @@ class AFTDF(lib.StreamObject):
     # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv=None):
+               with_j=True, with_k=True, omega=None, exxdiv=None):
+        if omega is not None:  # J/K for RSH functionals
+            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+                               with_j, with_k, omega, exxdiv)
+
         if kpts is None:
             if numpy.all(self.kpts == 0):
                 # Gamma-point calculation by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts
+        kpts = numpy.asarray(kpts)
 
         if kpts.shape == (3,):
             return aft_jk.get_jk(self, dm, hermi, kpts, kpts_band, with_j,
@@ -554,11 +615,23 @@ def _compensate_nuccell(mydf):
     nuccell._env = numpy.hstack((cell._env, chg_env))
     return nuccell
 
+def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
+                with_j=True, with_k=True, omega=None, exxdiv=None):
+    key = '%.6f' % omega
+    if key in dfobj._rsh_df:
+        rsh_df = dfobj._rsh_df[key]
+    else:
+        rsh_df = dfobj._rsh_df[key] = copy.copy(dfobj).reset()
+        logger.info(dfobj, 'Create RSH-%s object %s for omega=%s',
+                    dfobj.__class__.__name__, rsh_df, omega)
+    with rsh_df.cell.with_range_coulomb(omega):
+        return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
+                             omega=None, exxdiv=exxdiv)
+
 del(CUTOFF, PRECISION)
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto as pbcgto
     cell = pbcgto.Cell()
     cell.verbose = 0
     cell.atom = 'C 0 0 0; C 1 1 1'

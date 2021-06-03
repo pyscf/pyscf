@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ direct_nosym        No            No             No**               Yes
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
 '''
 
-import sys
 import ctypes
 import numpy
 from pyscf import lib
@@ -73,14 +72,6 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
     return ci1
 
-# Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
-# h2e = eri_{pq,rs} p^+ q r^+ s
-#     = (pq|rs) p^+ r^+ s q - (pq|rs) \delta_{qr} p^+ s
-# so eri is defined as
-#       eri_{pq,rs} = (pq|rs) - (1/Nelec) \sum_q (pq|qs)
-# to restore the symmetry between pq and rs,
-#       eri_{pq,rs} = (pq|rs) - (.5/Nelec) [\sum_q (pq|qs) + \sum_p (pq|rp)]
-# Please refer to the treatment in direct_spin1.absorb_h1e
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     g2e_aa = ao2mo.restore(4, eri[0], norb)
@@ -118,16 +109,16 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
 
     if u_aa != 0:  # u * n_alpha^+ n_alpha
         for i in range(norb):
-            maska = (strsa & (1<<i)) > 0
+            maska = (strsa & (1 << i)) > 0
             fcinew[maska] += u_aa * fcivec[maska]
     if u_ab != 0:  # u * (n_alpha^+ n_beta + n_beta^+ n_alpha)
         for i in range(norb):
-            maska = (strsa & (1<<i)) > 0
-            maskb = (strsb & (1<<i)) > 0
-            fcinew[maska[:,None]&maskb] += 2*u_ab * fcivec[maska[:,None]&maskb]
+            maska = (strsa & (1 << i)) > 0
+            maskb = (strsb & (1 << i)) > 0
+            fcinew[maska[:,None] & maskb] += 2*u_ab * fcivec[maska[:,None] & maskb]
     if u_bb != 0:  # u * n_beta^+ n_beta
         for i in range(norb):
-            maskb = (strsb & (1<<i)) > 0
+            maskb = (strsb & (1 << i)) > 0
             fcinew[:,maskb] += u_bb * fcivec[:,maskb]
     return fcinew
 
@@ -195,9 +186,6 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     g2e_aa = ao2mo.restore(1, eri[0], norb)
     g2e_ab = ao2mo.restore(1, eri[1], norb)
     g2e_bb = ao2mo.restore(1, eri[2], norb)
-    link_indexa = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
-    link_indexb = cistring.gen_linkstr_index_trilidx(range(norb), nelecb)
-    nb = link_indexb.shape[0]
     if hdiag is None:
         hdiag = make_hdiag(h1e, eri, norb, nelec)
     if hdiag.size < np:
@@ -207,6 +195,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
             addr = numpy.argpartition(hdiag, np-1)[:np]
         except AttributeError:
             addr = numpy.argsort(hdiag)[:np]
+    nb = cistring.num_strings(norb, nelecb)
     addra = addr // nb
     addrb = addr % nb
     stra = cistring.addrs2str(norb, neleca, addra)
@@ -303,7 +292,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

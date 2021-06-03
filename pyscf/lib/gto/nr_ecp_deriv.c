@@ -17,18 +17,21 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <complex.h>
 #include "cint.h"
 #include "vhf/fblas.h"
 
-#define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
 #define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-10*fabs(y) || fabs(x-y) < 1e-10)
 #define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define CART_CUM        (455+1) // upto l = 12
+#define MALLOC_INSTACK(var, n) \
+                var = (void *)cache; \
+                cache = (void *)(((uintptr_t)(var + (n)) + 7) & (-(uintptr_t)8));
 
 // Held in env, to get *ecpbas, necpbas
 #define AS_RINV_ORIG_ATOM       17
@@ -53,6 +56,8 @@ void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                           const int comp, const int di, const int dj);
 void ECPscalar_distribute0(double *out, const int *dims,
                            const int comp, const int di, const int dj);
+int ECPscalar_cache_size(int comp, int *shls,
+                         int *atm, int natm, int *bas, int nbas, double *env);
 
 /*
 static int _x_addr[] = {
@@ -228,9 +233,11 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
         const double *cj = env + bas[PTR_COEFF+jsh*BAS_SLOTS];
         int nfakbas = npi + npj;
-        int *fakbas = malloc(sizeof(int) * (npi+npj) * BAS_SLOTS);
+        int *fakbas;
+        MALLOC_INSTACK(fakbas, (npi+npj) * BAS_SLOTS);
         _uncontract_bas(fakbas, shls, atm, natm, bas, nbas, env);
-        double *buf1 = malloc(sizeof(double) * (nfi1*nfj * 2 + nfi*nfj*3));
+        double *buf1;
+        MALLOC_INSTACK(buf1, (nfi1*nfj * 2 + nfi*nfj*3));
         double *buf2 = buf1 + nfi1*nfj;
         double *gprim = buf2 + nfi1*nfj;
 
@@ -291,8 +298,6 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 } }
         } }
 
-        free(fakbas);
-        free(buf1);
         return has_value;
 }
 
@@ -310,16 +315,20 @@ static int _cart_factory(int (*intor_cart)(), double *out, int comp,
         const int dij = di * dj;
 
         if (out == NULL) {
-                return dij * 2 * comp;
+                int cache_size = ECPscalar_cache_size(comp*2, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                stack = malloc(sizeof(double) * dij * 2 * comp);
+                int cache_size = ECPscalar_cache_size(comp*2, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
         double *buf = cache;
-        cache += dij;
+        cache += dij * comp;
         int has_value;
         has_value = (*intor_cart)(buf, shls, ecpbas, necpbas,
                                   atm, natm, bas, nbas, env, opt, cache);
@@ -340,13 +349,33 @@ int ECPscalar_iprinv_cart(double *out, int *dims, int *shls, int *atm, int natm,
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _cart_factory(_deriv1_cart, out, 3,
-                                      dims, shls, ecpbas, necpbas,
-                                      atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for iprinv.
+        // iprinv requires potential on a specific atom.
+        // opt->u_ecp used by ECPrad_part was initialized as the sum of
+        // potentials on all atoms rather than a specific atom.
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _cart_factory(_deriv1_cart, out, 3,
+                                               dims, shls, NULL, necpbas,
+                                               atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _cart_factory(_deriv1_cart, out, 3,
+                                              dims, shls, ecpbas, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
@@ -374,26 +403,20 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
         const int dij = di * dj;
 
         if (out == NULL) {
-                const int nfi = (li+1) * (li+2) / 2;
-                const int nfj = (lj+1) * (lj+2) / 2;
-                const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
-                const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                int stack_size = dij*2*comp + nfi*nfj*nci*ncj*(comp+2);
-                return stack_size;
+                int cache_size = ECPscalar_cache_size(comp*2+2, shls,
+                                                      atm, natm, bas, nbas, env);
+                return cache_size;
         }
         double *stack = NULL;
         if (cache == NULL) {
-                const int nfi = (li+1) * (li+2) / 2;
-                const int nfj = (lj+1) * (lj+2) / 2;
-                const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
-                const int ncj = bas[NCTR_OF+jsh*BAS_SLOTS];
-                int stack_size = dij*2*comp + nfi*nfj*nci*ncj*(comp+2);
-                stack = malloc(sizeof(double) * stack_size);
+                int cache_size = ECPscalar_cache_size(comp*2+2, shls,
+                                                      atm, natm, bas, nbas, env);
+                stack = malloc(sizeof(double) * cache_size);
                 cache = stack;
         }
 
         double *buf = cache;
-        cache += dij;
+        cache += dij * comp;
         int has_value;
         has_value = ECPscalar_c2s_factory(intor_cart, buf, comp, shls, ecpbas, necpbas,
                                           atm, natm, bas, nbas, env, opt, cache);
@@ -414,13 +437,33 @@ int ECPscalar_iprinv_sph(double *out, int *dims, int *shls, int *atm, int natm,
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _sph_factory(_deriv1_cart, out, 3,
-                                     dims, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for iprinv.
+        // iprinv requires potential on a specific atom.
+        // opt->u_ecp used by ECPrad_part was initialized as the sum of
+        // potentials on all atoms rather than a specific atom.
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _sph_factory(_deriv1_cart, out, 3,
+                                              dims, shls, NULL, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _sph_factory(_deriv1_cart, out, 3,
+                                             dims, shls, ecpbas, necpbas,
+                                             atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
@@ -463,9 +506,11 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
         const double *cj = env + bas[PTR_COEFF+jsh*BAS_SLOTS];
         int nfakbas = npi + npj;
-        int *fakbas = malloc(sizeof(int) * (npi+npj) * BAS_SLOTS);
+        int *fakbas;
+        MALLOC_INSTACK(fakbas, (npi+npj) * BAS_SLOTS);
         _uncontract_bas(fakbas, shls, atm, natm, bas, nbas, env);
-        double *buf1 = malloc(sizeof(double) * (nfi2*nfj*2 + nfi1*nfj*3 + nfi*nfj*9));
+        double *buf1;
+        MALLOC_INSTACK(buf1, (nfi2*nfj*2 + nfi1*nfj*3 + nfi*nfj*9));
         double *buf2 = buf1 + nfi2*nfj;
         double *buf  = buf2 + nfi2*nfj;
         double *gprim = buf + nfi1*nfj * 3;
@@ -534,8 +579,6 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 } }
         } }
 
-        free(fakbas);
-        free(buf1);
         return has_value;
 }
 
@@ -544,13 +587,32 @@ int ECPscalar_ipiprinv_cart(double *out, int *dims, int *shls, int *atm, int nat
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _cart_factory(_ipipv_cart, out, 9,
-                                      dims, shls, ecpbas, necpbas,
-                                      atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _cart_factory(_ipipv_cart, out, 9,
+                                               dims, shls, NULL, necpbas,
+                                               atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _cart_factory(_ipipv_cart, out, 9,
+                                              dims, shls, ecpbas, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
@@ -569,13 +631,32 @@ int ECPscalar_ipiprinv_sph(double *out, int *dims, int *shls, int *atm, int natm
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _sph_factory(_ipipv_cart, out, 9,
-                                     dims, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _sph_factory(_ipipv_cart, out, 9,
+                                              dims, shls, NULL, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _sph_factory(_ipipv_cart, out, 9,
+                                             dims, shls, ecpbas, necpbas,
+                                             atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
@@ -619,9 +700,11 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
         const double *cj = env + bas[PTR_COEFF+jsh*BAS_SLOTS];
         int nfakbas = npi + npj;
-        int *fakbas = malloc(sizeof(int) * (npi+npj) * BAS_SLOTS);
+        int *fakbas;
+        MALLOC_INSTACK(fakbas, (npi+npj) * BAS_SLOTS);
         _uncontract_bas(fakbas, shls, atm, natm, bas, nbas, env);
-        double *buf1 = malloc(sizeof(double) * (nfi1*nfj1*2 + nfi*nfj1*3 + nfi*nfj*9));
+        double *buf1;
+        MALLOC_INSTACK(buf1, (nfi1*nfj1*2 + nfi*nfj1*3 + nfi*nfj*9));
         double *buf2 = buf1 + nfi1*nfj1;
         double *buf  = buf2 + nfi1*nfj1;
         double *gprim = buf + nfi*nfj1 * 3;
@@ -740,8 +823,6 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 } }
         } }
 
-        free(fakbas);
-        free(buf1);
         return has_value;
 }
 
@@ -750,13 +831,32 @@ int ECPscalar_iprinvip_cart(double *out, int *dims, int *shls, int *atm, int nat
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _cart_factory(_ipvip_cart, out, 9,
-                                      dims, shls, ecpbas, necpbas,
-                                      atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _cart_factory(_ipvip_cart, out, 9,
+                                               dims, shls, NULL, necpbas,
+                                               atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _cart_factory(_ipvip_cart, out, 9,
+                                              dims, shls, ecpbas, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipnucip_cart(double *out, int *dims, int *shls, int *atm, int natm,
@@ -775,13 +875,32 @@ int ECPscalar_iprinvip_sph(double *out, int *dims, int *shls, int *atm, int natm
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
-        int *ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
-        necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
-        int has_value = _sph_factory(_ipvip_cart, out, 9,
-                                     dims, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, opt, cache);
-        free(ecpbas);
-        return has_value;
+        // Switch off opt for rinv operator.
+        // rinv requires potential on a specific atom while opt->u_ecp was
+        // initialized as the sum of potentials on all atoms
+        opt = NULL;
+        if (out == NULL) {
+                int cache_size = _sph_factory(_ipvip_cart, out, 9,
+                                              dims, shls, NULL, necpbas,
+                                              atm, natm, bas, nbas, env, opt, cache);
+                cache_size += necpbas * BAS_SLOTS;
+                return cache_size;
+        } else {
+                int *ecpbas;
+                if (cache == NULL) {
+                        ecpbas = malloc(sizeof(int) * necpbas * BAS_SLOTS);
+                } else {
+                        MALLOC_INSTACK(ecpbas, necpbas * BAS_SLOTS);
+                }
+                necpbas = _one_shell_ecpbas(ecpbas, atm_id, atm, natm, bas, nbas, env);
+                int has_value = _sph_factory(_ipvip_cart, out, 9,
+                                             dims, shls, ecpbas, necpbas,
+                                             atm, natm, bas, nbas, env, opt, cache);
+                if (cache == NULL) {
+                        free(ecpbas);
+                }
+                return has_value;
+        }
 }
 
 int ECPscalar_ipnucip_sph(double *out, int *dims, int *shls, int *atm, int natm,
@@ -816,7 +935,8 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int dij = di * dj;
         const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
-        double *buf1 = malloc(sizeof(double) * nfi1*nci*nfj*ncj * 2);
+        double *buf1;
+        MALLOC_INSTACK(buf1, nfi1*nci*nfj*ncj * 2);
         double *buf2 = buf1 + nfi1*nci*nfj*ncj;
 
         int i, j;
@@ -871,7 +991,6 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 }
         }
 
-        free(buf1);
         return has_value;
 }
 
@@ -880,7 +999,8 @@ int ECPscalar_ignuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
-        int has_value = _cart_factory(_igv_cart, out, 3,
+        int comp = 3;
+        int has_value = _cart_factory(_igv_cart, out, comp+2,
                                       dims, shls, ecpbas, necpbas,
                                       atm, natm, bas, nbas, env, opt, cache);
         return has_value;
@@ -891,7 +1011,8 @@ int ECPscalar_ignuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
-        int has_value = _sph_factory(_igv_cart, out, 3,
+        int comp = 3;
+        int has_value = _sph_factory(_igv_cart, out, comp+2,
                                      dims, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
         return has_value;
@@ -904,10 +1025,16 @@ void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
 { \
         ECPscalar_optimizer(opt, atm, natm, bas, nbas, env); \
 }
+#define make_empty_optimizer(fname) \
+void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
+                                   int *bas, int nbas, double *env) \
+{ \
+        *opt = NULL; \
+}
 make_optimizer(ignuc)
 make_optimizer(ipnuc)
-make_optimizer(iprinv)
 make_optimizer(ipipnuc)
-make_optimizer(ipiprinv)
 make_optimizer(ipnucip)
-make_optimizer(iprinvip)
+make_empty_optimizer(iprinv)
+make_empty_optimizer(ipiprinv)
+make_empty_optimizer(iprinvip)

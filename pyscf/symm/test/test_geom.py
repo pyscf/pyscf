@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -342,6 +342,20 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(geom.symm_identical_atoms(gpname, atoms),
                          [[0, 1, 2, 3], [4, 5, 6, 7]])
 
+    def test_td_subgroup_c2v(self):
+        atoms = [['C', (0, 0, 0)],
+                 ['H', (0, 0, 1)],
+                 ['H', (0, 0.9428090415820634, -0.3333333333333333)],
+                 ['H', ( 0.8164965809277259, -0.4714045207910317, -0.3333333333333333)],
+                 ['H', (-0.8164965809277259, -0.4714045207910317, -0.3333333333333333)],
+                ]
+        gpname, orig, axes = geom.detect_symm(atoms)
+        self.assertEqual(gpname, 'Td')
+
+        gpname, axes = geom.as_subgroup(gpname, axes, subgroup='C2v')
+        z_ref = numpy.array([.5**.5, -6**-.5, 3**-.5])
+        self.assertAlmostEqual(abs(z_ref - axes[2]).max(), 0, 12)
+
     def test_c3v(self):
         coords1 = numpy.dot(make4(1.5), u)
         coords2 = numpy.dot(make4(1.9), u)
@@ -446,7 +460,7 @@ H   2.041481  -0.080642  -0.024174''')
                           [4, 12, 16, 24], [5, 13, 19, 27],
                           [6, 14, 18, 26], [7, 15, 17, 25]])
 
-    def test_s4(self):
+    def test_s4_1(self):
         coords1 = numpy.dot(make4(1.5), u)
         coords2 = numpy.dot(numpy.dot(make4(2.4), random_rotz()), u)
         atoms = [['C', c] for c in coords1] + [['C', c] for c in coords2]
@@ -787,6 +801,30 @@ H   2.041481  -0.080642  -0.024174''')
 
         g, ax = symm.as_subgroup('C6', axes)
         self.assertEqual(g, 'C2')
+
+        g, ax = symm.as_subgroup('Dooh', axes, 'D2h')
+        self.assertEqual(g, 'D2h')
+        g, ax = symm.as_subgroup('Dooh', axes, 'D2')
+        self.assertEqual(g, 'D2')
+        g, ax = symm.as_subgroup('Dooh', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+
+        g, ax = symm.as_subgroup('Coov', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+        g, ax = symm.as_subgroup('Coov', axes, 'C2')
+        self.assertEqual(g, 'C2')
+
+        g, ax = symm.as_subgroup('SO3', axes, 'D2h')
+        self.assertEqual(g, 'D2h')
+        g, ax = symm.as_subgroup('SO3', axes, 'D2')
+        self.assertEqual(g, 'D2')
+        g, ax = symm.as_subgroup('SO3', axes, 'C2v')
+        self.assertEqual(g, 'C2v')
+
+        g, ax = symm.as_subgroup('SO3', axes, 'Dooh')
+        self.assertEqual(g, 'Dooh')
+        g, ax = symm.as_subgroup('SO3', axes, 'Coov')
+        self.assertEqual(g, 'Coov')
 
     def test_ghost(self):
         atoms = [

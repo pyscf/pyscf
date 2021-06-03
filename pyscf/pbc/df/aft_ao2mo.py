@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,20 +20,17 @@
 Integral transformation with analytic Fourier transformation
 '''
 
-import time
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
-from pyscf.lib import logger
-from pyscf.pbc import tools
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.df.df_jk import zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
 from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 
 
@@ -78,15 +75,15 @@ def get_eri(mydf, kpts=None,
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
-# rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
+            # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
             zdotNC(pqkR*coulG[p0:p1], pqkI*coulG[p0:p1], pqkR.T, pqkI.T,
                    1, eriR, eriI, 1)
             pqkR = pqkI = None
         pqkR = pqkI = coulG = None
-# transpose(0,1,3,2) because
-# j == k && i == l  =>
-# (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
-# rho_rs(-G+k_rs) = conj(transpose(rho_sr(G+k_sr), (0,2,1)))
+        # transpose(0,1,3,2) because
+        # j == k && i == l  =>
+        # (L|ij).transpose(0,2,1).conj() = (L^*|ji) = (L^*|kl)  =>  (M|kl)
+        # rho_rs(-G+k_rs) = conj(transpose(rho_sr(G+k_sr), (0,2,1)))
         eri = lib.transpose((eriR+eriI*1j).reshape(-1,nao,nao), axes=(0,2,1))
         return eri.reshape(nao**2,-1)
 
@@ -238,6 +235,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
     q = kpts[1] - kpts[0]
     coords = cell.gen_uniform_grids(mydf.mesh)
     ngrids = len(coords)
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -256,7 +254,7 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
 
     ao_pairs_G = numpy.empty((ngrids,(i1-i0)*(j1-j0)), dtype=numpy.complex)
     for pqkR, pqkI, p0, p1 \
-            in mydf.pw_loop(mydf.mesh, kptijkl[:2], q, shls_slice,
+            in mydf.pw_loop(mydf.mesh, kpts, q, shls_slice,
                             max_memory=max_memory, aosym=aosym):
         ao_pairs_G[p0:p1] = pqkR.T + pqkI.T * 1j
     return ao_pairs_G
@@ -282,12 +280,14 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     ngrids = len(coords)
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
     mo_pairs_G = numpy.empty((ngrids,nmoi,nmoj), dtype=numpy.complex)
+    nao = cell.nao
     for pqkR, pqkI, p0, p1 \
-            in mydf.pw_loop(mydf.mesh, kptijkl[:2], q,
+            in mydf.pw_loop(mydf.mesh, kpts, q,
                             max_memory=max_memory, aosym='s2'):
-        pqk = (pqkR + pqkI*1j).reshape(nao,nao,-1)
+        pqk = lib.unpack_tril(pqkR + pqkI*1j, axis=0).reshape(nao,nao,-1)
         mo_pairs_G[p0:p1] = lib.einsum('pqk,pi,qj->kij', pqk, *mo_coeffs[:2])
     return mo_pairs_G.reshape(ngrids,nmoi*nmoj)
 
@@ -400,7 +400,6 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto
-    from pyscf.pbc import scf as pscf
     from pyscf.pbc.df import AFTDF
 
     L = 5.

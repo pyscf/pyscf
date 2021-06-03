@@ -26,20 +26,22 @@ See Also:
 '''
 
 import sys
-import time
+
 import numpy as np
 import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.data import nist
-from pyscf.scf.hf import make_rdm1
+from pyscf.pbc import gto
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.gto.pseudo import get_pp
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
+from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 
@@ -119,7 +121,8 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
     return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_k=False)[0]
 
 
-def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
+def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3),
+           kpts_band=None, with_j=True, with_k=True, omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices for the given density matrix.
 
     Args:
@@ -145,7 +148,8 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
         The function returns one J and one K matrix, corresponding to the input
         density matrix (both order and shape).
     '''
-    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, exxdiv=mf.exxdiv)
+    return df.FFTDF(cell).get_jk(dm, hermi, kpt, kpts_band, with_j, with_k,
+                                 omega, exxdiv=mf.exxdiv)
 
 
 def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
@@ -212,7 +216,6 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     Return:
         A list: the dipole moment on x, y and z components
     '''
-    from pyscf.pbc import gto
     from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
     from pyscf.pbc.dft import numint
@@ -346,10 +349,10 @@ def _search_dipole_gauge_origin(cell, grids, rho, log):
                 break
             log.debug1('iter %d: origin %s', i, origin)
     else:
-    # If the grids are non-cubic grids, regenerating the grids is expensive if
-    # the position or the shape of the unit cell is changed. The position of
-    # the unit cell is not optimized. The gauge origin is set to the nuclear
-    # charge center of the original unit cell.
+        # If the grids are non-cubic grids, regenerating the grids is expensive if
+        # the position or the shape of the unit cell is changed. The position of
+        # the unit cell is not optimized. The gauge origin is set to the nuclear
+        # charge center of the original unit cell.
         pass
 
     return origin
@@ -372,7 +375,6 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 
 def _dip_correction(mf):
     '''Makov-Payne corrections for charged systems.'''
-    from pyscf.pbc import gto
     from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
     log = logger.new_logger(mf)
@@ -473,7 +475,7 @@ class SCF(mol_hf.SCF):
             Exchange divergence treatment, can be one of
 
             | None : ignore G=0 contribution in exchange
-            | 'ewald' : Ewald probe charge correction (JCP, 122, 234102)
+            | 'ewald' : Ewald probe charge correction [JCP 122, 234102 (2005); DOI:10.1063/1.1926272]
 
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
@@ -497,6 +499,9 @@ class SCF(mol_hf.SCF):
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
+        # Range separation JK builder
+        self.rsjk = None
+
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.conv_tol = cell.precision * 10
@@ -511,14 +516,30 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        self.with_df.kpts = np.reshape(x, (-1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
         if 'kpt' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpt')
+
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == self.kpt):
+                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
+            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        return self
+
+    def reset(self, cell=None):
+        '''Reset cell and relevant attributes associated to the old cell object'''
+        if cell is not None:
+            self.cell = cell
+            self.mol = cell # used by hf kernel
+        self.with_df.reset(cell)
         return self
 
     def dump_flags(self, verbose=None):
@@ -565,7 +586,8 @@ class SCF(mol_hf.SCF):
         if kpt is None: kpt = self.kpt
         return get_ovlp(cell, kpt)
 
-    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_jk(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+               with_j=True, with_k=True, omega=None, **kwargs):
         r'''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
         for particular k-point (kpt).
 
@@ -581,34 +603,42 @@ class SCF(mol_hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
 
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
-        if (kpts_band is None and
+        if (not omega and kpts_band is None and
+            # TODO: generate AO integrals with rsjk algorithm
+            not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
             if self._eri is None:
                 logger.debug(self, 'Building PBC AO integrals incore')
                 self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi)
+            vj, vk = mol_hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
 
-            if self.exxdiv == 'ewald':
+            if with_k and self.exxdiv == 'ewald':
                 from pyscf.pbc.df.df_jk import _ewald_exxdiv_for_G0
                 # G=0 is not inculded in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
+        elif self.rsjk:
+            vj, vk = self.rsjk.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                      with_j, with_k, omega, exxdiv=self.exxdiv)
         else:
-            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                         kpt, kpts_band, exxdiv=self.exxdiv)
+            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                         with_j, with_k, omega, exxdiv=self.exxdiv)
 
+        if with_j:
+            vj = _format_jks(vj, dm, kpts_band)
+        if with_k:
+            vk = _format_jks(vk, dm, kpts_band)
         logger.timer(self, 'vj and vk', *cpu0)
-        vj = _format_jks(vj, dm, kpts_band)
-        vk = _format_jks(vk, dm, kpts_band)
         return vj, vk
 
-    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_j(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         r'''Compute J matrix for the given density matrix and k-point (kpt).
         When kpts_band is given, the J matrices on kpts_band are evaluated.
 
@@ -617,32 +647,15 @@ class SCF(mol_hf.SCF):
         where r,s are orbitals on kpt. p and q are orbitals on kpts_band
         if kpts_band is given otherwise p and q are orbitals on kpt.
         '''
-        #return self.get_jk(cell, dm, hermi, kpt, kpts_band)[0]
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        if kpt is None: kpt = self.kpt
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_k=False,
+                           omega=omega)[0]
 
-        cpu0 = (time.clock(), time.time())
-        dm = np.asarray(dm)
-        nao = dm.shape[-1]
-
-        if (kpts_band is None and
-            (self._eri is not None or cell.incore_anyway or
-             (not self.direct_scf and self._is_mem_enough()))):
-            if self._eri is None:
-                logger.debug(self, 'Building PBC AO integrals incore')
-                self._eri = self.with_df.get_ao_eri(kpt, compact=True)
-            vj, vk = mol_hf.dot_eri_dm(self._eri, dm.reshape(-1,nao,nao), hermi)
-        else:
-            vj = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                     kpt, kpts_band, with_k=False)[0]
-        logger.timer(self, 'vj', *cpu0)
-        return _format_jks(vj, dm, kpts_band)
-
-    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None):
+    def get_k(self, cell=None, dm=None, hermi=1, kpt=None, kpts_band=None,
+              omega=None):
         '''Compute K matrix for the given density matrix.
         '''
-        return self.get_jk(cell, dm, hermi, kpt, kpts_band)[1]
+        return self.get_jk(cell, dm, hermi, kpt, kpts_band, with_j=False,
+                           omega=omega)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -652,16 +665,27 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        return vj - vk * .5
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+        return vhf
 
-    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None):
+    def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
+                      **kwargs):
         '''Get Coulomb (J) and exchange (K) following :func:`scf.hf.RHF.get_jk_`.
 
         *Incore* version of Coulomb and exchange build only.
         Currently RHF always uses PBC AO integrals (unlike RKS), since
         exchange is currently computed by building PBC AO integrals.
         '''
+        if omega:
+            raise NotImplementedError
         if cell is None: cell = self.cell
         if kpt is None: kpt = self.kpt
         if self._eri is None:
@@ -753,19 +777,56 @@ class SCF(mol_hf.SCF):
         '''Convert the input mean-field object to a GHF/GKS object'''
         return addons.convert_to_ghf(mf)
 
+    def nuc_grad_method(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def jk_method(self, J='FFTDF', K=None):
+        '''
+        Set up the schemes to evaluate Coulomb and exchange matrix
+
+        FFTDF: planewave density fitting using Fast Fourier Transform
+        AFTDF: planewave density fitting using analytic Fourier Transform
+        GDF: Gaussian density fitting
+        MDF: Gaussian and planewave mix density fitting
+        RS: range-separation JK builder
+        RSDF: range-separation density fitting
+        '''
+        if K is None:
+            K = J
+
+        if J != K:
+            raise NotImplementedError('J != K')
+
+        if 'DF' in J or 'DF' in K:
+            if 'DF' in J and 'DF' in K:
+                assert J == K
+            else:
+                df_method = J if 'DF' in J else K
+                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+
+        if 'RS' in J or 'RS' in K:
+            if not gamma_point(self.kpt):
+                raise NotImplementedError('Single k-point must be gamma point')
+            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpt)
+            self.rsjk.verbose = self.verbose
+
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpt)
+
+        nuc = self.with_df.__class__.__name__
+        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
+        return self
+
 
 class RHF(SCF, mol_hf.RHF):
 
-    check_sanity = mol_hf.RHF.check_sanity
     stability = mol_hf.RHF.stability
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF'''
         addons.convert_to_rhf(mf, self)
         return self
-
-    def nuc_grad_method(self):
-        raise NotImplementedError
 
 
 def _format_jks(vj, dm, kpts_band):
@@ -788,10 +849,10 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
     if abs(ne - cell.nelectron).sum() > 1e-7:
         logger.debug(mf, 'Big error detected in the electron number '
-                    'of initial guess density matrix (Ne/cell = %g)!\n'
-                    '  This can cause huge error in Fock matrix and '
-                    'lead to instability in SCF for low-dimensional '
-                    'systems.\n  DM is normalized wrt the number '
-                    'of electrons %s', ne, cell.nelectron)
+                     'of initial guess density matrix (Ne/cell = %g)!\n'
+                     '  This can cause huge error in Fock matrix and '
+                     'lead to instability in SCF for low-dimensional '
+                     'systems.\n  DM is normalized wrt the number '
+                     'of electrons %s', ne, cell.nelectron)
         dm *= cell.nelectron / ne
     return dm

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -24,8 +24,8 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 
 #
-# JCP, 95, 2623
-# JCP, 95, 2639
+# JCP 95, 2623 (1991); DOI:10.1063/1.460915
+# JCP 95, 2639 (1991); DOI:10.1063/1.460916
 #
 
 def _gamma1_intermediates(mycc, t1, t2, l1, l2):
@@ -49,14 +49,13 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2):
 def _gamma2_intermediates(mycc, t1, t2, l1, l2, compress_vvvv=False):
     f = lib.H5TmpFile()
     _gamma2_outcore(mycc, t1, t2, l1, l2, f, compress_vvvv)
-    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
-          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
+    d2 = (f['dovov'][:], f['dvvvv'][:], f['doooo'][:], f['doovv'][:],
+          f['dovvo'][:], None,          f['dovvv'][:], f['dooov'][:])
     return d2
 
 def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
     nvir_pair = nvir * (nvir+1) //2
     dtype = numpy.result_type(t1, t2, l1, l2).char
     if compress_vvvv:
@@ -67,7 +66,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
                                   chunks=(nocc,1,nvir,nocc))
     fswap = lib.H5TmpFile()
 
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     pvOOv = lib.einsum('ikca,jkcb->aijb', l2, t2)
     moo = numpy.einsum('dljd->jl', pvOOv) * 2
     mvv = numpy.einsum('blld->db', pvOOv) * 2
@@ -84,8 +83,8 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     fswap['mvoOV'] = pvoOV
     pvoOV = None
 
-    mia =(numpy.einsum('kc,ikac->ia', l1, t2) * 2
-        - numpy.einsum('kc,ikca->ia', l1, t2))
+    mia =(numpy.einsum('kc,ikac->ia', l1, t2) * 2 -
+          numpy.einsum('kc,ikca->ia', l1, t2))
     mab = numpy.einsum('kc,kb->cb', l1, t1)
     mij = numpy.einsum('kc,jc->jk', l1, t1) + moo*.5
 
@@ -101,7 +100,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     gooov = gooov.conj()
     gooov -= lib.einsum('jkba,ib->jkia', l2, t1)
     h5fobj['dooov'] = gooov.transpose(0,2,1,3)*2 - gooov.transpose(1,2,0,3)
-    tau = goovo = None
+    tau = None
     time1 = log.timer_debug1('rdm intermediates pass1', *time1)
 
     goovv = numpy.einsum('ia,jb->ijab', mia.conj(), t1.conj())
@@ -151,12 +150,11 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3,
                nvir**3*2+nocc*nvir**2*2+nocc**2*nvir*2)
     blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
-    iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
                                   chunks=(nocc,min(nocc,nvir),1,nvir))
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1]
         gvvvv = lib.einsum('ijab,ijcd->abcd', l2tmp, t2)
@@ -165,11 +163,11 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
         l2tmp = jabc = None
 
         if compress_vvvv:
-# symmetrize dvvvv because it does not affect the results of ccsd_grad
-# dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
-# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
-# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
-# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            # symmetrize dvvvv because it does not affect the results of ccsd_grad
+            # dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
+            # dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+            # dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+            # now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
@@ -208,7 +206,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
         gvovv += lib.einsum('ja,jibc->aibc', t1[:,p0:p1], l2)
 
         dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
-        gvvov = None
+        gvovv = None
         time1 = log.timer_debug1('rdm intermediates pass3 [%d:%d]'%(p0, p1), *time1)
 
     fswap = None
@@ -217,7 +215,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
-    '''
+    r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
@@ -230,7 +228,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(mycc, t1, t2, l1, l2):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -242,10 +240,11 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+                      ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
-    '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+    r'''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is
@@ -261,7 +260,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1[nocc:,nocc:] = dvv + dvv.conj().T
     dm1[numpy.diag_indices(nocc)] += 2
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -277,7 +276,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
 # vvvv part of CI 2pdm
-def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     r'''
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
 
@@ -308,8 +307,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2[nocc:,:nocc,:nocc,nocc:] = dm2[:nocc,nocc:,nocc:,:nocc].transpose(1,0,3,2).conj()
     dovvo = None
 
-    if len(dvvvv.shape) == 2:
-# To handle the case of compressed vvvv, which is used in nuclear gradients
+    if dvvvv.ndim == 2:
+        # To handle the case of compressed vvvv, which is used in nuclear gradients
         dvvvv = ao2mo.restore(1, dvvvv, nvir)
         dm2[nocc:,nocc:,nocc:,nocc:] = dvvvv
         dm2[nocc:,nocc:,nocc:,nocc:]*= 4
@@ -339,7 +338,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2).conj()
     dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0).conj()
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmo, nmo0 = mycc.mo_occ.size, nmo
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm2 = numpy.zeros((nmo,nmo,nmo,nmo), dtype=dm2.dtype)
@@ -368,15 +367,22 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     # above. Transposing it so that it be contracted with ERIs (in Chemist's
     # notation):
     #   E = einsum('pqrs,pqrs', eri, rdm2)
-    return dm2.transpose(1,0,3,2)
+    dm2 = dm2.transpose(1,0,3,2)
+
+    if ao_repr:
+        dm2 = _rdm2_mo2ao(dm2.transpose(1,0,3,2), mycc.mo_coeff)
+    return dm2
+
+
+def _rdm2_mo2ao(dm2, mo):
+    mo_C = mo.conj()
+    return lib.einsum('ijkl,pi,qj,rk,sl->pqrs', dm2, mo, mo_C, mo, mo_C)
 
 
 if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf.cc import ccsd
-    from pyscf import ao2mo
 
     mol = gto.M()
     mf = scf.RHF(mol)
@@ -396,8 +402,8 @@ if __name__ == '__main__':
     l1 = numpy.random.random((nocc,nvir))
     l2 = numpy.random.random((nocc,nocc,nvir,nvir))
     l2 = l2 + l2.transpose(1,0,3,2)
-    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2
-                - numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
+    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2 -
+                  numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
 
     eris = lambda:None
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
@@ -448,20 +454,20 @@ if __name__ == '__main__':
 
     dm1 = make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = make_rdm2(mcc, t1, t2, l1, l2)
-    e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
-        +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
-        +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
-        +numpy.einsum('icba,icba', dovvv, eris.ovvv)*2
-        +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
-        +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
-        +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
-        +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
-        +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
-        +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
-        +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
-        +fock0[:nocc].trace()*2
-        -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2
-        +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
+    e2 = (numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2 +
+          numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2 +
+          numpy.einsum('jkia,jkia', dooov, eris.ooov)*2 +
+          numpy.einsum('icba,icba', dovvv, eris.ovvv)*2 +
+          numpy.einsum('iajb,iajb', dovov, eris.ovov)*2 +
+          numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2 +
+          numpy.einsum('ijab,ijab', doovv, eris.oovv)*2 +
+          numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2 +
+          numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2 +
+          numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2 +
+          numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2 +
+          fock0[:nocc].trace()*2 -
+          numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2 +
+          numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
     print(e2+794721.197459942)
     print(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
           numpy.einsum('pq,qp', dm1, h1) - e2)

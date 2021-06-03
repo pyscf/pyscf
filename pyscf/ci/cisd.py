@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 Solve CISD equation  H C = C e  where e = E_HF + E_CORR
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -28,7 +28,6 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
-from functools import reduce
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
@@ -36,7 +35,6 @@ BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     log = logger.new_logger(myci, verbose)
-    mol = myci.mol
     diag = myci.make_diagonal(eris)
     ehf = diag[0]
     diag -= ehf
@@ -76,7 +74,6 @@ def make_diagonal(myci, eris):
     nmo = mo_energy.size
     jdiag = numpy.zeros((nmo,nmo))
     kdiag = numpy.zeros((nmo,nmo))
-    eris_oooo = _cp(eris.oooo)
     nocc = eris.nocc
     nvir = nmo - nocc
     jdiag[:nocc,:nocc] = numpy.einsum('iijj->ij', eris.oooo)
@@ -105,18 +102,16 @@ def make_diagonal(myci, eris):
     return numpy.hstack((ehf, e1diag.reshape(-1), e2diag.reshape(-1)))
 
 def contract(myci, civec, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(myci.stdout, myci.verbose)
     nocc = myci.nocc
     nmo = myci.nmo
     nvir = nmo - nocc
-    nov = nocc * nvir
-    noo = nocc**2
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
     t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
     t2 *= .5  # due to t2+t2.transpose(1,0,3,2) in the end
-    time1 = log.timer_debug1('vvvv', *time0)
+    log.timer_debug1('vvvv', *time0)
 
     foo = eris.fock[:nocc,:nocc].copy()
     fov = eris.fock[:nocc,nocc:].copy()
@@ -136,7 +131,6 @@ def contract(myci, civec, eris):
     blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-    nvir_pair = nvir * (nvir+1) // 2
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
         tmp = lib.einsum('kbjc,ikca->jiba', eris_oVoV, c2)
@@ -151,7 +145,7 @@ def contract(myci, civec, eris):
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
-        eris_oVoV = eris_oovv = None
+        eris_oVoV = None
         theta = c2[:,:,p0:p1].transpose(2,0,1,3) * 2
         theta-= c2[:,:,p0:p1].transpose(2,1,0,3)
         for j in range(nocc):
@@ -163,7 +157,7 @@ def contract(myci, civec, eris):
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
         t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
-        eris_vooo = None
+        eris_ovoo = None
 
         eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1)).conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
@@ -225,7 +219,7 @@ def tn_addrs_signs(norb, nelec, n_excite):
     hole_strs = hole_strs[::-1]
     hole_sum = numpy.zeros(len(hole_strs), dtype=int)
     for i in range(nocc):
-        hole_at_i = (hole_strs & (1<<i)) == 0
+        hole_at_i = (hole_strs & (1 << i)) == 0
         hole_sum[hole_at_i] += i
 
     # The hole operators are listed from low-lying to high-lying orbitals
@@ -243,7 +237,7 @@ def tn_addrs_signs(norb, nelec, n_excite):
     signs = numpy.vstack([sign] * len(particle_strs)).T.ravel()
     return addrs, signs
 
-def to_fcivec(cisdvec, norb, nelec, frozen=0):
+def to_fcivec(cisdvec, norb, nelec, frozen=None):
     '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -253,7 +247,9 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
         assert(neleca == nelecb)
 
     frozen_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        nfroz = 0
+    elif isinstance(frozen, (int, numpy.integer)):
         nfroz = frozen
         frozen_mask[:frozen] = True
     else:
@@ -301,14 +297,14 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
         if frozen_mask[i]:
             if i < neleca:
                 # frozen occupied orbital should be occupied
-                core_mask &= (strs & (1<<i)) != 0
+                core_mask &= (strs & (1 << i)) != 0
                 parity ^= (count & 1) == 1
             else:
                 # frozen virtual orbital should not be occupied.
                 # parity is not needed since it's unoccupied
-                core_mask &= (strs & (1<<i)) == 0
+                core_mask &= (strs & (1 << i)) == 0
         else:
-            count += (strs & (1<<i)) != 0
+            count += (strs & (1 << i)) != 0
     sub_strs = strs[core_mask & (count == nocc)]
     addrs = cistring.strs2addr(norb, neleca, sub_strs)
     fcivec1 = numpy.zeros((na,na))
@@ -317,9 +313,9 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     fcivec1[:,parity] *= -1
     return fcivec1
 
-def from_fcivec(ci0, norb, nelec, frozen=0):
+def from_fcivec(ci0, norb, nelec, frozen=None):
     '''Extract CISD coefficients from FCI coefficients'''
-    if frozen is not 0:
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
     if isinstance(nelec, (int, numpy.number)):
@@ -496,7 +492,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
     return ovlp
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
-    '''
+    r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
@@ -512,7 +508,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -527,7 +523,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(myci, civec, nmo, nocc, f, False)
-    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
@@ -546,8 +543,8 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
 def _gamma2_intermediates(myci, civec, nmo, nocc, compress_vvvv=False):
     f = lib.H5TmpFile()
     _gamma2_outcore(myci, civec, nmo, nocc, f, compress_vvvv)
-    d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
-          f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
+    d2 = (f['dovov'][:], f['dvvvv'][:], f['doooo'][:], f['doovv'][:],
+          f['dovvo'][:], None,          f['dovvv'][:], f['dooov'][:])
     return d2
 
 def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
@@ -574,7 +571,6 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
     blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
-    iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dtype = numpy.result_type(civec).char
@@ -589,10 +585,10 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
         theta = c2[:,:,p0:p1] - c2[:,:,p0:p1].transpose(1,0,2,3) * .5
         gvvvv = lib.einsum('ijab,ijcd->abcd', theta.conj(), c2)
         if compress_vvvv:
-# symmetrize dvvvv because it does not affect the results of cisd_grad
-# dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
-# dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
-# now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
+            # symmetrize dvvvv because it does not affect the results of cisd_grad
+            # dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
+            # dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
+            # now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
@@ -637,7 +633,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
 def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
-    '''
+    r'''
     Spin-traced one-particle transition density matrix in MO basis.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
@@ -673,7 +669,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     norm = dot(cibra, ciket, nmo, nocc)
     dm1[numpy.diag_indices(nocc)] += 2 * norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if myci.frozen is not None:
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -722,16 +718,17 @@ def as_scanner(ci):
             else:
                 mol = self.mol.set_geom_(mol_or_geom, inplace=False)
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if getattr(self.ci, 'size', 0) != self.vector_size():
                 self.ci = None
             if ci0 is None:
-# FIXME: Whether to use the initial guess from last step? If root flips, large
-# errors may be found in the solutions
+                # FIXME: Whether to use the initial guess from last step?
+                # If root flips, large errors may be found in the solutions
                 ci0 = self.ci
             self.kernel(ci0, **kwargs)[0]
             return self.e_tot
@@ -788,7 +785,7 @@ class CISD(lib.StreamObject):
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
                                'CISD calculation should be initialized with HF object.\n'
@@ -798,7 +795,7 @@ class CISD(lib.StreamObject):
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ   is None: mo_occ   = mf.mo_occ
+        if mo_occ is None: mo_occ   = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -830,7 +827,7 @@ class CISD(lib.StreamObject):
         log.info('')
         log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -875,6 +872,12 @@ class CISD(lib.StreamObject):
         nocc = self.nocc
         nvir = self.nmo - nocc
         return 1 + nocc*nvir + (nocc*nvir)**2
+
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
 
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
@@ -979,7 +982,7 @@ class CISD(lib.StreamObject):
     def _add_vvvv(self, c2, eris, out=None, t2sym=None):
         return ccsd._add_vvvv(self, None, c2, eris, out, False, t2sym)
 
-    def to_fcivec(self, cisdvec, norb=None, nelec=None, frozen=0):
+    def to_fcivec(self, cisdvec, norb=None, nelec=None, frozen=None):
         if norb is None: norb = self.nmo
         if nelec is None: nelec = self.nocc*2
         return to_fcivec(cisdvec, norb, nelec, frozen)
@@ -1002,6 +1005,10 @@ class CISD(lib.StreamObject):
 
         if ci is None: ci = self.ci
         if frozen is None: frozen = self.frozen
+        # "None" cannot be serialized by the chkfile module
+        if frozen is None:
+            frozen = 0
+
         ci_chk = {'e_corr': self.e_corr,
                   'ci': ci,
                   'frozen': frozen}
@@ -1042,7 +1049,6 @@ def _cp(a):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import fci
     from pyscf import ao2mo
 
     mol = gto.Mole()

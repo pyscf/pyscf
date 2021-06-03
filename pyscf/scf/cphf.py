@@ -20,7 +20,7 @@
 Restricted coupled pertubed Hartree-Fock solver
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -50,7 +50,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
                max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     '''For field independent basis. First order overlap matrix is zero'''
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     e_a = mo_energy[mo_occ==0]
     e_i = mo_energy[mo_occ>0]
@@ -83,7 +83,7 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
         energy matrix
     '''
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     occidx = mo_occ > 0
     viridx = mo_occ == 0

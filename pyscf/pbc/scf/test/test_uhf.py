@@ -88,10 +88,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.644379056097664, 7)
+        self.assertAlmostEqual(lib.fp(dip), 1.644379056097664, 7)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.6934317735537686, 6)
+        self.assertAlmostEqual(lib.fp(dip), 0.6934317735537686, 6)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
@@ -102,10 +102,32 @@ class KnownValues(unittest.TestCase):
         kpts_bands = np.random.random((1,3))
 
         e = mf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.finger(e), 0.9038555558945438, 6)
+        self.assertAlmostEqual(lib.fp(e), 0.9038555558945438, 6)
 
         e = kmf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(lib.finger(e), -0.3020614, 6)
+        self.assertAlmostEqual(lib.fp(e), -0.3020614, 6)
+
+    def test_small_system(self):
+        mol = pgto.Cell(
+            atom='H 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            spin=1,
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KUHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -0.10439957735616917, 8)
+
+        mol = pgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KUHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
 
 
 if __name__ == '__main__':

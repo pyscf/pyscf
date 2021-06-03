@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 Spin-free lambda equation of UHF-CCSD(T)
 '''
 
-import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -34,7 +33,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
                               verbose, make_intermediates, update_lambda)
 
 def make_intermediates(mycc, t1, t2, eris):
-    from pyscf.cc import uccsd_t_slow
     def p6(t):
         return (t + t.transpose(1,2,0,4,5,3) +
                 t.transpose(2,0,1,5,3,4) + t.transpose(0,2,1,3,5,4) +
@@ -49,8 +47,6 @@ def make_intermediates(mycc, t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb = t2ab.shape[:2]
-    nmoa = eris.focka.shape[0]
-    nmob = eris.fockb.shape[0]
     mo_ea, mo_eb = eris.mo_energy
     eia = mo_ea[:nocca,None] - mo_ea[nocca:]
     eIA = mo_eb[:noccb,None] - mo_eb[noccb:]

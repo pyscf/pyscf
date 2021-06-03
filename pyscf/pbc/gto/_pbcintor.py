@@ -49,7 +49,10 @@ class PBCOpt(object):
         return self
 
     def __del__(self):
-        libpbc.PBCdel_optimizer(ctypes.byref(self._this))
+        try:
+            libpbc.PBCdel_optimizer(ctypes.byref(self._this))
+        except AttributeError:
+            pass
 
 class _CPBCOpt(ctypes.Structure):
     _fields_ = [('rrcut', ctypes.c_void_p),

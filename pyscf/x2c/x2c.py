@@ -14,7 +14,6 @@
 # limitations under the License.
 
 
-import time
 from functools import reduce
 import copy
 import numpy
@@ -25,25 +24,27 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
+from pyscf.data import nist
 from pyscf import __config__
+
+LINEAR_DEP_THRESHOLD = 1e-9
 
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
-    exp_drop = getattr(__config__, 'x2c_X2C_exp_drop', 0.2)
     approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
     xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'x2c_X2C_basis', None)
-    def __init__(self, mol=None):
+    def __init__(self, mol):
         self.mol = mol
+        self.stdout = mol.stdout
         self.verbose = mol.verbose
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)
         if self.basis is not None:
@@ -59,8 +60,7 @@ class X2C(lib.StreamObject):
             xmol.build(False, False, basis=self.basis)
             return xmol, None
         elif self.xuncontract:
-            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract,
-                                                self.exp_drop)
+            xmol, contr_coeff = _uncontract_mol(mol, self.xuncontract)
             return xmol, contr_coeff
         else:
             return mol, None
@@ -80,7 +80,13 @@ class X2C(lib.StreamObject):
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
         w = xmol.intor_symmetric('int1e_spnucsp_spinor')
-        if 'ATOM' in self.approx.upper():
+        if 'get_xmat' in self.__dict__:
+            # If the get_xmat method is overwritten by user, build the X
+            # matrix with the external get_xmat method
+            x = self.get_xmat(xmol)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
+
+        elif 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
             x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
@@ -89,12 +95,13 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
+
         else:
             h1 = _x2c1e_get_hcore(t, v, w, s, c)
 
@@ -110,6 +117,111 @@ class X2C(lib.StreamObject):
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
         return h1
+
+    def _picture_change(self, xmol, even_operator=(None, None), odd_operator=None):
+        '''Picture change for even_operator + odd_operator
+
+        even_operator has two terms at diagonal blocks
+        [ v  0 ]
+        [ 0  w ]
+
+        odd_operator has the term at off-diagonal blocks
+        [ 0    p ]
+        [ p^T  0 ]
+
+        v, w, and p can be strings (integral name) or matrices.
+        '''
+        c = lib.param.LIGHT_SPEED
+        v_op, w_op = even_operator
+        if isinstance(v_op, str):
+            v_op = xmol.intor(v_op)
+        if isinstance(w_op, str):
+            w_op = xmol.intor(w_op)
+            w_op *= (.5/c)**2
+        if isinstance(odd_operator, str):
+            odd_operator = xmol.intor(odd_operator) * (.5/c)
+
+        if v_op is not None:
+            shape = v_op.shape
+        elif w_op is not None:
+            shape = w_op.shape
+        elif odd_operator is not None:
+            shape = odd_operator.shape
+        else:
+            raise RuntimeError('No operators provided')
+
+        x = self.get_xmat()
+        r = self._get_rmat(x)
+        def transform(mat):
+            nao = mat.shape[-1] // 2
+            xv = mat[:nao] + x.conj().T.dot(mat[nao:])
+            h = xv[:,:nao] + xv[:,nao:].dot(x)
+            return reduce(numpy.dot, (r.T.conj(), h, r))
+
+        nao = shape[-1]
+        dtype = numpy.result_type(v_op, w_op, odd_operator)
+
+        if len(shape) == 2:
+            mat = numpy.zeros((nao*2,nao*2), dtype)
+            if v_op is not None:
+                mat[:nao,:nao] = v_op
+            if w_op is not None:
+                mat[nao:,nao:] = w_op
+            if odd_operator is not None:
+                mat[:nao,nao:] = odd_operator
+                mat[nao:,:nao] = odd_operator.conj().T
+            pc_mat = transform(mat)
+
+        else:
+            assert len(shape) == 3
+            mat = numpy.zeros((shape[0],nao*2,nao*2), dtype)
+            if v_op is not None:
+                mat[:,:nao,:nao] = v_op
+            if w_op is not None:
+                mat[:,nao:,nao:] = w_op
+            if odd_operator is not None:
+                mat[:,:nao,nao:] = odd_operator
+                mat[:,nao:,:nao] = odd_operator.conj().transpose(0,2,1)
+            pc_mat = numpy.asarray([transform(m) for m in mat])
+
+        return pc_mat
+
+    def picture_change(self, even_operator=(None, None), odd_operator=None):
+        '''Picture change for even_operator + odd_operator
+
+        even_operator has two terms at diagonal blocks
+        [ v  0 ]
+        [ 0  w ]
+
+        odd_operator has the term at off-diagonal blocks
+        [ 0    p ]
+        [ p^T  0 ]
+
+        v, w, and p can be strings (integral name) or matrices.
+        '''
+        mol = self.mol
+        xmol, contr_coeff_nr = self.get_xmol(mol)
+        pc_mat = self._picture_change(xmol, even_operator, odd_operator)
+
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('int1e_ovlp_spinor')
+            s21 = mole.intor_cross('int1e_ovlp_spinor', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+
+        elif self.xuncontract:
+            np, nc = contr_coeff_nr.shape
+            c = numpy.zeros((np*2,nc*2))
+            c[0::2,0::2] = contr_coeff_nr
+            c[1::2,1::2] = contr_coeff_nr
+
+        else:
+            return pc_mat
+
+        if pc_mat.ndim == 2:
+            return lib.einsum('pi,pq,qj->ij', c.conj(), pc_mat, c)
+        else:
+            return lib.einsum('pi,xpq,qj->xij', c.conj(), pc_mat, c)
+
 
     def get_xmat(self, mol=None):
         if mol is None:
@@ -128,7 +240,7 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                with xmol.with_rinv_as_nucleus(ia):
+                with xmol.with_rinv_at_nucleus(ia):
                     z = -xmol.atom_charge(ia)
                     v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
@@ -141,6 +253,22 @@ class X2C(lib.StreamObject):
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 
+    def _get_rmat(self, x=None):
+        '''The matrix (in AO basis) that changes metric from NESC metric to NR metric'''
+        xmol = self.get_xmol()[0]
+        if x is None:
+            x = self.get_xmat(xmol)
+        c = lib.param.LIGHT_SPEED
+        s = xmol.intor_symmetric('int1e_ovlp_spinor')
+        t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+        s1 = s + reduce(numpy.dot, (x.conj().T, t, x)) * (.5/c**2)
+        return _get_r(s, s1)
+
+    def reset(self, mol):
+        '''Reset mol and clean up relevant attributes for scanner mode'''
+        self.mol = mol
+        return self
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
@@ -149,7 +277,7 @@ def get_hcore(mol):
     x2c = X2C(mol)
     return x2c.get_hcore(mol)
 
-def get_jk(mol, dm, hermi=1, mf_opt=None):
+def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
@@ -208,7 +336,9 @@ class X2C_UHF(hf.SCF):
     def build(self, mol=None):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.opt = self.init_direct_scf(self.mol)
+        if self.direct_scf:
+            self.opt = self.init_direct_scf(mol)
+        return self
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
@@ -249,11 +379,11 @@ class X2C_UHF(hf.SCF):
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:mol.nelectron] = 1
         if mol.nelectron < len(mo_energy):
-            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
                         mol.nelectron, mo_energy[mol.nelectron-1],
                         mo_energy[mol.nelectron])
         else:
-            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO', \
+            logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
                         mol.nelectron, mo_energy[mol.nelectron-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
@@ -274,13 +404,14 @@ class X2C_UHF(hf.SCF):
         set_vkscreen(opt, 'CVHFrkbllll_vkscreen')
         return opt
 
-    def get_jk(self, mol=None, dm=None, hermi=1):
+    def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        t0 = (time.clock(), time.time())
+        t0 = (logger.process_clock(), logger.perf_counter())
         if self.direct_scf and self.opt is None:
             self.opt = self.init_direct_scf(mol)
-        vj, vk = get_jk(mol, dm, hermi, self.opt)
+        vj, vk = get_jk(mol, dm, hermi, self.opt, with_j, with_k)
         logger.timer(self, 'vj and vk', *t0)
         return vj, vk
 
@@ -299,30 +430,99 @@ class X2C_UHF(hf.SCF):
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return dhf.analyze(self, verbose)
+
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   picture_change=True, **kwargs):
+        r''' Dipole moment calculation with picture change correction
+
+        Args:
+             mol: an instance of :class:`Mole`
+             dm : a 2D ndarrays density matrices
+
+        Kwarg:
+            picture_change (bool) : Whether to compute the dipole moment with
+            picture change correction.
+
+        Return:
+            A list: the dipole moment on x, y and z component
+        '''
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        log = logger.new_logger(mol, verbose)
+
+        if 'unit_symbol' in kwargs:  # pragma: no cover
+            log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                     'unit since PySCF-1.5.')
+            unit = kwargs['unit_symbol']
+
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # UHF denisty matrices
+            dm = dm[0] + dm[1]
+
+        with mol.with_common_orig((0,0,0)):
+            if picture_change:
+                ao_dip = self.with_x2c.picture_change(('int1e_r_spinor',
+                                                       'int1e_sprsp_spinor'))
+            else:
+                ao_dip = mol.intor_symmetric('int1e_r_spinor')
+
+        el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
+
+        charges = mol.atom_charges()
+        coords  = mol.atom_coords()
+        nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+        mol_dip = nucl_dip - el_dip
+
+        if unit.upper() == 'DEBYE':
+            mol_dip *= nist.AU2DEBYE
+            log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+        else:
+            log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+        return mol_dip
+
 UHF = X2C_UHF
+
+class X2C_RHF(X2C_UHF):
+    def __init__(self, mol):
+        if dhf.zquatev is None:
+            raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
+
+    def _eigh(self, h, s):
+        return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
+
+RHF = X2C_RHF
 
 try:
     from pyscf.dft import rks, dks, r_numint
-    class X2C_UKS(X2C_UHF):
+    class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
         def __init__(self, mol):
             X2C_UHF.__init__(self, mol)
-            rks._dft_common_init_(self)
+            rks.KohnShamDFT.__init__(self)
             self._numint = r_numint.RNumInt()
 
         def dump_flags(self, verbose=None):
             hf.SCF.dump_flags(self, verbose)
-            logger.info(self, 'XC functionals = %s', self.xc)
-            logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-            self.grids.dump_flags(verbose)
+            rks.KohnShamDFT.dump_flags(self, verbose)
             if self.with_x2c:
                 self.with_x2c.dump_flags(verbose)
             return self
 
         get_veff = dks.get_veff
         energy_elec = rks.energy_elec
-        define_xc_ = rks.define_xc_
 
     UKS = X2C_UKS
+
+    class X2C_RKS(X2C_UKS):
+        def __init__(self, mol):
+            X2C_UKS.__init__(self, mol)
+            if dhf.zquatev is None:
+                raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
+
+        def _eigh(self, h, s):
+            return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
+
+    RKS = X2C_RKS
+
 except ImportError:
     pass
 
@@ -334,85 +534,79 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
     _env = []
     ptr = len(pmol._env)
     contr_coeff = []
-    for ib in range(mol.nbas):
+
+    def _to_full_contraction(mol, bas_idx):
+        es = numpy.hstack([mol.bas_exp(ib) for ib in bas_idx])
+        cs = scipy.linalg.block_diag(*[mol._libcint_ctr_coeff(ib) for ib in bas_idx])
+
+        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
+        cs_new = numpy.zeros((es.size, cs.shape[1]))
+        for i, j in enumerate(rev_idx):
+            cs_new[j] += cs[i]
+        return es[::-1], cs_new[::-1]
+
+    aoslices = mol.aoslice_by_atom()
+    for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
         if isinstance(xuncontract, str):
-            ia = mol.bas_atom(ib)
             uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
                              (xuncontract == mol.atom_symbol(ia)))
         elif isinstance(xuncontract, (tuple, list)):
-            ia = mol.bas_atom(ib)
             uncontract_me = ((mol.atom_pure_symbol(ia) in xuncontract) or
                              (mol.atom_symbol(ia) in xuncontract) or
                              (ia in xuncontract))
         else:
             uncontract_me = xuncontract
 
-        nc = mol._bas[ib,mole.NCTR_OF]
-        l = mol._bas[ib,mole.ANG_OF]
-        if mol.cart:
-            degen = (l + 1) * (l + 2) // 2
-        else:
-            degen = l * 2 + 1
-        if uncontract_me:
-            np = mol._bas[ib,mole.NPRIM_OF]
-            pexp = mol._bas[ib,mole.PTR_EXP]
-# Modfied partially uncontraction to avoid potentially lindep in the
-# segment-contracted basis
-            nkept = (pmol._env[pexp:pexp+np] > exp_drop).sum()
-            if nkept > nc:
-                b_coeff = mol.bas_ctr_coeff(ib)
-                importance = numpy.einsum('ij->i', abs(b_coeff))
-                idx = numpy.argsort(importance[:nkept])
-                contracted = numpy.sort(idx[nkept-nc:])
-                primitive  = numpy.sort(idx[:nkept-nc])
+        if not uncontract_me:
+            p0, p1 = aoslices[ia]
+            _bas.append(mol._bas[ib0:ib1])
+            contr_coeff.append(numpy.eye(p1-p0))
+            continue
 
-# part1: pGTOs that are associated with small coefficients
-                bs = numpy.empty((nkept-nc,mol._bas.shape[1]), dtype=numpy.int32)
-                bs[:] = mol._bas[ib]
-                bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
-                for k, i in enumerate(primitive):
-                    norm = mole.gto_norm(l, mol._env[pexp+i])
-                    _env.append(mol._env[pexp+i])
-                    _env.append(norm)
-                    bs[k,mole.PTR_EXP] = ptr
-                    bs[k,mole.PTR_COEFF] = ptr + 1
-                    ptr += 2
-                _bas.append(bs)
-                part1 = numpy.zeros((degen*(nkept-nc),degen*nc))
-                c = b_coeff[primitive]
-                for i in range(degen):
-                    part1[i::degen,i::degen] = c
+        lmax = mol._bas[ib0:ib1,mole.ANG_OF].max()
+        assert(all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
+        # TODO: loop based on kappa
+        for l in range(lmax+1):
+            bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,mole.ANG_OF] == l)[0]
+            if len(bas_idx) == 0:
+                continue
 
-# part2: binding the pGTOs of small exps to the pGTOs of large coefficients
-                bs = mol._bas[ib].copy()
-                bs[mole.NPRIM_OF] = np - nkept + nc
-                idx = numpy.hstack((contracted, numpy.arange(nkept,np)))
-                exps = mol._env[pexp:pexp+np][idx]
-                cs = mol._libcint_ctr_coeff(ib)[idx]
-                ee = mole.gaussian_int(l*2+2, exps[:,None] + exps)
-                s1 = numpy.einsum('pi,pq,qi->i', cs, ee, cs)
-                s1 = numpy.sqrt(s1)
-                cs = numpy.einsum('pi,i->pi', cs, 1/s1)
-                _env.extend(exps)
-                _env.extend(cs.T.reshape(-1))
-                bs[mole.PTR_EXP] = ptr
-                bs[mole.PTR_COEFF] = ptr + exps.size
-                ptr += exps.size + cs.size
-                _bas.append(bs)
+# Some input basis may be the segmented basis from a general contracted set.
+# This may lead to duplicated pGTOs. First contract all basis to remove
+# duplicated primitive functions.
+            mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
 
-                part2 = numpy.eye(degen*nc)
-                for i in range(nc):
-                    part2[i*degen:(i+1)*degen,i*degen:(i+1)*degen] *= s1[i]
-                contr_coeff.append(numpy.vstack((part1, part2)))
+            if mol.cart:
+                degen = (l + 1) * (l + 2) // 2
             else:
-                _bas.append(mol._bas[ib])
-                contr_coeff.append(numpy.eye(degen*nc))
-        else:
-            _bas.append(mol._bas[ib])
-            contr_coeff.append(numpy.eye(degen*nc))
+                degen = l * 2 + 1
+            np, nc = b_coeff.shape
+
+            # Uncontract all basis. Use pGTO basis for X
+            bs = numpy.zeros((np, mole.BAS_SLOTS), dtype=numpy.int32)
+            bs[:,mole.ATOM_OF] = ia
+            bs[:,mole.ANG_OF ] = l
+            bs[:,mole.NCTR_OF] = bs[:,mole.NPRIM_OF] = 1
+            norm = mole.gto_norm(l, mol_exps)
+            _env.append(mol_exps)
+            _env.append(norm)
+            bs[:,mole.PTR_EXP] = numpy.arange(ptr, ptr+np)
+            bs[:,mole.PTR_COEFF] = numpy.arange(ptr+np, ptr+np*2)
+            _bas.append(bs)
+            ptr += np * 2
+
+            c = b_coeff * 1/norm[:,None]
+            c = scipy.linalg.block_diag(*([c,] * degen))
+            c = c.reshape((degen, np, degen, nc))
+            c = c.transpose(1,0,3,2).reshape(np*degen, nc*degen)
+            contr_coeff.append(c)
+
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
-    pmol._env = numpy.hstack((mol._env, _env))
-    return pmol, scipy.linalg.block_diag(*contr_coeff)
+    pmol._env = numpy.hstack([mol._env,] + _env)
+    contr_coeff = scipy.linalg.block_diag(*contr_coeff)
+
+    return pmol, contr_coeff
+
 
 def _sqrt(a, tol=1e-14):
     e, v = numpy.linalg.eigh(a)
@@ -467,10 +661,23 @@ def _x2c1e_xmatrix(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
-    x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        cs = a[nao:,nao:]
+        x = numpy.linalg.solve(cl.T, cs.T).T  # B = XA
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        cs = a[nao:,idx]
+        # X = B A^{-1} = B A^T S
+        x = cs.dot(cl.conj().T).dot(m)
     return x
 
 def _x2c1e_get_hcore(t, v, w, s, c):
@@ -485,9 +692,23 @@ def _x2c1e_get_hcore(t, v, w, s, c):
     m[:nao,:nao] = s
     m[nao:,nao:] = t * (.5/c**2)
 
-    e, a = scipy.linalg.eigh(h, m)
-    cl = a[:nao,nao:]
-    cs = a[nao:,nao:]
+    try:
+        e, a = scipy.linalg.eigh(h, m)
+        cl = a[:nao,nao:]
+        # cs = a[nao:,nao:]
+        e = e[nao:]
+    except scipy.linalg.LinAlgError:
+        d, t = numpy.linalg.eigh(m)
+        idx = d>LINEAR_DEP_THRESHOLD
+        t = t[:,idx] / numpy.sqrt(d[idx])
+        tht = reduce(numpy.dot, (t.T.conj(), h, t))
+        e, a = numpy.linalg.eigh(tht)
+        a = numpy.dot(t, a)
+        idx = e > -c**2
+        cl = a[:nao,idx]
+        # cs = a[nao:,idx]
+        e = e[idx]
+
 # The so obtaied X seems not numerically stable.  We changed to the
 # transformed matrix
 # [1 1] [ V T ] [1 0]
@@ -516,13 +737,14 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 # Using R[A] = R[A]^{-1} A^+ S A,  Eq (0) turns to
 #      = S A R[A]^{-1}^+ A^+ h1 A R[A]^{-1} A^+ S
 #      = S A R[A]^{-1}^+ e R[A]^{-1} A^+ S                (2)
+
     w, u = numpy.linalg.eigh(reduce(numpy.dot, (cl.T.conj(), s, cl)))
     idx = w > 1e-14
-# Adopt (2) here becuase X is not appeared in Eq (2).
-# R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
+    # Adopt (2) here becuase X is not appeared in Eq (2).
+    # R[A] = u w^{1/2} u^+,  so R[A]^{-1} A^+ S in Eq (2) is
     r = reduce(numpy.dot, (u[:,idx]/numpy.sqrt(w[idx]), u[:,idx].T.conj(),
                            cl.T.conj(), s))
-    h1 = reduce(numpy.dot, (r.T.conj()*e[nao:], r))
+    h1 = reduce(numpy.dot, (r.T.conj()*e, r))
     return h1
 
 

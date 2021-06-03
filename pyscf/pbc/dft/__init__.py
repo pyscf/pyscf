@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ from pyscf.pbc.dft import roks
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft import kroks
+from pyscf.pbc.dft import krkspu
+from pyscf.pbc.dft import kukspu
 
 UKS = uks.UKS
 ROKS = roks.ROKS
@@ -26,6 +28,9 @@ ROKS = roks.ROKS
 KRKS = krks.KRKS
 KUKS = kuks.KUKS
 KROKS = kroks.KROKS
+
+KRKSpU = krkspu.KRKSpU
+KUKSpU = kukspu.KUKSpU
 
 def RKS(cell, *args, **kwargs):
     if cell.spin == 0:
@@ -39,10 +44,15 @@ def KS(cell, *args, **kwargs):
         return rks.RKS(cell, *args, **kwargs)
     else:
         return uks.UKS(cell, *args, **kwargs)
+KS.__doc__ = '''
+A wrap function to create DFT object (RKS or UKS) for PBC systems.\n
+''' + rks.RKS.__doc__
 
 def KKS(cell, *args, **kwargs):
     if cell.spin == 0:
         return krks.KRKS(cell, *args, **kwargs)
     else:
         return kuks.KUKS(cell, *args, **kwargs)
-
+KKS.__doc__ = '''
+A wrap function to create DFT object with k-point sampling (KRKS or KUKS).\n
+''' + krks.KRKS.__doc__

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,12 +31,16 @@ direct_nosym        No            No             No**               Yes
 
 *  Real hermitian Hamiltonian implies (ij|kl) = (ji|kl) = (ij|lk) = (ji|lk)
 ** Hamiltonian is real but not hermitian, (ij|kl) != (ji|kl) ...
+
+direct_spin0 solver is specified for singlet state. However, calling this
+solver sometimes ends up with the error "State not singlet x.xxxxxxe-06" due
+to numerical issues. Calling direct_spin1 for singlet state is slightly
+slower but more robust than direct_spin0 especially when combining to energy
+penalty method (:func:`fix_spin_`)
 '''
 
-import sys
 import ctypes
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
@@ -135,8 +139,9 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     #dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_spin0', fcivec, fcivec,
     #                          norb, nelec, link_index, 1)
-# NOT use FCIrdm12kern_spin0 because for small system, the kernel may call
-# direct diagonalization, which may not fulfil  fcivec = fcivet.T
+
+    # NOT use FCIrdm12kern_spin0 because for small system, the kernel may call
+    # direct diagonalization, which may not fulfil  fcivec = fcivet.T
     dm1, dm2 = rdm.make_rdm12('FCIrdm12kern_sf', fcivec, fcivec,
                               norb, nelec, link_index, 1)
     if reorder:
@@ -250,8 +255,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             pw = pv = None
 
         if pspace_size >= na*na and ci0 is None and not davidson_only:
-# The degenerated wfn can break symmetry.  The davidson iteration with proper
-# initial guess doesn't have this issue
+            # The degenerated wfn can break symmetry.  The davidson iteration with proper
+            # initial guess doesn't have this issue
             if na*na == 1:
                 return pw[0]+ecore, pv[:,0].reshape(1,1)
             elif nroots > 1:
@@ -268,9 +273,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                 civec = civec.reshape(na,na)
                 civec = lib.transpose_sum(civec) * .5
                 # direct diagonalization may lead to triplet ground state
-##TODO: optimize initial guess.  Using pspace vector as initial guess may have
-## spin problems.  The 'ground state' of psapce vector may have different spin
-## state to the true ground state.
+
+                #TODO: optimize initial guess.  Using pspace vector as initial guess may have
+                # spin problems.  The 'ground state' of psapce vector may have different spin
+                # state to the true ground state.
                 try:
                     return pw[0]+ecore, _check_(civec.reshape(na,na))
                 except ValueError:
@@ -331,7 +337,7 @@ def _check_(c):
     c *= .5
     norm = numpy.linalg.norm(c)
     if abs(norm-1) > 1e-6:
-        raise ValueError('State not singlet %g' % abs(numpy.linalg.norm(c)-1))
+        raise ValueError('State not singlet %g' % (norm - 1))
     return c/norm
 
 
@@ -417,7 +423,6 @@ def _unpack(norb, nelec, link_index):
 
 
 if __name__ == '__main__':
-    import time
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
@@ -449,5 +454,5 @@ if __name__ == '__main__':
     eri = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
     e, c = cis.kernel(h1e, eri, norb, nelec)
     print(e - -15.9977886375)
-    print('t',time.clock())
+    print('t',logger.process_clock())
 

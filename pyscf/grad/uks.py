@@ -18,12 +18,10 @@
 
 '''Non-relativistic UKS analytical nuclear gradients'''
 
-import time
+
 import numpy
-import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
@@ -31,11 +29,15 @@ from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
-    '''Coulomb + XC functional
+    '''
+    First order derivative of DFT effective potential matrix (wrt electron coordinates)
+
+    Args:
+        ks_grad : grad.uhf.Gradients or grad.uks.Gradients object
     '''
     if mol is None: mol = ks_grad.mol
     if dm is None: dm = ks_grad.base.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
     ni = mf._numint
@@ -90,13 +92,14 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho_a = make_rho(0, ao[0], mask, 'LDA')
             rho_b = make_rho(1, ao[0], mask, 'LDA')
-            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
+            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                             verbose=verbose)[1]
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,0])
             rks_grad._d1_dot_(vmat[0], mol, ao[1:4], aow, mask, ao_loc, True)
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,1])
             rks_grad._d1_dot_(vmat[1], mol, ao[1:4], aow, mask, ao_loc, True)
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
@@ -104,7 +107,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
-            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
+            vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                             verbose=verbose)[1]
             wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
             rks_grad._gga_grad_sum_(vmat[0], mol, ao, wva, mask, ao_loc)
@@ -113,7 +117,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     exc = numpy.zeros((mol.natm,3))
@@ -135,13 +139,13 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
-            ngrids = weight.size
             sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[0], mask, 'LDA')
             rho_b = make_rho(1, ao[0], mask, 'LDA')
-            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                                  verbose=verbose)[:2]
             vrho = vxc[0]
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -156,19 +160,19 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rks_grad._d1_dot_(vtmp, mol, ao[1:4], aow, mask, ao_loc, True)
             vmat[1] += vtmp
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[1]) * 2
-            rho = vxc = vrho = aow = None
+            vxc = vrho = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
-            ngrids = weight.size
             sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
-            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
+                                  verbose=verbose)[:2]
             wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -185,7 +189,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     # - sign because nabla_X = -nabla_x

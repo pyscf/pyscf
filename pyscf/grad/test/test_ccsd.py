@@ -51,7 +51,7 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         ecc, t1, t2 = mycc.kernel(eris=eris)
         l1, l2 = mycc.solve_lambda(eris=eris)
-        g1 = ccsd_grad.kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
+        g1 = ccsd_grad.Gradients(mycc).kernel(t1, t2, l1, l2)
         self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 6)
 
         mol = gto.M(
@@ -136,7 +136,7 @@ class KnownValues(unittest.TestCase):
         rdm2 = ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff)
         ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
         self.assertAlmostEqual(abs(ref-rdm2).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref-fdm2['dm2'].value).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref-fdm2['dm2'][:]).max(), 0, 10)
         self.assertAlmostEqual(lib.finger(rdm2), -0.32532303057849454, 6)
 
     def test_uccsd_rdm2_mo2ao(self):
@@ -183,10 +183,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref[0]-rdm2[0]).max(), 0, 10)
         self.assertAlmostEqual(abs(ref[1]-rdm2[1]).max(), 0, 10)
         uccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
-        self.assertAlmostEqual(abs(ref[0]-fdm2['dm2aa+ab'].value).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref[1]-fdm2['dm2bb+ab'].value).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref[0]-fdm2['dm2aa+ab'][:]).max(), 0, 10)
+        self.assertAlmostEqual(abs(ref[1]-fdm2['dm2bb+ab'][:]).max(), 0, 10)
         self.assertAlmostEqual(lib.finger(rdm2[0]), -1.6247203743431637, 7)
         self.assertAlmostEqual(lib.finger(rdm2[1]), -0.44062825991527471, 7)
+
+    def test_with_x2c_scanner(self):
+        with lib.light_speed(20.):
+            mycc = cc.ccsd.CCSD(mf.x2c())
+            mycc.frozen = [0,1,10,11,12]
+            gscan = mycc.nuc_grad_method().as_scanner().as_scanner()
+            e, g1 = gscan(mol)
+
+            cs = mycc.as_scanner()
+            e1 = cs([[8 , (0. , 0.     , 0.)],
+                     [1 , (0. , -0.757 , 0.5871)],
+                     [1 , (0. ,  0.757 , 0.587)]])
+            e2 = cs([[8 , (0. , 0.     , 0.)],
+                     [1 , (0. , -0.757 , 0.5869)],
+                     [1 , (0. ,  0.757 , 0.587)]])
+            self.assertAlmostEqual(g1[1,2], (e1-e2)/0.0002*lib.param.BOHR, 5)
 
     def test_with_qmmm_scanner(self):
         from pyscf import qmmm
@@ -212,6 +228,11 @@ class KnownValues(unittest.TestCase):
         ref = (e1 - e2)/0.002 * lib.param.BOHR
         g = ccs.nuc_grad_method().kernel()
         self.assertAlmostEqual(g[0,0], ref, 5)
+
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().CCSD().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.10105388861195158, 7)
 
 
 if __name__ == "__main__":

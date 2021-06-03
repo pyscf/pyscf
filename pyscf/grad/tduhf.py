@@ -19,22 +19,28 @@
 # J. Chem. Phys. 117, 7433
 #
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import tdrhf as tdrhf_grad
 from pyscf.scf import ucphf
-from pyscf import __config__
 
 
-#
-# Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
-#
-def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
+def grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
+    '''
+    Electronic part of TDA, TDHF nuclear gradients
+
+    Args:
+        td_grad : grad.tduhf.Gradients or grad.tduks.Gradients object.
+
+        x_y : a two-element list of numpy arrays
+            TDDFT X and Y amplitudes. If Y is set to 0, this function computes
+            TDA energy gradients.
+    '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -67,17 +73,17 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     dvvb = numpy.einsum('ai,bi->ab', xpyb, xpyb) + numpy.einsum('ai,bi->ab', xmyb, xmyb)
     dooa =-numpy.einsum('ai,aj->ij', xpya, xpya) - numpy.einsum('ai,aj->ij', xmya, xmya)
     doob =-numpy.einsum('ai,aj->ij', xpyb, xpyb) - numpy.einsum('ai,aj->ij', xmyb, xmyb)
-    dmzvopa = reduce(numpy.dot, (orbva, xpya, orboa.T))
-    dmzvopb = reduce(numpy.dot, (orbvb, xpyb, orbob.T))
-    dmzvoma = reduce(numpy.dot, (orbva, xmya, orboa.T))
-    dmzvomb = reduce(numpy.dot, (orbvb, xmyb, orbob.T))
+    dmxpya = reduce(numpy.dot, (orbva, xpya, orboa.T))
+    dmxpyb = reduce(numpy.dot, (orbvb, xpyb, orbob.T))
+    dmxmya = reduce(numpy.dot, (orbva, xmya, orboa.T))
+    dmxmyb = reduce(numpy.dot, (orbvb, xmyb, orbob.T))
     dmzooa = reduce(numpy.dot, (orboa, dooa, orboa.T))
     dmzoob = reduce(numpy.dot, (orbob, doob, orbob.T))
     dmzooa+= reduce(numpy.dot, (orbva, dvva, orbva.T))
     dmzoob+= reduce(numpy.dot, (orbvb, dvvb, orbvb.T))
 
-    vj, vk = mf.get_jk(mol, (dmzooa, dmzvopa+dmzvopa.T, dmzvoma-dmzvoma.T,
-                             dmzoob, dmzvopb+dmzvopb.T, dmzvomb-dmzvomb.T), hermi=0)
+    vj, vk = mf.get_jk(mol, (dmzooa, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
+                             dmzoob, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T), hermi=0)
     vj = vj.reshape(2,3,nao,nao)
     vk = vk.reshape(2,3,nao,nao)
     veff0doo = vj[0,0]+vj[1,0] - vk[:,0]
@@ -97,6 +103,8 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     wvob -= numpy.einsum('ki,ai->ak', veff0momb[:noccb,:noccb], xmyb) * 2
     wvoa += numpy.einsum('ac,ai->ci', veff0moma[nocca:,nocca:], xmya) * 2
     wvob += numpy.einsum('ac,ai->ci', veff0momb[noccb:,noccb:], xmyb) * 2
+
+    vresp = mf.gen_response(hermi=1)
     def fvind(x):
         dm1 = numpy.empty((2,nao,nao))
         xa = x[0,:nvira*nocca].reshape(nvira,nocca)
@@ -105,8 +113,7 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
         dmb = reduce(numpy.dot, (orbvb, xb, orbob.T))
         dm1[0] = dma + dma.T
         dm1[1] = dmb + dmb.T
-        vj, vk = mf.get_jk(mol, dm1)
-        v1 = vj[0] + vj[1] - vk
+        v1 = vresp(dm1)
         v1a = reduce(numpy.dot, (orbva.T, v1[0], orboa))
         v1b = reduce(numpy.dot, (orbvb.T, v1[1], orbob))
         return numpy.hstack((v1a.ravel(), v1b.ravel()))
@@ -118,8 +125,7 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     z1ao = numpy.empty((2,nao,nao))
     z1ao[0] = reduce(numpy.dot, (orbva, z1a, orboa.T))
     z1ao[1] = reduce(numpy.dot, (orbvb, z1b, orbob.T))
-    vj, vk = mf.get_jk(mol, z1ao, hermi=0)
-    veff = vj[0]+vj[1] - vk
+    veff = vresp((z1ao+z1ao.transpose(0,2,1)) * .5)
 
     im0a = numpy.zeros((nmoa,nmoa))
     im0b = numpy.zeros((nmob,nmob))
@@ -158,16 +164,19 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
     im0b = reduce(numpy.dot, (mo_coeff[1], im0b+zeta_b*dm1b, mo_coeff[1].T))
     im0 = im0a + im0b
 
-    hcore_deriv = td_grad.hcore_generator(mol)
-    s1 = td_grad.get_ovlp(mol)
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = td_grad.base._scf.nuc_grad_method()
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
 
     dmz1dooa = z1ao[0] + dmzooa
     dmz1doob = z1ao[1] + dmzoob
     oo0a = reduce(numpy.dot, (orboa, orboa.T))
     oo0b = reduce(numpy.dot, (orbob, orbob.T))
     as_dm1 = oo0a + oo0b + (dmz1dooa + dmz1doob) * .5
-    vj, vk = td_grad.get_jk(mol, (oo0a, dmz1dooa+dmz1dooa.T, dmzvopa+dmzvopa.T, dmzvoma-dmzvoma.T,
-                                  oo0b, dmz1doob+dmz1doob.T, dmzvopb+dmzvopb.T, dmzvomb-dmzvomb.T))
+    vj, vk = td_grad.get_jk(mol, (oo0a, dmz1dooa+dmz1dooa.T, dmxpya+dmxpya.T, dmxmya-dmxmya.T,
+                                  oo0b, dmz1doob+dmz1doob.T, dmxpyb+dmxpyb.T, dmxmyb-dmxmyb.T))
     vj = vj.reshape(2,4,3,nao,nao)
     vk = vk.reshape(2,4,3,nao,nao)
     vhf1a, vhf1b = vj[0] + vj[1] - vk
@@ -199,22 +208,23 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
 
         de[k] += numpy.einsum('xij,ij->x', vhf1a[1,:,p0:p1], oo0a[p0:p1]) * .5
         de[k] += numpy.einsum('xij,ij->x', vhf1b[1,:,p0:p1], oo0b[p0:p1]) * .5
-        de[k] += numpy.einsum('xij,ij->x', vhf1a[2,:,p0:p1], dmzvopa[p0:p1,:])
-        de[k] += numpy.einsum('xij,ij->x', vhf1b[2,:,p0:p1], dmzvopb[p0:p1,:])
-        de[k] += numpy.einsum('xij,ij->x', vhf1a[3,:,p0:p1], dmzvoma[p0:p1,:])
-        de[k] += numpy.einsum('xij,ij->x', vhf1b[3,:,p0:p1], dmzvomb[p0:p1,:])
-        de[k] += numpy.einsum('xji,ij->x', vhf1a[2,:,p0:p1], dmzvopa[:,p0:p1])
-        de[k] += numpy.einsum('xji,ij->x', vhf1b[2,:,p0:p1], dmzvopb[:,p0:p1])
-        de[k] -= numpy.einsum('xji,ij->x', vhf1a[3,:,p0:p1], dmzvoma[:,p0:p1])
-        de[k] -= numpy.einsum('xji,ij->x', vhf1b[3,:,p0:p1], dmzvomb[:,p0:p1])
+        de[k] += numpy.einsum('xij,ij->x', vhf1a[2,:,p0:p1], dmxpya[p0:p1,:])
+        de[k] += numpy.einsum('xij,ij->x', vhf1b[2,:,p0:p1], dmxpyb[p0:p1,:])
+        de[k] += numpy.einsum('xij,ij->x', vhf1a[3,:,p0:p1], dmxmya[p0:p1,:])
+        de[k] += numpy.einsum('xij,ij->x', vhf1b[3,:,p0:p1], dmxmyb[p0:p1,:])
+        de[k] += numpy.einsum('xji,ij->x', vhf1a[2,:,p0:p1], dmxpya[:,p0:p1])
+        de[k] += numpy.einsum('xji,ij->x', vhf1b[2,:,p0:p1], dmxpyb[:,p0:p1])
+        de[k] -= numpy.einsum('xji,ij->x', vhf1a[3,:,p0:p1], dmxmya[:,p0:p1])
+        de[k] -= numpy.einsum('xji,ij->x', vhf1b[3,:,p0:p1], dmxmyb[:,p0:p1])
 
     log.timer('TDUHF nuclear gradients', *time0)
     return de
 
 
 class Gradients(tdrhf_grad.Gradients):
-    def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, atmlst, self.max_memory, self.verbose)
+    @lib.with_doc(grad_elec.__doc__)
+    def grad_elec(self, xy, singlet=None, atmlst=None):
+        return grad_elec(self, xy, atmlst, self.max_memory, self.verbose)
 
 Grad = Gradients
 
@@ -225,7 +235,6 @@ tdscf.uhf.TDA.Gradients = tdscf.uhf.TDHF.Gradients = lib.class_as_method(Gradien
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0
@@ -247,7 +256,7 @@ if __name__ == '__main__':
     #tdg.verbose = 5
     g1 = tdg.kernel(z[1])
     print(g1)
-    print(lib.finger(g1) - 0.3970638627132136)
+    print(lib.fp(g1) - 0.3970638627132136)
     td_solver = td.as_scanner()
     e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
     e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
@@ -261,7 +270,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=2)
     print(g1)
-    print(lib.finger(g1) - 0.39823315202373544)
+    print(lib.fp(g1) - 0.39823315202373544)
     td_solver = td.as_scanner()
     e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
     e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))

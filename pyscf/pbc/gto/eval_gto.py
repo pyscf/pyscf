@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,10 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto import moleintor
-from pyscf.gto.eval_gto import _get_intor_and_comp
+from pyscf.gto.eval_gto import _get_intor_and_comp, BLKSIZE
 from pyscf.pbc.gto import _pbcintor
 from pyscf import __config__
 
-BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
@@ -182,7 +181,7 @@ def _estimate_rcut(cell):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, dft
+    from pyscf.pbc import gto
     cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
     coords = cell.get_uniform_grids([10]*3)
     ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))

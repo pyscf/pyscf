@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@ Generalized Hartree-Fock for periodic systems at a single k-point
 import numpy as np
 import scipy.linalg
 import pyscf.scf.ghf as mol_ghf
-from pyscf import lib
-from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import chkfile  # noqa
 
 
 def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
-           with_j=True, with_k=True):
+           with_j=True, with_k=True, **kwargs):
     if cell is None: cell = mf.cell
     if dm is None: dm = mf.make_rdm1()
     if kpt is None: kpt = mf.kpt
@@ -83,11 +81,14 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
 
     get_jk = get_jk
     get_occ = mol_ghf.get_occ
+    get_grad = mol_ghf.GHF.get_grad
 
-    def get_j(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None):
+    def get_j(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
+              **kwargs):
         return self.get_jk(cell, dm, hermi, kpt, kpts_band, True, False)[0]
 
-    def get_k(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None):
+    def get_k(self, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
+              **kwargs):
         return self.get_jk(cell, dm, hermi, kpt, kpts_band, False, True)[1]
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -123,7 +124,6 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
 
 
 if __name__ == '__main__':
-    from pyscf.scf import addons
     from pyscf.pbc import gto
     from pyscf.pbc import scf
 

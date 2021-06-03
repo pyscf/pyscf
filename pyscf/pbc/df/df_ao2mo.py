@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.df.df_jk import zdotNN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 
 
@@ -239,7 +239,6 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     kptjs_lst = kptij_lst[:,1]
     kpt_ji = kptjs_lst - kptis_lst
     uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
-    ngrids = numpy.prod(mydf.mesh)
 
     nao = cell.nao_nr()
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6) * .5
@@ -248,7 +247,6 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     ao_loc = None
     kconserv = kpts_helper.get_kconserv(cell, kpts)
     for uniq_id, kpt in enumerate(uniq_kpts):
-        q = uniq_kpts[uniq_id]
         adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
 
         for ji, ji_idx in enumerate(adapted_ji_idx):
@@ -318,7 +316,6 @@ def warn_pbc2d_eri(mydf):
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto
-    from pyscf.pbc import scf as pscf
     from pyscf.pbc.df import DF
 
     L = 5.

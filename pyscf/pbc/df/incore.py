@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,26 +23,10 @@ from pyscf import lib
 from pyscf import gto
 import pyscf.df
 from pyscf.scf import _vhf
-from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 
 libpbc = lib.load_library('libpbc')
-
-#try:
-### Moderate speedup by caching eval_ao
-#    from joblib import Memory
-#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#    def memory_cache(f):
-#        g = memory.cache(f)
-#        def maybe_cache(*args, **kwargs):
-#            if pyscf.pbc.DEBUG:
-#                return g(*args, **kwargs)
-#            else:
-#                return f(*args, **kwargs)
-#        return maybe_cache
-#except:
-#    memory_cache = lambda f: f
 
 def make_auxmol(cell, auxbasis=None):
     '''
@@ -52,12 +36,14 @@ def make_auxmol(cell, auxbasis=None):
     auxcell.rcut = max([auxcell.bas_rcut(ib, cell.precision)
                         for ib in range(auxcell.nbas)])
     return auxcell
+
+make_auxcell = make_auxmol
+
 def format_aux_basis(cell, auxbasis='weigend+etb'):
     '''For backward compatibility'''
     return make_auxmol(cell, auxbasis)
 
-#@memory_cache
-def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
+def aux_e2(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -65,6 +51,11 @@ def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
     Returns:
         (nao_pair, naux) array
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
 # For some unkown reasons, the pre-decontracted basis 'is slower than
 #    if shls_slice is None and cell.nao_nr() < 200:
 ## Slighly decontract basis. The decontracted basis has better locality.
@@ -134,8 +125,8 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
-    atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
-                                 cell._atm, cell._bas, cell._env)
+            atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
+                                         cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
     ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
@@ -150,19 +141,16 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     kptj = kptij_lst[:,1]
     if gamma_point(kptij_lst):
         kk_type = 'g'
-        dtype = numpy.double
         nkpts = nkptij = 1
         kptij_idx = numpy.array([0], dtype=numpy.int32)
         expkL = numpy.ones(1)
     elif is_zero(kpti-kptj):  # j_only
         kk_type = 'k'
-        dtype = numpy.complex128
         kpts = kptij_idx = numpy.asarray(kpti, order='C')
         expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         nkpts = nkptij = len(kpts)
     else:
         kk_type = 'kk'
-        dtype = numpy.complex128
         kpts = unique(numpy.vstack([kpti,kptj]))[0]
         expkL = numpy.exp(1j * numpy.dot(kpts, Ls.T))
         wherei = numpy.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
@@ -210,9 +198,14 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     return int3c
 
 
-def fill_2c2e(cell, auxcell, intor='int2c2e', hermi=0, kpt=numpy.zeros(3)):
+def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=numpy.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
+    if isinstance(auxcell_or_auxbasis, gto.Mole):
+        auxcell = auxcell_or_auxbasis
+    else:
+        auxcell = make_auxcell(cell, auxcell_or_auxbasis)
+
     if hermi != 0:
         hermi = pyscf.lib.HERMITIAN
 # pbcopt use the value of AO-pair to prescreening PBC integrals in the lattice

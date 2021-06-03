@@ -88,10 +88,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.6424482249196493, 7)
+        self.assertAlmostEqual(lib.fp(dip), 1.6424482249196493, 7)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.7361493256233677, 7)
+        self.assertAlmostEqual(lib.fp(dip), 0.7361493256233677, 7)
 
     def test_get_init_guess(self):
         cell1 = cell.copy()
@@ -99,11 +99,11 @@ class KnownValues(unittest.TestCase):
         cell1.build(0, 0)
         mf = pscf.ROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
 
         mf = pscf.KROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
@@ -111,9 +111,32 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         pop, chg = kmf.analyze()
-        self.assertAlmostEqual(lib.finger(pop), 1.1120443320325235, 7)
+        self.assertAlmostEqual(lib.fp(pop), 1.1120443320325235, 7)
         self.assertAlmostEqual(sum(chg), 0, 7)
-        self.assertAlmostEqual(lib.finger(chg), 0.002887875601340767, 7)
+        self.assertAlmostEqual(lib.fp(chg), 0.002887875601340767, 7)
+
+    def test_small_system(self):
+        # issue #686
+        mol = pgto.Cell(
+            atom='H 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            spin=1,
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KROHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -0.10439957735616917, 8)
+
+        mol = pgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KROHF(mol,kpts=[[0., 0., 0.]]).run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
 
 if __name__ == '__main__':
     print("Tests for PBC ROHF and PBC KROHF")

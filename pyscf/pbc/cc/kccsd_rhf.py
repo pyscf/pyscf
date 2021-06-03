@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -29,14 +29,11 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.pbc.cc.eom_kccsd_rhf import (ipccsd, eaccsd, amplitudes_to_vector_ip, vector_to_amplitudes_ip,
-    amplitudes_to_vector_ea, vector_to_amplitudes_ea)
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-from pyscf.lib import linalg_helper
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point, VectorComposer, VectorSplitter
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -54,7 +51,7 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time1 = time.clock(), time.time()
+    time0 = time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -65,8 +62,8 @@ def update_amps(cc, t1, t2, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:]
-    foo = fock[:, :nocc, :nocc]
-    fvv = fock[:, nocc:, nocc:]
+    #foo = fock[:, :nocc, :nocc]
+    #fvv = fock[:, nocc:, nocc:]
 
     kconserv = cc.khelper.kconserv
 
@@ -211,21 +208,20 @@ def update_amps(cc, t1, t2, eris):
     for ki in range(nkpts):
         ka = ki
         # Remove zero/padded elements from denominator
-        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        # For LARGE_DENOM, see t1new update above
-        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
 
-        ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-        n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+        ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                       [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                       fac=[1.0,-1.0])
         eijab = eia[:, None, :, None] + ejb[:, None, :]
 
         t2new[ki, kj, ka] /= eijab
@@ -233,6 +229,160 @@ def update_amps(cc, t1, t2, eris):
     time0 = log.timer_debug1('update t1 t2', *time0)
 
     return t1new, t2new
+
+
+def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
+    '''Create a denominator
+
+        fac[0]*e[kp,p0:p1] + fac[1]*e[kq,q0:q1]
+
+    where padded elements have been replaced by a large number.
+
+    Args:
+        pindices (5-list of object):
+            A list of p0, p1, kp, orbital values, and non-zero indicess for the first
+            denominator indices.
+        qindices (5-list of object):
+            A list of q0, q1, kq, orbital values, and non-zero indicess for the second
+            denominator element.
+        fac (3-list of float):
+            Factors to multiply the first and second denominator elements.
+        large_num (float):
+            Number to replace the padded elements.
+    '''
+    def get_idx(x0,x1,kx,n0_p):
+        return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
+
+    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    p0,p1,kp,mo_e_p,nonzero_p = pindices
+    q0,q1,kq,mo_e_q,nonzero_q = qindices
+    fac_p, fac_q = fac
+
+    epq = large_num * np.ones((p1-p0,q1-q0), dtype=mo_e_p[0].dtype)
+    idxp = get_idx(p0,p1,kp,nonzero_p)
+    idxq = get_idx(q0,q1,kq,nonzero_q)
+    n0_ovp_pq = np.ix_(nonzero_p[kp][idxp], nonzero_q[kq][idxq])
+    epq[n0_ovp_pq] = lib.direct_sum('p,q->pq', fac_p*mo_e_p[kp][p0:p1],
+                                               fac_q*mo_e_q[kq][q0:q1])[n0_ovp_pq]
+    return epq
+
+
+# TODO: pull these 3 methods to pyscf.util and make tests
+def describe_nested(data):
+    """
+    Retrieves the description of a nested array structure.
+    Args:
+        data (iterable): a nested structure to describe;
+
+    Returns:
+        - A nested structure where numpy arrays are replaced by their shapes;
+        - The overall number of scalar elements;
+        - The common data type;
+    """
+    if isinstance(data, np.ndarray):
+        return data.shape, data.size, data.dtype
+    elif isinstance(data, (list, tuple)):
+        total_size = 0
+        struct = []
+        dtype = None
+        for i in data:
+            i_struct, i_size, i_dtype = describe_nested(i)
+            struct.append(i_struct)
+            total_size += i_size
+            if dtype is not None and i_dtype is not None and i_dtype != dtype:
+                raise ValueError("Several different numpy dtypes encountered: %s and %s" %
+                                 (str(dtype), str(i_dtype)))
+            dtype = i_dtype
+        return struct, total_size, dtype
+    else:
+        raise ValueError("Unknown object to describe: %s" % str(data))
+
+
+def nested_to_vector(data, destination=None, offset=0):
+    """
+    Puts any nested iterable into a vector.
+    Args:
+        data (Iterable): a nested structure of numpy arrays;
+        destination (array): array to store the data to;
+        offset (int): array offset;
+
+    Returns:
+        If destination is not specified, returns a vectorized data and the original nested structure to restore the data
+        into its original form. Otherwise returns a new offset.
+    """
+    if destination is None:
+        struct, total_size, dtype = describe_nested(data)
+        destination = np.empty(total_size, dtype=dtype)
+        rtn = True
+    else:
+        rtn = False
+
+    if isinstance(data, np.ndarray):
+        destination[offset:offset + data.size] = data.ravel()
+        offset += data.size
+    elif isinstance(data, (list, tuple)):
+        for i in data:
+            offset = nested_to_vector(i, destination, offset)
+    else:
+        raise ValueError("Unknown object to vectorize: %s" % str(data))
+
+    if rtn:
+        return destination, struct
+    else:
+        return offset
+
+
+def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
+    """
+    Retrieves the original nested structure from the vector.
+    Args:
+        vector (array): a vector to decompose;
+        struct (Iterable): a nested structure with arrays' shapes;
+        copy (bool): whether to copy arrays;
+        ensure_size_matches (bool): if True, ensures all elements from the vector are used;
+
+    Returns:
+        A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
+    """
+    if len(vector.shape) != 1:
+        raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
+
+    if isinstance(struct, tuple):
+        expected_size = np.prod(struct)
+        if ensure_size_matches:
+            if vector.size != expected_size:
+                raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
+                                 (repr(struct), expected_size, vector.size,))
+        if len(vector) < expected_size:
+            raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
+                             (expected_size - len(vector), expected_size,
+                              repr(struct), len(vector),))
+        a = vector[:expected_size].reshape(struct)
+        if copy:
+            a = a.copy()
+
+        if ensure_size_matches:
+            return a
+        else:
+            return a, expected_size
+
+    elif isinstance(struct, list):
+        offset = 0
+        result = []
+        for i in struct:
+            nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
+            offset += size
+            result.append(nested)
+
+        if ensure_size_matches:
+            if vector.size != offset:
+                raise ValueError("%d additional elements found" % (vector.size - offset))
+            return result
+        else:
+            return result, offset
+
+    else:
+        raise ValueError("Unknown object to compose: %s" % (str(struct)))
 
 
 def energy(cc, t1, t2, eris):
@@ -346,20 +496,20 @@ def kconserve_pmatrix(nkpts, kconserv):
 class RCCSD(pyscf.cc.ccsd.CCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.made_ee_imds = False
-        self.made_ip_imds = False
-        self.made_ea_imds = False
         self.ip_partition = None
         self.ea_partition = None
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
 
-        keys = set(['kpts', 'khelper', 'made_ee_imds',
-                    'made_ip_imds', 'made_ea_imds', 'ip_partition',
+        ##################################################
+        # don't modify the following attributes, unless you know what you are doing
+        self.keep_exxdiv = False
+
+        keys = set(['kpts', 'khelper', 'ip_partition',
                     'ea_partition', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
         self.__imds__ = None
@@ -376,21 +526,22 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self, verbose=None):
         return pyscf.cc.ccsd.CCSD.dump_flags(self, verbose)
 
+    @property
+    def ccsd_vector_desc(self):
+        """Description of the ground-state vector."""
+        nvir = self.nmo - self.nocc
+        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
+
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""
-        vc = VectorComposer(t1.dtype)
-        vc.put(t1)
-        vc.put(t2)
-        return vc.flush()
+        return nested_to_vector((t1, t2))[0]
 
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
-        vs = VectorSplitter(vec)
-        nvir = self.nmo - self.nocc
-        return vs.get((self.nkpts, self.nocc, nvir)), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
+        return vector_to_nested(vec, self.ccsd_vector_desc)
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -411,13 +562,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             kb = kconserv[ki, ka, kj]
             # For discussion of LARGE_DENOM, see t1new update above
-            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
-            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+            eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                           [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                           fac=[1.0,-1.0])
 
-            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
-            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
-            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            ejb = _get_epq([0,nocc,kj,mo_e_o,nonzero_opadding],
+                           [0,nvir,kb,mo_e_v,nonzero_vpadding],
+                           fac=[1.0,-1.0])
             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
             eris_ijab = eris.oovv[ki, kj, ka]
@@ -458,11 +609,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
         if mbpt2:
-            cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
 
-        cctyp = 'CCSD'
         self.converged, self.e_corr, self.t1, self.t2 = \
             kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                    tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -477,33 +626,91 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
 
+    def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+               partition=None, eris=None, kptlist=None):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        return eom_kccsd_rhf.EOMIP(self).kernel(nroots=nroots, left=left,
+                                                koopmans=koopmans, guess=guess,
+                                                partition=partition, eris=eris,
+                                                kptlist=kptlist)
+
+    def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None,
+               partition=None, eris=None, kptlist=None):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        return eom_kccsd_rhf.EOMEA(self).kernel(nroots=nroots, left=left,
+                                                koopmans=koopmans, guess=guess,
+                                                partition=partition, eris=eris,
+                                                kptlist=kptlist)
+
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    ipccsd = ipccsd
-    eaccsd = eaccsd
-    amplitudes_to_vector_ea = amplitudes_to_vector_ea
-    amplitudes_to_vector_ip = amplitudes_to_vector_ip
-    vector_to_amplitudes_ea = vector_to_amplitudes_ea
-    vector_to_amplitudes_ip = vector_to_amplitudes_ip
+#####################################
+# Wrapper functions for IP/EA-EOM
+#####################################
+# TODO: ip/ea _matvec and _diag functions are not needed in pyscf-1.7 or
+# higher. Remove these wrapper functions in future release
+    def ipccsd_matvec(self, vector, kshift):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        if not self.imds.made_ip_imds:
+            self.imds.make_ip(self.ip_partition)
+        imds = self.imds
+        myeom = eom_kccsd_rhf.EOMIP(self)
+        return myeom.matvec(vector, kshift, imds=imds)
+
+    def ipccsd_diag(self, kshift):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        if not self.imds.made_ip_imds:
+            self.imds.make_ip(self.ip_partition)
+        imds = self.imds
+        myeom = eom_kccsd_rhf.EOMIP(self)
+        return myeom.get_diag(kshift, imds=imds)
+
+    def eaccsd_matvec(self, vector, kshift):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        if not self.imds.made_ea_imds:
+            self.imds.make_ea(self.ea_partition)
+        imds = self.imds
+        myeom = eom_kccsd_rhf.EOMEA(self)
+        return myeom.matvec(vector, kshift, imds=imds)
+
+    def eaccsd_diag(self, kshift):
+        from pyscf.pbc.cc import eom_kccsd_rhf
+        if not self.imds.made_ea_imds:
+            self.imds.make_ea(self.ea_partition)
+        imds = self.imds
+        myeom = eom_kccsd_rhf.EOMEA(self)
+        return myeom.get_diag(kshift, imds=imds)
 
     @property
     def imds(self):
         if self.__imds__ is None:
             self.__imds__ = _IMDS(self)
         return self.__imds__
+###########################################
+# End of Wrapper functions for IP/EA-EOM
+###########################################
 
 
 KRCCSD = RCCSD
 
+#######################################
+#
+# _ERIS.
+#
+# Note the two electron integrals are stored in different orders from
+# kccsd_uhf._ERIS.  Integrals (ab|cd) are stored as [ka,kc,kb,a,c,b,d] here
+# while the order is [ka,kb,kc,a,b,c,d] in kccsd_uhf._ERIS
+#
+# TODO: use the same convention as kccsd_uhf
+#
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
-        cput0 = (time.clock(), time.time())
-        moidx = get_frozen_mask(cc)
+        cput0 = (logger.process_clock(), logger.perf_counter())
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -523,23 +730,29 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        with lib.temporary_env(cc._scf, exxdiv=None):
+        exxdiv = cc._scf.exxdiv if cc.keep_exxdiv else None
+        with lib.temporary_env(cc._scf, exxdiv=exxdiv):
             # _scf.exxdiv affects eris.fock. HF exchange correction should be
             # excluded from the Fock matrix.
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+            vhf = cc._scf.get_veff(cell, dm)
+        fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
+        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
-        # Add HFX correction in the self.mo_energy to improve convergence in
-        # CCSD iteration. It is useful for the 2D systems since their occupied and
-        # the virtual orbital energies may overlap which may lead to numerical
-        # issue in the CCSD iterations.
-        # FIXME: Whether to add this correction for other exxdiv treatments?
-        # Without the correction, MP2 energy may be largely off the correct value.
-        madelung = tools.madelung(cell, kpts)
-        self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
-                          for k, mo_e in enumerate(self.mo_energy)]
+
+        if not cc.keep_exxdiv:
+            self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+            # Add HFX correction in the self.mo_energy to improve convergence in
+            # CCSD iteration. It is useful for the 2D systems since their occupied and
+            # the virtual orbital energies may overlap which may lead to numerical
+            # issue in the CCSD iterations.
+            # FIXME: Whether to add this correction for other exxdiv treatments?
+            # Without the correction, MP2 energy may be largely off the correct value.
+            madelung = tools.madelung(cell, kpts)
+            self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
+                              for k, mo_e in enumerate(self.mo_energy)]
 
         # Get location of padded elements in occupied and virtual space.
         nocc_per_kpt = get_nocc(cc, per_kpoint=True)
@@ -559,7 +772,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
-        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
         orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
@@ -609,9 +821,11 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                              or cell.dimension == 2)
             if vvvv_required:
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
+            else:
+                self.vvvv = None
 
             # <ij|pq>  = (ip|jq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -629,7 +843,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming oopq', *cput1)
 
             # <ia|pq> = (ip|aq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -647,7 +861,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
             ## Without k-point symmetry
-            # cput1 = time.clock(), time.time()
+            # cput1 = logger.process_clock(), logger.perf_counter()
             # for kp in range(nkpts):
             #    for kq in range(nkpts):
             #        for kr in range(nkpts):
@@ -665,7 +879,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
             # cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             mem_now = lib.current_memory()[0]
             if not vvvv_required:
                 _init_df_eris(cc, self)
@@ -727,7 +941,7 @@ def _init_df_eris(cc, eris):
 
     kpts = cc.kpts
     nkpts = len(kpts)
-    naux = cc._scf.with_df.get_naoaux()
+    #naux = cc._scf.with_df.get_naoaux()
     if gamma_point(kpts):
         dtype = np.double
     else:
@@ -736,7 +950,7 @@ def _init_df_eris(cc, eris):
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
     with h5py.File(cc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
@@ -756,9 +970,8 @@ def _init_df_eris(cc, eris):
                 Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
 
+# TODO: Remove _IMDS
 imd = imdk
-
-
 class _IMDS:
     # Identical to molecular rccsd_slow
     def __init__(self, cc):
@@ -778,7 +991,7 @@ class _IMDS:
             self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -790,7 +1003,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -816,7 +1029,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -844,7 +1057,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -882,8 +1095,12 @@ def _mem_usage(nkpts, nocc, nvir):
     return incore * 16 / 1e6, outcore * 16 / 1e6, basic * 16 / 1e6
 
 
+scf.khf.KRHF.CCSD = lib.class_as_method(KRCCSD)
+scf.krohf.KROHF.CCSD = None
+
+
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto, cc
 
     cell = gto.Cell()
     cell.atom = '''
@@ -915,7 +1132,6 @@ if __name__ == '__main__':
     mycc.max_cycle = 100
     e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
     #print(e_ip, e_ea)
-    exit()
 
     ####
     cell = gto.Cell()
@@ -963,13 +1179,14 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
-    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
+    print(lib.finger(Ht1) - (6.63584725357554   -0.1886803958548149j))
+    print(lib.finger(Ht2) - (-23.10640514550505 -142.54473917246457j))
 
-    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
+    kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
-    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME
+    print(lib.finger(Ht1) - (6.608150224325518  -0.2219476427503148j))
+    print(lib.finger(Ht2) - (-23.253955060531297-137.76211601171295j))
+

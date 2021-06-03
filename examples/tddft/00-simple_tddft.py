@@ -29,4 +29,4 @@ mytd.analyze()
 # object after importing tdscf module.
 from pyscf import tddft
 mytd = mf.TDDFT().run()
-mytd = scf.RHF(mol).run().TDHF().run()
+mytd = mol.RHF().run().TDHF().run()

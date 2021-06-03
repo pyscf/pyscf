@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,8 @@
 
 import numpy
 
-ELEMENTS = ['X',  # Ghost
+ELEMENTS = [
+    'X',  # Ghost
     'H' , 'He', 'Li', 'Be', 'B' , 'C' , 'N' , 'O' , 'F' , 'Ne',
     'Na', 'Mg', 'Al', 'Si', 'P' , 'S' , 'Cl', 'Ar', 'K' , 'Ca',
     'Sc', 'Ti', 'V' , 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
@@ -34,8 +35,9 @@ NUC.update((x.upper(),i) for i,x in enumerate(ELEMENTS))
 NUC['GHOST'] = 0
 ELEMENTS_PROTON = NUC
 
-ATOMIC_NAMES = ['Ghost',
-# IUPAC version dated 28 November 2016
+ATOMIC_NAMES = [
+    'Ghost',
+    # IUPAC version dated 28 November 2016
     'Hydrogen', 'Helium', 'Lithium', 'Beryllium', 'Boron',
     'Carbon', 'Nitrogen', 'Oxygen', 'Fluorine', 'Neon',
     'Sodium', 'Magnesium', 'Aluminium', 'Silicon', 'Phosphorus',
@@ -451,6 +453,131 @@ CONFIGURATION = [
     [14,36,40,28],     #118  Og
 ]
 
+# Non-relativistic spin-restricted spherically averaged Hartree-Fock
+# configurations for use in atomic SAD calculations. Reference
+# configurations from Phys. Rev. A 101, 012516 (2020).
+NRSRHF_CONFIGURATION = [
+    [ 0, 0, 0, 0],     #  0  GHOST
+    [ 1, 0, 0, 0],     #  1  H
+    [ 2, 0, 0, 0],     #  2  He
+    [ 3, 0, 0, 0],     #  3  Li
+    [ 4, 0, 0, 0],     #  4  Be
+    [ 4, 1, 0, 0],     #  5  B
+    [ 4, 2, 0, 0],     #  6  C
+    [ 4, 3, 0, 0],     #  7  N
+    [ 4, 4, 0, 0],     #  8  O
+    [ 4, 5, 0, 0],     #  9  F
+    [ 4, 6, 0, 0],     # 10  Ne
+    [ 5, 6, 0, 0],     # 11  Na
+    [ 6, 6, 0, 0],     # 12  Mg
+    [ 6, 7, 0, 0],     # 13  Al
+    [ 6, 8, 0, 0],     # 14  Si
+    [ 6, 9, 0, 0],     # 15  P
+    [ 6,10, 0, 0],     # 16  S
+    [ 6,11, 0, 0],     # 17  Cl
+    [ 6,12, 0, 0],     # 18  Ar
+    [ 7,12, 0, 0],     # 19  K
+    [ 8,12, 0, 0],     # 20  Ca
+    [ 8,13, 0, 0],     # 21  Sc
+    [ 8,12, 2, 0],     # 22  Ti
+    [ 8,12, 3, 0],     # 23  V
+    [ 8,12, 4, 0],     # 24  Cr
+    [ 6,12, 7, 0],     # 25  Mn
+    [ 6,12, 8, 0],     # 26  Fe
+    [ 6,12, 9, 0],     # 27  Co
+    [ 6,12,10, 0],     # 28  Ni
+    [ 7,12,10, 0],     # 29  Cu
+    [ 8,12,10, 0],     # 30  Zn
+    [ 8,13,10, 0],     # 31  Ga
+    [ 8,14,10, 0],     # 32  Ge
+    [ 8,15,10, 0],     # 33  As
+    [ 8,16,10, 0],     # 34  Se
+    [ 8,17,10, 0],     # 35  Br
+    [ 8,18,10, 0],     # 36  Kr
+    [ 9,18,10, 0],     # 37  Rb
+    [10,18,10, 0],     # 38  Sr
+    [10,19,10, 0],     # 39  Y
+    [10,18,12, 0],     # 40  Zr
+    [10,18,13, 0],     # 41  Nb
+    [ 8,18,16, 0],     # 42  Mo
+    [ 8,18,17, 0],     # 43  Tc
+    [ 8,18,18, 0],     # 44  Ru
+    [ 8,18,19, 0],     # 45  Rh
+    [ 8,18,20, 0],     # 46  Pd
+    [ 9,18,20, 0],     # 47  Ag
+    [10,18,20, 0],     # 48  Cd
+    [10,19,20, 0],     # 49  In
+    [10,20,20, 0],     # 50  Sn
+    [10,21,20, 0],     # 51  Sb
+    [10,22,20, 0],     # 52  Te
+    [10,23,20, 0],     # 53  I
+    [10,24,20, 0],     # 54  Xe
+    [11,24,20, 0],     # 55  Cs
+    [12,24,20, 0],     # 56  Ba
+    [12,24,21, 0],     # 57  La
+    [12,24,22, 0],     # 58  Ce
+    [12,24,21, 2],     # 59  Pr
+    [12,24,20, 4],     # 60  Nd
+    [12,24,20, 5],     # 61  Pm
+    [12,24,20, 6],     # 62  Sm
+    [12,24,20, 7],     # 63  Eu
+    [11,24,20, 9],     # 64  Gd
+    [10,24,20,11],     # 65  Tb
+    [10,24,20,12],     # 66  Dy
+    [10,24,20,13],     # 67  Ho
+    [10,24,20,14],     # 68  Er
+    [11,24,20,14],     # 69  Tm
+    [12,24,20,14],     # 70  Yb
+    [12,25,20,14],     # 71  Lu
+    [12,24,22,14],     # 72  Hf
+    [12,24,23,14],     # 73  Ta
+    [10,24,26,14],     # 74  W
+    [10,24,27,14],     # 75  Re
+    [10,24,28,14],     # 76  Os
+    [10,24,29,14],     # 77  Ir
+    [10,24,30,14],     # 78  Pt
+    [11,24,30,14],     # 79  Au
+    [12,24,30,14],     # 80  Hg
+    [12,25,30,14],     # 81  Tl
+    [12,26,30,14],     # 82  Pb
+    [12,27,30,14],     # 83  Bi
+    [12,28,30,14],     # 84  Po
+    [12,29,30,14],     # 85  At
+    [12,30,30,14],     # 86  Rn
+    [13,30,30,14],     # 87  Fr
+    [14,30,30,14],     # 88  Ra
+    [14,30,31,14],     # 89  Ac
+    [14,30,32,14],     # 90  Th
+    [14,30,30,17],     # 91  Pa
+    [14,30,30,18],     # 92  U
+    [14,30,30,19],     # 93  Np
+    [13,30,30,21],     # 94  Pu
+    [12,30,30,23],     # 95  Am
+    [12,30,30,24],     # 96  Cm
+    [12,30,30,25],     # 97  Bk
+    [12,30,30,26],     # 98  Cf
+    [12,30,30,27],     # 99  Es
+    [12,30,30,28],     #100  Fm
+    [13,30,30,28],     #101  Md
+    [14,30,30,28],     #102  No
+    [14,30,31,28],     #103  Lr
+    [14,30,32,28],     #104  Rf
+    [14,30,33,28],     #105  Db
+    [12,30,36,28],     #106  Sg
+    [12,30,37,28],     #107  Bh
+    [12,30,38,28],     #108  Hs
+    [12,30,39,28],     #109  Mt
+    [12,30,40,28],     #110  Ds
+    [13,30,40,28],     #111  Rg
+    [14,30,40,28],     #112  Cn
+    [14,31,40,28],     #113  Nh
+    [14,32,40,28],     #114  Fl
+    [14,33,40,28],     #115  Mc
+    [14,34,40,28],     #116  Lv
+    [14,35,40,28],     #117  Ts
+    [14,36,40,28],     #118  Og
+]
+
 
 # This is No. of shells, not the atomic configuations
 #     core       core+valence
@@ -725,11 +852,11 @@ _ELEMENTS_UPPER['GHOST'] = 'Ghost'
 
 def charge(symb_or_chg):
     if isinstance(symb_or_chg, (str, unicode)):
-        a = symb_or_chg.upper()
-        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
+        a = str(symb_or_chg.strip().upper())
+        if (a[:5] == 'GHOST' or (a[0] == 'X' and a[:2] != 'XE')):
             return 0
         else:
-            return ELEMENTS_PROTON[str(_rm_digit(a))]
+            return ELEMENTS_PROTON[_rm_digit(a)]
     else:
         return symb_or_chg
 
@@ -740,34 +867,76 @@ def _symbol(symb_or_chg):
         return ELEMENTS[symb_or_chg]
 
 def _std_symbol(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol (without the numeric prefix or suffix)
+    '''
     if isinstance(symb_or_chg, (str, unicode)):
-        rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
-            rawsymb = rawsymb[1:]
+        symb_or_chg = str(symb_or_chg.upper())
+        rawsymb = _rm_digit(symb_or_chg)
+        if rawsymb in _ELEMENTS_UPPER:
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+            rawsymb = rawsymb[1:]  # Remove the prefix X
             return 'X-' + _ELEMENTS_UPPER[rawsymb]
         elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
-            rawsymb = rawsymb[5:]
+            rawsymb = rawsymb[5:]  # Remove the prefix GHOST
             return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
         else:
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
+    else:
+        return ELEMENTS[symb_or_chg]
+
+def _std_symbol_without_ghost(symb_or_chg):
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol
+    '''
+    if isinstance(symb_or_chg, (str, unicode)):
+        symb_or_chg = str(symb_or_chg.upper())
+        rawsymb = _rm_digit(symb_or_chg)
+        if rawsymb in _ELEMENTS_UPPER:
             return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2] != 'XE':
+            rawsymb = rawsymb[1:]  # Remove the prefix X
+            return _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+            return _ELEMENTS_UPPER[rawsymb]
+        else:
+            raise RuntimeError('Unsupported atom symbol %s' % symb_or_chg)
     else:
         return ELEMENTS[symb_or_chg]
 
 def _atom_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (int, numpy.integer)):
-        symb = ELEMENTS[symb_or_chg]
-    else:
-        a = str(symb_or_chg.strip())
+    '''For a given atom symbol (lower case or upper case) or charge, return the
+    standardized atom symbol (with the numeric prefix or suffix)
+    '''
+    if isinstance(symb_or_chg, (str, unicode)):
+        a = str(symb_or_chg.strip().upper())
         if a.isdigit():
             symb = ELEMENTS[int(a)]
         else:
             rawsymb = _rm_digit(a)
-            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
-                rawsymb = rawsymb[1:]
-            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
-                rawsymb = rawsymb[5:]
-            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
+            if rawsymb not in _ELEMENTS_UPPER:  # likely a ghost atom
+                if len(rawsymb) > 1 and a[0] == 'X' and a[:2] != 'XE':
+                    rawsymb = rawsymb[1:]  # Remove the prefix X
+                    # put hyphen between X prefix and the atomic symbol
+                    if a[1].isalpha():
+                        a = a[0] + '-' + a[1:]
+                    else:
+                        a = a[0] + '-' + a[2:]
+                elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+                    rawsymb = rawsymb[5:]  # Remove the prefix GHOST
+                    # put hyphen between Ghost prefix and the atomic symbol
+                    if a[5].isalpha():
+                        a = a[:5] + '-' + a[5:]
+                    elif a[5] != '-':
+                        a = a[:5] + '-' + a[6:]
+                else:
+                    raise RuntimeError('Unsupported atom symbol %s' % a)
+            stdsymb = _ELEMENTS_UPPER[rawsymb]
             symb = a.replace(rawsymb, stdsymb)
+    else:
+        symb = ELEMENTS[symb_or_chg]
     return symb
 
 def is_ghost_atom(symb_or_chg):

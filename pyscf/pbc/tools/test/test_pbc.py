@@ -14,6 +14,7 @@
 
 import unittest
 import numpy
+from pyscf import gto
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
@@ -37,7 +38,18 @@ class KnownValues(unittest.TestCase):
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
-        self.assertAlmostEqual(lib.finger(coulG), 1.3245365170998518+0j, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 1.3245365170998518+0j, 9)
+
+    def test_unconventional_ws_cell(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He'
+        cell.basis = [[0, (1, 1)]]
+        cell.a = '''4.3, 0.7, 1.2
+                    0.4, 2.0, 0.1
+                    0.5, 0  , 1.8'''
+        cell.build()
+        kpts = cell.make_kpts([1,1,1])
+        self.assertRaises(RuntimeError, tools.precompute_exx, cell, kpts)
 
     def test_coulG(self):
         numpy.random.seed(19)
@@ -55,17 +67,17 @@ class KnownValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
         coulG = tools.get_coulG(cell, kpt)
-        self.assertAlmostEqual(lib.finger(coulG), 62.75448804333378, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 62.75448804333378, 9)
 
         cell.a = numpy.eye(3)
         cell.unit = 'B'
         coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]))
-        self.assertAlmostEqual(lib.finger(coulG), 4.6737453679713905, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 4.6737453679713905, 9)
         coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]),
                                 wrap_around=False)
-        self.assertAlmostEqual(lib.finger(coulG), 4.5757877990664744, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 4.5757877990664744, 9)
         coulG = tools.get_coulG(cell, exx='ewald')
-        self.assertAlmostEqual(lib.finger(coulG), 4.888843468914021, 9)
+        self.assertAlmostEqual(lib.fp(coulG), 4.888843468914021, 9)
 
     #def test_coulG_2d(self):
     #    cell = pbcgto.Cell()
@@ -79,7 +91,7 @@ class KnownValues(unittest.TestCase):
     #    cell.output = '/dev/null'
     #    cell.build()
     #    coulG = tools.get_coulG(cell)
-    #    self.assertAlmostEqual(lib.finger(coulG), -4.7118365257800496, 9)
+    #    self.assertAlmostEqual(lib.fp(coulG), -4.7118365257800496, 9)
 
 
     def test_get_lattice_Ls(self):
@@ -91,6 +103,9 @@ class KnownValues(unittest.TestCase):
         Ls = tools.get_lattice_Ls(cl1)
         self.assertEqual(Ls.shape, (1725,3))
 
+        Ls = tools.get_lattice_Ls(cl1, rcut=0)
+        self.assertEqual(Ls.shape, (1,3))
+
     def test_super_cell(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
@@ -98,7 +113,8 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.super_cell(cl1, [2,3,4])
-        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), -18.946080642714836, 9)
+        self.assertAlmostEqual(lib.fp(cl2.atom_coords()), -18.946080642714836, 9)
+        self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), 16.515144238434807, 9)
 
     def test_cell_plus_imgs(self):
         numpy.random.seed(2)
@@ -106,8 +122,10 @@ class KnownValues(unittest.TestCase):
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), 465.86333525744129, 9)
+        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([7,14,10])))
+        cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
+        self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
+        self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)
 
     def test_madelung(self):
         cell = pbcgto.Cell()

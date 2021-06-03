@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@
 Unrestricted CISD
 '''
 
-import time
-from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -353,7 +351,7 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
-def to_fcivec(cisdvec, norb, nelec, frozen=0):
+def to_fcivec(cisdvec, norb, nelec, frozen=None):
     '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -363,7 +361,9 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 
     frozena_mask = numpy.zeros(norb, dtype=bool)
     frozenb_mask = numpy.zeros(norb, dtype=bool)
-    if isinstance(frozen, (int, numpy.integer)):
+    if frozen is None:
+        nfroza = nfrozb = 0
+    elif isinstance(frozen, (int, numpy.integer)):
         nfroza = nfrozb = frozen
         frozena_mask[:frozen] = True
         frozenb_mask[:frozen] = True
@@ -429,21 +429,21 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     for i in range(norb):
         if frozena_mask[i]:
             if i < neleca:
-                core_a_mask &= (strsa & (1<<i)) != 0
+                core_a_mask &= (strsa & (1 <<i )) != 0
                 parity_a ^= (count_a & 1) == 1
             else:
-                core_a_mask &= (strsa & (1<<i)) == 0
+                core_a_mask &= (strsa & (1 << i)) == 0
         else:
-            count_a += (strsa & (1<<i)) != 0
+            count_a += (strsa & (1 << i)) != 0
 
         if frozenb_mask[i]:
             if i < nelecb:
-                core_b_mask &= (strsb & (1<<i)) != 0
+                core_b_mask &= (strsb & (1 <<i )) != 0
                 parity_b ^= (count_b & 1) == 1
             else:
-                core_b_mask &= (strsb & (1<<i)) == 0
+                core_b_mask &= (strsb & (1 << i)) == 0
         else:
-            count_b += (strsb & (1<<i)) != 0
+            count_b += (strsb & (1 << i)) != 0
 
     sub_strsa = strsa[core_a_mask & (count_a == nocca)]
     sub_strsb = strsb[core_b_mask & (count_b == noccb)]
@@ -455,10 +455,11 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     fcivec1[:,parity_b] *= -1
     return fcivec1
 
-def from_fcivec(ci0, norb, nelec, frozen=0):
+def from_fcivec(ci0, norb, nelec, frozen=None):
     '''Extract CISD coefficients from FCI coefficients'''
-    if frozen is not 0:
+    if not (frozen is None or frozen == 0):
         raise NotImplementedError
+
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -466,7 +467,7 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
         neleca, nelecb = nelec
 
     norba = norbb = norb
-    nocc = nocca, noccb = neleca, nelecb
+    nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
     t1addra, t1signa = cisd.tn_addrs_signs(norba, nocca, 1)
@@ -498,7 +499,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
             The overlap matrix of non-orthogonal one-particle basis
     '''
     if s is None:
-        return dot(cibra, ciket, nmo, nocc)
+        return numpy.dot(cibra, ciket, nmo, nocc)
 
     if isinstance(nmo, (int, numpy.integer)):
         nmoa = nmob = nmo
@@ -617,7 +618,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(myci, civec=None, nmo=None, nocc=None):
+def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
@@ -644,7 +645,8 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
     d2 = _gamma2_intermediates(myci, civec, nmo, nocc)
-    return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+    return uccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True,
+                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
@@ -831,7 +833,7 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1b[noccb:,noccb:] = dvvb
     dm1b[numpy.diag_indices(noccb)] += norm
 
-    if not (myci.frozen is 0 or myci.frozen is None):
+    if myci.frozen is not None:
         nmoa = myci.mo_occ[0].size
         nmob = myci.mo_occ[1].size
         nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)
@@ -979,8 +981,6 @@ def _cp(a):
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

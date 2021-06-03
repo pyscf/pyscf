@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 
 import sys
 import copy
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.fci import cistring
@@ -134,7 +135,7 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
             for x in gen_str_iter(restorb, nelec-1):
                 yield [orb_list[0]] + x
 
-# search for alpha and beta pattern which match to the required symmetry
+    # search for alpha and beta pattern which match to the required symmetry
     def query(target, nelec_atmost, spin, orbsym):
         norb = len(orbsym)
         for excite_level in range(1, nelec_atmost+1):
@@ -191,14 +192,6 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
         addrb = find_addr_(strb, bonly, nelecb)
         ci1[addra,addrb] = 1
 
-#    target = 0
-#    for i,k in enumerate(stra):
-#        if k:
-#            target ^= orbsym[i]
-#    for i,k in enumerate(strb):
-#        if k:
-#            target ^= orbsym[i]
-#    print target
     return ci1
 
 
@@ -217,6 +210,8 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     >>> ci0 = fci.addons.cylindrical_init_guess(mol, 4, (3,3), orbsym, wfnsym=10, singlet=False)[0]
     >>> print(ci0.reshape(4,4))
     '''
+    warnings.warn('Initial guess for cylindrical symmetry is under testing')
+
     neleca, nelecb = _unpack_nelec(nelec)
     if isinstance(orbsym[0], str):
         orbsym = [symm.irrep_name2id(mol.groupname, x) for x in orbsym]
@@ -224,10 +219,12 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
     if isinstance(wfnsym, str):
         wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
 
-    if mol.groupname in ('Dooh', 'Coov'):
+    if mol.groupname in ('SO3', 'Dooh', 'Coov'):
         def irrep_id2lz(irrep_id):
             # See also symm.basis.DOOH_IRREP_ID_TABLE
             level = irrep_id // 10
+            if mol.groupname == 'SO3':
+                level = level % 10  # See SO3 irreps in pyscf.symm.basis
             d2h_id = irrep_id % 10
             # irrep_id 0,1,4,5 corresponds to lz = 0,2,4,...
             # irrep_id 2,3,6,7 corresponds to lz = 1,3,5,...
@@ -327,7 +324,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                 addr_x_b, addr_y_b = search_open_shell_det(occb)
                 if singlet:
                     if wfn_lz == 0:
-                        ci_1[addr_x_a,addr_x_b] = \
+                        ci_1[addr_x_a,addr_x_b] = numpy.sqrt(.5)
                         ci_1[addr_y_a,addr_y_b] = numpy.sqrt(.5)
                     else:
                         ci_1[addr_x_a,addr_x_b] = numpy.sqrt(.5)
@@ -351,10 +348,12 @@ def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
     ci = ci.reshape(strsa.size,strsb.size)
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
     birreps = numpy.zeros(strsb.size, dtype=numpy.int32)
-    for i, ir in enumerate(orbsym):
-        airreps[numpy.bitwise_and(strsa, 1<<i) > 0] ^= ir
-        birreps[numpy.bitwise_and(strsb, 1<<i) > 0] ^= ir
-    mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10
+    wfnsym_in_d2h = wfnsym % 10
+    for i, ir in enumerate(orbsym_in_d2h):
+        airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+        birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
+    mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym_in_d2h
     ci1 = numpy.zeros_like(ci)
     ci1[mask] = ci[mask]
     ci1 *= 1/numpy.linalg.norm(ci1)
@@ -386,24 +385,18 @@ def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     return _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym)
 
 def _guess_wfnsym(ci, strsa, strsb, orbsym):
-    na = len(strsa)
     nb = len(strsb)
-    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
-        assert(ci.size == na*nb)
-        idx = numpy.argmax(abs(ci))
-    else:
-        assert(ci[0].size == na*nb)
-        idx = ci[0].argmax()
+    idx = abs(ci).argmax()
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
-    orbsym = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
     airrep = 0
     birrep = 0
-    for i, ir in enumerate(orbsym):
-        if (stra & (1<<i)):
+    for i, ir in enumerate(orbsym_in_d2h):
+        if (stra & (1 << i)):
             airrep ^= ir
-        if (strb & (1<<i)):
+        if (strb & (1 << i)):
             birrep ^= ir
     return airrep ^ birrep
 def guess_wfnsym(ci, norb, nelec, orbsym):
@@ -426,7 +419,14 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
     strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
-    return _guess_wfnsym(ci, strsa, strsb, orbsym)
+    if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
+        wfnsym = _guess_wfnsym(ci, strsa, strsb, orbsym)
+    else:
+        wfnsym = [_guess_wfnsym(c, strsa, strsb, orbsym) for c in ci]
+        if any(wfnsym[0] != x for x in wfnsym):
+            warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+        wfnsym = wfnsym[0]
+    return wfnsym
 
 
 def des_a(ci0, norb, neleca_nelecb, ap_id):
@@ -602,8 +602,8 @@ def det_overlap(string1, string2, norb, s=None):
             string2 = int(string2, 2)
         else:
             assert(bin(string2).count('1') == nelec)
-        idx1 = [i for i in range(norb) if (1<<i & string1)]
-        idx2 = [i for i in range(norb) if (1<<i & string2)]
+        idx1 = [i for i in range(norb) if (1 << i & string1)]
+        idx2 = [i for i in range(norb) if (1 << i & string2)]
         s1 = lib.take_2d(s, idx1, idx2)
         return numpy.linalg.det(s1)
 
@@ -639,8 +639,6 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
-    from pyscf.fci import spin_op
-    from pyscf.fci import direct_spin0
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')
@@ -663,12 +661,12 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             ss = ss_value
 
         if ss < sz*(sz+1)+.1:
-# (S^2-ss)|Psi> to shift state other than the lowest state
+            # (S^2-ss)|Psi> to shift state other than the lowest state
             ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
-# (S^2-ss)^2|Psi> to shift states except the given spin.
-# It still relies on the quality of initial guess
+            # (S^2-ss)^2|Psi> to shift states except the given spin.
+            # It still relies on the quality of initial guess
             tmp = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
@@ -687,6 +685,27 @@ def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
 
 def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
+    '''
+    Transform CI coefficients (dimension conserved) to the representation in
+    new one-particle basis.  Solving CI problem for Hamiltonian h1, h2 defined
+    in old basis,
+    CI_old = fci.kernel(h1, h2, ...)
+    Given orbital rotation u, the CI problem can be either solved by
+    transforming the Hamiltonian, or transforming the coefficients.
+    CI_new = fci.kernel(u^T*h1*u, ...) = transform_ci_for_orbital_rotation(CI_old, u)
+
+    Args:
+        u : a squared 2D array or a list of 2D array
+            the orbital rotation to transform the old one-particle basis to new
+            one-particle basis
+    '''
+    if isinstance(u, numpy.ndarray) and u.ndim == 2:
+        assert u.shape == (norb, norb)
+    else:
+        assert u[0].shape == (norb, norb) and u[1].shape == (norb, norb)
+    return transform_ci(ci, nelec, u)
+
+def transform_ci(ci, nelec, u):
     '''Transform CI coefficients to the representation in new one-particle basis.
     Solving CI problem for Hamiltonian h1, h2 defined in old basis,
     CI_old = fci.kernel(h1, h2, ...)
@@ -697,59 +716,76 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     Args:
         u : 2D array or a list of 2D array
             the orbital rotation to transform the old one-particle basis to new
-            one-particle basis
+            one-particle basis. If u is not a squared matrix, the resultant CI
+            coefficients array may have different shape to the input CI
+            coefficients.
     '''
     neleca, nelecb = _unpack_nelec(nelec)
-    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
-    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
-    one_particle_strs = numpy.asarray([1<<i for i in range(norb)])
-    na = len(strsa)
-    nb = len(strsb)
-    assert(ci.shape == (na, nb))
-
     if isinstance(u, numpy.ndarray) and u.ndim == 2:
         ua = ub = u
+        assert ua.shape == ub.shape
     else:
         ua, ub = u
+    norb_old, norb_new = ua.shape
+    na_old = cistring.num_strings(norb_old, neleca)
+    nb_old = cistring.num_strings(norb_old, nelecb)
+    na_new = cistring.num_strings(norb_new, neleca)
+    nb_new = cistring.num_strings(norb_new, nelecb)
+    ci = ci.reshape(na_old, nb_old)
+
+    one_particle_strs_old = numpy.asarray([1 << i for i in range(norb_old)])
+    one_particle_strs_new = numpy.asarray([1 << i for i in range(norb_new)])
 
     if neleca == 0:
-        trans_ci_a = numpy.ones((1,1))
+        trans_ci_a = numpy.ones((1, 1))
     else:
+        trans_ci_a = numpy.zeros((na_old, na_new))
+        strs_old = numpy.asarray(cistring.make_strings(range(norb_old), neleca))
+
         # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
-        occ_masks = (strsa[:,None] & one_particle_strs) != 0
-        trans_ci_a = numpy.zeros((na,na))
-        #for i in range(na): # for old basis
-        #    for j in range(na):
-        #        uij = u[occ_masks[i]][:,occ_masks[j]]
+        occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0
+        if norb_old == norb_new:
+            occ_masks_new = occ_masks_old
+        else:
+            strs_new = numpy.asarray(cistring.make_strings(range(norb_new), neleca))
+            occ_masks_new = (strs_new[:,None] & one_particle_strs_new) != 0
+
+        # Perform
+        #for i in range(na_old): # old basis
+        #    for j in range(na_new): # new basis
+        #        uij = u[occ_masks_old[i]][:,occ_masks_new[j]]
         #        trans_ci_a[i,j] = numpy.linalg.det(uij)
-        occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(na,neleca)
-        for i in range(na):
-            ui = ua[occ_masks[i]].T.copy()
+        occ_idx_all_strs = numpy.where(occ_masks_new)[1].reshape(na_new,neleca)
+        for i in range(na_old):
+            ui = ua[occ_masks_old[i]].T.copy()
             minors = ui[occ_idx_all_strs]
             trans_ci_a[i,:] = numpy.linalg.det(minors)
 
     if neleca == nelecb and numpy.allclose(ua, ub):
         trans_ci_b = trans_ci_a
+    elif nelecb == 0:
+        trans_ci_b = numpy.ones((1, 1))
     else:
-        if nelecb == 0:
-            trans_ci_b = numpy.ones((1,1))
+        trans_ci_b = numpy.zeros((nb_old, nb_new))
+        strs_old = numpy.asarray(cistring.make_strings(range(norb_old), nelecb))
+
+        occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0
+        if norb_old == norb_new:
+            occ_masks_new = occ_masks_old
         else:
-            occ_masks = (strsb[:,None] & one_particle_strs) != 0
-            trans_ci_b = numpy.zeros((nb,nb))
-            #for i in range(nb):
-            #    for j in range(nb):
-            #        uij = u[occ_masks[i]][:,occ_masks[j]]
-            #        trans_ci_b[i,j] = numpy.linalg.det(uij)
-            occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(nb,nelecb)
-            for i in range(nb):
-                ui = ub[occ_masks[i]].T.copy()
-                minors = ui[occ_idx_all_strs]
-                trans_ci_b[i,:] = numpy.linalg.det(minors)
+            strs_new = numpy.asarray(cistring.make_strings(range(norb_new), nelecb))
+            occ_masks_new = (strs_new[:,None] & one_particle_strs_new) != 0
+
+        occ_idx_all_strs = numpy.where(occ_masks_new)[1].reshape(nb_new,nelecb)
+        for i in range(nb_old):
+            ui = ub[occ_masks_old[i]].T.copy()
+            minors = ui[occ_idx_all_strs]
+            trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations
-    ci = lib.dot(trans_ci_a.T, ci.reshape(na,nb))
+    ci = lib.dot(trans_ci_a.T, ci)
     # Transform old basis to new basis for all beta-electron excitations
-    ci = lib.dot(ci.reshape(na,nb), trans_ci_b)
+    ci = lib.dot(ci, trans_ci_b)
     return ci
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
+    '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -48,6 +49,14 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     na = len(strsa)
     nb = len(strsb)
 
+    # Adding Eq (*) below to fcinew because contract_2e function computes the
+    # contraction  "E_{pq}E_{rs} V_{pqrs} |CI>" (~ p^+ q r^+ s |CI>) while
+    # the actual contraction for (aa|aa) and (bb|bb) part is
+    # "p^+ r^+ s q V_{pqrs} |CI>". To make (aa|aa) and (bb|bb) code reproduce
+    # "p^+ q r^+ s |CI>", we employ the identity
+    #    p^+ q r^+ s = p^+ r^+ s q  +  delta(qr) p^+ s
+    # the second term is the source of Eq (*)
+
     fcivec = ci_coeff.reshape(na,nb)
     fcinew = numpy.zeros_like(fcivec)
     # (bb|aa)
@@ -56,7 +65,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         for a, i, str0, sign in tab:
             if a >= 0:
                 t1[a,i,str1] += sign * fcivec[str0]
-    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)
+    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)  # (*)
     t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
     t1 = t1.reshape(norb,norb,na,nb)
     for str1, tab in enumerate(cd_indexb):
@@ -70,7 +79,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
         for a, i, str0, sign in tab:
             if a >= 0:
                 t1[a,i,:,str1] += sign * fcivec[:,str0]
-    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)
+    fcinew += numpy.einsum('ps,psab->ab', h_ps, t1)  # (*)
     t1 = numpy.dot(eri.reshape(norb*norb,-1), t1.reshape(norb*norb,-1))
     t1 = t1.reshape(norb,norb,na,nb)
     for str1, tab in enumerate(cd_indexa):
@@ -136,7 +145,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
             occ = []
             vir = []
             for i in range(norb):
-                if str0 & (1<<i):
+                if str0 & (1 << i):
                     occ.append(i)
                 else:
                     vir.append(i)
@@ -144,14 +153,14 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
             for i1, i in enumerate(occ):
                 for a1, a in enumerate(vir):
                     if eri_pq_max[a,i]*ca > myci.select_cutoff:
-                        str1 = str0 ^ (1<<i) | (1<<a)
+                        str1 = str0 ^ (1 << i) | (1 << a)
                         strs_add.append(str1)
 
                         if i < nelec and a >= nelec:
                             for j in occ[:i1]:
                                 for b in vir[a1+1:]:
                                     if abs(eri[a,i,b,j])*ca > myci.select_cutoff:
-                                        strs_add.append(str1 ^ (1<<j) | (1<<b))
+                                        strs_add.append(str1 ^ (1 << j) | (1 << b))
         strs_add = sorted(set(strs_add) - set(strs))
         return numpy.asarray(strs_add, dtype=int)
 
@@ -178,7 +187,7 @@ def cre_des_linkstr(strs, norb, nelec):
         occ = []
         vir = []
         for i in range(norb):
-            if str1 & (1<<i):
+            if str1 & (1 << i):
                 occ.append(i)
             else:
                 vir.append(i)
@@ -188,7 +197,7 @@ def cre_des_linkstr(strs, norb, nelec):
             k += 1
         for a in vir:
             for i in occ:
-                str0 = str1 ^ (1<<i) | (1<<a)
+                str0 = str1 ^ (1 << i) | (1 << a)
                 if str0 in addrs:
                     # [cre, des, targetddress, parity]
                     link_index[i0,k] = (a, i, addrs[str0], cistring.cre_des_sign(a, i, str1))
@@ -198,10 +207,10 @@ def cre_des_linkstr(strs, norb, nelec):
 def des_des_linkstr(strs, norb, nelec):
     inter = []
     for str0 in strs:
-        occ = [i for i in range(norb) if str0 & (1<<i)]
+        occ = [i for i in range(norb) if str0 & (1 << i)]
         for i1, i in enumerate(occ):
             for j in occ[:i1]:
-                inter.append(str0 ^ (1<<i) ^ (1<<j))
+                inter.append(str0 ^ (1 << i) ^ (1 << j))
     inter = sorted(set(inter))
     addrs = dict(zip(strs, range(len(strs))))
 
@@ -209,17 +218,17 @@ def des_des_linkstr(strs, norb, nelec):
     link_index = numpy.zeros((len(inter),nvir*nvir,4), dtype=int)
     link_index[:,:,0] = -1
     for i1, str1 in enumerate(inter):
-        vir = [i for i in range(norb) if not str1 & (1<<i)]
+        vir = [i for i in range(norb) if not str1 & (1 << i)]
         k = 0
         for i in vir:
             for j in vir:
-                str0 = str1 | (1<<i) | (1<<j)
+                str0 = str1 | (1 << i) | (1 << j)
                 if i != j and str0 in addrs:
                     # from intermediate str1, create i, create j -> str0
                     # (str1 = des_i des_j str0)
                     # [cre_j, cre_i, targetddress, parity]
                     sign = cistring.cre_sign(i, str1)
-                    sign*= cistring.cre_sign(j, str1|(1<<i))
+                    sign*= cistring.cre_sign(j, str1 | (1 << i))
                     link_index[i1,k] = (i, j, addrs[str0], sign)
                     k += 1
     return link_index
@@ -234,8 +243,8 @@ def make_hdiag(h1e, g2e, ci_strs, norb, nelec):
     strsa, strsb = ci_strs
     strsa = numpy.asarray(strsa)
     strsb = numpy.asarray(strsb)
-    occslista = [[i for i in range(norb) if str0 & (1<<i)] for str0 in strsa]
-    occslistb = [[i for i in range(norb) if str0 & (1<<i)] for str0 in strsb]
+    occslista = [[i for i in range(norb) if str0 & (1 << i)] for str0 in strsa]
+    occslistb = [[i for i in range(norb) if str0 & (1 << i)] for str0 in strsb]
 
     g2e = ao2mo.restore(1, g2e, norb)
     diagj = numpy.einsum('iijj->ij',g2e)
@@ -282,7 +291,7 @@ def kernel(h1e, eri, norb, nelec, ecore=0, verbose=logger.NOTE):
 
     e_last = 0
     tol = 1e-2
-    conv = False
+    # conv = False
     for icycle in range(norb):
         tol = max(tol*1e-2, myci.float_tol)
         link_index = all_linkstr_index(ci_strs)
@@ -292,11 +301,11 @@ def kernel(h1e, eri, norb, nelec, ecore=0, verbose=logger.NOTE):
         print('icycle %d  ci.shape %s  E = %.15g' %
               (icycle, (len(ci_strs[0]), len(ci_strs[1])), e))
         if ci0.shape == (namax,nbmax) or abs(e-e_last) < myci.float_tol*10:
-            conv = True
+            # conv = True
             break
         ci1, ci_strs = enlarge_space(myci, (ci0, ci_strs), h2e, norb, nelec)
         if ci1.size < ci0.size*1.02:
-            conv = True
+            # conv = True
             break
         e_last = e
         ci0 = ci1
@@ -411,7 +420,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

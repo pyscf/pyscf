@@ -4,7 +4,7 @@
 #
 
 '''
-Put SCF calculation in the background.  Tune the SCF solver on the runtime.
+Put SCF calculation in the background.  Tune the SCF solver at runtime.
 '''
 
 import time

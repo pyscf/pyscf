@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,13 +20,7 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
-import time
-import copy
-from functools import reduce
-import numpy
 from pyscf import lib
-from pyscf.dft import numint
-from pyscf.ao2mo import _ao2mo
 from pyscf.pbc.tdscf import krhf
 
 
@@ -38,14 +32,29 @@ RPA = KTDDFT = TDDFT = krhf.TDHF
 TDDFTNoHybrid = TDDFT
 
 
+def tddft(mf):
+    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    if mf._numint.libxc.is_hybrid_xc(mf.xc):
+        return TDDFT(mf)
+    else:
+        return TDDFTNoHybrid(mf)
+
+from pyscf.pbc import dft
+dft.krks.KRKS.TDA   = lib.class_as_method(KTDA)
+dft.krks.KRKS.TDHF  = None
+dft.krks.KRKS.TDDFT = tddft
+dft.kroks.KROKS.TDA   = None
+dft.kroks.KROKS.TDHF  = None
+dft.kroks.KROKS.TDDFT = None
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto
-    from pyscf.pbc import scf
     from pyscf.pbc import dft, df
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
-    C  0.          0.          0.        
+    C  0.          0.          0.
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
         shls_slice = (0, mol.nbas, 0, mol.nbas)
     nGv = Gv.shape[0]
     if (gxyz is None or b is None or Gvbase is None
-# backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
+        # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
@@ -112,7 +112,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
         shls_slice = (0, mol.nbas)
     nGv = Gv.shape[0]
     if (gxyz is None or b is None or Gvbase is None
-# backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
+        # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         GvT = numpy.asarray(Gv.T, order='C')
         p_gxyzT = lib.c_null_ptr()
@@ -149,7 +149,7 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
     nao = ao_loc[mol.nbas]
     ao_loc = numpy.asarray(numpy.hstack((ao_loc, [nao+1])), dtype=numpy.int32)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    mat = numpy.zeros((nGv,ni), order='F', dtype=numpy.complex)
+    mat = numpy.zeros((nGv,ni), order='F', dtype=numpy.complex128)
 
     shls_slice = shls_slice + (mol.nbas, mol.nbas+1)
     fn(intor, eval_gz, fill, mat.ctypes.data_as(ctypes.c_void_p),
@@ -165,8 +165,6 @@ def ft_ao(mol, Gv, shls_slice=None, b=numpy.eye(3),
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-
     mol = gto.Mole()
     mol.atom = '''C    1.3    .2       .3
                   C     .1    .1      1.1
@@ -188,9 +186,5 @@ if __name__ == '__main__':
     gxyz = lib.cartesian_prod((gxrange, gyrange, gzrange))
     Gv = 2*numpy.pi * numpy.dot(gxyz, b)
 
-    import time
-    print(time.clock())
     print(numpy.linalg.norm(ft_aopair(mol, Gv, None, 's1', b, gxyz, gs)) - 63.0239113778)
-    print(time.clock())
     print(numpy.linalg.norm(ft_ao(mol, Gv, None, b, gxyz, gs))-56.8273147065)
-    print(time.clock())

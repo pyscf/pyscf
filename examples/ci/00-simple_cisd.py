@@ -7,17 +7,17 @@
 A simple example to run CISD calculation.
 '''
 
-from pyscf import gto, scf, ci
+import pyscf
 
-mol = gto.M(
+mol = pyscf.M(
     atom = 'H 0 0 0; F 0 0 1.1',
     basis = 'ccpvdz')
 
-mf = scf.RHF(mol).run()
-mycc = ci.CISD(mf).run()
+mf = mol.HF().run()
+mycc = mf.CISD().run()
 print('RCISD correlation energy', mycc.e_corr)
 
-mf = scf.UHF(mol).run()
-mycc = ci.CISD(mf).run()
+mf = mol.UHF().run()
+mycc = mf.CISD().run()
 print('UCISD correlation energy', mycc.e_corr)
 

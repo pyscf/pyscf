@@ -20,13 +20,12 @@
 Non-relativistic Unrestricted Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import uhf
 from pyscf.dft import rks
-
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
@@ -40,7 +39,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         dm = numpy.asarray((dm*.5,dm*.5))
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -60,8 +59,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
+        if ks.nlc:
+            assert 'VV10' in ks.nlc.upper()
             _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1],
                                       max_memory=max_memory)
             exc += enlc
@@ -89,7 +88,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, ddm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, ddm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj = vj[0] + vj[1] + vhf_last.vj
@@ -99,7 +98,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = vj[0] + vj[1]
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, dm, omega, hermi, ks.opt)
+                vklr = ks.get_k(mol, dm, hermi, omega)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk
@@ -115,57 +114,79 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
+def get_vsap(ks, mol=None):
+    '''Superposition of atomic potentials
+
+    S. Lehtola, Assessment of initial guesses for self-consistent
+    field calculations. Superposition of Atomic Potentials: simple yet
+    efficient, J. Chem. Theory Comput. 15, 1593 (2019). DOI:
+    10.1021/acs.jctc.8b01089. arXiv:1810.11659.
+
+    This function evaluates the effective charge of a neutral atom,
+    given by exchange-only LDA on top of spherically symmetric
+    unrestricted Hartree-Fock calculations as described in
+
+    S. Lehtola, L. Visscher, E. Engel, Efficient implementation of the
+    superposition of atomic potentials initial guess for electronic
+    structure calculations in Gaussian basis sets, J. Chem. Phys., in
+    press (2020).
+
+    The potentials have been calculated for the ground-states of
+    spherically symmetric atoms at the non-relativistic level of theory
+    as described in
+
+    S. Lehtola, "Fully numerical calculations on atoms with fractional
+    occupations and range-separated exchange functionals", Phys. Rev. A
+    101, 012516 (2020). DOI: 10.1103/PhysRevA.101.012516
+
+    using accurate finite-element calculations as described in
+
+    S. Lehtola, "Fully numerical Hartree-Fock and density functional
+    calculations. I. Atoms", Int. J. Quantum Chem. e25945 (2019).
+    DOI: 10.1002/qua.25945
+
+    .. note::
+        This function will modify the input ks object.
+
+    Args:
+        ks : an instance of :class:`RKS`
+            XC functional are controlled by ks.xc attribute.  Attribute
+            ks.grids might be initialized.
+
+    Returns:
+        matrix Vsap = Vnuc + J + Vxc.
+    '''
+    Vsap = rks.get_vsap(ks, mol)
+    return numpy.asarray([Vsap, Vsap])
 
 def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if dm is None: dm = ks.make_rdm1()
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dm = numpy.array((dm*.5, dm*.5))
-    e1 = numpy.einsum('ij,ji', h1e, dm[0])
-    e1+= numpy.einsum('ij,ji', h1e, dm[1])
-    tot_e = e1 + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e.real, vhf.ecoul+vhf.exc
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        dm = dm[0] + dm[1]
+    return rks.energy_elec(ks, dm, h1e, vhf)
 
 
-class UKS(uhf.UHF):
+class UKS(rks.KohnShamDFT, uhf.UHF):
     '''Unrestricted Kohn-Sham
     See pyscf/dft/rks.py RKS class for document of the attributes'''
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         uhf.UHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         uhf.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        if self.nlc!='':
-            logger.info(self, 'NLC functional = %s', self.nlc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
+    get_vsap = get_vsap
     energy_elec = energy_elec
-    define_xc_ = rks.define_xc_
+
+    init_guess_by_vsap = rks.init_guess_by_vsap
 
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = UKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753
-

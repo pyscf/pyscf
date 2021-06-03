@@ -88,7 +88,7 @@ typedef struct {
 
 typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
                              double complex fac, double *Gv, double *b,
-                             int *gxyz, int *gs, size_t NGv);
+                             int *gxyz, int *gs, size_t NGv, double *cache);
 
 void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
                         int *atm, int natm, int *bas, int nbas, double *env);
@@ -105,10 +105,12 @@ void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
 
 int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                               FPtr_eval_gz eval_gz, double complex fac,
-                              double *Gv, double *b, int *gxyz, int *gs, size_t NGv);
+                              double *Gv, double *b, int *gxyz, int *gs,
+                              size_t NGv, double *cache);
 int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                              FPtr_eval_gz eval_gz, double complex fac,
-                             double *Gv, double *b, int *gxyz, int *gs,size_t NGv);
+                             double *Gv, double *b, int *gxyz, int *gs,
+                             size_t NGv, double *cache);
 
 int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
                      int (*eval_aopair)(), FPtr_eval_gz eval_gz, double complex fac,

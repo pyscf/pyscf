@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import numpy as np
+from pyscf import scf
+
 def convert_to_gcisd(myci):
-    from pyscf import scf
     from pyscf.ci import gcisd
     if isinstance(myci, gcisd.GCISD):
         return myci

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,18 +26,66 @@ much of the code below is adapted from code published freely on the website of G
 Ref: JCTC, 2013, 9, 4834-4843
 '''
 
-from time import time
 from functools import reduce
 import numpy
-import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lo import iao
 from pyscf.lo import orth, pipek
 from pyscf import __config__
 
+MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
-def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
-        verbose=logger.NOTE):
+def ibo(mol, orbocc, locmethod='IBO', iaos=None, s=None,
+        exponent=4, grad_tol=1e-8, max_iter=200, minao=MINAO, verbose=logger.NOTE):
+    '''Intrinsic Bonding Orbitals
+
+    This function serves as a wrapper to the underlying localization functions
+    ibo_loc and PipekMezey to create IBOs.
+
+    Args:
+        mol : the molecule or cell object
+
+        orbocc : occupied molecular orbital coefficients
+
+    Kwargs:
+        locmethod : string
+            the localization method 'PM' for Pipek Mezey localization or 'IBO' for the IBO localization
+
+        iaos : 2D array
+            the array of IAOs
+
+        s : 2D array
+            the overlap array in the ao basis
+
+    Returns:
+        IBOs in the basis defined in mol object.
+    '''
+
+    if s is None:
+        if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
+            if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
+                s = mol.pbc_intor('int1e_ovlp', hermi=1)
+            else:
+                raise NotImplementedError('k-points crystal orbitals')
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
+    if iaos is None:
+        iaos = iao.iao(mol, orbocc)
+
+    locmethod = locmethod.strip().upper()
+    if locmethod == 'PM':
+        EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', exponent)
+        ibos = PipekMezey(mol, orbocc, iaos, s, exponent=EXPONENT, minao=minao)
+        del(EXPONENT)
+    else:
+        ibos = ibo_loc(mol, orbocc, iaos, s, exponent=exponent,
+                       grad_tol=grad_tol, max_iter=max_iter,
+                       minao=minao, verbose=verbose)
+    return ibos
+
+def ibo_loc(mol, orbocc, iaos, s, exponent, grad_tol, max_iter,
+            minao=MINAO, verbose=logger.NOTE):
     '''Intrinsic Bonding Orbitals. [Ref. JCTC, 9, 4834]
 
     This implementation follows Knizia's implementation execept that the
@@ -68,23 +116,12 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     log = logger.new_logger(mol, verbose)
     assert(exponent in (2, 4))
 
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            ovlpS = mol.pbc_intor('int1e_ovlp', hermi=1)
-        else:
-            raise NotImplementedError('k-points crystal orbitals')
-    else:
-        ovlpS = mol.intor_symmetric('int1e_ovlp')
-
-    if iaos is None:
-        iaos = iao.iao(mol, orbocc)
-
     # Symmetrically orthogonalization of the IAO orbitals as Knizia's
     # implementation.  The IAO returned by iao.iao function is not orthogonal.
-    iaos = orth.vec_lowdin(iaos, ovlpS)
+    iaos = orth.vec_lowdin(iaos, s)
 
     #static variables
-    StartTime = time()
+    StartTime = logger.perf_counter()
     L  = 0 # initialize a value of the localization function for safety
     #max_iter = 20000 #for some reason the convergence of solid is slower
     #fGradConv = 1e-10 #this ought to be pumped up to about 1e-8 but for testing purposes it's fine
@@ -93,14 +130,16 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     #dynamic variables
     Converged = False
 
-    Atoms  = [mol.atom_symbol(i) for i in range(mol.natm)]
+    # render Atoms list without ghost atoms
+    iao_mol = iao.reference_mol(mol, minao=minao)
+    Atoms = [iao_mol.atom_pure_symbol(i) for i in range(iao_mol.natm)]
 
     #generates the parameters we need about the atomic structure
     nAtoms = len(Atoms)
     AtomOffsets = MakeAtomIbOffsets(Atoms)[0]
     iAtSl = [slice(AtomOffsets[A],AtomOffsets[A+1]) for A in range(nAtoms)]
     #converts the occupied MOs to the IAO basis
-    CIb = reduce(numpy.dot, (iaos.T, ovlpS , orbocc))
+    CIb = reduce(numpy.dot, (iaos.T, s , orbocc))
     numOccOrbitals = CIb.shape[1]
 
     log.debug("   {0:^5s} {1:^14s} {2:^11s} {3:^8s}"
@@ -158,7 +197,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         fGrad = fGrad**.5
 
         log.debug(" {0:5d} {1:12.8f} {2:11.2e} {3:8.2f}"
-                  .format(it+1, L**(1./exponent), fGrad, time()-StartTime))
+                  .format(it+1, L**(1./exponent), fGrad, logger.perf_counter()-StartTime))
         if fGrad < grad_tol:
             Converged = True
             break
@@ -175,9 +214,7 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
-EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
-
-def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
+def PipekMezey(mol, orbocc, iaos, s, exponent, minao=MINAO):
     '''
     Note this localization is slightly different to Knizia's implementation.
     The localization here reserves orthogonormality during optimization.
@@ -196,25 +233,15 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     >>> pm = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0])
     >>> loc_orb = pm.kernel()
     '''
-    if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
-        if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            s = mol.pbc_intor('int1e_ovlp', hermi=1)
-        else:
-            raise NotImplementedError('k-points crystal orbitals')
-    else:
-        s = mol.intor_symmetric('int1e_ovlp')
 
-    if iaos is None:
-        iaos = iao.iao(mol, orbocc)
-
-    # Different to Knizia's code, the reference IAOs are not neccessary
-    # orthogonal.
-    #iaos = orth.vec_lowdin(iaos, s)
+    # Note: PM with Lowdin-orth IAOs is implemented in pipek.PM class
+    # TODO: Merge the implemenation here to pipek.PM
 
     cs = numpy.dot(iaos.T.conj(), s)
     s_iao = numpy.dot(cs, iaos)
     iao_inv = numpy.linalg.solve(s_iao, cs)
-    iao_mol = iao.reference_mol(mol)
+    iao_mol = iao.reference_mol(mol, minao=minao)
+
     # Define the mulliken population of each atom based on IAO basis.
     # proj[i].trace is the mulliken population of atom i.
     def atomic_pops(mol, mo_coeff, method=None):
@@ -232,7 +259,22 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     return pm
 PM = Pipek = PipekMezey
 
-del(EXPONENT)
+
+def shell_str(l, n_cor, n_val):
+    '''
+    Help function to define core and valence shells for shell with different l
+    '''
+    cor_shell = [
+        "[{n}s]", "[{n}px] [{n}py] [{n}pz]",
+        "[{n}d0] [{n}d2-] [{n}d1+] [{n}d2+] [{n}d1-]",
+        "[{n}f1+] [{n}f1-] [{n}f0] [{n}f3+] [{n}f2-] [{n}f3-] [{n}f2+]"]
+    val_shell = [
+        l_str.replace('[', '').replace(']', '') for l_str in cor_shell]
+    l_str = ' '.join(
+        [cor_shell[l].format(n=i) for i in range(l + 1, l + 1 + n_cor)] +
+        [val_shell[l].format(n=i) for i in range(l + 1 + n_cor,
+                                                 l + 1 + n_cor + n_val)])
+    return l_str
 
 
 '''
@@ -258,6 +300,7 @@ def MakeAtomInfos():
     for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18/2+1+5+3
 
     AoLabels = {}
+
     def SetAo(At, AoDecl):
         Labels = AoDecl.split()
         AoLabels[At] = Labels
@@ -274,6 +317,79 @@ def MakeAtomInfos():
     for At in "K Ca".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz]")
     for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 3d0 3d2- 3d1+ 3d2+ 3d1-")
     for At in "Ga Ge As Se Br Kr".split(): SetAo(At, "[1s] [2s] [3s] 4s [2px] [2py] [2pz] [3px] [3py] [3pz] 4px 4py 4pz [3d0] [3d2-] [3d1+] [3d2+] [3d1-]")
+    for At in "Rb Sr".split():
+        nCoreX[At] = 36/2
+        nAoX[At] = nCoreX[At] + 1
+        SetAo(At, ' '.join ([shell_str(0,4,1),
+                             shell_str(1,3,0),
+                             shell_str(2,1,0)]))
+    for At in "Y Zr Nb Mo Tc Ru Rh Pd Ag Cd".split():
+        nCoreX[At] = 36/2
+        nAoX[At] = nCoreX[At] + 1 + 5
+        SetAo(At, ' '.join ([shell_str(0,4,1),
+                             shell_str(1,3,0),
+                             shell_str(2,1,1)]))
+    for At in "In Sn Sb Te I Xe".split():
+        nCoreX[At] = 36/2 + 5
+        nAoX[At] = nCoreX[At] + 1 + 3
+        SetAo(At, ' '.join ([shell_str(0,4,1),
+                             shell_str(1,3,1),
+                             shell_str(2,2,0)]))
+    for At in "Cs Ba".split():
+        nCoreX[At] = 54/2
+        nAoX[At] = nCoreX[At] + 1
+        SetAo(At, ' '.join ([shell_str(0,5,1),
+                             shell_str(1,4,0),
+                             shell_str(2,2,0)]))
+    for At in "Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu".split():
+        nCoreX[At] = 54/2
+        nAoX[At] = nCoreX[At] + 1 + 5 + 7
+        SetAo(At, ' '.join ([shell_str(0,5,1),
+                             shell_str(1,4,0),
+                             shell_str(2,2,1),
+                             shell_str(3,0,1)]))
+    for At in "La Hf Ta W Re Os Ir Pt Au Hg".split():
+        nCoreX[At] = 54/2 + 7
+        nAoX[At] = nCoreX[At] + 1 + 5
+        SetAo(At, ' '.join ([shell_str(0,5,1),
+                             shell_str(1,4,0),
+                             shell_str(2,2,1),
+                             shell_str(3,1,0)]))
+    for At in "Tl Pb Bi Po At Rn".split():
+        nCoreX[At] = 54/2 + 7 + 5
+        nAoX[At] = nCoreX[At] + 1 + 3
+        SetAo(At, ' '.join ([shell_str(0,5,1),
+                             shell_str(1,4,1),
+                             shell_str(2,3,0),
+                             shell_str(3,1,0)]))
+    for At in "Fr Ra".split():
+        nCoreX[At] = 86/2
+        nAoX[At] = nCoreX[At] + 1
+        SetAo(At, ' '.join ([shell_str(0,6,1),
+                             shell_str(1,5,0),
+                             shell_str(2,3,0),
+                             shell_str(3,1,0)]))
+    for At in "Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No".split():
+        nCoreX[At] = 86/2
+        nAoX[At] = nCoreX[At] + 1 + 5 + 7
+        SetAo(At, ' '.join ([shell_str(0,6,1),
+                             shell_str(1,5,0),
+                             shell_str(2,3,1),
+                             shell_str(3,1,1)]))
+    for At in "Ac Lr Rf Db Sg Bh Hs Mt Ds Rg Cn".split():
+        nCoreX[At] = 86/2 + 7
+        nAoX[At] = nCoreX[At] + 1 + 5
+        SetAo(At, ' '.join ([shell_str(0,6,1),
+                             shell_str(1,5,0),
+                             shell_str(2,3,1),
+                             shell_str(3,2,0)]))
+    for At in "Nh Fl Mc Lv Ts Og".split():
+        nCoreX[At] = 86/2 + 7 + 5
+        nAoX[At] = nCoreX[At] + 1 + 3
+        SetAo(At, ' '.join ([shell_str(0,6,1),
+                             shell_str(1,5,1),
+                             shell_str(2,4,0),
+                             shell_str(3,2,0)]))
     # note: f order is '4f1+','4f1-','4f0','4f3+','4f2-','4f3-','4f2+',
 
     return nCoreX, nAoX, AoLabels
@@ -285,6 +401,8 @@ def MakeAtomIbOffsets(Atoms):
     nCoreX, nAoX, AoLabels = MakeAtomInfos()
     iBfAt = [0]
     for Atom in Atoms:
+        Atom = ''.join(char for char in Atom if char.isalpha())
         iBfAt.append(iBfAt[-1] + nAoX[Atom])
     return iBfAt, nCoreX, nAoX, AoLabels
 
+del(MINAO)

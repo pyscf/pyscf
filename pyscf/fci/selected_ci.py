@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,11 @@
 #
 
 '''
-Selected CI
+Selected CI.
+
+This is an inefficient dialect of Selected CI using the same structure as
+determinant based FCI algorithm. For the efficient Selected CI programs,
+Dice program (https://github.com/sanshar/Dice.git) is a good candidate.
 
 Simple usage::
 
@@ -41,6 +45,7 @@ from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
+@lib.with_doc(direct_spin1.contract_2e.__doc__)
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
     ci_coeff, nelec, ci_strs = _unpack(civec_strs, nelec)
     if link_index is None:
@@ -81,6 +86,13 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
                                    ctypes.c_int(ma), ctypes.c_int(mlinka),
                                    dd_indexa.ctypes.data_as(ctypes.c_void_p))
 
+    # Adding h_ps below to because contract_2e function computes the
+    # contraction  "E_{pq}E_{rs} V_{pqrs} |CI>" (~ p^+ q r^+ s |CI>) while
+    # the actual contraction for (aa|aa) and (bb|bb) part is
+    # "p^+ r^+ s q V_{pqrs} |CI>". To make (aa|aa) and (bb|bb) code reproduce
+    # "p^+ q r^+ s |CI>", we employ the identity
+    #    p^+ q r^+ s = p^+ r^+ s q  +  delta(qr) p^+ s
+    # the second term is the source of h_ps
     h_ps = numpy.einsum('pqqs->ps', eri)
     eri1 = eri * 2
     for k in range(norb):
@@ -401,7 +413,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     e_last = 0
     float_tol = myci.start_tol
     tol_decay_rate = myci.tol_decay_rate
-    conv = False
+    # conv = False
     for icycle in range(norb):
         ci_strs = ci0[0]._strs
         float_tol = max(float_tol*tol_decay_rate, tol*1e2)
@@ -425,7 +437,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
             log.info('cycle %d  E = %.15g  dE = %.8g', icycle, e+ecore, de)
 
         if ci0[0].shape == (namax,nbmax) or abs(de) < tol*1e3:
-            conv = True
+            # conv = True
             break
 
         last_ci0_size = float(len(ci_strs[0])), float(len(ci_strs[1]))
@@ -434,7 +446,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
         nb = len(ci0[0]._strs[1])
         if ((.99 < na/last_ci0_size[0] < 1.01) and
             (.99 < nb/last_ci0_size[1] < 1.01)):
-            conv = True
+            # conv = True
             break
 
     ci_strs = ci0[0]._strs
@@ -468,7 +480,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   **kwargs)
 
 def make_rdm1s(civec_strs, norb, nelec, link_index=None):
-    '''Spin separated 1-particle density matrices.
+    r'''Spin separated 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta)
 
     dm1[p,q] = <q^\dagger p>
@@ -735,9 +747,9 @@ class SelectedCI(direct_spin1.FCISolver):
         logger.info(self, 'select_cutoff   %g', self.select_cutoff)
 
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
-# The argument civec_strs is a CI vector in function FCISolver.contract_2e.
-# Save and patch self._strs to make this contract_2e function compatible to
-# FCISolver.contract_2e.
+        # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
+        # Save and patch self._strs to make this contract_2e function compatible to
+        # FCISolver.contract_2e.
         if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
@@ -912,7 +924,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
     from pyscf.fci import spin_op
     from pyscf.fci import addons
 

@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -167,12 +166,13 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                   unsigned char *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(vv, 0, sizeof(double) * nao * nao);
+        size_t Nao = nao;
+        NPdset0(vv, Nao * Nao);
 
 #pragma omp parallel
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao+2, sizeof(double));
+        double *v_priv = calloc(Nao*Nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;
@@ -182,7 +182,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
         }
 #pragma omp critical
         {
-                for (ip = 0; ip < nao*nao; ip++) {
+                for (ip = 0; ip < Nao*Nao; ip++) {
                         vv[ip] += v_priv[ip];
                 }
         }
@@ -238,6 +238,42 @@ void VXC_dcontract_rho(double *rho, double *bra, double *ket,
                 for (j = b0; j < b1; j++) {
                         rho[j] += bra[i*Ngrids+j] * ket[i*Ngrids+j];
                 } }
+        }
+}
+}
+
+void VXC_vv10nlc(double *Fvec, double *Uvec, double *Wvec,
+                 double *vvcoords, double *coords,
+                 double *W0p, double *W0, double *K, double *Kp, double *RpW,
+                 int vvngrids, int ngrids)
+{
+#pragma omp parallel
+{
+        double DX, DY, DZ, R2;
+        double gp, g, gt, T, F, U, W;
+        int i, j;
+#pragma omp for schedule(static)
+        for (i = 0; i < ngrids; i++) {
+                F = 0;
+                U = 0;
+                W = 0;
+                for (j = 0; j < vvngrids; j++) {
+                        DX = vvcoords[j*3+0] - coords[i*3+0];
+                        DY = vvcoords[j*3+1] - coords[i*3+1];
+                        DZ = vvcoords[j*3+2] - coords[i*3+2];
+                        R2 = DX*DX + DY*DY + DZ*DZ;
+                        gp = R2*W0p[j] + Kp[j];
+                        g  = R2*W0[i] + K[i];
+                        gt = g + gp;
+                        T = RpW[j] / (g*gp*gt);
+                        F += T;
+                        T *= 1./g + 1./gt;
+                        U += T;
+                        W += T * R2;
+                }
+                Fvec[i] = F * -1.5;
+                Uvec[i] = U;
+                Wvec[i] = W;
         }
 }
 }

@@ -38,8 +38,6 @@ def make60(b5, b6):
     theta2 = (numpy.pi - theta1) * .5
     r = (b5*2+b6)/2/numpy.sin(theta1/2)
     rot72 = rotmatz(numpy.pi*2/5)
-    s1 = numpy.sin(theta1)
-    c1 = numpy.cos(theta1)
     s2 = numpy.sin(theta2)
     c2 = numpy.cos(theta2)
     p1 = numpy.array(( s2*b5,  0, r-c2*b5))
@@ -73,7 +71,6 @@ def make60(b5, b6):
 
 def make12(b):
     theta1 = numpy.arccos(1/numpy.sqrt(5))
-    theta2 = (numpy.pi - theta1) * .5
     r = b/2/numpy.sin(theta1/2)
     rot72 = rotmatz(numpy.pi*2/5)
     s1 = numpy.sin(theta1)

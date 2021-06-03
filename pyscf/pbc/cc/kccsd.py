@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 import numpy
 from functools import reduce
 
@@ -27,9 +27,9 @@ from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.cc import ccsd
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nmo, get_nocc,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates as imdk
-from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 
 DEBUG = False
@@ -66,7 +66,7 @@ def energy(cc, t1, t2, eris):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -77,8 +77,6 @@ def update_amps(cc, t1, t2, eris):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:].copy()
-    foo = fock[:, :nocc, :nocc].copy()
-    fvv = fock[:, nocc:, nocc:].copy()
 
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
@@ -231,7 +229,11 @@ def spatial2spin(tx, orbspin, kconserv):
         return spatial2spin((tx,tx), orbspin, kconserv)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 7:
         # KRCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,2,4,3,5,6)
+        t2aa = numpy.zeros_like(tx)
+        nkpts = t2aa.shape[2]
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            t2aa[ki,kj,ka] = tx[ki,kj,ka] - tx[ki,kj,kb].transpose(0,1,3,2)
         return spatial2spin((t2aa,tx,t2aa), orbspin, kconserv)
     elif len(tx) == 2:  # KUCCSD t1
         t1a, t1b = tx
@@ -328,11 +330,12 @@ def spin2spatial(tx, orbspin, kconserv):
 
 
 class GCCSD(gccsd.GCCSD):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert (isinstance(mf, scf.khf.KSCF))
         if not isinstance(mf, scf.kghf.KGHF):
             mf = scf.addons.convert_to_ghf(mf)
         self.kpts = mf.kpts
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         gccsd.GCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @property
@@ -350,7 +353,7 @@ class GCCSD(gccsd.GCCSD):
         return self
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -359,9 +362,6 @@ class GCCSD(gccsd.GCCSD):
         t1 = numpy.zeros((nkpts, nocc, nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=numpy.complex128)
         self.emp2 = 0
-        foo = eris.fock[:, :nocc, :nocc].copy()
-        fvv = eris.fock[:, nocc:, nocc:].copy()
-        fov = eris.fock[:, :nocc, nocc:].copy()
         eris_oovv = eris.oovv.copy()
 
         # Get location of padded elements in occupied and virtual space
@@ -471,14 +471,13 @@ def _make_eris_incore(cc, mo_coeff=None):
     from pyscf.pbc.cc.ccsd import _adjust_occ
 
     log = logger.Logger(cc.stdout, cc.verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = gccsd._PhysicistsERIs()
     cell = cc._scf.cell
     kpts = cc.kpts
     nkpts = cc.nkpts
     nocc = cc.nocc
     nmo = cc.nmo
-    nvir = nmo - nocc
     eris.nocc = nocc
 
     #if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k] > 0) for k in range(nkpts)):
@@ -539,9 +538,11 @@ def _make_eris_incore(cc, mo_coeff=None):
     with lib.temporary_env(cc._scf, exxdiv=None):
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        vhf = cc._scf.get_veff(cell, dm)
+    fockao = cc._scf.get_hcore() + vhf
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in
@@ -577,16 +578,20 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
             eri_kpt += fao2mo(
-                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
@@ -599,7 +604,8 @@ def _make_eris_incore(cc, mo_coeff=None):
         for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp, kq, kr]
             eri_kpt = fao2mo(
-                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]),
+                (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                 compact=False)
 
             eri_kpt[(eris.orbspin[kp][:, None] != eris.orbspin[kq]).ravel()] = 0
@@ -710,7 +716,7 @@ class _IMDS:
         self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -722,7 +728,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -748,7 +754,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -773,7 +779,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
@@ -786,7 +792,7 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv, self._fimd['vovv'])
-        if ea_partition == 'mp' and np.all(t1 == 0):
+        if ea_partition == 'mp' and numpy.all(t1 == 0):
             self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv, self._fimd['vvvo'])
         else:
             self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv, self._fimd['vvvv'])
@@ -794,8 +800,12 @@ class _IMDS:
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
+
+scf.kghf.KGHF.CCSD = lib.class_as_method(KGCCSD)
+
+
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto
 
     cell = gto.Cell()
     cell.atom='''

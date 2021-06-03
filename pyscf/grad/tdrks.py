@@ -19,13 +19,11 @@
 # J. Chem. Phys. 117, 7433
 #
 
-import time
-import copy
+
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf import dft
 from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.scf import cphf
@@ -36,10 +34,20 @@ from pyscf.grad import tdrhf
 #
 # Given Y = 0, TDDFT gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, singlet=True, atmlst=None,
-           max_memory=2000, verbose=logger.INFO):
+def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
+              max_memory=2000, verbose=logger.INFO):
+    '''
+    Electronic part of TDA, TDDFT nuclear gradients
+
+    Args:
+        td_grad : grad.tdrhf.Gradients or grad.tdrks.Gradients object.
+
+        x_y : a two-element list of numpy arrays
+            TDDFT X and Y amplitudes. If Y is set to 0, this function computes
+            TDA energy gradients.
+    '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -57,8 +65,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 
     dvv = numpy.einsum('ai,bi->ab', xpy, xpy) + numpy.einsum('ai,bi->ab', xmy, xmy)
     doo =-numpy.einsum('ai,aj->ij', xpy, xpy) - numpy.einsum('ai,aj->ij', xmy, xmy)
-    dmzvop = reduce(numpy.dot, (orbv, xpy, orbo.T))
-    dmzvom = reduce(numpy.dot, (orbv, xmy, orbo.T))
+    dmxpy = reduce(numpy.dot, (orbv, xpy, orbo.T))
+    dmxmy = reduce(numpy.dot, (orbv, xmy, orbo.T))
     dmzoo = reduce(numpy.dot, (orbo, doo, orbo.T))
     dmzoo+= reduce(numpy.dot, (orbv, dvv, orbv.T))
 
@@ -70,19 +78,18 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     # dm0 = mf.make_rdm1(mo_coeff, mo_occ), but it is not used when computing
     # fxc since rho0 is passed to fxc function.
-    dm0 = None
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     f1vo, f1oo, vxc1, k1ao = \
-            _contract_xc_kernel(td_grad, mf.xc, dmzvop,
+            _contract_xc_kernel(td_grad, mf.xc, dmxpy,
                                 dmzoo, True, True, singlet, max_memory)
 
     if abs(hyb) > 1e-10:
-        dm = (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        dm = (dmzoo, dmxpy+dmxpy.T, dmxmy-dmxmy.T)
         vj, vk = mf.get_jk(mol, dm, hermi=0)
         vk *= hyb
         if abs(omega) > 1e-10:
-            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+            vk += mf.get_k(mol, dm, hermi=0, omega=omega) * (alpha-hyb)
         veff0doo = vj[0] * 2 - vk[0] + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
@@ -97,7 +104,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
     else:
-        vj = mf.get_j(mol, (dmzoo, dmzvop+dmzvop.T), hermi=1)
+        vj = mf.get_j(mol, (dmzoo, dmxpy+dmxpy.T), hermi=1)
         veff0doo = vj[0] * 2 + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
@@ -108,40 +115,21 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
         veff0mom = numpy.zeros((nmo,nmo))
+
+    # set singlet=None, generate function for CPHF type response kernel
+    vresp = mf.gen_response(singlet=None, hermi=1)
     def fvind(x):
-# Cannot make call to .base.get_vind because first order orbitals are solved
-# through closed shell ground state CPHF.
-        dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
-        dm = dm + dm.T
-# Call singlet XC kernel contraction, for closed shell ground state
-        vindxc = numint.nr_rks_fxc_st(ni, mol, mf.grids, mf.xc, dm0, dm, 0,
-                                      singlet, rho0, vxc, fxc, max_memory)
-        if abs(hyb) > 1e-10:
-            vj, vk = mf.get_jk(mol, dm)
-            veff = vj * 2 - hyb * vk + vindxc
-            if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm, omega, hermi=1) * (alpha-hyb)
-        else:
-            vj = mf.get_j(mol, dm)
-            veff = vj * 2 + vindxc
-        return reduce(numpy.dot, (orbv.T, veff, orbo)).ravel()
+        dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc)*2, orbo.T))
+        v1ao = vresp(dm+dm.T)
+        return reduce(numpy.dot, (orbv.T, v1ao, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,
-                    max_cycle=td_grad.cphf_max_cycle, tol=td_grad.cphf_conv_tol)[0]
+                    max_cycle=td_grad.cphf_max_cycle,
+                    tol=td_grad.cphf_conv_tol)[0]
     z1 = z1.reshape(nvir,nocc)
     time1 = log.timer('Z-vector using CPHF solver', *time0)
 
     z1ao  = reduce(numpy.dot, (orbv, z1, orbo.T))
-# Note Z-vector is always associated to singlet integrals.
-    fxcz1 = _contract_xc_kernel(td_grad, mf.xc, z1ao, None,
-                                False, False, True, max_memory)[0]
-    if abs(hyb) > 1e-10:
-        vj, vk = mf.get_jk(mol, z1ao, hermi=0)
-        veff = vj * 2 - hyb * vk + fxcz1[0]
-        if abs(omega) > 1e-10:
-            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
-    else:
-        vj = mf.get_j(mol, z1ao, hermi=1)
-        veff = vj * 2 + fxcz1[0]
+    veff = vresp(z1ao+z1ao.T)
 
     im0 = numpy.zeros((nmo,nmo))
     im0[:nocc,:nocc] = reduce(numpy.dot, (orbo.T, veff0doo+veff, orbo))
@@ -162,13 +150,16 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    hcore_deriv = td_grad.hcore_generator(mol)
-    s1 = td_grad.get_ovlp(mol)
+    # Initialize hcore_deriv with the underlying SCF object because some
+    # extensions (e.g. QM/MM, solvent) modifies the SCF object only.
+    mf_grad = td_grad.base._scf.nuc_grad_method()
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
     if abs(hyb) > 1e-10:
-        dm = (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        dm = (oo0, dmz1doo+dmz1doo.T, dmxpy+dmxpy.T, dmxmy-dmxmy.T)
         vj, vk = td_grad.get_jk(mol, dm)
         vk *= hyb
         if abs(omega) > 1e-10:
@@ -181,13 +172,17 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         else:
             veff1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
     else:
-        vj = td_grad.get_j(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T))
+        vj = td_grad.get_j(mol, (oo0, dmz1doo+dmz1doo.T, dmxpy+dmxpy.T))
         vj = vj.reshape(-1,3,nao,nao)
         veff1 = numpy.zeros((4,3,nao,nao))
         if singlet:
             veff1[:3] = vj * 2
         else:
             veff1[:2] = vj[:2] * 2
+
+    fxcz1 = _contract_xc_kernel(td_grad, mf.xc, z1ao, None,
+                                False, False, True, max_memory)[0]
+
     veff1[0] += vxc1[1:]
     veff1[1] +=(f1oo[1:] + fxcz1[1:] + k1ao[1:]*2)*2 # *2 for dmz1doo+dmz1oo.T
     veff1[2] += f1vo[1:] * 2
@@ -212,15 +207,16 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         e1 -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
         e1 += numpy.einsum('xij,ij->x', veff1[1,:,p0:p1], oo0[p0:p1])
-        e1 += numpy.einsum('xij,ij->x', veff1[2,:,p0:p1], dmzvop[p0:p1,:]) * 2
-        e1 += numpy.einsum('xij,ij->x', veff1[3,:,p0:p1], dmzvom[p0:p1,:]) * 2
-        e1 += numpy.einsum('xji,ij->x', veff1[2,:,p0:p1], dmzvop[:,p0:p1]) * 2
-        e1 -= numpy.einsum('xji,ij->x', veff1[3,:,p0:p1], dmzvom[:,p0:p1]) * 2
+        e1 += numpy.einsum('xij,ij->x', veff1[2,:,p0:p1], dmxpy[p0:p1,:]) * 2
+        e1 += numpy.einsum('xij,ij->x', veff1[3,:,p0:p1], dmxmy[p0:p1,:]) * 2
+        e1 += numpy.einsum('xji,ij->x', veff1[2,:,p0:p1], dmxpy[:,p0:p1]) * 2
+        e1 -= numpy.einsum('xji,ij->x', veff1[3,:,p0:p1], dmxmy[:,p0:p1]) * 2
 
         de[k] = e1
 
     log.timer('TDDFT nuclear gradients', *time0)
     return de
+
 
 # dmvo, dmoo in AO-representation
 # Note spin-trace is applied for fxc, kxc
@@ -336,8 +332,9 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
 
 class Gradients(tdrhf.Gradients):
+    @lib.with_doc(grad_elec.__doc__)
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        return grad_elec(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
 Grad = Gradients
 
@@ -347,7 +344,6 @@ tdscf.rks.TDA.Gradients = tdscf.rks.TDDFT.Gradients = lib.class_as_method(Gradie
 
 if __name__ == '__main__':
     from pyscf import gto
-    from pyscf import scf
     from pyscf import dft
     from pyscf import tddft
     mol = gto.Mole()

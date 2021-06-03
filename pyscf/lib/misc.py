@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,21 +17,24 @@
 #
 
 '''
-Some hacky functions
+Some helper functions
 '''
 
 import os, sys
 import warnings
-import imp
 import tempfile
-import shutil
 import functools
 import itertools
-import math
-import types
 import ctypes
 import numpy
 import h5py
+from threading import Thread
+from multiprocessing import Queue, Process
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    ThreadPoolExecutor = None
+
 from pyscf.lib import param
 from pyscf import __config__
 
@@ -39,33 +42,27 @@ if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
                      'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
-if h5py.version.version[:2] == '3.':
-    h5py.get_config().default_file_mode = 'a'
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
 def load_library(libname):
-# numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
-    if '1.6' in numpy.__version__:
-        if (sys.platform.startswith('linux') or
-            sys.platform.startswith('gnukfreebsd')):
-            so_ext = '.so'
-        elif sys.platform.startswith('darwin'):
-            so_ext = '.dylib'
-        elif sys.platform.startswith('win'):
-            so_ext = '.dll'
-        else:
-            raise OSError('Unknown platform')
-        libname_so = libname + so_ext
-        return ctypes.CDLL(os.path.join(os.path.dirname(__file__), libname_so))
-    else:
+    try:
         _loaderpath = os.path.dirname(__file__)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
+    except OSError:
+        from pyscf import __path__ as ext_modules
+        for path in ext_modules:
+            libpath = os.path.join(path, 'lib')
+            if os.path.isdir(libpath):
+                for files in os.listdir(libpath):
+                    if files.startswith(libname):
+                        return numpy.ctypeslib.load_library(libname, libpath)
+        raise
 
 #Fixme, the standard resouce module gives wrong number when objects are released
-#see http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
+# http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
@@ -264,6 +261,45 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def map_with_prefetch(func, *iterables):
+    '''
+    Apply function to an task and prefetch the next task
+    '''
+    global_import_lock = False
+    if sys.version_info < (3, 6):
+        import imp
+        global_import_lock = imp.lock_held()
+
+    if global_import_lock:
+        for task in zip(*iterables):
+            yield func(*task)
+
+    elif ThreadPoolExecutor is not None:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = None
+            for task in zip(*iterables):
+                if future is None:
+                    future = executor.submit(func, *task)
+                else:
+                    result = future.result()
+                    future = executor.submit(func, *task)
+                    yield result
+            if future is not None:
+                yield future.result()
+    else:
+        def func_with_buf(_output_buf, *args):
+            _output_buf[0] = func(*args)
+        with call_in_background(func_with_buf) as f_prefetch:
+            buf0, buf1 = [None], [None]
+            for istep, task in enumerate(zip(*iterables)):
+                if istep == 0:
+                    f_prefetch(buf0, *task)
+                else:
+                    buf0, buf1 = buf1, buf0
+                    f_prefetch(buf0, *task)
+                    yield buf1[0]
+        if buf0[0] is not None:
+            yield buf0[0]
 
 def index_tril_to_pair(ij):
     '''Given tril-index ij, compute the pair indices (i,j) which satisfy
@@ -412,6 +448,7 @@ class omnimethod(object):
         return functools.partial(self.func, instance)
 
 
+SANITY_CHECK = getattr(__config__, 'SANITY_CHECK', True)
 class StreamObject(object):
     '''For most methods, there are three stream functions to pipe computing stream:
 
@@ -474,12 +511,15 @@ class StreamObject(object):
         self.kernel(*args)
         return self
 
-    def set(self, **kwargs):
+    def set(self, *args, **kwargs):
         '''
         Update the attributes of the current object.  The return value of
         method set is the object itself.  This allows a series of
         functions/methods to be executed in pipe.
         '''
+        if args:
+            warnings.warn('method set() only supports keyword arguments.\n'
+                          'Arguments %s are ignored.' % args)
         #if getattr(self, '_keys', None):
         #    for k,v in kwargs.items():
         #        setattr(self, k, v)
@@ -490,6 +530,9 @@ class StreamObject(object):
         for k,v in kwargs.items():
             setattr(self, k, v)
         return self
+
+    # An alias to .set method
+    __call__ = set
 
     def apply(self, fn, *args, **kwargs):
         '''
@@ -511,7 +554,8 @@ class StreamObject(object):
         return value of method set is the object itself.  This allows a series
         of functions/methods to be executed in pipe.
         '''
-        if (self.verbose > 0 and  # logger.QUIET
+        if (SANITY_CHECK and
+            self.verbose > 0 and  # logger.QUIET
             getattr(self, '_keys', None)):
             check_sanity(self, self._keys, self.stdout)
         return self
@@ -616,58 +660,8 @@ def class_as_method(cls):
         return cls(obj, *args, **kwargs)
     fn.__doc__ = cls.__doc__
     fn.__name__ = cls.__name__
+    fn.__module__ = cls.__module__
     return fn
-
-def import_as_method(fn, default_keys=None):
-    '''
-    The statement "fn1 = import_as_method(fn, default_keys=['a','b'])"
-    in a class is equivalent to define the following method in the class:
-
-    .. code-block:: python
-        def fn1(self, ..., a=None, b=None, ...):
-            if a is None: a = self.a
-            if b is None: b = self.b
-            return fn(..., a, b, ...)
-    '''
-    code_obj = fn.__code__
-# Add the default_keys as kwargs in CodeType is very complicated
-#    new_code_obj = types.CodeType(code_obj.co_argcount+1,
-#                                  code_obj.co_nlocals,
-#                                  code_obj.co_stacksize,
-#                                  code_obj.co_flags,
-#                                  code_obj.co_code,
-#                                  code_obj.co_consts,
-#                                  code_obj.co_names,
-## As a class method, the first argument should be self
-#                                  ('self',) + code_obj.co_varnames,
-#                                  code_obj.co_filename,
-#                                  code_obj.co_name,
-#                                  code_obj.co_firstlineno,
-#                                  code_obj.co_lnotab,
-#                                  code_obj.co_freevars,
-#                                  code_obj.co_cellvars)
-#    clsmethod = types.FunctionType(new_code_obj, fn.__globals__)
-#    clsmethod.__defaults__ = fn.__defaults__
-
-    # exec is a bad solution here.  But I didn't find a better way to
-    # implement this for now.
-    nargs = code_obj.co_argcount
-    argnames = code_obj.co_varnames[:nargs]
-    defaults = fn.__defaults__
-    new_code_str = 'def clsmethod(self, %s):\n' % (', '.join(argnames))
-    if default_keys is not None:
-        for k in default_keys:
-            new_code_str += '    if %s is None: %s = self.%s\n' % (k, k, k)
-        if defaults is None:
-            defaults = (None,) * nargs
-        else:
-            defaults = (None,) * (nargs-len(defaults)) + defaults
-    new_code_str += '    return %s(%s)\n' % (fn.__name__, ', '.join(argnames))
-    exec(new_code_str, fn.__globals__, locals())
-
-    clsmethod.__name__ = fn.__name__
-    clsmethod.__defaults__ = defaults
-    return clsmethod
 
 def overwrite_mro(obj, mro):
     '''A hacky function to overwrite the __mro__ attribute'''
@@ -695,8 +689,6 @@ def izip(*args):
     else:
         return zip(*args)
 
-from threading import Thread
-from multiprocessing import Queue, Process
 class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
@@ -737,10 +729,10 @@ class ThreadWithReturnValue(Thread):
         if self._e is not None:
             raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
         else:
-# Note: If the return value of target is huge, Queue.get may raise
-# SystemError: NULL result without error in PyObject_Call
-# It is because return value is cached somewhere by pickle but pickle is
-# unable to handle huge amount of data.
+            # Note: If the return value of target is huge, Queue.get may raise
+            # SystemError: NULL result without error in PyObject_Call
+            # It is because return value is cached somewhere by pickle but pickle is
+            # unable to handle huge amount of data.
             return self._q.get()
     get = join
 
@@ -804,7 +796,8 @@ class call_in_background(object):
 
     def __init__(self, *fns, **kwargs):
         self.fns = fns
-        self.handler = None
+        self.executor = None
+        self.handlers = [None] * len(self.fns)
         self.sync = kwargs.get('sync', not ASYNC_IO)
 
     if h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
@@ -817,37 +810,69 @@ class call_in_background(object):
 
     else:
         def __enter__(self):
-            if self.sync or imp.lock_held():
-# Some modules like nosetests, coverage etc
-#   python -m unittest test_xxx.py  or  nosetests test_xxx.py
-# hang when Python multi-threading was used in the import stage due to (Python
-# import lock) bug in the threading module.  See also
-# https://github.com/paramiko/paramiko/issues/104
-# https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-# Disable the asynchoronous mode for safe importing
-                def def_async_fn(fn):
-                    return fn
+            fns = self.fns
+            handlers = self.handlers
+            ntasks = len(self.fns)
 
-            else:
-                # Enable back-ground mode
-                def def_async_fn(fn):
+            global_import_lock = False
+            if sys.version_info < (3, 6):
+                import imp
+                global_import_lock = imp.lock_held()
+
+            if self.sync or global_import_lock:
+                # Some modules like nosetests, coverage etc
+                #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
+                # hang when Python multi-threading was used in the import stage due to (Python
+                # import lock) bug in the threading module.  See also
+                # https://github.com/paramiko/paramiko/issues/104
+                # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
+                # Disable the asynchoronous mode for safe importing
+                def def_async_fn(i):
+                    return fns[i]
+
+            elif ThreadPoolExecutor is None: # async mode, old python
+                def def_async_fn(i):
                     def async_fn(*args, **kwargs):
-                        if self.handler is not None:
-                            self.handler.join()
-                        self.handler = ThreadWithTraceBack(target=fn, args=args,
-                                                           kwargs=kwargs)
-                        self.handler.start()
-                        return self.handler
+                        if self.handlers[i] is not None:
+                            self.handlers[i].join()
+                        self.handlers[i] = ThreadWithTraceBack(target=fns[i], args=args,
+                                                               kwargs=kwargs)
+                        self.handlers[i].start()
+                        return self.handlers[i]
+                    return async_fn
+
+            else: # multiple executors in async mode, python 2.7.12 or newer
+                executor = self.executor = ThreadPoolExecutor(max_workers=ntasks)
+                def def_async_fn(i):
+                    def async_fn(*args, **kwargs):
+                        if handlers[i] is not None:
+                            try:
+                                handlers[i].result()
+                            except Exception as e:
+                                raise ThreadRuntimeError('Error on thread %s:\n%s'
+                                                         % (self, e))
+                        handlers[i] = executor.submit(fns[i], *args, **kwargs)
+                        return handlers[i]
                     return async_fn
 
             if len(self.fns) == 1:
-                return def_async_fn(self.fns[0])
+                return def_async_fn(0)
             else:
-                return [def_async_fn(fn) for fn in self.fns]
+                return [def_async_fn(i) for i in range(ntasks)]
 
     def __exit__(self, type, value, traceback):
-        if self.handler is not None:
-            self.handler.join()
+        for handler in self.handlers:
+            if handler is not None:
+                try:
+                    if ThreadPoolExecutor is None:
+                        handler.join()
+                    else:
+                        handler.result()
+                except Exception as e:
+                    raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, e))
+
+        if self.executor is not None:
+            self.executor.shutdown(wait=True)
 
 
 class H5TmpFile(h5py.File):
@@ -869,24 +894,28 @@ class H5TmpFile(h5py.File):
     >>> from pyscf import lib
     >>> ftmp = lib.H5TmpFile()
     '''
-    def __init__(self, filename=None, *args, **kwargs):
+    def __init__(self, filename=None, mode='a', *args, **kwargs):
         if filename is None:
             tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
             filename = tmpfile.name
-        h5py.File.__init__(self, filename, *args, **kwargs)
+        h5py.File.__init__(self, filename, mode, *args, **kwargs)
 #FIXME: Does GC flush/close the HDF5 file when releasing the resource?
 # To make HDF5 file reusable, file has to be closed or flushed
     def __del__(self):
         try:
             self.close()
+        except AttributeError:  # close not defined in old h5py
+            pass
         except ValueError:  # if close() is called twice
+            pass
+        except ImportError:  # exit program before de-referring the object
             pass
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
-finger = fingerprint
+finger = fp = fingerprint
 
 
 def ndpointer(*args, **kwargs):
@@ -915,7 +944,7 @@ class GradScanner:
 
     @property
     def converged(self):
-# Some base methods like MP2 does not have the attribute converged
+        # Some base methods like MP2 does not have the attribute converged
         conv = getattr(self.base, 'converged', True)
         return conv
 
@@ -973,6 +1002,63 @@ class light_speed(temporary_env):
     def __enter__(self):
         temporary_env.__enter__(self)
         return self.c
+
+def repo_info(repo_path):
+    '''
+    Repo location, version, git branch and commit ID
+    '''
+
+    def git_version(orig_head, head, branch):
+        git_version = []
+        if orig_head:
+            git_version.append('GIT ORIG_HEAD %s' % orig_head)
+        if branch:
+            git_version.append('GIT HEAD (branch %s) %s' % (branch, head))
+        elif head:
+            git_version.append('GIT HEAD      %s' % head)
+        return '\n'.join(git_version)
+
+    repo_path = os.path.abspath(repo_path)
+
+    if os.path.isdir(os.path.join(repo_path, '.git')):
+        git_str = git_version(*git_info(repo_path))
+
+    elif os.path.isdir(os.path.abspath(os.path.join(repo_path, '..', '.git'))):
+        repo_path = os.path.abspath(os.path.join(repo_path, '..'))
+        git_str = git_version(*git_info(repo_path))
+
+    else:
+        git_str = None
+
+    # TODO: Add info of BLAS, libcint, libxc, libxcfun, tblis if applicable
+
+    info = {'path': repo_path}
+    if git_str:
+        info['git'] = git_str
+    return info
+
+def git_info(repo_path):
+    orig_head = None
+    head = None
+    branch = None
+    try:
+        with open(os.path.join(repo_path, '.git', 'ORIG_HEAD'), 'r') as f:
+            orig_head = f.read().strip()
+    except IOError:
+        pass
+
+    try:
+        head = os.path.join(repo_path, '.git', 'HEAD')
+        with open(head, 'r') as f:
+            head = f.read().splitlines()[0].strip()
+
+        if head.startswith('ref:'):
+            branch = os.path.basename(head)
+            with open(os.path.join(repo_path, '.git', head.split(' ')[1]), 'r') as f:
+                head = f.read().strip()
+    except IOError:
+        pass
+    return orig_head, head, branch
 
 
 if __name__ == '__main__':

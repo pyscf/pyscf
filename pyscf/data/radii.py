@@ -16,9 +16,11 @@
 import numpy
 from pyscf.lib.parameters import BOHR
 
+unknown = 1.999999
+
 #########################
-# JCP 41 3199 (1964).
-BRAGG = 1/BOHR * numpy.array((0,  # Ghost atom
+# JCP 41, 3199 (1964); DOI:10.1063/1.1725697.
+BRAGG = 1/BOHR * numpy.array((unknown,  # Ghost atom
         0.35,                                     1.40,             # 1s
         1.45, 1.05, 0.85, 0.70, 0.65, 0.60, 0.50, 1.50,             # 2s2p
         1.80, 1.50, 1.25, 1.10, 1.00, 1.00, 1.00, 1.80,             # 3s3p
@@ -48,7 +50,7 @@ BRAGG = 1/BOHR * numpy.array((0,  # Ghost atom
 #       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
 #       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
 #       doi:10.1039/b801115j
-COVALENT = 1/BOHR * numpy.array((0,  # Ghost atom
+COVALENT = 1/BOHR * numpy.array((unknown,  # Ghost atom
         0.31,                                     0.28,             # 1s
         1.28, 0.96, 0.84, 0.73, 0.71, 0.66, 0.57, 0.58,             # 2s2p
         1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,             # 3s3p
@@ -93,8 +95,7 @@ COVALENT = 1/BOHR * numpy.array((0,  # Ghost atom
 #    Christopher J. Cramer, Donald G. Truhlar Consistent van der Waals Radii
 #    for the Whole Main Group. In J. Phys. Chem. A. 2009, 113, 5806-5812,
 #    doi:10.1021/jp8111556
-unknown = 2.0
-VDW = 1/BOHR * numpy.array((0,  # Ghost atom
+VDW = 1/BOHR * numpy.array((unknown,  # Ghost atom
     1.20,       #  1 H
     1.40,       #  2 He [1]
     1.82,       #  3 Li [1]
@@ -202,7 +203,7 @@ VDW = 1/BOHR * numpy.array((0,  # Ghost atom
 
 # Universal Force Field (UFF)
 # J. Am. Chem. Soc., 1992, 114 (25), pp 10024-10035
-UFF = 1/BOHR * numpy.array((0,  # Ghost atom
+UFF = 1/BOHR * numpy.array((unknown,  # Ghost atom
     1.4430,     #  1  H
     1.8100,     #  2  He
     1.2255,     #  3  Li
@@ -325,7 +326,7 @@ UFF = 1/BOHR * numpy.array((0,  # Ghost atom
 
 # Allinger's MM3 radii
 # From http://pcmsolver.readthedocs.io/en/latest/users/input.html
-MM3 = 1/BOHR * numpy.array((0,  # Ghost atom
+MM3 = 1/BOHR * numpy.array((unknown,  # Ghost atom
     1.62,       #  1  H
     1.53,       #  2  He
     2.55,       #  3  Li
@@ -446,3 +447,5 @@ MM3 = 1/BOHR * numpy.array((0,  # Ghost atom
     unknown,    #118  Og
 ))
 del unknown
+
+# flake8: noqa

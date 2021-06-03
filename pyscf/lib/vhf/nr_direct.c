@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include <math.h>
 //#include <omp.h>
@@ -25,10 +24,10 @@
 #include "cint.h"
 #include "optimizer.h"
 #include "nr_direct.h"
+#include "np_helper/np_helper.h"
+#include "gto/gto.h"
 
-int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
+#define AO_BLOCK_SIZE   32
 
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
@@ -43,15 +42,14 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
         const int joff = ao_loc[shls_slice[2]]; \
         const int koff = ao_loc[shls_slice[4]]; \
         const int loff = ao_loc[shls_slice[6]]; \
-        const int i0 = ao_loc[ish] - ioff; \
-        const int j0 = ao_loc[jsh] - joff; \
-        const int i1 = ao_loc[ish+1] - ioff; \
-        const int j1 = ao_loc[jsh+1] - joff; \
-        const int di = i1 - i0; \
-        const int dj = j1 - j0; \
-        const int ncomp = envs->ncomp; \
-        const int dk = GTOmax_shell_dim(ao_loc, shls_slice+4, 2); \
-        double *cache = buf + di * dj * dk * dk * ncomp; \
+        const int ish0 = ishls[0]; \
+        const int ish1 = ishls[1]; \
+        const int jsh0 = jshls[0]; \
+        const int jsh1 = jshls[1]; \
+        const int ksh0 = kshls[0]; \
+        const int ksh1 = kshls[1]; \
+        const int lsh0 = lshls[0]; \
+        const int lsh1 = lshls[1]; \
         int shls[4]; \
         void (*pf)(double *eri, double *dm, JKArray *vjk, int *shls, \
                    int i0, int i1, int j0, int j1, \
@@ -62,14 +60,22 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
         } else { \
                 fprescreen = CVHFnoscreen; \
         } \
-        int ksh, lsh, k0, k1, l0, l1, idm;
+        int ish, jsh, ksh, lsh, i0, j0, k0, l0, i1, j1, k1, l1, idm;
 
 #define INTOR_AND_CONTRACT \
+        shls[0] = ish; \
+        shls[1] = jsh; \
+        shls[2] = ksh; \
+        shls[3] = lsh; \
         if ((*fprescreen)(shls, vhfopt, atm, bas, env) \
             && (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, \
                         cintopt, cache)) { \
+                i0 = ao_loc[ish] - ioff; \
+                j0 = ao_loc[jsh] - joff; \
                 k0 = ao_loc[ksh] - koff; \
                 l0 = ao_loc[lsh] - loff; \
+                i1 = ao_loc[ish+1] - ioff; \
+                j1 = ao_loc[jsh+1] - joff; \
                 k1 = ao_loc[ksh+1] - koff; \
                 l1 = ao_loc[lsh+1] - loff; \
                 for (idm = 0; idm < n_dm; idm++) { \
@@ -83,91 +89,113 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
  * for given ksh, lsh, loop all ish, jsh
  */
 void CVHFdot_nrs1(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                  double **dms, double *buf, int n_dm, int ish, int jsh,
+                  double **dms, double *buf, double *cache, int n_dm,
+                  int *ishls, int *jshls, int *kshls, int *lshls,
                   CVHFOpt *vhfopt, IntorEnvs *envs)
 {
         DECLARE_ALL;
-        const int ksh0 = shls_slice[4];
-        const int ksh1 = shls_slice[5];
-        const int lsh0 = shls_slice[6];
-        const int lsh1 = shls_slice[7];
 
-        shls[0] = ish;
-        shls[1] = jsh;
-
+        for (ish = ish0; ish < ish1; ish++) {
+        for (jsh = jsh0; jsh < jsh1; jsh++) {
         for (ksh = ksh0; ksh < ksh1; ksh++) {
         for (lsh = lsh0; lsh < lsh1; lsh++) {
-                shls[2] = ksh;
-                shls[3] = lsh;
                 INTOR_AND_CONTRACT;
-        } }
-}
-
-/*
- * for given ish, jsh, loop all ksh > lsh
- */
-static void dot_nrs2sub(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                        double **dms, double *buf, int n_dm, int ish, int jsh,
-                        CVHFOpt *vhfopt, IntorEnvs *envs)
-{
-        DECLARE_ALL;
-        const int ksh0 = shls_slice[4];
-        const int ksh1 = shls_slice[5];
-        const int lsh0 = shls_slice[6];
-
-        shls[0] = ish;
-        shls[1] = jsh;
-
-        for (ksh = ksh0; ksh < ksh1; ksh++) {
-        for (lsh = lsh0; lsh <= ksh; lsh++) {
-                shls[2] = ksh;
-                shls[3] = lsh;
-                INTOR_AND_CONTRACT;
-        } }
+        } } } }
 }
 
 void CVHFdot_nrs2ij(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                    double **dms, double *buf, int n_dm, int ish, int jsh,
+                    double **dms, double *buf, double *cache, int n_dm,
+                    int *ishls, int *jshls, int *kshls, int *lshls,
                     CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        if (ish >= jsh) {
-                CVHFdot_nrs1(intor, jkop, vjk, dms, buf, n_dm, ish, jsh, vhfopt, envs);
+        if (ishls[0] > jshls[0]) {
+                return CVHFdot_nrs1(intor, jkop, vjk, dms, buf, cache, n_dm,
+                                    ishls, jshls, kshls, lshls, vhfopt, envs);
+        } else if (ishls[0] == jshls[0]) {
+
+                DECLARE_ALL;
+
+                for (ish = ish0; ish < ish1; ish++) {
+                for (jsh = jsh0; jsh <= ish; jsh++) {
+                for (ksh = ksh0; ksh < ksh1; ksh++) {
+                for (lsh = lsh0; lsh < lsh1; lsh++) {
+                        INTOR_AND_CONTRACT;
+                } } } }
         }
 }
 
 void CVHFdot_nrs2kl(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                    double **dms, double *buf, int n_dm, int ish, int jsh,
+                    double **dms, double *buf, double *cache, int n_dm,
+                    int *ishls, int *jshls, int *kshls, int *lshls,
                     CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        dot_nrs2sub(intor, jkop, vjk, dms, buf, n_dm, ish, jsh, vhfopt, envs);
+        if (kshls[0] > lshls[0]) {
+                return CVHFdot_nrs1(intor, jkop, vjk, dms, buf, cache, n_dm,
+                                    ishls, jshls, kshls, lshls, vhfopt, envs);
+        } else if (kshls[0] == lshls[0]) {
+                assert(kshls[1] == lshls[1]);
+
+                DECLARE_ALL;
+
+                for (ish = ish0; ish < ish1; ish++) {
+                for (jsh = jsh0; jsh < jsh1; jsh++) {
+                for (ksh = ksh0; ksh < ksh1; ksh++) {
+                for (lsh = lsh0; lsh <= ksh; lsh++) {
+                        INTOR_AND_CONTRACT;
+                } } } }
+        }
 }
 
 void CVHFdot_nrs4(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                  double **dms, double *buf, int n_dm, int ish, int jsh,
+                  double **dms, double *buf, double *cache, int n_dm,
+                  int *ishls, int *jshls, int *kshls, int *lshls,
                   CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        if (ish >= jsh) {
-                dot_nrs2sub(intor, jkop, vjk, dms, buf, n_dm, ish, jsh, vhfopt, envs);
+        if (ishls[0] > jshls[0]) {
+                return CVHFdot_nrs2kl(intor, jkop, vjk, dms, buf, cache, n_dm,
+                                      ishls, jshls, kshls, lshls, vhfopt, envs);
+        } else if (ishls[1] <= jshls[0]) {
+                return;
+        } else if (kshls[0] > lshls[0]) {  // ishls == jshls
+                return CVHFdot_nrs2ij(intor, jkop, vjk, dms, buf, cache, n_dm,
+                                      ishls, jshls, kshls, lshls, vhfopt, envs);
+        } else if (kshls[0] == lshls[0]) {  // ishls == jshls
+                assert(kshls[1] == lshls[1]);
+
+                DECLARE_ALL;
+
+                for (ish = ish0; ish < ish1; ish++) {
+                for (jsh = jsh0; jsh <= ish; jsh++) {
+                for (ksh = ksh0; ksh < ksh1; ksh++) {
+                for (lsh = lsh0; lsh <= ksh; lsh++) {
+                        INTOR_AND_CONTRACT;
+                } } } }
         }
 }
 
 void CVHFdot_nrs8(int (*intor)(), JKOperator **jkop, JKArray **vjk,
-                  double **dms, double *buf, int n_dm, int ish, int jsh,
+                  double **dms, double *buf, double *cache, int n_dm,
+                  int *ishls, int *jshls, int *kshls, int *lshls,
                   CVHFOpt *vhfopt, IntorEnvs *envs)
 {
-        if (ish < jsh) {
+        if (ishls[0] > kshls[0]) {
+                return CVHFdot_nrs4(intor, jkop, vjk, dms, buf, cache, n_dm,
+                                    ishls, jshls, kshls, lshls, vhfopt, envs);
+        } else if (ishls[0] < kshls[0]) {
+                return;
+        } else if ((ishls[1] <= jshls[0]) || (kshls[1] <= lshls[0])) {
+                assert(ishls[1] == kshls[1]);
                 return;
         }
+        // else i == k && i >= j && k >= l
+        assert(ishls[1] == kshls[1]);
+
         DECLARE_ALL;
-        const int ksh0 = shls_slice[4];
-        const int lsh0 = shls_slice[6];
 
-// to make fjk compatible to C-contiguous dm array, put ksh, lsh inner loop
-        shls[0] = ish;
-        shls[1] = jsh;
-
+        for (ish = ish0; ish < ish1; ish++) {
+        for (jsh = jsh0; jsh < MIN(jsh1, ish+1); jsh++) {
         for (ksh = ksh0; ksh <= ish; ksh++) {
-        for (lsh = lsh0; lsh <= ksh; lsh++) {
+        for (lsh = lsh0; lsh < MIN(lsh1, ksh+1); lsh++) {
 /* when ksh==ish, (lsh<jsh) misses some integrals (eg k<i&&l>j).
  * These integrals are calculated in the next (ish,jsh) pair. To show
  * that, we just need to prove that every elements in shell^4 appeared
@@ -175,21 +203,106 @@ void CVHFdot_nrs8(int (*intor)(), JKOperator **jkop, JKArray **vjk,
                 if ((ksh == ish) && (lsh > jsh)) {
                         break;
                 }
-                shls[2] = ksh;
-                shls[3] = lsh;
                 INTOR_AND_CONTRACT;
-        } }
+        } } } }
 }
 
-static void assemble_v(double *vjk, JKArray *jkarray, int *ao_loc)
+static JKArray *allocate_JKArray(JKOperator *op, int *shls_slice, int *ao_loc, int ncomp)
 {
-        int ish0 = jkarray->v_bra_sh0;
-        int ish1 = jkarray->v_bra_sh1;
-        int jsh0 = jkarray->v_ket_sh0;
-        int jsh1 = jkarray->v_ket_sh1;
+        JKArray *jkarray = malloc(sizeof(JKArray));
+        int ibra = op->ibra_shl0;
+        int iket = op->iket_shl0;
+        int obra = op->obra_shl0;
+        int oket = op->oket_shl0;
+        int v_bra_sh0 = shls_slice[obra];
+        int v_ket_sh0 = shls_slice[oket];
+        int v_bra_sh1 = shls_slice[obra+1];
+        int v_ket_sh1 = shls_slice[oket+1];
+        jkarray->v_ket_nsh  = shls_slice[oket+1] - shls_slice[oket];
+        jkarray->dm_dims[0] = ao_loc[shls_slice[ibra+1]] - ao_loc[shls_slice[ibra]];
+        jkarray->dm_dims[1] = ao_loc[shls_slice[iket+1]] - ao_loc[shls_slice[iket]];
+        int v_rows = ao_loc[v_bra_sh1] - ao_loc[v_bra_sh0];
+        int v_cols = ao_loc[v_ket_sh1] - ao_loc[v_ket_sh0];
+        jkarray->offset0_outptr = v_bra_sh0 * jkarray->v_ket_nsh + v_ket_sh0;
+        int outptr_size =((shls_slice[obra+1] - shls_slice[obra]) *
+                          (shls_slice[oket+1] - shls_slice[oket]));
+        int *outptr = malloc(sizeof(int) * outptr_size);
+        jkarray->outptr = outptr;
+        int i;
+        for (i = 0; i < outptr_size; i++) {
+                outptr[i] = NOVALUE;
+        }
+        jkarray->stack_size = 0;
+        int data_size = v_rows * v_cols * ncomp;
+        jkarray->data = malloc(sizeof(double) * data_size);
+        jkarray->ncomp = ncomp;
+        return jkarray;
+}
+
+static void deallocate_JKArray(JKArray *jkarray)
+{
+        free(jkarray->outptr);
+        free(jkarray->data);
+        free(jkarray);
+}
+
+static double *allocate_and_reorder_dm(JKOperator *op, double *dm,
+                                       int *shls_slice, int *ao_loc)
+{
+        int ibra = op->ibra_shl0;
+        int iket = op->iket_shl0;
+        int ish0 = shls_slice[ibra];
+        int jsh0 = shls_slice[iket];
+        int ish1 = shls_slice[ibra+1];
+        int jsh1 = shls_slice[iket+1];
+        int ioff = ao_loc[ish0];
+        int joff = ao_loc[jsh0];
+        int nrow = ao_loc[ish1] - ioff;
+        int ncol = ao_loc[jsh1] - joff;
+        double *out = malloc(sizeof(double) * nrow*ncol);
+        int ish, jsh, i0, i1, j0, j1, i, j, ij;
+
+        ij = 0;
+        for (ish = ish0; ish < ish1; ish++) {
+        for (jsh = jsh0; jsh < jsh1; jsh++) {
+                i0 = ao_loc[ish  ] - ioff;
+                i1 = ao_loc[ish+1] - ioff;
+                j0 = ao_loc[jsh  ] - joff;
+                j1 = ao_loc[jsh+1] - joff;
+                for (i = i0; i < i1; i++) {
+                for (j = j0; j < j1; j++, ij++) {
+                        out[ij] = dm[i*ncol+j];
+                } }
+        } }
+        return out;
+}
+
+static void zero_out_vjk(double *vjk, JKOperator *op,
+                         int *shls_slice, int *ao_loc, int ncomp)
+{
+        int obra = op->obra_shl0;
+        int oket = op->oket_shl0;
+        int ish0 = shls_slice[obra];
+        int jsh0 = shls_slice[oket];
+        int ish1 = shls_slice[obra+1];
+        int jsh1 = shls_slice[oket+1];
+        int nbra = ao_loc[ish1] - ao_loc[ish0];
+        int nket = ao_loc[jsh1] - ao_loc[jsh0];
+        NPdset0(vjk, ((size_t)nbra) * nket * ncomp);
+}
+
+static void assemble_v(double *vjk, JKOperator *op, JKArray *jkarray,
+                       int *shls_slice, int *ao_loc)
+{
+        int obra = op->obra_shl0;
+        int oket = op->oket_shl0;
+        int ish0 = shls_slice[obra];
+        int jsh0 = shls_slice[oket];
+        int ish1 = shls_slice[obra+1];
+        int jsh1 = shls_slice[oket+1];
         int njsh = jsh1 - jsh0;
-        size_t vrow = jkarray->v_dims[0];
-        size_t vcol = jkarray->v_dims[1];
+        size_t vrow = ao_loc[ish1] - ao_loc[ish0];
+        size_t vcol = ao_loc[jsh1] - ao_loc[jsh0];
         int ncomp = jkarray->ncomp;
         int voffset = ao_loc[ish0] * vcol + ao_loc[jsh0];
         int i, j, ish, jsh;
@@ -217,6 +330,28 @@ static void assemble_v(double *vjk, JKArray *jkarray, int *ao_loc)
         } }
 }
 
+// Divide shls into subblocks with roughly equal number of AOs in each block
+int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc)
+{
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int ao_loc_last = ao_loc[ish0];
+        int count = 1;
+        int ish;
+
+        block_loc[0] = ish0;
+        for (ish = ish0 + 1; ish < ish1; ish++) {
+                if (ao_loc[ish] - ao_loc_last > AO_BLOCK_SIZE) {
+                        block_loc[count] = ish;
+                        count++;
+                        ao_loc_last = ao_loc[ish];
+                }
+        }
+        block_loc[count] = ish1;
+        return count;
+}
+
+
 
 /*
  * drv loop over ij, generate eris of kl for given ij, call fjk to
@@ -239,55 +374,72 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, NULL,
                 cintopt, ncomp};
         int idm;
-        size_t size;
+        double *tile_dms[n_dm];
         for (idm = 0; idm < n_dm; idm++) {
-                size = jkop[idm]->data_size(shls_slice, ao_loc) * ncomp;
-                memset(vjk[idm], 0, sizeof(double)*size);
+                zero_out_vjk(vjk[idm], jkop[idm], shls_slice, ao_loc, ncomp);
+                tile_dms[idm] = allocate_and_reorder_dm(jkop[idm], dms[idm],
+                                                        shls_slice, ao_loc);
         }
 
+        const size_t di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
+        const size_t cache_size = GTOmax_cache_size(intor, shls_slice, 4,
+                                                    atm, natm, bas, nbas, env);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
         const int jsh1 = shls_slice[3];
+        const int ksh0 = shls_slice[4];
+        const int ksh1 = shls_slice[5];
+        const int lsh0 = shls_slice[6];
+        const int lsh1 = shls_slice[7];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        const int di = GTOmax_shell_dim(ao_loc, shls_slice, 4);
-        const int cache_size = GTOmax_cache_size(intor, shls_slice, 4,
-                                                 atm, natm, bas, nbas, env);
+        const int nksh = ksh1 - ksh0;
+        const int nlsh = lsh1 - lsh0;
+        int *block_iloc = malloc(sizeof(int) * (nish + njsh + nksh + nlsh + 4));
+        int *block_jloc = block_iloc + nish + 1;
+        int *block_kloc = block_jloc + njsh + 1;
+        int *block_lloc = block_kloc + nksh + 1;
+        const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
+        const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
+        const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
+        const size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
+        const size_t nblock_kl = nblock_k * nblock_l;
+        const size_t nblock_jkl = nblock_j * nblock_kl;
 
 #pragma omp parallel
 {
-        int i, j, ij, ij1;
+        size_t i, j, k, l, r, blk_id;
         JKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
-                v_priv[i] = jkop[i]->allocate(shls_slice, ao_loc, ncomp);
+                v_priv[i] = allocate_JKArray(jkop[i], shls_slice, ao_loc, ncomp);
         }
         double *buf = malloc(sizeof(double) * (di*di*di*di*ncomp + cache_size));
+        double *cache = buf + di*di*di*di*ncomp;
 #pragma omp for nowait schedule(dynamic, 1)
-        for (ij = 0; ij < nish*njsh; ij++) {
-                ij1 = nish*njsh-1 - ij;
-
-//                        if (ij % 2) {
-///* interlace the iteration to balance memory usage
-// * map [0,1,2...,N] to [0,N,1,N-1,...] */
-//                                ij1 = nish*njsh-1 - ij/2;
-//                        } else {
-//                                ij1 = ij / 2;
-//                        }
-
-                i = ij1 / njsh + ish0;
-                j = ij1 % njsh + jsh0;
-                (*fdot)(intor, jkop, v_priv, dms, buf, n_dm, i, j,
-                        vhfopt, &envs);
+        for (blk_id = 0; blk_id < nblock_jkl; blk_id++) {
+                r = blk_id;
+                j = r / nblock_kl ; r = r % nblock_kl;
+                k = r / nblock_l  ; r = r % nblock_l;
+                l = r;
+                for (i = 0; i < nblock_i; i++) {
+                        (*fdot)(intor, jkop, v_priv, tile_dms, buf, cache, n_dm,
+                                block_iloc+i, block_jloc+j, block_kloc+k, block_lloc+l,
+                                vhfopt, &envs);
+                }
         }
 #pragma omp critical
         {
                 for (i = 0; i < n_dm; i++) {
-                        assemble_v(vjk[i], v_priv[i], ao_loc);
-                        jkop[i]->deallocate(v_priv[i]);
+                        assemble_v(vjk[i], jkop[i], v_priv[i], shls_slice, ao_loc);
+                        deallocate_JKArray(v_priv[i]);
                 }
         }
         free(buf);
 }
+        for (idm = 0; idm < n_dm; idm++) {
+                free(tile_dms[idm]);
+        }
+        free(block_iloc);
 }
 

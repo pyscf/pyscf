@@ -24,7 +24,7 @@ See Also:
                            systems at a single k-point
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -32,6 +32,7 @@ from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import multigrid
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -42,7 +43,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     hybrid = abs(hyb) > 1e-10
@@ -83,11 +84,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
-        vxc += vj - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
 
         if ground_state:
             exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
-                    np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
+                    np.einsum('Kij,Kji', dm[1], vk[1])).real * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
@@ -107,6 +113,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
                   np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc
+    mf.scf_summary['e1'] = e1.real
+    mf.scf_summary['coul'] = vhf.ecoul.real
+    mf.scf_summary['exc'] = vhf.exc.real
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return tot_e.real, vhf.ecoul + vhf.exc
 
@@ -114,30 +123,32 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 def get_rho(mf, dm=None, grids=None, kpts=None):
     from pyscf.pbc.dft import krks
     if dm is None:
-        dm = self.make_rdm1()
+        dm = mf.make_rdm1()
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(kuhf.KUHF):
+class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
-        kuhf.KUHF.__init__(self, cell, kpts)
-        rks._dft_common_init_(self)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        kuhf.KUHF.__init__(self, cell, kpts, exxdiv=exxdiv)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         kuhf.KUHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
     get_rho = get_rho
 
-    define_xc_ = rks.define_xc_
-
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
+    def nuc_grad_method(self):
+        from pyscf.pbc.grad import kuks
+        return kuks.Gradients(self)
 
 
 if __name__ == '__main__':

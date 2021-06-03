@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ Intermediates for restricted CCSD.  Complex integrals are supported.
 
 import numpy as np
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf import ao2mo
 
 # This is restricted (R)CCSD
@@ -90,7 +91,7 @@ def cc_Woooo(t1, t2, eris):
     return Wklij
 
 def cc_Wvvvv(t1, t2, eris):
-    # Incore 
+    # Incore
     eris_ovvv = np.asarray(eris.get_ovvv())
     Wabcd  = lib.einsum('kdac,kb->abcd', eris_ovvv,-t1)
     Wabcd -= lib.einsum('kcbd,ka->abcd', eris_ovvv, t1)
@@ -229,9 +230,100 @@ def _get_vvvv(eris):
         vvL = np.asarray(eris.vvL)
         nvir = int(np.sqrt(eris.vvL.shape[0]*2))
         return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
-    elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
-                                     # backward compatbility
+    elif eris.vvvv.ndim == 2:
         nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
         return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
     else:
         return eris.vvvv
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
+
+def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
+    """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
+    and intermediates used in IP/EA-CCSD(T)a
+
+    For description of arguments, see `get_t3p2_imds_slow` in `gintermediates.py`.
+    """
+    if eris is None:
+        eris = cc.ao2mo()
+    fock = eris.fock
+    nocc, nvir = t1.shape
+
+    fov = fock[:nocc, nocc:]
+    #foo = fock[:nocc, :nocc].diagonal()
+    #fvv = fock[nocc:, nocc:].diagonal()
+
+    dtype = np.result_type(t1, t2)
+    if np.issubdtype(dtype, np.dtype(complex).type):
+        logger.error(cc, 't3p2 imds has not been strictly checked for use with complex integrals')
+
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:]
+
+    ovov = _cp(eris.ovov)
+    ovvv = _cp(eris.get_ovvv())
+    eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)  # Physicist notation
+    eris_vooo = eris.ovoo[:].conj().transpose(1,0,3,2)  # Chemist notation
+
+    ccsd_energy = cc.energy(t1, t2, eris)
+    dtype = np.result_type(t1, t2)
+
+    if t3p2_ip_out is None:
+        t3p2_ip_out = np.zeros((nocc,nvir,nocc,nocc), dtype=dtype)
+    Wmbkj = t3p2_ip_out
+
+    if t3p2_ea_out is None:
+        t3p2_ea_out = np.zeros((nvir,nvir,nvir,nocc), dtype=dtype)
+    Wcbej = t3p2_ea_out
+
+    tmp_t3  = np.einsum('abif,kjcf->ijkabc', eris_vvov, t2)
+    tmp_t3 -= np.einsum('aimj,mkbc->ijkabc', eris_vooo, t2)
+
+    tmp_t3 = (tmp_t3 + tmp_t3.transpose(0,2,1,3,5,4)
+                     + tmp_t3.transpose(1,0,2,4,3,5)
+                     + tmp_t3.transpose(1,2,0,4,5,3)
+                     + tmp_t3.transpose(2,0,1,5,3,4)
+                     + tmp_t3.transpose(2,1,0,5,4,3))
+
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
+    eijab = eia[:, None, :, None] + eia[None, :, None, :]
+    eijkabc = eijab[:, :, None, :, :, None] + eia[None, None, :, None, None, :]
+    tmp_t3 /= eijkabc
+
+    Ptmp_t3 = 2.*tmp_t3 - tmp_t3.transpose(1,0,2,3,4,5) - tmp_t3.transpose(2,1,0,3,4,5)
+    pt1 =  0.5 * lib.einsum('jbkc,ijkabc->ia', 2.*ovov - ovov.transpose(0,3,2,1), Ptmp_t3)
+
+    tmp =  0.5 * lib.einsum('ijkabc,ia->jkbc', Ptmp_t3, fov)
+    pt2 = tmp + tmp.transpose(1,0,3,2)
+
+    #     b\    / \    /
+    #  /\---\  /   \  /
+    # i\/a  d\/j   k\/c
+    # ------------------
+    tmp =  lib.einsum('ijkabc,iadb->jkdc', Ptmp_t3, ovvv)
+    pt2 += (tmp + tmp.transpose(1,0,3,2))
+
+    #     m\    / \    /
+    #  /\---\  /   \  /
+    # i\/a  j\/b   k\/c
+    # ------------------
+    tmp =  lib.einsum('ijkabc,iajm->mkbc', Ptmp_t3, eris.ovoo)
+    pt2 -= (tmp + tmp.transpose(1,0,3,2))
+
+    eia = mo_e_o[:, None] - mo_e_v[None, :]
+    eijab = eia[:, None, :, None] + eia[None, :, None, :]
+
+    pt1 /= eia
+    pt2 /= eijab
+
+    pt1 += t1
+    pt2 += t2
+
+    Wmbkj +=  lib.einsum('ijkabc,mcia->mbkj', Ptmp_t3, ovov)
+
+    Wcbej += -1.0*lib.einsum('ijkabc,iake->cbej', Ptmp_t3, ovov)
+
+    delta_ccsd_energy = cc.energy(pt1, pt2, eris) - ccsd_energy
+    logger.info(cc, 'CCSD energy T3[2] correction : %14.8e', delta_ccsd_energy)
+    return delta_ccsd_energy, pt1, pt2, Wmbkj, Wcbej

@@ -19,6 +19,7 @@ import unittest
 import copy
 import numpy
 import numpy as np
+import h5py
 
 from pyscf import gto, lib
 from pyscf import scf, dft
@@ -378,8 +379,42 @@ class KnownValues(unittest.TestCase):
         t2b = mycc1._add_vvvv(t1, t2, eris1, t2sym='jiba')
         self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 12)
 
+    def test_diagnostic(self):
+        t1_diag = mycc.get_t1_diagnostic()
+        d1_diag = mycc.get_d1_diagnostic()
+        d2_diag = mycc.get_d2_diagnostic()
+        self.assertAlmostEqual(t1_diag, 0.006002754773812036, 6)
+        self.assertAlmostEqual(d1_diag, 0.012738043220198926, 6)
+        self.assertAlmostEqual(d2_diag, 0.1169239107130769, 6)
+
+    def test_ao2mo(self):
+        mycc = ccsd.CCSD(mf)
+        numpy.random.seed(2)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        mycc.max_memory = 2000
+        eri_incore = mycc.ao2mo(mo)
+        mycc.max_memory = 0
+        eri_outcore = mycc.ao2mo(mo)
+        self.assertTrue(isinstance(eri_outcore.oovv, h5py.Dataset))
+        self.assertAlmostEqual(abs(eri_incore.oooo - eri_outcore.oooo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.oovv - eri_outcore.oovv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovoo - eri_outcore.ovoo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvo - eri_outcore.ovvo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovov - eri_outcore.ovov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.ovvv - eri_outcore.ovvv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eri_incore.vvvv - eri_outcore.vvvv).max(), 0, 12)
+
+        mycc1 = ccsd.CCSD(mf.density_fit(auxbasis='ccpvdz-ri'))
+        mycc1.max_memory = 0
+        eri_df = mycc1.ao2mo(mo)
+        self.assertAlmostEqual(lib.fp(eri_df.oooo), -493.98003157749906, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.oovv), -91.84858398271658 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovoo), -203.89515661847437, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -14.883877359169205, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovov), -57.62195194777554 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvv), -24.359418953533535, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.vvvv),  76.9017539373456  , 9)
 
 if __name__ == "__main__":
     print("Full Tests for RCCSD")
     unittest.main()
-

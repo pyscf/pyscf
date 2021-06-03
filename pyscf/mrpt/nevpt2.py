@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,8 @@
 #          Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import ctypes
-import time
+
 import tempfile
 from functools import reduce
 import numpy
@@ -34,7 +33,7 @@ from pyscf.ao2mo import _ao2mo
 libmc = lib.load_library('libmcscf')
 
 NUMERICAL_ZERO = 1e-14
-# Ref JCP, 117, 9138
+# Ref JCP 117, 9138 (2002); DOI:10.1063/1.1515317
 
 # h1e is the CAS space effective 1e hamiltonian
 # h2e is the CAS space 2e integrals in  notation # a' -> p # b' -> q # c' -> r
@@ -289,7 +288,6 @@ def Sr(mc,ci,dms, eris=None, verbose=None):
     dm3 = dms['3']
     #dm4 = dms['4']
     ncore = mo_core.shape[1]
-    nvirt = mo_virt.shape[1]
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
 
@@ -427,14 +425,27 @@ def Sijr(mc, dms, eris, verbose=None):
         hdm1 = make_hdm1(dm1)
 
     a3 = make_a3(h1e,h2e,dm1,dm2,hdm1)
+    # We sum norm and h only over i <= j (or j <= i instead).
+    # See Eq. (13) and (A2) in https://doi.org/10.1063/1.1515317
+    # This implementation is still somewhat wasteful in terms of memory,
+    # as we only need about half of norm and h in the end.
+    ci_diag = numpy.diag_indices(ncore)
+    ci_triu = numpy.triu_indices(ncore)
     norm = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,hdm1)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,hdm1)
+    norm += norm.transpose(0, 2, 1)
+    norm[:, ci_diag[0], ci_diag[1]] *= 0.5
     h = 2.0*numpy.einsum('rpji,raji,pa->rji',h2e_v,h2e_v,a3)\
          - 1.0*numpy.einsum('rpji,raij,pa->rji',h2e_v,h2e_v,a3)
+    h += h.transpose(0, 2, 1)
+    h[:, ci_diag[0], ci_diag[1]] *= 0.5
 
     diff = mc.mo_energy[nocc:,None,None] - mc.mo_energy[None,:ncore,None] - mc.mo_energy[None,None,:ncore]
 
-    return _norm_to_energy(norm, h, diff)
+    norm_tri = norm[:, ci_triu[0], ci_triu[1]]
+    h_tri = h[:, ci_triu[0], ci_triu[1]]
+    diff_tri = diff[:, ci_triu[0], ci_triu[1]]
+    return _norm_to_energy(norm_tri, h_tri, diff_tri)
 
 def Srsi(mc, dms, eris, verbose=None):
     #Subspace S_ijr^{(1)}
@@ -444,6 +455,7 @@ def Srsi(mc, dms, eris, verbose=None):
     ncore = mo_core.shape[1]
     ncas = mo_cas.shape[1]
     nocc = ncore + ncas
+    nvirt = mo_virt.shape[1]
     if eris is None:
         h1e = mc.h1e_for_cas()[0]
         h2e = ao2mo.restore(1, mc.ao2mo(mo_cas), ncas).transpose(0,2,1,3)
@@ -455,12 +467,22 @@ def Srsi(mc, dms, eris, verbose=None):
         h2e_v = eris['pacv'][nocc:].transpose(3,0,2,1)
 
     k27 = make_k27(h1e,h2e,dm1,dm2)
+    # We sum norm and h only over r <= s.
+    # See Eq. (12) and (26) in https://doi.org/10.1063/1.1515317
+    # This implementation is still somewhat wasteful in terms of memory,
+    # as we only need about half of norm and h in the end.
+    vi_diag = numpy.diag_indices(nvirt)
+    vi_triu = numpy.triu_indices(nvirt)
     norm = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,dm1)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,dm1)
+    norm += norm.transpose(1, 0, 2)
+    norm[vi_diag] *= 0.5
     h = 2.0*numpy.einsum('rsip,rsia,pa->rsi',h2e_v,h2e_v,k27)\
          - 1.0*numpy.einsum('rsip,sria,pa->rsi',h2e_v,h2e_v,k27)
+    h += h.transpose(1, 0, 2)
+    h[vi_diag] *= 0.5
     diff = mc.mo_energy[nocc:,None,None] + mc.mo_energy[None,nocc:,None] - mc.mo_energy[None,None,:ncore]
-    return _norm_to_energy(norm, h, diff)
+    return _norm_to_energy(norm[vi_triu], h[vi_triu], diff[vi_triu])
 
 def Srs(mc, dms, eris=None, verbose=None):
     #Subspace S_rs^{(-2)}
@@ -548,7 +570,6 @@ def Sir(mc, dms, eris, verbose=None):
         h2e_v1 = h2e_v1.reshape(mo_virt.shape[1],ncore,ncas,ncas).transpose(0,2,1,3)
         h2e_v2 = ao2mo.incore.general(mc._scf._eri,[mo_virt,mo_cas,mo_cas,mo_core],compact=False)
         h2e_v2 = h2e_v2.reshape(mo_virt.shape[1],ncas,ncas,ncore).transpose(0,2,1,3)
-        core_dm = numpy.dot(mo_core,mo_core.T)*2
     else:
         h1e = eris['h1eff'][ncore:nocc,ncore:nocc]
         h2e = eris['ppaa'][ncore:nocc,ncore:nocc].transpose(0,2,1,3)
@@ -609,6 +630,12 @@ class NEVPT(lib.StreamObject):
         self.onerdm = numpy.zeros((nao,nao))
         self._keys = set(self.__dict__.keys())
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._mc.reset(mol)
+        return self
+
     def get_hcore(self):
         return self._mc.get_hcore()
 
@@ -633,8 +660,13 @@ class NEVPT(lib.StreamObject):
 
 
     def for_dmrg(self):
-        #TODO
-        #Some preprocess for dmrg-nevpt
+        '''Some preprocess for dmrg-nevpt'''
+        if not self._mc.natorb:
+            logger.warn(self, '''\
+DRMG-MCSCF orbitals are not natural orbitals in active space. It's recommended
+to rerun DMRG-CASCI with mc.natorb before calling DMRG-NEVPT2.
+See discussions in github issue https://github.com/pyscf/pyscf/issues/698 and
+example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         return self
 
     def compress_approx(self,maxM=500, nevptsolver=None, tol=1e-7, stored_integral =False):
@@ -650,6 +682,12 @@ class NEVPT(lib.StreamObject):
         >>> mc = dmrgscf.DMRGSCF(mf, 4, 4).run()
         >>> NEVPT(mc, root=0).compress_approx(maxM=100).kernel()
         -0.14058324991532101
+
+        References:
+
+        J. Chem. Theory Comput. 12, 1583 (2016), doi:10.1021/acs.jctc.5b01225
+
+        J. Chem. Phys. 146, 244102 (2017), doi:10.1063/1.4986975
         '''
         #TODO
         #Some preprocess for compressed perturber
@@ -667,6 +705,7 @@ class NEVPT(lib.StreamObject):
 
         self.canonicalized = True
         self.compressed_mps = True
+        self.for_dmrg()
         return self
 
 
@@ -686,7 +725,7 @@ class NEVPT(lib.StreamObject):
             log = self.verbose
         else:
             log = logger.Logger(self.stdout, self.verbose)
-        time0 = (time.clock(), time.time())
+        time0 = (logger.process_clock(), logger.perf_counter())
         ncore = self.ncore
         ncas = self.ncas
         nocc = ncore + ncas
@@ -704,9 +743,10 @@ class NEVPT(lib.StreamObject):
                                                self.load_ci(), self.load_ci(), ncas, self.nelecas)
         dm4 = None
 
-        dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4,
-               #'h1': hdm1, 'h2': hdm2, 'h3': hdm3
-              }
+        dms = {
+            '1': dm1, '2': dm2, '3': dm3, '4': dm4,
+            # 'h1': hdm1, 'h2': hdm2, 'h3': hdm3
+        }
         time1 = log.timer('3pdm, 4pdm', *time0)
 
         eris = _ERIS(self, self.mo_coeff)
@@ -736,13 +776,13 @@ class NEVPT(lib.StreamObject):
                                                    nevptsolver=self.nevptsolver,
                                                    tol=self.tol)
             fh5 = h5py.File(perturb_file, 'r')
-            e_Si     =   fh5['Vi/energy'].value
+            e_Si     =   fh5['Vi/energy'][()]
             #The definition of norm changed.
             #However, there is no need to print out it.
             #Only perturbation energy is wanted.
-            norm_Si  =   fh5['Vi/norm'].value
-            e_Sr     =   fh5['Vr/energy'].value
-            norm_Sr  =   fh5['Vr/norm'].value
+            norm_Si  =   fh5['Vi/norm'][()]
+            e_Sr     =   fh5['Vr/energy'][()]
+            norm_Sr  =   fh5['Vr/norm'][()]
             fh5.close()
             logger.note(self, "Sr    (-1)',   E = %.14f",  e_Sr  )
             logger.note(self, "Si    (+1)',   E = %.14f",  e_Si  )
@@ -781,7 +821,6 @@ class NEVPT(lib.StreamObject):
         return nevpt_e
 
 
-
 def kernel(mc, *args, **kwargs):
     return sc_nevpt(mc, *args, **kwargs)
 
@@ -798,6 +837,10 @@ def sc_nevpt(mc, ci=None, verbose=None):
                           'Use mrpt.NEVPT(mc,root=?) for excited state.')
     return NEVPT(mc).kernel()
 
+
+# register NEVPT2 in MCSCF
+from pyscf.mcscf import casci
+casci.CASCI.NEVPT2 = NEVPT
 
 
 
@@ -900,7 +943,7 @@ def trans_e1_incore(mc, mo):
 
 def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
                      verbose=0):
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     mol = mc.mol
     log = logger.Logger(mc.stdout, verbose)
     ncore = mc.ncore
@@ -935,10 +978,10 @@ def trans_e1_outcore(mc, mo, max_memory=None, ioblk_size=256, tmpdir=None,
             time1[:] = logger.timer(mol, 'load_buf', *tuple(time1))
         return buf
     time0 = logger.timer(mol, 'halfe1', *time0)
-    time1 = [time.clock(), time.time()]
+    time1 = [logger.process_clock(), logger.perf_counter()]
     ao_loc = numpy.array(mol.ao_loc_nr(), dtype=numpy.int32)
     cvcvfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    with h5py.File(cvcvfile.name, 'r') as f5:
+    with h5py.File(cvcvfile.name, 'w') as f5:
         cvcv = f5.create_dataset('eri_mo', (ncore*nvir,ncore*nvir), 'f8')
         ppaa, papa, pacv = _trans(mo, ncore, ncas, load_buf, cvcv, ao_loc)[:3]
     time0 = logger.timer(mol, 'trans_cvcv', *time0)
@@ -1021,7 +1064,7 @@ if __name__ == '__main__':
     print(ci_e)
     #dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
     #                                         mc.ci, mc.ci, mc.ncas, mc.nelecas)
-    print(sc_nevpt(mc), -0.16978546152699392)
+    print(sc_nevpt(mc), -0.169785157128082)
 
 
     mol = gto.Mole()
@@ -1053,4 +1096,4 @@ if __name__ == '__main__':
     mc.fcisolver.conv_tol = 1e-14
     mc.kernel()
     mc.verbose = 4
-    print(sc_nevpt(mc), -0.094164472700469196)
+    print(sc_nevpt(mc), -0.094164359938171)

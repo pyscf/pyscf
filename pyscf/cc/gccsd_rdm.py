@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,11 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Jun Yang <junyang4711@gmail.com>
+#         Jun Yang
 #
 
-import time
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
 
 #einsum = numpy.einsum
 einsum = lib.einsum
@@ -120,7 +118,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
 
-def make_rdm2(mycc, t1, t2, l1, l2):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     Two-particle density matrix in the molecular spin-orbital representation
 
@@ -133,7 +131,8 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+                      ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     r'''
@@ -159,7 +158,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1 *= .5
     dm1[numpy.diag_indices(nocc)] += 1
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
@@ -173,7 +172,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
         dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
     return dm1
 
-def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
     r'''
     dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
 
@@ -214,7 +213,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2[:nocc,:nocc,nocc:,:nocc] = dooov.transpose(1,0,3,2).conj()
     dm2[nocc:,:nocc,:nocc,:nocc] = dooov.transpose(3,2,1,0).conj()
 
-    if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
+    if with_frozen and mycc.frozen is not None:
         nmo, nmo0 = mycc.mo_occ.size, nmo
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm2 = numpy.zeros((nmo,nmo,nmo,nmo), dtype=dm2.dtype)
@@ -229,7 +228,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         dm1[numpy.diag_indices(nocc)] -= 1
 
         for i in range(nocc):
-# Be careful with the convention of dm1 and the transpose of dm2 at the end
+            # Be careful with the convention of dm1 and dm2.transpose
+            # at the end
             dm2[i,i,:,:] += dm1
             dm2[:,:,i,i] += dm1
             dm2[:,i,i,:] -= dm1
@@ -244,7 +244,11 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     # above. Transposing it so that it be contracted with ERIs (in Chemist's
     # notation):
     #   E = einsum('pqrs,pqrs', eri, rdm2)
-    return dm2.transpose(1,0,3,2)
+    dm2 = dm2.transpose(1,0,3,2)
+    if ao_repr:
+        from pyscf.cc import ccsd_rdm
+        dm2 = ccsd_rdm._rdm2_mo2ao(dm2, mycc.mo_coeff)
+    return dm2
 
 
 if __name__ == '__main__':
@@ -253,7 +257,6 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import ao2mo
     from pyscf.cc import gccsd
-    from pyscf.cc import addons
 
     mol = gto.Mole()
     mol.atom = [

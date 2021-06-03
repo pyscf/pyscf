@@ -18,15 +18,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <complex.h>
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
 #include "optimizer.h"
-
-#define MAX(I,J)        ((I) > (J) ? (I) : (J))
+#include "np_helper/np_helper.h"
+#include "gto/gto.h"
 
 #define LL 0
 #define SS 1
@@ -36,8 +35,6 @@
 
 int int2e_spinor();
 int int2e_spsp1spsp2_spinor();
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
@@ -215,12 +212,6 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 
         assert(intor == &int2e_spsp1spsp2_spinor);
         set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
-        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        double *qcond = opt->q_cond;
-        int i;
-        for (i = 0; i < nbas*nbas; i++) {
-                qcond[i] *= c1;
-        }
 }
 
 
@@ -236,12 +227,6 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         set_qcond(&int2e_spinor, NULL, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
         set_qcond(&int2e_spsp1spsp2_spinor, NULL, opt->q_cond+nbas*nbas, ao_loc,
                   atm, natm, bas, nbas, env);
-        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
-        double *qcond = opt->q_cond + nbas*nbas;
-        int i;
-        for (i = 0; i < nbas*nbas; i++) {
-                qcond[i] *= c1;
-        }
 }
 
 static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
@@ -283,7 +268,7 @@ void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*(1+nset));
         // dmcond followed by dmscond which are max matrix element for each dm
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
@@ -297,7 +282,7 @@ void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*(1+nset));
         set_dmcond(opt->dm_cond, opt->dm_cond+nbas*nbas, dm,
                    opt->direct_scf_cutoff, nset, ao_loc, atm, natm, bas, nbas, env);
 }
@@ -318,7 +303,7 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
         }
         nset = nset / 3;
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));
-        memset(opt->dm_cond, 0, sizeof(double)*nbas*nbas*4*(1+nset));
+        NPdset0(opt->dm_cond, ((size_t)nbas)*nbas*4*(1+nset));
 
         // 4 types of dmcond (LL,SS,SL,SS) followed by 4 types of dmscond
         int n2c = CINTtot_cgto_spinor(bas, nbas);

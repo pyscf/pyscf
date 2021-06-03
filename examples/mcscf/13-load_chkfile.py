@@ -51,5 +51,5 @@ mcscf_orb = lib.chkfile.load(tmpchk.name, 'mcscf/mo_coeff')
 # Scenario 3: Using Python trick to quickly load scf/mcscf
 # intermediates/results
 #
-mc = mcscf.CASSCF(mf, norb, ne)
+mc = mcscf.CASSCF(mf, 6, 6)
 mc.__dict__.update(lib.chkfile.load(tmpchk.name, 'mcscf'))

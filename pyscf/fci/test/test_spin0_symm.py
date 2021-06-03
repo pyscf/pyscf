@@ -62,10 +62,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.571087072474697, 9)
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.010497935954916, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.257163492625622, 9)
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=3)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=3)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.257163492625622, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.010497935954916, 9)
 
     def test_kernel(self):
         e, c = fci.direct_spin0_symm.kernel(h1e, g2e, norb, nelec, orbsym=orbsym)

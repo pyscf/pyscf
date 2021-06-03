@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -132,9 +132,21 @@ class KnownValues(unittest.TestCase):
     def test_gmp2_with_ao2mofn(self):
         pt = mp.GMP2(gmf)
         mf_df = mf.density_fit('weigend')
-        ao2mofn = mf_df.with_df.ao2mo
+        def ao2mofn(mo_coeffs):
+            nao = mo_coeffs[0].shape[0]
+            mo_a = [mo[:nao//2] for mo in mo_coeffs]
+            mo_b = [mo[nao//2:] for mo in mo_coeffs]
+            eri  = mf_df.with_df.ao2mo(mo_a)
+            eri += mf_df.with_df.ao2mo(mo_b)
+            eri += mf_df.with_df.ao2mo([mo_a[0], mo_a[1], mo_b[2], mo_b[3]])
+            eri += mf_df.with_df.ao2mo([mo_b[0], mo_b[1], mo_a[2], mo_a[3]])
+            return eri
         pt.ao2mo = lambda *args: mp.gmp2._make_eris_incore(pt, *args, ao2mofn=ao2mofn)
         e1 = pt.kernel()[0]
+        self.assertAlmostEqual(e1, -0.12879040729543023, 8)
+        # Should be quite close to emp2 without DF
+        self.assertAlmostEqual(e1, -0.12886859466191491, 3)
+
 #        pt = mp.GMP2(gmf.density_fit('weigend'))
 #        e2 = pt.kernel()[0]
 #        self.assertAlmostEqual(e1, e2, 9)
@@ -166,10 +178,11 @@ class KnownValues(unittest.TestCase):
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
-        mf.mo_energy = mo_energy
+        eris.mo_energy = mf.mo_energy = mo_energy
         mf.mo_coeff = numpy.eye(nmo)
         mf.mo_occ = mo_occ
         mf.e_tot = numpy.einsum('ij,ji', hcore, dm) + numpy.einsum('ij,ji', vhf, dm) *.5
+        mf.converged = True
         pt = mp.GMP2(mf)
         pt.ao2mo = lambda *args, **kwargs: eris
         pt.kernel(eris=eris)
@@ -186,9 +199,31 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
 
+    def test_non_canonical_mp2(self):
+        mf = scf.GHF(mol).run(max_cycle=1)
+        pt = mp.MP2(mf)
+        self.assertAlmostEqual(pt.kernel()[0], -0.12714840392411947, 7)
+
+    def test_gmp2_with_df(self):
+        pt = mp.GMP2(gmf).density_fit()
+        emp2, t2 = pt.kernel(gmf.mo_energy, gmf.mo_coeff)
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 9)
+
+        mf1 = scf.addons.convert_to_ghf(mf)
+        mf1.mo_coeff = numpy.asarray(mf1.mo_coeff)  # remove tag orbspin
+        pt = mp.GMP2(mf1).density_fit()
+        emp2, t2 = pt.kernel()
+        self.assertAlmostEqual(emp2, -0.09624851692896723, 9)
+
+        dm = gmf.get_init_guess() + .1j
+        dm = 0.5*(dm + dm.T.conj())
+        gmf.conv_tol = 1e-9
+        gmf.kernel(dm0=dm)
+        pt = mp.GMP2(gmf).density_fit()
+        emp2, t2 = pt.kernel()
+        self.assertAlmostEqual(emp2, -0.12884823204824902, 8)
 
 
 if __name__ == "__main__":
-    print("Full Tests for mp2")
+    print("Full Tests for gmp2")
     unittest.main()
-

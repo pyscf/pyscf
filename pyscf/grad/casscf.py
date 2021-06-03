@@ -21,27 +21,32 @@ CASSCF analytical nuclear gradients
 
 Ref.
 J. Comput. Chem., 5, 589
+
+MRH: copied from pyscf.grad.casscf.py on 12/07/2019
+Contains my modifications for SA-CASSCF gradients
+1. Generalized Fock has nonzero i->a and u->a
+2. Memory footprint for differentiated eris bugfix
 '''
 
-import time
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import casci as casci_grad
+from pyscf.grad import rhf as rhf_grad  # noqa
 from pyscf.grad.mp2 import _shell_prange
 
-
-def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-           verbose=None):
+def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
+    mc = mc_grad.base
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
-    if mf_grad is None: mf_grad = mc._scf.nuc_grad_method()
     if mc.frozen is not None:
         raise NotImplementedError
 
-    mol = mc.mol
+    time0 = logger.process_clock(), logger.perf_counter()
+    log = logger.new_logger(mc_grad, verbose)
+    mol = mc_grad.mol
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
@@ -49,31 +54,42 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
 
+    # Necessary kludge because gfock isn't zero in occ-virt space in SA-CASSCf
+    # Among many other potential applications!
+    if hasattr (mc, '_tag_gfock_ov_nonzero'):
+        if mc._tag_gfock_ov_nonzero:
+            nocc = nmo
+
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
-    mo_cas = mo_coeff[:,ncore:nocc]
+    mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     casdm1, casdm2 = mc.fcisolver.make_rdm12(ci, ncas, nelecas)
 
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
+    # MRH flag: this is one of my kludges
+    # It would be better to just pass the ERIS object used in orbital optimization
+    # But I am too lazy at the moment
     aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
     aapa = aapa.reshape(ncas,ncas,nocc,ncas)
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
     vhf_a = vj[1] - vk[1] * .5
-    gfock = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_occ)) * 2
-    gfock[:,ncore:nocc] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
-    gfock[:,ncore:nocc] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
+    gfock = numpy.zeros ((nocc, nocc))
+    gfock[:,:ncore] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_core)) * 2
+    gfock[:,ncore:ncore+ncas] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
+    gfock[:,ncore:ncore+ncas] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
     dme0 = reduce(numpy.dot, (mo_occ, (gfock+gfock.T)*.5, mo_occ.T))
     aapa = vj = vk = vhf_c = vhf_a = h1 = gfock = None
 
     dm1 = dm_core + dm_cas
-    vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
-    hcore_deriv = mf_grad.hcore_generator(mol)
-    s1 = mf_grad.get_ovlp(mol)
+    vj, vk = mc_grad.get_jk(mol, (dm_core, dm_cas))
+    vhf1c, vhf1a = vj - vk * .5
+    hcore_deriv = mc_grad.hcore_generator(mol)
+    s1 = mc_grad.get_ovlp(mol)
 
     diag_idx = numpy.arange(nao)
     diag_idx = diag_idx * (diag_idx+1) // 2 + diag_idx
@@ -90,8 +106,11 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
 
-    max_memory = mc.max_memory - lib.current_memory()[0]
-    blksize = int(max_memory*.9e6/8 / ((aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
+    max_memory = mc_grad.max_memory - lib.current_memory()[0]
+    # MRH: this originally implied that the memory footprint would be max(p1-p0) * max(q1-q0) * nao_pair
+    # In fact, that's the size of dm2_ao AND EACH COMPONENT of the differentiated eris
+    # So the actual memory footprint is 4 times that!
+    blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
     blksize = min(nao, max(2, blksize))
 
     for k, ia in enumerate(atmlst):
@@ -112,7 +131,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
         de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
 
-    de += mf_grad.grad_nuc(mol, atmlst)
+    log.timer('CASSCF nuclear gradients', *time0)
     return de
 
 def as_scanner(mcscf_grad):
@@ -138,6 +157,7 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     from pyscf import gto
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -154,38 +174,21 @@ def as_scanner(mcscf_grad):
 
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
+            if isinstance(mc_scanner, StateAverageMCSCFSolver):
+                e_tot = mc_scanner.e_average
+
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
     return CASSCF_GradScanner(mcscf_grad)
 
 
-class Gradients(lib.StreamObject):
+class Gradients(casci_grad.Gradients):
     '''Non-relativistic restricted Hartree-Fock gradients'''
-    def __init__(self, mc):
-        self.base = mc
-        self.mol = mc.mol
-        self.stdout = mc.stdout
-        self.verbose = mc.verbose
-        self.max_memory = mc.max_memory
-        self.atmlst = None
-        self.de = None
-        self._keys = set(self.__dict__.keys())
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('\n')
-        if not self.base.converged:
-            log.warn('Ground state CASSCF not converged')
-        log.info('******** %s for %s ********',
-                 self.__class__, self.base.__class__)
-        log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, lib.current_memory()[0])
-        return self
+    grad_elec = grad_elec
 
-    def kernel(self, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-               verbose=None):
-        cput0 = (time.clock(), time.time())
+    def kernel(self, mo_coeff=None, ci=None, atmlst=None, verbose=None):
         log = logger.new_logger(self, verbose)
         if atmlst is None:
             atmlst = self.atmlst
@@ -197,13 +200,10 @@ class Gradients(lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-        if self.verbose >= logger.INFO:
-            self.dump_flags()
-
-        self.de = kernel(self.base, mo_coeff, ci, atmlst, mf_grad, log)
-        log.timer('CASSCF gradients', *cput0)
+        de = self.grad_elec(mo_coeff, ci, atmlst, log)
+        self.de = de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
         self._finalize()
         return self.de
 
@@ -211,7 +211,7 @@ class Gradients(lib.StreamObject):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s gradients ---------------',
                         self.base.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            self._write(self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     mol.build()
     mf = scf.RHF(mol).run()
     mc = mcscf.CASSCF(mf, 4, 4).run()
-    de = kernel(mc)
+    de = mc.Gradients().kernel()
 
     mcs = mc.as_scanner()
     mol.set_geom_('N 0 0 0; N 0 0 1.201')

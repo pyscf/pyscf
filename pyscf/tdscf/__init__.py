@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,15 +15,20 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from pyscf import scf
 from pyscf.tdscf import rhf
 from pyscf.tdscf import uhf
-from pyscf.tdscf import rks
-from pyscf.tdscf import uks
 from pyscf.tdscf.rhf import TDRHF
-from pyscf.tdscf.rks import TDRKS
 from pyscf.tdscf.uhf import TDUHF
-from pyscf.tdscf.uks import TDUKS
-from pyscf import scf
+
+try:
+    from pyscf import dft
+    from pyscf.tdscf import rks
+    from pyscf.tdscf import uks
+    from pyscf.tdscf.rks import TDRKS
+    from pyscf.tdscf.uks import TDUKS
+except (ImportError, IOError):
+    pass
 
 
 def TDHF(mf):
@@ -39,13 +44,13 @@ def TDHF(mf):
 def TDA(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return uks.TDA(mf)
         else:
             return uhf.TDA(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, dft.rks.KohnShamDFT):
             return rks.TDA(mf)
         else:
             return rhf.TDA(mf)
@@ -53,20 +58,14 @@ def TDA(mf):
 def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return uks.TDDFT(mf)
-            else:
-                return uks.TDDFTNoHybrid(mf)
+        if isinstance(mf, dft.rks.KohnShamDFT):
+            return uks.tddft(mf)
         else:
             return uhf.TDHF(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return rks.TDDFT(mf)
-            else:
-                return rks.TDDFTNoHybrid(mf)
+        if isinstance(mf, dft.rks.KohnShamDFT):
+            return rks.tddft(mf)
         else:
             return rhf.TDHF(mf)
 

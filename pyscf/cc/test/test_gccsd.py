@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,7 +191,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_coeff = numpy.eye(nmo)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
-        mf.e_tot = mf.energy_elec()[0]
         mycc = gccsd.GCCSD(mf)
         ecc, t1, t2 = mycc.kernel()
         l1, l2 = mycc.solve_lambda()
@@ -209,12 +208,50 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), hcore, mf.mo_coeff))
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
+        e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
+
+    def test_rdm_real1(self):
+        numpy.random.seed(1)
+        mol = gto.M(
+            atom = 'H 0 0 0; F 0 0 1.1',
+            basis = '321g',
+            spin = 2)
+        myhf = mol.GHF()
+        hcoreX = myhf.get_hcore()
+        # a small random potential to break the Sz symmetry:
+        pot = (numpy.random.random(hcoreX.shape) - 0.5) * 3e-2
+        pot = pot + pot.T
+        hcoreX += pot
+        myhf.get_hcore = lambda *args: hcoreX
+        myhf.kernel()
+        mycc = myhf.CCSD().run()
+        mycc.solve_lambda()
+        rdm1 = mycc.make_rdm1(ao_repr=False)
+        rdm2 = mycc.make_rdm2(ao_repr=False)
+
+        # integrals in MO basis 
+        nao = mol.nao
+        C_ao_mo = myhf.mo_coeff
+        hcore = reduce(numpy.dot, (C_ao_mo.conj().T, myhf.get_hcore(), C_ao_mo))
+        mo_a = C_ao_mo[:nao]
+        mo_b = C_ao_mo[nao:]
+        eri  = ao2mo.kernel(myhf._eri, mo_a)
+        eri += ao2mo.kernel(myhf._eri, mo_b)
+        eri1 = ao2mo.kernel(myhf._eri, (mo_a, mo_a, mo_b, mo_b))
+        eri += eri1
+        eri += eri1.T
+        eri1 = None
+        eri_s1 = ao2mo.restore(1, eri, nao*2)
+        E_ref = myhf.energy_nuc()
+        E_ref += numpy.einsum('pq, qp ->', hcore, rdm1)
+        E_ref += 0.5 * numpy.einsum('pqrs, pqrs ->', eri_s1, rdm2)
+        self.assertAlmostEqual(E_ref, mycc.e_tot, 7)
 
     def test_rdm_complex(self):
         mol = gto.M()
@@ -251,7 +288,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_coeff = lib.tag_array(numpy.eye(nmo) + 0j, orbspin=orbspin)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
-        mf.e_tot = mf.energy_elec(mf.make_rdm1(), hcore)[0]
 
         mycc = cc.GCCSD(mf)
         eris = gccsd._make_eris_incore(mycc, mf.mo_coeff, ao2mofn)

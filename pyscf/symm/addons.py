@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import basis
 from pyscf.symm import param
 from pyscf import __config__
 
+
+MULTI_IRREPS = -1
 
 def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
                    check=getattr(__config__, 'symm_addons_label_orb_symm_check', True),
@@ -71,7 +74,7 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
         try:
             s_moso = lib.cho_solve(ovlpso, moso)
-        except:
+        except numpy.linalg.LinAlgError:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
             s_moso = lib.cho_solve(ovlpso, moso)
         norm[i] = numpy.einsum('ki,ki->i', moso.conj(), s_moso).real
@@ -194,17 +197,17 @@ def symmetrize_space(mol, mo, s=None,
     nmo = mo.shape[1]
     s_mo = numpy.dot(s, mo)
     if check and abs(numpy.dot(mo.conj().T, s_mo) - numpy.eye(nmo)).max() > tol:
-            raise ValueError('Orbitals are not orthogonalized')
+        raise ValueError('Orbitals are not orthogonalized')
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
         moso = numpy.dot(csym.T, s_mo)
         ovlpso = reduce(numpy.dot, (csym.T, s, csym))
 
-# excluding orbitals which are already symmetrized
+        # excluding orbitals which are already symmetrized
         try:
             diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
-        except:
+        except numpy.linalg.LinAlgError:
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
             diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
         idx = abs(1-diag) < 1e-8
@@ -229,7 +232,10 @@ def symmetrize_space(mol, mo, s=None,
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return str(gpname[0].upper() + gpname[1:].lower())
+    if gpname == 'SO3':
+        return gpname
+    else:
+        return str(gpname[0].upper() + gpname[1:].lower())
 
 def irrep_name2id(gpname, symb):
     '''Convert the irrep symbol to internal irrep ID
@@ -245,7 +251,9 @@ def irrep_name2id(gpname, symb):
     '''
     gpname = std_symb(gpname)
     symb = std_symb(symb)
-    if gpname in ('Dooh', 'Coov'):
+    if gpname == 'SO3':
+        return basis.so3_irrep_symb2id(symb)
+    elif gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_symb2id(gpname, symb)
     else:
         return param.IRREP_ID_TABLE[gpname][symb]
@@ -263,13 +271,17 @@ def irrep_id2name(gpname, irrep_id):
         Irrep sybmol, str
     '''
     gpname = std_symb(gpname)
-    if gpname in ('Dooh', 'Coov'):
+    if gpname == 'SO3':
+        return basis.so3_irrep_id2symb(irrep_id)
+    elif gpname in ('Dooh', 'Coov'):
         return basis.linearmole_irrep_id2symb(gpname, irrep_id)
     else:
-        return param.CHARACTER_TABLE[gpname][irrep_id][0]
+        # irrep_id may be obtained from high symmetry (Dooh, Coov)
+        irrep_id_in_d2h = irrep_id % 10
+        return param.CHARACTER_TABLE[gpname][irrep_id_in_d2h][0]
 
 def irrep_name(pgname, irrep_id):
-    raise RuntimeError('This function was obsoleted. Use irrep_id2name')
+    raise PointGroupSymmetryError('This function was obsoleted. Use irrep_id2name')
 
 def route(target, nelec, orbsym):
     '''Pick orbitals to form a determinant which has the right symmetry.
@@ -285,7 +297,7 @@ def route(target, nelec, orbsym):
             for i, ir in enumerate(orbsym):
                 off = i + 1
                 orb_left = orbsym[off:]
-                res = riter(target^ir, nelec-1, orb_left)
+                res = riter(target ^ ir, nelec-1, orb_left)
                 if res:
                     return [i] + [off+x for x in res]
             return []
@@ -311,6 +323,33 @@ def eigh(h, orbsym):
     '''
     return lib.eigh_by_blocks(h, labels=orbsym)
 
+def direct_prod(orbsym1, orbsym2, groupname='D2h'):
+    if groupname == 'SO3':
+        prod = orbsym1[:,None] ^ orbsym2
+        orbsym1_not_s = orbsym1 != 0
+        orbsym2_not_s = orbsym2 != 0
+        prod[orbsym1_not_s[:,None] & orbsym2_not_s != 0] = MULTI_IRREPS
+        prod[orbsym1[:,None] == orbsym2] = 0
+    elif groupname == 'Dooh':
+        orbsym1_octa = (orbsym1 // 10) * 8 + orbsym1 % 10
+        orbsym2_octa = (orbsym2 // 10) * 8 + orbsym2 % 10
+        prod = orbsym1_octa[:,None] ^ orbsym2_octa
+        prod = (prod % 8) + (prod // 8) * 10
+        orbsym1_irrepE = (orbsym1 >= 2) & (orbsym1 != 4) & (orbsym1 != 5)
+        orbsym2_irrepE = (orbsym2 >= 2) & (orbsym2 != 4) & (orbsym2 != 5)
+        prod[orbsym1_irrepE[:,None] & orbsym2_irrepE] = MULTI_IRREPS
+        prod[orbsym1[:,None] == orbsym2] = 0
+    elif groupname == 'Coov':
+        prod = orbsym1[:,None] ^ orbsym2
+        orbsym1_irrepE = orbsym1 >= 2
+        orbsym2_irrepE = orbsym2 >= 2
+        prod[orbsym1_irrepE[:,None] & orbsym2_irrepE] = MULTI_IRREPS
+        prod[orbsym1[:,None] == orbsym2] = 0
+    else:  # D2h and subgroup
+        prod = orbsym1[:,None] ^ orbsym2
+    return prod
+
+
 if __name__ == "__main__":
     from pyscf import gto
     from pyscf import scf
@@ -333,4 +372,4 @@ if __name__ == "__main__":
 
     orbsym = [0, 3, 0, 2, 5, 6]
     res = route(7, 3, orbsym)
-    print(res, reduce(lambda x,y:x^y, [orbsym[i] for i in res]))
+    print(res, reduce(lambda x, y: x ^ y, [orbsym[i] for i in res]))

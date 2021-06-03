@@ -18,10 +18,8 @@
 
 '''Non-relativistic RKS analytical nuclear gradients'''
 
-import time
-import copy
+
 import numpy
-import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
@@ -31,11 +29,15 @@ from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
-    '''Coulomb + XC functional
+    '''
+    First order derivative of DFT effective potential matrix (wrt electron coordinates)
+
+    Args:
+        ks_grad : grad.uhf.Gradients or grad.uks.Gradients object
     '''
     if mol is None: mol = ks_grad.mol
     if dm is None: dm = ks_grad.base.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     mf = ks_grad.base
     ni = mf._numint
@@ -81,7 +83,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
-    shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((nset,3,nao,nao))
@@ -91,7 +92,8 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[0], mask, 'LDA')
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                 verbose=verbose)[1]
                 vrho = vxc[0]
                 aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
                 _d1_dot_(vmat[idm], mol, ao[1:4], aow, mask, ao_loc, True)
@@ -102,13 +104,14 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[:4], mask, 'GGA')
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[1]
+                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                 verbose=verbose)[1]
                 wv = numint._rks_gga_wv0(rho, vxc, weight)
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
-                rho = vxc = vrho = vsigma = wv = None
+                rho = vxc = vrho = wv = None
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     exc = None
@@ -165,11 +168,11 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 1
         vtmp = numpy.empty((3,nao,nao))
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
-            ngrids = weight.size
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[0], mask, 'LDA')
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                  verbose=verbose)[:2]
             vrho = vxc[0]
 
             vtmp = numpy.zeros((3,nao,nao))
@@ -186,11 +189,11 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'GGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
-            ngrids = weight.size
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho = make_rho(0, ao[:4], mask, 'GGA')
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1, verbose)[:2]
+            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
+                                  verbose=verbose)[:2]
 
             vtmp = numpy.zeros((3,nao,nao))
             wv = numint._rks_gga_wv0(rho, vxc, weight)
@@ -201,18 +204,18 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = vsigma = wv = mat = None
+            rho = vxc = vrho = wv = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     # - sign because nabla_X = -nabla_x
     return excsum, -vmat
 
 
-# JCP, 98, 5612
+# JCP 98, 5612 (1993); DOI:10.1063/1.464906
 def grids_response_cc(grids):
     mol = grids.mol
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
@@ -258,7 +261,7 @@ def grids_response_cc(grids):
             grid_dist.append(normv)
             grid_norm_vec.append(v)
 
-        def get_du(ia, ib):  # JCP, 98, 5612 (B10)
+        def get_du(ia, ib):  # JCP 98, 5612 (1993); (B10)
             uab = atm_coords[ia] - atm_coords[ib]
             duab = 1./atm_dist[ia,ib] * grid_norm_vec[ia]
             duab-= uab[:,None]/atm_dist[ia,ib]**3 * (grid_dist[ia]-grid_dist[ib])
@@ -300,7 +303,7 @@ def grids_response_cc(grids):
                     dpbecke[ib,ib] -= pt_uba * duba
                     dpbecke[ib,ia] -= pt_uab * duba
 
-# * JCP, 98, 5612 (B8) (B10) miss many terms
+# * JCP 98, 5612 (1993); (B8) (B10) miss many terms
                 if ia != atom_id and ib != atom_id:
                     ua_ub = grid_norm_vec[ia] - grid_norm_vec[ib]
                     ua_ub /= atm_dist[ia,ib]
@@ -327,15 +330,15 @@ def grids_response_cc(grids):
 
 class Gradients(rhf_grad.Gradients):
 
-# This parameter has no effects for HF gradients. Add this attribute so that
-# the kernel function can be reused in the DFT gradients code.
+    # This parameter has no effects for HF gradients. Add this attribute so that
+    # the kernel function can be reused in the DFT gradients code.
     grid_response = getattr(__config__, 'grad_rks_Gradients_grid_response', False)
 
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
-# This parameter has no effects for HF gradients. Add this attribute so that
-# the kernel function can be reused in the DFT gradients code.
+        # This parameter has no effects for HF gradients. Add this attribute so that
+        # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
@@ -373,7 +376,6 @@ dft.rks.RKS.Gradients = dft.rks_symm.RKS.Gradients = lib.class_as_method(Gradien
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import dft
 
     mol = gto.Mole()
@@ -394,6 +396,9 @@ if __name__ == '__main__':
 # [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
     g.grid_response = True
     print(lib.finger(g.kernel()) - -0.049891265876709084)
+# O     0.0000000000    -0.0000000000     0.0210225191
+# H     0.0000000000     0.0281984036    -0.0105112595
+# H    -0.0000000000    -0.0281984036    -0.0105112595
 
     mf.xc = 'b88,p86'
     e0 = mf.scf()

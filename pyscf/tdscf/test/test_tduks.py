@@ -25,16 +25,25 @@ from pyscf import tdscf
 mol = gto.Mole()
 mol.verbose = 5
 mol.output = '/dev/null'
-mol.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
+mol.atom = '''
+O     0.   0.       0.
+H     0.   -0.757   0.587
+H     0.   0.757    0.587'''
 mol.spin = 2
 mol.basis = '631g'
 mol.build()
 
-mf = scf.UHF(mol).run()
-td_hf = tdscf.TDHF(mf).run(conv_tol=1e-12)
+mol1 = gto.Mole()
+mol1.verbose = 0
+mol1.atom = '''
+O     0.   0.       0.
+H     0.   -0.757   0.587
+H     0.   0.757    0.587'''
+mol1.basis = '631g'
+mol1.build()
+
+mf_uhf = scf.UHF(mol).run()
+td_hf = tdscf.TDHF(mf_uhf).run(conv_tol=1e-12)
 
 mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
 mf_lda.grids.prune = None
@@ -67,55 +76,78 @@ def diagonalize(a, b, nroots=4):
     return lowest_e
 
 def tearDownModule():
-    global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
     mol.stdout.close()
-    del mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    del mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
 
 class KnownValues(unittest.TestCase):
-    def test_nohbrid_lda(self):
+    def test_nohybrid_lda(self):
         td = tdscf.uks.TDDFTNoHybrid(mf_lda).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 6)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
-        self.assertAlmostEqual(lib.finger(es[:3]*27.2114), 1.2946309669294163, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 1.294630966929489, 6)
 
-    def test_nohbrid_b88p86(self):
+        mf = dft.UKS(mol1).run(xc='lda, vwn_rpa').run()
+        td = mf.TDDFTNoHybrid()
+        td.nstates = 5
+        es = td.kernel()[0] * 27.2114
+        ref = [6.94083826, 7.61492553, 8.55550045, 9.36308859, 9.84896499]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+
+    def test_nohybrid_b88p86(self):
         td = tdscf.uks.TDDFTNoHybrid(mf_bp86).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 6)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 8)
-        self.assertAlmostEqual(lib.finger(es[:3]*27.2114), 1.4624730971221087, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 1.4624730971221087, 6)
 
     def test_tddft_lda(self):
         td = tdscf.uks.TDDFT(mf_lda).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0] * 27.2114
-        self.assertAlmostEqual(lib.finger(es[:3]), 1.2946309669294163, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]), 1.2946309669294163, 6)
 
     def test_tddft_b88p86(self):
         td = tdscf.uks.TDDFT(mf_bp86).set(conv_tol=1e-12)
-        es = td.kernel(nstates=4)[0] * 27.2114
-        self.assertAlmostEqual(lib.finger(es[:3]), 1.4624730971221087, 6)
+        es = td.kernel(nstates=5)[0] * 27.2114
+        self.assertAlmostEqual(lib.fp(es[:3]), 1.4624730971221087, 6)
+        ref = [2.45700922, 2.93224712, 6.19693767, 12.22264487, 13.40445012]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
+
+        mf = dft.UKS(mol1).run(xc='b88,p86').run()
+        es = mf.TDDFT().kernel(nstates=5)[0] * 27.2114
+        ref = [6.96397206, 7.70955605, 8.59882964, 9.35357180, 9.92828610]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
 
     def test_tddft_b3lyp(self):
         td = tdscf.uks.TDDFT(mf_b3lyp).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0] * 27.2114
-        self.assertAlmostEqual(lib.finger(es[:3]), 1.2984822994759448, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]), 1.2984822994759448, 6)
 
     def test_tda_b3lyp(self):
         td = tdscf.TDA(mf_b3lyp).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0] * 27.2114
-        self.assertAlmostEqual(lib.finger(es[:3]), 1.4303636271767162, 6)
+        self.assertAlmostEqual(lib.fp(es[:3]), 1.4303636271767162, 6)
 
     def test_tda_lda(self):
         td = tdscf.TDA(mf_lda).set(conv_tol=1e-12)
-        es = td.kernel(nstates=4)[0] * 27.2114
-        self.assertAlmostEqual(lib.finger(es[:3]), 1.4581538269747121, 6)
+        es = td.kernel(nstates=5)[0] * 27.2114
+        self.assertAlmostEqual(lib.fp(es[:3]), 1.4581538269747121, 6)
+        ref = [2.14644585, 3.27738191, 5.90913787, 12.14980714, 13.15535042]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
+
+        mf = dft.UKS(mol1).run(xc='lda,vwn').run()
+        td = mf.TDA()
+        td.nstates = 5
+        es = td.kernel()[0] * 27.2114
+        ref = [6.88046608, 7.58244885, 8.49961771, 9.30209259, 9.79775972]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
     def test_ab_hf(self):
-        mf = scf.UHF(mol).run()
-        a, b = tdscf.TDDFT(mf).get_ab()
+        mf = mf_uhf
+        a, b = tdscf.TDDFT(mf_uhf).get_ab()
         ftda = tdscf.uhf.gen_tda_operation(mf)[0]
         ftdhf = tdscf.uhf.gen_tdhf_operation(mf)[0]
         nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
@@ -252,13 +284,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ab12 - abxy_ref).max(), 0, 9)
 
     def test_nto(self):
-        mf = scf.UHF(mol).run()
+        mf = mf_uhf
         td = tdscf.TDA(mf).run()
         w, nto = td.get_nto(state=1)
         self.assertAlmostEqual(w[0][0], 0.00018520143461015, 9)
         self.assertAlmostEqual(w[1][0], 0.99963372674044326, 9)
-        self.assertAlmostEqual(lib.finger(w[0]), 0.00027305600430816, 9)
-        self.assertAlmostEqual(lib.finger(w[1]), 0.99964370569529093, 9)
+        self.assertAlmostEqual(lib.fp(w[0]), 0.00027305600430816, 9)
+        self.assertAlmostEqual(lib.fp(w[1]), 0.99964370569529093, 9)
 
         pmol = copy.copy(mol)
         pmol.symmetry = True
@@ -268,8 +300,8 @@ class KnownValues(unittest.TestCase):
         w, nto = td.get_nto(state=0)
         self.assertAlmostEqual(w[0][0], 0.00018520143461016, 9)
         self.assertAlmostEqual(w[1][0], 0.99963372674044326, 9)
-        self.assertAlmostEqual(lib.finger(w[0]), 0.00027305600430816, 9)
-        self.assertAlmostEqual(lib.finger(w[1]), 0.99964370569529093, 9)
+        self.assertAlmostEqual(lib.fp(w[0]), 0.00027305600430816, 9)
+        self.assertAlmostEqual(lib.fp(w[1]), 0.99964370569529093, 9)
 
         w, nto = td.get_nto(state=-1)
         self.assertAlmostEqual(w[0][0], 0.00236940007134660, 9)
@@ -277,10 +309,22 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         f = td_hf.oscillator_strength(gauge='length')
-        self.assertAlmostEqual(lib.finger(f), 0.16147450863004867, 7)
+        self.assertAlmostEqual(lib.fp(f), 0.16147450863004867, 7)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
-        self.assertAlmostEqual(lib.finger(f), 0.19750347627735745, 6)
-        td_hf.analyze()
+        self.assertAlmostEqual(lib.fp(f), 0.19750347627735745, 6)
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td_hf.analyze()
+        ref = [(),
+               (1, 2.057393343331977, 602.6275818634069, 0.1605980834206071),
+               (2, 2.280659766638949, 543.6330282886508, 0.0016221163442707552),
+               (3, 6.37244518162562, 194.5629880048233, 9.923201744400984e-31)]
+
+        self.assertAlmostEqual(abs(numpy.hstack(ref) -
+                                   numpy.hstack(note_args)).max(), 0, 7)
 
     def test_init(self):
         hf = scf.UHF(mol)
@@ -316,7 +360,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.uks.TDA(mf)
         td.wfnsym = 'B1'
         es = td.kernel(nstates=3)[0]
-        self.assertAlmostEqual(lib.finger(es), 0.16350926466999033, 6)
+        self.assertAlmostEqual(lib.fp(es), 0.16350926466999033, 6)
         td.analyze()
 
     def test_tdhf_with_wfnsym(self):
@@ -329,8 +373,23 @@ class KnownValues(unittest.TestCase):
         td.wfnsym = 'B1'
         td.nroots = 3
         es = td.kernel()[0]
-        self.assertAlmostEqual(lib.finger(es), 0.11306948533259675, 6)
-        td.analyze()
+        self.assertAlmostEqual(lib.fp(es), 0.11306948533259675, 6)
+
+        note_args = []
+        def temp_logger_note(rec, msg, *args):
+            note_args.append(args)
+        with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
+            td.analyze()
+        ref = [(),
+               (1, 'B1', 2.0573933276026657, 602.6275864706528, 0.1605980714821934),
+               (2, 'B1', 14.851066559488304, 83.4850460381169, 0.001928664835262468),
+               (3, 'B1', 16.832235179166293, 73.65878400799706, 0.17021505486468672)]
+        self.assertEqual(note_args[1][1], 'B1')
+        self.assertEqual(note_args[2][1], 'B1')
+        self.assertEqual(note_args[3][1], 'B1')
+        self.assertAlmostEqual(abs(numpy.hstack((ref[1][2:], ref[2][2:], ref[3][2:])) -
+                                   numpy.hstack((note_args[1][2:], note_args[2][2:], note_args[3][2:]))).max(),
+                               0, 7)
 
     def test_tddft_with_wfnsym(self):
         pmol = mol.copy()
@@ -342,8 +401,14 @@ class KnownValues(unittest.TestCase):
         td.wfnsym = 'B1'
         td.nroots = 3
         es = td.kernel()[0]
-        self.assertAlmostEqual(lib.finger(es), 0.15403661700414412, 6)
+        self.assertAlmostEqual(lib.fp(es), 0.15403661700414412, 6)
         td.analyze()
+
+    def test_symmetry_init_guess(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
+        td = mol.UHF.run().TDA().run(nstates=1)
+        self.assertAlmostEqual(td.e[0], 0.14147328219131602, 7)
+        # TODO: verify symmetry of td.x == A1u, close to triplet state
 
 
 if __name__ == "__main__":

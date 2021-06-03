@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@ parse CP2K format
 
 import re
 from pyscf.gto.basis import parse_nwchem
+from pyscf import __config__
+
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
 
 MAXL = 8
 
@@ -41,15 +44,23 @@ def load(basisfile, symb, optimize=False):
     return _parse(search_seg(basisfile, symb), optimize)
 
 def _parse(blines, optimize=False):
-    header_ln = blines.pop(0)
+    header_ln = blines.pop(0)  # noqa: F841
     nsets = int(blines.pop(0))
     basis = []
     for n in range(nsets):
         comp = [int(p) for p in blines.pop(0).split()]
-        n, lmin, lmax, nexps, ncontractions = comp[0], comp[1], comp[2], comp[3], comp[4:]
+        lmin, lmax, nexps, ncontractions = comp[1], comp[2], comp[3], comp[4:]
         basis_n = [[l] for l in range(lmin,lmax+1)]
         for nexp in range(nexps):
-            bfun = [float(x) for x in blines.pop(0).split()]
+            line = blines.pop(0)
+            dat = line.split()
+            try:
+                bfun = [float(x) for x in dat]
+            except ValueError:
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse basis %s' % line)
+                else:
+                    bfun = eval(','.join(dat))
             exp = bfun.pop(0)
             for i,l in enumerate(range(lmin,lmax+1)):
                 cl = [exp]

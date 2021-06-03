@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,14 +16,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
-import ctypes
-import tempfile
-from functools import reduce
+
 import numpy
-import h5py
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd_lambda
 
@@ -37,9 +32,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
 
 # l2, t2 as ijab
 def make_intermediates(mycc, t1, t2, eris):
-    log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
     foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
     fvo = eris.fock[nocc:,:nocc]
@@ -108,10 +101,9 @@ def make_intermediates(mycc, t1, t2, eris):
 
 # update L1, L2
 def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
-    time1 = time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
     fov = eris.fock[:nocc,nocc:]
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 #          Alec White
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -31,7 +31,10 @@ from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point
+from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
+from pyscf.pbc.mp.kump2 import (get_frozen_mask, get_nocc, get_nmo,
+                                padded_mo_coeff, padding_k_idx)  # noqa
 from pyscf.pbc.cc import kintermediates_uhf
 from pyscf import __config__
 
@@ -56,8 +59,7 @@ def convert_mo_coeff(mo_coeff):
     return mo_coeff
 
 def update_amps(cc, t1, t2, eris):
-    from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
 
     t1a, t1b = t1
@@ -70,17 +72,22 @@ def update_amps(cc, t1, t2, eris):
 
     nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
-    fvv_ = eris.fock[0][:,nocca:,nocca:]
-    fVV_ = eris.fock[1][:,noccb:,noccb:]
-    foo_ = eris.fock[0][:,:nocca,:nocca]
-    fOO_ = eris.fock[1][:,:noccb,:noccb]
+    #fvv_ = eris.fock[0][:,nocca:,nocca:]
+    #fVV_ = eris.fock[1][:,noccb:,noccb:]
+    #foo_ = eris.fock[0][:,:nocca,:nocca]
+    #fOO_ = eris.fock[1][:,:noccb,:noccb]
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
 
+    # Get location of padded elements in occupied and virtual space
+    nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(cc, kind="split")
+    nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+    nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
+
     mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
     mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
-    mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
-    mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+    mo_ea_v = [e[nocca:] + cc.level_shift for e in eris.mo_energy[0]]
+    mo_eb_v = [e[noccb:] + cc.level_shift for e in eris.mo_energy[1]]
 
     Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
@@ -247,8 +254,8 @@ def update_amps(cc, t1, t2, eris):
     #    kv = kconserv[kx, kz, kw]
     #    for ku in range(nkpts):
     #        ky = kconserv[kw, kv, ku]
-            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
-            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
+    #        #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
+    #        #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
 
     for km, ke, kb in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ke, kb]
@@ -261,7 +268,7 @@ def update_amps(cc, t1, t2, eris):
         ky = kconserv[kz, kx, ku]
         Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], eris.voOV[ku,kw,kz])
 
-    
+
     #:Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
     #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
     #for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
@@ -381,25 +388,36 @@ def update_amps(cc, t1, t2, eris):
     eia = []
     eIA = []
     for ki in range(nkpts):
-        eia.append([mo_ea_o[ki][:,None] - mo_ea_v[ka] for ka in range(nkpts)])
-        eIA.append([mo_eb_o[ki][:,None] - mo_eb_v[ka] for ka in range(nkpts)])
+        tmp_alpha = []
+        tmp_beta = []
+        for ka in range(nkpts):
+            tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+            tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+            n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+            tmp_eia[n0_ovp_ia] = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+            tmp_eIA[n0_ovp_IA] = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+            tmp_alpha.append(tmp_eia)
+            tmp_beta.append(tmp_eIA)
+        eia.append(tmp_alpha)
+        eIA.append(tmp_beta)
 
     for ki in range(nkpts):
-        Ht1a[ki] /= eia[ki][ki]
-        Ht1b[ki] /= eIA[ki][ki]
+        ka = ki
+        # Remove zero/padded elements from denominator
+        Ht1a[ki] /= eia[ki][ka]
+        Ht1b[ki] /= eIA[ki][ka]
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
         eijab = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2aa[ki,kj,ka] /= eijab
 
         eijab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2ab[ki,kj,ka] /= eijab
 
         eijab = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2bb[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
@@ -441,11 +459,11 @@ def energy(cc, t1, t2, eris):
     tauab = t2ab + t1t1ab
     taubb = t2bb + 2*t1t1bb
     d = 0.0 + 0.j
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa)
-            - einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa) -
+               einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
     d += einsum('xzyiajb,xyzijab->',eris.ovOV,tauab)
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb)
-            - einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb) -
+               einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
     e = s + d
     e /= nkpts
     if abs(e.imag) > 1e-4:
@@ -453,60 +471,60 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-def get_nocc(cc, per_kpoint=False):
-    '''See also function get_nocc in pyscf/pbc/mp2/kmp2.py'''
-    if cc._nocc is not None:
-        return cc._nocc
-
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
-        noccb = [(np.count_nonzero(cc.mo_occ[1][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
-
-    else:
-        raise NotImplementedError
-
-    if not per_kpoint:
-        nocca = np.amax(nocca)
-        noccb = np.amax(noccb)
-    return nocca, noccb
-
-def get_nmo(cc, per_kpoint=False):
-    '''See also function get_nmo in pyscf/pbc/mp2/kmp2.py'''
-    if cc._nmo is not None:
-        return cc._nmo
-
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
-        nmob = [(cc.mo_occ[1][k].size - cc.frozen) for k in range(cc.nkpts)]
-
-    else:
-        raise NotImplementedError
-
-    if not per_kpoint:
-        nmoa = np.amax(nmoa)
-        nmob = np.amax(nmob)
-    return nmoa, nmob
-
-def get_frozen_mask(cc):
-    '''See also get_frozen_mask function in pyscf/pbc/mp2/kmp2.py'''
-
-    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
-    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
-    assert(cc.frozen == 0)
-
-    if isinstance(cc.frozen, (int, np.integer)):
-        for idx in moidxa:
-            idx[:cc.frozen] = False
-        for idx in moidxb:
-            idx[:cc.frozen] = False
-    else:
-        raise NotImplementedError
-
-    return moidxa, moisxb
+#def get_nocc(cc, per_kpoint=False):
+#    '''See also function get_nocc in pyscf/pbc/mp2/kmp2.py'''
+#    if cc._nocc is not None:
+#        return cc._nocc
+#
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
+#        noccb = [(np.count_nonzero(cc.mo_occ[1][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
+#
+#    else:
+#        raise NotImplementedError
+#
+#    if not per_kpoint:
+#        nocca = np.amax(nocca)
+#        noccb = np.amax(noccb)
+#    return nocca, noccb
+#
+#def get_nmo(cc, per_kpoint=False):
+#    '''See also function get_nmo in pyscf/pbc/mp2/kmp2.py'''
+#    if cc._nmo is not None:
+#        return cc._nmo
+#
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
+#        nmob = [(cc.mo_occ[1][k].size - cc.frozen) for k in range(cc.nkpts)]
+#
+#    else:
+#        raise NotImplementedError
+#
+#    if not per_kpoint:
+#        nmoa = np.amax(nmoa)
+#        nmob = np.amax(nmob)
+#    return nmoa, nmob
+#
+#def get_frozen_mask(cc):
+#    '''See also get_frozen_mask function in pyscf/pbc/mp2/kmp2.py'''
+#
+#    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
+#    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
+#    assert(cc.frozen == 0)
+#
+#    if isinstance(cc.frozen, (int, np.integer)):
+#        for idx in moidxa:
+#            idx[:cc.frozen] = False
+#        for idx in moidxb:
+#            idx[:cc.frozen] = False
+#    else:
+#        raise NotImplementedError
+#
+#    return moidxa, moisxb
 
 def amplitudes_to_vector(t1, t2):
     return np.hstack((t1[0].ravel(), t1[1].ravel(),
@@ -532,7 +550,6 @@ def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
 def add_vvvv_(cc, Ht2, t1, t2, eris):
     nocca, noccb = cc.nocc
     nmoa, nmob = cc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
     nkpts = cc.nkpts
     kconserv = cc.khelper.kconserv
 
@@ -570,61 +587,41 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             WvvVV *= (1./nkpts)
             WVVVV *= (1./nkpts)
             return Wvvvv, WvvVV, WVVVV
-
-        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
-            kd = kconserv[ka,kc,kb]
-            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
-            for ki in range(nkpts):
-                kj = kconserv[ka,ki,kb]
-                tauaa = t2aa[ki,kj,kc].copy()
-                tauab = t2ab[ki,kj,kc].copy()
-                taubb = t2bb[ki,kj,kc].copy()
-                if ki == kc and kj == kd:
-                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
-                if ki == kd and kj == kc:
-                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
-
-                tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
-                Ht2aa[ki,kj,ka] += tmp
-                Ht2aa[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-
-                tmp = lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
-                Ht2bb[ki,kj,ka] += tmp
-                Ht2bb[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-
-                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
-            Wvvvv = WvvVV = WVVVV = None
     else:
-        _Wvvvv, _WvvVV, _WVVVV = kintermediates_uhf.cc_Wvvvv(cc, t1, t2, eris)
+        _Wvvvv, _WvvVV, _WVVVV = kintermediates_uhf.cc_Wvvvv_half(cc, t1, t2, eris)
         def get_Wvvvv(ka, kc, kb):
             return _Wvvvv[ka,kc,kb], _WvvVV[ka,kc,kb], _WVVVV[ka,kc,kb]
 
-        #:Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, _Wvvvv, P, P) * .5
-        #:Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, _WVVVV, P, P) * .5
-        #:Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, _WvvVV, P, P)
-        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
-            kd = kconserv[ka,kc,kb]
-            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
-            for ki in range(nkpts):
-                kj = kconserv[ka,ki,kb]
-                tauaa = t2aa[ki,kj,kc].copy()
-                tauab = t2ab[ki,kj,kc].copy()
-                taubb = t2bb[ki,kj,kc].copy()
-                if ki == kc and kj == kd:
-                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
-                if ki == kd and kj == kc:
-                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+    #:Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, _Wvvvv-_Wvvvv.transpose(2,1,0,5,4,3,6), P, P) * .5
+    #:Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, _WVVVV-_WVVVV.transpose(2,1,0,5,4,3,6), P, P) * .5
+    #:Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, _WvvVV, P, P)
+    for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
+        kd = kconserv[ka,kc,kb]
+        Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
+        for ki in range(nkpts):
+            kj = kconserv[ka,ki,kb]
+            tauaa = t2aa[ki,kj,kc].copy()
+            tauab = t2ab[ki,kj,kc].copy()
+            taubb = t2bb[ki,kj,kc].copy()
+            if ki == kc and kj == kd:
+                tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+            if ki == kd and kj == kc:
+                tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
 
-                Ht2aa[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
-                Ht2bb[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
-                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
-        _Wvvvv = _WvvVV = _WVVVV = None
+            tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
+            Ht2aa[ki,kj,ka] += tmp
+            Ht2aa[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+            tmp = lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
+            Ht2bb[ki,kj,ka] += tmp
+            Ht2bb[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+            Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
+        Wvvvv = WvvVV = WVVVV = None
+    _Wvvvv = _WvvVV = _WVVVV = None
 
     # Contractions below are merged to Woooo intermediates
     # tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
@@ -642,7 +639,7 @@ class KUCCSD(uccsd.UCCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
@@ -686,8 +683,7 @@ class KUCCSD(uccsd.UCCSD):
             return _make_eris_outcore(self, mo_coeff)
 
     def init_amps(self, eris):
-        from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
 
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo
@@ -706,23 +702,36 @@ class KUCCSD(uccsd.UCCSD):
         mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
         mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
 
+        # Get location of padded elements in occupied and virtual space
+        nonzero_padding_alpha, nonzero_padding_beta = padding_k_idx(self, kind="split")
+        nonzero_opadding_alpha, nonzero_vpadding_alpha = nonzero_padding_alpha
+        nonzero_opadding_beta, nonzero_vpadding_beta = nonzero_padding_beta
+
+        eia = []
+        eIA = []
+        # Create denominators, ignoring padded elements
+        for ki in range(nkpts):
+            tmp_alpha = []
+            tmp_beta = []
+            for ka in range(nkpts):
+                tmp_eia = LARGE_DENOM * np.ones((nocca, nvira), dtype=eris.mo_energy[0][0].dtype)
+                tmp_eIA = LARGE_DENOM * np.ones((noccb, nvirb), dtype=eris.mo_energy[0][0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding_alpha[ki], nonzero_vpadding_alpha[ka])
+                n0_ovp_IA = np.ix_(nonzero_opadding_beta[ki], nonzero_vpadding_beta[ka])
+
+                tmp_eia[n0_ovp_ia] = (mo_ea_o[ki][:,None] - mo_ea_v[ka])[n0_ovp_ia]
+                tmp_eIA[n0_ovp_IA] = (mo_eb_o[ki][:,None] - mo_eb_v[ka])[n0_ovp_IA]
+                tmp_alpha.append(tmp_eia)
+                tmp_beta.append(tmp_eIA)
+            eia.append(tmp_alpha)
+            eIA.append(tmp_beta)
+
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            Daa = (mo_ea_o[ki][:,None,None,None] + mo_ea_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_ea_v[kb][None,None,None,:])
-            Dab = (mo_ea_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-            Dbb = (mo_eb_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_eb_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-
-            # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
-            Daa[idx] = LARGE_DENOM
-            idx = np.where(abs(Dab) < LOOSE_ZERO_TOL)[0]
-            Dab[idx] = LARGE_DENOM
-            idx = np.where(abs(Dbb) < LOOSE_ZERO_TOL)[0]
-            Dbb[idx] = LARGE_DENOM
+            Daa = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
+            Dab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+            Dbb = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
 
             t2aa[ki,kj,ka] = eris.ovov[ki,ka,kj].conj().transpose((0,2,1,3)) / Daa
             t2aa[ki,kj,ka]-= eris.ovov[kj,ka,ki].conj().transpose((2,0,1,3)) / Daa
@@ -733,11 +742,11 @@ class KUCCSD(uccsd.UCCSD):
         t2 = (t2aa,t2ab,t2bb)
 
         d = 0.0 + 0.j
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa)
-                - einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa) -
+                   einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
         d += einsum('xzyiajb,xyzijab->',eris.ovOV,t2ab)
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb)
-                - einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb) -
+                   einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
         self.emp2 = d/nkpts
 
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
@@ -756,11 +765,22 @@ class KUCCSD(uccsd.UCCSD):
 UCCSD = KUCCSD
 
 
+#######################################
+#
+# _ERIS.
+#
+# Note the two electron integrals are stored in different orders from
+# kccsd_rhf._ERIS.  Integrals (ab|cd) are stored as [ka,kb,kc,a,b,c,d] here
+# while the order is [ka,kc,kb,a,c,b,d] in kccsd_rhf._ERIS
+#
+# TODO: use the same convention as kccsd_rhf
+#
 def _make_eris_incore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
     mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -817,10 +837,10 @@ def _make_eris_incore(cc, mo_coeff=None):
 def _kuccsd_eris_common_(cc, eris, buf=None):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
-    if not (cc.frozen is None or cc.frozen == 0):
-        raise NotImplementedError('cc.frozen = %s' % cc.frozen)
+    #if not (cc.frozen is None or cc.frozen == 0):
+    #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(cc)
     cell = cc._scf.cell
     thisdf = cc._scf.with_df
@@ -828,10 +848,8 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     kpts = cc.kpts
     nkpts = cc.nkpts
     mo_coeff = eris.mo_coeff
-    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
     mo_a, mo_b = mo_coeff
 
     # Re-make our fock MO matrix elements from density and fock AO
@@ -844,6 +862,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
              for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
+    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     madelung = tools.madelung(cell, kpts)
     mo_ea = [focka[k].diagonal().real for k in range(nkpts)]
@@ -853,9 +872,9 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     eris.mo_energy = (mo_ea, mo_eb)
 
     orboa = np.asarray(mo_coeff[0][:,:,:nocca], order='C')
-    orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
     orbob = np.asarray(mo_coeff[1][:,:,:noccb], order='C')
-    orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
+    #orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
+    #orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
     dtype = np.result_type(*focka).char
 
     # The momentum conservation array
@@ -933,6 +952,7 @@ def _make_eris_outcore(cc, mo_coeff=None):
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
     mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -1004,6 +1024,7 @@ def _make_df_eris(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = padded_mo_coeff(cc, mo_coeff)
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
     thisdf = cc._scf.with_df
@@ -1013,10 +1034,10 @@ def _make_df_eris(cc, mo_coeff=None):
     nocca, noccb = cc.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
-    if getattr(thisdf, 'auxcell', None):
-        naux = thisdf.auxcell.nao_nr()
-    else:
-        naux = thisdf.get_naoaux()
+    #if getattr(thisdf, 'auxcell', None):
+    #    naux = thisdf.auxcell.nao_nr()
+    #else:
+    #    naux = thisdf.get_naoaux()
     nao = cell.nao_nr()
     mo_kpts_a, mo_kpts_b = eris.mo_coeff
 
@@ -1067,7 +1088,7 @@ def _make_df_eris(cc, mo_coeff=None):
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
     eris.LPV = LPV = np.empty((nkpts,nkpts), dtype=object)
     with h5py.File(thisdf._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'].value
+        kptij_lst = f['j3c-kptij'][:]
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
@@ -1094,8 +1115,11 @@ def _make_df_eris(cc, mo_coeff=None):
     return eris
 
 
+scf.kuhf.KUHF.CCSD = lib.class_as_method(KUCCSD)
+
+
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, cc
+    from pyscf.pbc import gto
     from pyscf import lo
 
     cell = gto.Cell()

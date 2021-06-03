@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #
 
 import numpy
-from pyscf import symm
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import mc1step
@@ -25,7 +24,7 @@ from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
 from pyscf import fci
-from pyscf import __config__
+from pyscf.soscf.newton_ah import _force_SO3_degeneracy_, _force_Ex_Ey_degeneracy_
 
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
@@ -112,6 +111,10 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
+        # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
+        if isinstance (self, StateAverageMCSCFSolver):
+            mc1 = mc1.state_average_(self.weights)
         return mc1
 
 CASSCF = SymAdaptedCASSCF
@@ -122,17 +125,21 @@ def _symmetrize(mat, orbsym, groupname):
     allowed = orbsym.reshape(-1,1) == orbsym
     mat1[allowed] = mat[allowed]
 
-    if groupname in ('Dooh', 'Coov'):
-        from pyscf.soscf import newton_ah
-        newton_ah._force_Ex_Ey_degeneracy_(mat1, orbsym)
+    if groupname == 'SO3':
+        _force_SO3_degeneracy_(mat1, orbsym)
+    elif groupname in ('Dooh', 'Coov'):
+        _force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
+
+from pyscf import scf
+scf.hf_symm.RHF.CASSCF = scf.hf_symm.ROHF.CASSCF = lib.class_as_method(SymAdaptedCASSCF)
+scf.uhf_symm.UHF.CASSCF = None
 
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     import pyscf.fci
-    from pyscf.mcscf import addons
 
     mol = gto.Mole()
     mol.verbose = 0

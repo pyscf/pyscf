@@ -31,7 +31,6 @@ charges = (numpy.arange(5) + 1.) * -.1
 #
 # Background charges have to be patched to the underlying SCF calculaitons.
 #
-
 mf = qmmm.mm_charge(scf.RHF(mol), coords, charges).run()
 
 cc.CCSD(mf).run()

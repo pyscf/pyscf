@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -250,7 +250,7 @@ void FCIcontract_b_1e(double *f1e_tril, double *ci0, double *ci1,
 void FCIcontract_1e_spin0(double *f1e_tril, double *ci0, double *ci1,
                           int norb, int na, int nlink, int *link_index)
 {
-        memset(ci1, 0, sizeof(double)*na*na);
+        NPdset0(ci1, ((size_t)na) * na);
         FCIcontract_a_1e(f1e_tril, ci0, ci1, norb, na, na, nlink, nlink,
                          link_index, link_index);
 }
@@ -304,7 +304,7 @@ static void ctr_rhf2e_kern(double *eri, double *ci0, double *ci1,
         double *t1 = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         FCIprog_b_t1(ci0, t1, bcount, stra_id, strb_id,
@@ -330,6 +330,26 @@ void FCIaxpy2d(double *out, double *in, size_t count, size_t no, size_t ni)
         }
 }
 
+static void _reduce(double *out, double **in, size_t count, size_t no, size_t ni)
+{
+        unsigned int nthreads = omp_get_num_threads();
+        unsigned int thread_id = omp_get_thread_num();
+        size_t blksize = (count + nthreads - 1) / nthreads;
+        size_t start = thread_id * blksize;
+        size_t end = MIN(start + blksize, count);
+        double *src;
+        size_t it, i, j;
+
+        for (it = 0; it < nthreads; it++) {
+                src = in[it];
+                for (i = start; i < end; i++) {
+                        for (j = 0; j < ni; j++) {
+                                out[i*no+j] += src[i*ni+j];
+                        }
+                }
+        }
+}
+
 /*
  * nlink = nocc*nvir, num. all possible strings that a string can link to
  * link_index[str0] == linking map between str0 and other strings
@@ -345,7 +365,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         _LinkTrilT *clink = malloc(sizeof(_LinkTrilT) * nlink * na);
         FCIcompress_link_tril(clink, link_index, na, nlink);
 
-        memset(ci1, 0, sizeof(double)*na*na);
+        NPdset0(ci1, ((size_t)na) * na);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -356,7 +376,7 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, na-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static, 112)
 /* strk starts from MAX(strk0, ib), because [0:ib,0:ib] have been evaluated */
                 for (strk = ib; strk < na; strk++) {
@@ -366,9 +386,11 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                                        strk, ib, norb, na, na, nlink, nlink,
                                        clink, clink);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, na, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2e_kern
 #pragma omp barrier
@@ -389,7 +411,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-        memset(ci1, 0, sizeof(double)*na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -400,7 +422,7 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_rhf2e_kern(eri, ci0, ci1, ci1buf, t1buf,
@@ -408,9 +430,11 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2e_kern
 #pragma omp barrier
@@ -441,8 +465,11 @@ static void ctr_uhf2e_kern(double *eri_aa, double *eri_ab, double *eri_bb,
         double *t1b = t1a + nnorb*bcount;
         double *vt1 = t1b + nnorb*bcount;
 
-        memset(t1a, 0, sizeof(double)*nnorb*bcount);
-        memset(t1b, 0, sizeof(double)*nnorb*bcount);
+        int i;
+        for (i = 0; i < nnorb*bcount; i++) {
+                t1a[i] = 0;
+                t1b[i] = 0;
+        }
         FCIprog_a_t1(ci0, t1a, bcount, stra_id, strb_id,
                      norb, nb, nlinka, clink_indexa);
         FCIprog_b_t1(ci0, t1b, bcount, stra_id, strb_id,
@@ -473,7 +500,7 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
         FCIcompress_link_tril(clinka, link_indexa, na, nlinka);
         FCIcompress_link_tril(clinkb, link_indexb, nb, nlinkb);
 
-        memset(ci1, 0, sizeof(double)*na*nb);
+        NPdset0(ci1, ((size_t)na) * nb);
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel
 {
@@ -484,7 +511,7 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na; strk++) {
                         ctr_uhf2e_kern(eri_aa, eri_ab, eri_bb, ci0, ci1,
@@ -492,9 +519,11 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                                        norb, na, nb, nlinka, nlinkb,
                                        clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_uhf2e_kern
 #pragma omp barrier
@@ -753,7 +782,7 @@ static void ctr_rhf2esym_kern1(double *eri, double *ci0, double *ci1ab,
         double *t1 = t1buf;
         double *vt1 = t1buf + nnorb*bcount;
 
-        memset(t1, 0, sizeof(double)*nnorb*bcount);
+        NPdset0(t1, nnorb*bcount);
         FCIprog_a_t1(ci0, t1, bcount, stra_id, strb_id,
                      0, nb, nlinka, clink_indexa);
         dgemm_(&TRANS_N, &TRANS_N, &bcount, &nnorb, &nnorb,
@@ -779,7 +808,7 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
-                memset(ci1buf, 0, sizeof(double) * na*blen);
+                NPdset0(ci1buf, ((size_t)na) * blen);
 #pragma omp for schedule(static)
                 for (strk = 0; strk < na_intermediate; strk++) {
                         ctr_rhf2esym_kern1(eri, ci0, ci1ab, ci1buf, t1buf,
@@ -787,9 +816,11 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
                                            nnorb, nb_intermediate, na, nb,
                                            nlinka, nlinkb, clinka, clinkb);
                 }
-                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
-#pragma omp master
-                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+//                NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
+//#pragma omp master
+//                FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
+                _reduce(ci1aa+ib, ci1bufs, na, nb, blen);
 // An explicit barrier to ensure ci1 is updated. Without barrier, there may
 // occur race condition between FCIaxpy2d and ctr_rhf2esym_kern1
 #pragma omp barrier

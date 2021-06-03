@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #
 
 import sys
-import time
+
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -76,7 +76,7 @@ class CIAHOptimizer(lib.StreamObject):
 
 
 def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
-    t2m = (time.clock(), time.time())
+    t2m = (logger.process_clock(), logger.perf_counter())
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -120,7 +120,6 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
     g_op = lambda: g_orb
     x0_guess = g_orb
     while True:
-        g_orb0 = g_orb
         stat = Statistic()
         dr = 0
         ikf = 0
@@ -164,7 +163,7 @@ def rotate_orb_cc(iah, u0, conv_tol_grad=None, verbose=logger.NOTE):
 
                 elif (ikf > 2 and # avoid frequent keyframe
                       (ikf >= max(iah.kf_interval, iah.kf_interval-numpy.log(norm_dr+1e-9)) or
-# Insert keyframe if the keyframe and the esitimated g_orb are too different
+                       # Insert keyframe if the keyframe and the esitimated g_orb are too different
                        norm_gorb < norm_gkf/kf_trust_region)):
                     ikf = 0
                     ukf = iah.extract_rotation(dr, ukf)
@@ -249,10 +248,10 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         heff[1:nx,nx] = heff[nx,1:nx].conj()
         ovlp[1:nx,nx] = ovlp[nx,1:nx].conj()
         nvec = nx + 1
-#        s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
-#        if s0 < lindep:
-#            yield True, istep, w_t, xtrial, hx, dx, s0
-#            break
+        #s0 = scipy.linalg.eigh(ovlp[:nvec,:nvec])[0][0]
+        #if s0 < lindep:
+        #    yield True, istep, w_t, xtrial, hx, dx, s0
+        #    break
         wlast = w_t
         xtrial, w_t, v_t, index, seig = \
                 _regular_step(heff[:nvec,:nvec], ovlp[:nvec,:nvec], xs,
@@ -262,7 +261,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         # note g*v_t[0], as the first trial vector is (1,0,0,...)
         dx = hx + g*v_t[0] - w_t * v_t[0]*xtrial
         norm_dx = numpy.linalg.norm(dx)
-        log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
+        log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g',
                    istep+1, index, norm_dx, w_t, v_t[0].real, s0)
         hx *= 1/v_t[0] # == h_op(xtrial)
         if (abs(w_t-wlast) < tol and norm_dx < toloose) or s0 < lindep:

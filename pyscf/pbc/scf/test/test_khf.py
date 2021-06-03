@@ -28,9 +28,6 @@ from pyscf.pbc.scf import kuhf
 from pyscf.pbc import df
 import pyscf.pbc.tools
 
-def finger(a):
-    return np.dot(np.cos(np.arange(a.size)), a.ravel())
-
 def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
@@ -64,7 +61,7 @@ class KnownValues(unittest.TestCase):
         upop, uchg = kumf.analyze()
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
-        self.assertAlmostEqual(lib.finger(rpop), 1.697446, 5)
+        self.assertAlmostEqual(lib.fp(rpop), 1.697446, 5)
 
     def test_kpt_vs_supercell_high_cost(self):
         # For large n, agreement is always achieved
@@ -132,7 +129,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(1)
         kpts_bands = np.random.random((2,3))
         e = kumf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(finger(np.array(e)), -0.0455444, 6)
+        self.assertAlmostEqual(lib.fp(np.array(e)), -0.0455444, 6)
 
     def test_krhf_1d(self):
         L = 4
@@ -255,7 +252,7 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.729751581497479, 5)
+        self.assertAlmostEqual(lib.fp(dip), 0.729751581497479, 5)
 
     def test_krhf_vs_rhf(self):
         np.random.seed(1)
@@ -272,6 +269,38 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, e2, 9)
         self.assertAlmostEqual(e1, -11.451118801956275, 9)
 
+    def test_small_system(self):
+        mol = pbcgto.Cell(
+            atom='He 0 0 0;',
+            a=[[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+            basis=[[0, [1, 1]]],
+            verbose=7,
+            output='/dev/null'
+        )
+        mf = pscf.KRHF(mol,kpts=[[0., 0., 0.]])
+        mf.run()
+        self.assertAlmostEqual(mf.e_tot, -2.2719576422665635, 8)
+
+    def test_damping(self):
+        nao = cell.nao
+        np.random.seed(1)
+        s = kmf.get_ovlp()
+        d = np.random.random((len(kpts),nao,nao))
+        d = (d + d.transpose(0,2,1)) * 2
+        vhf = 0
+        f = khf.get_fock(kmf, kmf.get_hcore(), s, vhf, d, cycle=0,
+                             diis_start_cycle=2, damp_factor=0.5)
+        self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 9)
+        self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 9)
+        self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 9)
+
+        vhf = np.zeros((2,len(kpts),nao,nao))
+        d1 = np.asarray([d/2, d/2])
+        f1 = kuhf.get_fock(kumf, kumf.get_hcore(), s, vhf, d1, cycle=0,
+                             diis_start_cycle=2, damp_factor=0.5)
+        for k in range(len(kpts)):
+            self.assertAlmostEqual(np.linalg.norm(f[k]), np.linalg.norm(f1[0,k]),9)
+            self.assertAlmostEqual(np.linalg.norm(f[k]), np.linalg.norm(f1[1,k]),9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.khf")

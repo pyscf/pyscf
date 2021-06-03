@@ -39,6 +39,7 @@ from pyscf import lib
 from pyscf.gto import moleintor
 
 libecp = moleintor.libcgto
+libecp.ECPscalar_cache_size.restype = ctypes.c_int
 
 def type1_by_shell(mol, shls, cart=False):
     li = mol.bas_angular(shls[0])
@@ -51,8 +52,14 @@ def type1_by_shell(mol, shls, cart=False):
         fn = libecp.ECPtype1_sph
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    cache_size = libecp.ECPscalar_cache_size(
+        ctypes.c_int(1), (ctypes.c_int*2)(*shls),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    cache = numpy.empty(cache_size)
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
@@ -74,14 +81,45 @@ def type2_by_shell(mol, shls, cart=False):
         fn = libecp.ECPtype2_sph
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
+    cache_size = libecp.ECPscalar_cache_size(
+        ctypes.c_int(1), (ctypes.c_int*2)(*shls),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    cache = numpy.empty(cache_size)
     buf = numpy.empty((di,dj), order='F')
-    cache = numpy.empty(buf.size*5)
+
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
+    return buf
+
+AS_ECPBAS_OFFSET= 18
+AS_NECPBAS      = 19
+def so_by_shell(mol, shls):
+    '''Spin-orbit coupling ECP in spinor basis
+    i/2 <Pauli_matrix dot l U(r)>
+    '''
+    li = mol.bas_angular(shls[0])
+    lj = mol.bas_angular(shls[1])
+    di = (li*4+2) * mol.bas_nctr(shls[0])
+    dj = (lj*4+2) * mol.bas_nctr(shls[1])
+    bas = numpy.vstack((mol._bas, mol._ecpbas))
+    mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
+    mol._env[AS_NECPBAS] = len(mol._ecpbas)
+    buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
+    cache = numpy.empty(buf.size*48+100000)
+    fn = libecp.ECPso_spinor
+    fn(buf.ctypes.data_as(ctypes.c_void_p),
+       (ctypes.c_int*2)(di, dj),
+       (ctypes.c_int*2)(*shls),
+       mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
        mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
        cache.ctypes.data_as(ctypes.c_void_p))
     return buf

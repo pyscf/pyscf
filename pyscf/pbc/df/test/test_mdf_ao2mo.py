@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,12 +33,11 @@ cell.rcut = 17
 cell.build(0,0)
 nao = cell.nao_nr()
 
+def tearDownModule():
+    global cell
+    del cell
 
-def finger(a):
-    w = np.cos(np.arange(a.size))
-    return np.dot(w, a.ravel())
-
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])

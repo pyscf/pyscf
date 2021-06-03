@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -105,7 +105,7 @@ def get_projG(cell, kpt=np.zeros(3)):
     return get_gth_projG(cell, kpt+cell.Gv)
 
 def get_gth_projG(cell, Gvs):
-    '''G space projectors from the FT of the real-space projectors.
+    r'''G space projectors from the FT of the real-space projectors.
 
     \int e^{iGr} p_j^l(r) Y_{lm}^*(theta,phi)
     = i^l p_j^l(G) Y_{lm}^*(thetaG, phiG)
@@ -119,7 +119,7 @@ def get_gth_projG(cell, Gvs):
     for ia in range(cell.natm):
         symb = cell.atom_symbol(ia)
         pp = cell._pseudo[symb]
-        nproj_types = pp[4]
+        # nproj_types = pp[4]
         h_ia = []
         proj_ia = []
         for l,proj in enumerate(pp[5:]):
@@ -144,7 +144,7 @@ def projG_li(G, l, i, rl):
     G_red = G*rl
 
     # MH Eq. (4.81)
-    return ( _qli(G_red,l,i) * np.pi**(5/4.) * G**l * np.sqrt(rl**(2*l+3))
+    return (_qli(G_red,l,i) * np.pi**(5/4.) * G**l * np.sqrt(rl**(2*l+3))
             / np.exp(0.5*G_red**2) )
 
 def _qli(x,l,i):

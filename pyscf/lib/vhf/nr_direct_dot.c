@@ -18,8 +18,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include "nr_direct.h"
+#include "np_helper/np_helper.h"
 
 #define ASSERT(expr, msg) \
         if (!(expr)) { fprintf(stderr, "Fail at %s\n", msg); exit(1); }
@@ -34,35 +34,6 @@
 #define KSH1    5
 #define LSH0    6
 #define LSH1    7
-
-#define JKOP_ALLOCATE(ibra, iket, obra, oket) \
-        static JKArray *JKOperator_allocate_##ibra##iket##obra##oket(int *shls_slice, int *ao_loc, int ncomp) \
-{ \
-        JKArray *jkarray = malloc(sizeof(JKArray)); \
-        jkarray->dm_bra_sh0 = shls_slice[ibra##SH0]; \
-        jkarray->dm_bra_sh1 = shls_slice[ibra##SH1]; \
-        jkarray->dm_ket_sh0 = shls_slice[iket##SH0]; \
-        jkarray->dm_ket_sh1 = shls_slice[iket##SH1]; \
-        jkarray->v_bra_sh0  = shls_slice[obra##SH0]; \
-        jkarray->v_bra_sh1  = shls_slice[obra##SH1]; \
-        jkarray->v_ket_sh0  = shls_slice[oket##SH0]; \
-        jkarray->v_ket_sh1  = shls_slice[oket##SH1]; \
-        jkarray->v_ket_nsh  = shls_slice[oket##SH1] - shls_slice[oket##SH0]; \
-        jkarray->offset0_outptr = jkarray->v_bra_sh0 * jkarray->v_ket_nsh + jkarray->v_ket_sh0; \
-        jkarray->dm_dims[0] = ao_loc[shls_slice[ibra##SH1]] - ao_loc[shls_slice[ibra##SH0]]; \
-        jkarray->dm_dims[1] = ao_loc[shls_slice[iket##SH1]] - ao_loc[shls_slice[iket##SH0]]; \
-        jkarray->v_dims[0]  = ao_loc[shls_slice[obra##SH1]] - ao_loc[shls_slice[obra##SH0]]; \
-        jkarray->v_dims[1]  = ao_loc[shls_slice[oket##SH1]] - ao_loc[shls_slice[oket##SH0]]; \
-        int outptr_size =((shls_slice[obra##SH1] - shls_slice[obra##SH0]) * \
-                          (shls_slice[oket##SH1] - shls_slice[oket##SH0])); \
-        jkarray->outptr = malloc(sizeof(int) * outptr_size); \
-        memset(jkarray->outptr, NOVALUE, sizeof(int) * outptr_size); \
-        jkarray->stack_size = 0; \
-        int data_size = jkarray->v_dims[0] * jkarray->v_dims[1] * ncomp; \
-        jkarray->data = malloc(sizeof(double) * data_size); \
-        jkarray->ncomp = ncomp; \
-        return jkarray; \
-}
 
 #define JKOP_DATA_SIZE(obra, oket) \
         static size_t JKOperator_data_size_##obra##oket(int *shls_slice, int *ao_loc) \
@@ -85,16 +56,9 @@ JKOP_DATA_SIZE(J, L)
 JKOP_DATA_SIZE(L, J)
 
 #define ADD_JKOP(fname, ibra, iket, obra, oket, type) \
-JKOperator CVHF##fname = {JKOperator_allocate_##ibra##iket##obra##oket, \
-        JKOperator_deallocate, fname, JKOperator_data_size_##obra##oket, \
+JKOperator CVHF##fname = {ibra##SH0, iket##SH0, obra##SH0, oket##SH0, \
+        fname, JKOperator_data_size_##obra##oket, \
         JKOperator_sanity_check_##type}
-
-static void JKOperator_deallocate(JKArray *jkarray)
-{
-        free(jkarray->outptr);
-        free(jkarray->data);
-        free(jkarray);
-}
 
 static void JKOperator_sanity_check_s1(int *shls_slice)
 {
@@ -136,14 +100,16 @@ static void JKOperator_sanity_check_s8(int *shls_slice)
         if (*_poutptr == NOVALUE) { \
                 *_poutptr = out->stack_size; \
                 out->stack_size += d##i##j * ncomp; \
-                memset(out->data+*_poutptr, 0, sizeof(double)*d##i##j*ncomp); \
+                NPdset0(out->data+*_poutptr, d##i##j*ncomp); \
         } \
         double *v = out->data + *_poutptr;
 #define DECLARE(v, i, j) \
         int ncomp = out->ncomp; \
         int ncol = out->dm_dims[1]; \
-        int d##i = i##1 - i##0; \
-        int d##j = j##1 - j##0; \
+        int di = i1 - i0; \
+        int dj = j1 - j0; \
+        int dk = k1 - k0; \
+        int dl = l1 - l0; \
         int *_poutptr; \
         LOCATE(v, i, j)
 
@@ -153,22 +119,22 @@ static void nrs1_##D1##D2##_s1##V1##V2(double *eri, double *dm, JKArray *out, in
                          int k0, int k1, int l0, int l1) \
 { \
         DECLARE(v, V1, V2); \
-        V1##0 = 0; \
-        V1##1 = d##V1; \
-        V2##0 = 0; \
-        V2##1 = d##V2; \
         int i, j, k, l, ijkl, icomp; \
+        dm += D1##0 * ncol + D2##0 * d##D1; \
  \
         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) { \
-                for (l = l0; l < l1; l++) { \
-                for (k = k0; k < k1; k++) { \
-                for (j = j0; j < j1; j++) { \
-                for (i = i0; i < i1; i++, ijkl++) { \
-                        v[V1*d##V2+V2] += eri[ijkl] * dm[D1*ncol+D2]; \
+                for (l = 0; l < dl; l++) { \
+                for (k = 0; k < dk; k++) { \
+                for (j = 0; j < dj; j++) { \
+                for (i = 0; i < di; i++, ijkl++) { \
+                        v[V1*d##V2+V2] += eri[ijkl] * dm[D1*d##D2+D2]; \
                 } } } } \
                 v += d##V1##V2; \
         } \
 }
+
+#define DEF_DM(I, J) \
+        double *dm##I##J = dm + I##0 * ncol + J##0 * d##I
 
 /* eri in Fortran order; dm, out in C order */
 
@@ -177,28 +143,24 @@ static void nrs1_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                          int k0, int k1, int l0, int l1)
 {
         DECLARE(v, k, l);
-        int i, j, k, l, ij, icomp;
-        double tdm[MAXCGTO*MAXCGTO];
-
-        for (ij = 0, j = j0; j < j1; j++) {
-                for (i = i0; i < i1; i++, ij++) {
-                        tdm[ij] = dm[j*ncol+i];
-                }
-        }
-        int dij = ij;
+        int dij = di * dj;
+        DEF_DM(j, i);
+        int k, l, ij, icomp;
+        double s;
 
         for (icomp = 0; icomp < ncomp; icomp++) {
                 for (l = 0; l < dl; l++) {
                 for (k = 0; k < dk; k++) {
+                        s = v[k*dl+l];
                         for (ij = 0; ij < dij; ij++) {
-                                v[k*dl+l] += eri[ij] * tdm[ij];
+                                s += eri[ij] * dmji[ij];
                         }
+                        v[k*dl+l] = s;
                         eri += dij;
                 } }
                 v += dkl;
         }
 }
-JKOP_ALLOCATE(J, I, K, L);
 ADD_JKOP(nrs1_ji_s1kl, J, I, K, L, s1);
 
 static void nrs1_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
@@ -217,16 +179,19 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                          int k0, int k1, int l0, int l1)
 {
         DECLARE(v, i, j);
+        DEF_DM(l, k);
         int i, j, k, l, ij, icomp;
         double buf[MAXCGTO*MAXCGTO];
+        double s;
 
         for (icomp = 0; icomp < ncomp; icomp++) {
 
                 for (i = 0; i < dij; i++) { buf[i] = 0; }
-                for (l = l0; l < l1; l++) {
-                for (k = k0; k < k1; k++) {
+                for (l = 0; l < dl; l++) {
+                for (k = 0; k < dk; k++) {
+                        s = dmlk[l*dk+k];
                         for (ij = 0; ij < dij; ij++) {
-                                buf[ij] += eri[ij] * dm[l*ncol+k];
+                                buf[ij] += eri[ij] * s;
                         }
                         eri += dij;
                 } }
@@ -238,7 +203,6 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 v += dij;
         }
 }
-JKOP_ALLOCATE(L, K, I, J);
 ADD_JKOP(nrs1_lk_s1ij, L, K, I, J, s1);
 
 static void nrs1_lk_s2ij(double *eri, double *dm, JKArray *out, int *shls,
@@ -257,46 +221,49 @@ static void nrs1_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                          int k0, int k1, int l0, int l1)
 {
         DECLARE(v, i, l);
+        DEF_DM(j, k);
         int i, j, k, l, ijkl, icomp;
+        double s;
 
         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                 for (l = 0; l < dl; l++) {
-                for (k = k0; k < k1; k++) {
-                for (j = j0; j < j1; j++) {
-                for (i = 0; i < di; i++, ijkl++) {
-                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
-                } } } }
+                for (k = 0; k < dk; k++) {
+                for (j = 0; j < dj; j++) {
+                        s = dmjk[j*dk+k];
+                        for (i = 0; i < di; i++, ijkl++) {
+                                v[i*dl+l] += eri[ijkl] * s;
+                        }
+                } } }
                 v += dil;
         }
 }
-JKOP_ALLOCATE(J, K, I, L);
 ADD_JKOP(nrs1_jk_s1il, J, K, I, L, s1);
 
-//DEF_NRS1_CONTRACT(j, k, i, l); JKOP_ALLOCATE(J, K, I, L); ADD_JKOP(nrs1_jk_s1il, J, K, I, L, s1);
-DEF_NRS1_CONTRACT(j, k, l, i); JKOP_ALLOCATE(J, K, L, I); ADD_JKOP(nrs1_jk_s1li, J, K, L, I, s1);
-DEF_NRS1_CONTRACT(k, j, i, l); JKOP_ALLOCATE(K, J, I, L); ADD_JKOP(nrs1_kj_s1il, K, J, I, L, s1);
-DEF_NRS1_CONTRACT(k, j, l, i); JKOP_ALLOCATE(K, J, L, I); ADD_JKOP(nrs1_kj_s1li, K, J, L, I, s1);
-DEF_NRS1_CONTRACT(i, k, j, l); JKOP_ALLOCATE(I, K, J, L); ADD_JKOP(nrs1_ik_s1jl, I, K, J, L, s1);
-DEF_NRS1_CONTRACT(i, k, l, j); JKOP_ALLOCATE(I, K, L, J); ADD_JKOP(nrs1_ik_s1lj, I, K, L, J, s1);
-DEF_NRS1_CONTRACT(k, i, l, j); JKOP_ALLOCATE(K, I, L, J); ADD_JKOP(nrs1_ki_s1lj, K, I, L, J, s1);
-DEF_NRS1_CONTRACT(k, i, j, l); JKOP_ALLOCATE(K, I, J, L); ADD_JKOP(nrs1_ki_s1jl, K, I, J, L, s1);
-DEF_NRS1_CONTRACT(j, l, k, i); JKOP_ALLOCATE(J, L, K, I); ADD_JKOP(nrs1_jl_s1ki, J, L, K, I, s1);
-DEF_NRS1_CONTRACT(j, l, i, k); JKOP_ALLOCATE(J, L, I, K); ADD_JKOP(nrs1_jl_s1ik, J, L, I, K, s1);
-DEF_NRS1_CONTRACT(l, j, k, i); JKOP_ALLOCATE(L, J, K, I); ADD_JKOP(nrs1_lj_s1ki, L, J, K, I, s1);
-DEF_NRS1_CONTRACT(l, j, i, k); JKOP_ALLOCATE(L, J, I, K); ADD_JKOP(nrs1_lj_s1ik, L, J, I, K, s1);
-DEF_NRS1_CONTRACT(l, i, k, j); JKOP_ALLOCATE(L, I, K, J); ADD_JKOP(nrs1_li_s1kj, L, I, K, J, s1);
-DEF_NRS1_CONTRACT(l, i, j, k); JKOP_ALLOCATE(L, I, J, K); ADD_JKOP(nrs1_li_s1jk, L, I, J, K, s1);
-DEF_NRS1_CONTRACT(i, l, k, j); JKOP_ALLOCATE(I, L, K, J); ADD_JKOP(nrs1_il_s1kj, I, L, K, J, s1);
-DEF_NRS1_CONTRACT(i, l, j, k); JKOP_ALLOCATE(I, L, J, K); ADD_JKOP(nrs1_il_s1jk, I, L, J, K, s1);
+//DEF_NRS1_CONTRACT(j, k, i, l); ADD_JKOP(nrs1_jk_s1il, J, K, I, L, s1);
+DEF_NRS1_CONTRACT(j, k, l, i); ADD_JKOP(nrs1_jk_s1li, J, K, L, I, s1);
+DEF_NRS1_CONTRACT(k, j, i, l); ADD_JKOP(nrs1_kj_s1il, K, J, I, L, s1);
+DEF_NRS1_CONTRACT(k, j, l, i); ADD_JKOP(nrs1_kj_s1li, K, J, L, I, s1);
+DEF_NRS1_CONTRACT(i, k, j, l); ADD_JKOP(nrs1_ik_s1jl, I, K, J, L, s1);
+DEF_NRS1_CONTRACT(i, k, l, j); ADD_JKOP(nrs1_ik_s1lj, I, K, L, J, s1);
+DEF_NRS1_CONTRACT(k, i, l, j); ADD_JKOP(nrs1_ki_s1lj, K, I, L, J, s1);
+DEF_NRS1_CONTRACT(k, i, j, l); ADD_JKOP(nrs1_ki_s1jl, K, I, J, L, s1);
+DEF_NRS1_CONTRACT(j, l, k, i); ADD_JKOP(nrs1_jl_s1ki, J, L, K, I, s1);
+DEF_NRS1_CONTRACT(j, l, i, k); ADD_JKOP(nrs1_jl_s1ik, J, L, I, K, s1);
+DEF_NRS1_CONTRACT(l, j, k, i); ADD_JKOP(nrs1_lj_s1ki, L, J, K, I, s1);
+DEF_NRS1_CONTRACT(l, j, i, k); ADD_JKOP(nrs1_lj_s1ik, L, J, I, K, s1);
+DEF_NRS1_CONTRACT(l, i, k, j); ADD_JKOP(nrs1_li_s1kj, L, I, K, J, s1);
+DEF_NRS1_CONTRACT(l, i, j, k); ADD_JKOP(nrs1_li_s1jk, L, I, J, K, s1);
+DEF_NRS1_CONTRACT(i, l, k, j); ADD_JKOP(nrs1_il_s1kj, I, L, K, J, s1);
+DEF_NRS1_CONTRACT(i, l, j, k); ADD_JKOP(nrs1_il_s1jk, I, L, J, K, s1);
 
-//DEF_NRS1_CONTRACT(j, i, k, l); JKOP_ALLOCATE(J, I, K, L); ADD_JKOP(nrs1_ji_s1kl, J, I, K, L, s1);
-//DEF_NRS1_CONTRACT(l, k, i, j); JKOP_ALLOCATE(L, K, I, J); ADD_JKOP(nrs1_lk_s1ij, L, K, I, J, s1);
-DEF_NRS1_CONTRACT(i, j, k, l); JKOP_ALLOCATE(I, J, K, L); ADD_JKOP(nrs1_ij_s1kl, I, J, K, L, s1);
-DEF_NRS1_CONTRACT(i, j, l, k); JKOP_ALLOCATE(I, J, L, K); ADD_JKOP(nrs1_ij_s1lk, I, J, L, K, s1);
-DEF_NRS1_CONTRACT(j, i, l, k); JKOP_ALLOCATE(J, I, L, K); ADD_JKOP(nrs1_ji_s1lk, J, I, L, K, s1);
-DEF_NRS1_CONTRACT(l, k, j, i); JKOP_ALLOCATE(L, K, J, I); ADD_JKOP(nrs1_lk_s1ji, L, K, J, I, s1);
-DEF_NRS1_CONTRACT(k, l, i, j); JKOP_ALLOCATE(K, L, I, J); ADD_JKOP(nrs1_kl_s1ij, K, L, I, J, s1);
-DEF_NRS1_CONTRACT(k, l, j, i); JKOP_ALLOCATE(K, L, J, I); ADD_JKOP(nrs1_kl_s1ji, K, L, J, I, s1);
+//DEF_NRS1_CONTRACT(j, i, k, l); ADD_JKOP(nrs1_ji_s1kl, J, I, K, L, s1);
+//DEF_NRS1_CONTRACT(l, k, i, j); ADD_JKOP(nrs1_lk_s1ij, L, K, I, J, s1);
+DEF_NRS1_CONTRACT(i, j, k, l); ADD_JKOP(nrs1_ij_s1kl, I, J, K, L, s1);
+DEF_NRS1_CONTRACT(i, j, l, k); ADD_JKOP(nrs1_ij_s1lk, I, J, L, K, s1);
+DEF_NRS1_CONTRACT(j, i, l, k); ADD_JKOP(nrs1_ji_s1lk, J, I, L, K, s1);
+DEF_NRS1_CONTRACT(l, k, j, i); ADD_JKOP(nrs1_lk_s1ji, L, K, J, I, s1);
+DEF_NRS1_CONTRACT(k, l, i, j); ADD_JKOP(nrs1_kl_s1ij, K, L, I, J, s1);
+DEF_NRS1_CONTRACT(k, l, j, i); ADD_JKOP(nrs1_kl_s1ji, K, L, J, I, s1);
 
 static void nrs1_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                          int i0, int i1, int j0, int j1,
@@ -336,21 +303,26 @@ static void nrs2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(v, k, l);
+                int dij = di * dj;
+                DEF_DM(i, j);
+                DEF_DM(j, i);
                 int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                for (i = i0; i < i1; i++, ij++) {
-                        tdm[ij] = dm[i*ncol+j] + dm[j*ncol+i];
+                for (ij = 0, j = 0; j < dj; j++) {
+                for (i = 0; i < di; i++, ij++) {
+                        tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
                 } }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
+                                tmp = 0;
                                 for (ij = 0; ij < dij; ij++) {
-                                        v[k*dl+l] += eri[ij] * tdm[ij];
+                                        tmp += eri[ij] * tdm[ij];
                                 }
+                                v[k*dl+l] += tmp;
                                 eri += dij;
                         } }
                         v += dkl;
@@ -379,16 +351,19 @@ static void nrs2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         if (i0 > j0) {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
+                double s;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                s = dmlk[l*dk+k];
                                 for (ij = 0; ij < dij; ij++) {
-                                        buf[ij] += eri[ij] * dm[l*ncol+k];
+                                        buf[ij] += eri[ij] * s;
                                 }
                                 eri += dij;
                         } }
@@ -422,18 +397,24 @@ static void nrs2ij_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(vil, i, l);
-                int dj = j1 - j0;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
+                double s, tmp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
-                        for (k = k0; k < k1; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vil[i*dl+l] += eri[ijkl]*dm[jp*ncol+k];
-                                vjl[j*dl+l] += eri[ijkl]*dm[ip*ncol+k];
-                        } } } }
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s = dmjk[j*dk+k];
+                                tmp = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s;
+                                        tmp += eri[ijkl] * dmik[i*dk+k];
+                                }
+                                vjl[j*dl+l] = tmp;
+                        } } }
                         vil += dil;
                         vjl += djl;
                 }
@@ -462,18 +443,24 @@ static void nrs2ij_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(vkj, k, j);
-                int di = i1 - i0;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
                 LOCATE(vki, k, i);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
+                double s, tmp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[l*ncol+jp];
-                        } } } }
+                        for (j = 0; j < dj; j++) {
+                                s = dmlj[l*dj+j];
+                                tmp = vkj[k*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmli[l*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                }
+                                vkj[k*dj+j] = tmp;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                 }
@@ -503,30 +490,22 @@ static void nrs2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         if (k0 > l0) {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
-                double buf[MAXCGTO*MAXCGTO];
-
-                for (ij = 0, j = j0; j < j1; j++) {
-                for (i = i0; i < i1; i++, ij++) {
-                        tdm[ij] = dm[j*ncol+i];
-                } }
-                int dij = ij;
+                int dij = di * dj;
+                DEF_DM(j, i);
+                int k, l, ij, icomp;
+                double tmp;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * dmji[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] += tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] += buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -551,6 +530,8 @@ static void nrs2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(v, i, j);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -558,9 +539,9 @@ static void nrs2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[k*ncol+l] + dm[l*ncol+k];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmkl[k*dl+l] + dmlk[l*dk+k];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -596,18 +577,23 @@ static void nrs2kl_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[j*ncol+lp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                        } } }
                         vil += dil;
                         vik += dik;
                 }
@@ -636,18 +622,25 @@ static void nrs2kl_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(vkj, k, j);
-                int dl = l1 - l0;
+                DEF_DM(k, i);
+                DEF_DM(l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
+                double tmp0, tmp1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = i0; i < i1; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+i];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+i];
-                        } } } }
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vlj += dlj;
                 }
@@ -681,30 +674,30 @@ static void nrs4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                int dij = di * dj;
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[i*ncol+j] + dm[j*ncol+i];
+                for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
                         }
                 }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * tdm[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] += tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] += buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -732,6 +725,8 @@ static void nrs4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -739,9 +734,9 @@ static void nrs4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[l*ncol+k] + dm[k*ncol+l];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmlk[l*dk+k] + dmkl[k*dl+l];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -778,23 +773,33 @@ static void nrs4_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 nrs2ij_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vik, i, k);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vil, i, l);
                 LOCATE(vjk, j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmjl[j*dl+l];
+                                s1 = dmjk[j*dk+k];
+                                tmp0 = vjk[j*dk+k];
+                                tmp1 = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmil[i*dl+l];
+                                        tmp1 += eri[ijkl] * dmik[i*dk+k];
+                                        vik[i*dk+k] += eri[ijkl] * s0;
+                                        vil[i*dl+l] += eri[ijkl] * s1;
+                                }
+                                vjk[j*dk+k] = tmp0;
+                                vjl[j*dl+l] = tmp1;
+                        } } }
                         vjk += djk;
                         vjl += djl;
                         vik += dik;
@@ -816,87 +821,119 @@ static void nrs4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
         } else if (i0 < k0) {
                 if (j0 < l0) { // j < l <= i < k
                         DECLARE(v, i, l);
+                        DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
+                        double s;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = j0; j < j1; j++) {
-                                for (i = 0; i < di; i++, ijkl++) {
-                                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
-                                } } } }
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        s = dmjk[j*dk+k];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                v[i*dl+l] += eri[ijkl] * s;
+                                        }
+                                } } }
                                 v += dil;
                         }
                 } else { // l <= j < i < k
                         DECLARE(vil, i, l);
-                        int dj = j1 - j0;
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, ijkl, icomp;
+                        DEF_DM(i, k);
+                        DEF_DM(j, k);
+                        int i, j, k, l, ijkl, icomp;
+                        double s, tmp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vjl[j*dl+l] += eri[ijkl] *dm[ip*ncol+k];
-                                        vil[i*dl+l] += eri[ijkl] *dm[jp*ncol+k];
-                                } } } }
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        s = dmjk[j*dk+k];
+                                        tmp = vjl[j*dl+l];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp += eri[ijkl] * dmik[i*dk+k];
+                                                vil[i*dl+l] += eri[ijkl] * s;
+                                        }
+                                        vjl[j*dl+l] = tmp;
+                                } } }
                                 vjl += djl;
                                 vil += dil;
                         }
                 }
         } else if (j0 < l0) { // j < l < k <= i
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
-                        for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[j*ncol+lp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                        } } }
                         vil += dil;
                         vik += dik;
                 }
         } else if (j0 < k0) { // l <= j < k <= i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmjk[j*dk+k];
+                                s1 = dmjl[j*dl+l];
+                                tmp = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmik[i*dk+k];
+                                        vil[i*dl+l] += eri[ijkl] * s0;
+                                        vik[i*dk+k] += eri[ijkl] * s1;
+                                }
+                                vjl[j*dl+l] = tmp;
+                        } } }
                         vjl += djl;
                         vil += dil;
                         vik += dik;
                 }
         } else { // l < k <= j < i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vjk, j, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmjl[j*dl+l];
+                                s1 = dmjk[j*dk+k];
+                                tmp0 = vjk[j*dk+k];
+                                tmp1 = vjl[j*dl+l];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmil[i*dl+l];
+                                        tmp1 += eri[ijkl] * dmik[i*dk+k];
+                                        vik[i*dk+k] += eri[ijkl] * s0;
+                                        vil[i*dl+l] += eri[ijkl] * s1;
+                                }
+                                vjk[j*dk+k] = tmp0;
+                                vjl[j*dl+l] = tmp1;
+                        } } }
                         vjk += djk;
                         vjl += djl;
                         vik += dik;
@@ -917,22 +954,32 @@ static void nrs4_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 nrs2ij_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s0;
+                                        vli[l*di+i] += eri[ijkl] * s1;
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -954,87 +1001,123 @@ static void nrs4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
         } else if (k0 < i0) {
                 if (l0 < j0) { // l < j < k < i
                         DECLARE(v, k, j);
+                        DEF_DM(l, i);
                         int i, j, k, l, ijkl, icomp;
+                        double tmp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = l0; l < l1; l++) {
+                                for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
-                                } } } }
+                                        tmp = v[k*dj+j];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp += eri[ijkl] * dmli[l*di+i];
+                                        }
+                                        v[k*dj+j] = tmp;
+                                } } }
                                 v += dkj;
                         }
                 } else { // j <= l < k < i
                         DECLARE(vkj, k, j);
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
-                        int i, j, k, l, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        int i, j, k, l, ijkl, icomp;
+                        double tmp0, tmp1;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        vkj[k*dj+j] += eri[ijkl] *dm[lp*ncol+i];
-                                        vlj[l*dj+j] += eri[ijkl] *dm[kp*ncol+i];
-                                } } } }
+                                        tmp0 = vkj[k*dj+j];
+                                        tmp1 = vlj[l*dj+j];
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                tmp0 += eri[ijkl] * dmli[l*di+i];
+                                                tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        }
+                                        vkj[k*dj+j] = tmp0;
+                                        vlj[l*dj+j] = tmp1;
+                                } } }
                                 vkj += dkj;
                                 vlj += dlj;
                         }
                 }
         } else if (l0 < j0) { // l < j < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
                 LOCATE(vkj, k, j);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                int i, j, k, l, ijkl, icomp;
+                double s, tmp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[l*ncol+jp];
-                        } } } }
+                        for (j = 0; j < dj; j++) {
+                                s = dmlj[l*dj+j];
+                                tmp = vkj[k*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp += eri[ijkl] * dmli[l*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                }
+                                vkj[k*dj+j] = tmp;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                 }
         } else if (l0 < i0) { // j <= l < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                int i, j, k, l, ijkl, icomp;
+                double s, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s = dmlj[l*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vki[k*di+i] += eri[ijkl] * s;
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
                 }
         } else { // j < i <= l < k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
+                double s0, s1, tmp0, tmp1;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                tmp0 = vkj[k*dj+j];
+                                tmp1 = vlj[l*dj+j];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        tmp0 += eri[ijkl] * dmli[l*di+i];
+                                        tmp1 += eri[ijkl] * dmki[k*di+i];
+                                        vki[k*di+i] += eri[ijkl] * s0;
+                                        vli[l*di+i] += eri[ijkl] * s1;
+                                }
+                                vkj[k*dj+j] = tmp0;
+                                vlj[l*dj+j] = tmp1;
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -1056,27 +1139,30 @@ static void nrs8_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 nrs4_lk_s1ij  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vij, i, j);
-                int dk = k1 - k0;
-                int dl = l1 - l0;
                 LOCATE(vji, j, i);
                 LOCATE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, kp, lp, ij, icomp;
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm2, tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                for (i = i0; i < i1; i++, ij++) {
-                        tdm[ij] = dm[i*ncol+j] + dm[j*ncol+i];
-                } }
-
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (ij = 0, j = 0; j < dj; j++) {
+                                for (i = 0; i < di; i++, ij++) {
+                                        tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
+                                        buf[ij] = 0;
+                                }
+                        }
+
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
                                 tmp = 0;
-                                tdm2 = dm[kp*ncol+lp] + dm[lp*ncol+kp];
+                                tdm2 = dmkl[k*dl+l] + dmlk[l*dk+k];
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                         buf[ij] += eri[ij] * tdm2;
@@ -1111,34 +1197,39 @@ static void nrs8_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
                 nrs4_lk_s2ij  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vij, i, j);
-                int dk = k1 - k0;
-                int dl = l1 - l0;
                 LOCATE(vkl, k, l);
-                int i, j, k, l, kp, lp, ij, icomp;
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
                 double buf[MAXCGTO*MAXCGTO];
-                double tdm2;
-
-                for (ij = 0, j = j0; j < j1; j++) {
-                for (i = i0; i < i1; i++, ij++) {
-                        tdm[ij] = dm[i*ncol+j] + dm[j*ncol+i];
-                } }
+                double tmp, tdm2;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-                        for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                                tdm2 = dm[kp*ncol+lp] + dm[lp*ncol+kp];
-                                for (ij = 0; ij < dij; ij++) {
-                                        vkl[k*dl+l] += eri[ij] * tdm[ij];
-                                        buf[ij] += eri[ij] * tdm2;
+                        for (ij = 0, j = 0; j < dj; j++) {
+                                for (i = 0; i < di; i++, ij++) {
+                                        tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
+                                        buf[ij] = 0;
                                 }
+                        }
+
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm2 = dmkl[k*dl+l] + dmlk[l*dk+k];
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        buf[ij] += eri[ij] * tdm2;
+                                        tmp     += eri[ij] * tdm[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
                                 eri += dij;
                         } }
 
-                        for (ij = 0, j = 0; j < dj; j++) {
-                        for (i = 0; i < di; i++, ij++) {
-                                vij[i*dj+j] += buf[ij];
+                        for (ij = 0, i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++, ij++) {
+                                vij[ij] += buf[j*di+i];
                         } }
                         vij += dij;
                         vkl += dkl;
@@ -1176,8 +1267,6 @@ static void nrs8_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 nrs4_jk_s1il  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vkj, k, j);
-                int di = i1 - i0;
-                int dl = l1 - l0;
                 LOCATE(vki, k, i);
                 LOCATE(vlj, l, j);
                 LOCATE(vli, l, i);
@@ -1185,21 +1274,44 @@ static void nrs8_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 LOCATE(vil, i, l);
                 LOCATE(vjk, j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                int i, j, k, l, ijkl, icomp;
+                double s, s0, s1, s2, s3, tmp0, tmp1, tmp2, tmp3;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                        } } } }
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                                s0 = dmlj[l*dj+j];
+                                s1 = dmkj[k*dj+j];
+                                s2 = dmjl[j*dl+l];
+                                s3 = dmjk[j*dk+k];
+                                tmp0 = 0;
+                                tmp1 = 0;
+                                tmp2 = 0;
+                                tmp3 = 0;
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        s = eri[ijkl];
+                                        vki[k*di+i] += s * s0;
+                                        vli[l*di+i] += s * s1;
+                                        vik[i*dk+k] += s * s2;
+                                        vil[i*dl+l] += s * s3;
+                                        tmp0 += s * dmli[l*di+i];
+                                        tmp1 += s * dmki[k*di+i];
+                                        tmp2 += s * dmil[i*dl+l];
+                                        tmp3 += s * dmik[i*dk+k];
+                                }
+                                vkj[k*dj+j] += tmp0;
+                                vlj[l*dj+j] += tmp1;
+                                vjk[j*dk+k] += tmp2; // vkj, vjk may share memory
+                                vjl[j*dl+l] += tmp3; // vlj, vjl may share memory
+                        } } }
                         vkj += dkj;
                         vki += dki;
                         vlj += dlj;
@@ -1226,24 +1338,39 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 nrs4_li_s2kj  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
                 nrs4_jk_s2il  (eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
+                int i, j, k, l, ijkl, icomp;
+                double s, tjl, tjk, sjk, sjl, skj, slj;
                 if (j0 < l0) { // j <= l < k < i
                         DECLARE(vkj, k, j);
-                        int di = i1 - i0;
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
                         LOCATE(vik, i, k);
                         LOCATE(vil, i, l);
-                        int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        DEF_DM(j, l);
+                        DEF_DM(j, k);
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                        vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                        vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                        vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                } } } }
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        tjl = dmjl[j*dl+l];
+                                        tjk = dmjk[j*dk+k];
+                                        skj = 0;
+                                        slj = 0;
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                //vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                                //vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
+                                                //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                                //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                                s = eri[ijkl];
+                                                skj += s * dmli[l*di+i];
+                                                slj += s * dmki[k*di+i];
+                                                vik[i*dk+k] += s * tjl;
+                                                vil[i*dl+l] += s * tjk;
+                                        }
+                                        vkj[k*dj+j] += skj;
+                                        vlj[l*dj+j] += slj;
+                                } } }
                                 vkj += dkj;
                                 vlj += dlj;
                                 vik += dik;
@@ -1251,24 +1378,41 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         }
                 } else if (j0 == l0) { // j == l < k < i
                         DECLARE(vkj, k, j);
-                        int di = i1 - i0;
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
                         LOCATE(vik, i, k);
                         LOCATE(vil, i, l);
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        DEF_DM(j, l);
+                        DEF_DM(j, k);
+                        DEF_DM(i, k);
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                        vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                        vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                        vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                        vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                } } } }
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        tjl = dmjl[j*dl+l];
+                                        tjk = dmjk[j*dk+k];
+                                        skj = 0;
+                                        slj = 0;
+                                        sjl = 0;
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                                //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                                //vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                                //vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
+                                                //vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                                s = eri[ijkl];
+                                                vik[i*dk+k] += s * tjl;
+                                                vil[i*dl+l] += s * tjk;
+                                                skj += s * dmli[l*di+i];
+                                                slj += s * dmki[k*di+i];
+                                                sjl += s * dmik[i*dk+k];
+                                        }
+                                        vlj[l*dj+j] += slj;
+                                        vkj[k*dj+j] += skj;
+                                        vjl[j*dl+l] += sjl; // vjl, vlj may share memory
+                                } } }
                                 vkj += dkj;
                                 vlj += dlj;
                                 vik += dik;
@@ -1277,22 +1421,35 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         }
                 } else if (j0 < k0) { // l < j < k < i
                         DECLARE(vkj, k, j);
-                        int di = i1 - i0;
-                        int dl = l1 - l0;
                         LOCATE(vik, i, k);
                         LOCATE(vil, i, l);
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(j, l);
+                        DEF_DM(j, k);
+                        DEF_DM(i, k);
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                        vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                        vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                        vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                } } } }
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        tjl = dmjl[j*dl+l];
+                                        tjk = dmjk[j*dk+k];
+                                        skj = 0;
+                                        sjl = 0;
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                                //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                                //vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                                //vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                                s = eri[ijkl];
+                                                vik[i*dk+k] += s * tjl;
+                                                vil[i*dl+l] += s * tjk;
+                                                skj += s * dmli[l*di+i];
+                                                sjl += s * dmik[i*dk+k];
+                                        }
+                                        vkj[k*dj+j] += skj;
+                                        vjl[j*dl+l] += sjl;
+                                } } }
                                 vkj += dkj;
                                 vik += dik;
                                 vil += dil;
@@ -1300,24 +1457,41 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         }
                 } else if (j0 == k0) { // l < j == k < i
                         DECLARE(vkj, k, j);
-                        int di = i1 - i0;
-                        int dl = l1 - l0;
                         LOCATE(vik, i, k);
                         LOCATE(vil, i, l);
                         LOCATE(vjk, j, k);
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(i, l);
+                        DEF_DM(j, l);
+                        DEF_DM(j, k);
+                        DEF_DM(i, k);
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                        vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                        vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                        vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                        vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                } } } }
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        tjl = dmjl[j*dl+l];
+                                        tjk = dmjk[j*dk+k];
+                                        sjk = 0;
+                                        sjl = 0;
+                                        skj = 0;
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                                //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                                //vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                                //vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
+                                                //vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                                s = eri[ijkl];
+                                                vik[i*dk+k] += s * tjl;
+                                                vil[i*dl+l] += s * tjk;
+                                                skj += s * dmli[l*di+i];
+                                                sjk += s * dmil[i*dl+l];
+                                                sjl += s * dmik[i*dk+k];
+                                        }
+                                        vjk[j*dk+k] += sjk;
+                                        vjl[j*dl+l] += sjl;
+                                        vkj[k*dj+j] += skj; // vjk, vkj may share memory
+                                } } }
                                 vkj += dkj;
                                 vjk += djk;
                                 vik += dik;
@@ -1326,22 +1500,35 @@ static void nrs8_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                         }
                 } else { // l < k < j < i
                         DECLARE(vik, i, k);
-                        int dj = j1 - j0;
-                        int dl = l1 - l0;
                         LOCATE(vil, i, l);
                         LOCATE(vjk, j, k);
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                        DEF_DM(j, l);
+                        DEF_DM(j, k);
+                        DEF_DM(i, l);
+                        DEF_DM(i, k);
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                        vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                        vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                        vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                } } } }
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                        tjl = dmjl[j*dl+l];
+                                        tjk = dmjk[j*dk+k];
+                                        sjk = 0;
+                                        sjl = 0;
+                                        for (i = 0; i < di; i++, ijkl++) {
+                                                //vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                                //vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                                //vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
+                                                //vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                                s = eri[ijkl];
+                                                vik[i*dk+k] += s * tjl;
+                                                vil[i*dl+l] += s * tjk;
+                                                sjk += s * dmil[i*dl+l];
+                                                sjl += s * dmik[i*dk+k];
+                                        }
+                                        vjk[j*dk+k] += sjk;
+                                        vjl[j*dl+l] += sjl;
+                                } } }
                                 vik += dik;
                                 vil += dil;
                                 vjk += djk;
@@ -1379,22 +1566,27 @@ static void nra2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(v, k, l);
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                int dij = di * dj;
                 int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[j*ncol+i] - dm[i*ncol+j];
+                for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                tdm[ij] = dmji[j*di+i] - dmij[i*dj+j];
                         }
                 }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
+                                tmp = 0;
                                 for (ij = 0; ij < dij; ij++) {
-                                        v[k*dl+l] += eri[ij] * tdm[ij];
+                                        tmp += eri[ij] * tdm[ij];
                                 }
+                                v[k*dl+l] += tmp;
                                 eri += dij;
                         } }
                         v += dkl;
@@ -1422,16 +1614,17 @@ static void nra2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         if (i0 > j0) {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
                                 for (ij = 0; ij < dij; ij++) {
-                                        buf[ij] += eri[ij] * dm[l*ncol+k];
+                                        buf[ij] += eri[ij] * dmlk[l*dk+k];
                                 }
                                 eri += dij;
                         } }
@@ -1472,17 +1665,18 @@ static void nra2ij_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(vil, i, l);
-                int dj = j1 - j0;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                         for (l = 0; l < dl; l++) {
-                        for (k = k0; k < k1; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+k];
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+k];
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
                         } } } }
                         vil += dil;
                         vjl += djl;
@@ -1511,17 +1705,18 @@ static void nra2ij_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (i0 > j0) {
                 DECLARE(vkj, k, j);
-                int di = i1 - i0;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
                 LOCATE(vki, k, i);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[l*ncol+jp];
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -1551,31 +1746,22 @@ static void nra2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         if (k0 > l0) {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
-                double buf[MAXCGTO*MAXCGTO];
-
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[j*ncol+i];
-                        }
-                }
-                int dij = ij;
+                DEF_DM(j, i);
+                int dij = di * dj;
+                int k, l, ij, icomp;
+                double tmp;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * dmji[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] -= tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] -= buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -1607,6 +1793,8 @@ static void nra2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(v, i, j);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -1614,9 +1802,9 @@ static void nra2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[l*ncol+k] - dm[k*ncol+l];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -1651,17 +1839,18 @@ static void nra2kl_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
                         for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[j*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vik += dik;
                         vil += dil;
@@ -1690,17 +1879,18 @@ static void nra2kl_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
 {
         if (k0 > l0) {
                 DECLARE(vkj, k, j);
-                int dl = l1 - l0;
+                DEF_DM(l, i);
+                DEF_DM(k, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
                         for (j = 0; j < dj; j++) {
-                        for (i = i0; i < i1; i++, ijkl++) {
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+i];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+i];
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
                         } } } }
                         vkj += dkj;
                         vlj += dlj;
@@ -1734,31 +1924,30 @@ static void nra4ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                int dij = di * dj;
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[j*ncol+i] - dm[i*ncol+j];
+                for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                tdm[ij] = dmji[j*di+i] - dmij[i*dj+j];
                         }
                 }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * tdm[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] += tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] += buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -1785,6 +1974,8 @@ static void nra4ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -1792,9 +1983,9 @@ static void nra4ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[l*ncol+k] + dm[k*ncol+l];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmlk[l*dk+k] + dmkl[k*dl+l];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -1839,22 +2030,24 @@ static void nra4ij_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 nra2ij_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vik, i, k);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vil, i, l);
                 LOCATE(vjk, j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] -= eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] -= eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -1877,28 +2070,30 @@ static void nra4ij_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
         } else if (i0 < k0) {
                 if (j0 < l0) { // j < l <= i < k
                         DECLARE(v, i, l);
+                        DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = j0; j < j1; j++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
                                 for (i = 0; i < di; i++, ijkl++) {
-                                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
+                                        v[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                                 } } } }
                                 v += dil;
                         }
                 } else { // l <= j < i < k
                         DECLARE(vil, i, l);
-                        int dj = j1 - j0;
+                        DEF_DM(i, k);
+                        DEF_DM(j, k);
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, ijkl, icomp;
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vjl[j*dl+l] -= eri[ijkl] *dm[ip*ncol+k];
-                                        vil[i*dl+l] += eri[ijkl] *dm[jp*ncol+k];
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vjl[j*dl+l] -= eri[ijkl] *dmik[i*dk+k];
+                                        vil[i*dl+l] += eri[ijkl] *dmjk[j*dk+k];
                                 } } } }
                                 vjl += djl;
                                 vil += dil;
@@ -1906,35 +2101,37 @@ static void nra4ij_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (j0 < l0) { // j < l < k <= i
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
                         for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[j*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vil += dil;
                         vik += dik;
                 }
         } else if (j0 < k0) { // l <= j < k <= i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vjl += djl;
                         vil += dil;
@@ -1942,21 +2139,23 @@ static void nra4ij_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // l < k <= j < i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vjk, j, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] -= eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] += eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] -= eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] += eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -1977,21 +2176,23 @@ static void nra4ij_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 nra2ij_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] -= eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] -= eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2014,28 +2215,30 @@ static void nra4ij_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
         } else if (k0 < i0) {
                 if (l0 < j0) { // l < j < k < i
                         DECLARE(v, k, j);
+                        DEF_DM(l, i);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = l0; l < l1; l++) {
+                                for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        v[k*dj+j] += eri[ijkl] * dmli[l*di+i];
                                 } } } }
                                 v += dkj;
                         }
                 } else { // j <= l < k < i
                         DECLARE(vkj, k, j);
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
-                        int i, j, k, l, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        vkj[k*dj+j] += eri[ijkl] *dm[lp*ncol+i];
-                                        vlj[l*dj+j] += eri[ijkl] *dm[kp*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vkj[k*dj+j] += eri[ijkl] *dmli[l*di+i];
+                                        vlj[l*dj+j] += eri[ijkl] *dmki[k*di+i];
                                 } } } }
                                 vkj += dkj;
                                 vlj += dlj;
@@ -2043,35 +2246,37 @@ static void nra4ij_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (l0 < j0) { // l < j < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
                 LOCATE(vkj, k, j);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[l*ncol+jp];
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
                 }
         } else if (l0 < i0) { // j <= l < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2079,21 +2284,23 @@ static void nra4ij_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // j < i <= l < k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] += eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] -= eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] += eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] -= eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2115,31 +2322,30 @@ static void nra4kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                int dij = di * dj;
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[i*ncol+j] + dm[j*ncol+i];
+                for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
                         }
                 }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * tdm[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] -= tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] -= buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -2174,6 +2380,8 @@ static void nra4kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -2181,9 +2389,9 @@ static void nra4kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[l*ncol+k] - dm[k*ncol+l];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -2220,22 +2428,24 @@ static void nra4kl_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 nrs2ij_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vik, i, k);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vil, i, l);
                 LOCATE(vjk, j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] -= eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] -= eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -2258,28 +2468,30 @@ static void nra4kl_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
         } else if (i0 < k0) {
                 if (j0 < l0) { // j < l <= i < k
                         DECLARE(v, i, l);
+                        DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = j0; j < j1; j++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
                                 for (i = 0; i < di; i++, ijkl++) {
-                                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
+                                        v[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                                 } } } }
                                 v += dil;
                         }
                 } else { // l <= j < i < k
                         DECLARE(vil, i, l);
-                        int dj = j1 - j0;
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, ijkl, icomp;
+                        DEF_DM(i, k);
+                        DEF_DM(j, k);
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vjl[j*dl+l] += eri[ijkl] *dm[ip*ncol+k];
-                                        vil[i*dl+l] += eri[ijkl] *dm[jp*ncol+k];
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                        vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                                 } } } }
                                 vjl += djl;
                                 vil += dil;
@@ -2287,35 +2499,37 @@ static void nra4kl_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (j0 < l0) { // j < l < k <= i
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
                         for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[j*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vil += dil;
                         vik += dik;
                 }
         } else if (j0 < k0) { // l <= j < k <= i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vjl += djl;
                         vil += dil;
@@ -2323,21 +2537,23 @@ static void nra4kl_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // l < k <= j < i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vjk, j, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] -= eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] += eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] -= eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] += eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -2358,21 +2574,23 @@ static void nra4kl_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 nrs2ij_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] -= eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] -= eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2395,28 +2613,30 @@ static void nra4kl_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
         } else if (k0 < i0) {
                 if (l0 < j0) { // l < j < k < i
                         DECLARE(v, k, j);
+                        DEF_DM(l, i);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = l0; l < l1; l++) {
+                                for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        v[k*dj+j] += eri[ijkl] * dmli[l*di+i];
                                 } } } }
                                 v += dkj;
                         }
                 } else { // j <= l < k < i
                         DECLARE(vkj, k, j);
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
-                        int i, j, k, l, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        vkj[k*dj+j] += eri[ijkl] *dm[lp*ncol+i];
-                                        vlj[l*dj+j] -= eri[ijkl] *dm[kp*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                        vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
                                 } } } }
                                 vkj += dkj;
                                 vlj += dlj;
@@ -2424,35 +2644,37 @@ static void nra4kl_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (l0 < j0) { // l < j < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
                 LOCATE(vkj, k, j);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[l*ncol+jp];
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
                 }
         } else if (l0 < i0) { // j <= l < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2460,21 +2682,23 @@ static void nra4kl_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // j < i <= l < k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] += eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] -= eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] += eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] -= eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2499,31 +2723,30 @@ static void nraa4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vkl, k, l);
                 LOCATE(vlk, l, k);
-                int i, j, k, l, ij, kl, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                DEF_DM(i, j);
+                DEF_DM(j, i);
+                int dij = di * dj;
+                int i, j, k, l, ij, icomp;
                 double tdm[MAXCGTO*MAXCGTO];
+                double tmp;
 
-                for (ij = 0, j = j0; j < j1; j++) {
-                        for (i = i0; i < i1; i++, ij++) {
-                                tdm[ij] = dm[j*ncol+i] - dm[i*ncol+j];
+                for (ij = 0, j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ij++) {
+                                tdm[ij] = dmji[j*di+i] - dmij[i*dj+j];
                         }
                 }
-                int dij = ij;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
-
-                        for (i = 0; i < dkl; i++) { buf[i] = 0; }
-                        for (kl = 0; kl < dkl; kl++) {
-                        for (ij = 0; ij < dij; ij++) {
-                                buf[kl] += eri[kl*dij+ij] * tdm[ij];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tmp = 0;
+                                for (ij = 0; ij < dij; ij++) {
+                                        tmp += eri[ij] * tdm[ij];
+                                }
+                                vkl[k*dl+l] += tmp;
+                                vlk[l*dk+k] -= tmp;
+                                eri += dij;
                         } }
-
-                        for (kl = 0, l = 0; l < dl; l++) {
-                        for (k = 0; k < dk; k++, kl++) {
-                                vkl[k*dl+l] += buf[kl];
-                                vlk[kl] -= buf[kl];
-                        } }
-                        eri += dij * dkl;
                         vkl += dkl;
                         vlk += dkl;
                 }
@@ -2550,6 +2773,8 @@ static void nraa4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         } else {
                 DECLARE(vij, i, j);
                 LOCATE(vji, j, i);
+                DEF_DM(k, l);
+                DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
                 double buf[MAXCGTO*MAXCGTO];
                 double tdm;
@@ -2557,9 +2782,9 @@ static void nraa4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
-                        for (l = l0; l < l1; l++) {
-                        for (k = k0; k < k1; k++) {
-                                tdm = dm[l*ncol+k] - dm[k*ncol+l];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                                tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -2604,22 +2829,24 @@ static void nraa4_jk_s1il(double *eri, double *dm, JKArray *out, int *shls,
                 nra2ij_jk_s1il(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vik, i, k);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vil, i, l);
                 LOCATE(vjk, j, k);
                 LOCATE(vjl, j, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
 
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -2642,28 +2869,30 @@ static void nraa4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
         } else if (i0 < k0) {
                 if (j0 < l0) { // j < l <= i < k
                         DECLARE(v, i, l);
+                        DEF_DM(j, k);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = j0; j < j1; j++) {
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
                                 for (i = 0; i < di; i++, ijkl++) {
-                                        v[i*dl+l] += eri[ijkl] * dm[j*ncol+k];
+                                        v[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                                 } } } }
                                 v += dil;
                         }
                 } else { // l <= j < i < k
                         DECLARE(vil, i, l);
-                        int dj = j1 - j0;
                         LOCATE(vjl, j, l);
-                        int i, j, k, l, ip, jp, ijkl, icomp;
+                        DEF_DM(i, k);
+                        DEF_DM(j, k);
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
                                 for (l = 0; l < dl; l++) {
-                                for (k = k0; k < k1; k++) {
-                                for (j = 0; j < dj; j++) { jp = j0 + j;
-                                for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                        vjl[j*dl+l] -= eri[ijkl] *dm[ip*ncol+k];
-                                        vil[i*dl+l] += eri[ijkl] *dm[jp*ncol+k];
+                                for (k = 0; k < dk; k++) {
+                                for (j = 0; j < dj; j++) {
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                        vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                                 } } } }
                                 vjl += djl;
                                 vil += dil;
@@ -2671,35 +2900,37 @@ static void nraa4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (j0 < l0) { // j < l < k <= i
                 DECLARE(vil, i, l);
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
-                int i, j, k, l, kp, lp, ijkl, icomp;
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = j0; j < j1; j++) {
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
                         for (i = 0; i < di; i++, ijkl++) {
-                                vil[i*dl+l] += eri[ijkl] * dm[j*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[j*ncol+lp];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vil += dil;
                         vik += dik;
                 }
         } else if (j0 < k0) { // l <= j < k <= i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, k);
+                DEF_DM(j, k);
+                DEF_DM(j, l);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
                         } } } }
                         vjl += djl;
                         vil += dil;
@@ -2707,21 +2938,23 @@ static void nraa4_jk_s2il(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // l < k <= j < i
                 DECLARE(vjl, j, l);
-                int di = i1 - i0;
-                int dk = k1 - k0;
                 LOCATE(vik, i, k);
                 LOCATE(vjk, j, k);
                 LOCATE(vil, i, l);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(i, l);
+                DEF_DM(i, k);
+                DEF_DM(j, l);
+                DEF_DM(j, k);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vjk[j*dk+k] += eri[ijkl] * dm[ip*ncol+lp];
-                                vjl[j*dl+l] -= eri[ijkl] * dm[ip*ncol+kp];
-                                vik[i*dk+k] -= eri[ijkl] * dm[jp*ncol+lp];
-                                vil[i*dl+l] += eri[ijkl] * dm[jp*ncol+kp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vjk[j*dk+k] += eri[ijkl] * dmil[i*dl+l];
+                                vjl[j*dl+l] -= eri[ijkl] * dmik[i*dk+k];
+                                vik[i*dk+k] -= eri[ijkl] * dmjl[j*dl+l];
+                                vil[i*dl+l] += eri[ijkl] * dmjk[j*dk+k];
                         } } } }
                         vjk += djk;
                         vjl += djl;
@@ -2742,21 +2975,23 @@ static void nraa4_li_s1kj(double *eri, double *dm, JKArray *out, int *shls,
                 nra2ij_li_s1kj(eri, dm, out, shls, i0, i1, j0, j1, k0, k1, l0, l1);
         } else {
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] += eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2779,28 +3014,30 @@ static void nraa4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
         } else if (k0 < i0) {
                 if (l0 < j0) { // l < j < k < i
                         DECLARE(v, k, j);
+                        DEF_DM(l, i);
                         int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = l0; l < l1; l++) {
+                                for (l = 0; l < dl; l++) {
                                 for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        v[k*dj+j] += eri[ijkl] * dm[l*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        v[k*dj+j] += eri[ijkl] * dmli[l*di+i];
                                 } } } }
                                 v += dkj;
                         }
                 } else { // j <= l < k < i
                         DECLARE(vkj, k, j);
-                        int dl = l1 - l0;
                         LOCATE(vlj, l, j);
-                        int i, j, k, l, kp, lp, ijkl, icomp;
+                        DEF_DM(l, i);
+                        DEF_DM(k, i);
+                        int i, j, k, l, ijkl, icomp;
                         for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                                for (l = 0; l < dl; l++) { lp = l0 + l;
-                                for (k = 0; k < dk; k++) { kp = k0 + k;
+                                for (l = 0; l < dl; l++) {
+                                for (k = 0; k < dk; k++) {
                                 for (j = 0; j < dj; j++) {
-                                for (i = i0; i < i1; i++, ijkl++) {
-                                        vkj[k*dj+j] += eri[ijkl] *dm[lp*ncol+i];
-                                        vlj[l*dj+j] -= eri[ijkl] *dm[kp*ncol+i];
+                                for (i = 0; i < di; i++, ijkl++) {
+                                        vkj[k*dj+j] += eri[ijkl] *dmli[l*di+i];
+                                        vlj[l*dj+j] -= eri[ijkl] *dmki[k*di+i];
                                 } } } }
                                 vkj += dkj;
                                 vlj += dlj;
@@ -2808,35 +3045,37 @@ static void nraa4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else if (l0 < j0) { // l < j < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
                 LOCATE(vkj, k, j);
-                int i, j, k, l, ip, jp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = l0; l < l1; l++) {
+                        for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[l*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[l*ncol+jp];
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;
                 }
         } else if (l0 < i0) { // j <= l < i <= k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
                         } } } }
                         vkj += dkj;
                         vki += dki;
@@ -2844,21 +3083,23 @@ static void nraa4_li_s2kj(double *eri, double *dm, JKArray *out, int *shls,
                 }
         } else { // j < i <= l < k
                 DECLARE(vki, k, i);
-                int dj = j1 - j0;
-                int dl = l1 - l0;
                 LOCATE(vkj, k, j);
                 LOCATE(vli, l, i);
                 LOCATE(vlj, l, j);
-                int i, j, k, l, ip, jp, kp, lp, ijkl, icomp;
+                DEF_DM(l, i);
+                DEF_DM(l, j);
+                DEF_DM(k, i);
+                DEF_DM(k, j);
+                int i, j, k, l, ijkl, icomp;
                 for (ijkl = 0, icomp = 0; icomp < ncomp; icomp++) {
-                        for (l = 0; l < dl; l++) { lp = l0 + l;
-                        for (k = 0; k < dk; k++) { kp = k0 + k;
-                        for (j = 0; j < dj; j++) { jp = j0 + j;
-                        for (i = 0; i < di; i++, ijkl++) { ip = i0 + i;
-                                vkj[k*dj+j] += eri[ijkl] * dm[lp*ncol+ip];
-                                vki[k*di+i] -= eri[ijkl] * dm[lp*ncol+jp];
-                                vlj[l*dj+j] -= eri[ijkl] * dm[kp*ncol+ip];
-                                vli[l*di+i] += eri[ijkl] * dm[kp*ncol+jp];
+                        for (l = 0; l < dl; l++) {
+                        for (k = 0; k < dk; k++) {
+                        for (j = 0; j < dj; j++) {
+                        for (i = 0; i < di; i++, ijkl++) {
+                                vkj[k*dj+j] += eri[ijkl] * dmli[l*di+i];
+                                vki[k*di+i] -= eri[ijkl] * dmlj[l*dj+j];
+                                vlj[l*dj+j] -= eri[ijkl] * dmki[k*di+i];
+                                vli[l*di+i] += eri[ijkl] * dmkj[k*dj+j];
                         } } } }
                         vkj += dkj;
                         vki += dki;

@@ -25,7 +25,7 @@ See Also:
                             systems with k-point sampling
 '''
 
-import time
+
 import numpy
 import pyscf.dft
 from pyscf import lib
@@ -34,7 +34,7 @@ from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
-from pyscf.dft.rks import define_xc_
+from pyscf.dft import rks as mol_ks
 from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
@@ -60,12 +60,10 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
     if kpt is None: kpt = ks.kpt
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(omega) > 1e-10:
-        raise NotImplementedError
-    hybrid = abs(hyb) > 1e-10
+    hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
@@ -103,10 +101,15 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vxc += vj - vk * (hyb * .5)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk * .5
 
         if ground_state:
-            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * hyb*.5
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
@@ -152,33 +155,8 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     return rho
 
 
-class RKS(pbchf.RHF):
-    '''RKS class adapted for PBCs.
-
-    This is a literal duplication of the molecular RKS class with some `mol`
-    variables replaced by `cell`.
-    '''
-    def __init__(self, cell, kpt=numpy.zeros(3)):
-        pbchf.RHF.__init__(self, cell, kpt)
-        _dft_common_init_(self)
-
-    def dump_flags(self, verbose=None):
-        pbchf.RHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
-
-    get_veff = get_veff
-    energy_elec = pyscf.dft.rks.energy_elec
-    get_rho = get_rho
-
-    define_xc_ = define_xc_
-
-    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
-    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
-
-
-def _dft_common_init_(mf):
-    mf.xc = 'LDA,VWN'
+def _dft_common_init_(mf, xc='LDA,VWN'):
+    mf.xc = xc
     mf.grids = gen_grid.UniformGrids(mf.cell)
     # Use rho to filter grids
     mf.small_rho_cutoff = getattr(__config__,
@@ -191,6 +169,46 @@ def _dft_common_init_(mf):
     else:
         mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+
+class KohnShamDFT(mol_ks.KohnShamDFT):
+    '''PBC-KS'''
+
+    __init__ = _dft_common_init_
+
+    def dump_flags(self, verbose=None):
+        logger.info(self, 'XC functionals = %s', self.xc)
+        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+        self.grids.dump_flags(verbose)
+        return self
+
+    def reset(self, mol=None):
+        pbchf.SCF.reset(self, mol)
+        self.grids.reset(mol)
+        return self
+
+
+class RKS(KohnShamDFT, pbchf.RHF):
+    '''RKS class adapted for PBCs.
+
+    This is a literal duplication of the molecular RKS class with some `mol`
+    variables replaced by `cell`.
+    '''
+    def __init__(self, cell, kpt=numpy.zeros(3), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        pbchf.RHF.__init__(self, cell, kpt, exxdiv=exxdiv)
+        KohnShamDFT.__init__(self, xc)
+
+    def dump_flags(self, verbose=None):
+        pbchf.RHF.dump_flags(self, verbose)
+        KohnShamDFT.dump_flags(self, verbose)
+        return self
+
+    get_veff = get_veff
+    energy_elec = pyscf.dft.rks.energy_elec
+    get_rho = get_rho
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
 
 if __name__ == '__main__':

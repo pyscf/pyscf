@@ -23,13 +23,13 @@ Restricted open-shell Hartree-Fock for periodic systems with k-point sampling
 from functools import reduce
 import numpy as np
 import scipy.linalg
+from pyscf.scf import hf as mol_hf
 from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.scf import rohf as pbcrohf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -42,7 +42,6 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     Returns:
         dm_kpts : (2, nkpts, nao, nao) ndarray
     '''
-    nkpts = len(mo_occ_kpts)
     dma = []
     dmb = []
     for k, occ in enumerate(mo_occ_kpts):
@@ -73,10 +72,12 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     dm_sf = dm_kpts[0] + dm_kpts[1]
+    if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
+        raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
-        f_kpts = [hf.level_shift(s, dm_sf[k]*.5, f_kpts[k], level_shift_factor)
+        f_kpts = [mol_hf.level_shift(s, dm_sf[k]*.5, f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
     f_kpts = lib.tag_array(lib.asarray(f_kpts), focka=focka, fockb=fockb)
     return f_kpts
@@ -167,12 +168,14 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
             vir_idx = mo_occ_kpts[k] == 0
             logger.debug(mf, '  kpt %2d (%6.3f %6.3f %6.3f)',
                          k, kpt[0], kpt[1], kpt[2])
-            logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
-                         max(mo_energy_kpts[k][core_idx]),
-                         max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
-            logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
-                         min(mo_energy_kpts[k][vir_idx]),
-                         min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
+            if np.count_nonzero(core_idx) > 0:
+                logger.debug(mf, '  Highest 2-occ = %18.15g | %18.15g | %18.15g',
+                             max(mo_energy_kpts[k][core_idx]),
+                             max(mo_ea_kpts[k][core_idx]), max(mo_eb_kpts[k][core_idx]))
+            if np.count_nonzero(vir_idx) > 0:
+                logger.debug(mf, '  Lowest 0-occ =  %18.15g | %18.15g | %18.15g',
+                             min(mo_energy_kpts[k][vir_idx]),
+                             min(mo_ea_kpts[k][vir_idx]), min(mo_eb_kpts[k][vir_idx]))
             for i in np.where(open_idx)[0]:
                 logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
                              mo_energy_kpts[k][i], mo_ea_kpts[k][i], mo_eb_kpts[k][i])
@@ -254,12 +257,12 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
 
-class KROHF(pbcrohf.ROHF, khf.KRHF):
+class KROHF(khf.KRHF, pbcrohf.ROHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -290,9 +293,6 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         logger.info(self, 'number of electrons per unit cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
-
-    build = khf.KSCF.build
-    check_sanity = khf.KSCF.check_sanity
 
 #?    def get_init_guess(self, cell=None, key='minao'):
 #?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
@@ -335,35 +335,42 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         nelec = float(sum(self.nelec))
         if np.any(abs(ne - nelec) > 1e-7*nkpts):
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %g', ne/nkpts, nelec/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %g', ne/nkpts, nelec/nkpts)
             dm_kpts *= nelec / ne
         return dm_kpts
 
-    get_hcore = khf.KSCF.get_hcore
-    get_ovlp = khf.KSCF.get_ovlp
-    get_jk = khf.KSCF.get_jk
-    get_j = khf.KSCF.get_j
-    get_k = khf.KSCF.get_k
+    init_guess_by_minao  = pbcrohf.ROHF.init_guess_by_minao
+    init_guess_by_atom   = pbcrohf.ROHF.init_guess_by_atom
+    init_guess_by_huckel = pbcrohf.ROHF.init_guess_by_huckel
+
+    get_rho = get_rho
+
     get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
 
-    get_rho = khf.KSCF.get_rho
-
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
+        if dm_kpts is None:
+            dm_kpts = self.make_rdm1()
         if getattr(dm_kpts, 'mo_coeff', None) is not None:
             mo_coeff = dm_kpts.mo_coeff
             mo_occ_a = [(x > 0).astype(np.double) for x in dm_kpts.mo_occ]
             mo_occ_b = [(x ==2).astype(np.double) for x in dm_kpts.mo_occ]
             dm_kpts = lib.tag_array(dm_kpts, mo_coeff=(mo_coeff,mo_coeff),
                                     mo_occ=(mo_occ_a,mo_occ_b))
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -434,17 +441,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
     spin_square = pbcrohf.ROHF.spin_square
 
-    get_bands = khf.KSCF.get_bands
-
     canonicalize = canonicalize
-
-    dump_chk = khf.KSCF.dump_chk
-
-    density_fit = khf.KSCF.density_fit
-    # mix_density_fit inherits from khf.KSCF.mix_density_fit
-
-    newton = khf.KSCF.newton
-    x2c = x2c1e = sfx2c1e = khf.KSCF.sfx2c1e
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),

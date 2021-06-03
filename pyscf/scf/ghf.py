@@ -100,8 +100,9 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
+@lib.with_doc(hf.get_jk.__doc__)
 def get_jk(mol, dm, hermi=0,
-           with_j=True, with_k=True, jkbuild=hf.get_jk):
+           with_j=True, with_k=True, jkbuild=hf.get_jk, omega=None):
 
     dm = numpy.asarray(dm)
     nso = dm.shape[-1]
@@ -115,11 +116,11 @@ def get_jk(mol, dm, hermi=0,
     dms = numpy.vstack((dmaa, dmbb, dmab))
     if dm.dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
-        hermi = 0
 
-    j1, k1 = jkbuild(mol, dms, hermi)
-    j1 = j1.reshape(-1,n_dm,nao,nao)
-    k1 = k1.reshape(-1,n_dm,nao,nao)
+    hermi = 0  # The off-diagonal blocks are not hermitian
+    j1, k1 = jkbuild(mol, dms, hermi, with_j, with_k, omega)
+    if with_j: j1 = j1.reshape(-1,n_dm,nao,nao)
+    if with_k: k1 = k1.reshape(-1,n_dm,nao,nao)
 
     if dm.dtype == numpy.complex128:
         if with_j: j1 = j1[:3] + j1[3:] * 1j
@@ -377,10 +378,22 @@ class GHF(hf.SCF):
         mo_coeff[nao:nao*2] are the coefficients of AO with beta spin.
     '''
 
+    def __init__(self, mol):
+        hf.SCF.__init__(self, mol)
+        self.with_soc = None
+        self._keys = self._keys.union(['with_soc'])
+
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         hcore = hf.get_hcore(mol)
-        return scipy.linalg.block_diag(hcore, hcore)
+        hcore = scipy.linalg.block_diag(hcore, hcore)
+
+        if self.with_soc and mol.has_ecp_soc():
+            # The ECP SOC contribution = <|1j * s * U_SOC|>
+            s = .5 * lib.PauliMatrices
+            ecpso = numpy.einsum('sxy,spq->xpyq', -1j * s, mol.intor('ECPso'))
+            hcore = hcore + ecpso.reshape(hcore.shape)
+        return hcore
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
@@ -397,7 +410,7 @@ class GHF(hf.SCF):
         viridx = ~occidx
         g = reduce(numpy.dot, (mo_coeff[:,occidx].T.conj(), fock,
                                mo_coeff[:,viridx]))
-        return g.T.ravel()
+        return g.conj().T.ravel()
 
     @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
@@ -407,50 +420,49 @@ class GHF(hf.SCF):
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_huckel.__doc__)
+    def init_guess_by_huckel(self, mol=None):
+        if mol is None: mol = self.mol
+        logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
+        return _from_rhf_init_dm(hf.init_guess_by_huckel(mol))
+
     @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project)
 
-    def get_jk(self, mol=None, dm=None, hermi=0):
+    @lib.with_doc(hf.get_jk.__doc__)
+    def get_jk(self, mol=None, dm=None, hermi=0, with_j=True, with_k=True,
+               omega=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, True, True, self.get_jk)
-        else:
-            if self._eri is not None or mol.incore_anyway or self._is_mem_enough():
+        nao = mol.nao
+        dm = numpy.asarray(dm)
+
+        def jkbuild(mol, dm, hermi, with_j, with_k, omega=None):
+            if (not omega and
+                (self._eri is not None or mol.incore_anyway or self._is_mem_enough())):
                 if self._eri is None:
                     self._eri = mol.intor('int2e', aosym='s8')
-                vj, vk = hf.dot_eri_dm(self._eri, dm, hermi)
+                return hf.dot_eri_dm(self._eri, dm, hermi, with_j, with_k)
             else:
-                vj, vk = hf.SCF.get_jk(self, mol, dm, hermi)
-            return vj, vk
+                return hf.SCF.get_jk(self, mol, dm, hermi, with_j, with_k, omega)
 
-    def get_j(self, mol=None, dm=None, hermi=0):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, True, False, self.get_jk)[0]
-        else:
-            return hf.SCF.get_j(self, mol, dm, hermi)
-
-    def get_k(self, mol=None, dm=None, hermi=0):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if mol.nao_nr() * 2 == dm[0].shape[0]:  # GHF density matrix, shape (2N,2N)
-            return get_jk(mol, dm, hermi, False, True, self.get_jk)[1]
-        else:
-            return hf.SCF.get_k(self, mol, dm, hermi)
+        if nao == dm.shape[-1]:
+            vj, vk = jkbuild(mol, dm, hermi, with_j, with_k, omega)
+        else:  # GHF density matrix, shape (2N,2N)
+            vj, vk = get_jk(mol, dm, hermi, with_j, with_k, jkbuild, omega)
+        return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self._eri is not None or not self.direct_scf:
-            vj, vk = get_jk(mol, dm, hermi, True, True, self.get_jk)
+            vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj - vk
         else:
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = get_jk(mol, ddm, hermi, True, True, self.get_jk)
+            vj, vk = self.get_jk(mol, ddm, hermi)
             vhf = vj - vk + numpy.asarray(vhf_last)
         return vhf
 
@@ -508,7 +520,7 @@ class GHF(hf.SCF):
         from pyscf.scf import addons
         return addons.convert_to_ghf(mf, out=self)
 
-    def stability(self, verbose=None):
+    def stability(self, internal=None, external=None, verbose=None):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
 
@@ -528,7 +540,6 @@ del(PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     mol = gto.Mole()
     mol.verbose = 3
     mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'

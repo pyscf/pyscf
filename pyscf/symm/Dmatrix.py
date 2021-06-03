@@ -68,8 +68,8 @@ def dmatrix(l, beta, reorder_p=False):
     if l == 0:
         return numpy.eye(1)
     elif l == 1:
-        mat = numpy.array(((c**2        , sqrt(2)*c*s , s**2       ), \
-                           (-sqrt(2)*c*s, c**2-s**2   , sqrt(2)*c*s), \
+        mat = numpy.array(((c**2        , sqrt(2)*c*s , s**2       ),
+                           (-sqrt(2)*c*s, c**2-s**2   , sqrt(2)*c*s),
                            (s**2        , -sqrt(2)*c*s, c**2       )))
         if reorder_p:
             mat = mat[[2,0,1]][:,[2,0,1]]
@@ -128,7 +128,7 @@ def get_euler_angles(c1, c2):
     tmp = numpy.einsum('ij,kj->ik', c1 , geom.rotation_mat(c1[2], alpha))
     tmp = numpy.einsum('ij,kj->ik', tmp, geom.rotation_mat(yp   , beta ))
     c2  = numpy.einsum('ij,kj->ik', tmp, geom.rotation_mat(c2[2], gamma))
-    
+
     (For backward compatibility) if c1 and c2 are two points in the real
     space, the Euler angles define the rotation transforms the old coordinates
     to the new coordinates (new_x, new_y, new_z) in which c1 is identical to c2.

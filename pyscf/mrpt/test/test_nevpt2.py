@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,48 +60,53 @@ h2e = ao2mo.restore(1, h2e, norb).transpose(0,2,1,3)
 dm1, dm2, dm3, dm4 = fci.rdm.make_dm1234('FCI4pdm_kern_sf',
                                          mc.ci, mc.ci, norb, nelec)
 hdm1 = 2.0*numpy.eye(dm1.shape[0])-dm1.T
-eris = nevpt2._ERIS(mc, mc.mo_coeff)
+# Test integral transformation incore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='incore')
+# Test integral transformation outcore algorithm
+eris = nevpt2._ERIS(mc, mc.mo_coeff, method='outcore')
 dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
 
 class KnowValues(unittest.TestCase):
+    # energy values for H14 from Dalton
+
     def test_Sr(self):
         norm, e = nevpt2.Sr(mc, mc.ci, dms, eris)
-        self.assertAlmostEqual(e, -0.020245617857870119, 7)
-        self.assertAlmostEqual(norm, 0.039479583324952064, 7)
+        self.assertAlmostEqual(e, -0.0202461540, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.039479583324952064, delta=1.0e-7)
 
     def test_Si(self):
         norm, e = nevpt2.Si(mc, mc.ci, dms, eris)
-        self.assertAlmostEqual(e, -0.0021281408063186956, 7)
-        self.assertAlmostEqual(norm, 0.0037402334190064367, 7)
+        self.assertAlmostEqual(e, -0.0021282083, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.0037402334190064367, delta=1.0e-7)
 
     def test_Sijrs(self):
         norm, e = nevpt2.Sijrs(mc, eris)
-        self.assertAlmostEqual(e, -0.0071504286486605891, 7)
-        self.assertAlmostEqual(norm, 0.023107592349719219, 7)
+        self.assertAlmostEqual(e, -0.0071505004, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.023107592349719219, delta=1.0e-7)
 
     def test_Sijr(self):
         norm, e = nevpt2.Sijr(mc,dms, eris)
-        self.assertAlmostEqual(e, -0.0050340133565470449, 7)
-        self.assertAlmostEqual(norm, 0.012664066951786257, 7)
+        self.assertAlmostEqual(e, -0.0050346117, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.012664066951786257, delta=1.0e-7)
 
     def test_Srsi(self):
         norm, e = nevpt2.Srsi(mc,dms, eris)
-        self.assertAlmostEqual(e, -0.013695728508982102, 7)
-        self.assertAlmostEqual(norm, 0.040695892654346914, 7)
+        self.assertAlmostEqual(e, -0.0136954715, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.040695892654346914, delta=1.0e-7)
 
     def test_Srs(self):
         norm, e = nevpt2.Srs(mc, dms, eris)
-        self.assertAlmostEqual(e, -0.017531645975808627, 7)
-        self.assertAlmostEqual(norm, 0.056323606234166601, 7)
+        self.assertAlmostEqual(e, -0.0175312323, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.056323606234166601, delta=1.0e-7)
 
     def test_Sir(self):
         norm, e = nevpt2.Sir(mc, dms, eris)
-        self.assertAlmostEqual(e, -0.033866295344083322, 7)
-        self.assertAlmostEqual(norm, 0.074269050656629421, 7)
+        self.assertAlmostEqual(e, -0.0338666048, delta=1.0e-6)
+        self.assertAlmostEqual(norm, 0.074269050656629421, delta=1.0e-7)
 
     def test_energy(self):
         e = nevpt2.NEVPT(mc).kernel()
-        self.assertAlmostEqual(e, -0.10315217594326213, 7)
+        self.assertAlmostEqual(e, -0.1031529251, delta=1.0e-6)
 
     def test_energy1(self):
         mol = gto.M(
@@ -118,6 +123,13 @@ class KnowValues(unittest.TestCase):
         mc.kernel()
         e = nevpt2.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.16978532268234559, 6)
+
+    def test_reset(self):
+        mol1 = gto.M(atom='C')
+        pt = nevpt2.NEVPT(mc)
+        pt.reset(mol1)
+        self.assertTrue(pt.mol is mol1)
+        self.assertTrue(pt._mc.mol is mol1)
 
 
 if __name__ == "__main__":

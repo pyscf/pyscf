@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,17 +17,15 @@
 Analytical nuclear hessian for 1-electron spin-free x2c method
 
 Ref.
-JCP 135 244104
-JCTC 8 2617
+JCP 135, 244104 (2011); DOI:10.1063/1.3667202
+JCTC 8, 2617 (2012); DOI:10.1021/ct300127e
 '''
 
-import time
 from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf.lib import logger
 from pyscf.x2c import x2c
 from pyscf.x2c import sfx2c1e_grad
 
@@ -68,7 +66,7 @@ def gen_sf_hfw(mol, approx='1E'):
             shls_slice = (ish0, ish1, ish0, ish1)
             t1 = mol.intor('int1e_kin', shls_slice=shls_slice)
             s1 = mol.intor('int1e_ovlp', shls_slice=shls_slice)
-            with mol.with_rinv_as_nucleus(ia):
+            with mol.with_rinv_at_nucleus(ia):
                 z = -mol.atom_charge(ia)
                 v1 = z * mol.intor('int1e_rinv', shls_slice=shls_slice)
                 w1 = z * mol.intor('int1e_prinvp', shls_slice=shls_slice)
@@ -155,7 +153,7 @@ def gen_sf_hfw(mol, approx='1E'):
             w2cc[:,:,i0:i1,j0:j1] = w2ab[:,:,i0:i1,j0:j1]
             zi = mol.atom_charge(ia)
             zj = mol.atom_charge(ja)
-            with mol.with_rinv_as_nucleus(ia):
+            with mol.with_rinv_at_nucleus(ia):
                 shls_slice = (jsh0, jsh1, 0, mol.nbas)
                 rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                 rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
@@ -170,7 +168,7 @@ def gen_sf_hfw(mol, approx='1E'):
                 w2cc[:,:,j0:j1] += prinvp2aa
                 w2cc[:,:,j0:j1] += prinvp2ab.transpose(1,0,2,3)
 
-            with mol.with_rinv_as_nucleus(ja):
+            with mol.with_rinv_at_nucleus(ja):
                 shls_slice = (ish0, ish1, 0, mol.nbas)
                 rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                 rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
@@ -264,9 +262,6 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
     wr0_sqrt, vr0 = r0_roots
     wr0_invsqrt = 1. / wr0_sqrt
 
-    s0_sqrt = numpy.diag(w_sqrt)
-    s0_invsqrt = numpy.diag(1./w_sqrt)
-    s0 = numpy.diag(w_sqrt**2)
     sa0  = lib.einsum('pi,pq,qj->ij', v_s, sa0 , v_s)
     s1i  = lib.einsum('pi,pq,qj->ij', v_s, s1i , v_s)
     s1j  = lib.einsum('pi,pq,qj->ij', v_s, s1j , v_s)
@@ -277,10 +272,10 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
 
     s1i_sqrt = s1i / (w_sqrt[:,None] + w_sqrt)
     s1i_invsqrt = (numpy.einsum('i,ij,j->ij', w_invsqrt**2, s1i, w_invsqrt**2)
-                  / -(w_invsqrt[:,None] + w_invsqrt))
+                   / -(w_invsqrt[:,None] + w_invsqrt))
     s1j_sqrt = s1j / (w_sqrt[:,None] + w_sqrt)
     s1j_invsqrt = (numpy.einsum('i,ij,j->ij', w_invsqrt**2, s1j, w_invsqrt**2)
-                  / -(w_invsqrt[:,None] + w_invsqrt))
+                   / -(w_invsqrt[:,None] + w_invsqrt))
 
     tmp = numpy.dot(s1i_sqrt, s1j_sqrt)
     s2_sqrt = (s2 - tmp - tmp.T) / (w_sqrt[:,None] + w_sqrt)

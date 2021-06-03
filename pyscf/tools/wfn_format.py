@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 GAMESS WFN File format
 '''
 
-from functools import reduce
 from pyscf import gto
 from pyscf import lib
 import numpy
@@ -92,6 +91,15 @@ TYPE_MAP = [
     [56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36],  # H
 ]
 def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
+    if mol.cart:
+        raise NotImplementedError('Cartesian basis not available')
+
+    #FIXME: Duplicated primitives may lead to problems.  x2c._uncontract_mol
+    # is the workaround at the moment to remove duplicated primitives.
+    from pyscf.x2c import x2c
+    mol, ctr = x2c._uncontract_mol(mol, True, 0.)
+    mo_coeff = numpy.dot(ctr, mo_coeff)
+
     nmo = mo_coeff.shape[1]
     mo_cart = []
     centers = []
@@ -184,11 +192,10 @@ def write_ci(fout, fcivec, norb, nelec, ncore=0):
         fout.write('%18.10E %s %s\n' % (fcivec[addra,addrb], ' '.join(idxa), ' '.join(idxb)))
 
 if __name__ == '__main__':
-    import sys
-    from pyscf import gto, scf, mcscf, symm
+    from pyscf import scf, mcscf, symm
     from pyscf.tools import molden
-    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599', 
-                unit='B', basis='ccpvtz', verbose=4, 
+    mol = gto.M(atom='N 0 0 0; N 0 0 2.88972599',
+                unit='B', basis='ccpvtz', verbose=4,
                 symmetry=1, symmetry_subgroup='d2h')
     mf = scf.RHF(mol).run()
     coeff = mf.mo_coeff[:,mf.mo_occ>0]
@@ -201,7 +208,7 @@ if __name__ == '__main__':
     mc.kernel()
     nmo = mc.ncore + mc.ncas
     nelecas = mc.nelecas[0] + mc.nelecas[1]
-    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas) 
+    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, mc.ncas, mc.nelecas)
     rdm1, rdm2 = mcscf.addons._make_rdm12_on_mo(casdm1, casdm2, mc.ncore, mc.ncas, nmo)
     den_file = 'n2_cas.den'
     fspt = open(den_file,'w')
@@ -216,7 +223,7 @@ if __name__ == '__main__':
             for k in range(nmo):
                 for l in range(nmo):
                     if (abs(rdm2[i,j,k,l]) > 1e-12):
-                            fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
+                        fspt.write('%i %i %i %i %.16f\n' % ((i+1), (j+1), (k+1), (l+1), rdm2[i,j,k,l]))
     fspt.close()
     orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mc.mo_coeff[:,:nmo])
     natocc, natorb = symm.eigh(-rdm1, orbsym)

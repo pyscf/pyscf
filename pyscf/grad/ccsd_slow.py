@@ -19,17 +19,14 @@
 '''
 RCCSD
 
-Ref: JCP, 90, 1752
+Ref: JCP 90, 1752 (1989); DOI:10.1063/1.456069
 '''
 
 from functools import reduce
-import time
 import numpy
 import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.grad import ccsd as ccsd_grad
 
@@ -41,10 +38,11 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     mo_energy = cc._scf.mo_energy
     nao, nmo = mo_coeff.shape
     nocc = numpy.count_nonzero(cc.mo_occ > 0)
-    nvir = nmo - nocc
     mo_e_o = mo_energy[:nocc]
     mo_e_v = mo_energy[nocc:]
-    with_frozen = not (cc.frozen is None or cc.frozen is 0)
+    with_frozen = not ((cc.frozen is None)
+                       or (isinstance(cc.frozen, (int, numpy.integer)) and cc.frozen == 0)
+                       or (len(cc.frozen) == 0))
 
     d1 = _gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(cc, t1, t2, l1, l2)
@@ -70,10 +68,10 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     dm1 += ccsd_grad._response_dm1(cc, Xvo, eris)
     Imat[nocc:,:nocc] = Imat[:nocc,nocc:].T
 
-    h1 =-(mol.intor('int1e_ipkin', comp=3)
-         +mol.intor('int1e_ipnuc', comp=3))
+    h1 =-(mol.intor('int1e_ipkin', comp=3) +
+          mol.intor('int1e_ipnuc', comp=3))
     s1 =-mol.intor('int1e_ipovlp', comp=3)
-    zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
+    #zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
     eri1 = mol.intor('int2e_ip1', comp=3).reshape(3,nao,nao,nao,nao)
     eri1 = numpy.einsum('xipkl,pj->xijkl', eri1, mo_coeff)
     eri1 = numpy.einsum('xijpl,pk->xijkl', eri1, mo_coeff)
@@ -92,8 +90,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
             g1 = g1 + g1.transpose(1,0,2,3)
             g1 = g1 + g1.transpose(2,3,0,1)
             g1 *= -1
-            hx =(numpy.einsum('pq,pi,qj->ij', h1[i,p0:p1], mo_coeff[p0:p1], mo_coeff)
-               + reduce(numpy.dot, (mo_coeff.T, vrinv[i], mo_coeff)))
+            hx =(numpy.einsum('pq,pi,qj->ij', h1[i,p0:p1], mo_coeff[p0:p1], mo_coeff) +
+                 reduce(numpy.dot, (mo_coeff.T, vrinv[i], mo_coeff)))
             hx = hx + hx.T
             sx = numpy.einsum('pq,pi,qj->ij', s1[i,p0:p1], mo_coeff[p0:p1], mo_coeff)
             sx = sx + sx.T
@@ -186,7 +184,7 @@ def index_frozen_active(cc):
 
 def _gamma1_intermediates(cc, t1, t2, l1, l2):
     d1 = ccsd_rdm._gamma1_intermediates(cc, t1, t2, l1, l2)
-    if cc.frozen is None or cc.frozen is 0:
+    if cc.frozen is None:
         return d1
     nocc = numpy.count_nonzero(cc.mo_occ>0)
     nvir = cc.mo_occ.size - nocc
@@ -204,7 +202,7 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
 def _gamma2_intermediates(cc, t1, t2, l1, l2):
     d2 = ccsd_rdm._gamma2_intermediates(cc, t1, t2, l1, l2)
     nocc, nvir = t1.shape
-    if cc.frozen is None or cc.frozen is 0:
+    if cc.frozen is None:
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
         dvvov = dovvv.transpose(2,3,0,1)
         dvvvv = ao2mo.restore(1, d2[1], nvir)

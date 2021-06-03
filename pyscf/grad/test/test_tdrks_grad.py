@@ -47,8 +47,7 @@ class KnownValues(unittest.TestCase):
     def test_tda_singlet_lda(self):
         td = tdscf.TDA(mf_lda).run(nstates=3)
         tdg = td.nuc_grad_method()
-        g1 = tdrks_grad.kernel(tdg, td.xy[2])
-        g1 += tdg.grad_nuc()
+        g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
 
 #    def test_tda_triplet_lda(self):

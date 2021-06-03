@@ -80,9 +80,9 @@ class KnownValues(unittest.TestCase):
         eris = cc.ccsd.CCSD(mf).ao2mo(mo_coeff)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.962033460861587 , 12)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3666078517246127, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.122525571320871, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.122525571320871, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48517302161068, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 59.418747028576142, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 59.418747028576142, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.562457227975969, 12)
 
 
@@ -97,7 +97,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
-        e = myeom.ipccsd_star(e, v, lv)
+        e = myeom.ipccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.43584093045349137, 6)
         self.assertAlmostEqual(e[1], 0.50959675100507518, 6)
         self.assertAlmostEqual(e[2], 0.69021193094404043, 6)
@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMEA(mycc)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
-        e = myeom.eaccsd_star(e, v, lv)
+        e = myeom.eaccsd_star_contract(e, v, lv)
         self.assertAlmostEqual(e[0], 0.18931289565459147, 6)
         self.assertAlmostEqual(e[1], 0.28204643613789027, 6)
         self.assertAlmostEqual(e[2], 0.457836723621172  , 6)
@@ -235,6 +235,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1S), 213.16715890265095, 9)
         self.assertAlmostEqual(lib.finger(vec1T),-857.23800705535234, 9)
         self.assertAlmostEqual(lib.finger(vec2) , 14.360296355284504, 9)
+
+    def test_ao2mo(self):
+        numpy.random.seed(2)
+        mo = numpy.random.random(mf.mo_coeff.shape)
+        mycc = cc.CCSD(mf).density_fit(auxbasis='ccpvdz-ri')
+        mycc.max_memory = 0
+        eri_df = mycc.ao2mo(mo)
+        self.assertAlmostEqual(lib.fp(eri_df.oooo), -493.98003157749906, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.oovv), -91.84858398271658 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovoo), -203.89515661847437, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvo), -14.883877359169205, 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovov), -57.62195194777554 , 9)
+        self.assertAlmostEqual(lib.fp(eri_df.ovvv), -24.359418953533535, 9)
+        self.assertTrue(eri_df.vvvv is None)
+        self.assertAlmostEqual(lib.fp(eri_df.vvL),  -0.5165177516806061, 9)
 
 
 if __name__ == "__main__":

@@ -16,10 +16,16 @@
 import ctypes
 import unittest
 import numpy
+import scipy.misc
 import scipy.special
+try:
+    from scipy.special import factorial2
+except ImportError:
+    from scipy.misc import factorial2
 from pyscf import lib
 from pyscf import gto
 from pyscf.dft import radi
+from pyscf.symm import sph
 
 libecp = gto.moleintor.libcgto
 
@@ -53,7 +59,6 @@ Na S
 ''')})
 
 
-
 CHARGE_OF  = 0
 PTR_COORD  = 1
 NUC_MOD_OF = 2
@@ -63,8 +68,8 @@ ATM_SLOTS  = 6
 ATOM_OF    = 0
 ANG_OF     = 1 # <0 means local function
 NPRIM_OF   = 2
-RADI_POWER = 3 # <= NCTR_OF
-KAPPA_OF   = 4
+RADI_POWER = 3
+SO_TYPE_OF = 4
 PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
@@ -238,6 +243,75 @@ def type2_by_shell(mol, shls, ecpatm_id, ecpbas):
             gsph[ic,jc] = c2s_bra(li, tmp.T.copy())
     return gsph.transpose(0,2,1,3).reshape(nci*(li*2+1),-1)
 
+def so_by_shell(mol, shls, ecpatm_id, ecpbas):
+    '''SO-ECP
+    i/2 <Pauli_matrix dot l U(r)>
+    '''
+    ish, jsh = shls
+
+    li = mol.bas_angular(ish)
+    npi = mol.bas_nprim(ish)
+    nci = mol.bas_nctr(ish)
+    ai = mol.bas_exp(ish)
+    ci = mol._libcint_ctr_coeff(ish)
+    icart = (li+1) * (li+2) // 2
+
+    lj = mol.bas_angular(jsh)
+    npj = mol.bas_nprim(jsh)
+    ncj = mol.bas_nctr(jsh)
+    aj = mol.bas_exp(jsh)
+    cj = mol._libcint_ctr_coeff(jsh)
+    jcart = (lj+1) * (lj+2) // 2
+
+    rc = mol.atom_coord(ecpatm_id)
+    rcb = rc - mol.bas_coord(jsh)
+    r_cb = numpy.linalg.norm(rcb)
+    rca = rc - mol.bas_coord(ish)
+    r_ca = numpy.linalg.norm(rca)
+    #rs, ws = radi.treutler(99)
+    rs, ws = radi.gauss_chebyshev(99)
+
+    i_fac_cache = cache_fac(li, rca)
+    j_fac_cache = cache_fac(lj, rcb)
+
+    g1 = numpy.zeros((nci,ncj,3,icart,jcart), dtype=numpy.complex128)
+    for lc in range(5): # up to g function
+        ecpbasi = ecpbas[ecpbas[:,ANG_OF] == lc]
+        if len(ecpbasi) == 0:
+            continue
+        ur = rad_part(mol, ecpbasi, rs) * ws
+        idx = abs(ur) > 1e-80
+        rur = numpy.array([ur[idx] * rs[idx]**lab for lab in range(li+lj+1)])
+
+        fi = facs_rad(mol, ish, lc, r_ca, rs)[:,:,idx].copy()
+        fj = facs_rad(mol, jsh, lc, r_cb, rs)[:,:,idx].copy()
+        angi = facs_ang(type2_ang_part(li, lc, -rca), li, lc, i_fac_cache)
+        angj = facs_ang(type2_ang_part(lj, lc, -rcb), lj, lc, j_fac_cache)
+
+        # Note the factor 2/(2l+1) in JCP 82, 2664 (1985); DOI:10.1063/1.448263 is not multiplied here
+        # because the ECP parameter has been scaled by 2/(2l+1) in CRENBL
+        jmm = angular_moment_matrix(lc)
+
+        for ic in range(nci):
+            for jc in range(ncj):
+                rad_all = numpy.einsum('pr,ir,jr->pij', rur, fi[ic], fj[jc])
+
+                for i1 in range(li+1):
+                    for j1 in range(lj+1):
+                        g1[ic,jc] += numpy.einsum('pq,imp,jnq,lmn->lij', rad_all[i1+j1],
+                                                  angi[i1], angj[j1], jmm)
+
+    g1 *= (numpy.pi*4)**2
+    gspinor = numpy.empty((nci,ncj,li*4+2,lj*4+2), dtype=numpy.complex128)
+    for ic in range(nci):
+        for jc in range(ncj):
+            ui = numpy.asarray(gto.cart2spinor_l(li))
+            uj = numpy.asarray(gto.cart2spinor_l(lj))
+            s = lib.PauliMatrices * .5j
+            gspinor[ic,jc] = numpy.einsum('sxy,spq,xpi,yqj->ij', s,
+                                          g1[ic,jc], ui.conj(), uj)
+    return gspinor.transpose(0,2,1,3).reshape(nci*(li*4+2),-1)
+
 def cache_fac(l, r):
     facs = numpy.empty((3,l+1,l+1))
     for i in range(l+1):
@@ -249,7 +323,7 @@ def cache_fac(l, r):
 
 def sph_in(l, xs):
     '''Modified spherical Bessel function of the first kind'''
-    return numpy.asarray([scipy.special.sph_in(l, x)[0] for x in xs]).T
+    return numpy.asarray([scipy.special.spherical_in(numpy.arange(l+1), x) for x in xs]).T
 
 def sph_ine(l, xs):
     '''exponentially scaled modified spherical Bessel function'''
@@ -340,7 +414,7 @@ def type2_ang_part(li, lc, ri):
             for c in range(li+1-a-b):
                 for lmb in range(li+lc+1):
                     if (lc+a+b+c+lmb) % 2 == 0:
-                        omega_xyz = numpy.empty((lcart,(lmb+1)*(lmb+2)//2))
+                        omega_xyz = numpy.empty((lcart, (lmb+1)*(lmb+2)//2))
                         for m,(u,v,w) in enumerate(loop_cart(lc)):
                             for n, (i1, j1, k1) in enumerate(loop_cart(lmb)):
                                 omega_xyz[m,n] = int_unit_xyz(a+u+i1, b+v+j1, c+w+k1)
@@ -350,8 +424,31 @@ def type2_ang_part(li, lc, ri):
                 omega[a,b,c,:,:] = c2s_bra(lc, tmp)
     return omega
 
+def angular_moment_matrix(l):
+    '''Matrix of angular moment operator l*1j on the real spherical harmonic
+    basis'''
+    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex128))
+    lx = numpy.zeros_like(lz)
+    ly = numpy.zeros_like(lz)
+    for mi in range(-l, l+1):
+        mj = mi + 1
+        if mj <= l:
+            lx[l+mi,l+mj] = .5  * ((l+mj)*(l-mj+1))**.5
+            ly[l+mi,l+mj] = .5j * ((l+mj)*(l-mj+1))**.5
+
+        mj = mi - 1
+        if mj >= -l:
+            lx[l+mi,l+mj] = .5  * ((l-mj)*(l+mj+1))**.5
+            ly[l+mi,l+mj] =-.5j * ((l-mj)*(l+mj+1))**.5
+
+    u = sph.sph_pure2real(l)
+    lx = u.conj().T.dot(lx).dot(u)
+    ly = u.conj().T.dot(ly).dot(u)
+    lz = u.conj().T.dot(lz).dot(u)
+    return numpy.array((lx, ly, lz))
+
 def facs_ang(omega, l, lc, fac_cache):
-    #                 (cart_nlm,        a+b+c,m,    lambda )
+    #                 (a+b+c,cart_nlm,        m,    lambda )
     facs = numpy.zeros((l+1,(l+1)*(l+2)//2,lc*2+1,l+lc+1))
     for mi,(ix,iy,iz) in enumerate(loop_cart(l)):
         for i1, i2, i3 in loop_xyz(ix, iy, iz):
@@ -384,7 +481,7 @@ def int_unit_xyz(i, j, k):
     else:
         return (_fac2[i-1] * _fac2[j-1] * _fac2[k-1] / _fac2[i+j+k+1])
 
-_fac2 = scipy.special.factorial2(numpy.arange(80))
+_fac2 = factorial2(numpy.arange(80))
 _fac2[-1] = 1
 
 def c2s_bra(l, gcart):
@@ -405,7 +502,7 @@ class KnownValues(unittest.TestCase):
         rs = radi.gauss_chebyshev(99)[0]
         bessel1 = numpy.empty(8)
         for i,x in enumerate(rs):
-            bessel0 = scipy.special.sph_in(7, x)[0] * numpy.exp(-x)
+            bessel0 = scipy.special.spherical_in(numpy.arange(7+1), x) * numpy.exp(-x)
             libecp.ECPsph_ine(bessel1.ctypes.data_as(ctypes.c_void_p),
                               ctypes.c_int(7), ctypes.c_double(x))
             self.assertTrue(numpy.allclose(bessel0, bessel1))
@@ -424,6 +521,7 @@ class KnownValues(unittest.TestCase):
         rs, ws = radi.gauss_chebyshev(99)
         ur0 = rad_part(mol, mol._ecpbas, rs)
         ur1 = numpy.empty_like(ur0)
+        cache = numpy.empty(100000)
         libecp.ECPrad_part(ur1.ctypes.data_as(ctypes.c_void_p),
                            rs.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(0), ctypes.c_int(len(rs)), ctypes.c_int(1),
@@ -432,19 +530,21 @@ class KnownValues(unittest.TestCase):
                            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                            mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                            mol._env.ctypes.data_as(ctypes.c_void_p),
-                           lib.c_null_ptr())
+                           lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
         self.assertTrue(numpy.allclose(ur0, ur1))
 
     def test_type2_ang_part(self):
         numpy.random.seed(3)
         rca = numpy.random.random(3)
+        cache = numpy.empty(100000)
         def type2_facs_ang(li, lc):
             i_fac_cache = cache_fac(li, rca)
             facs0 = facs_ang(type2_ang_part(li, lc, -rca), li, lc, i_fac_cache)
             facs1 = numpy.empty_like(facs0)
             libecp.type2_facs_ang(facs1.ctypes.data_as(ctypes.c_void_p),
                                   ctypes.c_int(li), ctypes.c_int(lc),
-                                  rca.ctypes.data_as(ctypes.c_void_p))
+                                  rca.ctypes.data_as(ctypes.c_void_p),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for li in range(6):
             for lc in range(5):
@@ -453,6 +553,7 @@ class KnownValues(unittest.TestCase):
     def test_type2_rad_part(self):
         rc = .8712
         rs, ws = radi.gauss_chebyshev(99)
+        cache = numpy.empty(100000)
         def type2_facs_rad(ish, lc):
             facs0 = facs_rad(mol, ish, lc, rc, rs).transpose(0,2,1).copy()
             facs1 = numpy.empty_like(facs0)
@@ -463,13 +564,15 @@ class KnownValues(unittest.TestCase):
                                   ctypes.c_int(len(rs)), ctypes.c_int(1),
                                   mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                   mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                  mol._env.ctypes.data_as(ctypes.c_void_p))
+                                  mol._env.ctypes.data_as(ctypes.c_void_p),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for ish in range(mol.nbas):
             for lc in range(5):
                 type2_facs_rad(ish, lc)
 
     def test_type2(self):
+        cache = numpy.empty(100000)
         def gen_type2(shls):
             di = (mol.bas_angular(shls[0])*2+1) * mol.bas_nctr(shls[0])
             dj = (mol.bas_angular(shls[1])*2+1) * mol.bas_nctr(shls[1])
@@ -480,7 +583,6 @@ class KnownValues(unittest.TestCase):
                     continue
                 mat0 += type2_by_shell(mol, shls, ia, ecpbas)
             mat1 = numpy.empty(mat0.shape, order='F')
-            cache = numpy.empty(100000)
             libecp.ECPtype2_sph(mat1.ctypes.data_as(ctypes.c_void_p),
                                 (ctypes.c_int*2)(*shls),
                                 mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
@@ -501,12 +603,14 @@ class KnownValues(unittest.TestCase):
     def test_type1_state_fac(self):
         numpy.random.seed(3)
         ri = numpy.random.random(3) - .5
+        cache = numpy.empty(100000)
         def tfacs(li):
             facs0 = type1_cache_fac(li, ri)
             facs1 = numpy.zeros_like(facs0)
             libecp.type1_static_facs(facs1.ctypes.data_as(ctypes.c_void_p),
                                      ctypes.c_int(li),
-                                     ri.ctypes.data_as(ctypes.c_void_p))
+                                     ri.ctypes.data_as(ctypes.c_void_p),
+                                     cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(facs0, facs1))
         for l in range(6):
             tfacs(l)
@@ -531,6 +635,7 @@ class KnownValues(unittest.TestCase):
         aij = .792
         rs, ws = radi.gauss_chebyshev(99)
         ur = rad_part(mol, mol._ecpbas, rs) * ws
+        cache = numpy.empty(100000)
         def gen_type1_rad(li):
             rad_all0 = type1_rad_part(li, k, aij, ur, rs)
             rad_all1 = numpy.zeros_like(rad_all0)
@@ -539,7 +644,8 @@ class KnownValues(unittest.TestCase):
                                   ctypes.c_double(k), ctypes.c_double(aij),
                                   ur.ctypes.data_as(ctypes.c_void_p),
                                   rs.ctypes.data_as(ctypes.c_void_p),
-                                  ctypes.c_int(len(rs)), ctypes.c_int(1))
+                                  ctypes.c_int(len(rs)), ctypes.c_int(1),
+                                  cache.ctypes.data_as(ctypes.c_void_p))
             self.assertTrue(numpy.allclose(rad_all0, rad_all1))
         for l in range(13):
             gen_type1_rad(l)
@@ -575,6 +681,48 @@ class KnownValues(unittest.TestCase):
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type1((i,j))
+
+    def test_so_1atom(self):
+        mol = gto.M(atom='''
+                    Na 0.5 0.5 0.
+                    ''',
+                    charge=1,
+                    basis={'Na': [(0, (1, 1)), (1, (4, 1)), (1, (1, 1)), (2, (1, 1))]},
+                    ecp = {'Na': gto.basis.parse_ecp('''
+Na nelec 8
+Na ul
+1      0.    -3.    -3.
+Na S
+1      0.    -3.    -3.
+Na P
+1      0.    -3.    -3.
+Na D
+1      0.    -3.    -3.
+Na F
+1      0.    -3.    -3.
+''')})
+        def gen_so(shls):
+            mat0 = 0
+            for ia in range(mol.natm):
+                ecpbas = mol._ecpbas[(mol._ecpbas[:,ATOM_OF]==ia) &
+                                     (mol._ecpbas[:,SO_TYPE_OF]==1)]
+                if len(ecpbas) == 0:
+                    continue
+                mat0 += so_by_shell(mol, shls, ia, ecpbas)
+
+            s = lib.PauliMatrices * .5
+            ui = numpy.asarray(gto.sph2spinor_l(mol.bas_angular(shls[0])))
+            uj = numpy.asarray(gto.sph2spinor_l(mol.bas_angular(shls[1])))
+            ref = numpy.einsum('sxy,spq,xpi,yqj->ij', s,
+                               mol.intor_by_shell('int1e_inuc_rxp', shls),
+                               ui.conj(), uj)
+            self.assertAlmostEqual(abs(ref-mat0).max(), 0, 12)
+
+            mat2 = .5 * gto.ecp.so_by_shell(mol, shls)
+            self.assertTrue(numpy.allclose(ref, mat2, atol=1e-6))
+        for i in range(mol.nbas):
+            for j in range(mol.nbas):
+                gen_so((i,j))
 
 
 if __name__ == '__main__':

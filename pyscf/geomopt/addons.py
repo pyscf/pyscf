@@ -33,8 +33,10 @@ def as_pyscf_method(mol, scan_function):
     >>> m = as_pyscf_method(mol, scan_fn)
     >>> pyscf.geomopt.berny_solver.kernel(m)
     '''
+    from pyscf.grad.rhf import GradientsMixin
     class OmniGrad(lib.GradScanner):
         def __init__(self, g):
+            self.__dict__.update(g.__dict__)
             self.base = g.base
         def __call__(self, mol):
             self.e_tot, grad = scan_function(mol)
@@ -43,9 +45,7 @@ def as_pyscf_method(mol, scan_function):
         def converged(self):
             return True
 
-    class Grad(object):
-        def __init__(self, base):
-            self.base = base
+    class Gradients(GradientsMixin):
         def as_scanner(self):
             return OmniGrad(self)
 
@@ -54,14 +54,15 @@ def as_pyscf_method(mol, scan_function):
             self.mol = mol
             self.verbose = mol.verbose
             self.stdout = mol.stdout
-        def nuc_grad_method(self):
-            return Grad(self)
+        def Gradients(self):
+            return Gradients(self)
+        nuc_grad_method = Gradients
     return OmniMethod(mol)
 
 def dump_mol_geometry(mol, new_coords, log=None):
     '''Dump the molecular geometry (new_coords) and the displacement wrt old
     geometry.
-    
+
     Args:
         new_coords (ndarray) : Cartesian coordinates in Angstrom
     '''
@@ -83,24 +84,7 @@ def dump_mol_geometry(mol, new_coords, log=None):
 
 def symmetrize(mol, coords):
     '''Symmetrize the structure of a molecule.'''
-    assert(mol.symmetry)
-    pmol = mol.copy()
-    # p-type AOs has the same symmetry adaptation structure as the
-    # coordinates.
-    pmol.basis = {'default': [[1, (1, 1)]]}
-    # There is uncertainty for the output of the transformed molecular
-    # geometry when mol.symmetry is True. E.g., H2O can be placed either on
-    # xz-plane or on yz-plane for C2v symmetry. This uncertainty can lead to
-    # wrong symmetry adaptation basis. Molecular point group and coordinates
-    # should be explicitly given to avoid the uncertainty.
-    pmol.symmetry = mol.topgroup
-    pmol.atom = mol._atom
-    pmol.unit = 'Bohr'
-    pmol.build(False, False)
-
-    a_id = pmol.irrep_id.index(0)
-    c = pmol.symm_orb[a_id].reshape(mol.natm, 3, -1)
-    tmp = numpy.einsum('zx,zxi->i', coords, c)
-    proj_coords = numpy.einsum('i,zxi->zx', tmp, c)
-    return proj_coords
+    from pyscf.grad.rhf import symmetrize
+    # Symmetrizing coordinates is the same to the symmetrization of gradients.
+    return symmetrize(mol, coords)
 

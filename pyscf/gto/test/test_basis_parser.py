@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.gto.basis import parse_molpro
 from pyscf.gto.basis import parse_gaussian
+from pyscf.lib.exceptions import BasisNotFoundError
 
 class KnownValues(unittest.TestCase):
     def test_parse_pople(self):
@@ -36,8 +37,8 @@ class KnownValues(unittest.TestCase):
 
     def test_basis_load(self):
         self.assertEqual(gto.basis.load(__file__, 'H'), [])
-        self.assertRaises(KeyError, gto.basis.load, 'abas', 'H')
-        #self.assertRaises(RuntimeError, gto.basis.load(__file__, 'C'), [])
+        self.assertRaises(BasisNotFoundError, gto.basis.load, 'abas', 'H')
+        #self.assertRaises(BasisNotFoundError, gto.basis.load(__file__, 'C'), [])
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -89,7 +90,7 @@ C    SP
       2.9412494             -0.09996723             0.15591627       
       0.6834831              0.39951283             0.60768372       
       0.2222899              0.70011547             0.39195739       '''
-        self.assertRaises(KeyError, gto.basis.parse_nwchem.parse, basis_str, 'O')
+        self.assertRaises(BasisNotFoundError, gto.basis.parse_nwchem.parse, basis_str, 'O')
         basis_dat = gto.basis.parse_nwchem.parse(basis_str)
         self.assertEqual(len(basis_dat), 3)
 
@@ -104,9 +105,9 @@ Na ul
 2      7.9060270            -17.2283007        
 
 Na S
-0    243.3605846              3.0000000        
-1     41.5764759             36.2847626        
-2     13.2649167             72.9304880        
+0    243.3605846              3.0000000*np.exp(0)
+1     41.5764759             36.2847626*np.exp(0)
+2     13.2649167             72.9304880*np.exp(0)
 Na P
 0   1257.2650682              5.0000000        
 1    189.6248810            117.4495683        
@@ -260,7 +261,7 @@ END ''')
     def test_parse_gaussian_basis(self):
         basis_str = '''
 ****
-C     0 
+C     0
 S   8   1.00
    8236.0000000              0.0005310        
    1235.0000000              0.0041080        
@@ -313,7 +314,7 @@ F   1   1.00
 
         basis_str = '''
 ****
-C     0 
+C     0
 S   6   1.00
    4563.2400000              0.00196665       
     682.0240000              0.0152306        
@@ -369,6 +370,47 @@ F   1   1.00
         ref = gto.basis.load('631g(3df,3pd)', 'C')
         self.assertEqual(ref, basis1)
 
+    def test_parse_gaussian_load_basis(self):
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+****
+H 0
+S 1 1.0
+1.0 1.0
+****
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+H 0
+S 1 1.0
+1.0 1.0
+****
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+****
+H 0
+S 1 1.0
+1.0 1.0
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
+        with tempfile.NamedTemporaryFile(mode='w+') as f:
+            f.write('''
+H 0
+S 1 1.0
+1.0 1.0
+''')
+            f.flush()
+            self.assertEqual(parse_gaussian.load(f.name, 'H'), [[0, [1., 1.]]])
+
     def test_basis_truncation(self):
         b = gto.basis.load('ano@3s1p1f', 'C')
         self.assertEqual(len(b), 3)
@@ -399,6 +441,28 @@ F   1   1.00
         self.assertEqual(len(b[0]), 6)
         self.assertEqual(len(b[1]), 3)
         self.assertEqual(len(b[2]), 2)
+
+    def test_parse_molpro_ecp_soc(self):
+        ecp_data = parse_molpro.parse_ecp('''
+!  Q=7., MEFIT, MCDHF+Breit, Ref 32; CPP: alpha=1.028;delta=1.247;ncut=2.
+ECP,I,46,4,3;
+1; 2,1.000000,0.000000;
+2; 2,3.380230,83.107547; 2,1.973454,5.099343;
+4; 2,2.925323,27.299020; 2,3.073557,55.607847; 2,1.903188,0.778322; 2,1.119689,1.751128;
+4; 2,1.999036,8.234552; 2,1.967767,12.488097; 2,0.998982,2.177334; 2,0.972272,3.167401;
+4; 2,2.928812,-11.777154; 2,2.904069,-15.525522; 2,0.287352,-0.148550; 2,0.489380,-0.273682;
+4; 2,2.925323,-54.598040; 2,3.073557,55.607847; 2,1.903188,-1.556643; 2,1.119689,1.751128;
+4; 2,1.999036,-8.234552; 2,1.967767,8.325398; 2,0.998982,-2.177334; 2,0.972272,2.111601;
+4; 2,2.928812,7.851436; 2,2.904069,-7.762761; 2,0.287352,0.099033; 2,0.489380,-0.136841;
+''')
+        ref = [46,
+               [[-1, [[], [], [[1.0, 0.0]], [], [], [], []]],
+                [0, [[], [], [[3.38023, 83.107547], [1.973454, 5.099343]], [], [], [], []]],
+                [1, [[], [], [[2.925323, 27.29902, -54.59804], [3.073557, 55.607847, 55.607847], [1.903188, 0.778322, -1.556643], [1.119689, 1.751128, 1.751128]], [], [], [], []]],
+                [2, [[], [], [[1.999036, 8.234552, -8.234552], [1.967767, 12.488097, 8.325398], [0.998982, 2.177334, -2.177334], [0.972272, 3.167401, 2.111601]], [], [], [], []]],
+                [3, [[], [], [[2.928812, -11.777154, 7.851436], [2.904069, -15.525522, -7.762761], [0.287352, -0.14855, 0.099033], [0.48938, -0.273682, -0.136841]], [], [], [], []]]]]
+        self.assertEqual(ecp_data, ref)
+
 
 if __name__ == "__main__":
     print("test basis module")

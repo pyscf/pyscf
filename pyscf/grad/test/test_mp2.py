@@ -44,7 +44,7 @@ class KnownValues(unittest.TestCase):
     def test_mp2_grad(self):
         pt = mp.mp2.MP2(mf)
         pt.kernel()
-        g1 = pt.nuc_grad_method().kernel(pt.t2, mf_grad=grad.RHF(mf), atmlst=[0,1,2])
+        g1 = pt.nuc_grad_method().kernel(pt.t2, atmlst=[0,1,2])
         self.assertAlmostEqual(lib.finger(g1), -0.035681131697586257, 6)
 
     def test_mp2_grad_finite_diff(self):
@@ -76,10 +76,10 @@ class KnownValues(unittest.TestCase):
         pt.frozen = [0,1,10,11,12]
         pt.max_memory = 1
         pt.kernel()
-        g1 = mp2_grad.kernel(pt, pt.t2, mf_grad=grad.RHF(mf))
+        g1 = mp2_grad.Gradients(pt).kernel(pt.t2)
         self.assertAlmostEqual(lib.finger(g1), 0.12457973399092415, 6)
 
-    def test_as_scanner(self):
+    def test_as_scanner_with_frozen(self):
         pt = mp.mp2.MP2(mf)
         pt.frozen = [0,1,10,11,12]
         gscan = pt.nuc_grad_method().as_scanner().as_scanner()
@@ -87,6 +87,52 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.025166662910223, 9)
         self.assertAlmostEqual(lib.finger(g1), 0.12457973399092415, 6)
+
+    def test_with_x2c_scanner(self):
+        with lib.light_speed(20.):
+            pt = mp.mp2.MP2(mf.x2c())
+            pt.frozen = [0,1,10,11,12]
+            gscan = pt.nuc_grad_method().as_scanner().as_scanner()
+            e, g1 = gscan(mol)
+
+            ps = pt.as_scanner()
+            e1 = ps([[8 , (0. , 0.     , 0.)],
+                     [1 , (0. , -0.757 , 0.5871)],
+                     [1 , (0. ,  0.757 , 0.587)]])
+            e2 = ps([[8 , (0. , 0.     , 0.)],
+                     [1 , (0. , -0.757 , 0.5869)],
+                     [1 , (0. ,  0.757 , 0.587)]])
+            self.assertAlmostEqual(g1[1,2], (e1-e2)/0.0002*lib.param.BOHR, 5)
+
+    def test_with_qmmm_scanner(self):
+        from pyscf import qmmm
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        #coords = [(0.0,0.0,0.0)]
+        charges = [-0.1]
+        mf = qmmm.add_mm_charges(mol.RHF, coords, charges)
+        ps = mf.MP2().as_scanner()
+        g = ps.nuc_grad_method().as_scanner()(mol)[1]
+        e1 = ps(''' O                  0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = ps(''' O                 -0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        ref = (e1 - e2)/0.002 * lib.param.BOHR
+        self.assertAlmostEqual(g[0,0], ref, 4)
+
+    def test_symmetrize(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
+        g = mol.RHF.run().MP2().run().Gradients().kernel()
+        self.assertAlmostEqual(lib.finger(g), 0.049987975650731625, 7)
 
 
 if __name__ == "__main__":

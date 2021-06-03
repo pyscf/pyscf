@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 Electron phonon coupling
 
 Ref:
-    arXiv:1602.04195 
+    arXiv:1602.04195
 '''
 
 import numpy
@@ -114,9 +114,9 @@ def contract_2e_hubbard(u, fcivec, nsite, nelec, nphonon):
     fcinew = numpy.zeros(cishape)
 
     for i in range(nsite):
-        maska = (strsa & (1<<i)) > 0
-        maskb = (strsb & (1<<i)) > 0
-        fcinew[maska[:,None]&maskb] += u * ci0[maska[:,None]&maskb]
+        maska = (strsa & (1 << i)) > 0
+        maskb = (strsb & (1 << i)) > 0
+        fcinew[maska[:,None] & maskb] += u * ci0[maska[:,None] & maskb]
     return fcinew.reshape(fcivec.shape)
 
 def slices_for(psite_id, nsite, nphonon):
@@ -138,12 +138,11 @@ def contract_ep(g, fcivec, nsite, nelec, nphonon):
     na, nb = cishape[:2]
     ci0 = fcivec.reshape(cishape)
     fcinew = numpy.zeros(cishape)
-    nbar = float(neleca+nelecb) / nsite
 
     phonon_cre = numpy.sqrt(numpy.arange(1,nphonon+1))
     for i in range(nsite):
-        maska = (strsa & (1<<i)) > 0
-        maskb = (strsb & (1<<i)) > 0
+        maska = (strsa & (1 << i)) > 0
+        maskb = (strsb & (1 << i)) > 0
         e_part = numpy.zeros((na,nb))
         e_part[maska,:] += 1
         e_part[:,maskb] += 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from functools import reduce
-import time
+
 import numpy
 import numpy as np
 
@@ -74,15 +74,15 @@ def update_amps(cc, t1, t2, eris):
     t2new += 0.5*einsum('ijef,abef->ijab', tau, Wvvvv)
     tmp = einsum('imae,mbej->ijab', t2, Wovvo)
     tmp -= -einsum('ie,ma,mbje->ijab', t1, t1, eris.ovov)
-    t2new += ( tmp - tmp.transpose(0,1,3,2)
-             - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
+    t2new += (tmp - tmp.transpose(0,1,3,2)
+              - tmp.transpose(1,0,2,3) + tmp.transpose(1,0,3,2) )
     tmp = einsum('ie,jeba->ijab', t1, np.array(eris.ovvv).conj())
     t2new += (tmp - tmp.transpose(1,0,2,3))
     tmp = einsum('ma,mbij->ijab', t1, eris.ovoo)
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
     mo_e = eris.fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_e[:nocc,None] - mo_e[None,nocc:] - cc.level_shift
     eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
     t1new /= eia
     t2new /= eijab
@@ -104,7 +104,7 @@ get_frozen_mask = ump2.get_frozen_mask
 
 class UCCSD(ccsd.CCSD):
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
         self.conv_tol_normt = 1e-6
@@ -124,7 +124,7 @@ class UCCSD(ccsd.CCSD):
     get_frozen_mask = get_frozen_mask
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         mo_e = eris.fock.diagonal()
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
@@ -309,14 +309,14 @@ class UCCSD(ccsd.CCSD):
             _Wvvvva = np.array(imds.Wvvvv[a])
             for b in range(a):
                 for j in range(nocc):
-                   Hr2[j,a,b] += imds.Fvv[a,a]
-                   Hr2[j,a,b] += imds.Fvv[b,b]
-                   Hr2[j,a,b] += -imds.Foo[j,j]
-                   Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
-                   Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
-                   Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
-                   Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b])
-                                       -np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b]))
+                    Hr2[j,a,b] += imds.Fvv[a,a]
+                    Hr2[j,a,b] += imds.Fvv[b,b]
+                    Hr2[j,a,b] += -imds.Foo[j,j]
+                    Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
+                    Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
+                    Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
+                    Hr2[j,a,b] -= 0.5*(np.dot(imds.Woovv[:,j,a,b],t2[:,j,a,b]) -
+                                       np.dot(imds.Woovv[:,j,b,a],t2[:,j,a,b]))
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
@@ -380,7 +380,7 @@ class UCCSD(ccsd.CCSD):
 
         tmpabij = einsum('mbej,imae->ijab',imds.Wovvo,r2)
 
-        Hr2 = ( tmpab - tmpab.transpose(0,1,3,2)
+        Hr2 = (tmpab - tmpab.transpose(0,1,3,2)
                + tmpij - tmpij.transpose(1,0,2,3)
                + 0.5*einsum('mnij,mnab->ijab',imds.Woooo,r2)
                + 0.5*einsum('abef,ijef->ijab',imds.Wvvvv,r2)
@@ -406,8 +406,8 @@ class UCCSD(ccsd.CCSD):
             for a in range(nvir):
                 Hr1[i,a] = imds.Fvv[a,a] - imds.Foo[i,i] + imds.Wovvo[i,a,a,i]
         for a in range(nvir):
-            tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2)
-                      -np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
+            tmp = 0.5*(np.einsum('ijeb,ijbe->ijb', imds.Woovv, t2) -
+                       np.einsum('jieb,ijbe->ijb', imds.Woovv, t2))
             Hr2[:,:,:,a] += imds.Fvv[a,a] + tmp
             Hr2[:,:,a,:] += imds.Fvv[a,a] + tmp
             _Wvvvva = np.array(imds.Wvvvv[a])
@@ -420,8 +420,8 @@ class UCCSD(ccsd.CCSD):
                 Hr2[:,i,a,:] += tmp
                 Hr2[i,:,a,:] += tmp
         for i in range(nocc):
-            tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2)
-                      -np.einsum('kjba,jkab->jab', imds.Woovv, t2))
+            tmp = 0.5*(np.einsum('kjab,jkab->jab', imds.Woovv, t2) -
+                       np.einsum('kjba,jkab->jab', imds.Woovv, t2))
             Hr2[:,i,:,:] += -imds.Foo[i,i] + tmp
             Hr2[i,:,:,:] += -imds.Foo[i,i] + tmp
             for j in range(i):
@@ -484,7 +484,7 @@ class UCCSD(ccsd.CCSD):
 class _PhysicistsERIs:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.outcore.general_iofree):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         moidx = cc.get_frozen_mask()
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = [cc.mo_coeff[0][:,moidx[0]],
@@ -537,7 +537,7 @@ class _PhysicistsERIs:
             self.ovvv = self.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
             self.vvvv = self.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), ds_type)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbo,so_coeff), compact=0)
             if mo_coeff[0].dtype == np.float: buf = buf.real
@@ -555,7 +555,7 @@ class _PhysicistsERIs:
             self.ooov[:,:,:,:] = buf1[:,:,:nocc,nocc:]
             self.oovv[:,:,:,:] = buf1[:,:,nocc:,nocc:]
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             # <ia||pq> = <ia|pq> - <ia|qp> = (ip|aq) - (iq|ap)
             buf = ao2mofn(cc._scf.mol, (orbo,so_coeff,orbv,so_coeff), compact=0)
             if mo_coeff[0].dtype == np.float: buf = buf.real
@@ -617,14 +617,13 @@ def uspatial2spin(cc, moidx, mo_coeff):
     nocc = cc.nocc
     nao = cc.mo_coeff[0].shape[0]
     nmo = cc.nmo
-    nvir = nmo - nocc
     so_coeff = np.zeros((nao, nmo), dtype=mo_coeff[0].dtype)
     nocc_a = int(sum(cc.mo_occ[0]*moidx[0]))
     nocc_b = int(sum(cc.mo_occ[1]*moidx[1]))
     nmo_a = fockab[0].shape[0]
     nmo_b = fockab[1].shape[0]
     nvir_a = nmo_a - nocc_a
-    nvir_b = nmo_b - nocc_b
+    #nvir_b = nmo_b - nocc_b
     oa = range(0,nocc_a)
     ob = range(nocc_a,nocc)
     va = range(nocc,nocc+nvir_a)
@@ -674,7 +673,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -693,7 +692,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -711,7 +710,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris
@@ -729,7 +728,7 @@ class _IMDS:
             self._make_shared()
             self._made_shared = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.cc.stdout, self.cc.verbose)
 
         t1,t2,eris = self.cc.t1, self.cc.t2, self.cc.eris

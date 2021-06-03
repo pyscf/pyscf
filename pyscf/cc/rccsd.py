@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,14 +26,13 @@ Note MO integrals are treated in chemist's notation
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
 
-import time
+
 import numpy as np
 
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
 from pyscf.cc import rintermediates as imd
 from pyscf.mp import mp2
 from pyscf import __config__
@@ -228,9 +227,6 @@ class RCCSD(ccsd.CCSD):
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
-#?        # Note
-#?        assert(t1.dtype == np.double)
-#?        assert(t2.dtype == np.double)
         return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
     def density_fit(self, auxbasis=None, with_df=None):
@@ -247,12 +243,11 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             return self.ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nmo = eris.fock.shape[0]
-    nvir = nmo - nocc
 
     if callable(ao2mofn):
         eri1 = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
@@ -270,7 +265,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -280,9 +275,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
-    orbo = mo_coeff[:,:nocc]
-    orbv = mo_coeff[:,nocc:]
-    nvpair = nvir * (nvir+1) // 2
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
@@ -414,10 +406,8 @@ if __name__ == '__main__':
     orbspin = np.zeros(nao*2, dtype=int)
     orbspin[1::2] = 1
     eri1 = np.zeros([nao*2]*4, dtype=np.complex)
-    eri1[0::2,0::2,0::2,0::2] = \
-    eri1[0::2,0::2,1::2,1::2] = \
-    eri1[1::2,1::2,0::2,0::2] = \
-    eri1[1::2,1::2,1::2,1::2] = eri0
+    eri1[0::2,0::2,0::2,0::2] = eri1[0::2,0::2,1::2,1::2] = eri0
+    eri1[1::2,1::2,0::2,0::2] = eri1[1::2,1::2,1::2,1::2] = eri0
     eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)
     erig = gccsd._PhysicistsERIs(mol)
     nocc *= 2

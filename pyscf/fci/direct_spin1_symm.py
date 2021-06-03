@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -90,15 +90,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     nas = (ctypes.c_int*TOTIRREPS)(*[x.size for x in aidx])
     nbs = (ctypes.c_int*TOTIRREPS)(*[x.size for x in bidx])
 
-# aa, ab
+    # aa, ab
     ci0 = []
     ci1 = []
     for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, bidx[wfnsym^ir].size
+        ma, mb = aidx[ir].size, bidx[wfnsym ^ ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
         if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym^ir], out=ci0[ir])
+            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym ^ ir], out=ci0[ir])
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
     ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
     libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
@@ -108,15 +108,15 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym^ir])
+            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym ^ ir])
 
-# bb, ba
+    # bb, ba
     ci0T = []
     for ir in range(TOTIRREPS):
-        mb, ma = bidx[ir].size, aidx[wfnsym^ir].size
+        mb, ma = bidx[ir].size, aidx[wfnsym ^ ir].size
         ci0T.append(numpy.zeros((mb,ma)))
         if ma > 0 and mb > 0:
-            lib.transpose(ci0[wfnsym^ir], out=ci0T[ir])
+            lib.transpose(ci0[wfnsym ^ ir], out=ci0T[ir])
     ci0, ci0T = ci0T, None
     ci1 = [numpy.zeros_like(x) for x in ci0]
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
@@ -128,7 +128,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym^ir], bidx[ir])
+            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym ^ ir], bidx[ir])
     return ci1new.reshape(fcivec_shape)
 
 
@@ -174,26 +174,29 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym, wfnsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
-def _id_wfnsym(cis, norb, nelec, orbsym, wfnsym):
+def _id_wfnsym(cisolver, norb, nelec, orbsym, wfnsym):
+    '''Guess wfnsym or convert wfnsym to symmetry ID if it's a symmetry label'''
     if wfnsym is None:
         neleca, nelecb = _unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
         for i in orbsym[nelecb:neleca]:
-            wfnsym ^= i
+            wfnsym ^= i % 10
     elif isinstance(wfnsym, str):
-        wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym)
+        wfnsym = symm.irrep_name2id(cisolver.mol.groupname, wfnsym)
+    # % 10 to convert irrep_ids to irrep of D2h
     return wfnsym % 10
 
 def _gen_strs_irrep(strs, orbsym):
-    orbsym = numpy.asarray(orbsym) % 10
+    # % 10 to convert irrep_ids to irrep of D2h
+    orbsym_in_d2h = numpy.asarray(orbsym) % 10
     irreps = numpy.zeros(len(strs), dtype=numpy.int32)
     if isinstance(strs, cistring.OIndexList):
         nocc = strs.shape[1]
         for i in range(nocc):
-            irreps ^= orbsym[strs[:,i]]
+            irreps ^= orbsym_in_d2h[strs[:,i]]
     else:
-        for i, ir in enumerate(orbsym):
-            irreps[numpy.bitwise_and(strs, 1<<i) > 0] ^= ir
+        for i, ir in enumerate(orbsym_in_d2h):
+            irreps[numpy.bitwise_and(strs, 1 << i) > 0] ^= ir
     return irreps
 
 def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
@@ -231,18 +234,19 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 def reorder_eri(eri, norb, orbsym):
     if orbsym is None:
         return [eri], numpy.arange(norb), numpy.zeros(norb,dtype=numpy.int32)
-# map irrep IDs of Dooh or Coov to D2h, C2v
-# see symm.basis.linearmole_symm_descent
+
+    # % 10 to map irrep IDs of Dooh or Coov, etc. to irreps of D2h, C2v
     orbsym = numpy.asarray(orbsym) % 10
-# irrep of (ij| pair
-    trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb)]
-# and the number of occurence for each irrep
+
+    # irrep of (ij| pair
+    trilirrep = (orbsym[:,None] ^ orbsym)[numpy.tril_indices(norb)]
+    # and the number of occurence for each irrep
     dimirrep = numpy.asarray(numpy.bincount(trilirrep), dtype=numpy.int32)
-# we sort the irreps of (ij| pair, to group the pairs which have same irreps
-# "order" is irrep-id-sorted index. The (ij| paired is ordered that the
-# pair-id given by order[0] comes first in the sorted pair
-# "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
-# of the sorted pair
+    # we sort the irreps of (ij| pair, to group the pairs which have same irreps
+    # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
+    # pair-id given by order[0] comes first in the sorted pair
+    # "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
+    # of the sorted pair
     old_eri_irrep = numpy.asarray(trilirrep, dtype=numpy.int32)
     rank_in_irrep = numpy.empty_like(old_eri_irrep)
     p0 = 0
@@ -289,8 +293,14 @@ class FCISolver(direct_spin1.FCISolver):
         if isinstance(self.wfnsym, str):
             log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
-            log.info('Input CI wfn symmetry = %s',
-                     symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+            try:
+                log.info('Input CI wfn symmetry = %s',
+                         symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+            except KeyError:
+                raise RuntimeError('FCISolver cannot find mwfnsym Id %s in group %s. '
+                                   'This might be caused by the projection from '
+                                   'high-symmetry group to D2h symmetry.' %
+                                   (self.wfnsym, self.mol.groupname))
         else:
             log.info('CI wfn symmetry = %s', self.wfnsym)
         return self
@@ -333,16 +343,42 @@ class FCISolver(direct_spin1.FCISolver):
         '''
         if orbsym is None:
             orbsym = self.orbsym
-        nelec = _unpack_nelec(nelec, self.spin)
-        if fcivec is None:
-            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
-        else:
-            # TODO: if wfnsym is given in the input, check whether the
-            # symmetry of fcivec is consistent with given wfnsym.
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+
         verbose = kwargs.get('verbose', None)
         log = logger.new_logger(self, verbose)
-        log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+        nelec = _unpack_nelec(nelec, self.spin)
+        if fcivec is None:
+            # guess wfnsym if initial guess is not given
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+        elif wfnsym is None:
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+        else:
+            # verify if the input wfnsym is consistent with the symmetry of fcivec
+            neleca, nelecb = nelec
+            strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
+            strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
+            na, nb = strsa.size, strsb.size
+
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10
+            airreps = numpy.zeros(na, dtype=numpy.int32)
+            birreps = numpy.zeros(nb, dtype=numpy.int32)
+            for i, ir in enumerate(orbsym_in_d2h):
+                airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+                birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
+
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+            mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
+
+            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
+                fcivec = [fcivec]
+            if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
+                raise RuntimeError('Input wfnsym is not consistent with fcivec coefficients')
+
         return wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
@@ -358,6 +394,7 @@ class FCISolver(direct_spin1.FCISolver):
         self.nelec = nelec
 
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                            tol, lindep, max_cycle, max_space,

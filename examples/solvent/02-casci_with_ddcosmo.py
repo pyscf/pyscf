@@ -23,7 +23,7 @@ H        0.000000   -0.9353074360871938   -1.082500
 mf = scf.RHF(mol).run()
 
 #
-# 1. Allow solvent response to CASSCF optimization
+# 1. Allow solvent response to CASCI optimization
 #
 mc = mcscf.CASCI(mf, 4, 4)
 mc = solvent.ddCOSMO(mc)
@@ -32,7 +32,8 @@ mc.run()
 #
 # Freeze solvent effects in the CASSCF optimization
 #
-# Solvent is fully relaxed in the HF calculation.
+# In this case, we need to decide which HF reference to use in the ddCOSMO-CASCI
+# calculation. The fully relaxed solvent at HF level is preferred.
 #
 mf = solvent.ddCOSMO(scf.RHF(mol)).run()
 mc = mcscf.CASCI(mf, 4, 4)

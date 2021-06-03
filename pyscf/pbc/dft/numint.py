@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 #
 
 import sys
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.dft import numint
@@ -27,24 +26,9 @@ from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import _rks_gga_wv0, _rks_gga_wv1
 from pyscf.dft.numint import _uks_gga_wv0, _uks_gga_wv1
 from pyscf.dft.numint import OCCDROP
-from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
+from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
+from pyscf.pbc.lib.kpts_helper import member
 
-#try:
-### Moderate speedup by caching eval_ao
-#    from pyscf import pbc
-#    from joblib import Memory
-#    memory = Memory(cachedir='./tmp/', mmap_mode='r', verbose=0)
-#    def memory_cache(f):
-#        g = memory.cache(f)
-#        def maybe_cache(*args, **kwargs):
-#            if pbc.DEBUG:
-#                return g(*args, **kwargs)
-#            else:
-#                return f(*args, **kwargs)
-#        return maybe_cache
-#except:
-#    memory_cache = lambda f: f
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -83,7 +67,6 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
     return ao_kpts[0]
 
 
-#@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
@@ -157,6 +140,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
             dm = (dm + dm.conj().T) * .5
 
         def dot_bra(bra, aodm):
+            # rho = numpy.einsum('pi,pi->p', bra.conj(), aodm).real
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
             #:rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
             #:return rho
@@ -206,7 +190,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                             dtype=numpy.uint8)
+                              dtype=numpy.uint8)
         non0tab[:] = 0xff
 
     # complex orbitals or density matrix
@@ -348,8 +332,8 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                                  max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
-                vrho = vxc[0]
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1)[:2]
                 den = rho*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
@@ -362,7 +346,8 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                                  max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1)[:2]
                 den = rho[0]*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
@@ -377,7 +362,8 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
                                  max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1)[:2]
+                exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
+                                      relativity=relativity, deriv=1)[:2]
                 den = rho[0]*weight
                 nelec[i] += den.sum()
                 excsum[i] += (den*exc).sum()
@@ -387,7 +373,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
         nelec = nelec[0]
         excsum = excsum[0]
         vmat = vmat[0]
-    return nelec, excsum, vmat
+    return nelec, excsum, numpy.asarray(vmat)
 
 def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
            kpts=None, kpts_band=None, max_memory=2000, verbose=None):
@@ -453,8 +439,9 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho = vxc[0]
                 den = rho_a * weight
                 nelec[0,i] += den.sum()
@@ -475,8 +462,9 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho, vsigma = vxc[:2]
                 den = rho_a[0]*weight
                 nelec[0,i] += den.sum()
@@ -500,8 +488,9 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
             for i in range(nset):
                 rho_a = make_rhoa(i, ao_k2, mask, xctype)
                 rho_b = make_rhob(i, ao_k2, mask, xctype)
-                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b),
-                                      1, relativity, 1, verbose)[:2]
+                exc, vxc = ni.eval_xc(xc_code, (rho_a, rho_b), spin=1,
+                                      relativity=relativity, deriv=1,
+                                      verbose=verbose)[:2]
                 vrho, vsigma, vlapl, vtau = vxc
                 den = rho_a[0]*weight
                 nelec[0,i] += den.sum()
@@ -523,12 +512,12 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
         excsum = excsum[0]
         vmata = vmata[0]
         vmatb = vmatb[0]
-    return nelec, excsum, lib.asarray((vmata,vmatb))
+    return nelec, excsum, numpy.asarray((vmata,vmatb))
 
 def _format_uks_dm(dms):
     dma, dmb = dms
     if getattr(dms, 'mo_coeff', None) is not None:
-#TODO: test whether dm.mo_coeff matching dm
+        #TODO: test whether dm.mo_coeff matching dm
         mo_coeff = dms.mo_coeff
         mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and
@@ -598,7 +587,9 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             ngrid = weight.size
             if fxc is None:
                 rho = make_rho0(0, ao_k1, mask, xctype)
-                fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2, verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, rho, spin=0,
+                                  relativity=relativity, deriv=2,
+                                  verbose=verbose)[2]
                 frr = fxc0[0]
             else:
                 frr = fxc[0][ip:ip+ngrid]
@@ -621,7 +612,9 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho = numpy.asarray(rho0[:,ip:ip+ngrid], order='C')
 
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, rho, 0, relativity, 2, verbose)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, rho, spin=0,
+                                        relativity=relativity, deriv=2,
+                                        verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
@@ -644,7 +637,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if isinstance(dms, numpy.ndarray) and dms.ndim == vmat[0].ndim:
         # One set of DMs in the input
         vmat = vmat[0]
-    return lib.asarray(vmat)
+    return numpy.asarray(vmat)
 
 def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, max_memory=2000,
@@ -676,7 +669,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
             if fxc is None:
                 rho = make_rho0(0, ao_k1, mask, xctype)
                 rho *= .5  # alpha density
-                fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[2]
+                fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
                 u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T
@@ -700,7 +693,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
             if vxc is None or fxc is None:
                 rho = make_rho0(0, ao_k1, mask, xctype)
                 rho *= .5  # alpha density
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), 1, deriv=2)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho,rho), spin=1, deriv=2)[1:3]
 
                 vsigma = vxc0[1].T
                 u_u, u_d, d_d = fxc0[0].T  # v2rho2
@@ -740,7 +733,7 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == vmat[0].ndim:
         vmat = vmat[0]
-    return lib.asarray(vmat)
+    return numpy.asarray(vmat)
 
 
 def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
@@ -798,7 +791,6 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)[0]
         make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)[0]
 
-    shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
 
     vmata = [0] * nset
@@ -812,7 +804,9 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             if fxc is None:
                 rho0a = make_rho0a(0, ao_k1, mask, xctype)
                 rho0b = make_rho0b(0, ao_k1, mask, xctype)
-                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[2]
+                fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                  relativity=relativity, deriv=2,
+                                  verbose=verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
                 u_u, u_d, d_d = fxc[0][ip:ip+ngrid].T
@@ -841,7 +835,9 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
             if vxc is None or fxc is None:
-                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[1:3]
+                vxc0, fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), spin=1,
+                                        relativity=relativity, deriv=2,
+                                        verbose=verbose)[1:3]
             else:
                 vxc0 = (None, vxc[1][ip:ip+ngrid])
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
@@ -864,7 +860,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if dma.ndim == vmata[0].ndim:  # One set of DMs in the input
         vmata = vmata[0]
         vmatb = vmatb[0]
-    return lib.asarray((vmata,vmatb))
+    return numpy.asarray((vmata,vmatb))
 
 def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)
@@ -908,7 +904,8 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
             rhoa.append(ni.eval_rho2(cell, ao_k1, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(cell, ao_k1, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
-    vxc, fxc = ni.eval_xc(xc_code, rho, spin, 0, 2, 0)[1:3]
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, relativity=0, deriv=2,
+                          verbose=0)[1:3]
     return rho, vxc, fxc
 
 
@@ -964,7 +961,7 @@ class NumInt(numint.NumInt):
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         if kpts_band is not None:
-# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
             ni = KNumInt()
             ni.__dict__.update(self.__dict__)
             nao = dms.shape[-1]
@@ -978,7 +975,7 @@ class NumInt(numint.NumInt):
     def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         if kpts_band is not None:
-# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
             ni = KNumInt()
             ni.__dict__.update(self.__dict__)
             nao = dms[0].shape[-1]
@@ -990,8 +987,8 @@ class NumInt(numint.NumInt):
 
     def eval_mat(self, cell, ao, weight, rho, vxc,
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
-# Guess whether ao is evaluated for kpts_band.  When xctype is LDA, ao on grids
-# should be a 2D array.  For other xc functional, ao should be a 3D array.
+        # Guess whether ao is evaluated for kpts_band.  When xctype is LDA, ao on grids
+        # should be a 2D array.  For other xc functional, ao should be a 3D array.
         if ao.ndim == 2 or (xctype != 'LDA' and ao.ndim == 3):
             mat = eval_mat(cell, ao, weight, rho, vxc, non0tab, xctype, spin, verbose)
         else:
@@ -1006,13 +1003,15 @@ class NumInt(numint.NumInt):
     def _fxc_mat(self, cell, ao, wv, non0tab, xctype, ao_loc):
         return _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc)
 
-    def block_loop(self, cell, grids, nao, deriv=0, kpt=numpy.zeros(3),
+    def block_loop(self, cell, grids, nao=None, deriv=0, kpt=numpy.zeros(3),
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
-# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+        # For UniformGrids, grids.coords does not indicate whehter grids are initialized
         if grids.non0tab is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = cell.nao
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
@@ -1055,11 +1054,6 @@ class NumInt(numint.NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
-    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
-        if abs(omega) > 1e-10:
-            raise NotImplementedError
-        return omega, alpha, hyb
 _NumInt = NumInt
 
 
@@ -1175,12 +1169,14 @@ class KNumInt(numint.NumInt):
             mat[k] = _fxc_mat(cell, ao_kpts[k], wv, non0tab, xctype, ao_loc)
         return mat
 
-    def block_loop(self, cell, grids, nao, deriv=0, kpts=numpy.zeros((1,3)),
+    def block_loop(self, cell, grids, nao=None, deriv=0, kpts=numpy.zeros((1,3)),
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
+        if nao is None:
+            nao = cell.nao
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
@@ -1221,6 +1217,7 @@ class KNumInt(numint.NumInt):
                 mo_occ = [mo_occ]
             nao = cell.nao_nr()
             ndms = len(mo_occ)
+
             def make_rho(idm, ao, non0tab, xctype):
                 return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],
                                       non0tab, xctype)
@@ -1237,6 +1234,7 @@ class KNumInt(numint.NumInt):
             #    dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
             nao = dms[0].shape[-1]
             ndms = len(dms)
+
             def make_rho(idm, ao_kpts, non0tab, xctype):
                 return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
                                      hermi=hermi)
@@ -1247,9 +1245,4 @@ class KNumInt(numint.NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
-    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
-        if abs(omega) > 1e-10:
-            raise NotImplementedError
-        return omega, alpha, hyb
 _KNumInt = KNumInt

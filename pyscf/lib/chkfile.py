@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ else:
 
 def load(chkfile, key):
     '''Load array(s) from chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile. The chkfile needs to be saved in HDF5 format.
@@ -68,7 +68,7 @@ def load(chkfile, key):
                 return dict([(k.replace('__from_list__', ''),
                               load_as_dic(k, val)) for k in val])
         else:
-            return val.value
+            return val[()]
 
     with h5py.File(chkfile, 'r') as fh5:
         return load_as_dic(key, fh5)
@@ -76,7 +76,7 @@ load_chkfile_key = load
 
 def dump(chkfile, key, value):
     '''Save array(s) in chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -142,7 +142,7 @@ dump_chkfile_key = save = dump
 def load_mol(chkfile):
     '''Load Mole object from chkfile.
     The save_mol/load_mol operation can be used a serialization method for Mole object.
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -158,18 +158,18 @@ def load_mol(chkfile):
     >>> lib.chkfile.load_mol('He.chk')
     <pyscf.gto.mole.Mole object at 0x7fdcd94d7f50>
     '''
-    from numpy import array
+    from numpy import array  # noqa
     from pyscf import gto
     try:
         with h5py.File(chkfile, 'r') as fh5:
-            mol = gto.loads(fh5['mol'].value)
-    except:
-# Compatibility to the old serialization format
-# TODO: remove it in future release
+            mol = gto.loads(fh5['mol'][()])
+    except Exception:
+        # Compatibility to the old serialization format
+        # TODO: remove it in future release
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.Mole()
             mol.output = '/dev/null'
-            moldic = eval(fh5['mol'].value)
+            moldic = eval(fh5['mol'][()])
             for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
                     del(moldic[key])

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ the 4-index integrals (ij|kl) = (ij|lk) = (ji|kl) are assumed.
 Note MO integrals are treated in chemist's notation
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -36,7 +36,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO,
            fintermediates=None, fupdate=None):
     if eris is None: eris = mycc.ao2mo()
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)
 
     if t1 is None: t1 = mycc.t1
@@ -79,11 +79,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
 def make_intermediates(mycc, t1, t2, eris):
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
-    nvir_pair = nvir*(nvir+1)//2
     foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
-    fvo = eris.fock[nocc:,:nocc]
+    #fvo = eris.fock[nocc:,:nocc]
     fvv = eris.fock[nocc:,nocc:]
 
     class _IMDS: pass
@@ -103,7 +101,6 @@ def make_intermediates(mycc, t1, t2, eris):
     w3 += lib.einsum('kc,kb,jc->bj', fov, t1, t1)
     w4 = fov.copy()
 
-    time1 = time.clock(), time.time()
     unit = nocc*nvir**2*6
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     blksize = min(nvir, max(ccsd.BLKMIN, int((max_memory*.95e6/8-nocc**4-nvir*nocc**3)/unit)))
@@ -199,7 +196,6 @@ def make_intermediates(mycc, t1, t2, eris):
         wvOOv += vOOv
         imds.wVOov[p0:p1] = wVOov
         imds.wvOOv[p0:p1] = wvOOv
-        wOVov = wOvOv = None
 
         ov1 = vOOv*2 + VOov
         ov2 = VOov*2 + vOOv
@@ -239,10 +235,9 @@ def make_intermediates(mycc, t1, t2, eris):
 # update L1, L2
 def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     if imds is None: imds = make_intermediates(mycc, t1, t2, eris)
-    time1 = time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc * nvir
     fov = eris.fock[:nocc,nocc:]
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
@@ -263,7 +258,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     l1new  = numpy.einsum('ijab,jb->ia', l2new, t1) * 2
     l1new -= numpy.einsum('jiab,jb->ia', l2new, t1)
     l2new *= .5  # *.5 because of l2+l2.transpose(1,0,3,2) in the end
-    tmp = tmp1 = None
+    tmp = None
 
     w1 = imds.w1 - numpy.diag(mo_e_v)
     w2 = imds.w2 - numpy.diag(mo_e_o)
@@ -309,7 +304,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
         l1new -= numpy.einsum('ijab,ia->jb', m4, t1[:,p0:p1]) * 2
         l1new[:,p0:p1] += numpy.einsum('jiab,jb->ia', m4, t1)
         l1new += numpy.einsum('jiab,ia->jb', m4, t1[:,p0:p1])
-        eris_ovvv = m4buf = m4 = None
+        eris_ovvv = m4 = None
 
         eris_voov = _cp(eris.ovvo[:,p0:p1].transpose(1,0,3,2))
         l1new[:,p0:p1] += numpy.einsum('jb,aijb->ia', l1, eris_voov) * 2
@@ -335,7 +330,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
         tmp_voov += saved_wvOOv
         tmp = l2.transpose(0,2,1,3) - l2.transpose(0,3,1,2)*.5
         l2new[:,:,p0:p1] += lib.einsum('iakc,bjkc->jiba', tmp, tmp_voov)
-        tmp = tmp1 = tmp_ovov = None
+        tmp = None
 
         tmp = lib.einsum('jkca,bikc->jiba', l2, saved_wvOOv)
         l2new[:,:,p0:p1] += tmp
@@ -356,7 +351,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
 #    l2new = l2new + l2new.transpose(1,0,3,2)
 #    l2new /= lib.direct_sum('ia+jb->ijab', eia, eia)
 #    l2new += l2
-    ij = 0
     for i in range(nocc):
         if i > 0:
             l2new[i,:i] += l2new[:i,i].transpose(0,2,1)
@@ -376,7 +370,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo
-    from pyscf.cc import ccsd
 
     mol = gto.M()
     mf = scf.RHF(mol)

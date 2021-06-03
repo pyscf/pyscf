@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import json
 import h5py
 import pyscf.pbc.gto
 import pyscf.lib.chkfile
-from pyscf.lib.chkfile import load_chkfile_key, load
-from pyscf.lib.chkfile import dump_chkfile_key, dump, save
+from pyscf.lib.chkfile import load_chkfile_key, load  # noqa
+from pyscf.lib.chkfile import dump_chkfile_key, dump, save  # noqa
 
 def load_cell(chkfile):
     '''Load Cell object from chkfile.
@@ -44,10 +43,10 @@ def load_cell(chkfile):
     '''
     with h5py.File(chkfile, 'r') as fh5:
         try:
-            cell = pyscf.pbc.gto.loads(fh5['mol'].value)
-        except:
-            from numpy import array  # for eval() function
-            celldic = eval(fh5['mol'].value)
+            cell = pyscf.pbc.gto.loads(fh5['mol'][()])
+        except Exception:
+            from numpy import array  # noqa
+            celldic = eval(fh5['mol'][()])
             cell = pyscf.pbc.gto.cell.unpack(celldic)
             cell.build(False, False)
     return cell

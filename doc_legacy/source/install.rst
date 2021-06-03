@@ -64,6 +64,7 @@ Another way to use PySCF in docker container is to start an Ipython shell::
   $ docker run -it pyscf/pyscf-1.5.0 start.sh ipython
 
 
+.. _compile_c_extensions:
 Manual installation from github repo
 ====================================
 
@@ -343,15 +344,22 @@ TBLIS
 -----
 `TBLIS <https://github.com/devinamatthews/tblis>`_ provides a native algorithm
 to perform tensor contraction for arbitrary high dimensional tensors. The native
-algorithm does not need to translate the tensors into matrices and call the BLAS
+algorithm does not need to transform tensors into matrices then call the BLAS
 libraries for the matrix contraction.  Tensor transposing and data moving are
 largely avoided in TBLIS tensor library.  The interface to TBLIS offers an
 efficient implementation for :func:`numpy.einsum` style tensor contraction.
+To enable the tlibs-einsum plugin, you can set the cmake flags
+``-DENABLE_TBLIS`` when compiling the C extensions::
+
+  $ cmake -DENABLE_TBLIS=ON ..
+
+Note TBLIS library was implemented with C++11 standard. You need at least GCC
+5.2 to compile this plugin.
 
 
 Pyberny
 -------
-The geometry optimizer `Pyberny <https://github.com/azag0/pyberny>`_ provides an
+The geometry optimizer `Pyberny <https://github.com/jhrmnn/pyberny>`_ provides an
 independent implementation that supports various geometry optimization
 techniques (comprising redundant internal coordinates, iterative Hessian
 estimate, trust region, line search, and coordinate weighing etc.).  It can take

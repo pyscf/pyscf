@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,10 +40,6 @@ def tearDownModule():
     global mol, mf, ao, rho
     del mol, mf, ao, rho
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(w, a.ravel())
-
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
@@ -60,7 +56,7 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
         self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP\n+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
         self.assertAlmostEqual(hyb, .15, 12)
@@ -89,6 +85,10 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb, [1.3, 1.02, 0.3])
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(2.04;0.56;0.3) + 0.5*BP86')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(.3, 2.04, 0.56) + 0.5*BP86')
         self.assertEqual(hyb, [1.3, 1.02, 0.3])
         self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
 
@@ -134,7 +134,7 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(dft.libxc.is_lda('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc('m05'))
         self.assertTrue (dft.libxc.is_hybrid_xc('pbe0,'))
-        self.assertFalse(dft.libxc.is_hybrid_xc('m05,'))
+        self.assertTrue (dft.libxc.is_hybrid_xc('m05,'))
         self.assertFalse(dft.libxc.is_hybrid_xc('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
@@ -160,22 +160,23 @@ class KnownValues(unittest.TestCase):
 
     def test_nlc_coeff(self):
         self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.libxc.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.libxc.eval_xc('lda,', rho[0][:3], deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0]), -1.1414693830969338, 8)
-        self.assertAlmostEqual(lib.finger(k[0]),  4.1402447248393921, 8)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0]), -1.1414693830969338, 8)
+        self.assertAlmostEqual(lib.fp(k[0]),  4.1402447248393921, 8)
 
         e,v,f,k = dft.libxc.eval_xc('lda,', [rho[0][:3]*.5]*2, spin=1, deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[1]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[0]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 7)
-        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[1]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[0]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[2]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(k[0].T[0]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(k[0].T[3]),  4.1402447248393921*4, 7)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]
@@ -186,6 +187,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2428894571085, 6)
         self.assertAlmostEqual(numpy.dot(rho[0],f[2]), 0, 8)
         self.assertAlmostEqual(abs(f[2]).sum(), 0, 3)
+
+    #def test_tpss(self):
+    #    #FIXME: raised numerical error
+    #    rho_a = numpy.array([[3.67808547e-08,-2.02358682e-08, 2.16729780e-07, 2.27036045e-07,-1.47795869e-07,-1.45668997e-09]]).T
+    #    e, v = dft.libxc.eval_xc('tpss,', rho_a, spin=0, deriv=1)[:2]
+    #    rho_b = numpy.array([[4.53272893e-06, 4.18968775e-06,-2.83034672e-06, 2.61832978e-06, 5.63360737e-06, 8.97541777e-07]]).T
+    #    e, v = dft.libxc.eval_xc('tpss,', (rho_a, rho_b), spin=1, deriv=1)[:2]
 
     def test_define_xc(self):
         def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
@@ -207,9 +215,9 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         rho = numpy.random.random((4,10))
         exc, vxc = ni.eval_xc(None, rho, 0, deriv=1)[:2]
-        self.assertAlmostEqual(lib.finger(exc), 0.0012441814416833327, 9)
-        self.assertAlmostEqual(lib.finger(vxc[0]), 0.0065565189784811129, 9)
-        self.assertAlmostEqual(lib.finger(vxc[1]), 0.0049270110162854116, 9)
+        self.assertAlmostEqual(lib.fp(exc), 0.0012441814416833327, 9)
+        self.assertAlmostEqual(lib.fp(vxc[0]), 0.0065565189784811129, 9)
+        self.assertAlmostEqual(lib.fp(vxc[1]), 0.0049270110162854116, 9)
 
         mf = mf.define_xc_('0.5*B3LYP+0.5*B3LYP')
         exc0, vxc0 = mf._numint.eval_xc(None, rho, 0, deriv=1)[:2]
@@ -220,19 +228,27 @@ class KnownValues(unittest.TestCase):
 
         self.assertRaises(ValueError, dft.libxc.define_xc, mf._numint, 0.1)
 
-# libxc-4.2.3 does not support m05x
+        ni = dft.libxc.define_xc(mf._numint, 'PBE')
+        exc1, vxc1 = dft.libxc.eval_xc('PBE', rho, 0, deriv=1)[:2]
+        exc0, vxc0 = ni.eval_xc(None, rho, 0, deriv=1)[:2]
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
+        self.assertAlmostEqual(abs(vxc0[0]-vxc1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(vxc0[1]-vxc1[1]).max(), 0, 9)
+
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),
               numpy.array([.8, 1., 0., 0., 0., 0.1050]).reshape(-1,1))
-        test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
-                                 0.00000000, -0.00444560, 3.45640232, 4.4349756])
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('m05,', rho, 1, deriv=1)
+        #test_ref = numpy.array([-1.57876583, -2.12127045,-2.11264351,-0.00315462,
+        #                         0.00000000, -0.00444560, 3.45640232, 4.4349756])  # libxc-4.3.4
+        test_ref = numpy.array([-1.57730394, -2.12127045,-2.11297165,-0.00315462,
+                                 0.00000000, -0.00446935, 3.45640232, 4.42563831])  # libxc-5.1.2
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho, 1, deriv=1)
         self.assertAlmostEqual(float(exc)*1.8, test_ref[0], 5)
         self.assertAlmostEqual(abs(vxc[0]-test_ref[1:3]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[1]-test_ref[3:6]).max(), 0, 6)
         self.assertAlmostEqual(abs(vxc[3]-test_ref[6:8]).max(), 0, 5)
 
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('m05,', rho[0], 0, deriv=1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('1.38888888889*m05,', rho[0], 0, deriv=1)
         self.assertAlmostEqual(float(exc), -0.5746231988116002, 5)
         self.assertAlmostEqual(float(vxc[0]), -0.8806121005703862, 6)
         self.assertAlmostEqual(float(vxc[1]), -0.0032300155406846756, 7)
@@ -241,14 +257,31 @@ class KnownValues(unittest.TestCase):
     def test_camb3lyp(self):
         rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
         exc, vxc, fxc, kxc = dft.libxc.eval_xc('camb3lyp', rho, 0, deriv=1)
-        self.assertAlmostEqual(float(exc), -0.5752559666317147, 5)
-        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 5)
+        self.assertAlmostEqual(float(exc), -0.5752559666317147, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.7709812578936763, 7)
         self.assertAlmostEqual(float(vxc[1]), -0.0029862221286189846, 7)
+
+        self.assertEqual(dft.libxc.rsh_coeff('camb3lyp'), [0.33, 0.65, -0.46])
+
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('RSH(0.5,0.65,-0.46) + 0.46*ITYH + .35*B88,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.48916154057161476, 9)
+        self.assertAlmostEqual(float(vxc[0]), -0.6761177630311709, 9)
+        self.assertAlmostEqual(float(vxc[1]), -0.002949151742087167, 9)
+
+    def test_ityh(self):
+        rho = numpy.array([1., 1., 0.1, 0.1]).reshape(-1,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('ityh,', rho, 0, deriv=1)
+        self.assertAlmostEqual(float(exc), -0.6359945579326314, 7)
+        self.assertAlmostEqual(float(vxc[0]), -0.8712041561251518, 7)
+        self.assertAlmostEqual(float(vxc[1]), -0.003911167644579979, 7)
+        self.assertEqual(dft.libxc.rsh_coeff('ityh,'), [0.2, 0.0, 0.0])
 
     def test_deriv_order(self):
         self.assertTrue(dft.libxc.test_deriv_order('lda', 3, raise_error=False))
-        self.assertTrue(not dft.libxc.test_deriv_order('m05', 2, raise_error=False))
-        self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'pbe0', 3, True)
+        self.assertTrue(dft.libxc.test_deriv_order('m05', 2, raise_error=False))
+        self.assertTrue(dft.libxc.test_deriv_order('camb3lyp', 3, True))
+        self.assertTrue(dft.libxc.test_deriv_order('pbe0', 3, True))
         self.assertRaises(KeyError, dft.libxc.test_deriv_order, 'OL2', 3, True)
 
     def test_xc_type(self):
@@ -263,5 +296,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Test libxc")
     unittest.main()
-
-

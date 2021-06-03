@@ -17,7 +17,6 @@
 #
 
 import ctypes
-import warnings
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -110,11 +109,17 @@ class UniformGrids(lib.StreamObject):
             self.non0tab = None
         return coords, weights
 
+    def reset(self, cell=None):
+        if cell is not None:
+            self.cell = cell
+        return self
+
     def dump_flags(self, verbose=None):
         if self.mesh is None:
             logger.info(self, 'Uniform grid, mesh = %s', self.cell.mesh)
         else:
             logger.info(self, 'Uniform grid, mesh = %s', self.mesh)
+        return self
 
     def kernel(self, cell=None, with_non0tab=False):
         self.dump_flags()

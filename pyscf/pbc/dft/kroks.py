@@ -26,6 +26,7 @@ from pyscf.pbc.scf import krohf
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft.kuks import energy_elec
+from pyscf import __config__
 
 
 @lib.with_doc(kuks.get_veff.__doc__)
@@ -40,23 +41,22 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     return kuks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpts, kpts_band)
 
 
-class KROKS(krohf.KROHF):
+class KROKS(rks.KohnShamDFT, krohf.KROHF):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3))):
-        krohf.KROHF.__init__(self, cell, kpts)
-        rks._dft_common_init_(self)
+    def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
+        krohf.KROHF.__init__(self, cell, kpts, exxdiv=exxdiv)
+        rks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         krohf.KROHF.dump_flags(self, verbose)
-        lib.logger.info(self, 'XC functionals = %s', self.xc)
-        self.grids.dump_flags(verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
     get_rho = kuks.get_rho
-
-    define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(krohf.KROHF.mix_density_fit)

@@ -62,12 +62,12 @@ class KnownValues(unittest.TestCase):
 
         j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1')
         self.assertTrue(numpy.allclose(eri0, j3c.reshape(nao,nao,naoaux)))
-        self.assertAlmostEqual(lib.finger(j3c), 48.11812978990752, 9)
+        self.assertAlmostEqual(lib.finger(j3c), 45.27912877994409, 9)
 
         idx = numpy.tril_indices(nao)
         j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
         self.assertTrue(numpy.allclose(eri0[idx], j3c))
-        self.assertAlmostEqual(lib.finger(j3c), 4.6774743051154459, 9)
+        self.assertAlmostEqual(lib.finger(j3c), 12.407403711205063, 9)
 
     def test_aux_e1(self):
         j3c1 = df.incore.aux_e1(mol, auxmol, intor='int3c2e', aosym='s2ij')
@@ -134,6 +134,9 @@ class KnownValues(unittest.TestCase):
         eri1 = numpy.einsum('ik,kl->il', j3c, numpy.linalg.inv(j2c))
         eri1 = numpy.einsum('ip,kp->ik', eri1, j3c)
         self.assertTrue(numpy.allclose(eri1, eri0))
+
+        cderi1 = df.incore.cholesky_eri_debug(mol)
+        self.assertAlmostEqual(abs(cderi-cderi1).max(), 0, 9)
 
     def test_r_incore(self):
         j3c = df.r_incore.aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1')

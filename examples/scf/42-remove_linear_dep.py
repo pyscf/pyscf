@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+'''
+There is a list of methods of the SCF object one can modify to control the SCF
+calculations. You can find these methods in function pyscf.scf.hf.kernel.
+This example shows how to remove basis linear dependency by modifying the SCF
+eig method.
+
+The pyscf.scf.addons module provides a function remove_linear_dep_ to remove
+basis linear dependency in a similar manner, but it also can handle
+pathological linear dependencies via the partial Cholesky procedure.
+'''
+
+
 import numpy
 import numpy.linalg
 from pyscf import gto, scf, mcscf
@@ -16,9 +28,11 @@ mol = gto.M(atom=['H 0 0 %f'%i for i in range(10)], unit='Bohr',
 # answer. This example shows how to remove linear dependency from overlap
 # matrix and use the linearly independent basis in the HF, MCSCF calculations.
 #
-# There is a shortcut function to remove linear-dependency, eg
+# There is a shortcut function to remove linear-dependency, e.g.
 #
 #       mf = scf.RHF(mol).apply(scf.addons.remove_linear_dep_)
+#
+# which also implements the partial Cholesky ortogonalization method.
 #
 # This example demonstrated how the linear dependency is removed in our
 # implementation.

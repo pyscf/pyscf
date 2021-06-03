@@ -19,7 +19,7 @@ from pyscf.mp import ump2
 from pyscf.mp import gmp2
 
 class RMP2(mp2.RMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -32,7 +32,7 @@ class RMP2(mp2.RMP2):
         return eris
 
 class UMP2(ump2.UMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -45,7 +45,7 @@ class UMP2(ump2.UMP2):
         return eris
 
 class GMP2(gmp2.GMP2):
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
         gmp2.GMP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
@@ -86,3 +86,11 @@ def _gen_ao2mofn(mf):
     def ao2mofn(mo_coeff):
         return with_df.ao2mo(mo_coeff, kpt, compact=False)
     return ao2mofn
+
+
+from pyscf.pbc import scf
+scf.hf.RHF.MP2 = lib.class_as_method(RMP2)
+scf.uhf.UHF.MP2 = lib.class_as_method(UMP2)
+scf.ghf.GHF.MP2 = lib.class_as_method(GMP2)
+scf.rohf.ROHF.MP2 = None
+

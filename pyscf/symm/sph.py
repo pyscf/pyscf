@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -146,7 +146,7 @@ def sph_pure2real(l, reorder_p=True):
     return u
 
 def sph_real2pure(l, reorder_p=True):
-    ''' 
+    '''
     Transformation matrix: from real spherical harmonic functions to the pure
     spherical harmonic functions.
 
@@ -234,7 +234,8 @@ def sph2spinor_coeff(mol):
         nctr = mol.bas_nctr(ib)
         ca.extend([ua]*nctr)
         cb.extend([ub]*nctr)
-    return scipy.linalg.block_diag(*ca), scipy.linalg.block_diag(*cb)
+    return numpy.stack([scipy.linalg.block_diag(*ca),
+                        scipy.linalg.block_diag(*cb)])
 real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):

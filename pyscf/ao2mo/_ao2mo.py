@@ -56,7 +56,10 @@ class AO2MOpt(object):
                       c_env.ctypes.data_as(ctypes.c_void_p))
 
     def __del__(self):
-        libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        try:
+            libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
+        except AttributeError:
+            pass
 
 
 # if out is not None, transform AO to MO in-place

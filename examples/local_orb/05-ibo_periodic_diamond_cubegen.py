@@ -4,8 +4,10 @@
 #
 
 import numpy
-from pyscf import lo, tools
+from pyscf import lo
+from pyscf.tools import chgcar
 from pyscf.pbc import gto, scf
+from functools import reduce
 '''
 This Benchmark show how to use the Cubegen command to make VASP chgcars for
 visualizing periodic IBOs for example in diamond 
@@ -40,15 +42,15 @@ a = lo.iao.iao(cell, mo_occ)
 # Orthogonalize IAO
 a = lo.vec_lowdin(a, mf.get_ovlp())
 #ibo must take the orthonormalized IAOs
-ibo = lo.ibo.ibo(cell, mo_occ, a)
+ibo = lo.ibo.ibo(cell, mo_occ, iaos=a)
 
 
 '''
 Generates IBO files as VASP Chgcars
 '''
 for i in range(ibo.shape[1]):
-    tools.cubegen.density(cell, 'diamond_ibo'+str(i+1)+'.vasp', ibo ,moN=i+1,fileFormat="vasp")
-    print("wrote cube "+str(i+1))
+    chgcar.orbital(cell, 'diamond_ibo{:02d}.chgcar'.format(i+1), ibo[:,i])
+    print("wrote cube {:02d}".format(i+1))
 
 '''
 Makes Population Analysis with IAOs

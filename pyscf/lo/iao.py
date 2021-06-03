@@ -30,9 +30,11 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import __config__
 from pyscf.lo.orth import vec_lowdin
+from pyscf.data.elements import is_ghost_atom
 
 # Alternately, use ANO for minao
-# orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
+# orthogonalize iao with coefficients obtained by
+#     vec_lowdin(iao_coeff, mol.intor('int1e_ovlp'))
 MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
 def iao(mol, orbocc, minao=MINAO, kpts=None):
@@ -67,13 +69,13 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
         s2 = numpy.asarray(pmol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts))
         s12 = numpy.asarray(pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol, kpts=kpts))
     else:
-#s1 is the one electron overlap integrals (coulomb integrals)
+        #s1 is the one electron overlap integrals (coulomb integrals)
         s1 = mol.intor_symmetric('int1e_ovlp')
-#s2 is the same as s1 except in minao 
+        #s2 is the same as s1 except in minao
         s2 = pmol.intor_symmetric('int1e_ovlp')
-#overlap integrals of the two molecules 
+        #overlap integrals of the two molecules
         s12 = gto.mole.intor_cross('int1e_ovlp', mol, pmol)
-#transpose of overlap
+
     if len(s1.shape) == 2:
         s21 = s12.conj().T
         s1cd = scipy.linalg.cho_factor(s1)
@@ -86,7 +88,7 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
         ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
         #a is the set of IAOs in the original basis
         a = (p12 + reduce(numpy.dot, (ccs1, ccs2, p12)) * 2
-            - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))
+             - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))
     else: # k point sampling
         s21 = numpy.swapaxes(s12, -1, -2).conj()
         nkpts = len(kpts)
@@ -103,12 +105,19 @@ def iao(mol, orbocc, minao=MINAO, kpts=None):
             ccs2_k = reduce(numpy.dot, (ctild_k, ctild_k.conj().T, s1[k]))
             #a is the set of IAOs in the original basis
             a[k] = (p12_k + reduce(numpy.dot, (ccs1_k, ccs2_k, p12_k)) * 2
-                - numpy.dot(ccs1_k, p12_k) - numpy.dot(ccs2_k, p12_k))
+                    - numpy.dot(ccs1_k, p12_k) - numpy.dot(ccs2_k, p12_k))
     return a
 
 def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
+    atoms = [atom for atom in gto.format_atom(pmol.atom, unit=1)]
+    # remove ghost atoms
+    pmol.atom = [atom for atom in atoms if not is_ghost_atom(atom[0])]
+    if len(pmol.atom) != len(atoms):
+        logger.info(mol, 'Ghost atoms found in system. '
+                    'Current IAO does not support ghost atoms. '
+                    'They are removed from IAO reference basis.')
     if getattr(pmol, 'rcut', None) is not None:
         pmol.rcut = None
     pmol.build(False, False, basis=minao)

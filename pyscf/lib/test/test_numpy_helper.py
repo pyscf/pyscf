@@ -1,4 +1,4 @@
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -80,7 +80,13 @@ class KnownValues(unittest.TestCase):
 
         numpy.random.seed(1)
         a = numpy.random.random((5050,20))
-        self.assertAlmostEqual(lib.finger(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
+        self.assertAlmostEqual(lib.fp(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
+
+        a = numpy.zeros((5, 0))
+        self.assertEqual(lib.unpack_tril(a, axis=-1).shape, (5, 0, 0))
+
+        a = numpy.zeros((0, 5))
+        self.assertEqual(lib.unpack_tril(a, axis=0).shape, (0, 0, 5))
 
     def test_unpack_tril_integer(self):
         a = lib.unpack_tril(numpy.arange(6, dtype=numpy.int32))
@@ -193,6 +199,20 @@ class KnownValues(unittest.TestCase):
         a = lib.frompointer(ptr, count=2, dtype=numpy.int32)
         self.assertTrue(numpy.array_equal(a, [65537, 65537]))
 
+    def test_split_reshape(self):
+        numpy.random.seed(3)
+        shapes = (numpy.random.random((5,4)) * 5).astype(int)
+        ref = [numpy.random.random([x for x in shape if x > 1]) for shape in shapes]
+        shapes = [x.shape for x in ref]
+        a = numpy.hstack([x.ravel() for x in ref])
+        a = lib.split_reshape(a, shapes)
+        for x, y in zip(a, ref):
+            self.assertAlmostEqual(abs(x-y).max(), 0, 12)
+
+        b = lib.split_reshape(numpy.arange(17), ((2,3), (1,), ((2,2), (1,1))))
+
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), ((2,2),))
+        self.assertRaises(ValueError, lib.split_reshape, numpy.arange(3), (2,2))
 
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")

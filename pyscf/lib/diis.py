@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,11 +21,8 @@ DIIS
 """
 
 import sys
-import tempfile
 import numpy
 import scipy.linalg
-import h5py
-from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import misc
 from pyscf.lib import numpy_helper
@@ -34,11 +31,11 @@ from pyscf import __config__
 INCORE_SIZE = getattr(__config__, 'lib_diis_incore_size', 10000000)  # 80 MB
 BLOCK_SIZE  = getattr(__config__, 'lib_diis_block_size', 20000000)  # ~ 160/320 MB
 
+# PCCP, 4, 11 (2002); DOI:10.1039/B108658H
+# GEDIIS, JCTC, 2, 835 (2006); DOI:10.1021/ct050275a
+# C2DIIS, IJQC, 45, 31 (1993); DOI:10.1002/qua.560450106
+# SCF-EDIIS, JCP 116, 8255 (2002); DOI:10.1063/1.1470195
 
-# PCCP, 4, 11
-# GEDIIS, JCTC, 2, 835
-# C2DIIS, IJQC, 45, 31
-# SCF-EDIIS, JCP 116, 8255
 class DIIS(object):
     '''Direct inversion in the iterative subspace method.
 
@@ -161,9 +158,9 @@ class DIIS(object):
             self._head += 1
 
         elif self._xprev is None:
-# If push_err_vec is not called in advance, the error vector is generated
-# as the diff of the current vec and previous returned vec (._xprev)
-# So store the first trial vec as the previous returned vec
+            # If push_err_vec is not called in advance, the error vector is generated
+            # as the diff of the current vec and previous returned vec (._xprev)
+            # So store the first trial vec as the previous returned vec
             self._xprev = x
             self._store('xprev', x)
             if 'xprev' not in self._buffer:  # not incore
@@ -203,7 +200,7 @@ class DIIS(object):
         return len(self._bookkeep)
 
     def update(self, x, xerr=None):
-        '''Extrapolate vector 
+        '''Extrapolate vector
 
         * If xerr the error vector is given, this function will push the target
         vector and error vector in the DIIS subspace, and use the error vector
@@ -304,7 +301,7 @@ class DIIS(object):
 
         else:
             for key in diis_keys:
-                self._store(key, fdiis[key].value)
+                self._store(key, fdiis[key][()])
 
             if 'xprev' in diis_keys:
                 self._store('xprev', numpy.asarray(fdiis['xprev']))

@@ -20,15 +20,12 @@
 4-component Dirac-Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
-from pyscf.dft import gen_grid
-from pyscf.dft import r_numint
-from pyscf import __config__
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -63,7 +60,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
 
@@ -94,19 +91,28 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
-#        if (ks._eri is None and ks.direct_scf and
-#            getattr(vhf_last, 'vk', None) is not None):
-#            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-#            vj, vk = ks.get_jk(mol, ddm, hermi)
-#            vj += vhf_last.vj
-#            vk += vhf_last.vk
-#        else:
-#            vj, vk = ks.get_jk(mol, dm, hermi)
-#        vxc += vj - vk * hyb
-#
-#        if ground_state:
-#            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
-        raise NotImplementedError
+        if (ks._eri is None and ks.direct_scf and
+            getattr(vhf_last, 'vk', None) is not None):
+            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            vj, vk = ks.get_jk(mol, ddm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:  # For range separated Coulomb operator
+                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+            vj += vhf_last.vj
+            vk += vhf_last.vk
+        else:
+            vj, vk = ks.get_jk(mol, dm, hermi)
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                vklr = ks.get_k(mol, dm, hermi, omega=omega)
+                vklr *= (alpha - hyb)
+                vk += vklr
+        vxc += vj - vk
+
+        if ground_state:
+            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
@@ -120,21 +126,21 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 energy_elec = rks.energy_elec
 
 
-class UKS(dhf.UHF):
-    def __init__(self, mol):
-        dhf.UHF.__init__(self, mol)
-        rks._dft_common_init_(self)
+class DKS(rks.KohnShamDFT, dhf.DHF):
+    '''Dirac-Kohn-Sham'''
+    def __init__(self, mol, xc='LDA,VWN'):
+        from pyscf.dft import r_numint
+        dhf.DHF.__init__(self, mol)
+        rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
     def dump_flags(self, verbose=None):
-        dhf.UHF.dump_flags(self, verbose)
-        logger.info(self, 'XC functionals = %s', self.xc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
-        self.grids.dump_flags(verbose)
+        dhf.DHF.dump_flags(self, verbose)
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        return self
 
     get_veff = get_veff
     energy_elec = energy_elec
-    define_xc_ = rks.define_xc_
 
     def x2c1e(self):
         from pyscf.x2c import x2c
@@ -145,23 +151,19 @@ class UKS(dhf.UHF):
         return x2chf
     x2c = x2c1e
 
-DKS = UKS
+UKS = UDKS = DKS
 
+class RDKS(DKS, dhf.RDHF):
+    '''Kramers restricted Dirac-Kohn-Sham'''
+    _eigh = dhf.RDHF._eigh
 
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
+    def x2c1e(self):
+        from pyscf.x2c import x2c
+        x2chf = x2c.RKS(self.mol)
+        x2c_keys = x2chf._keys
+        x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
+        return x2chf
+    x2c = x2c1e
 
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = DKS(mol)
-    print(m.kernel())
-
-    m = DKS(mol).x2c()
-    print(m.kernel())
-
+RKS = RDKS

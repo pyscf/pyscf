@@ -20,7 +20,6 @@ restart point.
 
 from pyscf import gto
 from pyscf import scf
-from pyscf.tools import c60struct
 
 mol = gto.Mole()
 mol.build(
@@ -66,3 +65,17 @@ mf.__dict__.update(scf.chkfile.load('h2o.chk', 'scf'))
 dm = mf.make_rdm1()
 mf.kernel(dm)
 
+
+#
+# 5. Restart from an old DIIS file
+#
+mf = scf.RHF(mol)
+mf.diis_file = 'h2o_diis.h5'
+mf.kernel()
+
+# In another calculation, DIIS information from previous calculation can be
+# restored. Previous calculation can be continued.
+mf = scf.RHF(mol)
+mf.diis = scf.diis.DIIS().restore('h2o_diis.h5')
+mf.max_cycle = 2
+mf.kernel()

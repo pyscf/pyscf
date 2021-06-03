@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 Parses for basis set in the Molpro format
 '''
 
+__all__ = ['parse', 'load']
+
+import re
 import numpy
 
 try:
@@ -29,33 +32,33 @@ except ImportError:
     optimize_contraction = lambda basis: basis
     remove_zero = lambda basis: basis
 
-MAXL = 8
-MAPSPDF = {'S': 0,
-           'P': 1,
-           'D': 2,
-           'F': 3,
-           'G': 4,
-           'H': 5,
-           'I': 6,
-           'K': 7}
+from pyscf import __config__
+DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
+
+MAXL = 12
+SPDF = 'SPDFGHIKLMNO'
+MAPSPDF = {key: l for l, key in enumerate(SPDF)}
 COMMENT_KEYWORDS = '!*#'
 
 # parse the basis text which is in Molpro format, return an internal basis
 # format which can be assigned to gto.mole.basis
 def parse(string, optimize=True):
-    bastxt = []
+    raw_basis = []
     for x in string.splitlines():
         x = x.strip()
         if x and x[0] not in COMMENT_KEYWORDS:
-            bastxt.append(x)
-    return _parse(bastxt, optimize)
+            raw_basis.append(x)
+    return _parse(raw_basis, optimize)
 
 def load(basisfile, symb, optimize=True):
-    return _parse(search_seg(basisfile, symb), optimize)
+    raw_basis = search_seg(basisfile, symb)
+    #if not raw_basis:
+    #    raise BasisNotFoundError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    return _parse(raw_basis, optimize)
 
 def search_seg(basisfile, symb):
+    raw_basis = []
     with open(basisfile, 'r') as fin:
-        rawbas = []
         dat = fin.readline()
         while dat:
             if dat[0] in COMMENT_KEYWORDS:
@@ -63,14 +66,14 @@ def search_seg(basisfile, symb):
                 continue
             elif dat[0].isalpha():
                 if dat.startswith(symb+' '):
-                    rawbas.append(dat.splitlines()[0])
-                elif rawbas:
-                    return rawbas
+                    raw_basis.append(dat.splitlines()[0])
+                elif raw_basis:
+                    return raw_basis
                 fin.readline()  # line for references
-            elif rawbas:
-                rawbas.append(dat.splitlines()[0])
+            elif raw_basis:
+                raw_basis.append(dat.splitlines()[0])
             dat = fin.readline()
-    raise RuntimeError('Basis not found for  %s  in  %s' % (symb, basisfile))
+    return raw_basis
 
 
 def _parse(raw_basis, optimize=True):
@@ -127,6 +130,68 @@ def _parse(raw_basis, optimize=True):
 
     basis_sorted = remove_zero(basis_sorted)
     return basis_sorted
+
+def parse_ecp(string):
+    ecptxt = []
+    for x in string.splitlines():
+        x = x.strip()
+        if x and x[0] not in COMMENT_KEYWORDS:
+            ecptxt.append(x)
+    return _parse_ecp(ecptxt)
+
+def _parse_ecp(raw_ecp):
+    symb, nelec, nshell, nso = re.split(',|;', raw_ecp[0])[1:5]
+    nelec = int(nelec)
+    nshell = int(nshell)
+    nso = int(nso)
+    assert len(raw_ecp) == (nshell + nso + 2), "ecp info doesn't match with data"
+
+    def parse_terms(terms):
+        r_orders = [[] for i in range(7)]  # up to r^6
+        for term in terms:
+            line = term.split(',')
+            order = int(line[0])
+            try:
+                coef = [float(x) for x in line[1:]]
+            except ValueError:
+                if DISABLE_EVAL:
+                    raise ValueError('Failed to parse ecp %s' % line)
+                else:
+                    coef = list(eval(','.join(line[1:])))
+            r_orders[order].append(coef)
+        return r_orders
+
+    ecp_add = {}
+    ul = [x.strip() for x in raw_ecp[1].replace('D', 'e').split(';') if x.strip()]
+    assert int(ul[0]) + 1 == len(ul), "UL doesn't match data"
+    ecp_add[-1] = parse_terms(ul[1:])
+
+    for i, sf_terms in enumerate(raw_ecp[2:2+nshell]):
+        terms = [x.strip() for x in sf_terms.replace('D', 'e').split(';') if x.strip()]
+        assert int(terms[0]) + 1 == len(terms), \
+                "ECP %s Shell doesn't match data" % SPDF[i]
+        ecp_add[i] = parse_terms(terms[1:])
+
+    if nso > 0:
+        for i, so_terms in enumerate(raw_ecp[2+nshell:]):
+            terms = [x.strip() for x in so_terms.replace('D', 'e').split(';') if x.strip()]
+            assert int(terms[0]) + 1 == len(terms), \
+                    "ECP-SOC Shell %s doesn't match data" % SPDF[i+1]
+            soc_data = parse_terms(terms[1:])
+            for order, coefs in enumerate(soc_data):
+                if not coefs:
+                    continue
+                sf_coefs = ecp_add[i+1][order]
+                assert ([x[0] for x in sf_coefs] == [x[0] for x in coefs]), \
+                        "In ECP Shell %s order %d, SF and SOC do not match" % (SPDF[i+1], order)
+                for j, c in enumerate(coefs):
+                    sf_coefs[j].append(c[1])
+
+    bsort = []
+    for l in range(-1, MAXL):
+        if l in ecp_add:
+            bsort.append([l, ecp_add[l]])
+    return [nelec, bsort]
 
 if __name__ == '__main__':
     #print(search_seg('minao.libmol', 'C'))

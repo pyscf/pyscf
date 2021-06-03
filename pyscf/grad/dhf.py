@@ -17,7 +17,7 @@
 Relativistic Dirac-Hartree-Fock
 """
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -38,7 +38,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
     n2c = dm0.shape[0] // 2
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -54,17 +54,17 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         h1ao = hcore_deriv(ia)
         de[k] += numpy.einsum('xij,ji->x', h1ao, dm0).real
 # large components
-        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
-        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
+        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
 # small components
         p0 += n2c
         p1 += n2c
-        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
-        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
+        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
     log.debug('gradients of electronic part')
     log.debug(str(de))
     return de
@@ -124,18 +124,10 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
 get_veff = get_coulomb_hf
 
 
-class Gradients(rhf_grad.Gradients):
-    '''Unrestricted Dirac-Hartree-Fock gradients'''
-    def __init__(self, scf_method):
-        rhf_grad.Gradients.__init__(self, scf_method)
-        if scf_method.with_ssss:
-            self.level = 'SSSS'
-        else:
-            #self.level = 'NOSS'
-            #self.level = 'LLLL'
-            raise NotImplementedError
-        self._keys = self._keys.union(['level'])
-
+class GradientsMixin(rhf_grad.GradientsMixin):
+    '''
+    Basic nuclear gradient functions for 4C relativistic methods
+    '''
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return get_hcore(mol)
@@ -148,7 +140,7 @@ class Gradients(rhf_grad.Gradients):
         c = lib.param.LIGHT_SPEED
         def hcore_deriv(atm_id):
             shl0, shl1, p0, p1 = aoslices[atm_id]
-            with mol.with_rinv_as_nucleus(atm_id):
+            with mol.with_rinv_at_nucleus(atm_id):
                 z = -mol.atom_charge(atm_id)
                 vn = z * mol.intor('int1e_iprinv_spinor', comp=3)
                 wn = z * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
@@ -165,15 +157,63 @@ class Gradients(rhf_grad.Gradients):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
 
+
+class Gradients(GradientsMixin):
+    '''Unrestricted Dirac-Hartree-Fock gradients'''
+    def __init__(self, scf_method):
+        GradientsMixin.__init__(self, scf_method)
+        if scf_method.with_ssss:
+            self.level = 'SSSS'
+        else:
+            #self.level = 'NOSS'
+            #self.level = 'LLLL'
+            raise NotImplementedError
+        self._keys = self._keys.union(['level'])
+
     def get_veff(self, mol, dm):
         return get_coulomb_hf(mol, dm, level=self.level)
 
-    def grad_elec(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  atmlst=None):
+    def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
-        return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
+        return make_rdm1e(mo_energy, mo_coeff, mo_occ)
+
+    grad_elec = grad_elec
+
+    def extra_force(self, atom_id, envs):
+        '''Hook for extra contributions in analytical gradients.
+
+        Contributions like the response of auxiliary basis in density fitting
+        method, the grid response in DFT numerical integration can be put in
+        this function.
+        '''
+        return 0
+
+    def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+        cput0 = (logger.process_clock(), logger.perf_counter())
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
+
+        de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
+        self.de = de + self.grad_nuc(atmlst=atmlst)
+        if self.mol.symmetry:
+            self.de = self.symmetrize(self.de, atmlst)
+        logger.timer(self, 'SCF gradients', *cput0)
+        self._finalize()
+        return self.de
+
+    as_scanner = rhf_grad.as_scanner
 
 Grad = Gradients
 

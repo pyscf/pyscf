@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ See also
 https://cms.mpi.univie.ac.at/vasp/vasp/CHGCAR_file.html
 '''
 
+import sys
 import collections
 import time
 import numpy
@@ -31,8 +32,10 @@ import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc.dft import numint, gen_grid
 from pyscf.tools import cubegen
+
+if sys.version_info >= (3,):
+    unicode = str
 
 RESOLUTION = cubegen.RESOLUTION
 BOX_MARGIN = cubegen.BOX_MARGIN
@@ -65,10 +68,10 @@ def density(cell, outfile, dm, nx=60, ny=60, nz=60, resolution=RESOLUTION):
         No return value. This function outputs a VASP chgcarlike file
         (with phase if desired)...it can be opened in VESTA or VMD or
         many other softwares
-    
+
     Examples:
 
-        >>> # generates the first MO from the list of mo_coefficents 
+        >>> # generates the first MO from the list of mo_coefficents
         >>> from pyscf.pbc import gto, scf
         >>> from pyscf.tools import chgcar
         >>> cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
@@ -121,10 +124,10 @@ def orbital(cell, outfile, coeff, nx=60, ny=60, nz=60, resolution=RESOLUTION):
         No return value. This function outputs a VASP chgcarlike file
         (with phase if desired)...it can be opened in VESTA or VMD or
         many other softwares
-    
+
     Examples:
 
-        >>> # generates the first MO from the list of mo_coefficents 
+        >>> # generates the first MO from the list of mo_coefficents
         >>> from pyscf.pbc import gto, scf
         >>> from pyscf.tools import chgcar
         >>> cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
@@ -230,10 +233,10 @@ class CHGCAR(cubegen.Cube):
             f.write('\n')
             f.write('%6.5s %6.5s %6.5s \n' % (self.nx,self.ny,self.nz))
             fmt = ' %14.8e '
-            for iz in range(self.nx):
+            for iz in range(self.nz):
                 for iy in range(self.ny):
                     f.write('\n')
-                    for ix in range(self.nz):
+                    for ix in range(self.nx):
                         f.write(fmt % field[ix,iy,iz])
 
     def read(self, chgcar_file):
@@ -241,7 +244,7 @@ class CHGCAR(cubegen.Cube):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf
+    from pyscf.pbc import scf
     from pyscf.tools import chgcar
     cell = gto.M(atom='H 0 0 0; H 0 0 1', a=numpy.eye(3)*3)
     mf = scf.RHF(cell).run()

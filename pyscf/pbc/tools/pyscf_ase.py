@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ class PySCF(Calculator):
 
         calc_molcell = self.molcell.copy()
         calc_molcell.atom = ase_atoms_to_pyscf(atoms)
-        calc_molcell.a = atoms.cell
+        calc_molcell.a = np.asarray(atoms.cell)
         calc_molcell.build(None,None)
         self.mf = self.mf_class(calc_molcell)
         for key in self.mf_dict:
@@ -91,5 +91,4 @@ class PySCF(Calculator):
 
 def make_kpts(cell, nks):
     raise DeprecationWarning('Use cell.make_kpts(nks) instead.')
-    return kpts
 

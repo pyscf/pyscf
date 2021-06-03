@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,15 +22,13 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
-import time
+
 import copy
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc import gto
-from pyscf.pbc.df import ft_ao
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
@@ -68,7 +66,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -149,7 +147,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+
+    if exxdiv is not None and exxdiv != 'ewald':
+        log.warn('GDF does not support exxdiv %s. '
+                 'exxdiv needs to be "ewald" or None', exxdiv)
+        raise RuntimeError('GDF does not support exxdiv %s' % exxdiv)
+
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -248,7 +252,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
 
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     if mydf._cderi is None or not mydf.has_kpts(kpts_band):
         if mydf._cderi is not None:
             log.warn('DF integrals for band k-points were not found %s. '
@@ -280,7 +284,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         buf2I = numpy.empty((mydf.blockdim*nao**2))
         max_memory *= .5
     log.debug1('max_memory = %d MB (%d in use)', max_memory, mem_now)
-    def contract_k(pLqR, pLqI):
+    def contract_k(pLqR, pLqI, sign):
         # K ~ 'iLj,lLk*,li->kj' + 'lLk*,iLj,li->kj'
         #:pLq = (LpqR + LpqI.reshape(-1,nao,nao)*1j).transpose(1,0,2)
         #:tmp = numpy.dot(dm, pLq.reshape(nao,-1))
@@ -290,7 +294,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
         if k_real:
             for i in range(nset):
                 lib.ddot(dmsR[i], pLqR.reshape(nao,-1), 1, tmpR)
-                lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), 1, vkR[i], 1)
+                lib.ddot(pLqR.reshape(-1,nao).T, tmpR.reshape(-1,nao), sign, vkR[i], 1)
         else:
             tmpI = numpy.ndarray((nao,nrow*nao), buffer=buf2I)
             for i in range(nset):
@@ -298,7 +302,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                        pLqI.reshape(nao,-1), 1, tmpR, tmpI, 0)
                 zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                        tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                       1, vkR[i], vkI[i], 1)
+                       sign, vkR[i], vkI[i], 1)
     pLqI = None
     thread_k = None
     for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
@@ -331,7 +335,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 if LpqI is not None:
                     pLqI[:] = LpqI.reshape(-1,nao,nao).transpose(1,0,2)
 
-            thread_k = lib.background_thread(contract_k, pLqR, pLqI)
+            thread_k = lib.background_thread(contract_k, pLqR, pLqI, sign)
             t1 = log.timer_debug1('        with_k', *t1)
         LpqR = LpqI = pLqR = pLqI = None
     if thread_k is not None:
@@ -376,7 +380,7 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     else:
         if getattr(kpts_band, 'ndim', None) == 1:
             v_kpts = v_kpts[:,0]
-# A temporary solution for issue 242. Looking for better way to sort out the
+# A temporary solution for issue 242. Looking for better ways to sort out the
 # dimension of the output
 # dm_kpts.shape     kpts.shape     nset
 # (Nao,Nao)         (1 ,3)         None

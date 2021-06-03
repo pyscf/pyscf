@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import time
+
 import tempfile
 import numpy
 import h5py
@@ -37,19 +37,20 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.df import fuse_auxcell
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
+from pyscf.pbc.df.df import fuse_auxcell, _round_off_to_odd_mesh
+from pyscf.pbc.df.df_jk import zdotCN
+from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, unique,
                                        KPT_DIFF_TOL)
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
+from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
@@ -113,7 +114,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #            j2ctag = 'CD'
 #        except scipy.linalg.LinAlgError as e:
 #
-# Abandon CD treatment for better numerical stablity
+# Abandon CD treatment for better numerical stability
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
                   uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
@@ -127,7 +128,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         j2ctag = 'eig'
         return j2c, j2c_negative, j2ctag
 
-    feri = h5py.File(cderi_file, 'a')
+    feri = h5py.File(cderi_file, 'w')
     feri['j3c-kptij'] = kptij_lst
     nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id, cholesky_j2c):  # kpt = kptj - kpti
@@ -171,21 +172,45 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         else:
             Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
         Gblksize = min(Gblksize, ngrids, 16384)
+
+        def load(aux_slice):
+            col0, col1 = aux_slice
+            j3cR = []
+            j3cI = []
+            for k, idx in enumerate(adapted_ji_idx):
+                v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                v = fuse(numpy.vstack(v))
+                if is_zero(kpt) and cell.dimension == 3:
+                    for i in numpy.where(vbar != 0)[0]:
+                        v[i] -= vbar[i] * ovlp[k][col0:col1]
+                j3cR.append(numpy.asarray(v.real, order='C'))
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                    j3cI.append(None)
+                else:
+                    j3cI.append(numpy.asarray(v.imag, order='C'))
+                v = None
+            return j3cR, j3cI
+
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-        def pw_contract(istep, sh_range, j3cR, j3cI):
-            bstart, bend, ncol = sh_range
+        cols = [sh_range[2] for sh_range in shranges]
+        locs = numpy.append(0, numpy.cumsum(cols))
+        tasks = zip(locs[:-1], locs[1:])
+        for istep, (j3cR, j3cI) in enumerate(lib.map_with_prefetch(load, tasks)):
+            bstart, bend, ncol = shranges[istep]
+            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
+                       istep+1, len(shranges), bstart, bend, ncol)
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
             else:
                 shls_slice = (bstart, bend, 0, cell.nbas)
 
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                            b, gxyz[p0:p1], Gvbase, kpt,
-                                            adapted_kptjs, out=buf)
+                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                           b, gxyz[p0:p1], Gvbase, kpt,
+                                           adapted_kptjs, out=buf)
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -214,29 +239,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 # low-dimension systems
                 if j2c_negative is not None:
                     feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
+            j3cR = j3cI = None
 
-        with lib.call_in_background(pw_contract) as compute:
-            col1 = 0
-            for istep, sh_range in enumerate(shranges):
-                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
-                           istep+1, len(shranges), *sh_range)
-                bstart, bend, ncol = sh_range
-                col0, col1 = col1, col1+ncol
-                j3cR = []
-                j3cI = []
-                for k, idx in enumerate(adapted_ji_idx):
-                    v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
-                    v = fuse(numpy.vstack(v))
-                    if is_zero(kpt) and cell.dimension == 3:
-                        for i in numpy.where(vbar != 0)[0]:
-                            v[i] -= vbar[i] * ovlp[k][col0:col1]
-                    j3cR.append(numpy.asarray(v.real, order='C'))
-                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                        j3cI.append(None)
-                    else:
-                        j3cI.append(numpy.asarray(v.imag, order='C'))
-                    v = None
-                compute(istep, sh_range, j3cR, j3cI)
         for ji in adapted_ji_idx:
             del(fswap['j3c-junk/%d'%ji])
 
@@ -312,7 +316,7 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     mesh = numpy.min((mesh, cell.mesh), axis=0)
     if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
         mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-    return mesh
+    return _round_off_to_odd_mesh(mesh)
 del(VALENCE_EXP)
 
 
@@ -353,6 +357,7 @@ class MDF(df.DF):
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
+        self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -388,7 +393,28 @@ class MDF(df.DF):
     # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
     # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv=None):
+               with_j=True, with_k=True, omega=None, exxdiv=None):
+        if omega is not None:  # J/K for RSH functionals
+            cell = self.cell
+            # * AFT is computationally more efficient than MDF if the Coulomb
+            #   attenuation tends to the long-range role (i.e. small omega).
+            # * Note: changing to AFT integrator may cause small difference to
+            #   the MDF integrator. If a very strict MDF result is desired,
+            #   we can disable this trick by setting
+            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            # * The sparse mesh is not appropriate for low dimensional systems
+            #   with infinity vacuum since the ERI may require large mesh to
+            #   sample density in vacuum.
+            if (omega < df.LONGRANGE_AFT_TURNOVER_THRESHOLD and
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+                mydf = aft.AFTDF(cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
+                               with_j, with_k, omega, exxdiv)
+
         if kpts is None:
             if numpy.all(self.kpts == 0):
                 # Gamma-point calculation by default

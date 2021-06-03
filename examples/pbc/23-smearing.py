@@ -16,7 +16,7 @@ cell.verbose = 4
 cell.build()
 
 #
-# Use scf.addons.smearing_ function to modify PBC (gamma-point or k-points)
+# Use scf.addons.smearing_ function to modify the PBC (gamma-point or k-points)
 # SCF object
 #
 nks = [2,1,1]

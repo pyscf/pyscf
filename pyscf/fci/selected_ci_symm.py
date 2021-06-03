@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #
 
 import ctypes
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -32,18 +33,18 @@ def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     if orbsym is None:
         return eri, link_index, numpy.array(norb, dtype=numpy.int32)
     orbsym = numpy.asarray(orbsym)
-# map irrep IDs of Dooh or Coov to D2h, C2v
-# see symm.basis.linearmole_symm_descent
+    # map irrep IDs of Dooh or Coov to D2h, C2v
+    # see symm.basis.linearmole_symm_descent
     orbsym = orbsym % 10
-# irrep of (ij| pair
-    trilirrep = (orbsym[:,None]^orbsym)[numpy.tril_indices(norb, offdiag)]
-# and the number of occurence for each irrep
+    # irrep of (ij| pair
+    trilirrep = (orbsym[:,None] ^ orbsym)[numpy.tril_indices(norb, offdiag)]
+    # and the number of occurence for each irrep
     dimirrep = numpy.array(numpy.bincount(trilirrep), dtype=numpy.int32)
-# we sort the irreps of (ij| pair, to group the pairs which have same irreps
-# "order" is irrep-id-sorted index. The (ij| paired is ordered that the
-# pair-id given by order[0] comes first in the sorted pair
-# "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
-# of the sorted pair
+    # we sort the irreps of (ij| pair, to group the pairs which have same irreps
+    # "order" is irrep-id-sorted index. The (ij| paired is ordered that the
+    # pair-id given by order[0] comes first in the sorted pair
+    # "rank" is a sorted "order". Given nth (ij| pair, it returns the place(rank)
+    # of the sorted pair
     order = numpy.asarray(trilirrep.argsort(), dtype=numpy.int32)
     rank = numpy.asarray(order.argsort(), dtype=numpy.int32)
     eri = lib.take_2d(eri, order, order)
@@ -167,11 +168,38 @@ class SelectedCI(selected_ci.SelectedCI):
         if orbsym is None:
             orbsym = self.orbsym
         if fcivec is None:
-            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym,
-                                                  wfnsym)
+            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+
+        elif wfnsym is None:
+            strsa, strsb = getattr(fcivec, '_strs', self._strs)
+            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
+                wfnsym = addons._guess_wfnsym(fcivec, strsa, strsb, orbsym)
+            else:
+                wfnsym = [addons._guess_wfnsym(c, strsa, strsb, orbsym)
+                          for c in fcivec]
+                if any(wfnsym[0] != x for x in wfnsym):
+                    warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
+                wfnsym = wfnsym[0]
+
         else:
             strsa, strsb = getattr(fcivec, '_strs', self._strs)
-            wfnsym = addons._guess_wfnsym(fcivec, strsa, strsb, orbsym)
+            na, nb = strsa.size, strsb.size
+
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            airreps = numpy.zeros(na, dtype=numpy.int32)
+            birreps = numpy.zeros(nb, dtype=numpy.int32)
+            for i, ir in enumerate(orbsym_in_d2h):
+                airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+                birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
+
+            wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, orbsym, wfnsym)
+            mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
+
+            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
+                fcivec = [fcivec]
+            if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
+                raise RuntimeError('Input wfnsym is not consistent with fcivec coefficients')
+
         verbose = kwargs.get('verbose', None)
         log = logger.new_logger(self, verbose)
         log.debug('Guessing CI wfn symmetry = %s', wfnsym)
@@ -213,7 +241,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
     from pyscf import symm
     from pyscf.fci import cistring
 

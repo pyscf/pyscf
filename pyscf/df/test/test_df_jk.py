@@ -178,10 +178,19 @@ class KnownValues(unittest.TestCase):
         mf = mf.density_fit()
         self.assertTrue(mf.with_df is not None)
 
-        self.assertRaises(RuntimeError, mf.density_fit, 'sto3g')
-
         mf = mf.newton().density_fit(auxbasis='sto3g')
         self.assertEqual(mf.with_df.auxbasis, 'sto3g')
+
+    def test_get_j(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+
+        mf = scf.RHF(mol).density_fit(auxbasis='weigend')
+        vj0 = mf.get_j(mol, dms)
+        vj1 = mf.get_jk(mol, dms)[0]
+        self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 12)
+        self.assertAlmostEqual(lib.finger(vj0), -194.15910890730052, 9)
 
 
 if __name__ == "__main__":

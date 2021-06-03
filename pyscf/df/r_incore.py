@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
 import numpy
 from pyscf import gto
 from pyscf.df import incore
@@ -43,8 +42,8 @@ def aux_e1(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
 def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
                  int3c='int3c2e_spinor', aosym='s1', int2c='int2c2e_sph', comp=1,
                  verbose=0):
-    return incore.cholesky_eri(mol, auxbasis, auxmol, int3c, aosym, int2c,
-                               comp, verbose, aux_e2)
+    return incore.cholesky_eri_debug(mol, auxbasis, auxmol, int3c, aosym, int2c,
+                                     comp, verbose, aux_e2)
 
 
 if __name__ == '__main__':
@@ -70,8 +69,8 @@ if __name__ == '__main__':
         vj = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
         vk = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
 
-        rho =(numpy.dot(cderi[0], dm[:n2c,:n2c].T.reshape(-1))
-            + numpy.dot(cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c2**2))
+        rho =(numpy.dot(cderi[0], dm[:n2c,:n2c].T.reshape(-1)) +
+              numpy.dot(cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c2**2))
         vj[:n2c,:n2c] = numpy.dot(rho, cderi[0]).reshape(n2c,n2c)
         vj[n2c:,n2c:] = numpy.dot(rho, cderi[1]).reshape(n2c,n2c) * c2**2
 

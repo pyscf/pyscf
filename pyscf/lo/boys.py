@@ -20,15 +20,14 @@
 Foster-Boys localization
 '''
 
-import sys
-import time
+
 import numpy
 from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.soscf import ciah
-from pyscf.lo import orth
+from pyscf.lo import orth, cholesky_mos
 from pyscf import __config__
 
 
@@ -43,7 +42,7 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         localizer.check_sanity()
     localizer.dump_flags()
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(localizer, verbose=verbose)
 
     if localizer.conv_tol_grad is None:
@@ -126,6 +125,59 @@ def atomic_init_guess(mol, mo_coeff):
     return lib.dot(u, vh).conj().T
 
 class Boys(ciah.CIAHOptimizer):
+    r'''
+    The Foster-Boys localization optimizer that maximizes the orbital dipole
+
+    \sum_i | <i| r |i> |^2
+
+    Args:
+        mol : Mole object
+
+    Kwargs:
+        mo_coeff : size (N,N) np.array
+            The orbital space to localize for Boys localization.
+            When initializing the localization optimizer ``bopt = Boys(mo_coeff)``,
+
+            Note these orbitals ``mo_coeff`` may or may not be used as initial
+            guess, depending on the attribute ``.init_guess`` . If ``.init_guess``
+            is set to None, the ``mo_coeff`` will be used as initial guess. If
+            ``.init_guess`` is 'atomic', a few atomic orbitals will be
+            constructed inside the space of the input orbitals and the atomic
+            orbitals will be used as initial guess.
+
+            Note when calling .kernel(orb) method with a set of orbitals as
+            argument, the orbitals will be used as initial guess regardless of
+            the value of the attributes .mo_coeff and .init_guess.
+
+    Attributes for Boys class:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`.
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`.
+        conv_tol : float
+            Converge threshold.  Default 1e-6
+        conv_tol_grad : float
+            Converge threshold for orbital rotation gradients.  Default 1e-3
+        max_cycle : int
+            The max. number of macro iterations. Default 100
+        max_iters : int
+            The max. number of iterations in each macro iteration. Default 20
+        max_stepsize : float
+            The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
+            Default 0.03.
+        init_guess : str or None
+            Initial guess for optimization. If set to None, orbitals defined
+            by the attribute .mo_coeff will be used as initial guess. If set
+            to 'atomic', atomic orbitals will be used as initial guess. If set
+            to 'cholesky', then cholesky orbitals will be used as the initial guess.
+            Default is 'atomic'.
+
+    Saved results
+
+        mo_coeff : ndarray
+            Localized orbitals
+
+    '''
 
     conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
     conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
@@ -197,6 +249,7 @@ class Boys(ciah.CIAHOptimizer):
         #:h = h[idx][:,idx[0],idx[1]]
 
         g0 = g0 + g0.conj().T
+
         def h_op(x):
             x = self.unpack_uniq_var(x)
             norb = x.shape[0]
@@ -254,6 +307,10 @@ class Boys(ciah.CIAHOptimizer):
         nmo = self.mo_coeff.shape[1]
         if isinstance(key, str) and key.lower() == 'atomic':
             u0 = atomic_init_guess(self.mol, self.mo_coeff)
+        elif isinstance(key, str) and key.lower().startswith('cho'):
+            mo_init = cholesky_mos(self.mo_coeff)
+            S = self.mol.intor_symmetric('int1e_ovlp')
+            u0 = numpy.linalg.multi_dot([self.mo_coeff.T, S, mo_init])
         else:
             u0 = numpy.eye(nmo)
         if (isinstance(key, str) and key.lower().startswith('rand')

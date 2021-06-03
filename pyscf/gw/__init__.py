@@ -12,4 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.gw.gw import GW
+'''
+G0W0 approximation
+'''
+
+#from pyscf.gw.gw import GW
+from pyscf.gw import gw_ac
+from pyscf.gw import ugw_ac
+from pyscf.gw import gw_cd
+from pyscf.gw import gw_exact
+from pyscf import scf
+
+def GW(mf, freq_int='ac', frozen=None, tdmf=None):
+    if isinstance(mf, scf.ghf.GHF):
+        raise RuntimeError('GW does not support GHF or GKS methods.')
+    if freq_int.lower() == 'ac':
+        if isinstance(mf, scf.uhf.UHF):
+            return ugw_ac.GWAC(mf, frozen)
+        else:
+            return gw_ac.GWAC(mf, frozen)
+    elif freq_int.lower() == 'cd':
+        if isinstance(mf, scf.uhf.UHF):
+            raise RuntimeError('GWCD does not support UHF or UKS methods.')
+        else:
+            return gw_cd.GWCD(mf, frozen)
+    elif freq_int.lower() == 'exact':
+        if isinstance(mf, scf.uhf.UHF):
+            raise RuntimeError('GWExact does not support UHF or UKS methods.')
+        else:
+            return gw_exact.GWExact(mf, frozen, tdmf)
+    else:
+        raise RuntimeError("GW frequency integration method %s not recognized. "
+                           "Options are 'ac', 'cd', and 'exact'."%(freq_int))
+

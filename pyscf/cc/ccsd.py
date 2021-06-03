@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ RCCSD for real integrals
 (ij|kl) = (ji|kl) = (kl|ij) = ...
 '''
 
-import time
+
 import ctypes
 from functools import reduce
 import numpy
@@ -51,10 +51,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
-    cput1 = cput0 = (time.clock(), time.time())
+    cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
-    log.info('Init E(CCSD) = %.15g', eccsd)
+    log.info('Init E_corr(CCSD) = %.15g', eccsd)
 
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
@@ -67,8 +67,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
-                                  mycc.amplitudes_to_vector(t1, t2))
+        tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
+        tmpvec -= mycc.amplitudes_to_vector(t1, t2)
+        normt = numpy.linalg.norm(tmpvec)
+        tmpvec = None
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new
@@ -78,7 +80,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
-        log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
+        log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
@@ -93,10 +95,9 @@ def update_amps(mycc, t1, t2, eris):
         raise NotImplementedError
     assert(isinstance(eris, _ChemistsERIs))
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-    nov = nocc*nvir
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
@@ -123,13 +124,14 @@ def update_amps(mycc, t1, t2, eris):
     fwVOov, fwVooV = _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('ovvv', *time1)
 
+    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
+
     unit = nocc**2*nvir*7 + nocc**3 + nocc*nvir**2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, mycc.max_memory - mem_now)
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-nocc**4)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-
-    woooo = numpy.asarray(eris.oooo).transpose(0,2,1,3).copy()
 
     for p0, p1 in lib.prange(0, nvir, blksize):
         wVOov = fwVOov[p0:p1]
@@ -235,7 +237,7 @@ def update_amps(mycc, t1, t2, eris):
                 #:t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
                 update_t2(q0, q1, theta)
                 theta = None
-        eris_VOov = wVOov = wVooV = update_wVOov = update_t2new = None
+        eris_VOov = wVOov = wVooV = update_wVOov = None
         time1 = log.timer_debug1('voov [%d:%d]'%(p0, p1), *time1)
     fwVOov = fwVooV = fswap = None
 
@@ -273,7 +275,7 @@ def update_amps(mycc, t1, t2, eris):
 
 
 def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
-    time1 = time.clock(), time.time()
+    time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
     nvir_pair = nvir * (nvir+1) // 2
@@ -285,20 +287,29 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     wooVV = numpy.zeros((nocc,nocc*nvir_pair))
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*2.5 + nocc**2*nvir + 2
+    unit = nocc*nvir**2*3 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
+    if not mycc.direct:
+        unit = nocc*nvir**2*3 + nocc**2*nvir + 2 + nocc*nvir**2 + nocc*nvir
+        blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size-nocc**2*nvir)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
-    def load_ovvv(p0, p1):
-        if p0 < p1:
+
+    def load_ovvv(buf, p0):
+        if p0 < nvir:
+            p1 = min(nvir, p0+blksize)
             buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
-    buf = numpy.empty((blksize,nocc,nvir_pair))
     with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
-        load_ovvv(0, blksize)
+        buf = numpy.empty((blksize,nocc,nvir_pair))
+        buf_prefetch = numpy.empty((blksize,nocc,nvir_pair))
+
+        load_ovvv(buf_prefetch, 0)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
-            prefetch(p1, min(nvir, p1+blksize))
+            buf, buf_prefetch = buf_prefetch, buf
+            prefetch(buf_prefetch, p1)
+
+            eris_vovv = buf[:p1-p0]
 
             #:wooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
             lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
@@ -317,7 +328,6 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
                     tmp = lib.einsum('jcd,cdbk->jbk', tau, vvvo)
                     t2new[i] -= lib.einsum('ka,jbk->jab', t1, tmp)
                     tau = tmp = None
-                eris_vvvo = None
 
             wVOov[p0:p1] = lib.einsum('biac,jc->bija', eris_vovv, t1)
 
@@ -366,7 +376,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
     Using symmetry t2[ijab] = t2[jiba] and Ht2[ijab] = Ht2[jiba], compute the
     lower triangular part of  Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if with_ovvv is None:
         with_ovvv = mycc.direct
@@ -418,7 +428,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     without using symmetry t2[ijab] = t2[jiba] in t2 or Ht2
     '''
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if t1 is None:
         tau = t2
@@ -476,7 +486,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         return numpy.zeros_like(t2)
 
     _dgemm = lib.numpy_helper._dgemm
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -550,15 +560,29 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
+
+        if mycc.async_io:
+            fmap = lib.map_with_prefetch
+            unit += nvira*nvir_pair
+        else:
+            fmap = map
+
         blksize = numpy.sqrt(max(BLKMIN**2, max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
-        tril2sq = lib.square_mat_in_trilu_indices(nvira)
-        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
-        def block_contract(i0, i1):
+        def load(v_slice):
+            i0, i1 = v_slice
             off0 = i0*(i0+1)//2
             off1 = i1*(i1+1)//2
-            wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
+            return numpy.asarray(vvvv[off0:off1], order='C')
+
+        tril2sq = lib.square_mat_in_trilu_indices(nvira)
+        loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
+
+        slices = [(i0, i1) for i0, i1 in lib.prange(0, nvira, blksize)]
+        for istep, wwbuf in enumerate(fmap(load, lib.prange(0, nvira, blksize))):
+            i0, i1 = slices[istep]
+            off0 = i0*(i0+1)//2
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
                 tmp = numpy.ndarray((i1-i0,nvirb,j1-j0,nvirb), buffer=loadbuf)
@@ -567,13 +591,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
                                        (ctypes.c_int*4)(i0, i1, j0, j1),
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
-
-        with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
-            readbuf = numpy.empty((blksize,nvira,nvir_pair))
-            readbuf1 = numpy.empty_like(readbuf)
-            for p0, p1 in lib.prange(0, nvira, blksize):
-                bcontract(p0, p1)
-                time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
+            wwbuf = None
+            time0 = log.timer_debug1('vvvv [%d:%d]'%(i0,i1), *time0)
     return Ht2.reshape(t2.shape)
 
 def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
@@ -588,7 +607,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert(vvvv is not None)
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
@@ -712,6 +731,35 @@ def restore_from_diis_(mycc, diis_file, inplace=True):
         mycc.diis = adiis
     return mycc
 
+def get_t1_diagnostic(t1):
+    '''Returns the t1 amplitude norm, normalized by number of correlated electrons.'''
+    nelectron = 2 * t1.shape[0]
+    return numpy.sqrt(numpy.linalg.norm(t1)**2 / nelectron)
+
+def get_d1_diagnostic(t1):
+    '''D1 diagnostic given in
+
+        Janssen, et. al Chem. Phys. Lett. 290 (1998) 423
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d1norm_ij = f(numpy.linalg.eigh(numpy.einsum('ia,ja->ij',t1,t1)))
+    d1norm_ab = f(numpy.linalg.eigh(numpy.einsum('ia,ib->ab',t1,t1)))
+    d1norm = max(d1norm_ij, d1norm_ab)
+    return d1norm
+
+def get_d2_diagnostic(t2):
+    '''D2 diagnostic given in
+
+        Nielsen, et. al Chem. Phys. Lett. 310 (1999) 568
+
+    Note: This is currently only defined in the literature for restricted
+    closed-shell systems.
+    '''
+    f = lambda x: numpy.sqrt(numpy.sort(numpy.abs(x[0])))[-1]
+    d2norm_ij = f(numpy.linalg.eigh(numpy.einsum('ikab,jkab->ij',t2,t2)))
+    d2norm_ab = f(numpy.linalg.eigh(numpy.einsum('ijac,ijbc->ab',t2,t2)))
+    d2norm = max(d2norm_ij, d2norm_ab)
+    return d2norm
 
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
@@ -755,9 +803,10 @@ def as_scanner(cc):
             else:
                 last_size = 0
 
+            self.reset(mol)
+
             mf_scanner = self._scf
             mf_scanner(mol)
-            self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
             if last_size != self.vector_size():
@@ -838,8 +887,7 @@ class CCSD(lib.StreamObject):
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        from pyscf import gto
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
         if isinstance(mf, gto.Mole):
             raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.10.
@@ -850,12 +898,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
                                'CCSD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
-                               'the code below:\n'
-                               '    mf_hf = scf.RHF(mol)\n'
+                               'the code:\n'
+                               '    mf_hf = mol.HF()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
-        if mo_coeff  is None: mo_coeff  = mf.mo_coeff
-        if mo_occ    is None: mo_occ    = mf.mo_occ
+        if mo_coeff is None: mo_coeff = mf.mo_coeff
+        if mo_occ is None: mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -874,6 +922,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged = False
         self.converged_lambda = False
         self.emp2 = None
+        self.e_hf = None
         self.e_corr = None
         self.t1 = None
         self.t2 = None
@@ -895,7 +944,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_tot(self):
-        return self.e_corr + self._scf.e_tot
+        return (self.e_hf or self._scf.e_tot) + self.e_corr
 
     @property
     def nocc(self):
@@ -911,6 +960,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def nmo(self, n):
         self._nmo = n
 
+    def reset(self, mol=None):
+        if mol is not None:
+            self.mol = mol
+        self._scf.reset(mol)
+        return self
+
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
@@ -921,7 +976,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
-        if self.frozen is not 0:
+        if self.frozen is not None:
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_cycle = %d', self.max_cycle)
         log.info('direct = %d', self.direct)
@@ -937,14 +992,14 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.__class__ == CCSD):
             nocc = self.nocc
             nvir = self.nmo - self.nocc
-            flops = _fp(nocc, nvir)
+            flops = _flops(nocc, nvir)
             log.debug1('total FLOPs %s', flops)
         return self
 
     def get_init_guess(self, eris=None):
         return self.init_amps(eris)[1:]
     def init_amps(self, eris=None):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         mo_e = eris.mo_energy
@@ -965,7 +1020,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
         self.emp2 = emp2.real
 
-        logger.info(self, 'Init t2, MP2 energy = %.15g', emp2.real)
+        e_hf = self.e_hf or eris.e_hf
+
+        logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
+                    e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -978,9 +1036,17 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def ccsd(self, t1=None, t2=None, eris=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
+
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+
+        self.e_hf = getattr(eris, 'e_hf', None)
+        if self.e_hf is None:
+            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -1073,7 +1139,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1085,7 +1151,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:
@@ -1154,9 +1220,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if not self.chkfile:
             return self
         if t1_t2 is None: t1_t2 = self.t1, self.t2
-        if frozen is None: frozen = self.frozen
-
         t1, t2 = t1_t2
+
+        if frozen is None: frozen = self.frozen
+        # "None" cannot be serialized by the chkfile module
+        if frozen is None:
+            frozen = 0
+
         cc_chk = {'e_corr': self.e_corr,
                   't1': t1,
                   't2': t2,
@@ -1184,11 +1254,20 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.grad import ccsd
         return ccsd.Gradients(self)
 
-CC = RCCSD = CCSD
+    def get_t1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_t1_diagnostic(t1)
 
-from pyscf import scf
-scf.hf.RHF.CCSD = lib.class_as_method(CCSD)
-scf.rohf.ROHF.CCSD = None
+    def get_d1_diagnostic(self, t1=None):
+        if t1 is None: t1 = self.t1
+        return get_d1_diagnostic(t1)
+
+    def get_d2_diagnostic(self, t2=None):
+        if t2 is None: t2 = self.t2
+        return get_d2_diagnostic(t2)
+
+
+CC = RCCSD = CCSD
 
 
 class _ChemistsERIs:
@@ -1198,6 +1277,7 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
+        self.e_hf = None
 
         self.oooo = None
         self.ovoo = None
@@ -1211,10 +1291,13 @@ class _ChemistsERIs:
         if mo_coeff is None:
             mo_coeff = mycc.mo_coeff
         self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+
+# Note: Recomputed fock matrix and HF energy since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_fock(dm=dm)
+        vhf = mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
@@ -1259,7 +1342,7 @@ class _ChemistsERIs:
         raise NotImplementedError
 
 def _make_eris_incore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
@@ -1276,6 +1359,10 @@ def _make_eris_incore(mycc, mo_coeff=None):
     #:ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
     #:eris.ovvv = lib.pack_tril(ovvv.reshape(-1,nvir,nvir)).reshape(nocc,nvir,-1)
     #:eris.vvvv = ao2mo.restore(4, eri1[nocc:,nocc:,nocc:,nocc:], nvir)
+
+    if eri1.ndim == 4:
+        eri1 = ao2mo.restore(4, eri1, nmo)
+
     nvir_pair = nvir * (nvir+1) // 2
     eris.oooo = numpy.empty((nocc,nocc,nocc,nocc))
     eris.ovoo = numpy.empty((nocc,nvir,nocc,nocc))
@@ -1312,7 +1399,7 @@ def _make_eris_incore(mycc, mo_coeff=None):
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
@@ -1346,7 +1433,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    cput1 = time.clock(), time.time()
+    cput1 = logger.process_clock(), logger.perf_counter()
     if not mycc.direct:
         max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
         eris.feri2 = lib.H5TmpFile()
@@ -1370,28 +1457,30 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     fload = ao2mo.outcore._load_from_h5g
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
-    def prefetch(p0, p1, rowmax):
-        p0, p1 = p1, min(rowmax, p1+blksize)
-        if p0 < p1:
+    def load(buf_prefetch, p0, rowmax):
+        if p0 < rowmax:
+            p1 = min(rowmax, p0+blksize)
             fload(fswap['0'], p0*nocc, p1*nocc, buf_prefetch)
 
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
-        fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
+    with lib.call_in_background(load, sync=not mycc.async_io) as prefetch:
+        prefetch(buf_prefetch, 0, nocc)
         for p0, p1 in lib.prange(0, nocc, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(p0, p1, nocc)
+            prefetch(buf_prefetch, p1, nocc)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
         cput2 = log.timer_debug1('transforming oopp', *cput2)
 
-        fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
+        prefetch(buf_prefetch, nocc, nmo)
         for p0, p1 in lib.prange(0, nvir, blksize):
-            nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(nocc+p0, nocc+p1, nmo)
+            prefetch(buf_prefetch, nocc+p1, nmo)
+
+            nrow = (p1 - p0) * nocc
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
@@ -1402,19 +1491,16 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     return eris
 
 def _make_df_eris_outcore(mycc, mo_coeff=None):
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mycc.stdout, mycc.verbose)
     eris = _ChemistsERIs()
     eris._common_init_(mycc, mo_coeff)
 
-    mol = mycc.mol
     mo_coeff = numpy.asarray(eris.mo_coeff, order='F')
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
     nvir_pair = nvir*(nvir+1)//2
-    orbo = mo_coeff[:,:nocc]
-    orbv = mo_coeff[:,nocc:]
 
     naux = mycc._scf.with_df.get_naoaux()
     Loo = numpy.empty((naux,nocc,nocc))
@@ -1453,7 +1539,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
-def _fp(nocc, nvir):
+def _flops(nocc, nvir):
     '''Total float points'''
     return (nocc**3*nvir**2*2 + nocc**2*nvir**3*2 +     # Ftilde
             nocc**4*nvir*2 * 2 + nocc**4*nvir**2*2 +    # Wijkl
@@ -1470,7 +1556,6 @@ def _fp(nocc, nvir):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
 
     mol = gto.Mole()

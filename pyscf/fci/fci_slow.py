@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ def contract_1e(f1e, fcivec, norb, nelec):
 
 
 def contract_2e(eri, fcivec, norb, nelec, opt=None):
+    '''Compute E_{pq}E_{rs}|CI>'''
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -92,35 +93,35 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
 
     for addr, s in enumerate(strsa):
         for i in range(norb):
-            if s & (1<<i):
+            if s & (1 << i):
                 t1a[i,addr] += fcivec[addr]
     for addr, s in enumerate(strsb):
         for i in range(norb):
-            if s & (1<<i):
+            if s & (1 << i):
                 t1b[i,:,addr] += fcivec[:,addr]
 
     if u_aa != 0:
         # u * n_alpha^+ n_alpha
         for addr, s in enumerate(strsa):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[addr] += t1a[i,addr] * u_aa
     if u_ab != 0:
         # u * n_alpha^+ n_beta
         for addr, s in enumerate(strsa):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[addr] += t1b[i,addr] * u_ab
         # u * n_beta^+ n_alpha
         for addr, s in enumerate(strsb):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[:,addr] += t1a[i,:,addr] * u_ab
     if u_bb != 0:
         # u * n_beta^+ n_beta
         for addr, s in enumerate(strsb):
             for i in range(norb):
-                if s & (1<<i):
+                if s & (1 << i):
                     fcinew[:,addr] += t1b[i,:,addr] * u_bb
     return fcinew
 
@@ -139,7 +140,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     return h2e * fac
 
 
-def make_hdiag(h1e, g2e, norb, nelec, opt=None):
+def make_hdiag(h1e, eri, norb, nelec, opt=None):
     if isinstance(nelec, (int, numpy.integer)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -148,9 +149,9 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
 
     occslista = cistring._gen_occslst(range(norb), neleca)
     occslistb = cistring._gen_occslst(range(norb), nelecb)
-    g2e = ao2mo.restore(1, g2e, norb)
-    diagj = numpy.einsum('iijj->ij',g2e)
-    diagk = numpy.einsum('ijji->ij',g2e)
+    eri = ao2mo.restore(1, eri, norb)
+    diagj = numpy.einsum('iijj->ij', eri)
+    diagk = numpy.einsum('ijji->ij', eri)
     hdiag = []
     for aocc in occslista:
         for bocc in occslistb:
@@ -161,8 +162,8 @@ def make_hdiag(h1e, g2e, norb, nelec, opt=None):
             hdiag.append(e1 + e2*.5)
     return numpy.array(hdiag)
 
-def kernel(h1e, g2e, norb, nelec, ecore=0):
-    h2e = absorb_h1e(h1e, g2e, norb, nelec, .5)
+def kernel(h1e, eri, norb, nelec, ecore=0):
+    h2e = absorb_h1e(h1e, eri, norb, nelec, .5)
 
     na = cistring.num_strings(norb, nelec//2)
     ci0 = numpy.zeros((na,na))
@@ -171,7 +172,7 @@ def kernel(h1e, g2e, norb, nelec, ecore=0):
     def hop(c):
         hc = contract_2e(h2e, c, norb, nelec)
         return hc.reshape(-1)
-    hdiag = make_hdiag(h1e, g2e, norb, nelec)
+    hdiag = make_hdiag(h1e, eri, norb, nelec)
     precond = lambda x, e, *args: x/(hdiag-e+1e-4)
     e, c = lib.davidson(hop, ci0.reshape(-1), precond)
     return e+ecore
@@ -233,7 +234,6 @@ if __name__ == '__main__':
     from functools import reduce
     from pyscf import gto
     from pyscf import scf
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0

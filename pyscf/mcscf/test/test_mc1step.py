@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -146,7 +146,7 @@ class KnownValues(unittest.TestCase):
         mc1 = mcscf.CASSCF(m, 4, 4).state_average_((0.5,0.5))
         mc1.natorb = True
         mc1.kernel()
-        self.assertAlmostEqual(numpy.dot(mc1.e_tot, [.5,.5]), -108.80445340617777, 8)
+        self.assertAlmostEqual(numpy.dot(mc1.e_states, [.5,.5]), -108.80445340617777, 8)
         mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
         self.assertAlmostEqual(lib.finger(mo_occ), 1.8748844779923917, 4)
         dm1 = mc1.analyze()
@@ -271,14 +271,14 @@ class KnownValues(unittest.TestCase):
         mcdic = lib.chkfile.load(mc0.chkfile, 'mcscf')
         mcscf.chkfile.dump_mcscf(mc0, **mcdic)
 
-    def test_state_average(self):
+    def test_state_average1(self):
         mc = mcscf.CASSCF(m, 4, 4)
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
         mc.run()
-        self.assertAlmostEqual(mc.e_tot[0], -108.7513784239438, 7)
-        self.assertAlmostEqual(mc.e_tot[1], -108.6919327057737, 7)
-        self.assertAlmostEqual(mc.e_tot[2], -108.6919327057737, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 6)
+        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 6)
+        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 6)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
@@ -287,9 +287,9 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([0.5, 0.25, 0.25])
         mc.fcisolver.spin = 2
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_tot[0], -108.7513784239438, 7)
-        self.assertAlmostEqual(mc.e_tot[1], -108.6919327057737, 7)
-        self.assertAlmostEqual(mc.e_tot[2], -108.6919327057737, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7513784239438, 6)
+        self.assertAlmostEqual(mc.e_states[1], -108.6919327057737, 6)
+        self.assertAlmostEqual(mc.e_states[2], -108.6919327057737, 6)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         # Second and third root are degenerated
         #self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
@@ -300,15 +300,15 @@ class KnownValues(unittest.TestCase):
         cis1.spin = 2
         mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [.5, .5])
         mc.run()
-        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 7)
-        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
+        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
 
         mc.analyze()
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_tot[0], -108.7506795311190, 7)
-        self.assertAlmostEqual(mc.e_tot[1], -108.8582272809495, 7)
+        self.assertAlmostEqual(mc.e_states[0], -108.7506795311190, 5)
+        self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 

@@ -22,7 +22,7 @@ orbitals)
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -88,7 +88,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start uhf-based CASCI')
 
     ncas = casci.ncas
@@ -185,7 +185,7 @@ class UCASCI(casci.CASCI):
         nmo = self.mo_coeff[0].shape[1]
         nvir_alpha = nmo - self.ncore[0] - self.ncas
         nvir_beta  = nmo - self.ncore[1]  - self.ncas
-        log.info('CAS ((%de+%de), %do), ncore = [%d+%d], nvir = [%d+%d]', \
+        log.info('CAS ((%de+%de), %do), ncore = [%d+%d], nvir = [%d+%d]',
                  self.nelecas[0], self.nelecas[1], self.ncas,
                  self.ncore[0], self.ncore[1], nvir_alpha, nvir_beta)
         log.info('max_memory %d (MB)', self.max_memory)

@@ -21,11 +21,11 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 1-step optimization algorithm
 '''
 
-import time
+import sys
+
 import copy
 from functools import reduce
 import numpy
-import scipy.linalg
 import pyscf.gto
 import pyscf.scf
 from pyscf.lib import logger
@@ -55,24 +55,27 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
 
     # part2, part3
     vhf_c = eris.vhf_c
-    vhf_ca = (vhf_c[0] + numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1s[0]) \
-                       - numpy.einsum('upqv,uv->pq', eris.appa, casdm1s[0]) \
-                       + numpy.einsum('uvpq,uv->pq', eris.AApp, casdm1s[1]),
-              vhf_c[1] + numpy.einsum('uvpq,uv->pq', eris.aaPP, casdm1s[0]) \
-                       + numpy.einsum('uvpq,uv->pq', eris.AAPP, casdm1s[1]) \
-                       - numpy.einsum('upqv,uv->pq', eris.APPA, casdm1s[1]),)
+    vhf_ca = ((vhf_c[0] +
+               numpy.einsum('uvpq,uv->pq', eris.aapp, casdm1s[0]) -
+               numpy.einsum('upqv,uv->pq', eris.appa, casdm1s[0]) +
+               numpy.einsum('uvpq,uv->pq', eris.AApp, casdm1s[1])),
+              (vhf_c[1] +
+               numpy.einsum('uvpq,uv->pq', eris.aaPP, casdm1s[0]) +
+               numpy.einsum('uvpq,uv->pq', eris.AAPP, casdm1s[1]) -
+               numpy.einsum('upqv,uv->pq', eris.APPA, casdm1s[1])),)
 
     ################# gradient #################
-    hdm2 = [ numpy.einsum('tuvw,vwpq->tupq', casdm2s[0], eris.aapp) \
-           + numpy.einsum('tuvw,vwpq->tupq', casdm2s[1], eris.AApp),
-             numpy.einsum('vwtu,vwpq->tupq', casdm2s[1], eris.aaPP) \
-           + numpy.einsum('tuvw,vwpq->tupq', casdm2s[2], eris.AAPP)]
+    hdm2 = [(numpy.einsum('tuvw,vwpq->tupq', casdm2s[0], eris.aapp) +
+             numpy.einsum('tuvw,vwpq->tupq', casdm2s[1], eris.AApp)),
+            (numpy.einsum('vwtu,vwpq->tupq', casdm2s[1], eris.aaPP) +
+             numpy.einsum('tuvw,vwpq->tupq', casdm2s[2], eris.AAPP))]
 
     hcore = casscf.get_hcore()
     h1e_mo = (reduce(numpy.dot, (mo[0].T, hcore[0], mo[0])),
               reduce(numpy.dot, (mo[1].T, hcore[1], mo[1])))
     g = [numpy.dot(h1e_mo[0], dm1[0]),
          numpy.dot(h1e_mo[1], dm1[1])]
+
     def gpart(m):
         g[m][:,:ncore[m]] += vhf_ca[m][:,:ncore[m]]
         g[m][:,ncore[m]:nocc[m]] += \
@@ -201,6 +204,7 @@ def gen_g_hop(casscf, mo, u, casdm1s, casdm2s, eris):
         # part2
         x2a[:ncore[0]] += numpy.dot(xa_cu, vhf_ca[0][ncore[0]:])
         x2b[:ncore[1]] += numpy.dot(xb_cu, vhf_ca[1][ncore[1]:])
+
         # part3
         def fpart3(m, x2, x_av, x_ac):
             x2[ncore[m]:nocc[m]] += reduce(numpy.dot, (casdm1s[m], x_av, vhf_c[m][nocc[m]:])) \
@@ -233,7 +237,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 1-step CASSCF')
 
     mo = mo_coeff
@@ -279,8 +283,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 break
 
             casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_cas, eris)
-            norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
-                     + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
+            norm_ddm = (numpy.linalg.norm(casdm1[0] - casdm1_last[0]) +
+                        numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
             t3m = log.timer('update CAS DM', *t3m)
             if isinstance(gci, numpy.ndarray):
                 norm_gci = numpy.linalg.norm(gci)
@@ -314,8 +318,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
 
         e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas, casscf.nelecas)
-        norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
-                 + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
+        norm_ddm = (numpy.linalg.norm(casdm1[0] - casdm1_last[0]) +
+                    numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
         casdm1_last = casdm1
         log.timer('CASCI solver', *t2m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
@@ -424,7 +428,7 @@ class UCASSCF(ucasci.UCASCI):
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
-        log.info('augmented hessian level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian level shift = %g', self.ah_level_shift)
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
@@ -638,7 +642,6 @@ class UCASSCF(ucasci.UCASCI):
 
     def approx_cas_integral(self, mo, u, eris):
         ncas = self.ncas
-        nelecas = self.nelecas
         ncore = self.ncore
         nocc = (ncas + ncore[0], ncas + ncore[1])
         nmo = mo[0].shape[1]
@@ -660,19 +663,19 @@ class UCASSCF(ucasci.UCASCI):
         apca = eris.appa[:,:,:ncore[0],:]
         APCA = eris.APPA[:,:,:ncore[1],:]
         jka = numpy.einsum('iup->up', eris.jkcpp[:,:nocc[0]]) + eris.jC_pp[:nocc[0]]
-        v1a =(numpy.einsum('up,pv->uv', jka[ncore[0]:], rmat[0][:,ncore[0]:nocc[0]])
-            + numpy.einsum('uvpi,pi->uv', aapc-apca.transpose(0,3,1,2), rmat[0][:,:ncore[0]])
-            + numpy.einsum('uvpi,pi->uv', aaPC, rmat[1][:,:ncore[1]]))
+        v1a = (numpy.einsum('up,pv->uv', jka[ncore[0]:], rmat[0][:,ncore[0]:nocc[0]]) +
+               numpy.einsum('uvpi,pi->uv', aapc-apca.transpose(0,3,1,2), rmat[0][:,:ncore[0]]) +
+               numpy.einsum('uvpi,pi->uv', aaPC, rmat[1][:,:ncore[1]]))
         jkb = numpy.einsum('iup->up', eris.jkcPP[:,:nocc[1]]) + eris.jc_PP[:nocc[1]]
-        v1b =(numpy.einsum('up,pv->uv', jkb[ncore[1]:], rmat[1][:,ncore[1]:nocc[1]])
-            + numpy.einsum('uvpi,pi->uv', AApc, rmat[0][:,:ncore[0]])
-            + numpy.einsum('uvpi,pi->uv', AAPC-APCA.transpose(0,3,1,2), rmat[1][:,:ncore[1]]))
-        h1casa =(h1effa[ncore[0]:,ncore[0]:] + (v1a + v1a.T)
-               + reduce(numpy.dot, (mocas[0].T, hcore[0], mocas[0]))
-               + eris.vhf_c[0][ncore[0]:nocc[0],ncore[0]:nocc[0]])
-        h1casb =(h1effb[ncore[1]:,ncore[1]:] + (v1b + v1b.T)
-               + reduce(numpy.dot, (mocas[1].T, hcore[1], mocas[1]))
-               + eris.vhf_c[1][ncore[1]:nocc[1],ncore[1]:nocc[1]])
+        v1b = (numpy.einsum('up,pv->uv', jkb[ncore[1]:], rmat[1][:,ncore[1]:nocc[1]]) +
+               numpy.einsum('uvpi,pi->uv', AApc, rmat[0][:,:ncore[0]]) +
+               numpy.einsum('uvpi,pi->uv', AAPC-APCA.transpose(0,3,1,2), rmat[1][:,:ncore[1]]))
+        h1casa = (h1effa[ncore[0]:,ncore[0]:] + (v1a + v1a.T) +
+                  reduce(numpy.dot, (mocas[0].T, hcore[0], mocas[0])) +
+                  eris.vhf_c[0][ncore[0]:nocc[0],ncore[0]:nocc[0]])
+        h1casb = (h1effb[ncore[1]:,ncore[1]:] + (v1b + v1b.T) +
+                  reduce(numpy.dot, (mocas[1].T, hcore[1], mocas[1])) +
+                  eris.vhf_c[1][ncore[1]:nocc[1],ncore[1]:nocc[1]])
         h1cas = (h1casa, h1casb)
 
         aaap = eris.aapp[:,:,ncore[0]:nocc[0],:]
@@ -689,14 +692,14 @@ class UCASSCF(ucasci.UCASCI):
         AAAA += AAAP[:,:,:,ncore[1]:nocc[1]]
         tmp = (numpy.einsum('vwtp,pu->tuvw', AAap, rmat[0][:,ncore[0]:nocc[0]]),
                numpy.einsum('tuvp,pw->tuvw', aaAP, rmat[1][:,ncore[1]:nocc[1]]))
-        aaAA =(tmp[0] + tmp[0].transpose(1,0,2,3)
-             + tmp[1] + tmp[1].transpose(0,1,3,2))
+        aaAA = (tmp[0] + tmp[0].transpose(1,0,2,3) +
+                tmp[1] + tmp[1].transpose(0,1,3,2))
         aaAA += aaAP[:,:,:,ncore[1]:nocc[1]]
 
         # pure core response
-        ecore =(h1effa[:ncore[0]].trace() + h1effb[:ncore[1]].trace()
-              + numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2
-              + numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2)
+        ecore = (h1effa[:ncore[0]].trace() + h1effb[:ncore[1]].trace() +
+                 numpy.einsum('jp,pj->', jka[:ncore[0]], rmat[0][:,:ncore[0]])*2 +
+                 numpy.einsum('jp,pj->', jkb[:ncore[1]], rmat[1][:,:ncore[1]])*2)
 
         return ecore, h1cas, (aaaa, aaAA, AAAA)
 
@@ -705,8 +708,7 @@ class UCASSCF(ucasci.UCASCI):
         '''
         ncas = self.ncas
         nelecas = self.nelecas
-        ncore = self.ncore
-        nocc = (ncas + ncore[0], ncas + ncore[1])
+
         if getattr(self.fcisolver, 'approx_kernel', None):
             ci1 = self.fcisolver.approx_kernel(h1, h2, ncas, nelecas, ci0=ci0)[1]
             return ci1, None
@@ -721,8 +723,7 @@ class UCASSCF(ucasci.UCASCI):
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
                                            max_memory=self.max_memory)
         else:
-            nd = min(max(self.ci_response_space, 2), ci0.size)
-            logger.debug(self, 'CI step by %dD subspace response', nd)
+            nd = self.ci_response_space
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
@@ -730,13 +731,17 @@ class UCASSCF(ucasci.UCASCI):
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_cas)
+                dx = ax[i-1] - xs[i-1] * e_cas
+                if numpy.linalg.norm(dx) < 1e-3:
+                    break
+                xs.append(dx)
                 ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
                                                      nelecas).ravel())
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
-            e, v = pyscf.lib.safe_eigh(heff, seff)[:2]
+            nd = len(xs)
+            e, v = pyscf.lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
             ci1 = 0
             for i in range(nd):
                 ci1 += xs[i] * v[i,0]
@@ -835,7 +840,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = (ncas + ncore[0], ncas + ncore[1])
-    eri_cas = (eris.aapp[:,:,ncore[0]:nocc[0],ncore[0]:nocc[0]].copy(), \
+    eri_cas = (eris.aapp[:,:,ncore[0]:nocc[0],ncore[0]:nocc[0]].copy(),
                eris.aaPP[:,:,ncore[1]:nocc[1],ncore[1]:nocc[1]].copy(),
                eris.AAPP[:,:,ncore[1]:nocc[1],ncore[1]:nocc[1]].copy())
     mc.get_h2eff = lambda *args: eri_cas

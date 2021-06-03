@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,16 +20,13 @@
 Spin-free lambda equation of RHF-CCSD(T)
 
 Ref:
-JCP, 147, 044104
+JCP 147, 044104 (2017); DOI:10.1063/1.4994918
 '''
 
-import time
-import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
-from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_lambda
 
 # Note: not support fov != 0
@@ -60,10 +57,10 @@ def make_intermediates(mycc, t1, t2, eris):
                 - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
                 - 2 * w.transpose(0,1,2,4,3,5))
 
-    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
-      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
-    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
-      + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
+    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2) -
+        numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
+    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1) +
+        numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
     w = p6(w)
     v = p6(v)
 
@@ -101,8 +98,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf.cc import ccsd
-    from pyscf import ao2mo
 
     mol = gto.Mole()
     mol.verbose = 0
