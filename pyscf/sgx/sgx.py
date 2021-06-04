@@ -44,6 +44,13 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, optimal auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
+        with_df : SGX
+            Existing SGX object for the system.
+        pjs: bool
+            Whether to perform P-junction screening (screening matrix elements
+            by the density matrix). Default False. If True, dfj is set to True
+            automatically at the beginning of the calculation, as this screening
+            is only for K-matrix elements.
 
     Returns:
         An SCF object with a modified J, K matrix constructor which uses density
