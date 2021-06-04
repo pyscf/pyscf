@@ -294,14 +294,6 @@ H  0.  0.  1.3''', basis='ccpvtz')
         ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e').transpose(2,0,1)
         j3c = mol1.intor('int1e_grids', grids=grids)
         self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
-        with mol1.with_range_coulomb(1.0):
-            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e').transpose(2,0,1)
-            j3c = mol1.intor('int1e_grids', grids=grids)
-        self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
-        with mol1.with_range_coulomb(-1.0):
-            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e').transpose(2,0,1)
-            j3c = mol1.intor('int1e_grids', grids=grids)
-        self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
 
         ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_cart').transpose(2,0,1)
         j3c = mol1.intor('int1e_grids_cart', grids=grids)
