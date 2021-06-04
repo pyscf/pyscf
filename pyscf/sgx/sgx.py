@@ -288,7 +288,7 @@ class SGX(lib.StreamObject):
         self._rsh_df = {}
         return self
 
-    def get_jk(self, dm, hermi=1, with_j=True, with_k=True, vhfopt=None,
+    def get_jk(self, dm, hermi=1, vhfopt=None, with_j=True, with_k=True,
                direct_scf_tol=getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13),
                omega=None):
         if omega is not None:
@@ -308,7 +308,7 @@ class SGX(lib.StreamObject):
             with rsh_df.mol.with_range_coulomb(omega):
                 return rsh_df.get_jk(dm, hermi, with_j, with_k,
                                      direct_scf_tol)
-
+        
         if with_j and self.dfj:
             vj = df_jk.get_j(self, dm, hermi, direct_scf_tol)
             if with_k:
