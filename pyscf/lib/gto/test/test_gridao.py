@@ -311,6 +311,41 @@ H  0.  0.  1.3''', basis='ccpvtz')
         j3c = mol1.intor('int1e_grids_spinor', grids=grids)
         self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
 
+    def test_range_separated_coulomb_int1e_grids(self):
+        mol1 = gto.M(atom='''
+O 0.5 0.5 0.
+H  1.  1.2 0.
+H  0.  0.  1.3''', basis='ccpvtz')
+        ngrids = 201
+        grids = numpy.random.random((ngrids, 3)) * 12 - 5
+        fmol = gto.fakemol_for_charges(grids)
+
+        with mol1.with_range_coulomb(.8):
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_cart').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids_cart', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_spinor').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids_spinor', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+        with mol1.with_range_coulomb(-.8):
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_cart').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids_cart', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
+            ref = df.incore.aux_e2(mol1, fmol, intor='int3c2e_spinor').transpose(2,0,1)
+            j3c = mol1.intor('int1e_grids_spinor', grids=grids)
+            self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+
     def test_int1e_grids_ip(self):
         ngrids = 201
         grids = numpy.random.random((ngrids, 3)) * 12 - 5
