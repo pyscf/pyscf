@@ -271,9 +271,6 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
         if pjs:
             sgxopt.set_dm(fg/numpy.sqrt(weights[None,:]), mol._atm, mol._bas, mol._env)
             #sgxopt.set_dm(fg, mol._atm, mol._bas, mol._env)
-        fakemol = gto.fakemol_for_charges(grid_coords)
-        #atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-        #                                  fakemol._atm, fakemol._bas, fakemol._env)
         atm, bas, env = mol._atm, mol._bas, mol._env
         ngrids = grid_coords.shape[0]
         env = numpy.append(env, grid_coords.ravel())
