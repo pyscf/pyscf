@@ -51,8 +51,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
-    if hasattr(mycc, "tailorfunc"):
-        t1, t2 = mycc.tailorfunc(t1, t2)
+    # For tailored CC
+    if mycc.tailor_func is not None:
+        t1, t2 = mycc.tailor_func(t1, t2)
 
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
@@ -71,8 +72,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         # For tailored CC
-        if hasattr(mycc, "tailorfunc"):
-            t1new, t2new = mycc.tailorfunc(t1new, t2new)
+        if mycc.tailor_func is not None
+            t1new, t2new = mycc.tailor_func(t1new, t2new)
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
         tmpvec -= mycc.amplitudes_to_vector(t1, t2)
         normt = numpy.linalg.norm(tmpvec)
@@ -920,6 +921,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
         self.level_shift = 0
+        # For tailored CC
+        self.tailor_func = None
 
 ##################################################
 # don't modify the following attributes, they are not input options

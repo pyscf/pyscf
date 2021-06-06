@@ -1485,7 +1485,6 @@ class SCF(lib.StreamObject):
 
 
     def _eigh(self, h, s):
-        #return eig(h, s)
         # Eigenvalue solver with linear dependency treatment if needed:
         eigh = self.mol.eigh_factory()
         return eigh(h, s)

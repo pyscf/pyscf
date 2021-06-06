@@ -40,7 +40,6 @@ def kpts_to_kmesh(cell, kpts):
     kmesh = (len(np.unique(scaled_k[:,0])),
              len(np.unique(scaled_k[:,1])),
              len(np.unique(scaled_k[:,2])))
-    logger.debug(cell, "Guessed kmesh= %r", kmesh)
     return kmesh
 
 def translation_vectors_for_kmesh(cell, kmesh):

@@ -355,8 +355,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 else:
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
                 if j2ctag == 'CD':
-                    v2 = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
-                    feri['j3c/%d/%d'%(ji,istep)] = v2
+                    v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v
                 else:
                     feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
 
