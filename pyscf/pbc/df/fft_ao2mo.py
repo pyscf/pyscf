@@ -41,11 +41,9 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf import __config__
 
-from timeit import default_timer as timer
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
-
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
@@ -56,12 +54,8 @@ def get_eri(mydf, kpts=None,
 
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    #t0 = timer()
     coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
-    #mydf._timings["get_coulG"] += (timer()-t0)
-    #t0 = timer()
     coords = cell.gen_uniform_grids(mydf.mesh)
-    #mydf._timings["coords"] += (timer()-t0)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
 ####################
@@ -70,17 +64,11 @@ def get_eri(mydf, kpts=None,
         #:ao_pairs_G = get_ao_pairs_G(mydf, kptijkl[:2], q, compact=compact)
         #:ao_pairs_G *= numpy.sqrt(coulG).reshape(-1,1)
         #:eri = lib.dot(ao_pairs_G.T, ao_pairs_G, cell.vol/ngrids**2)
-        #t0 = timer()
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        #mydf._timings["_numint.eval_ao"] += (timer()-t0)
         ao = numpy.asarray(ao.T, order='C')
-        #t0 = timer()
         eri = _contract_compact(mydf, (ao,ao), coulG, max_memory=max_memory)
-        #mydf._timings["_contract_compact"] += (timer()-t0)
         if not compact:
-            #t0 = timer()
             eri = ao2mo.restore(1, eri, nao).reshape(nao**2,nao**2)
-            #mydf._timings["ao2mo.restore"] += (timer()-t0)
         return eri
 
 ####################
@@ -131,9 +119,6 @@ def general(mydf, mo_coeffs, kpts=None,
     coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
-    # MAX:
-    if max_memory <= 0:
-        lib.logger.warn(cell, "max_memory = %d", max_memory)
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
@@ -143,9 +128,6 @@ def general(mydf, mo_coeffs, kpts=None,
             moiT = mojT = numpy.asarray(lib.dot(mo_coeffs[0].T,ao.T), order='C')
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6
-            if max_memory <= 0:
-                lib.logger.warn(cell, "2: max_memory = %f (before = %f)", max_memory, max_memory+moiT.nbytes*1e-6)
-
             eri = _contract_compact(mydf, (moiT,mojT), coulG, max_memory=max_memory)
             if not compact:
                 nmo = moiT.shape[0]
@@ -155,9 +137,6 @@ def general(mydf, mo_coeffs, kpts=None,
             ao = None
             fac = numpy.array(1.)
             max_memory = max_memory - sum([x.nbytes for x in mos])*1e-6
-            if max_memory <= 0:
-                lib.logger.warn(cell, "2: max_memory = %f", max_memory)
-
             eri = _contract_plain(mydf, mos, coulG, fac, max_memory=max_memory).real
         return eri
 
@@ -193,20 +172,14 @@ def _contract_compact(mydf, mos, coulG, max_memory):
                       (max_memory*1e6/8 - eri.size)/2/ngrids+1))
     buf = numpy.empty((blksize,ngrids))
     for p0, p1 in lib.prange_tril(0, nmoi, blksize):
-        #t0 = timer()
         mo_pairs_G = tools.fft(fill_orbital_pair(moiT, p0, p1, buf), mydf.mesh)
-        #mydf._timings["tools.fft"] += (timer()-t0)
         mo_pairs_G*= wcoulG
-        #t0 = timer()
         v = tools.ifft(mo_pairs_G, mydf.mesh)
-        #mydf._timings["tools.ifft"] += (timer()-t0)
         vR = numpy.asarray(v.real, order='C')
-        #t0 = timer()
         for q0, q1 in lib.prange_tril(0, nmok, blksize):
             mo_pairs = numpy.asarray(fill_orbital_pair(mokT, q0, q1, buf), order='C')
             eri[p0*(p0+1)//2:p1*(p1+1)//2,
                 q0*(q0+1)//2:q1*(q1+1)//2] = lib.ddot(vR, mo_pairs.T)
-        #mydf._timings["lib.ddot"] += (timer()-t0)
         v = None
     return eri
 
@@ -219,15 +192,8 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     dtype = numpy.result_type(phase, *mos)
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
-    # DEBUG
-    #print("nmoi=%d, nmok=%d, max_memory=%f, eri.size=%f, ngrids=%d" % (nmoi, nmok, max_memory*1e6/16, eri.size, ngrids))
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
-    #assert blksize > 0
-    # Recover?
-    if blksize <= 0:
-        print("WARNING: blksize = %d" % blksize)
-        blksize = int(max(nmoi,nmok))
-        print("Setting to blksize = %d" % blksize)
+    assert blksize > 0
     buf0 = numpy.empty((blksize,max(nmoj,nmol),ngrids), dtype=dtype)
     buf1 = numpy.ndarray((blksize,nmoj,ngrids), dtype=dtype, buffer=buf0)
     buf2 = numpy.ndarray((blksize,nmol,ngrids), dtype=dtype, buffer=buf0)

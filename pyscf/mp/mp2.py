@@ -29,8 +29,6 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf import __config__
 
-from timeit import default_timer
-
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
 einsum = functools.partial(numpy.einsum, optimize=True)
@@ -662,32 +660,11 @@ class _ChemistsERIs:
             self.mo_energy = self.fock.diagonal().real
         return self
 
-    def _direct_init_(self, mp, mo_coeff, mo_energy, fock, e_hf):
-        if mo_coeff is None:
-            mo_coeff = mp.mo_coeff
-        if mo_coeff is None:
-            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
-                               'You may need to call mf.kernel() to generate them.')
-
-        self.mo_coeff = _mo_without_core(mp, mo_coeff)
-        self.mol = mp.mol
-
-        self.mo_energy = mo_energy.copy()
-        self.fock = fock.copy()
-        self.e_hf = e_hf
-
-        return self
-
-
-def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None,
-        direct_init=False, mo_energy=None, fock=None, e_hf=None):
+def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)
     time0 = (logger.process_clock(), logger.perf_counter())
     eris = _ChemistsERIs()
-    if direct_init:
-        eris._direct_init_(mp, mo_coeff, mo_energy, fock, e_hf)
-    else:
-        eris._common_init_(mp, mo_coeff)
+    eris._common_init_(mp, mo_coeff)
     mo_coeff = eris.mo_coeff
 
     nocc = mp.nocc

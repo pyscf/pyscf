@@ -26,11 +26,9 @@ class RMP2(mp2.RMP2):
         warn_pbc2d_eri(mf)
         mp2.RMP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
-    #def ao2mo(self, mo_coeff=None):
-    def ao2mo(self, mo_coeff=None, direct_init=False, **kwargs):
+    def ao2mo(self, mo_coeff=None):
         ao2mofn = _gen_ao2mofn(self._scf)
-        #eris = mp2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
-        eris = mp2._make_eris(self, mo_coeff, ao2mofn, self.verbose, direct_init=direct_init, **kwargs)
+        eris = mp2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
         return eris
 
 class UMP2(ump2.UMP2):

@@ -25,7 +25,6 @@ import inspect
 import warnings
 from functools import reduce
 import numpy
-import numpy as np
 import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
@@ -88,7 +87,6 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
             w = numpy.zeros((0,))
             v = t
     return w, v, seig
-
 
 def eigh_by_blocks(h, s=None, labels=None):
     '''Solve an ordinary or generalized eigenvalue problem for diagonal blocks.
@@ -164,45 +162,6 @@ def eigh_by_blocks(h, s=None, labels=None):
     es = numpy.hstack(es)
     idx = numpy.argsort(es)
     return es[idx], cs[:,idx]
-
-#def canonical_orth(ovlp, threshold=None):
-#    """Löwdin's canonical orthogonalization."""
-#    # Ensure the basis functions are normalized (symmetry-adapted ones are not!)
-#    normlz = np.diag(np.power(np.diag(ovlp), -0.5))
-#    novlp = np.linalg.multi_dot((normlz, ovlp, normlz))
-#    # Form vectors for normalized overlap matrix
-#    se, sv = np.linalg.eigh(novlp)
-#    if threshold is not None:
-#        keep = (se >= threshold)
-#        se, sv = se[keep], sv[:,keep]
-#    x = sv / np.sqrt(se)
-#    # Plug normalization back in
-#    x = np.dot(normlz, x)
-#    return x
-#
-#def eigh_lindep(a, b, lindep_threshold, lindep_method='canonical-orth', fallback_mode=True):
-#    """Eigensolver with"""
-#
-#    w, v = None
-#    if fallback_mode:
-#        try:
-#            w, v = scipy.linalg.eigh(a, b)
-#        except scipy.linalg.LinAlgError:
-#            pass
-#
-#    if w is None:
-#        x = canonical_orth(b, threshold=lindep_threshold)
-#        n0, n1 = x.shape
-#        logger.debug(self, "Removing linearly dependent bfns: method= %s threshold= %.1e N(tot)= %4d N(removed)= %3d", ldm, ldt, n0, (n0-n1))
-#        xax = np.linalg.multi_dot((x.T.conj(), a, x))
-#        e, c = np.linalg.eigh(xax)
-#        c = np.dot(x, c)
-#
-#    # PySCF sign convention
-#    idx = numpy.argmax(abs(c.real), axis=0)
-#    switch = c[idx,np.arange(len(e))].real < 0
-#    c[:,switch] *= -1
-#    return e, c
 
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,

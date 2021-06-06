@@ -44,7 +44,6 @@ from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
-from timeit import default_timer as timer
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.

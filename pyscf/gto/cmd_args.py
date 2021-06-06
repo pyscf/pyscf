@@ -16,7 +16,6 @@
 #
 
 import sys
-import os
 import pyscf.lib.logger
 
 try:
@@ -40,7 +39,7 @@ def cmd_args():
                         action='store_false', dest='quite', default=False,
                         help='be very quiet')
     parser.add_argument('-o', '--output',
-                        dest='output', metavar='FILE', help='write output to FILE')#,
+                        dest='output', metavar='FILE', help='write output to FILE')
     parser.add_argument('-m', '--max-memory',
                         action='store', dest='max_memory', metavar='NUM',
                         help='maximum memory to use (in MB)')

@@ -2360,7 +2360,6 @@ class Mole(lib.StreamObject):
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
-                #self.stdout = open(self.output, 'w')
                 self.stdout = open(self.output, 'a')
 
         if self.verbose >= logger.WARN:

@@ -296,7 +296,6 @@ def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=REF_BASIS, s=None):
         mf = mf_or_mol
 
     if s is None:
-        #if getattr(mol, 'pbc_intor', None):  # whether mol object is a cell
         if hasattr(mol, 'a') and mol.a is not None:
             s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:

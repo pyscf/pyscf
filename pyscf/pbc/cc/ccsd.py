@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import numpy
-np = numpy
 
 from pyscf import lib
 from pyscf.cc import rccsd
@@ -39,7 +38,6 @@ class RCCSD(rccsd.RCCSD):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-
         with lib.temporary_env(self._scf, exxdiv=None):
             eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
@@ -59,22 +57,6 @@ class RCCSD(rccsd.RCCSD):
         madelung = tools.madelung(self._scf.cell, self._scf.kpt)
         eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
         return eris
-
-    def ao2mo_direct(self, fock, mo_coeff=None, e_hf=None):
-        """Takes Fock matrix WITH exxdiv correction."""
-        from pyscf.pbc import tools
-        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-
-        eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn,
-                direct_init=True, fock=fock, e_hf=e_hf)
-
-        # Remove exxdiv correction from Fock matrix (mo_energy are correct)
-        madelung = tools.madelung(self._scf.cell, self._scf.kpt)
-        for i in range(eris.nocc):
-            eris.fock[i,i] += madelung
-
-        return eris
-
 
 class UCCSD(uccsd.UCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):

@@ -1324,34 +1324,6 @@ class _ChemistsERIs:
             pass
         return self
 
-    def _direct_init_(self, mycc, mo_coeff=None, fock=None, e_hf=None):
-        if mo_coeff is None:
-            mo_coeff = mycc.mo_coeff
-        self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
-
-        self.fock = fock.copy()
-        self.e_hf = e_hf
-        nocc = self.nocc = mycc.nocc
-        self.mol = mycc.mol
-
-        # Note self.mo_energy can be different to fock.diagonal().
-        # self.mo_energy is used in the initial guess function (to generate
-        # MP2 amplitudes) and CCSD update_amps preconditioner.
-        # fock.diagonal() should only be used to compute the expectation value
-        # of Slater determinants.
-        mo_e = self.mo_energy = self.fock.diagonal().real.copy()
-        try:
-            gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
-            if gap < 1e-5:
-                logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD.\n'
-                            'CCSD may be difficult to converge. Increasing '
-                            'CCSD Attribute level_shift may improve '
-                            'convergence.', gap)
-        except ValueError:  # gap.size == 0
-            pass
-        return self
-
-
     def get_ovvv(self, *slices):
         '''To access a subblock of ovvv tensor'''
         ovw = numpy.asarray(self.ovvv[slices])
