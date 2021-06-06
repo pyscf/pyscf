@@ -50,6 +50,27 @@ _itrf.LIBXC_hybrid_coeff.restype = ctypes.c_double
 _itrf.LIBXC_nlc_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 _itrf.LIBXC_rsh_coeff.argtypes = [ctypes.c_int,ctypes.POINTER(ctypes.c_double)]
 
+_itrf.LIBXC_version.restype = ctypes.c_char_p
+_itrf.LIBXC_reference.restype = ctypes.c_char_p
+_itrf.LIBXC_reference_doi.restype = ctypes.c_char_p
+_itrf.LIBXC_xc_reference.argtypes = [ctypes.c_int, (ctypes.c_char_p * 8)]
+
+def libxc_version():
+    '''Returns the version of libxc'''
+    return _itrf.LIBXC_version().decode("UTF-8")
+
+def libxc_reference():
+    '''Returns the reference to libxc'''
+    return _itrf.LIBXC_reference().decode("UTF-8")
+
+def libxc_reference_doi():
+    '''Returns the reference to libxc'''
+    return _itrf.LIBXC_reference_doi().decode("UTF-8")
+
+__version__ = libxc_version()
+__reference__ = libxc_reference()
+__reference_doi__ = libxc_reference_doi()
+
 # Runtime detection of available functionals
 dynamic_func = getattr(__config__, 'dft_libxc_dynamic', False)
 
@@ -835,6 +856,18 @@ VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
                'SCAN_VV10', 'SCAN_RVV10', 'SCANL_VV10', 'SCANL_RVV10'))
 VV10_XC = VV10_XC.union(set([x.replace('_', '') for x in VV10_XC]))
 
+def xc_reference(xc_code):
+    '''Returns the reference to the individual XC functional'''
+    hyb, fn_facs = parse_xc(xc_code)
+    refs = []
+    c_refs = (ctypes.c_char_p * 8)()
+    for xid, fac in fn_facs:
+        _itrf.LIBXC_xc_reference(xid, c_refs)
+        for ref in c_refs:
+            if ref:
+                refs.append(ref.decode("UTF-8"))
+    return refs
+
 def xc_type(xc_code):
     if xc_code is None:
         return None
@@ -1579,28 +1612,3 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
 def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
-
-
-if __name__ == '__main__':
-    from pyscf import gto, dft
-    mol = gto.M(atom=[
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]],
-    )
-    mf = dft.RKS(mol)
-    #mf._numint.libxc = dft.xcfun
-    mf.xc = 'camb3lyp'
-    mf.kernel()
-    mf.xc = 'b88,lyp'
-    eref = mf.kernel()
-
-    mf = dft.RKS(mol)
-    mf._numint = define_xc(mf._numint, 'BLYP')
-    e1 = mf.kernel()
-    print(e1 - eref)
-
-    mf = dft.RKS(mol)
-    mf._numint = define_xc(mf._numint, 'B3LYP5')
-    e1 = mf.kernel()
-    print(e1 - -75.2753037898599)

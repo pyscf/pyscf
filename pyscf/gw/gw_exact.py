@@ -88,23 +88,22 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
     for p in orbs:
         tdm_p = tdm[:,:,p]
         if gw.linearized:
-            de = 1e-6
             ep = gw._scf.mo_energy[p]
-            #TODO: analytic sigma derivative
             sigma = get_sigma_element(gw, ep, tdm_p, tdm_p, td_e).real
-            dsigma = get_sigma_element(gw, ep+de, tdm_p, tdm_p, td_e).real - sigma
-            zn = 1.0/(1-dsigma/de)
-            e = ep + zn*(sigma.real + vk[p,p] - v_mf[p,p])
-            mo_energy[p] = e
+            dsigma_dw = get_sigma_deriv_element(gw, ep, tdm_p, tdm_p, td_e).real
+            zn = 1.0/(1-dsigma_dw)
+            mo_energy[p] = ep + zn*(sigma.real + vk[p,p] - v_mf[p,p])
         else:
             def quasiparticle(omega):
                 sigma = get_sigma_element(gw, omega, tdm_p, tdm_p, td_e)
                 return omega - gw._scf.mo_energy[p] - (sigma.real + vk[p,p] - v_mf[p,p])
             try:
-                e = newton(quasiparticle, gw._scf.mo_energy[p], tol=1e-6, maxiter=100)
-                mo_energy[p] = e
+                mo_energy[p] = newton(quasiparticle, gw._scf.mo_energy[p], tol=1e-6, maxiter=100)
             except RuntimeError:
                 conv = False
+                mo_energy[p] = gw._scf.mo_energy[p]
+                logger.warn(gw, 'Root finding for GW eigenvalue %s did not converge. '
+                                'Setting it equal to the reference MO energy.'%(p))
     mo_coeff = gw._scf.mo_coeff
 
     if gw.verbose >= logger.DEBUG:
@@ -127,6 +126,18 @@ def get_sigma_element(gw, omega, tdm_p, tdm_q, td_e, eta=None, vir_sgn=1):
     return sigma
 
 
+def get_sigma_deriv_element(gw, omega, tdm_p, tdm_q, td_e, eta=None, vir_sgn=1):
+    if eta is None:
+        eta = gw.eta
+
+    nocc = gw.nocc
+    evi = lib.direct_sum('v-i->vi', td_e, gw._scf.mo_energy[:nocc])
+    eva = lib.direct_sum('v+a->va', td_e, gw._scf.mo_energy[nocc:])
+    dsigma =  -np.sum( tdm_p[:,:nocc]*tdm_q[:,:nocc]/(omega + evi - 1j*eta)**2 )
+    dsigma += -np.sum( tdm_p[:,nocc:]*tdm_q[:,nocc:]/(omega - eva + vir_sgn*1j*eta)**2 )
+    return dsigma
+
+
 def get_g(omega, mo_energy, mo_occ, eta):
     sgn = mo_occ - 1
     return 1.0/(omega - mo_energy + 1j*eta*sgn)
@@ -143,7 +154,7 @@ class GWExact(lib.StreamObject):
             Orbital coefficients
     '''
 
-    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
+    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-8)
     linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
     def __init__(self, mf, frozen=None, tdmf=None):
@@ -254,9 +265,9 @@ class GWExact(lib.StreamObject):
             return _make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
-            logger.warn(self, 'GW detected DF being used in the HF object. '
+            logger.warn(self, 'GW Exact detected DF being used in the HF object. '
                         'MO integrals are computed based on the DF 3-index tensors.\n'
-                        'Developer TODO:  Write dfgw.GW for the '
+                        'Developer TODO:  Write dfgw.GWExact for the '
                         'DF-GW calculations')
             raise NotImplementedError
             #return _make_df_eris_outcore(self, mo_coeff)
@@ -392,11 +403,11 @@ if __name__ == '__main__':
     gw = GWExact(mf)
     gw.kernel()
     print(gw.mo_energy)
-# [-20.10555946  -1.2264067   -0.68160939  -0.53066326  -0.44679868
-#   0.17291986   0.24457082   0.74758227   0.80045129   1.11748735
-#   1.1508353    1.19081928   1.40406947   1.43593681   1.63324734
-#   1.81839838   1.86943727   2.37827782   2.48829939   3.26028229
-#   3.3247595    3.4958492    3.77735135   4.14572189]
+# [-20.10555941  -1.2264133   -0.68160937  -0.53066324  -0.44679866
+#    0.17291986   0.24457082   0.74758225   0.80045126   1.11748749
+#    1.15083528   1.19081826   1.40406946   1.43593671   1.63324755
+#    1.79839248   1.88459324   2.31461977   2.48839545   3.26047431
+#    3.32486673   3.49601314   3.77699489   4.14575936]
 
     nocc = mol.nelectron//2
 

@@ -213,8 +213,8 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD, mu0=None):
         else: # rhf and ghf
             return get_grad_tril(mo_coeff_kpts, mo_occ_kpts, fock)
 
-    def energy_tot(dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
-        e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
+    def energy_tot(dm=None, h1e=None, vhf=None):
+        e_tot = mf.energy_elec(dm, h1e, vhf)[0] + mf.energy_nuc()
         if (mf.sigma and mf.smearing_method and
             mf.entropy is not None):
             mf.e_free = e_tot - mf.sigma * mf.entropy

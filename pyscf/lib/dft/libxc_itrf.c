@@ -776,6 +776,9 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 // func->cam_beta does not update the coefficients accordingly.
                 //func->cam_alpha = alpha;
                 //func->cam_beta  = beta;
+                // However, the parameters can be set with the libxc function
+                //void xc_func_set_ext_params_name(xc_func_type *p, const char *name, double par);
+                // since libxc 5.1.0
 #if defined XC_SET_RELATIVITY
                 xc_lda_x_set_params(&func, relativity);
 #endif
@@ -837,4 +840,37 @@ void LIBXC_functional_numbers(int *list)
 char * LIBXC_functional_name(int ifunc)
 {
   return xc_functional_get_name(ifunc);
+}
+
+const char * LIBXC_version()
+{
+  return xc_version_string();
+}
+
+const char * LIBXC_reference()
+{
+  return xc_reference();
+}
+
+const char * LIBXC_reference_doi()
+{
+  return xc_reference_doi();
+}
+
+void LIBXC_xc_reference(int xc_id, const char **refs)
+{
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+
+        int i;
+        for (i = 0; i < XC_MAX_REFERENCES; i++) {
+                if (func.info->refs[i] == NULL || func.info->refs[i]->ref == NULL) {
+                        refs[i] = NULL;
+                        break;
+                }
+                refs[i] = func.info->refs[i]->ref;
+        }
 }

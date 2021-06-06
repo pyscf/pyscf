@@ -21,12 +21,9 @@
 #include "config.h"
 #include "cint.h"
 #include "np_helper/np_helper.h"
+#include "gto/gto.h"
 
 #define BLKSIZE 8
-
-int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
-int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
-                      int *atm, int natm, int *bas, int nbas, double *env);
 
 /*
  * out[naoi,naoj,naok,comp] in F-order
