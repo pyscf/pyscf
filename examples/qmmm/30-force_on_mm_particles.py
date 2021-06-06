@@ -7,6 +7,7 @@
 The force from QM region acting on the background MM particles.
 '''
 
+from functools import reduce
 import numpy
 from pyscf import gto, scf, mp, qmmm
 

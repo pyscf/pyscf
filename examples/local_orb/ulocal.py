@@ -15,6 +15,7 @@
 #
 # Localization based on ALPHA orbitals from UHF/UKS check files
 #
+from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import tools,gto,scf,dft
