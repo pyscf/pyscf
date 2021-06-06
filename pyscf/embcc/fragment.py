@@ -1,7 +1,6 @@
 # Standard libaries
 import os
 import os.path
-import logging
 from collections import OrderedDict
 import functools
 from datetime import datetime
@@ -32,21 +31,17 @@ from . import helper
 from . import psubspace
 from .qemb import QEmbeddingFragment
 
-log = logging.getLogger(__name__)
-
-
-class FROM_BASE: pass
 
 @dataclasses.dataclass
 class FragmentOptions(Options):
-    """Attributes set to `FROM_BASE` inherit their value from the parent EmbCC object."""
-    dmet_threshold : float = FROM_BASE
-    make_rdm1 : bool = FROM_BASE
-    eom_ccsd : bool = FROM_BASE
-    plot_orbitals : bool = FROM_BASE
-    solver_options : dict = FROM_BASE
-    bsse_correction : bool = FROM_BASE
-    bsse_range : float = FROM_BASE
+    """Attributes set to `NOTSET` inherit their value from the parent EmbCC object."""
+    dmet_threshold : float = NOTSET
+    make_rdm1 : bool = NOTSET
+    eom_ccsd : bool = NOTSET
+    plot_orbitals : bool = NOTSET
+    solver_options : dict = NOTSET
+    bsse_correction : bool = NOTSET
+    bsse_rmax : float = NOTSET
 
 
 class Fragment(QEmbeddingFragment):
@@ -74,7 +69,7 @@ class Fragment(QEmbeddingFragment):
         if solver not in embcc.VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
-        log.info("  * Solver= %s", self.solver)
+        self.log.info("  * Solver= %s", self.solver)
 
         # Bath natural orbital (BNO) threshold
         if bno_threshold is None:
@@ -93,11 +88,11 @@ class Fragment(QEmbeddingFragment):
             options = dataclasses.replace(options, **kwargs)
         self.opts = options
         for key, val in self.opts.items():
-            if val == FROM_BASE:
+            if val == NOTSET:
                 setattr(self.opts, key, copy.copy(getattr(self.base.opts, key)))
-        log.infov("Fragment parameters:")
+        self.log.infov("Fragment parameters:")
         for key, val in self.opts.items():
-            log.infov('  * %-24s %r', key + ':', val)
+            self.log.infov('  * %-24s %r', key + ':', val)
 
         # Intermediate and output attributes:
         self.nactive = 0
@@ -128,12 +123,12 @@ class Fragment(QEmbeddingFragment):
         idx = np.argmin(self.bno_threshold)
         return self.e_corrs[idx]
 
-    def loop_clusters(self, exclude_self=False):
-        """Loop over all clusters."""
-        for cluster in self.base.clusters:
-            if (exclude_self and cluster == self):
+    def loop_fragments(self, exclude_self=False):
+        """Loop over all fragments."""
+        for frag in self.base.clusters:
+            if (exclude_self and frag == self):
                 continue
-            yield cluster
+            yield frag
 
     @property
     def fragment_type(self):
@@ -146,6 +141,10 @@ class Fragment(QEmbeddingFragment):
     get_local_amplitudes = get_local_amplitudes
     get_local_amplitudes_general = get_local_amplitudes_general
     get_local_energy = get_local_energy
+
+
+    def add_tailor_fragment(self, frag):
+        raise NotImplementedError()
 
 
 
@@ -246,7 +245,7 @@ class Fragment(QEmbeddingFragment):
             pT2 = einsum("xi,yj,ijab->xyab", P, P, T2)
 
         if symmetrize_T2:
-            log.debug("Projected T2 symmetry error = %.3g", np.linalg.norm(pT2 - pT2.transpose(1,0,3,2)))
+            self.log.debug("Projected T2 symmetry error = %.3g", np.linalg.norm(pT2 - pT2.transpose(1,0,3,2)))
             pT2 = (pT2 + pT2.transpose(1,0,3,2))/2
 
         return pT1, pT2
@@ -258,21 +257,21 @@ class Fragment(QEmbeddingFragment):
         if self.power1_occ_bath_tol is not False:
             c_add, c_occenv, _ = make_mf_bath(self, c_occenv, "occ", bathtype="power",
                     tol=self.power1_occ_bath_tol)
-            log.info("Adding %d first-order occupied power bath orbitals to cluster.", c_add.shape[-1])
+            self.log.info("Adding %d first-order occupied power bath orbitals to cluster.", c_add.shape[-1])
             c_bath = np.hstack((c_add, c_bath))
         if self.power1_vir_bath_tol is not False:
             c_add, c_virenv, _ = make_mf_bath(self, c_virenv, "vir", bathtype="power",
                     tol=self.power1_vir_bath_tol)
-            log.info("Adding %d first-order virtual power bath orbitals to cluster.", c_add.shape[-1])
+            self.log.info("Adding %d first-order virtual power bath orbitals to cluster.", c_add.shape[-1])
             c_bath = np.hstack((c_bath, c_add))
         # Local orbitals:
         if self.local_occ_bath_tol is not False:
             c_add, c_occenv = make_local_bath(self, c_occenv, tol=self.local_occ_bath_tol)
-            log.info("Adding %d local occupied bath orbitals to cluster.", c_add.shape[-1])
+            self.log.info("Adding %d local occupied bath orbitals to cluster.", c_add.shape[-1])
             c_bath = np.hstack((c_add, c_bath))
         if self.local_vir_bath_tol is not False:
             c_add, c_virenv = make_local_bath(self, c_virenv, tol=self.local_vir_bath_tol)
-            log.info("Adding %d local virtual bath orbitals to cluster.", c_add.shape[-1])
+            self.log.info("Adding %d local virtual bath orbitals to cluster.", c_add.shape[-1])
             c_bath = np.hstack((c_bath, c_add))
         return c_bath, c_occenv, c_virenv
 
@@ -293,12 +292,12 @@ class Fragment(QEmbeddingFragment):
             bno_threshold = self.bno_threshold
 
         t0_bath = t0 = timer()
-        log.info("MAKING DMET BATH")
-        log.info("****************")
-        log.changeIndentLevel(1)
+        self.log.info("MAKING DMET BATH")
+        self.log.info("****************")
+        self.log.changeIndentLevel(1)
         c_dmet, c_env_occ, c_env_vir = self.make_dmet_bath(tol=self.opts.dmet_threshold)
-        log.timing("Time for DMET bath:  %s", time_string(timer()-t0))
-        log.changeIndentLevel(-1)
+        self.log.timing("Time for DMET bath:  %s", time_string(timer()-t0))
+        self.log.changeIndentLevel(-1)
 
         # Add fragment and DMET orbitals for cube file plots
         if self.opts.plot_orbitals:
@@ -313,7 +312,7 @@ class Fragment(QEmbeddingFragment):
 
         # Diagonalize cluster DM to separate cluster occupied and virtual
         self.c_cluster_occ, self.c_cluster_vir = self.diagonalize_cluster_dm(c_dmet, tol=2*self.opts.dmet_threshold)
-        log.info("Cluster orbitals:  n(occ)= %3d  n(vir)= %3d", self.c_cluster_occ.shape[-1], self.c_cluster_vir.shape[-1])
+        self.log.info("Cluster orbitals:  n(occ)= %3d  n(vir)= %3d", self.c_cluster_occ.shape[-1], self.c_cluster_vir.shape[-1])
 
         # Add cluster orbitals to plot
         #if self.opts.plot_orbitals:
@@ -324,12 +323,12 @@ class Fragment(QEmbeddingFragment):
         # TODO NOT MAINTAINED
         #if True:
         #    if self.opts.prim_mp2_bath_tol_occ:
-        #        log.info("Adding primary occupied MP2 bath orbitals")
+        #        self.log.info("Adding primary occupied MP2 bath orbitals")
         #        C_add_o, C_rest_o, *_ = self.make_mp2_bath(C_occclst, C_virclst, "occ",
         #                c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
         #                mp2_correction=False)
         #    if self.opts.prim_mp2_bath_tol_vir:
-        #        log.info("Adding primary virtual MP2 bath orbitals")
+        #        self.log.info("Adding primary virtual MP2 bath orbitals")
         #        C_add_v, C_rest_v, *_ = self.make_mp2_bath(C_occclst, C_virclst, "vir",
         #                c_occenv=C_occenv, c_virenv=C_virenv, tol=self.opts.prim_mp2_bath_tol_occ,
         #                mp2_correction=False)
@@ -346,33 +345,33 @@ class Fragment(QEmbeddingFragment):
         #self.C_bath = C_bath
 
         if c_env_occ.shape[-1] > 0:
-            log.info("MAKING OCCUPIED BNOs")
-            log.info("********************")
+            self.log.info("MAKING OCCUPIED BNOs")
+            self.log.info("********************")
             t0 = timer()
-            log.changeIndentLevel(1)
+            self.log.changeIndentLevel(1)
             self.c_no_occ, self.n_no_occ = make_mp2_bno(
                     self, "occ", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-            log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
+            self.log.timing("Time for occupied BNOs:  %s", time_string(timer()-t0))
             if len(self.n_no_occ) > 0:
-                log.info("Occupied BNO histogram:")
+                self.log.info("Occupied BNO histogram:")
                 helper.plot_histogram(self.n_no_occ)
-            log.changeIndentLevel(-1)
+            self.log.changeIndentLevel(-1)
         else:
             self.c_no_occ = c_env_occ
             self.n_no_occ = np.zeros((0,))
 
         if c_env_vir.shape[-1] > 0:
-            log.info("MAKING VIRTUAL BNOs")
-            log.info("*******************")
+            self.log.info("MAKING VIRTUAL BNOs")
+            self.log.info("*******************")
             t0 = timer()
-            log.changeIndentLevel(1)
+            self.log.changeIndentLevel(1)
             self.c_no_vir, self.n_no_vir = make_mp2_bno(
                     self, "vir", self.c_cluster_occ, self.c_cluster_vir, c_env_occ, c_env_vir)
-            log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
+            self.log.timing("Time for virtual BNOs:   %s", time_string(timer()-t0))
             if len(self.n_no_vir) > 0:
-                log.info("Virtual BNO histogram:")
+                self.log.info("Virtual BNO histogram:")
                 helper.plot_histogram(self.n_no_vir)
-            log.changeIndentLevel(-1)
+            self.log.changeIndentLevel(-1)
         else:
             self.c_no_vir = c_env_vir
             self.n_no_vir = np.zeros((0,))
@@ -383,53 +382,53 @@ class Fragment(QEmbeddingFragment):
             # Save state of cubefile, in case a replot of the same data is required later:
             self.cubefile.save_state("%s.pkl" % self.cubefile.filename)
             self.cubefile.write()
-        log.timing("Time for bath:  %s", time_string(timer()-t0_bath))
+        self.log.timing("Time for bath:  %s", time_string(timer()-t0_bath))
 
         init_guess = eris = None
         for icalc, bno_thr in enumerate(bno_threshold):
-            log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
-            log.info("*******************************")
-            log.changeIndentLevel(1)
+            self.log.info("RUN %2d - BNO THRESHOLD= %.1e", icalc, bno_thr)
+            self.log.info("*******************************")
+            self.log.changeIndentLevel(1)
 
             if True:
                 e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
-                log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
+                self.log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
             else:
                 try:
                     e_corr, n_active, init_guess, eris = self.run_bno_threshold(solver, bno_thr, init_guess=init_guess, eris=eris)
-                    log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
+                    self.log.info("BNO threshold= %.1e :  E(corr)= %+14.8f Ha", bno_thr, e_corr)
                 except Exception as e:
-                    log.error("Exception for BNO threshold= %.1e:\n%r", bno_thr, e)
+                    self.log.error("Exception for BNO threshold= %.1e:\n%r", bno_thr, e)
                     e_corr = n_active = 0
 
             self.e_corrs[icalc] = e_corr
             self.n_active[icalc] = n_active
-            log.changeIndentLevel(-1)
+            self.log.changeIndentLevel(-1)
 
-        log.info("FRAGMENT CORRELATION ENERGIES")
-        log.info("*****************************")
+        self.log.info("FRAGMENT CORRELATION ENERGIES")
+        self.log.info("*****************************")
         for i in range(len(bno_threshold)):
             icalc = -(i+1)
             bno_thr = bno_threshold[icalc]
             n_active = self.n_active[icalc]
             e_corr = self.e_corrs[icalc]
             if n_active > 0:
-                log.info("  * BNO threshold= %.1e :  n(active)= %4d  E(corr)= %+14.8f Ha", bno_thr, n_active, e_corr)
+                self.log.info("  * BNO threshold= %.1e :  n(active)= %4d  E(corr)= %+14.8f Ha", bno_thr, n_active, e_corr)
             else:
-                log.info("  * BNO threshold= %.1e :  <Exception during calculation>", bno_thr)
+                self.log.info("  * BNO threshold= %.1e :  <Exception during calculation>", bno_thr)
 
 
 
     def run_bno_threshold(self, solver, bno_thr, init_guess=None, eris=None):
         #self.e_delta_mp2 = e_delta_occ + e_delta_vir
-        #log.debug("MP2 correction = %.8g", self.e_delta_mp2)
+        #self.log.debug("MP2 correction = %.8g", self.e_delta_mp2)
 
         assert (self.c_no_occ is not None)
         assert (self.c_no_vir is not None)
 
-        log.info("Occupied BNOs:")
+        self.log.info("Occupied BNOs:")
         c_nbo_occ, c_frozen_occ = self.apply_bno_threshold(self.c_no_occ, self.n_no_occ, bno_thr)
-        log.info("Virtual BNOs:")
+        self.log.info("Virtual BNOs:")
         c_nbo_vir, c_frozen_vir = self.apply_bno_threshold(self.c_no_vir, self.n_no_vir, bno_thr)
 
         # Canonicalize orbitals
@@ -458,21 +457,21 @@ class Fragment(QEmbeddingFragment):
         nfrozen = nocc_frozen + nvir_frozen
         nactive = c_active_occ.shape[-1] + c_active_vir.shape[-1]
 
-        log.info("ORBITALS FOR CLUSTER %3d", self.id)
-        log.info("************************")
-        log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", c_active_occ.shape[-1], nocc_frozen, c_occ.shape[-1])
-        log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", c_active_vir.shape[-1], nvir_frozen, c_vir.shape[-1])
-        log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", nactive, nfrozen, mo_coeff.shape[-1])
+        self.log.info("ORBITALS FOR CLUSTER %3d", self.id)
+        self.log.info("************************")
+        self.log.info("  * Occupied: active= %4d  frozen= %4d  total= %4d", c_active_occ.shape[-1], nocc_frozen, c_occ.shape[-1])
+        self.log.info("  * Virtual:  active= %4d  frozen= %4d  total= %4d", c_active_vir.shape[-1], nvir_frozen, c_vir.shape[-1])
+        self.log.info("  * Total:    active= %4d  frozen= %4d  total= %4d", nactive, nfrozen, mo_coeff.shape[-1])
 
         # --- Do nothing if solver is not set
         if not solver:
-            log.info("Solver set to None. Skipping calculation.")
+            self.log.info("Solver set to None. Skipping calculation.")
             self.converged = True
             return 0, nactive, None, None
 
-        #log.info("RUNNING %s SOLVER", solver)
-        #log.info((len(solver)+15)*"*")
-        #log.changeIndentLevel(1)
+        #self.log.info("RUNNING %s SOLVER", solver)
+        #self.log.info((len(solver)+15)*"*")
+        #self.log.changeIndentLevel(1)
 
         # --- Project initial guess and integrals from previous cluster calculation with smaller eta:
         # Use initial guess from previous calculations
@@ -489,9 +488,9 @@ class Fragment(QEmbeddingFragment):
         # If superspace ERIs were calculated before, they can be transformed and used again
         if self.base.opts.project_eris and eris is not None:
             t0 = timer()
-            log.debug("Projecting previous ERIs onto subspace")
+            self.log.debug("Projecting previous ERIs onto subspace")
             eris = psubspace.project_eris(eris, c_active_occ, c_active_vir, ovlp=self.base.get_ovlp())
-            log.timing("Time to project ERIs:  %s", time_string(timer()-t0))
+            self.log.timing("Time to project ERIs:  %s", time_string(timer()-t0))
         else:
             eris = None
 
@@ -500,7 +499,7 @@ class Fragment(QEmbeddingFragment):
         csolver = get_solver_class(solver)(self, mo_coeff, mo_occ, nocc_frozen=nocc_frozen, nvir_frozen=nvir_frozen,
                 eris=eris, options=self.opts.solver_options)
         csolver.kernel(init_guess=init_guess)
-        log.timing("Time for %s solver:  %s", solver, time_string(timer()-t0))
+        self.log.timing("Time for %s solver:  %s", solver, time_string(timer()-t0))
         self.converged = csolver.converged
         self.e_corr_full = csolver.e_corr
         # ERIs and initial guess for next calculations
@@ -520,14 +519,14 @@ class Fragment(QEmbeddingFragment):
             try:
                 self.pop_analysis(csolver.dm1)
             except Exception as e:
-                log.error("Exception in population analysis: %s", e)
+                self.log.error("Exception in population analysis: %s", e)
         # EOM analysis
         if self.opts.eom_ccsd in (True, "IP"):
             self.eom_ip_energy, _ = self.eom_analysis(csolver, "IP")
         if self.opts.eom_ccsd in (True, "EA"):
             self.eom_ea_energy, _ = self.eom_analysis(csolver, "EA")
 
-        #log.changeIndentLevel(-1)
+        #self.log.changeIndentLevel(-1)
 
         return e_corr, nactive, init_guess, eris
 
@@ -539,13 +538,13 @@ class Fragment(QEmbeddingFragment):
         # Logging
         fmt = "  %4s: N= %4d  max= % 9.3g  min= % 9.3g  sum= % 9.3g ( %7.3f %%)"
         if n_bno > 0:
-            log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
+            self.log.info(fmt, "Bath", n_bno, max(n_in), min(n_in), np.sum(n_in), 100*np.sum(n_in)/np.sum(n_no))
         else:
-            log.info(fmt[:13], "Bath", 0)
+            self.log.info(fmt[:13], "Bath", 0)
         if n_rest > 0:
-            log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
+            self.log.info(fmt, "Rest", n_rest, max(n_cut), min(n_cut), np.sum(n_cut), 100*np.sum(n_cut)/np.sum(n_no))
         else:
-            log.info(fmt[:13], "Rest", 0)
+            self.log.info(fmt[:13], "Rest", 0)
 
         c_bno, c_rest = np.hsplit(c_no, [n_bno])
         return c_bno, c_rest
@@ -564,7 +563,7 @@ class Fragment(QEmbeddingFragment):
 
         tstamp = datetime.now()
 
-        log.info("[%s] Writing cluster population analysis to file \"%s\"", tstamp, filename)
+        self.log.info("[%s] Writing cluster population analysis to file \"%s\"", tstamp, filename)
         with open(filename, mode) as f:
             f.write("[%s] Population analysis\n" % tstamp)
             f.write("*%s*********************\n" % (26*"*"))
@@ -603,9 +602,9 @@ class Fragment(QEmbeddingFragment):
         eris = csolver._eris
         cc = csolver._solver
 
-        log.info("EOM-CCSD %s energies= %r", kind, e[:5].tolist())
+        self.log.info("EOM-CCSD %s energies= %r", kind, e[:5].tolist())
         tstamp = datetime.now()
-        log.info("[%s] Writing detailed cluster %s-EOM analysis to file \"%s\"", tstamp, kind, filename)
+        self.log.info("[%s] Writing detailed cluster %s-EOM analysis to file \"%s\"", tstamp, kind, filename)
 
         with open(filename, mode) as f:
             f.write("[%s] %s-EOM analysis\n" % (tstamp, kind))
@@ -617,7 +616,7 @@ class Fragment(QEmbeddingFragment):
                 f.write("  %s-EOM-CCSD root= %2d , energy= %+16.8g , QP-weight= %10.5g\n" %
                         (kind, root, e[root], qp))
                 if qp < 0.0 or qp > 1.0:
-                    log.error("Error: QP-weight not between 0 and 1!")
+                    self.log.error("Error: QP-weight not between 0 and 1!")
                 r1lo = einsum("i,ai,al->l", r1, eris.mo_coeff[:,:cc.nocc], sc)
 
                 if sort_weight:
@@ -669,92 +668,81 @@ class Fragment(QEmbeddingFragment):
             chis2 = chis
 
         # Output
-        log.info("Orbitals of cluster %s", self.name)
-        log.info("===================="+len(self.name)*"=")
-        log.info(("%18s" + " " + len(spaces)*"  %9s"), "Atomic orbital", "Active", "Frozen", "Local", "DMET bath", "Occ. bath", "Vir. bath", "Occ. env.", "Vir. env")
-        log.info((18*"-" + " " + len(spaces)*("  "+(9*"-"))))
+        self.log.info("Orbitals of cluster %s", self.name)
+        self.log.info("===================="+len(self.name)*"=")
+        self.log.info(("%18s" + " " + len(spaces)*"  %9s"), "Atomic orbital", "Active", "Frozen", "Local", "DMET bath", "Occ. bath", "Vir. bath", "Occ. env.", "Vir. env")
+        self.log.info((18*"-" + " " + len(spaces)*("  "+(9*"-"))))
         for ao in range(self.mol.nao_nr()):
             line = "[%3s %3s %2s %-5s]:" % tuple(ao_labels[ao])
             for ispace, space in enumerate(spaces):
                 line += "  %9.3g" % chis2[ao,ispace]
-            log.info(line)
+            self.log.info(line)
 
         # Active chis
         return chis[:,0]
 
 
-    def get_fragment_bsse(self, radius=None, unit='Ang'):
+    def get_fragment_bsse(self, rmax=None, nimages=5, unit='A'):
+        self.log.info("COUNTERPOISE CALCULATION")
+        self.log.info("************************")
         # Currently only PBC
-        if not self.boundary_cond == 'open':
-            raise NotImplementedError()
-        if radius is None:
-            radius = self.opts.bsse_radius
+        #if not self.boundary_cond == 'open':
+        #    raise NotImplementedError()
+        if rmax is None:
+            rmax = self.opts.bsse_rmax
 
-        # Atomic calculation:
-        mol = self.mol.copy()
-        atom = mol.atom[self.atoms]
-        log.debugv("Keeping atoms %r", atom)
-        mol.atom = atom
-        mol.a = None
-        mol.build(False, False)
+        # Atomic calculation with atomic basis functions:
+        #mol = self.mol.copy()
+        #atom = mol.atom[self.atoms]
+        #self.log.debugv("Keeping atoms %r", atom)
+        #mol.atom = atom
+        #mol.a = None
+        #mol.build(False, False)
 
-        mf = type(self.mf)(mol)
+        natom0, e_mf0, e_cm0, dm = self.counterpoise_calculation(rmax=0.0, nimages=0)
+        assert natom0 == len(self.atoms)
+        self.log.debugv("Counterpoise: E(atom)= % 16.8f Ha", e_cm0)
+
+        #natom_list = []
+        #e_mf_list = []
+        #e_cm_list = []
+        r_values = np.hstack((np.arange(1.0, int(rmax)+1, 1.0), rmax))
+        #for r in r_values:
+        r = rmax
+        natom, e_mf, e_cm, dm = self.counterpoise_calculation(rmax=r, dm0=dm)
+        self.log.debugv("Counterpoise: n(atom)= %3d  E(mf)= %16.8f Ha  E(%s)= % 16.8f Ha", natom, e_mf, self.solver, e_cm)
+
+        e_bsse = self.sym_factor*(e_cm - e_cm0)
+        self.log.debugv("Counterpoise: E(BSSE)= % 16.8f Ha", e_bsse)
+        return e_bsse
+
+
+    def counterpoise_calculation(self, rmax, dm0=None, nimages=5, unit='A'):
+        mol = self.make_counterpoise_mol(rmax, nimages=nimages, unit=unit, output='pyscf-cp.txt')
+        # Mean-field
+        #mf = type(self.mf)(mol)
+        mf = pyscf.scf.RHF(mol)
         mf.conv_tol = self.mf.conv_tol
-        mf = mf.density_fit(auxbasis=self.mf.with_df.auxbasis)
+        #if self.mf.with_df is not None:
+        #    self.log.debugv("Setting GDF")
+        #    self.log.debugv("%s", type(self.mf.with_df))
+        #    # ONLY GDF SO FAR!
+        # TODO: generalize
+        if self.base.kdf is not None:
+            auxbasis = self.base.kdf.auxbasis
+        elif self.mf.with_df is not None:
+            auxbasis = self.mf.with_df.auxbasis
+        else:
+            auxbasis=None
+        if auxbasis:
+            mf = mf.density_fit(auxbasis=auxbasis)
+        # TODO:
+        #use dm0 as starting point
         mf.kernel()
-
-        ecc = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
-        ecc.add_atom_cluster(self.atoms, options=self.opts)
+        dm0 = mf.make_rdm1()
+        # Embedded calculation with same options
+        ecc = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, options=self.base.opts)
+        ecc.make_atom_cluster(self.atoms, options=self.opts)
         ecc.kernel()
 
-        log.debugv("Counterpoise: E(corr)= % 16.8f Ha", ecc.e_tot)
-
-        # Extended calculation
-
-        scell = pyscf.pbc.tools.cell_plus_imgs(self.mol, [3,3,3])
-        assert len(self.atoms) == 1
-        center = scell.atom_coord(self.atoms[0], unit=unit)
-
-
-
-        #mol = cell.to_mol() # Remove PBC
-        #assert len(self.atoms) == 1
-        #center = self.mol.atom_coord(self.atoms[0])
-        #atoms = [self.atoms[0]]
-        #for atm in range(cell.natm):
-        #    if atm == self.atoms[0]:
-        #        continue
-        #    coords = cell.atom_coord(atm, unit=unit)
-        #    if np.linalg.norm(coords - center) < radius:
-        #        atoms.append(atm)
-        #log.debugv("Included atoms for BSSE calculation of atom %d= %r", atoms[0], atoms[1:])
-
-        ## Atom in atom basis
-        #mf = pyscf.scf.RHF(mol)
-        ## TODO AUXBASIS ETC
-        #mf = mf.density_fit()
-        #mf.kernel()
-        #log.debuv("Counterpoise: E(MF,atom)= % 16.8f Ha", mf.e_tot)
-
-        #ccx = embcc.EmbCC(mf, solver=self.solver, bno_threshold=self.bno_threshold, opts=self.base.opts)
-        ## Do not use sym factor here! We also have to scale the MF energy
-        #ccx.add_atom_cluster(self.atoms[0], options=self.opts)
-        #ccx.kernel()
-        #log.debuv("Counterpoise: E(CC,atom)= %r", ccx.get_energies())
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return mol.natm, mf.e_tot, ecc.e_tot, dm0

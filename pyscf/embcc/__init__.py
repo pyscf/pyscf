@@ -8,7 +8,7 @@ import logging
 import subprocess
 
 import pyscf
-from .logg import init_logging
+from . import qlog
 from . import cmdargs
 
 # Command line arguments
@@ -16,8 +16,19 @@ args = cmdargs.parse_cmd_args()
 strict = args.strict
 
 # Logging
+qlog.init_logging()
 log = logging.getLogger(__name__)
-init_logging(log, logname=args.logname, loglevel=args.loglevel)
+#logg.init_default_logs(log, logname=args.logname, loglevel=args.loglevel)
+log.setLevel(args.loglevel)
+
+# Default log
+fmt = qlog.QuantermFormatter(indent=True)
+log.addHandler(qlog.QuantermFileHandler(args.logname, formatter=fmt))
+# Warning log (for WARNING and above)
+wh = qlog.QuantermFileHandler("warnings")
+wh.setLevel(logging.WARNING)
+log.addHandler(wh)
+
 
 log.info("+--------------------+")
 log.info("| Module pyscf.embcc |")

@@ -1,6 +1,5 @@
 """These functions take a cluster instance as first argument ("self")."""
 
-import logging
 import numpy as np
 from timeit import default_timer as timer
 
@@ -11,9 +10,6 @@ import pyscf.pbc.mp
 
 from .util import *
 from .psubspace import transform_mp2_eris
-
-log = logging.getLogger(__name__)
-
 
 def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
         canonicalize=True, local_dm=False, eris=None):
@@ -88,9 +84,9 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
         eris = self.base.get_eris(mp2)
     # Reuse previously obtained integral transformation into N^2 sized quantity (rather than N^4)
     else:
-        log.debug("Transforming previous eris.")
+        self.log.debug("Transforming previous eris.")
         eris = transform_mp2_eris(eris, c_occ, c_vir, ovlp=self.base.get_ovlp())
-    log.timing("Time for integral transformation:  %s", time_string(timer()-t0))
+    self.log.timing("Time for integral transformation:  %s", time_string(timer()-t0))
     assert (eris.ovov is not None)
 
     t0 = timer()
@@ -98,29 +94,29 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     nocc, nvir = t2.shape[0], t2.shape[2]
     assert (c_occ.shape[-1] == nocc)
     assert (c_vir.shape[-1] == nvir)
-    log.timing("Time for MP2 kernel:  %s", time_string(timer()-t0))
+    self.log.timing("Time for MP2 kernel:  %s", time_string(timer()-t0))
 
     # Energies
     e_mp2_full *= self.sym_factor
     t2loc = self.get_local_amplitudes(mp2, None, t2, symmetrize=True)[1]
     e_mp2 = self.sym_factor * mp2.energy(t2loc, eris)
-    log.debug("Bath E(MP2):  Cluster= %+16.8g Ha  Fragment= %+16.8g Ha", e_mp2_full, e_mp2)
+    self.log.debug("Bath E(MP2):  Cluster= %+16.8g Ha  Fragment= %+16.8g Ha", e_mp2_full, e_mp2)
 
     # MP2 density matrix
     #dm_occ = dm_vir = None
     if local_dm is False:
-        log.debug("Constructing DM from full T2 amplitudes.")
+        self.log.debug("Constructing DM from full T2 amplitudes.")
         t2l, t2r = t2, t2
         # This is equivalent to:
         # do, dv = pyscf.mp.mp2._gamma1_intermediates(mp2, eris=eris)
         # do, dv = -2*do, 2*dv
     elif local_dm is True:
         # LOCAL DM IS NOT RECOMMENDED - USE SEMI OR FALSE
-        log.warning("Using local_dm = True is not recommended - use 'semi' or False")
-        log.debug("Constructing DM from local T2 amplitudes.")
+        self.log.warning("Using local_dm = True is not recommended - use 'semi' or False")
+        self.log.debug("Constructing DM from local T2 amplitudes.")
         t2l, t2r = t2loc, t2loc
     elif local_dm == "semi":
-        log.debug("Constructing DM from semi-local T2 amplitudes.")
+        self.log.debug("Constructing DM from semi-local T2 amplitudes.")
         t2l, t2r = t2loc, t2
     else:
         raise ValueError("Unknown value for local_dm: %r" % local_dm)
@@ -148,7 +144,7 @@ def make_mp2_bno(self, kind, c_cluster_occ, c_cluster_vir, c_env_occ, c_env_vir,
     # TEST SVD of cluster-environment block
     if False:
         sv, c_svd = np.linalg.svd(dm[clt,env], full_matrices=False)[1:]
-        log.debug("Sqrt of singular values: %r", np.sqrt(sv))
+        self.log.debug("Sqrt of singular values: %r", np.sqrt(sv))
         #c_svd = np.dot(c_env, vh.T)
         c_svd = c_svd.T
         nsvd = np.sqrt(sv) > 1e-3
@@ -171,7 +167,7 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
     e_mp2_all, eris = self.run_mp2(Co1, Cv1)[:2]
     e_mp2_act = self.run_mp2(Co2, Cv2, eris=eris)[0]
     e_delta_mp2 = e_mp2_all - e_mp2_act
-    log.debug("MP2 correction: all=%.4g, active=%.4g, correction=%+.4g",
+    self.log.debug("MP2 correction: all=%.4g, active=%.4g, correction=%+.4g",
             e_mp2_all, e_mp2_act, e_delta_mp2)
     return e_delta_mp2
 
@@ -190,7 +186,7 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
 #    #    v = vh.T
 #    #    add = (s > threshold)
 #    #    nadd = np.count_nonzero(add)
-#    #    log.debug("Step= %3d sqrt(s)= %r n(add)= %d", i, s, nadd)
+#    #    self.log.debug("Step= %3d sqrt(s)= %r n(add)= %d", i, s, nadd)
 #
 #    #    # Rotate a
 #    #    arot = a.copy()
@@ -217,7 +213,7 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
 #        #clt, env = np.s_[:n], np.s_[n:]
 #
 #        s, v, nadd = block_svd(block, nsmall)
-#        log.debug("Step= %3d Sqrt(s)= %r Adding %d orbitals", i, s, nadd)
+#        self.log.debug("Step= %3d Sqrt(s)= %r Adding %d orbitals", i, s, nadd)
 #
 #        if step == 1:
 #            coeff = v
@@ -314,14 +310,14 @@ def get_mp2_correction(self, Co1, Cv1, Co2, Cv2):
 #        np.savetxt(f, dm_occ, fmt="%.10e", header="%s MP2 bath orbital occupation of cluster %s" % (kindname.title(), self.name))
 #
 #    if self.opts.plot_orbitals:
-#        #bins = np.hstack((-np.inf, np.logspace(-9, -3, 9-3+1), np.inf))
-#        bins = np.hstack((1, np.logspace(-3, -9, 9-3+1), -1))
+#        #bins = np.hstack((-np.inf, np.self.logspace(-9, -3, 9-3+1), np.inf))
+#        bins = np.hstack((1, np.self.logspace(-3, -9, 9-3+1), -1))
 #        for idx, upper in enumerate(bins[:-1]):
 #            lower = bins[idx+1]
-#            mask = np.logical_and((dm_occ > lower), (dm_occ <= upper))
+#            mask = np.self.logical_and((dm_occ > lower), (dm_occ <= upper))
 #            if np.any(mask):
 #                coeff = c_rot[:,mask]
-#                log.info("Plotting MP2 bath density between %.0e and %.0e containing %d orbitals." % (upper, lower, coeff.shape[-1]))
+#                self.log.info("Plotting MP2 bath density between %.0e and %.0e containing %d orbitals." % (upper, lower, coeff.shape[-1]))
 #                dm = np.dot(coeff, coeff.T)
 #                dset_idx = (4001 if kind == "occ" else 5001) + idx
 #                self.cubefile.add_density(dm, dset_idx=dset_idx)

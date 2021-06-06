@@ -23,6 +23,8 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
 
     t0 = timer()
     mol = pyscf.gto.Mole(atom='%s 0 0 0 ; %s 0 0 %f' % (*atoms, d), basis=basis)
+    mol.verbose = 10
+    mol.output = 'pyscf.out'
     mol.build()
     mf = pyscf.scf.RHF(mol)
     #mf = mf.density_fit()
@@ -47,7 +49,7 @@ def test_dimer(atoms=['H', 'H'], d=1.3, basis='cc-pvdz', bno_threshold=-1):
         cc.kernel()
         print("E(CCSD)=   %+16.8f Ha" % cc.e_tot)
         assert np.allclose(cc.e_tot, ecc.e_tot)
-        print("SUCCESS")
+        print(">>> SUCCESS")
 
 def make_cubic(a, atom="He", basis="gth-dzv", supercell=False):
     amat = a * np.eye(3)
@@ -101,7 +103,7 @@ def make_diamond_cell(a, atoms=['C', 'C'], basis='gth-dzv', supercell=False):
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
     return cell
 
-def make_graphene_cell(a, c, atoms=['C', 'C'], basis='gth-dzv', supercell=False):
+def make_graphene_cell(a, c, atoms=['C', 'C'], basis='gth-dzv', pseudo='gth-pade', supercell=False):
     amat = np.asarray([
             [a, 0, 0],
             [a/2, a*np.sqrt(3.0)/2, 0],
@@ -118,9 +120,11 @@ def make_graphene_cell(a, c, atoms=['C', 'C'], basis='gth-dzv', supercell=False)
     cell.a = amat
     cell.atom = atom
     cell.basis = basis
-    cell.pseudo = "gth-pade"
+    if pseudo:
+        cell.pseudo = pseudo
     cell.verbose = 10
     cell.dimension = 2
+    cell.output = 'pyscf.out'
     cell.build()
     if supercell:
         cell = pyscf.pbc.tools.super_cell(cell, supercell)
@@ -333,55 +337,22 @@ def test_graphene(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshol
 
     return kcc.e_tot
 
-def test_graphene_bsse(a=3.56, c=20.0, basis='gth-dzv', kmesh=[2, 2, 1], bno_threshold=1e-7):
+def test_graphene_bsse(a=3.56, c=20.0, basis='def-svp', pseudo=None, kmesh=[2, 2, 1], bno_threshold=1e-7):
 
-    ncells = np.product(kmesh)
-
-    # Monomer-basis
-    cell = make_graphene_cell(a, c, atoms=['C', None], basis=basis)
+    cell = make_graphene_cell(a, c, basis=basis, pseudo=pseudo)
     cell.lindep_threshold = 1e-7
     kpts = cell.make_kpts(kmesh)
     kmf = pyscf.pbc.scf.KRHF(cell, kpts)
     kmf = kmf.density_fit()
     kmf.kernel()
     kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
-    kcc.make_atom_cluster(0)
-    kcc.kernel()
-    e_cp_mon = kcc.e_tot
 
-    # dimer-basis
-    cell = make_graphene_cell(a, c, atoms=['C', 'Ghost-C'], basis=basis)
-    cell.lindep_threshold = 1e-7
-    kpts = cell.make_kpts(kmesh)
-    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
-    kmf = kmf.density_fit()
-    kmf.kernel()
-    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
-    kcc.make_atom_cluster(0)
-    kcc.kernel()
-    e_cp_dim = kcc.e_tot
-
-    e_bsse = 2*(e_cp_dim-e_cp_mon)
-    print("E(monomer)= %16.8f Ha" % e_cp_mon)
-    print("E(dimer)=   %16.8f Ha" % e_cp_dim)
-    print("E(BSSE)=    %16.8f Ha" % e_bsse)
-    return
-
-    # Full
-    cell = make_graphene_cell(a, c, basis=basis)
-    cell.lindep_threshold = 1e-7
-    kpts = cell.make_kpts(kmesh)
-    kmf = pyscf.pbc.scf.KRHF(cell, kpts)
-    kmf = kmf.density_fit()
-    kmf.kernel()
-    kcc = pyscf.embcc.EmbCC(kmf, bno_threshold=bno_threshold)
     kcc.make_atom_cluster(0, sym_factor=2)
+    e_bsse = kcc.clusters[0].get_fragment_bsse()
     kcc.kernel()
     e_tot = kcc.e_tot
 
     print("E(EmbCC)=   %16.8f Ha" % e_tot)
-    print("E(monomer)= %16.8f Ha" % e_cp_mon)
-    print("E(dimer)=   %16.8f Ha" % e_cp_dim)
     print("E(BSSE)=    %16.8f Ha" % e_bsse)
 
 
@@ -521,16 +492,17 @@ def test_full_ccsd_limit(EXPECTED, kmesh=[2, 2, 2]):
 
 def run_test():
 
-    #test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
+    test_dimer(['Li', 'H'], d=1.4, bno_threshold=-1)
     #test_dimer(['Li', 'Li'], d=2.0)
     #test_cubic(bno_threshold=-1)
     #test_cubic('C', basis='gth-tzvp')
    # test_diamond(basis='gth-tzvp', bno_threshold=1e-8)
-    ecc = test_graphene(basis='gth-dzv', bno_threshold=1e-4)
+    #ecc = test_graphene(basis='gth-dzv', bno_threshold=1e-4)
+    #assert np.isclose(ecc, -10.88016134)   # threshold 1e-4
     #assert np.isclose(ecc, -10.89049556)   # threshold -1
-    assert np.isclose(ecc, -10.88016134)   # threshold 1e-4
+
     #test_graphene(basis='gth-tzvp', bno_threshold=1e-8)
-    #test_graphene_bsse(basis='gth-dzv', kmesh=[1,1,1])
+    #test_graphene_bsse(basis='def2-svp', pseudo=None, kmesh=[2,2,1])
     #test_fci_solver()
     #test_perovskite()
     #test_diamond_bno_threshold(kmesh=[2,2,2])

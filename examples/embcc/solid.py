@@ -47,7 +47,6 @@ def get_arguments():
     parser.add_argument("--atoms", nargs="*")
     parser.add_argument("--basis", default="gth-dzvp")
     parser.add_argument("--pseudopot", type=str_or_none, default="gth-pade")
-    parser.add_argument("--counterpoise")
     parser.add_argument("--ecp")
     parser.add_argument("--supercell", type=int, nargs=3)
     parser.add_argument("--k-points", type=int, nargs=3)
@@ -59,6 +58,10 @@ def get_arguments():
     parser.add_argument("--precision", type=float, default=1e-8)
     parser.add_argument("--pyscf-verbose", type=int, default=10)
     parser.add_argument("--exp-to-discard", type=float, help="If set, discard diffuse basis functions.")
+    # Counterpoise
+    parser.add_argument("--counterpoise")
+    parser.add_argument("--counterpoise-shells", type=int, default=1)
+    parser.add_argument("--counterpoise-range", type=float)
     # Mean-field
     parser.add_argument("--save-scf", help="Save primitive cell SCF.", default="scf-%.2f.chk")           # If containg "%", it will be formatted as args.save_scf % a with a being the lattice constant
     parser.add_argument("--load-scf", help="Load primitive cell SCF.")
@@ -271,7 +274,6 @@ def make_cell(a, args, **kwargs):
         cell.a = None
     # Remove all but one atom, but keep basis functions of the 26 (3D) or 8 (2D) neighboring cells
     elif '*' in args.counterpoise:
-        maxr = 1000.0
         atmidx = int(args.counterpoise.replace('*', ''))
         atom = cell.atom.copy()
         center = atom[atmidx][1]
@@ -281,10 +283,9 @@ def make_cell(a, args, **kwargs):
                 atom[idx][0] = 'Ghost-%s' % atom[idx][0]
         # Add Ghost atoms in other cells
         if cell.dimension == 2:
-            images = [1, 1, 0]
-            #images = [2, 2, 0]
+            images = [args.counterpoise_shells, args.counterpoise_shells, 0]
         else:
-            images = [1, 1, 1]
+            images = [args.counterpoise_shells, args.counterpoise_shells, args.counterpoise_shells]
         for x in range(-images[0], images[0]+1):
             for y in range(-images[1], images[1]+1):
                 for z in range(-images[2], images[2]+1):
@@ -294,7 +295,7 @@ def make_cell(a, args, **kwargs):
                     for atm in cell.atom:
                         symb = atm[0] if atm[0].lower().startswith('ghost') else 'Ghost-%s' % atm[0]
                         coord = atm[1] + x*cell.a[0] + y*cell.a[1] + z*cell.a[2]
-                        if np.linalg.norm(coord - center) < maxr:
+                        if np.linalg.norm(coord - center) < args.counterpoise_range:
                             atom.append([symb, coord])
                             log.debugv("Adding atom %r at %r with distance %.2f", symb, coord, np.linalg.norm(coord-center))
                         else:

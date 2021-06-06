@@ -168,6 +168,7 @@ class CCSDSolver(ClusterSolver):
         #    cls = pyscf.pbc.cc.CCSD
         #    #cls = pyscf.cc.ccsd.CCSD
         cls = pyscf.cc.ccsd.CCSD
+        print(log)
         log.debug("CCSD class= %r" % cls)
         cc = cls(self.mf, mo_coeff=self.mo_coeff, mo_occ=self.mo_occ, frozen=self.get_frozen_indices())
         # Additional solver options

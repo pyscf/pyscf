@@ -8,8 +8,10 @@ import scipy.optimize
 
 log = logging.getLogger(__name__)
 
-__all__ = ['einsum', 'time_string', 'memory_string', 'Options']
+__all__ = ['NOTSET', 'einsum', 'time_string', 'memory_string', 'Options']
 
+
+class NOTSET: pass
 
 def einsum(*args, **kwargs):
     kwargs['optimize'] = kwargs.pop('optimize', True)

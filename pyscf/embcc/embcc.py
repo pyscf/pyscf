@@ -1,4 +1,4 @@
-import logging
+#import logging
 import os.path
 import functools
 from datetime import datetime
@@ -33,8 +33,7 @@ except ImportError:
     MPI_size = 1
     from timeit import default_timer as timer
 
-log = logging.getLogger(__name__)
-
+#log = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class EmbCCOptions(Options):
@@ -60,11 +59,11 @@ class EmbCCOptions(Options):
     popfile: str = "population"         # Filename for population analysis
     eom_ccsd: bool = False              # Perform EOM-CCSD in each cluster by default
     eomfile: str = "eom-ccsd"           # Filename for EOM-CCSD states
-
+    # Counterpoise correction of BSSE
+    bsse_correction: bool = True
+    bsse_rmax: float = 5.0              # In Angstrom
     # --- Other
     energy_partition: str = 'first-occ'
-    bsse_correction: bool = True
-    bsse_range: float = 10.0
     strict: bool = False                # Stop if cluster not converged
 
 
@@ -73,7 +72,7 @@ VALID_SOLVERS = [None, "", "MP2", "CISD", "CCSD", "CCSD(T)", 'FCI', "FCI-spin0",
 class EmbCC(QEmbeddingMethod):
 
 
-    def __init__(self, mf, solver='CCSD', bno_threshold=1e-8, options=None, **kwargs):
+    def __init__(self, mf, solver='CCSD', bno_threshold=1e-8, options=None, log=None, **kwargs):
         """Embedded CCSD calcluation object.
 
         Parameters
@@ -87,29 +86,30 @@ class EmbCC(QEmbeddingMethod):
         **kwargs :
             See class `EmbCCOptions` for additional options.
         """
+        super().__init__(mf, log=log)
+
         t_start = timer()
 
-        log.info("INITIALIZING EmbCC")
-        log.info("******************")
-        log.changeIndentLevel(1)
+        self.log.info("INITIALIZING EmbCC")
+        self.log.info("******************")
+        self.log.changeIndentLevel(1)
 
         if options is None:
             options = EmbCCOptions(**kwargs)
         else:
             options = dataclasses.replace(options, **kwargs)
         self.opts = options
-        log.info("EmbCC parameters:")
+        self.log.info("EmbCC parameters:")
         for key, val in self.opts.items():
-            log.info('  * %-24s %r', key + ':', val)
+            self.log.info('  * %-24s %r', key + ':', val)
 
-        super(EmbCC, self).__init__(mf)
 
         # --- Check input
         if not mf.converged:
             if self.opts.strict:
                 raise RuntimeError("Mean-field calculation not converged.")
             else:
-                log.error("Mean-field calculation not converged.")
+                self.log.error("Mean-field calculation not converged.")
         if solver not in VALID_SOLVERS:
             raise ValueError("Unknown solver: %s" % solver)
         self.solver = solver
@@ -117,9 +117,9 @@ class EmbCC(QEmbeddingMethod):
         # Minimal basis for IAO
         if self.opts.iao_minao == 'auto':
             self.opts.iao_minao = helper.get_minimal_basis(self.mol.basis)
-            log.warning("Minimal basis set %s for IAOs was selected automatically.",  self.opts.iao_minao)
-        log.info("Computational basis= %s", self.mol.basis)
-        log.info("Minimal basis=       %s", self.opts.iao_minao)
+            self.log.warning("Minimal basis set '%s' for IAOs was selected automatically.",  self.opts.iao_minao)
+        self.log.info("Computational basis= %s", self.mol.basis)
+        self.log.info("Minimal basis=       %s", self.opts.iao_minao)
 
         # Bath natural orbital threshold
         if np.isscalar(bno_threshold):
@@ -132,24 +132,24 @@ class EmbCC(QEmbeddingMethod):
         assert np.all(c.imag == 0), "max|Im(C)|= %.2e" % abs(c.imag).max()
         ctsc = np.linalg.multi_dot((c.T, self.get_ovlp(), c))
         nonorth = abs(ctsc - np.eye(ctsc.shape[-1])).max()
-        log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-5 else "")
+        self.log.info("Max. non-orthogonality of input orbitals= %.2e%s", nonorth, " (!!!)" if nonorth > 1e-5 else "")
         if self.opts.orthogonal_mo_tol and nonorth > self.opts.orthogonal_mo_tol:
             t0 = timer()
-            log.info("Orthogonalizing orbitals...")
+            self.log.info("Orthogonalizing orbitals...")
             self.mo_coeff = helper.orthogonalize_mo(c, self.get_ovlp())
             change = abs(np.diag(np.linalg.multi_dot((self.mo_coeff.T, self.get_ovlp(), c)))-1)
-            log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
-            log.timing("Time for orbital orthogonalization: %s", time_string(timer()-t0))
+            self.log.info("Max. orbital change= %.2e%s", change.max(), " (!!!)" if change.max() > 1e-4 else "")
+            self.log.timing("Time for orbital orthogonalization: %s", time_string(timer()-t0))
 
         # Prepare fragments
         #if self.local_orbital_type in ("IAO", "LAO"):
         if self.opts.fragment_type in ("IAO", "LAO"):
             t0 = timer()
             self.init_fragments()
-            log.timing("Time for fragment initialization: %s", time_string(timer()-t0))
+            self.log.timing("Time for fragment initialization: %s", time_string(timer()-t0))
 
-        log.timing("Time for EmbCC setup: %s", time_string(timer()-t_start))
-        log.changeIndentLevel(-1)
+        self.log.timing("Time for EmbCC setup: %s", time_string(timer()-t_start))
+        self.log.changeIndentLevel(-1)
 
         # Intermediate and output attributes
         self.clusters = []
@@ -172,7 +172,7 @@ class EmbCC(QEmbeddingMethod):
 
         locmethod = self.opts.localize_fragment
         if locmethod:
-            log.debug("Localize fragment orbitals with %s method", locmethod)
+            self.log.debug("Localize fragment orbitals with %s method", locmethod)
 
             #orbs = {self.ao_labels[i] : self.C_ao[:,i:i+1] for i in range(self.C_ao.shape[-1])}
             #orbs = {"A" : self.C_ao}
@@ -191,16 +191,16 @@ class EmbCC(QEmbeddingMethod):
             elif locmethod == "LAO":
                 #centers = [l[0] for l in self.mol.ao_labels(None)]
                 centers = [l[0] for l in self.ao_labels]
-                log.debug("Atom centers: %r", centers)
+                self.log.debug("Atom centers: %r", centers)
                 C_loc = localize_ao(self.mol, self.C_ao, centers)
 
             #C_loc = locfunc(self.mol).kernel(self.C_ao, verbose=4)
-            log.timing("Time for orbital localization: %s", time_string(timer()-t0))
+            self.log.timing("Time for orbital localization: %s", time_string(timer()-t0))
             assert C_loc.shape == self.C_ao.shape
             # Check that all orbitals kept their fundamental character
             chi = np.einsum("ai,ab,bi->i", self.C_ao, self.get_ovlp(), C_loc)
-            log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
-            log.info("Smallest value: %.3g" % np.amin(chi))
+            self.log.info("Diagonal of AO-Loc(AO) overlap: %r", chi)
+            self.log.info("Smallest value: %.3g" % np.amin(chi))
             #assert np.all(chi > 0.5)
             self.C_ao = C_loc
 
@@ -278,9 +278,9 @@ class EmbCC(QEmbeddingMethod):
         assert len(iao_labels) == C_ao.shape[-1]
 
         loc = np.isin(iao_labels, ao_labels)
-        log.debug("Local NonOrth IAOs: %r", (np.asarray(iao_labels)[loc]).tolist())
+        self.log.debug("Local NonOrth IAOs: %r", (np.asarray(iao_labels)[loc]).tolist())
         nlocal = np.count_nonzero(loc)
-        log.debug("Number of local IAOs=%3d", nlocal)
+        self.log.debug("Number of local IAOs=%3d", nlocal)
 
         C_local = C_ao[:,loc]
         # Orthogonalize locally
@@ -361,7 +361,7 @@ class EmbCC(QEmbeddingMethod):
             refmol = pyscf.lo.iao.reference_mol(self.mol, minao=self.opts.iao_minao)
             for ao in ao_labels:
                 ao_indices = refmol.search_ao_label(ao).tolist()
-                log.debug("IAOs for label %s: %r", ao, (np.asarray(refmol.ao_labels())[ao_indices]).tolist())
+                self.log.debug("IAOs for label %s: %r", ao, (np.asarray(refmol.ao_labels())[ao_indices]).tolist())
                 if not ao_indices:
                     raise ValueError("No orbitals found for label %s" % ao)
                 indices += ao_indices
@@ -377,14 +377,14 @@ class EmbCC(QEmbeddingMethod):
         cluster = self.make_fragment(name, C_local, C_env, **kwargs)
         return cluster
 
-    def make_atom_cluster(self, atoms, name=None, check_atoms=True, **kwargs):
+    def make_atom_fragment(self, atoms, name=None, check_atoms=True, **kwargs):
         """
         Parameters
         ---------
         atoms : list of int/str or int/str
-            Atom labels of atoms in cluster.
+            Atom labels of atoms in fragment.
         name : str
-            Name of cluster.
+            Name of fragment.
         """
         # Atoms may be a single atom index/label
         #if not isinstance(atoms, (tuple, list, np.ndarray)):
@@ -445,11 +445,11 @@ class EmbCC(QEmbeddingMethod):
             #indices = np.nonzero(np.isin(ao_atoms, atoms))[0]
 
             # Use atom labels as AO labels
-            log.debug("Making occupied projector.")
+            self.log.debug("Making occupied projector.")
             Po = self.get_ao_projector(atom_labels, basis=kwargs.pop("basis_proj_occ", None))
-            log.debug("Making virtual projector.")
+            self.log.debug("Making virtual projector.")
             Pv = self.get_ao_projector(atom_labels, basis=kwargs.pop("basis_proj_vir", None))
-            log.debug("Done.")
+            self.log.debug("Done.")
 
             o = (self.mo_occ > 0)
             v = (self.mo_occ == 0)
@@ -461,8 +461,8 @@ class EmbCC(QEmbeddingMethod):
             rev = np.s_[::-1]
             eo, Vo = eo[rev], Vo[:,rev]
             ev, Vv = ev[rev], Vv[:,rev]
-            log.debug("Non-zero occupied eigenvalues:\n%r", eo[eo>1e-10])
-            log.debug("Non-zero virtual eigenvalues:\n%r", ev[ev>1e-10])
+            self.log.debug("Non-zero occupied eigenvalues:\n%r", eo[eo>1e-10])
+            self.log.debug("Non-zero virtual eigenvalues:\n%r", ev[ev>1e-10])
             #tol = 1e-8
             tol = 0.1
             lo = eo > tol
@@ -471,17 +471,21 @@ class EmbCC(QEmbeddingMethod):
             Cv = np.dot(C[:,v], Vv)
             C_local = np.hstack((Co[:,lo], Cv[:,lv]))
             C_env = np.hstack((Co[:,~lo], Cv[:,~lv]))
-            log.debug("Number of local orbitals: %d", C_local.shape[-1])
-            log.debug("Number of environment orbitals: %d", C_env.shape[-1])
+            self.log.debug("Number of local orbitals: %d", C_local.shape[-1])
+            self.log.debug("Number of environment orbitals: %d", C_env.shape[-1])
 
-        cluster = self.make_fragment(name, C_local, C_env, atoms=atom_indices, **kwargs)
+        frag = self.make_fragment(name, C_local, C_env, atoms=atom_indices, **kwargs)
 
         # TEMP
         #ao_indices = get_ao_indices_at_atoms(self.mol, atomids)
         ao_indices = helper.atom_labels_to_ao_indices(self.mol, atom_labels)
-        cluster.ao_indices = ao_indices
+        frag.ao_indices = ao_indices
 
-        return cluster
+        return frag
+
+    def make_atom_cluster(self, *args, **kwargs):
+        self.log.warning("make_atom_cluster is deprecated.")
+        return self.make_atom_fragment(*args, **kwargs)
 
     def make_all_atom_clusters(self, **kwargs):
         """Make a cluster for each atom in the molecule."""
@@ -500,7 +504,7 @@ class EmbCC(QEmbeddingMethod):
 
     def set_cluster_attributes(self, attr, values):
         """Set attribute for each cluster."""
-        log.debug("Setting attribute %s of all clusters", attr)
+        self.log.debug("Setting attribute %s of all clusters", attr)
         for i, cluster in enumerate(self.clusters):
             setattr(cluster, attr, values[i])
 
@@ -540,7 +544,7 @@ class EmbCC(QEmbeddingMethod):
 
         if filename:
             tstamp = datetime.now()
-            log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
+            self.log.info("[%s] Writing mean-field population analysis to file \"%s\"", tstamp, filename)
             with open(filename, mode) as f:
                 f.write("[%s] Mean-field population analysis\n" % tstamp)
                 f.write("*%s********************************\n" % (26*"*"))
@@ -573,7 +577,7 @@ class EmbCC(QEmbeddingMethod):
             ao_labels = ["-".join([str(xi) for xi in x]) for x in self.mol.ao_labels(None)]
             iao_labels = ["-".join([str(xi) for xi in x]) for x in self.iao_labels]
             #iao_labels = ["-".join(x) for x in self.iao_labels]
-            log.info("[%s] Writing fragment orbitals to file \"%s\"", tstamp, filename)
+            self.log.info("[%s] Writing fragment orbitals to file \"%s\"", tstamp, filename)
             with open(filename, "a") as f:
                 f.write("[%s] Fragment Orbitals\n" % tstamp)
                 f.write("*%s*******************\n" % (26*"*"))
@@ -590,9 +594,9 @@ class EmbCC(QEmbeddingMethod):
         self.pop_mf, self.pop_mf_chg = self.pop_analysis()
 
         nelec_frags = sum([x.sym_factor*x.nelectron for x in self.clusters])
-        log.info("Total number of mean-field electrons over all fragments= %.8f", nelec_frags)
+        self.log.info("Total number of mean-field electrons over all fragments= %.8f", nelec_frags)
         if abs(nelec_frags - np.rint(nelec_frags)) > 1e-4:
-            log.warning("Number of electrons not integer!")
+            self.log.warning("Number of electrons not integer!")
 
         for idx, fragment in enumerate(self.clusters):
             if MPI_rank != (idx % MPI_size):
@@ -600,12 +604,12 @@ class EmbCC(QEmbeddingMethod):
 
             mpi_info = (" on MPI process %3d" % MPI_rank) if MPI_size > 1 else ""
             msg = "RUNNING FRAGMENT %3d: %s%s" % (fragment.id, fragment.name, mpi_info.upper())
-            log.info(msg)
-            log.info(len(msg)*"*")
-            log.changeIndentLevel(1)
+            self.log.info(msg)
+            self.log.info(len(msg)*"*")
+            self.log.changeIndentLevel(1)
             fragment.kernel(**kwargs)
-            log.info("Fragment %3d: %s%s is done.", fragment.id, fragment.name, mpi_info)
-            log.changeIndentLevel(-1)
+            self.log.info("Fragment %3d: %s%s is done.", fragment.id, fragment.name, mpi_info)
+            self.log.changeIndentLevel(-1)
 
         #results = self.collect_results("converged", "e_corr", "e_delta_mp2", "e_corr_v", "e_corr_d")
         #attributes = ["converged", "e_corr", "e_pert_t",
@@ -618,10 +622,10 @@ class EmbCC(QEmbeddingMethod):
 
         results = self.collect_results(*attributes)
         if MPI_rank == 0 and not np.all(results["converged"]):
-            log.critical("CRITICAL: The following fragments did not converge:")
+            self.log.critical("CRITICAL: The following fragments did not converge:")
             for i, x in enumerate(self.clusters):
                 if not results["converged"][i]:
-                    log.critical("%3d %s solver= %s", x.id, x.name, x.solver)
+                    self.log.critical("%3d %s solver= %s", x.id, x.name, x.solver)
             if self.opts.strict:
                 raise RuntimeError("Not all fragments converged")
 
@@ -636,9 +640,10 @@ class EmbCC(QEmbeddingMethod):
             self.print_results(results)
 
         if MPI: MPI_comm.Barrier()
-        log.info("Total wall time:  %s", time_string(timer()-t_start))
+        self.log.info("Total wall time:  %s", time_string(timer()-t_start))
 
-        log.info("All done.")
+        #self.log.info("All done.")
+        self.log.warning("All done.")
 
     # Alias for kernel
     run = kernel
@@ -646,7 +651,7 @@ class EmbCC(QEmbeddingMethod):
     def collect_results(self, *attributes):
         """Use MPI to collect results from all fragments."""
 
-        #log.debug("Collecting attributes %r from all clusters", (attributes,))
+        #self.log.debug("Collecting attributes %r from all clusters", (attributes,))
         clusters = self.clusters
 
         if MPI:
@@ -665,14 +670,14 @@ class EmbCC(QEmbeddingMethod):
         return results
 
     def show_cluster_sizes(self, results, show_largest=True):
-        log.info("CLUSTER SIZES")
-        log.info("*************")
+        self.log.info("CLUSTER SIZES")
+        self.log.info("*************")
         fmtstr = "  * %3d %-10s  :  active=%4d  frozen=%4d  ( %5.1f %%)"
         imax = [0]
         for i, x in enumerate(self.clusters):
             nactive = results["nactive"][i]
             nfrozen = results["nfrozen"][i]
-            log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
+            self.log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
             if i == 0:
                 continue
             if nactive > results["nactive"][imax[0]]:
@@ -681,30 +686,30 @@ class EmbCC(QEmbeddingMethod):
                 imax.append(i)
 
         if show_largest and len(self.clusters) > 1:
-            log.info("LARGEST CLUSTER")
-            log.info("***************")
+            self.log.info("LARGEST CLUSTER")
+            self.log.info("***************")
             for i in imax:
                 x = self.clusters[i]
                 nactive = results["nactive"][i]
                 nfrozen = results["nfrozen"][i]
-                log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
+                self.log.info(fmtstr, x.id, x.trimmed_name(10), nactive, nfrozen, 100.0*nactive/self.nmo)
 
     def print_results(self, results):
         self.show_cluster_sizes(results)
 
-        log.info("FRAGMENT ENERGIES")
-        log.info("*****************")
-        log.info("CCSD / CCSD+dMP2 / CCSD+dMP2+(T)")
+        self.log.info("FRAGMENT ENERGIES")
+        self.log.info("*****************")
+        self.log.info("CCSD / CCSD+dMP2 / CCSD+dMP2+(T)")
         fmtstr = "  * %3d %-10s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha"
         for i, x in enumerate(self.clusters):
             e_corr = results["e_corr"][i]
             e_pert_t = results["e_pert_t"][i]
             e_delta_mp2 = results["e_delta_mp2"][i]
-            log.info(fmtstr, x.id, x.trimmed_name(10), e_corr, e_corr+e_delta_mp2, e_corr+e_delta_mp2+e_pert_t)
+            self.log.info(fmtstr, x.id, x.trimmed_name(10), e_corr, e_corr+e_delta_mp2, e_corr+e_delta_mp2+e_pert_t)
 
-        log.info("  * %-14s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
-        log.info("E(corr)= %+16.8f Ha", self.e_corr)
-        log.info("E(tot)=  %+16.8f Ha", self.e_tot)
+        self.log.info("  * %-14s  :  %+16.8f Ha  %+16.8f Ha  %+16.8f Ha", "total", self.e_corr, self.e_corr+self.e_delta_mp2, self.e_corr+self.e_delta_mp2+self.e_pert_t)
+        self.log.info("E(corr)= %+16.8f Ha", self.e_corr)
+        self.log.info("E(tot)=  %+16.8f Ha", self.e_tot)
 
     def get_energies(self):
         """Get total energy."""
@@ -723,7 +728,7 @@ class EmbCC(QEmbeddingMethod):
 
     def print_clusters(self):
         """Print fragments of calculations."""
-        log.info("%3s  %20s  %8s  %4s", "ID", "Name", "Solver", "Size")
+        self.log.info("%3s  %20s  %8s  %4s", "ID", "Name", "Solver", "Size")
         for cluster in self.clusters:
-            log.info("%3d  %20s  %8s  %4d", cluster.id, cluster.name, cluster.solver, cluster.size)
+            self.log.info("%3d  %20s  %8s  %4d", cluster.id, cluster.name, cluster.solver, cluster.size)
 

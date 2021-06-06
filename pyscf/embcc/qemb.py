@@ -6,30 +6,36 @@ import scipy
 import scipy.linalg
 
 import pyscf
+import pyscf.lib
 import pyscf.gto
 import pyscf.mp
 import pyscf.lo
 import pyscf.pbc
 import pyscf.pbc.gto
 
+from . import qlog
 from .util import *
 from .kao2gmo import gdf_to_pyscf_eris
 
-log = logging.getLogger(__name__)
-
-
 class QEmbeddingMethod:
 
-    def __init__(self, mf):
+    def __init__(self, mf, log=None, output=None, verbose=None):
+
+        self.log = log or logging.getLogger(__name__)
+        #if output is not None:
+            #log.
+        print(self.log)
+        print(self.log.name)
+        self.log.addHandler(qlog.QuantermFileHandler("Qemb.log"))
 
         # k-space unfolding
         if hasattr(mf, 'kpts') and mf.kpts is not None:
             t0 = timer()
             self.kdf = mf.with_df
-            log.info("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
-            log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
+            self.log.info("Mean-field calculations has %d k-points; unfolding to supercell.", self.ncells)
+            self.log.debug("type(df._cderi)= %r", type(self.kdf._cderi))
             mf = pyscf.pbc.tools.k2gamma.k2gamma(mf)
-            log.timing("Time for k->Gamma unfolding of mean-field calculation:  %s", time_string(timer()-t0))
+            self.log.timing("Time for k->Gamma unfolding of mean-field calculation:  %s", time_string(timer()-t0))
         else:
             self.kdf = None
         self.mf = mf
@@ -50,12 +56,12 @@ class QEmbeddingMethod:
 
         # Some output
         if self.mf.converged:
-            log.info("E(MF)= %+16.8f Ha", self.e_mf)
+            self.log.info("E(MF)= %+16.8f Ha", self.e_mf)
         else:
-            log.warning("E(MF)= %+16.8f Ha (not converged!)", self.e_mf)
-        log.info("n(AO)= %4d  n(MO)= %4d  n(linear dep.)= %4d", self.nao, self.nmo, self.nao-self.nmo)
+            self.log.warning("E(MF)= %+16.8f Ha (not converged!)", self.e_mf)
+        self.log.info("n(AO)= %4d  n(MO)= %4d  n(linear dep.)= %4d", self.nao, self.nmo, self.nao-self.nmo)
         idterr = self.mo_coeff.T.dot(self._ovlp).dot(self.mo_coeff) - np.eye(self.nmo)
-        log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
+        self.log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
                 "Orthogonality error of MF orbitals: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
 
 
@@ -96,7 +102,9 @@ class QEmbeddingMethod:
 
     @property
     def kcell(self):
-        """Unit cell for periodic calculations."""
+        """Unit cell for periodic calculations.
+        Note that this is not the unfolded supercell, which is stored in `self.mol`.
+        """
         if self.kdf is None:
             return None
         return self.kdf.cell
@@ -125,7 +133,10 @@ class QEmbeddingMethod:
 
     @property
     def e_mf(self):
-        """Total mean-field energy."""
+        """Total mean-field energy per unit cell (not unfolded supercell!).
+        Note that the input unit cell itself can be a supercell, in which case
+        `e_mf` refers to this cell.
+        """
         return self.mf.e_tot/self.ncells
 
 
@@ -158,7 +169,7 @@ class QEmbeddingMethod:
         """
         # Molecules or supercell:
         if self.kdf is None:
-            log.debugv("ao2mo method: %r", cm.ao2mo)
+            self.log.debugv("ao2mo method: %r", cm.ao2mo)
             if isinstance(cm, pyscf.mp.dfmp2.DFMP2):
                 # TODO: This is a hack, requiring modified PySCF - normal DFMP2 does not store 4c (ov|ov) integrals
                 return cm.ao2mo(store_eris=True)
@@ -207,7 +218,7 @@ class QEmbeddingMethod:
         c_occ = self.mo_coeff[:,self.mo_occ>0]
         c_iao = pyscf.lo.iao.iao(self.mol, c_occ, minao=minao)
         niao = c_iao.shape[-1]
-        log.info("Total number of IAOs= %4d", niao)
+        self.log.info("Total number of IAOs= %4d", niao)
 
         # Orthogonalize IAO using symmetric orthogonalization
         c_iao = pyscf.lo.vec_lowdin(c_iao, ovlp)
@@ -216,13 +227,13 @@ class QEmbeddingMethod:
         sc = np.dot(ovlp, c_iao)
         dm_iao = np.linalg.multi_dot((sc.T, self.mf.make_rdm1(), sc))
         nelec_iao = np.trace(dm_iao)
-        log.debugv('nelec_iao= %.8f', nelec_iao)
+        self.log.debugv('nelec_iao= %.8f', nelec_iao)
         if abs(nelec_iao - self.mol.nelectron) > 1e-5:
-            log.error("IAOs do not contain the correct number of electrons: %.8f", nelec_iao)
+            self.log.error("IAOs do not contain the correct number of electrons: %.8f", nelec_iao)
 
         # Test orthogonality of IAO
         idterr = c_iao.T.dot(ovlp).dot(c_iao) - np.eye(niao)
-        log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
+        self.log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
                 "Orthogonality error of IAO: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
 
         if not return_rest:
@@ -246,20 +257,20 @@ class QEmbeddingMethod:
         mask_iao, mask_rest = (e <= 0.5), (e > 0.5)
         e_iao, e_rest = e[mask_iao], e[mask_rest]
         if np.any(abs(e_iao) > 1e-3):
-            log.error("CRITICAL: Some IAO eigenvalues of 1-P_IAO are not close to 0:\n%r", e_iao)
+            self.log.error("CRITICAL: Some IAO eigenvalues of 1-P_IAO are not close to 0:\n%r", e_iao)
         elif np.any(abs(e_iao) > 1e-6):
-            log.warning("Some IAO eigenvalues e of 1-P_IAO are not close to 0: n= %d max|e|= %.2e",
+            self.log.warning("Some IAO eigenvalues e of 1-P_IAO are not close to 0: n= %d max|e|= %.2e",
                     np.count_nonzero(abs(e_iao) > 1e-6), abs(e_iao).max())
         if np.any(abs(1-e_rest) > 1e-3):
-            log.error("CRITICAL: Some non-IAO eigenvalues of 1-P_IAO are not close to 1:\n%r", e_rest)
+            self.log.error("CRITICAL: Some non-IAO eigenvalues of 1-P_IAO are not close to 1:\n%r", e_rest)
         elif np.any(abs(1-e_rest) > 1e-6):
-            log.warning("Some non-IAO eigenvalues e of 1-P_IAO are not close to 1: n= %d max|1-e|= %.2e",
+            self.log.warning("Some non-IAO eigenvalues e of 1-P_IAO are not close to 1: n= %d max|1-e|= %.2e",
                     np.count_nonzero(abs(1-e_rest) > 1e-6), abs(1-e_rest).max())
 
         if not (np.sum(mask_rest) + niao == self.nmo):
-            log.critical("Error in construction of remaining virtual orbitals! Eigenvalues of projector 1-P_IAO:\n%r", e)
-            log.critical("Number of eigenvalues above 0.5 = %d", np.sum(mask_rest))
-            log.critical("Total number of orbitals = %d", self.nmo)
+            self.log.critical("Error in construction of remaining virtual orbitals! Eigenvalues of projector 1-P_IAO:\n%r", e)
+            self.log.critical("Number of eigenvalues above 0.5 = %d", np.sum(mask_rest))
+            self.log.critical("Total number of orbitals = %d", self.nmo)
             raise RuntimeError("Incorrect number of remaining virtual orbitals")
         c_rest = np.dot(self.mo_coeff, c[:,mask_rest])        # Transform back to AO basis
 
@@ -268,7 +279,7 @@ class QEmbeddingMethod:
         # Test orthogonality of IAO + rest
         c_all = np.hstack((c_iao, c_rest))
         idterr = c_all.T.dot(ovlp).dot(c_all) - np.eye(self.nmo)
-        log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
+        self.log.log(logging.ERROR if np.linalg.norm(idterr) > 1e-5 else logging.DEBUG,
                 "Orthogonality error of IAO+vir. orbitals: L2= %.2e  Linf= %.2e", np.linalg.norm(idterr), abs(idterr).max())
 
         return c_iao, c_rest
@@ -303,33 +314,33 @@ class QEmbeddingMethod:
         # Occupancy per atom
         occ_atom = []
         iao_atoms = np.asarray([i[0] for i in iao_labels])
-        log.debugv('iao_atoms= %r', iao_atoms)
+        self.log.debugv('iao_atoms= %r', iao_atoms)
         for a in range(self.mol.natm):
             mask = np.where(iao_atoms == a)[0]
             occ_atom.append(occ_iao[mask])
-        log.debugv("occ_atom: %r", occ_atom)
+        self.log.debugv("occ_atom: %r", occ_atom)
 
         # Check lattice symmetry if k-point mf object was used
         tsym = False
         if self.ncells > 1:
             # IAO occupations per cell
             occ_cell = np.split(np.hstack(occ_atom), self.ncells)
-            log.debugv("occ_cell: %r", occ_cell)
+            self.log.debugv("occ_cell: %r", occ_cell)
             # Compare all cells to the primitive cell
-            log.debugv("list: %r", [np.allclose(occ_cell[i], occ_cell[0]) for i in range(self.ncells)])
+            self.log.debugv("list: %r", [np.allclose(occ_cell[i], occ_cell[0]) for i in range(self.ncells)])
             tsym = np.all([np.allclose(occ_cell[i], occ_cell[0]) for i in range(self.ncells)])
-        log.debugv("tsym: %r", tsym)
+        self.log.debugv("tsym: %r", tsym)
 
         # Print occupations of IAOs
-        log.info("IAO MEAN-FIELD OCCUPANCY PER ATOM")
-        log.info("*********************************")
+        self.log.info("IAO MEAN-FIELD OCCUPANCY PER ATOM")
+        self.log.info("*********************************")
         for a in range(self.mol.natm if not tsym else self.kcell.natm):
             mask = np.where(iao_atoms == a)[0]
-            log.debugv('mask= %r', mask)
+            self.log.debugv('mask= %r', mask)
             fmt = "  * %3d: %-8s total= %12.8f" + len(occ_atom[a])*"  %s= %10.8f"
             labels = [("_".join((x[2], x[3])) if x[3] else x[2]) for x in np.asarray(iao_labels)[mask]]
             vals = [val for pair in zip(labels, occ_atom[a]) for val in pair]
-            log.info(fmt, a, self.mol.atom_symbol(a), np.sum(occ_atom[a]), *vals)
+            self.log.info(fmt, a, self.mol.atom_symbol(a), np.sum(occ_atom[a]), *vals)
 
         return occ_iao
 
@@ -349,7 +360,7 @@ class QEmbeddingMethod:
         """
         refmol = pyscf.lo.iao.reference_mol(self.mol, minao=minao)
         iao_labels_refmol = refmol.ao_labels(None)
-        log.debugv('iao_labels_refmol: %r', iao_labels_refmol)
+        self.log.debugv('iao_labels_refmol: %r', iao_labels_refmol)
         if refmol.natm == self.mol.natm:
             iao_labels = iao_labels_refmol
         # If there are ghost atoms in the system, they will be removed in refmol.
@@ -363,7 +374,7 @@ class QEmbeddingMethod:
                 for atm in range(self.mol.natm):
                     coords = self.mol.atom_coord(atm)
                     if np.allclose(coords, ref_coords):
-                        log.debugv('reference cell atom %r maps to atom %r', refatm, atm)
+                        self.log.debugv('reference cell atom %r maps to atom %r', refatm, atm)
                         ref2mol.append(atm)
                         break
                 else:
@@ -371,7 +382,7 @@ class QEmbeddingMethod:
             iao_labels = []
             for iao in iao_labels_refmol:
                 iao_labels.append((ref2mol[iao[0]], iao[1], iao[2], iao[3]))
-        log.debugv('iao_labels: %r', iao_labels)
+        self.log.debugv('iao_labels: %r', iao_labels)
         assert (len(iao_labels_refmol) == len(iao_labels))
         return iao_labels
 
@@ -404,10 +415,10 @@ class QEmbeddingMethod:
         if isinstance(aos, slice):
             s2 = s1[aos,aos]
         elif isinstance(aos[0], str):
-            log.debugv("Searching for AO indices of AOs %r", aos)
+            self.log.debugv("Searching for AO indices of AOs %r", aos)
             aos_idx = self.mol.search_ao_label(aos)
-            log.debugv("Found AO indices: %r", aos_idx)
-            log.debugv("Corresponding to AO labels: %r", np.asarray(self.mol.ao_labels())[aos_idx])
+            self.log.debugv("Found AO indices: %r", aos_idx)
+            self.log.debugv("Corresponding to AO labels: %r", np.asarray(self.mol.ao_labels())[aos_idx])
             if len(aos_idx) == 0:
                 raise RuntimeError("No AOs with labels %r found" % aos)
             aos = aos_idx
@@ -476,10 +487,10 @@ class QEmbeddingMethod:
         if isinstance(aos, slice):
             s2 = s1[aos,aos]
         elif isinstance(aos[0], str):
-            log.debugv("Searching for AO indices of AOs %r", aos)
+            self.log.debugv("Searching for AO indices of AOs %r", aos)
             aos_idx = mol2.search_ao_label(aos)
-            log.debugv("Found AO indices: %r", aos_idx)
-            log.debugv("Corresponding to AO labels: %r", np.asarray(mol2.ao_labels())[aos_idx])
+            self.log.debugv("Found AO indices: %r", aos_idx)
+            self.log.debugv("Corresponding to AO labels: %r", np.asarray(mol2.ao_labels())[aos_idx])
             if len(aos_idx) == 0:
                 raise RuntimeError("No AOs with labels %r found" % aos)
             aos = aos_idx
@@ -502,7 +513,7 @@ class QEmbeddingMethod:
 class QEmbeddingFragment:
 
 
-    def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1.0,
+    def __init__(self, base, fid, name, c_frag, c_env, sym_factor=1.0, log=None,
             # Metadata
             aos=None, atoms=None):
         """
@@ -523,9 +534,10 @@ class QEmbeddingFragment:
         aos : list or int, optional
         atoms : list or int, optional
         """
+        self.log = log or base.log
         msg = "CREATING FRAGMENT %d: %s" % (fid, name)
-        log.info(msg)
-        log.info(len(msg)*"*")
+        self.log.info(msg)
+        self.log.info(len(msg)*"*")
 
         self.base = base
         self.id = fid
@@ -537,13 +549,13 @@ class QEmbeddingFragment:
         self.atoms = atoms
 
         # Some output
-        log.info("  * Number of fragment orbitals= %d", self.size)
-        log.info("  * Symmetry factor= %f", self.sym_factor)
-        log.info("  * Number of mean-field electrons= %.6f", self.nelectron)
+        self.log.info("  * Number of fragment orbitals= %d", self.size)
+        self.log.info("  * Symmetry factor= %f", self.sym_factor)
+        self.log.info("  * Number of mean-field electrons= %.6f", self.nelectron)
         if self.aos:
-            log.info("  * Associated AOs= %r", self.aos)
+            self.log.info("  * Associated AOs= %r", self.aos)
         if self.atoms:
-            log.info("  * Associated atoms= %r", self.atoms)
+            self.log.info("  * Associated atoms= %r", self.atoms)
 
     @property
     def mol(self):
@@ -575,6 +587,10 @@ class QEmbeddingFragment:
     def id_name(self):
         """Use this whenever a unique name is needed (for example to open a seperate file for each fragment)."""
         return "%s-%s" % (self.id, self.trimmed_name())
+
+    @property
+    def boundary_cond(self):
+        return self.base.boundary_cond
 
     def get_mo_occupation(self, *mo_coeff):
         """Get mean-field occupation numbers (diagonal of 1-RDM) of orbitals.
@@ -651,3 +667,92 @@ class QEmbeddingFragment:
         return c_occclt, c_virclt
 
 
+    # --- Counterpoise
+    # ================
+
+
+    def make_counterpoise_mol(self, rmax, nimages=5, unit='A', **kwargs):
+        """Make molecule object for counterposise calculation.
+
+        WARNING: This has only been tested for periodic systems so far!
+
+        Parameters
+        ----------
+        rmax : float
+            All atom centers within range `rmax` are added as ghost-atoms in the counterpoise correction.
+        nimages : int, optional
+            Number of neighboring unit cell in each spatial direction. Has no effect in open boundary
+            calculations. Default: 5.
+        unit : ['A', 'B']
+            Unit for `rmax`, either Angstrom (`A`) or Bohr (`B`).
+        **kwargs :
+            Additional keyword arguments for returned PySCF Mole/Cell object.
+
+        Returns
+        -------
+        mol_cp : pyscf.gto.Mole or pyscf.pbc.gto.Cell
+            Mole or Cell object with periodic boundary conditions removed
+            and with ghost atoms added depending on `rmax` and `nimages`.
+        """
+        # Atomic calculation with additional basis functions:
+        images = np.zeros(3, dtype=int)
+        if self.boundary_cond == 'periodic-1D':
+            images[0] = nimages
+        elif self.boundary_cond == 'periodic-2D':
+            images[:2] = nimages
+        elif self.boundary_cond == 'periodic':
+            images[:] = nimages
+        self.log.debugv('images= %r', images)
+
+        # TODO: More than one atom in fragment! -> find center over fragment atoms?
+        unit_pyscf = 'ANG' if (unit.upper()[0] == 'A') else unit
+        if self.kcell is None:
+            mol = self.mol
+        else:
+            mol = self.kcell
+        center = mol.atom_coord(self.atoms[0], unit=unit_pyscf).copy()
+        amat = mol.lattice_vectors().copy()
+        if unit.upper()[0] == 'A' and mol.unit.upper()[0] == 'B':
+            amat *= pyscf.lib.param.BOHR
+        if unit.upper()[0] == 'B' and mol.unit.upper()[:3] == 'ANG':
+            amat /= pyscf.lib.param.BOHR
+        self.log.debugv('A= %r', amat)
+        self.log.debugv('unit= %r', unit)
+        self.log.debugv('Center= %r', center)
+        atom = []
+        # Fragments atoms first:
+        for atm in self.atoms:
+            symb = mol.atom_symbol(atm)
+            coord = mol.atom_coord(atm, unit=unit_pyscf)
+            self.log.debug("Counterpoise: Adding fragment atom %6s at %8.5f %8.5f %8.5f", symb, *coord)
+            atom.append([symb, coord])
+        # Other atom positions. Note that rx = ry = rz = 0 for open boundary conditions
+        for rx in range(-images[0], images[0]+1):
+            for ry in range(-images[1], images[1]+1):
+                for rz in range(-images[2], images[2]+1):
+                    for atm in range(mol.natm):
+                        # This is a fragment atom - already included above as real atom
+                        if (abs(rx)+abs(ry)+abs(rz) == 0) and (atm in self.atoms):
+                            continue
+                        # This is either a non-fragment atom in the unit cell (rx = ry = rz = 0) or in a neighbor cell
+                        symb = mol.atom_symbol(atm)
+                        coord = mol.atom_coord(atm, unit=unit_pyscf).copy()
+                        if abs(rx)+abs(ry)+abs(rz) > 0:
+                            coord += (rx*amat[0] + ry*amat[1] + rz*amat[2])
+                        if not symb.lower().startswith('ghost'):
+                            symb = 'Ghost-' + symb
+                        distance = np.linalg.norm(coord - center)
+                        if distance <= rmax:
+                            self.log.debugv("Counterpoise:     including atom %6s at %8.5f %8.5f %8.5f with distance %8.5f %s", symb, *coord, distance, unit)
+                            atom.append([symb, coord])
+                        #else:
+                            #self.log.debugv("Counterpoise: NOT including atom %3s at %8.5f %8.5f %8.5f with distance %8.5f A", symb, *coord, distance)
+        mol_cp = mol.copy()
+        mol_cp.atom = atom
+        self.log.debugv('atom= %r', mol_cp.atom)
+        mol_cp.unit = unit_pyscf
+        mol_cp.a = None
+        for key, val in kwargs.items():
+            setattr(mol_cp, key, val)
+        mol_cp.build(False, False)
+        return mol_cp

@@ -3,7 +3,6 @@
 These require a projection of the some indices of the C1 and C2
 amplitudes.
 """
-import logging
 
 import numpy as np
 import scipy
@@ -16,8 +15,6 @@ __all__ = [
         "get_local_amplitudes_general",
         "get_local_energy",
         ]
-
-log = logging.getLogger(__name__)
 
 
 def get_local_amplitudes(self, cc, C1, C2, **kwargs):
@@ -39,7 +36,7 @@ def get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, part=None, symmetri
     # By default inherit from base object
     if part is None:
         part = self.base.opts.energy_partition
-    #log.debug("Amplitude partitioning = %s", part)
+    #self.log.debug("Amplitude partitioning = %s", part)
     if part not in ("first-occ", "first-vir", "democratic"):
         raise ValueError("Unknown partitioning of amplitudes: %s", part)
 
@@ -105,7 +102,7 @@ def get_local_amplitudes_general(self, C1, C2, c_occ, c_vir, part=None, symmetri
         # Corrections
         # ===========
         # Loop over all other clusters x
-        for x in self.loop_clusters(exclude_self=True):
+        for x in self.loop_fragments(exclude_self=True):
 
             Xo = x.get_local_projector(Co)
             Xv = x.get_local_projector(Cv)
@@ -189,9 +186,9 @@ def get_local_energy(self, cc, pC1, pC2, eris):
     e2 = 2*einsum('ijab,iabj', pC2, eris_ovvo)
     e2 -=  einsum('ijab,jabi', pC2, eris_ovvo)
 
-    log.info("Energy components: E1=%16.8g, E2=%16.8g", e1, e2)
+    self.log.info("Energy components: E1=%16.8g, E2=%16.8g", e1, e2)
     if e1 > 1e-4 and 10*e1 > e2:
-        log.warning("WARNING: Large E1 component!")
+        self.log.warning("WARNING: Large E1 component!")
 
     # Symmetry factor if fragment is repeated in molecule, (e.g. in hydrogen rings: only calculate one fragment)
     e_loc = self.sym_factor * (e1 + e2)
@@ -236,7 +233,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
 #    F = eris.fock[o][:,v]
 #    e1 = 2*np.sum(F * T1)
 #    if not np.isclose(e1, 0):
-#        log.warning("Warning: large E1 component: %.8e" % e1)
+#        self.log.warning("Warning: large E1 component: %.8e" % e1)
 
 #    #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
 #    def project_T2(P1, P2, P3, P4):
@@ -296,7 +293,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
 ##    v = cc.mo_occ[a] == 0
 ##
 ##    if eris is None:
-##        log.warning("Warning: recomputing AO->MO integral transformation")
+##        self.log.warning("Warning: recomputing AO->MO integral transformation")
 ##        eris = cc.ao2mo()
 ##
 ##    def get_projectors(aos):
@@ -320,7 +317,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
 ##    F = eris.fock[o][:,v]
 ##    e1 = 2*np.sum(F * T1)
 ##    if not np.isclose(e1, 0):
-##        log.warning("Warning: large E1 component: %.8e" % e1)
+##        self.log.warning("Warning: large E1 component: %.8e" % e1)
 ##
 ##    #tau = cc.t2 + einsum('ia,jb->ijab', cc.t1, cc.t1)
 ##    def project_T2(P1, P2, P3, P4):
@@ -386,7 +383,7 @@ def get_local_energy(self, cc, pC1, pC2, eris):
 ##    F = eris.fock[o][:,v]
 ##    e1 = 2*np.sum(F * pC1)
 ##    if not np.isclose(e1, 0):
-##        log.warning("Warning: large E1 component: %.8e" % e1)
+##        self.log.warning("Warning: large E1 component: %.8e" % e1)
 ##
 ##    # TWO-ELECTRON
 ##    # ============
