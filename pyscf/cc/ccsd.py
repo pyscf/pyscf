@@ -72,7 +72,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         # For tailored CC
-        if mycc.tailor_func is not None
+        if mycc.tailor_func is not None:
             t1new, t2new = mycc.tailor_func(t1new, t2new)
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
         tmpvec -= mycc.amplitudes_to_vector(t1, t2)
