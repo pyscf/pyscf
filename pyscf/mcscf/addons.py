@@ -321,7 +321,9 @@ def make_natural_orbitals (method_obj):
 
         natorbs : A set of natural orbitals made from method_obj.
     """
-    mf = method_obj._scf
+    mf = method_obj
+    if hasattr(method_obj, "_scf"):
+        mf = method_obj._scf
     rdm1 = method_obj.make_rdm1(ao_repr=True)
     S = mf.get_ovlp()
 
@@ -334,8 +336,7 @@ def make_natural_orbitals (method_obj):
         elif numpy.ndim(rdm1) == 2:
             Dm = rdm1
         else:
-            raise ValueError(
-                "rdm1 passed to is a numpy array," + 
+            raise ValueError("rdm1 passed to is a numpy array," +
                 "but it has the wrong number of dimensions: {}".format(numpy.ndim(rdm1)))
     else:
         raise ValueError(
