@@ -336,7 +336,8 @@ def make_natural_orbitals (method_obj):
         elif numpy.ndim(rdm1) == 2:
             Dm = rdm1
         else:
-            raise ValueError("rdm1 passed to is a numpy array," +
+            raise ValueError(
+                "rdm1 passed to is a numpy array," +
                 "but it has the wrong number of dimensions: {}".format(numpy.ndim(rdm1)))
     else:
         raise ValueError(
