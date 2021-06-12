@@ -236,6 +236,11 @@ class KnownValues(unittest.TestCase):
         ncas, nelecas = (8, 12)
         mymc = mcscf.CASCI(myhf, ncas, nelecas)
 
+        # Test UHF
+        # The tests below are only to ensure that `make_natural_orbitals` can 
+        # run at all since we've confirmed above that the NOONs are correct for MP2
+        mcscf.addons.make_natural_orbitals(myhf)
+
         # Test MP2
         # Trusted results from ORCA v4.2.1
         rmp2_noons = [1.99992786,1.99992701,1.99414062,1.98906552,1.96095173,1.96095165,1.95280755,1.02078458,1.02078457,0.04719006,0.01274288,0.01274278,0.00728679,0.00582683,0.00543964,0.00543962,0.00290772,0.00108258]
