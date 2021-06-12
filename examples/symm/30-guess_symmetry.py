@@ -2,6 +2,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
 import numpy
 from pyscf import gto, symm, scf
 

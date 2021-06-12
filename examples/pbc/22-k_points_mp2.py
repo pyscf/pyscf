@@ -4,6 +4,7 @@
 MP2 at an individual k-point
 '''
 
+from functools import reduce
 import numpy
 from pyscf.pbc import gto, scf, mp
 

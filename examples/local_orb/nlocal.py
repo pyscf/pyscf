@@ -14,6 +14,7 @@
 #
 # Localization based on UNO from UHF/UKS check files
 #
+from functools import reduce
 import numpy
 import scipy.linalg
 import h5py
