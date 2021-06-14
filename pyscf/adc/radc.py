@@ -245,7 +245,9 @@ def compute_amplitudes(myadc, eris):
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
     if (myadc.method == "adc(3)"):
+    #if (myadc.method == "adc(2)"):
 
+        t1_3 = np.zeros((nocc,nvir), dtype=t2_1.dtype)
         eris_ovoo = eris.ovoo
 
         t1_3 =  lib.einsum('d,ilad,ld->ia',e[nocc:],t2_1[:],t1_2,optimize=True)
@@ -2290,7 +2292,6 @@ def ip_compute_trans_moments(adc, orb):
     T = np.zeros((dim))
 
 ######## ADC(2) 1h part  ############################################
-
     if orb < nocc:
         T[s1:f1]  = idn_occ[orb, :]
         T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1, optimize = True)
@@ -2302,11 +2303,11 @@ def ip_compute_trans_moments(adc, orb):
     else :
         T[s1:f1] += t1_2[:,(orb-nocc)]
 
-######## ADC(2) 2h-1p  part  ############################################
+######### ADC(2) 2h-1p  part  ############################################
 
         t2_1_t = t2_1.transpose(2,3,1,0)
 
-        T[s2:f2] = t2_1_t[(orb-nocc),:,:,:].reshape(-1)
+        T[s2:f2] += t2_1_t[(orb-nocc),:,:,:].reshape(-1)
 
 ######## ADC(3) 2h-1p  part  ############################################
 
@@ -2338,7 +2339,7 @@ def ip_compute_trans_moments(adc, orb):
             T[s1:f1] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1, t2_2[orb,:,:,:],optimize = True)
             T[s1:f1] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1, t2_2[orb,:,:,:],optimize = True)
         else:
-            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
+            T[s1:f1] += 0.5 * lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] += t1_3[:,(orb-nocc)]
@@ -2349,6 +2350,7 @@ def ip_compute_trans_moments(adc, orb):
     T_aaa = T[n_singles:].reshape(nvir,nocc,nocc).copy()
     T_aaa = T_aaa - T_aaa.transpose(0,2,1)
     T[n_singles:] += T_aaa.reshape(-1)
+
 
     return T
 
@@ -2363,6 +2365,7 @@ def get_trans_moments(adc):
         T.append(T_a)
 
     T = np.array(T)
+    print (T)
     return T
 
 
