@@ -237,21 +237,23 @@ class Cube(object):
         coord = mol.atom_coords()
 
         # If the molecule is periodic, use lattice vectors as the box
-        # and ignore magin, origin, and extent arguments
+        # and automatically determine margin, origin, and extent
         if isinstance(mol, Cell):
             self.box = mol.lattice_vectors()
-            box = numpy.diag(self.box)
-            self.boxorig = (numpy.max(coord, axis=0) + numpy.min(coord, axis=0))/2 - box/2
+            atom_center = (numpy.max(coord, axis=0) + numpy.min(coord, axis=0))/2
+            box_center = (self.box[0] + self.box[1] + self.box[2])/2
+            self.boxorig = atom_center - box_center
         else:
+            # Create a box based on its origin and extents/lengths (rectangular cuboid only)
+            # If extent is not supplied, use the coordinates plus a margin on both sides
             if extent is None:
-                box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
-                self.box = numpy.diag(box)
-            else:
-                self.box = numpy.diag(extent)
+                extent = numpy.max(coord, axis=0) - numpy.min(coord, axis=0) + 2*margin
+            self.box = numpy.diag(extent)
+
+            # if origin is not supplied, set it as the minimum coordinate minus a margin.
             if origin is None:
-                self.boxorig = numpy.min(coord,axis=0) - margin
-            else:
-                self.boxorig = numpy.array(origin)
+                origin = numpy.min(coord, axis=0) - margin
+            self.boxorig = numpy.asarray(origin)
 
         if resolution is not None:
             nx, ny, nz = numpy.ceil(numpy.diag(self.box) / resolution).astype(int)
@@ -260,25 +262,24 @@ class Cube(object):
         self.ny = ny
         self.nz = nz
 
-        # Use an asymmetric mesh for tiling unit cells
         if isinstance(mol, Cell):
-            self.xs = numpy.arange(nx) * box[0] / nx
-            self.ys = numpy.arange(ny) * box[1] / ny
-            self.zs = numpy.arange(nz) * box[2] / nz
+            # Use an asymmetric mesh for tiling unit cells
+            self.xs = numpy.linspace(0, 1, nx, endpoint=False)
+            self.ys = numpy.linspace(0, 1, ny, endpoint=False)
+            self.zs = numpy.linspace(0, 1, nz, endpoint=False)
         else:
-            # .../(nx-1) to get symmetric mesh
+            # Use endpoint=True to get a symmetric mesh
             # see also the discussion https://github.com/sunqm/pyscf/issues/154
-            self.xs = numpy.arange(nx) * (numpy.diag(self.box)[0] / (nx - 1))
-            self.ys = numpy.arange(ny) * (numpy.diag(self.box)[1] / (ny - 1))
-            self.zs = numpy.arange(nz) * (numpy.diag(self.box)[2] / (nz - 1))
+            self.xs = numpy.linspace(0, 1, nx, endpoint=True)
+            self.ys = numpy.linspace(0, 1, ny, endpoint=True)
+            self.zs = numpy.linspace(0, 1, nz, endpoint=True)
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
         in the file.
         """
-        coords = lib.cartesian_prod([self.xs,self.ys,self.zs])
-        coords = numpy.asarray(coords, order='C') - (-self.boxorig)
-        return coords
+        frac_coords = lib.cartesian_prod([self.xs, self.ys, self.zs])
+        return frac_coords @ self.box + self.boxorig # Convert fractional coordinates to real-space coordinates
 
     def get_ngrids(self):
         return self.nx * self.ny * self.nz
@@ -297,12 +298,13 @@ class Cube(object):
         coord = mol.atom_coords()
         with open(fname, 'w') as f:
             f.write(comment+'\n')
-            f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
-            f.write('%5d' % mol.natm)
+            f.write(f'PySCF Version: {pyscf.__version__}  Date: {time.ctime()}\n')
+            f.write(f'{mol.natm:5d}')
             f.write('%12.6f%12.6f%12.6f\n' % tuple(self.boxorig.tolist()))
-            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nx, self.xs[1], 0, 0))
-            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.ny, 0, self.ys[1], 0))
-            f.write('%5d%12.6f%12.6f%12.6f\n' % (self.nz, 0, 0, self.zs[1]))
+            delta = (self.box.T * [self.xs[1], self.ys[1], self.zs[1]]).T
+            f.write(f'{self.nx:5d}{delta[0,0]:12.6f}{delta[0,1]:12.6f}{delta[0,2]:12.6f}\n')
+            f.write(f'{self.ny:5d}{delta[1,0]:12.6f}{delta[1,1]:12.6f}{delta[1,2]:12.6f}\n')
+            f.write(f'{self.nz:5d}{delta[2,0]:12.6f}{delta[2,1]:12.6f}{delta[2,2]:12.6f}\n')
             for ia in range(mol.natm):
                 atmsymb = mol.atom_symbol(ia)
                 f.write('%5d%12.6f'% (gto.charge(atmsymb), 0.))
