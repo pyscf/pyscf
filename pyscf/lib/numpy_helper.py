@@ -1028,10 +1028,14 @@ def condense(opname, a, loc_x, loc_y=None):
             for j,j0 in enumerate(loc_y):
                 j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1,j0:j1])
+
+    opname can be  sum, max, min, abssum, absmax, absmin, norm
     '''
-    assert(a.dtype == numpy.double)
+    assert a.dtype == numpy.double
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
+    assert opname[3:] in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')
+
     op = getattr(_np_helper, opname)
     if loc_y is None:
         loc_y = loc_x
@@ -1041,6 +1045,8 @@ def condense(opname, a, loc_x, loc_y=None):
     nloc_y = loc_y.size - 1
     if a.flags.f_contiguous:
         out = numpy.zeros((nloc_x, nloc_y), order='F')
+        loc_x, loc_y = loc_y, loc_x
+        nloc_x, nloc_y = nloc_x, nloc_y
     else:
         a = numpy.asarray(a, order='C')
         out = numpy.zeros((nloc_x, nloc_y))
