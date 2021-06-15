@@ -566,6 +566,13 @@ class StreamObject(object):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def add_keys(self, **kwargs):
+        '''Add or update attributes of the object and register these attributes in ._keys'''
+        if kwargs:
+            self.__dict__.update(**kwargs)
+            self._keys = self._keys.union(kwargs.keys())
+        return self
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is

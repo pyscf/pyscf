@@ -21,15 +21,14 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf.scf import hf
-from pyscf.scf import dhf
+from pyscf.scf import hf, ghf, dhf
 from pyscf.scf import _vhf
 from pyscf.data import nist
 from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = 1e-9
 
-class X2C(lib.StreamObject):
+class X2CHelperMixin(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
@@ -222,7 +221,6 @@ class X2C(lib.StreamObject):
         else:
             return lib.einsum('pi,xpq,qj->xij', c.conj(), pc_mat, c)
 
-
     def get_xmat(self, mol=None):
         if mol is None:
             xmol = self.get_xmol(mol)[0]
@@ -269,13 +267,140 @@ class X2C(lib.StreamObject):
         self.mol = mol
         return self
 
+class SpinorX2CHelper(X2CHelperMixin):
+    '''2-component X2c (including spin-free and spin-dependent terms) in
+    the j-adapted spinor basis.
+    '''
+    pass
+
+X2C = SpinorX2CHelper
+
+class SpinOrbitalX2CHelper(X2CHelperMixin):
+    '''2-component X2c (including spin-free and spin-dependent terms) in
+    the Gaussian type spin-orbital basis (as the spin-orbital basis in GHF)
+    '''
+    def get_hcore(self, mol=None):
+        if mol is None: mol = self.mol
+        if mol.has_ecp():
+            raise NotImplementedError
+
+        xmol, contr_coeff = self.get_xmol(mol)
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+
+        t = _block_diag(xmol.intor_symmetric('int1e_kin'))
+        v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
+        s = _block_diag(xmol.intor_symmetric('int1e_ovlp'))
+        w = _sigma_dot(xmol.intor('int1e_spnucsp'))
+        if 'get_xmat' in self.__dict__:
+            # If the get_xmat method is overwritten by user, build the X
+            # matrix with the external get_xmat method
+            x = self.get_xmat(xmol)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
+
+        elif 'ATOM' in self.approx.upper():
+            atom_slices = xmol.offset_nr_by_atom()
+            # spin-orbital basis is twice the size of NR basis
+            atom_slices[:,2:] *= 2
+            nao = xmol.nao_nr() * 2
+            x = numpy.zeros((nao,nao))
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = _block_diag(xmol.intor('int1e_kin', shls_slice=shls_slice))
+                s1 = _block_diag(xmol.intor('int1e_ovlp', shls_slice=shls_slice))
+                with xmol.with_rinv_at_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = _block_diag(z * xmol.intor('int1e_rinv', shls_slice=shls_slice))
+                    w1 = _sigma_dot(z * xmol.intor('int1e_sprinvsp', shls_slice=shls_slice))
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+            h1 = _get_hcore_fw(t, v, w, s, x, c)
+
+        else:
+            h1 = _x2c1e_get_hcore(t, v, w, s, c)
+
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('int1e_ovlp')
+            s21 = mole.intor_cross('int1e_ovlp', xmol, mol)
+            c = _block_diag(lib.cho_solve(s22, s21))
+            h1 = reduce(lib.dot, (c.T, h1, c))
+        if self.xuncontract and contr_coeff is not None:
+            contr_coeff = _block_diag(contr_coeff)
+            h1 = reduce(lib.dot, (contr_coeff.T, h1, contr_coeff))
+        return h1
+
+    @lib.with_doc(X2CHelperMixin.picture_change.__doc__)
+    def picture_change(self, even_operator=(None, None), odd_operator=None):
+        mol = self.mol
+        xmol, c = self.get_xmol(mol)
+        pc_mat = self._picture_change(xmol, even_operator, odd_operator)
+
+        if self.basis is not None:
+            s22 = xmol.intor_symmetric('int1e_ovlp')
+            s21 = mole.intor_cross('int1e_ovlp', xmol, mol)
+            c = lib.cho_solve(s22, s21)
+
+        elif self.xuncontract:
+            pass
+
+        else:
+            return pc_mat
+
+        c = _block_diag(c)
+        if pc_mat.ndim == 2:
+            return lib.einsum('pi,pq,qj->ij', c, pc_mat, c)
+        else:
+            return lib.einsum('pi,xpq,qj->xij', c, pc_mat, c)
+
+    def get_xmat(self, mol=None):
+        if mol is None:
+            xmol = self.get_xmol(mol)[0]
+        else:
+            xmol = mol
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xmol.offset_nr_by_atom()
+            # spin-orbital basis is twice the size of NR basis
+            atom_slices[:,2:] *= 2
+            nao = xmol.nao_nr() * 2
+            x = numpy.zeros((nao,nao))
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = _block_diag(xmol.intor('int1e_kin', shls_slice=shls_slice))
+                s1 = _block_diag(xmol.intor('int1e_ovlp', shls_slice=shls_slice))
+                with xmol.with_rinv_at_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = _block_diag(z * xmol.intor('int1e_rinv', shls_slice=shls_slice))
+                    w1 = _sigma_dot(z * xmol.intor('int1e_sprinvsp', shls_slice=shls_slice))
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            t = _block_diag(xmol.intor_symmetric('int1e_kin'))
+            v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
+            s = _block_diag(xmol.intor_symmetric('int1e_ovlp'))
+            w = _sigma_dot(xmol.intor('int1e_spnucsp'))
+            x = _x2c1e_xmatrix(t, v, w, s, c)
+        return x
+
+    def _get_rmat(self, x=None):
+        '''The matrix (in AO basis) that changes metric from NESC metric to NR metric'''
+        xmol = self.get_xmol()[0]
+        if x is None:
+            x = self.get_xmat(xmol)
+        c = lib.param.LIGHT_SPEED
+        s = _block_diag(xmol.intor_symmetric('int1e_ovlp'))
+        t = _block_diag(xmol.intor_symmetric('int1e_kin'))
+        s1 = s + reduce(numpy.dot, (x.conj().T, t, x)) * (.5/c**2)
+        return _get_r(s, s1)
+
 
 def get_hcore(mol):
     '''2-component X2c hcore Hamiltonian (including spin-free and
     spin-dependent terms) in the j-adapted spinor basis.
     '''
-    x2c = X2C(mol)
-    return x2c.get_hcore(mol)
+    return SpinorX2CHelper(mol).get_hcore(mol)
 
 def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
@@ -327,9 +452,10 @@ def get_init_guess(mol, key='minao'):
 
 
 class X2C_UHF(hf.SCF):
+    '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self.with_x2c = X2C(mol)
+        self.with_x2c = SpinorX2CHelper(mol)
         #self.with_x2c.xuncontract = False
         self._keys = self._keys.union(['with_x2c'])
 
@@ -450,11 +576,6 @@ class X2C_UHF(hf.SCF):
         if dm is None: dm =self.make_rdm1()
         log = logger.new_logger(mol, verbose)
 
-        if 'unit_symbol' in kwargs:  # pragma: no cover
-            log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
-                     'unit since PySCF-1.5.')
-            unit = kwargs['unit_symbol']
-
         if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
             # UHF denisty matrices
             dm = dm[0] + dm[1]
@@ -480,10 +601,18 @@ class X2C_UHF(hf.SCF):
             log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
         return mol_dip
 
+    def x2c1e(self):
+        return self
+    x2c = x2c1e
+
+    def sfx2c1e(self):
+        raise NotImplementedError
+
 UHF = X2C_UHF
 
 class X2C_RHF(X2C_UHF):
     def __init__(self, mol):
+        super().__init__(mol)
         if dhf.zquatev is None:
             raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
 
@@ -493,7 +622,7 @@ class X2C_RHF(X2C_UHF):
 RHF = X2C_RHF
 
 try:
-    from pyscf.dft import rks, dks, r_numint
+    from pyscf.dft import rks, dks, gks, r_numint
     class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
         def __init__(self, mol):
             X2C_UHF.__init__(self, mol)
@@ -514,7 +643,7 @@ try:
 
     class X2C_RKS(X2C_UKS):
         def __init__(self, mol):
-            X2C_UKS.__init__(self, mol)
+            super().__init__(mol)
             if dhf.zquatev is None:
                 raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
 
@@ -525,6 +654,110 @@ try:
 
 except ImportError:
     pass
+
+def x2c1e_ghf(mf):
+    '''
+    For the given *GHF* object, generate X2C-GSCF object in GHF spin-orbital
+    basis
+
+    Args:
+        mf : an GHF/GKS object
+
+    Returns:
+        An GHF/GKS object
+
+    Examples:
+
+    >>> mol = pyscf.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
+    >>> mf = scf.GHF(mol).x2c1e().run()
+    '''
+    assert isinstance(mf, ghf.GHF)
+
+    if isinstance(mf, _X2C_SCF):
+        if mf.with_x2c is None:
+            mf.with_x2c = SpinOrbitalX2CHelper(mf.mol)
+            return mf
+        elif not isinstance(mf.with_x2c, SpinOrbitalX2CHelper):
+            # An object associated to sfx2c1e.SpinFreeX2CHelper
+            raise NotImplementedError
+        else:
+            return mf
+
+    mf_class = mf.__class__
+    if mf_class.__doc__ is None:
+        doc = ''
+    else:
+        doc = mf_class.__doc__
+
+    class X2C1E_GSCF(_X2C_SCF, mf_class):
+        __doc__ = doc + '''
+        Attributes for spin-orbital X2C:
+            with_x2c : X2C object
+        '''
+        def __init__(self, mol, *args, **kwargs):
+            mf_class.__init__(self, mol, *args, **kwargs)
+            self.with_x2c = SpinOrbitalX2CHelper(mf.mol)
+            self._keys = self._keys.union(['with_x2c'])
+
+        def get_hcore(self, mol=None):
+            if mol is None: mol = self.mol
+            return self.with_x2c.get_hcore(mol)
+
+        def dump_flags(self, verbose=None):
+            mf_class.dump_flags(self, verbose)
+            if self.with_x2c:
+                self.with_x2c.dump_flags(verbose)
+            return self
+
+        def reset(self, mol):
+            self.with_x2c.reset(mol)
+            return mf_class.reset(self, mol)
+
+        def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                       picture_change=True, **kwargs):
+            r''' Dipole moment calculation with picture change correction
+
+            Args:
+                 mol: an instance of :class:`Mole`
+                 dm : a 2D ndarrays density matrices
+
+            Kwarg:
+                picture_change (bool) : Whether to compute the dipole moment with
+                picture change correction.
+
+            Return:
+                A list: the dipole moment on x, y and z component
+            '''
+            if mol is None: mol = self.mol
+            if dm is None: dm = self.make_rdm1()
+            log = logger.new_logger(mol, verbose)
+
+            nao = mol.nao
+            dm = dm[:nao,:nao] + dm[nao:,nao:]
+
+            charges = mol.atom_charges()
+            coords  = mol.atom_coords()
+            nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+            with mol.with_common_orig(nucl_dip):
+                ao_dip = _block_diag(mol.intor_symmetric('int1e_r'))
+                if picture_change:
+                    xmol = self.with_x2c.get_xmol()[0]
+                    nao = xmol.nao
+                    prp = xmol.intor_symmetric('int1e_sprsp').reshape(3,4,nao,nao)[:,0]
+                    prp = numpy.array([_block_diag(x) for x in prp])
+                    ao_dip = self.with_x2c.picture_change((ao_dip, prp))
+
+            mol_dip = -numpy.einsum('xij,ji->x', ao_dip, dm).real
+
+            if unit.upper() == 'DEBYE':
+                mol_dip *= nist.AU2DEBYE
+                log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
+            else:
+                log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
+            return mol_dip
+
+    with_x2c = SpinOrbitalX2CHelper(mf.mol)
+    return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
 
 
 def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
@@ -652,8 +885,9 @@ def _get_r(s, snesc):
 def _x2c1e_xmatrix(t, v, w, s, c):
     nao = s.shape[0]
     n2 = nao * 2
-    h = numpy.zeros((n2,n2), dtype=v.dtype)
-    m = numpy.zeros((n2,n2), dtype=v.dtype)
+    dtype = numpy.result_type(t, v, w, s)
+    h = numpy.zeros((n2,n2), dtype=dtype)
+    m = numpy.zeros((n2,n2), dtype=dtype)
     h[:nao,:nao] = v
     h[:nao,nao:] = t
     h[nao:,:nao] = t
@@ -683,8 +917,9 @@ def _x2c1e_xmatrix(t, v, w, s, c):
 def _x2c1e_get_hcore(t, v, w, s, c):
     nao = s.shape[0]
     n2 = nao * 2
-    h = numpy.zeros((n2,n2), dtype=v.dtype)
-    m = numpy.zeros((n2,n2), dtype=v.dtype)
+    dtype = numpy.result_type(t, v, w, s)
+    h = numpy.zeros((n2,n2), dtype=dtype)
+    m = numpy.zeros((n2,n2), dtype=dtype)
     h[:nao,:nao] = v
     h[:nao,nao:] = t
     h[nao:,:nao] = t
@@ -755,6 +990,19 @@ def _proj_dmll(mol_nr, dm_nr, mol):
     dm_ll = reduce(numpy.dot, (proj, dm_nr*.5, proj.T.conj()))
     dm_ll = (dm_ll + dhf.time_reversal_matrix(mol, dm_ll)) * .5
     return dm_ll
+
+def _block_diag(mat):
+    '''
+    [A 0]
+    [0 A]
+    '''
+    return scipy.linalg.block_diag(mat, mat)
+
+def _sigma_dot(mat):
+    '''sigma dot A x B + A dot B'''
+    quaternion = numpy.vstack([1j * lib.PauliMatrices, numpy.eye(2)[None,:,:]])
+    nao = mat.shape[-1] * 2
+    return lib.einsum('sxy,spq->xpyq', quaternion, mat).reshape(nao, nao)
 
 
 # A tag to label the derived SCF class

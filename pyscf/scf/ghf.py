@@ -527,6 +527,17 @@ class GHF(hf.SCF):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+    def x2c1e(self):
+        '''X2C with spin-orbit coupling effects.
+
+        Note the difference to PySCF-1.7. In PySCF it calls spin-free X2C1E.
+        This result (mol.GHF().x2c() ) should equal to mol.X2C() although they
+        are solved in different AO basis (spherical GTO vs spinor GTO)
+        '''
+        from pyscf.x2c.x2c import x2c1e_ghf
+        return x2c1e_ghf(self)
+    x2c = x2c1e
+
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5
     dm = scipy.linalg.block_diag(dma, dma)

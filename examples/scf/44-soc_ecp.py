@@ -29,7 +29,8 @@ s = .5 * lib.PauliMatrices
 # Note to the phase factor -1j to remove the phase 1j above when adding to
 # core Hamiltonian
 ecpso = -1j * lib.einsum('sxy,spq->xpyq', s, mol.intor('ECPso'))
-hcore = mf.get_hcore() + ecpso.reshape(hcore.shape)
+hcore = mf.get_hcore()
+hcore = hcore + ecpso.reshape(hcore.shape)
 mf.get_hcore = lambda *args: hcore
 mf.kernel()
 

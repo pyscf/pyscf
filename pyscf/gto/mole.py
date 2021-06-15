@@ -1838,6 +1838,11 @@ def atom_mass_list(mol, isotope_avg=False):
 def condense_to_shell(mol, mat, compressor='max'):
     '''The given matrix is first partitioned to blocks, based on AO shell as
     delimiter. Then call compressor function to abstract each block.
+
+    Args:
+        compressor: string or function
+            if compressor is a string, its value can be  sum, max, min, abssum,
+            absmax, absmin, norm
     '''
     ao_loc = mol.ao_loc_nr()
     if callable(compressor):
