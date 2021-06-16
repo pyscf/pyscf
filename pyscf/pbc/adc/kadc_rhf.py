@@ -73,7 +73,40 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     for k, kshift in enumerate(kptlist):
         matvec, diag = adc.gen_matvec(kshift, imds, eris)
+
         guess = adc.get_init_guess(nroots, diag, ascending = True)
+
+        ##guess = adc.get_init_guess(kshift,imds,nroots, diag, ascending = True)
+        #kop_npick = [0,1,2,3]
+        #nkop_chk = False
+        #Eh2ev = 27.211386245988        
+
+        #if (nkop_chk is True) or (kop_npick is not False):
+        #        kop_w, kop_v = np.linalg.eigh(imds[kshift])
+        #        kop_v = kop_v
+        #        kop_w = kop_w
+        #        dim_kop = kop_v.shape[1]
+        #       
+        #
+        #        for kop_root, w in enumerate(kop_w):
+        #            print("Koopman State #", kop_root, " Energy [Eh]: ", w, "  Energy [ev]: ", w*Eh2ev ) ## Only works for IP; need another print statement for EA
+        #
+        #        if nkop_chk is True:
+        #           print("Initial Koopman's state checkpoint... exiting calculation")
+        #           exit()
+        #
+        #        if kop_npick is not False:
+        #            kroots, dim_guess = np.array(guess).shape
+        #            len_kop_npick = len(kop_npick)
+        #            nroots = len_kop_npick
+        #            guess = np.zeros((dim_guess,kroots))
+        #            for idx_guess, npick in enumerate(kop_npick):
+        #               print (guess[:dim_kop,idx_guess].shape)
+        #               print (kop_v[:,npick].shape)
+        #               print (idx_guess)
+        #               print (np.array(guess).shape)
+        #               guess[:dim_kop,idx_guess] = kop_v[:,npick] 
+
         conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
     
         evals_k = evals_k.real
@@ -89,7 +122,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     print (evals)
     print (P)
-    exit()
+#    exit()
 #
 #    adc.U = np.array(U).T.copy()
 #
@@ -314,20 +347,19 @@ def compute_amplitudes(myadc, eris):
 
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
         
-    if (myadc.method == "adc(2)"):
-    #if (myadc.method == "adc(3)"):
-
-        t1_3 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
-
-        for ki in range (nkpts):
-            ka = ki
-            for kl in range(nkpts):
-                kd = kconserv[ki, kl, ka]
-
-                t1_3[ki] =  -lib.einsum('d,ilda,ld->ia',mo_e_v[kd],t2_1[ki,kl,kd].conj(),t1_2[kl],optimize=True)
-                #t1_3[ki] +=  lib.einsum('d,lida,ld->ia',mo_e_v[kd],t2_1[kl,ki,kd].conj(),t1_2[kl],optimize=True)
-
-
+#    if (myadc.method == "adc(3)"):
+#
+#        t1_3 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
+#
+#        for ki in range (nkpts):
+#            ka = ki
+#            for kl in range(nkpts):
+#                kd = kconserv[ki, kl, ka]
+#
+#                t1_3[ki] =  -lib.einsum('d,ilda,ld->ia',mo_e_v[kd],t2_1[ki,kl,kd].conj(),t1_2[kl],optimize=True)
+#                #t1_3[ki] +=  lib.einsum('d,lida,ld->ia',mo_e_v[kd],t2_1[kl,ki,kd].conj(),t1_2[kl],optimize=True)
+#
+#
 #                t1_3[ki] =  lib.einsum('d,ilad,ld->ia',mo_e_v[kd],t2_1[ki,kl,ka].conj(),t1_2[kl],optimize=True)
 #                t1_3[ki] -= lib.einsum('d,liad,ld->ia',mo_e_v[kd],t2_1[kl,ki,ka],t1_2[kl],optimize=True)
 #                t1_3[ki] += lib.einsum('d,ilad,ld->ia',mo_e_v[kd],t2_1[ki,kl,ka],t1_2[kl],optimize=True)
@@ -2324,8 +2356,8 @@ def ea_compute_trans_moments(adc, orb, kshift):
     nocc = adc.t2[0].shape[3]
     t2_1 = adc.t2[0]
     t1_2 = adc.t1[0]
-    n_singles = nvir
     nvir = adc.nmo - adc.nocc
+    n_singles = nvir
     n_doubles = nkpts * nkpts * nocc * nvir * nvir
 
     dim = n_singles + n_doubles
@@ -2339,16 +2371,27 @@ def ea_compute_trans_moments(adc, orb, kshift):
     idn_vir = np.identity(nvir)
 
     T = np.zeros((dim),dtype=np.complex)
+    T_doub = np.zeros((n_doubles),dtype=t2_1.dtype).reshape(nkpts,nkpts,nocc,nvir,nvir)
     
 ######## ADC(2) 1h part  ############################################
 
     if orb < nocc:
 
-        T[s1:f1] = -t1_2[kshift][orb,:]
+        T[s1:f1] -= t1_2[kshift][orb,:]
 
-        #t2_1_t = -t2_1.transpose(1,0,2,3)
+        t2_1_t = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=np.complex)
 
-        #T[s2:f2] += t2_1_t[:,orb,:,:].reshape(-1)
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = adc.khelper.kconserv[kj, kshift, ka]
+                ki = adc.khelper.kconserv[kj, ka, kb]
+
+                t2_1_t[kj,ki,ka] = t2_1[ki,kj,ka].conj().transpose(1,0,2,3)
+        
+                T_doub[kj,ka] -= t2_1_t[kj,kshift,ka][:,orb,:,:]
+
+        T[s2:f2] += T_doub.reshape(-1)
+
     else:
 
         T[s1:f1] += idn_vir[(orb-nocc), :]
@@ -2363,6 +2406,69 @@ def ea_compute_trans_moments(adc, orb, kshift):
                 T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[kl,kk,kshift][:,:,(orb-nocc),:], t2_1[kk,kl,ka].conj(), optimize = True)
                 T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[kk,kl,kshift][:,:,(orb-nocc),:], t2_1[kl,kk,ka].conj(), optimize = True)
                 T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[kl,kk,kshift][:,:,(orb-nocc),:], t2_1[kl,kk,ka].conj(), optimize = True)
+
+######### ADC(3) 2p-1h  part  ############################################
+
+    if(method=="adc(2)-x"or adc.method=="adc(3)"):
+
+        t2_2 = adc.t2[1][:]
+        t2_2_t = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=np.complex)
+
+        if orb < nocc:
+
+            for kj in range(nkpts):
+                for ka in range(nkpts):
+                    kb = adc.khelper.kconserv[kj, kshift, ka]
+                    ki = adc.khelper.kconserv[kj, ka, kb]
+
+                    t2_2_t[kj,ki,ka] = t2_2[ki,kj,ka].conj().transpose(1,0,2,3)
+            
+                    T_doub[kj,ka] -= t2_2_t[kj,kshift,ka][:,orb,:,:]
+
+            T[s2:f2] += T_doub.reshape(-1)
+
+########### ADC(3) 1p part  ############################################
+
+    if(adc.method=="adc(3)"):
+
+
+        if orb < nocc:
+            for kk in range(nkpts):
+                for kc in range(nkpts):
+                    ka = adc.khelper.kconserv[kc, kk, kshift]
+                    T[s1:f1] += 0.5*lib.einsum('kac,ck->a',t2_1[kk,kshift,kc][:,orb,:,:], t1_2[kc].T,optimize = True)
+                    T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[kshift,kk,ka][orb,:,:,:], t1_2[kc].T,optimize = True)
+                    T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[kshift,kk,ka][orb,:,:,:], t1_2[kc].T,optimize = True)
+
+        else:
+            for kk in range(nkpts):
+                for kc in range(nkpts):
+                    kl = adc.khelper.kconserv[kc, kk, kshift]
+                    ka = adc.khelper.kconserv[kc, kl, kk]
+
+                    T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[kk,kl,kshift][:,:,(orb-nocc),:], t2_2[kk,kl,ka].conj(), optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[kl,kk,kshift][:,:,(orb-nocc),:], t2_2[kl,kk,ka].conj(), optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('klc,klac->a',t2_1[kk,kl,kshift][:,:,(orb-nocc),:], t2_2[kk,kl,ka].conj(), optimize = True)
+                    T[s1:f1] += 0.25*lib.einsum('klc,lkac->a',t2_1[kk,kl,kshift][:,:,(orb-nocc),:], t2_2[kl,kk,ka].conj(), optimize = True)
+                    T[s1:f1] += 0.25*lib.einsum('lkc,klac->a',t2_1[kl,kk,kshift][:,:,(orb-nocc),:], t2_2[kk,kl,ka].conj(), optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('lkc,lkac->a',t2_1[kl,kk,kshift][:,:,(orb-nocc),:], t2_2[kl,kk,ka].conj(), optimize = True)
+
+                    T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1[kk,kl,ka].conj(), t2_2[kk,kl,kshift][:,:,(orb-nocc),:],optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1[kl,kk,ka].conj(), t2_2[kl,kk,kshift][:,:,(orb-nocc),:],optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('klac,klc->a',t2_1[kk,kl,ka].conj(), t2_2[kk,kl,kshift][:,:,(orb-nocc),:],optimize = True)
+                    T[s1:f1] += 0.25*lib.einsum('klac,lkc->a',t2_1[kk,kl,ka].conj(), t2_2[kl,kk,kshift][:,:,(orb-nocc),:],optimize = True)
+                    T[s1:f1] += 0.25*lib.einsum('lkac,klc->a',t2_1[kl,kk,ka].conj(), t2_2[kk,kl,kshift][:,:,(orb-nocc),:],optimize = True)
+                    T[s1:f1] -= 0.25*lib.einsum('lkac,lkc->a',t2_1[kl,kk,ka].conj(), t2_2[kl,kk,kshift][:,:,(orb-nocc),:],optimize = True)
+
+        del t2_2
+    del t2_1
+
+    T_aaa = T[n_singles:].reshape(nkpts,nkpts,nocc,nvir,nvir).copy()
+    for ka in range(nkpts):
+        for kb in range(nkpts):
+            ki = adc.khelper.kconserv[kb,kshift, ka]
+            T_aaa[ki,ka] = T_aaa[ki,ka] - T_aaa[ki,kb].transpose(0,2,1)
+    T[n_singles:] += T_aaa.reshape(-1)
 
     return T
 
@@ -2393,6 +2499,7 @@ def ip_compute_trans_moments(adc, orb, kshift):
     idn_vir = np.identity(nvir)
 
     T = np.zeros((dim),dtype=np.complex)
+    T_doub = np.zeros((n_doubles),dtype=t2_1.dtype).reshape(nkpts,nkpts,nvir,nocc,nocc)
     
 ######## ADC(2) 1h part  ############################################
 
@@ -2410,20 +2517,17 @@ def ip_compute_trans_moments(adc, orb, kshift):
                 T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[kshift,kk,kc][orb,:,:,:], t2_1[ki,kk,kc].conj(), optimize = True)
     else :
         t2_1_t = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc),dtype=np.complex)
-        T_doub = np.zeros((n_doubles),dtype=t2_1.dtype).reshape(nkpts,nkpts,nvir,nocc,nocc)
         T[s1:f1] += t1_2[kshift][:,(orb-nocc)]
 
 ######## ADC(2) 2h-1p  part  ############################################
 
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = adc.khelper.kconserv[kj, kshift, ka]
-                ki = adc.khelper.kconserv[kj, ka, kb]
-                t2_1_t[ka,kb,kj] = t2_1[ki,kj,ka].conj().transpose(2,3,1,0)
-                #t2_1_t[ka,kb,ki] = t2_1[ki,kj,ka].conj().transpose(2,3,1,0)
-        
-                #T_doub[kb,kj] += t2_1_t[kshift,kb,kj][(orb-nocc),:,:,:]
-                T_doub[ka,kj] += t2_1_t[ka,kshift,kj][:,(orb-nocc),:,:]
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                ka = adc.khelper.kconserv[kj, kshift, ki]
+                kb = adc.khelper.kconserv[ki, kj, ka]
+
+                t2_1_t[ka,kb,ki] = t2_1[ki,kj,ka].conj().transpose(2,3,0,1)
+                T_doub[ka,ki] += t2_1_t[ka,kshift,ki].conj()[:,(orb-nocc),:,:]
 
         T[s2:f2] += T_doub.reshape(-1)
 
@@ -2433,20 +2537,17 @@ def ip_compute_trans_moments(adc, orb, kshift):
 
         t2_2 = adc.t2[1][:]
         t2_2_t = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nocc,nocc),dtype=np.complex)
-        T_doub_2 = np.zeros((n_doubles),dtype=t2_1.dtype).reshape(nkpts,nkpts,nvir,nocc,nocc)
 
         if orb >= nocc:
-            for kj in range(nkpts):
-                for ka in range(nkpts):
-                    kb = adc.khelper.kconserv[kj, kshift, ka]
-                    ki = adc.khelper.kconserv[kj, ka, kb]
-                    t2_2_t[ka,kb,kj] = t2_2[ki,kj,ka].conj().transpose(2,3,1,0)
-                    #t2_1_t[ka,kb,ki] = t2_1[ki,kj,ka].conj().transpose(2,3,1,0)
-            
-                    #T_doub[kb,kj] += t2_1_t[kshift,kb,kj][(orb-nocc),:,:,:]
-                    T_doub_2[ka,kj] += t2_2_t[ka,kshift,kj][:,(orb-nocc),:,:]
+            for ki in range(nkpts):
+                for kj in range(nkpts):
+                    ka = adc.khelper.kconserv[kj, kshift, ki]
+                    kb = adc.khelper.kconserv[ki, kj, ka]
 
-            T[s2:f2] += T_doub_2.reshape(-1)
+                    t2_2_t[ka,kb,ki] = t2_2[ki,kj,ka].conj().transpose(2,3,0,1)
+                    T_doub[ka,ki] += t2_2_t[ka,kshift,ki].conj()[:,(orb-nocc),:,:]
+
+            T[s2:f2] += T_doub.reshape(-1)
 
 ########## ADC(3) 1h part  ############################################
 
@@ -2477,14 +2578,17 @@ def ip_compute_trans_moments(adc, orb, kshift):
 
                     T[s1:f1] += 0.5 * lib.einsum('kic,kc->i',t2_1[kk,ki,kc][:,:,:,(orb-nocc)], t1_2[kk],optimize = True)
                     T[s1:f1] -= 0.5*lib.einsum('ikc,kc->i',t2_1[ki,kk,kc][:,:,:,(orb-nocc)], t1_2[kk],optimize = True)
-                    #T[s1:f1] += 0.5*lib.einsum('kic,kc->i',t2_1[kk,ki,kshift].conj()[:,:,(orb-nocc),:], t1_2[kk],optimize = True)
+                    T[s1:f1] += 0.5*lib.einsum('kic,kc->i',t2_1[kk,ki,kc][:,:,:,(orb-nocc)], t1_2[kk],optimize = True)
 
-#        del t2_2
-#    del t2_1
+        del t2_2
+    del t2_1
 
-#    T_aaa = T[n_singles:].reshape(nvir,nocc,nocc).copy()
-#    T_aaa = T_aaa - T_aaa.transpose(0,2,1)
-#    T[n_singles:] += T_aaa.reshape(-1)
+    T_aaa = T[n_singles:].reshape(nkpts,nkpts,nvir,nocc,nocc).copy()
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            ka = adc.khelper.kconserv[kj,kshift, ki]
+            T_aaa[ka,ki] = T_aaa[ka,ki] - T_aaa[ka,kj].transpose(0,2,1)
+    T[n_singles:] += T_aaa.reshape(-1)
 
     return T
 
@@ -2499,6 +2603,35 @@ def get_trans_moments(adc,kshift):
     T = np.array(T)
     print (T)
     return T
+
+def renormalize_eigenvectors_ea(adc, kshift, nroots=1):
+
+    nkpts = adc.nkpts
+    nocc = adc.t2[0].shape[3]
+    t2 = adc.t2[0]
+    t1_2 = adc.t1[0]
+    nvir = adc.nmo - adc.nocc
+    n_singles = nvir
+    n_doubles = nkpts * nkpts * nocc * nvir * nvir
+
+    dim = n_singles + n_doubles
+
+    U = adc.U
+
+    for I in range(U.shape[1]):
+        U1 = U[:n_singles,I]
+        U2 = U[n_singles:,I].reshape(nkpts,nkpts,nocc,nvir,nvir)
+        UdotU = np.dot(U1.conj().ravel(),U1.ravel())
+        for ka in range(nkpts):
+            for kb in range(nkpts):
+                ki = adc.khelper.kconserv[kb,kshift, ka]
+                UdotU +=  2.*np.dot(U2[ki,ka].conj().ravel(), U2[ki,ka].ravel()) - np.dot(U2[ki,ka].conj().ravel(), U2[ki,kb].transpose(0,2,1).ravel())
+        #UdotU = np.dot(U1.ravel(), U1.ravel()) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+        U[:,I] /= np.sqrt(UdotU)
+
+    U = U.reshape(-1,nroots)
+
+    return U
 
 def renormalize_eigenvectors_ip(adc, kshift, nroots=1):
 
@@ -2638,9 +2771,9 @@ class RADCEA(RADC):
     get_diag = ea_adc_diag
     matvec = ea_adc_matvec
     vector_size = ea_vector_size
-    compute_trans_moments = ip_compute_trans_moments
+    compute_trans_moments = ea_compute_trans_moments
     get_trans_moments = get_trans_moments
-    renormalize_eigenvectors = renormalize_eigenvectors_ip
+    renormalize_eigenvectors = renormalize_eigenvectors_ea
     get_properties = get_properties
     #analyze_spec_factor = analyze_spec_factor
     #analyze_eigenvector = analyze_eigenvector_ip
@@ -2716,8 +2849,8 @@ class RADCIP(RADC):
         #self.max_memory = adc.max_memory
         self.max_space = 60
         self.max_cycle = 100
-        self.conv_tol  = 1e-6
-        self.tol_residual  = 1e-3
+        self.conv_tol  = 1e-8
+        self.tol_residual  = 1e-6
         self.t1 = adc.t1
         self.t2 = adc.t2
         #self.imds = adc.imds
@@ -2793,6 +2926,30 @@ class RADCIP(RADC):
         for p in range(g.shape[1]):
             guess.append(g[:,p])
         return guess
+
+    #def get_init_guess(self, kshift, imds, nroots=1, diag=None, ascending = True):
+    #    if diag is None :
+    #        diag = self.ip_adc_diag()
+    #    idx = None
+    #    dtype = getattr(diag, 'dtype', np.complex)
+    #    if ascending:
+    #        idx = np.argsort(diag)
+    #    else:
+    #        idx = np.argsort(diag)[::-1]
+    #    guess = np.zeros((diag.shape[0], nroots), dtype=dtype)
+    #    #min_shape = min(diag.shape[0], nroots)
+    #    #guess[:min_shape,:min_shape] = np.identity(min_shape)
+    #    e,v = np.linalg.eigh(imds[kshift])
+    #    print (v)
+    #    exit()
+    #    guess[:self.nocc,:] = v.reshape(-1)
+    #    exit()
+    #    g = np.zeros((diag.shape[0], nroots), dtype=dtype)
+    #    g[idx] = guess.copy()
+    #    guess = []
+    #    for p in range(g.shape[1]):
+    #        guess.append(g[:,p])
+    #    return guess
 
     def gen_matvec(self,kshift,imds=None, eris=None):
         if imds is None: imds = self.get_imds(eris)
