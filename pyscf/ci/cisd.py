@@ -99,7 +99,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
 
 def make_diagonal(myci, eris):
     '''
-    Return diagonal of hamiltonian in Slater determinant basis.
+    Return diagonal of CISD hamiltonian in Slater determinant basis.
 
     Note that a constant has been substracted of all elements.
     The first element is the HF energy (minus the
@@ -795,7 +795,7 @@ def as_scanner(ci):
                 # FIXME: Whether to use the initial guess from last step?
                 # If root flips, large errors may be found in the solutions
                 ci0 = self.ci
-            _ = self.kernel(ci0, **kwargs)[0]
+            self.kernel(ci0, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)
 
