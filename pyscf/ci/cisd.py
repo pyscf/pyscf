@@ -999,9 +999,6 @@ class CISD(lib.StreamObject):
         '''
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
-        # [TODO] in `make_diagonal` function it says:
-        # [TODO] "# DO NOT use eris.mo_energy, it may differ to "
-        # [TODO] "eris.fock.diagonal()" - change here?
         mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
