@@ -323,8 +323,8 @@ class SGX(lib.StreamObject):
             else:
                 vk = None
         elif with_j and self.direct_j:
-            vj = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
-                             vhfopt, hermi, mol.cart, True, False)
+            vj, _ = _vhf.direct(dm, self.mol._atm, self.mol._bas, self.mol._env,
+                                vhfopt, hermi, self.mol.cart, True, False)
             if with_k:
                 vk = sgx_jk.get_jk(self, dm, hermi, False, with_k, direct_scf_tol)[1]
             else:
