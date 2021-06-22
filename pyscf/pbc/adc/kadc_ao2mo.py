@@ -138,7 +138,7 @@ def transform_integrals_outcore(myadc):
     eris.ovov = feri.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
     eris.ovvv = feri.create_dataset('ovvv', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
     eris.ovvo = feri.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
-    #eris.vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+    eris.vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
 
     cput1 = time.clock(), time.time()
     for kp in range(nkpts):
@@ -175,85 +175,40 @@ def transform_integrals_outcore(myadc):
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
     if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-    #     cput1 = time.clock(), time.time()
-    #     mem_now = lib.current_memory()[0]
-    #     if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
-    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
-    #             iks = kconserv[ikp, ikq, ikr]
-    #             orbv_p = mo_coeff[ikp][:, nocc:]
-    #             orbv_q = mo_coeff[ikq][:, nocc:]
-    #             orbv_r = mo_coeff[ikr][:, nocc:]
-    #             orbv_s = mo_coeff[iks][:, nocc:]
-    #             # unit cell is small enough to handle vvvv in-core
-    #             buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
-    #                              kpts[[ikp,ikq,ikr,iks]], compact=False)
-    #             if dtype == np.float: buf_kpt = buf_kpt.real
-    #             buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
-    #             for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
-    #                 buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
-    #                 eris.vvvv[kp, kr, kq] = buf_kpt_symm / nkpts
-    #     else:
-    #         raise MemoryError('Minimal memory requirements %s MB'
-    #                           % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
-    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
-    #             for a in range(nvir):
-    #                 orbva_p = orbv_p[:, a].reshape(-1, 1)
-    #                 buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
-    #                                  (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-    #                 if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
-    #                 buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
+        mem_now = lib.current_memory()[0] 
+        if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
+            for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                iks = kconserv[ikp, ikq, ikr]
+                orbv_p = mo_coeff[ikp][:, nocc:]
+                orbv_q = mo_coeff[ikq][:, nocc:]
+                orbv_r = mo_coeff[ikr][:, nocc:]
+                orbv_s = mo_coeff[iks][:, nocc:]
+                # unit cell is small enough to handle vvvv in-core
+                buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
+                                 kpts[[ikp,ikq,ikr,iks]], compact=False)
+                if dtype == np.float: buf_kpt = buf_kpt.real
+                buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
+                for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
+                    buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
+                    eris.vvvv[kp, kr, kq] = buf_kpt_symm / nkpts
+        else:
+            #raise MemoryError('Minimal memory requirements %s MB'
+            #                  % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
+            for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                for a in range(nvir):
+                    orbva_p = orbv_p[:, a].reshape(-1, 1)
+                    buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
+                                     (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
+                    if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                    buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
-    #                 eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
-    #                 # Store symmetric permutations
-    #                 eris.vvvv[ikr, ikp, iks, :, a, :, :] = buf_kpt.transpose(1, 0, 3, 2)[:, 0, :, :] / nkpts
-    #                 eris.vvvv[ikq, iks, ikp, :, :, a, :] = buf_kpt.transpose(2, 3, 0, 1).conj()[:, :, 0, :] / nkpts
-    #                 eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[:, :, :, 0] / nkpts
-    #         cput1 = log.timer_debug1('transforming vvvv', *cput1)
+                    eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
+                    # Store symmetric permutations
+                    eris.vvvv[ikr, ikp, iks, :, a, :, :] = buf_kpt.transpose(1, 0, 3, 2)[:, 0, :, :] / nkpts
+                    eris.vvvv[ikq, iks, ikp, :, :, a, :] = buf_kpt.transpose(2, 3, 0, 1).conj()[:, :, 0, :] / nkpts
+                    eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[:, :, :, 0] / nkpts
+            cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-    #log.timer('CCSD integral transformation', *cput0)
-        eris.vvvv = []
-        vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
-
-        cput3 = time.clock(), time.time()
-        avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
-        chnk_size = calculate_chunk_size(myadc)
-        a = 0
-        for (ikp, ikq, ikr) in khelper.symm_map.keys():
-            iks = kconserv[ikp, ikq, ikr]
-            orbv_p = mo_coeff[ikp][:, nocc:]
-            orbv_q = mo_coeff[ikq][:, nocc:]
-            orbv_r = mo_coeff[ikr][:, nocc:]
-            orbv_s = mo_coeff[iks][:, nocc:]
-
-            for p in range(0,nvir,chnk_size):
-
-                if chnk_size < nvir :
-                    orb_slice = orbv_p[:, p:p+chnk_size]
-                else :
-                    orb_slice = orbv_p[:, p:]
-
-                _, tmp = tempfile.mkstemp()
-                buf_kpt = fao2mo((orb_slice, orbv_q, orbv_r, orbv_s),
-                                      (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                buf_kpt = buf_kpt.reshape((-1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
-                k = orb_slice.shape[1]
-                vvvv[ikp,ikr,ikq,a:a+k,:,:,:] = buf_kpt/nkpts
-                eris.vvvv.append(vvvv)
-                #del eris.vvvv
-                a += k
-
-
-    #        cput3 = log.timer_debug1('transforming vvvv', *cput3)
-
-    #         for (ikp, ikq, ikr) in khelper.symm_map.keys():
-    #             for a in range(nvir):
-    #                 orbva_p = orbv_p[:, a].reshape(-1, 1)
-    #                 buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
-    #                                  (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-    #                 if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
-    #                 buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
-
-    #                 eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
     return eris
 
 

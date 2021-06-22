@@ -18,89 +18,73 @@ import numpy
 from pyscf import lib
 from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
-from pyscf.adc import uadc
 from pyscf.pbc import mp
 from pyscf.cc import rccsd
 
 class RADC(radc.RADC):
-    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        #if abs(mf.kpt).max() > 1e-9:
-        #    raise NotImplementedError
-        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        warn_pbc2d_eri(mf)
-        radc.RADC.__init__(self, mf, frozen, mo_coeff, mo_occ)
-
     def kernel(self, nroots=1, guess=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
-    
-        self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-            raise NotImplementedError(self.method)
-    
-         
-
-#        if self.verbose >= logger.WARN:
-#            self.check_sanity()
-#        self.dump_flags_gs()
-    
-#        nmo = self._nmo
-#        nao = self.mo_coeff.shape[0]
-#        nmo_pair = nmo * (nmo+1) // 2
-#        nao_pair = nao * (nao+1) // 2
-#        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
-#        mem_now = lib.current_memory()[0]
-#
-#        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
-#           if getattr(self, 'with_df', None): 
-#               self.with_df = self.with_df
-#           else :
-#               self.with_df = self._scf.with_df
-#
-#           def df_transform():
-#              return radc_ao2mo.transform_integrals_df(self)
-#           self.transform_integrals = df_transform
-#        elif (self._scf._eri is None or
-#            (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-#           def outcore_transform():
-#               return radc_ao2mo.transform_integrals_outcore(self)
-#           self.transform_integrals = outcore_transform
 
         #transform_integrals = radc_ao2mo.transform_integrals_incore
-        #eris = self.transform_integrals() 
-
-        mo_coeff = self._scf.mo_coeff
-        nocc = self._nocc
-
-        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        with lib.temporary_env(self._scf, exxdiv=None):
-            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)        
-
-    
-        exit()
-
-        self.e_corr, self.t1, self.t2 = radc.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        eris = self.transform_integrals_incore()
+        #eris = self.transform_integrals()
+        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, x, adc_es = radc.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, x, adc_es = radc.ip_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
         return e_exc, v_exc, spec_fac, x
 
+        #return radc.RADC.kernel(self,nroots,guess,eris)
+        return e_exc, v_exc, spec_fac, x
 
-#def _adjust_occ(mo_energy, nocc, shift):
-#    '''Modify occupied orbital energy'''
-#    mo_energy = mo_energy.copy()
-#    mo_energy[:nocc] += shift
-#    return mo_energy
+    def transform_integrals_incore(self,mo_coeff=None):
+    #def transform_integrals(self,mo_coeff=None):
+        print ("Sam")
+        from pyscf.pbc import tools
+        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
 
+        occ = self.mo_coeff[:,:self._nocc]
+        vir = self.mo_coeff[:,self._nocc:]
+
+        nocc = occ.shape[1]
+        nvir = vir.shape[1]
+        nmo = self._nmo
+    
+        eris = lambda:None
+        eri1 = ao2mofn(self.mo_coeff).reshape([nmo]*4)
+        
+        # TODO: check if myadc._scf._eri is not None
+
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris.oooo = eri1[:nocc, :nocc,:nocc,:nocc].copy()
+            #eris.ovoo = eri1[:nocc, nocc:,:nocc,:nocc).copy()  # noqa: E501
+            #eris.oovv = eri1[:nocc, :nocc, nocc:, nvir).copy()  # noqa: E501
+            #eris.ovvo = eri1[:nocc, nocc:, nocc:, nocc).copy()  # noqa: E501
+            #eris.ovvv = eri1[:nocc, nocc:, -1).copy()  # noqa: E501
+#
+#        if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+#            eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
+#            eris.vvvv = np.ascontiguousarray(eris.vvvv.transpose(0,2,1,3))
+#            eris.vvvv = eris.vvvv.reshape(nvir*nvir, nvir*nvir)
+#
+#        log.timer('ADC integral transformation', *cput0)
+#        return eris
+
+
+            # _scf.exxdiv affects eris.fock. HF exchange correction should be
+            # excluded from the Fock matrix.
+            #with lib.temporary_env(self._scf, exxdiv=None):
+            #    eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        #exit()
+        return eris
 
 from pyscf.pbc import scf
 scf.hf.RHF.ADC = lib.class_as_method(RADC)

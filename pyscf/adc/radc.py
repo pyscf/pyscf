@@ -2365,7 +2365,6 @@ def get_trans_moments(adc):
         T.append(T_a)
 
     T = np.array(T)
-    print (T)
     return T
 
 
