@@ -243,6 +243,11 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if abs(shifta)+abs(shiftb) > 1e-4:
         f = (hf.level_shift(s1e, dm[0], f[0], shifta),
              hf.level_shift(s1e, dm[1], f[1], shiftb))
+    if mf.vemb and cycle >0:
+        mat = mf.vemb_mat()
+        print("Initial: ",f[0][0][0])
+        f += mat
+        print("Final: ", f[0][0][0])
     return numpy.array(f)
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):

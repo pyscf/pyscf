@@ -806,6 +806,13 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
+        #PRG 2021
+        print("Initial: ",fockao[0][0][0])
+        if mycc._scf.vemb:
+            mat = mycc._scf.vemb_mat()
+            fockao += mat
+            print("FDE: ", np.einsum('imn,inm->',dm,mat))
+        print("Final: ",fockao[0][0][0])
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)

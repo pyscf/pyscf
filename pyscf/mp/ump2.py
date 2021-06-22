@@ -480,10 +480,18 @@ class _ChemistsERIs(mp2._ChemistsERIs):
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
+            #PRG 2021
+            print("Initial: ",fockao[0][0][0])
+            if mp._scf.vemb:
+                mat = mp._scf.vemb_mat()
+                fockao += mat
+            print("Final: ",fockao[0][0][0])
+            print("FDE: ",numpy.einsum('imn,inm->',dm,mat))
             focka = mo_a.conj().T.dot(fockao[0]).dot(mo_a)
             fockb = mo_b.conj().T.dot(fockao[1]).dot(mo_b)
             self.fock = (focka, fockb)
             self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
+            #print("E: ",self.e_hf)
             nocca, noccb = self.nocc = mp.nocc
             self.mo_energy = (focka.diagonal().real, fockb.diagonal().real)
         return self

@@ -605,7 +605,7 @@ def get_init_guess(mol, key='minao'):
     '''
     return RHF(mol).get_init_guess(mol, key)
 
-#:PRG:
+###################:PRG:
 def static_dft(mf, s, mo_energy, mo_occ, mo_coeff, option=2):
     r'''Add static DFT operator to Fock matrix
 
@@ -644,22 +644,122 @@ def static_dft(mf, s, mo_energy, mo_occ, mo_coeff, option=2):
 
         if option == 1:
             dEdp = beta * numpy.where(p < 0.5, -1.0 / (1.0 - p), numpy.where(p > 0.5, 1.0 / p, 0)) 
-            #dEdp = beta * numpy.where((p > 0.0) & (p < 0.5), -1.0 / (1.0 - p), numpy.where((p > 0.5) & (p < 1.0), 1.0 / p, 0))
         else:
             dEdp = beta * (numpy.log(p) - numpy.log(1-p))
-            #dEdp = beta * numpy.where((p > 0.0) & (p < 1.0), numpy.log(p) - numpy.log(1-p), 0)
 
         v_c_static = dEdp * dpde * mo_energy
 
         return v_c_static
 
     vcs = static_potential(mf, mo_occ, mo_energy, option=2)
-    #print("static: ", numpy.shape(vcs))
-    #d = numpy.dot(mo_coeff*vcs, mo_coeff.conj().T) 
     d = mf.make_rdm1(mo_coeff,vcs)
     F_static = reduce(numpy.dot, (s, d, s))
     return F_static
 
+def get_value_at_points_new(vemb_fft, points):
+    '''Get values of an Embedding Potential into and External Grid
+
+    Kwargs:
+        vemb_fft: Embedding potential object from dftpy 
+        points: np.array wit x,y,z GRID coordinates
+        '''
+
+    import scipy.ndimage as ndimage
+    from scipy import interpolate
+    if vemb_fft.field.spl_coeffs is None:
+        vemb_fft.field._calc_spline()
+        
+    nr=vemb_fft.field.grid.nr
+    gridf=vemb_fft.field.grid
+    ll=gridf.latparas[:]
+    for i in range(3):
+        points[:,i] /= ll[i]
+        points[:,i] *= nr[i]
+        points[:,i] += 3
+    values = ndimage.map_coordinates(vemb_fft.field.spl_coeffs, [points[:, 0],
+                                        points[:, 1], points[:, 2]],
+                                        mode='wrap')
+    return values
+
+def Spline_FFT_to_grid(mf,filename,ex_grids_coord):
+    '''
+    Function to spline a field on a regular FFT grid to a 
+    custom grid.
+    
+    INPUT:
+    mf: SCF class of PySCF
+    points: np.array wit x,y,z GRID coordinates
+    filename: External Embedding Potential
+    
+    OUTPUT:
+    vemb: numpy array of shape len(mf_grids_coord[:,0])
+    
+    '''
+    
+    if ".pp" in filename:
+        format='pp'
+    else:
+        raise Exception("Only PP format available for V_emb.")
+    
+    if format=='pp':
+        from dftpy.formats import io
+        vemb_fft=io.read_system(filename)
+    if mf.nelec[0] == mf.nelec[1]:
+        vemb = get_value_at_points_new(vemb_fft,numpy.array(ex_grids_coord))
+    else:
+        vemb=numpy.empty((2,ex_grids_coord.shape[0]))
+        vemb[0] = get_value_at_points_new(vemb_fft,numpy.array(ex_grids_coord))
+        vemb[1] = get_value_at_points_new(vemb_fft,numpy.array(ex_grids_coord))
+    return vemb
+
+def get_vemb_mu_nu(mf,vembf,ex_grids_coord,ex_grids_weights):
+    '''
+    Function returns the <mu|vemb|nu> matrix where vemb is a function on pyscf's dft grid.
+    
+    INPUT:
+    mf: PySCF SCF class
+    vemb: numpy array of size (nspin,nao,nao)
+    
+    '''
+    from pyscf.dft.numint import eval_ao, _scale_ao, _dot_ao_ao
+    from pyscf.dft.gen_grid import BLKSIZE
+    
+    ao=eval_ao(mf.mol,ex_grids_coord,deriv=0)
+    ngrids, nao = ao.shape
+    nspin=numpy.shape(mf.nelec)[0]
+    non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mf.mol.nbas),dtype=numpy.uint8)
+    shls_slice = (0, mf.mol.nbas)
+    ao_loc = mf.mol.ao_loc_nr()
+    aow=numpy.empty((nspin,numpy.shape(ex_grids_coord[:,0])[0],nao)) 
+    mat=numpy.empty((nspin,nao,nao))
+    
+    if mf.nelec[0] == mf.nelec[1]:
+        # *.5 because vmat + vmat.T
+        aow[0] = _scale_ao(ao, .5*ex_grids_weights*vembf, out=aow[0])
+        aow[1]=aow[0]
+        
+        mat[0] = _dot_ao_ao(mf.mol, ao, aow[0], non0tab, shls_slice, ao_loc) 
+        mat[1] = mat[0]
+
+    else:
+        aow[0] = _scale_ao(ao, .5*ex_grids_weights*vembf[0], out=aow[0])
+        aow[1] = _scale_ao(ao, .5*ex_grids_weights*vembf[1], out=aow[1])
+        mat[0] = _dot_ao_ao(mf.mol, ao, aow[0], non0tab, shls_slice, ao_loc)
+        mat[1] = _dot_ao_ao(mf.mol, ao, aow[1], non0tab, shls_slice, ao_loc)    
+
+    mat[0] = mat[0] + mat[0].T.conj()
+    mat[1] = mat[1] + mat[1].T.conj()
+    return mat
+
+def vemb_mat(mf,extemb,ex_grids_coord,ex_grids_weights):
+    ''' Get the Embedding Potential in the MO basis'''
+    
+    vembf = Spline_FFT_to_grid(mf,extemb,ex_grids_coord)
+    mat = get_vemb_mu_nu(mf,vembf*0.5,ex_grids_coord,ex_grids_weights) # *.5 because Ry to a.u.
+    
+    return mat
+
+#END PRG contribution
 
 def level_shift(s, d, f, factor):
     r'''Apply level shift :math:`\Delta` to virtual orbitals
@@ -962,6 +1062,11 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if mf.static and cycle >0:
         #f +=mf.static_dft(mo_occ=mo_occ,mo_coeff=mo_coeff,mo_energy=mo_energy)
         f +=mf.static_dft()
+    if mf.vemb and cycle >0:
+        mat = mf.vemb_mat()
+        print("Initial: ",f[0][0][0])
+        f += mat
+        print("Final: ", f[0][0][0])
     return f
 
 def get_occ(mf, mo_energy=None, mo_coeff=None):
@@ -1379,6 +1484,50 @@ def as_scanner(mf):
 
     return SCF_Scanner(mf)
 
+
+############
+
+class VEMB(lib.StreamObject):
+    '''VEMB base class. Calculate FDE Interaction Energy and Total 
+    Subsystem DFT energy
+
+    Attributes:
+        vemb: bool
+            If True it adds a Embedding Field to the Initital Fock Matrix
+        field: Numpy Array
+            With the Values of a field on a regular FFT grid to a 
+            custom grid
+        mf: SCF class of PySCF
+        ex_grids_coord: Ext. np.Array
+            x,y,z GRID coordinates
+        ex_grids_weights: Ext. np.Array
+            GRID Weights
+    Save Results
+        emb_e: Embedded Energy
+        '''
+
+
+    def __init__(self,mol):
+        if not mol._built:
+            sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
+                    'Initialize %s in %s\n' % (mol, mol, self))
+            mol.build()
+        self.mol = mol
+        self.verbose = mol.verbose
+        self.max_memory = mol.max_memory
+        self.stdout = mol.stdout
+        self.extemb = mol.extemb
+        self.vemb = mol.vemb
+        self.ex_grids_coord = mol.ex_grids_coord
+        self.ex_grids_weights = mol.ex_grids_weights
+
+    def vemb_mat(self,mol=None,extemb=None,ex_grids_coord=None,ex_grids_weights=None):
+        if mol is None: mol = self.mol
+        if extemb is None: extemb=mol.extemb
+        if ex_grids_coord is None: ex_grids_coord=mol.ex_grids_coord
+        if ex_grids_weights is None: ex_grids_weights=mol.ex_grids_weights
+        return vemb_mat(self,extemb,ex_grids_coord,ex_grids_weights)
+
 ############
 
 
@@ -1439,6 +1588,9 @@ class SCF(lib.StreamObject):
             A hook for overloading convergence criteria in SCF iterations.
         static : bool
             If True it performs self-consistent static-correlation DFT :PRG:
+        vemb : bool
+            If True it add self-consistently Vemb (Embedding Potential) to 
+            fock0 matrix :PRG:
 
     Saved results:
 
@@ -1493,7 +1645,12 @@ class SCF(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
+        # PRG 2021
         self.static = mol.static
+        self.extemb = mol.extemb
+        self.vemb = mol.vemb
+        self.ex_grids_coord = mol.ex_grids_coord
+        self.ex_grids_weights = mol.ex_grids_weights
 
 # If chkfile is muted, SCF intermediates will not be dumped anywhere.
         if MUTE_CHKFILE:
@@ -1705,6 +1862,13 @@ class SCF(lib.StreamObject):
         if s is None: s = self.get_ovlp()
         if option is None: option = 2
         return static_dft(self,s, mo_energy, mo_coeff, mo_occ,option)
+
+    def vemb_mat(self,mol=None,extemb=None,ex_grids_coord=None,ex_grids_weights=None):
+        if mol is None: mol = self.mol
+        if extemb is None: extemb=mol.extemb
+        if ex_grids_coord is None: ex_grids_coord=mol.ex_grids_coord
+        if ex_grids_weights is None: ex_grids_weights=mol.ex_grids_weights
+        return vemb_mat(self,extemb,ex_grids_coord,ex_grids_weights)
 
     def scf(self, dm0=None, **kwargs):
         '''SCF main driver
