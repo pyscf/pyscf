@@ -312,11 +312,13 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             aaaa = ao2mo.incore.full(aaaa, ucas)
         else:
             if getattr(mc, 'with_df', None):
-                raise NotImplementedError('cas_natorb for DFCASCI/DFCASSCF')
+                aaaa = mc.with_df.ao2mo(mocas)
+            else:
+                aaaa = ao2mo.kernel(mc.mol, mocas)
             corevhf = mc.get_veff(mc.mol, dm_core)
             ecore += numpy.einsum('ij,ji', dm_core, corevhf) * .5
             h1eff += reduce(numpy.dot, (mocas.conj().T, corevhf, mocas))
-            aaaa = ao2mo.kernel(mc.mol, mocas)
+
 
         # See label_symmetry_ function in casci_symm.py which initialize the
         # orbital symmetry information in fcisolver.  This orbital symmetry
