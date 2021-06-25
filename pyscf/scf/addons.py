@@ -303,7 +303,7 @@ def mom_occ_(mf, occorb, setocc):
             log.error('mom alpha electron occupation numbers do not match: %d, %d',
                       nocc_a, int(numpy.sum(mo_occ[0])))
         if (int(numpy.sum(mo_occ[1])) != nocc_b):
-            log.error('mom alpha electron occupation numbers do not match: %d, %d',
+            log.error('mom beta electron occupation numbers do not match: %d, %d',
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         #output 1-dimension occupation number for restricted open-shell
