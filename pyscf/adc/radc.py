@@ -1534,12 +1534,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     D_n = -d_i + d_ab.reshape(-1)
     D_iab = D_n.reshape(-1)
   
-   
-    print (d_ab.shape)
-    print (d_i.shape)
-    print (D_n.shape)
-    print (D_iab.shape)
-
     D_iab_one = np.ones_like(D_iab)
     diag = np.zeros(dim)
 
@@ -1551,7 +1545,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     # Compute precond in 2p1h-2p1h block
 
     diag[s2:f2] = D_iab.copy()  
-    print (diag[s2:f2].shape)
     del D_iab
 
 #    ###### Additional terms for the preconditioner ####
@@ -2080,7 +2073,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                     temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
                     temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_1, eris_ovvv, optimize=True)
                     temp_doubles = lib.einsum('i,icab->cba',r1[a:a+k],eris_ovvv,optimize=True)
-                    #s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1, optimize=True).reshape(-1)
+                    s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1, optimize=True).reshape(-1)
                     del eris_ovvv
                     del temp_doubles
                     a += k
@@ -2091,7 +2084,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
                 temp_singles -= lib.einsum('abc,ibac->i',temp, eris_ovvv, optimize=True)
                 temp_singles += lib.einsum('abc,icab->i',temp_1, eris_ovvv, optimize=True)
                 temp_doubles = lib.einsum('i,icab->cba',r1,eris_ovvv,optimize=True)
-                #s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1, optimize=True).reshape(-1)
+                s[s2:f2] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1, optimize=True).reshape(-1)
                 del eris_ovvv
                 del temp_doubles
 
