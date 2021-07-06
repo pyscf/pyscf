@@ -3378,8 +3378,7 @@ class Mole(lib.StreamObject):
 
     search_ao_label = search_ao_label
 
-    def search_shell_id(self, atm_id, l):
-        return search_shell_id(self, atm_id, l)
+    search_shell_id = search_shell_id
 
     search_ao_nr = search_ao_nr
     search_ao_r = search_ao_r
