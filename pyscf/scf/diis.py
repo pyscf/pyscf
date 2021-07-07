@@ -38,13 +38,14 @@ DEBUG = False
 # error vector = SDF-FDS
 # error vector = F_ai ~ (S-SDS)*S^{-1}FDS = FDS - SDFDS ~ FDS-SDF in converge
 class CDIIS(lib.diis.DIIS):
-    def __init__(self, mf=None, filename=None):
+    def __init__(self, mf=None, filename=None, Corth=None):
         lib.diis.DIIS.__init__(self, mf, filename)
         self.rollback = False
         self.space = 8
+        self.Corth = Corth
 
     def update(self, s, d, f, *args, **kwargs):
-        errvec = get_err_vec(s, d, f)
+        errvec = get_err_vec(s, d, f, self.Corth)
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:
@@ -59,23 +60,23 @@ class CDIIS(lib.diis.DIIS):
 
 SCFDIIS = SCF_DIIS = DIIS = CDIIS
 
-def get_err_vec(s, d, f):
+def get_err_vec(s, d, f, Corth):
     '''error vector = SDF - FDS'''
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
         sdf = reduce(numpy.dot, (s,d,f))
-        errvec = sdf.T.conj() - sdf
+        errvec = numpy.dot(Corth.T, numpy.dot(sdf.T.conj() - sdf, Corth))
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
             sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-            errvec.append((sdf.T.conj() - sdf))
+            errvec.append(numpy.dot(Corth.T, numpy.dot((sdf.T.conj() - sdf), Corth)))
         errvec = numpy.vstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
         nao = s.shape[-1]
         s = lib.asarray((s,s)).reshape(-1,nao,nao)
-        return get_err_vec(s, d.reshape(s.shape), f.reshape(s.shape))
+        return get_err_vec(s, d.reshape(s.shape), f.reshape(s.shape), Corth)
     else:
         raise RuntimeError('Unknown SCF DIIS type')
     return errvec

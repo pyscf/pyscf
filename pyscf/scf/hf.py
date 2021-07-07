@@ -153,6 +153,16 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
+
+        # We get the used orthonormalized AO basis from any old eigendecomposition.
+        # Since the ingredients for the Fock matrix has already been built, we can
+        # just go ahead and use it to determine the orthonormal basis vectors.
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mf_diis.Corth = mo_coeff
+        else:
+            mf_diis.Corth = mo_coeff[0]
     else:
         mf_diis = None
 
@@ -1216,7 +1226,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         unit = kwargs['unit_symbol']
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        # UHF denisty matrices
+        # UHF density matrices
         dm = dm[0] + dm[1]
 
     with mol.with_common_orig((0,0,0)):
@@ -1427,7 +1437,7 @@ class SCF(lib.StreamObject):
     max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
     init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
 
-    # To avoid diis pollution form previous run, self.diis should not be
+    # To avoid diis pollution from previous run, self.diis should not be
     # initialized as DIIS instance here
     DIIS = diis.SCF_DIIS
     diis = getattr(__config__, 'scf_hf_SCF_diis', True)
