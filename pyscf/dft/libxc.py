@@ -1182,6 +1182,7 @@ def parse_xc(description):
 
             if key[:3] == 'RSH':
                 # RSH(alpha; beta; omega): Range-separated-hybrid functional
+                # See also utils.format_xc_code
                 alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
                 assign_omega(omega, fac*(alpha+beta), fac*alpha)
             elif key == 'HF':
@@ -1358,7 +1359,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
       correlation part is the same to putting "HF" in the exchange part.
 
     * String "RSH" means range-separated operator. Its format is
-      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      RSH(omega, alpha, beta).  Another way to input RSH is to use keywords
       SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
       alpha" where the number in parenthesis is the value of omega.
 
