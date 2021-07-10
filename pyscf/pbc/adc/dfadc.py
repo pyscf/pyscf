@@ -14,14 +14,18 @@
 # limitations under the License.
 
 import numpy as np
+#@profile
 def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
 
     ''' Returns approximate ovvv integrals used in restricted implementation'''
 
-    nocc = myadc.nocc
-    nmo = myadc.nmo
-    nvir = nmo - nocc
-    naux = myadc.with_df.get_naoaux()
+    #nocc = myadc.nocc
+    #nmo = myadc.nmo
+    #nvir = nmo - nocc
+    #naux = myadc.with_df.get_naoaux()
+    naux = Lov.shape[0]
+    nocc = Lov.shape[1]
+    nvir = Lov.shape[2]
 
     Lvv = Lvv.reshape(naux,nvir*nvir)
     Lov = Lov.reshape(naux,nocc,nvir)
@@ -34,6 +38,8 @@ def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
     ovvv = np.dot(Lov_temp, Lvv)
     #ovvv = np.einsum('Lpq,Lrs->pqrs',Lov,Lvv)
     ovvv = ovvv.reshape(-1, nvir, nvir, nvir)
+    del Lvv
+    del Lov
     return ovvv    
 
 
@@ -60,15 +66,17 @@ def  get_ovvv_spin_df(myadc, Lov, Lvv, p, chnk_size):
     #vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
     return ovvv    
 
+#@profile
 def  get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
 
     ''' Returns approximate vvvv integrals used in restricted implementation'''
 
-    nocc = myadc.nocc
-    nmo = myadc.nmo
-    nvir = nmo - nocc
-    naux = myadc.with_df.get_naoaux()
-    nkpts = myadc.nkpts
+    #nocc = myadc.nocc
+    #nmo = myadc.nmo
+    #nvir = nmo - nocc
+    #naux = myadc.with_df.get_naoaux()
+    naux = vv1.shape[0]
+    nvir = vv1.shape[1]
 
     vv1 = vv1.reshape(naux,nvir,nvir)
 
@@ -82,6 +90,8 @@ def  get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
     vvvv = vvvv.reshape(-1, nvir, nvir, nvir)
     vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir ,nvir)
     #vvvv = np.einsum('Lpq,Lrs->pqrs',vv1,vv2)
+    del vv1
+    del vv2
     return vvvv    
 
 

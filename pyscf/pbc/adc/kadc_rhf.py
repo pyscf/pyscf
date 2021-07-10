@@ -158,6 +158,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
     return e_corr, t1, t2
 
+#@profile
 def compute_amplitudes(myadc, eris):
 
     cput0 = (time.clock(), time.time())
@@ -184,7 +185,7 @@ def compute_amplitudes(myadc, eris):
     # Get location of non-zero/padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(myadc, kind="split")
    
-    eris_oovv = eris.oovv[:].copy()
+    #eris_oovv = eris.oovv[:].copy()
 
     kconserv = myadc.khelper.kconserv
     touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
@@ -231,6 +232,7 @@ def compute_amplitudes(myadc, eris):
 
                 if isinstance(eris.ovvv, type(None)):
                     chnk_size = kadc_ao2mo.calculate_chunk_size(myadc)
+                    #chnk_size = kadc_ao2mo.calculate_chunk_size(myadc)
                     if chnk_size > nocc:
                         chnk_size = nocc
                     a = 0
@@ -297,13 +299,13 @@ def compute_amplitudes(myadc, eris):
                 else : 
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka) 
 
-        if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
-
         t2_2 = np.zeros_like((t2_1))
 
-        t2_2 = t2_1_vvvv[:].copy()
+        t2_2 = t2_1_vvvv.copy()
+        if not isinstance(eris.oooo, np.ndarray):
+            t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
         
+        eris_oovv = eris.oovv
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             for kk in range(nkpts):
 
@@ -612,7 +614,7 @@ def compute_energy(myadc, t2, eris):
     emp2 = emp2.real / nkpts
     return emp2
 
-
+#@profile
 def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
 
     log = logger.Logger(myadc.stdout, myadc.verbose)
@@ -834,6 +836,7 @@ def ip_vector_size(adc):
 
     return size
 
+#@profile
 def get_imds_ea(adc, eris=None):
 
     cput0 = (time.clock(), time.time())
@@ -1047,7 +1050,7 @@ def get_imds_ea(adc, eris=None):
 
                     del t2_2_mlb
 
-           log.timer_debug1("Starting the small integrals  calculation")
+           #log.timer_debug1("Starting the small integrals  calculation")
            for kn, ke, kd in kpts_helper.loop_kkk(nkpts):
            
                km = kconserv[kb,kn,ke]
@@ -1144,9 +1147,9 @@ def get_imds_ea(adc, eris=None):
                M_ab[ka] += 0.25*lib.einsum('lmdb,mlad->ab',t2_1[kl,km,kd].conj(), temp_t2_v_11[km,kl,ka], optimize=True)
                del temp_t2_v_11
 
-           log.timer_debug1("Completed M_ab ADC(3) small integrals calculation")
+           #log.timer_debug1("Completed M_ab ADC(3) small integrals calculation")
 
-           log.timer_debug1("Starting M_ab vvvv ADC(3) calculation")
+           #log.timer_debug1("Starting M_ab vvvv ADC(3) calculation")
 
            for km in range(nkpts):
                for kl in range(nkpts):
@@ -1253,6 +1256,7 @@ def get_imds_ea(adc, eris=None):
  
     return M_ab
 
+##@profile
 def get_imds_ip(adc, eris=None):
 
     cput0 = (time.clock(), time.time())
@@ -1729,13 +1733,15 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
     log.timer_debug1("Completed ea_diag calculation")
 
     return diag
-
+#@profile
 def ea_contract_r_vvvv(myadc,r2,vvvv,ka,kb,kc):
 
     log = logger.Logger(myadc.stdout, myadc.verbose)
-    nocc = myadc.nocc
-    nmo = myadc.nmo
-    nvir = nmo - nocc
+    #nocc = myadc.nocc
+    #nmo = myadc.nmo
+    #nvir = nmo - nocc
+    nocc = r2.shape[0]
+    nvir = r2.shape[1]
     nkpts = myadc.nkpts
     kconserv = myadc.khelper.kconserv
 
@@ -1759,7 +1765,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv,ka,kb,kc):
             a += k
     else :
         for p in range(0,nvir,chnk_size):
-            vvvv_p = vvvv[ka,kb,kc,p:p+chnk_size,:,:,:].reshape(-1,nvir*nvir)
+            vvvv_p = vvvv[ka,kb,kc][p:p+chnk_size].reshape(-1,nvir*nvir)
             k = vvvv_p.shape[0]
             r2_vvvv[a:a+k] += np.dot(vvvv_p,r2.T).reshape(-1,nvir,nocc)
             del vvvv_p
@@ -1768,7 +1774,6 @@ def ea_contract_r_vvvv(myadc,r2,vvvv,ka,kb,kc):
     r2_vvvv = np.ascontiguousarray(r2_vvvv.transpose(2,0,1))
 
     return r2_vvvv
-
 
 
 def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
@@ -1812,6 +1817,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
         M_ab = adc.get_imds()
 
     #Calculate sigma vector
+    #@profile
     def sigma_(r):
         cput0 = (time.clock(), time.time())
         log = logger.Logger(adc.stdout, adc.verbose)
@@ -2182,6 +2188,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
         M_ij = adc.get_imds()
 
     #Calculate sigma vector
+    #@profile
     def sigma_(r):
         cput0 = (time.clock(), time.time())
         log = logger.Logger(adc.stdout, adc.verbose)

@@ -324,12 +324,16 @@ def transform_integrals_df(myadc):
 
     return eris
 
-
+#@profile
 def calculate_chunk_size(myadc):
 
     avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
-    nocc = myadc.nocc
-    nmo = myadc.nmo
+    #nocc = myadc.nocc
+    #nmo = myadc.nmo
+    nocc = [np.count_nonzero(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]
+    nocc = np.amax(nocc)
+    nmo = [len(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]
+    nmo = np.max(nocc) + np.max(np.array(nmo) - np.array(nocc))
     nvir = nmo - nocc
     vvv_mem = (nvir**3) * 8/1e6
 
@@ -339,5 +343,3 @@ def calculate_chunk_size(myadc):
         chnk_size = 1
 
     return chnk_size
-
-
