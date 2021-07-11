@@ -43,14 +43,14 @@ void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
 void CVHFdel_optimizer(CVHFOpt **opt)
 {
         CVHFOpt *opt0 = *opt;
-        if (!opt0) {
+        if (opt == NULL) {
                 return;
         }
 
-        if (!opt0->q_cond) {
+        if (opt0->q_cond != NULL) {
                 free(opt0->q_cond);
         }
-        if (!opt0->dm_cond) {
+        if (opt0->dm_cond != NULL) {
                 free(opt0->dm_cond);
         }
 
@@ -67,7 +67,7 @@ int CVHFnoscreen(int *shls, CVHFOpt *opt,
 int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
                         int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1;
         }
         int i = shls[0];
@@ -87,7 +87,7 @@ int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
 int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
                        int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -117,7 +117,7 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -141,7 +141,7 @@ int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -182,7 +182,7 @@ int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_vj_pass1_prescreen(int *shls, CVHFOpt *opt,
                                int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -205,7 +205,7 @@ int CVHFnr3c2e_vj_pass1_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_vj_pass2_prescreen(int *shls, CVHFOpt *opt,
                                int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -228,7 +228,7 @@ int CVHFnr3c2e_vj_pass2_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_schwarz_cond(int *shls, CVHFOpt *opt,
                             int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -263,7 +263,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 {
         /* This memory is released in void CVHFdel_optimizer, Don't know
          * why valgrind raises memory leak here */
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         // nbas in the input arguments may different to opt->nbas.
@@ -327,7 +327,7 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
 
 void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * len);
@@ -337,7 +337,7 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
+        if (opt->dm_cond != NULL) { // NOT reuse opt->dm_cond because nset may be diff in different call
                 free(opt->dm_cond);
         }
         // nbas in the input arguments may different to opt->nbas.
@@ -371,7 +371,7 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 
 void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)
 {
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * len);
