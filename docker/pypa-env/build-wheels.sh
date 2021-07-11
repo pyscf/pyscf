@@ -8,7 +8,7 @@ mkdir -p /root/wheelhouse $src/linux-wheels
 
 if [ "$#" -gt 0 ]; then
   export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF"
-  curl $1 | tar -C $src/pyscf/lib -xzf -
+  curl -L $1 | tar -C $src/pyscf/lib -xzf -
 else
   export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
 fi
