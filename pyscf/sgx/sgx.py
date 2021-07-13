@@ -123,6 +123,14 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             if self.with_df.grids_level_i != self.with_df.grids_level_f:
                 self._in_scf = True
             if self.with_df.pjs:
+                if not self.with_df.dfj:
+                    import warnings
+                    msg = '''
+                    P-junction screening is not compatible with SGX J-matrix.
+                    Setting dfj = True. If you want to use SGX J-matrix,
+                    set pjs = False to turn off P-junction screening.
+                    '''
+                    warnings.warn(msg)
                 self.with_df.dfj = True # no SGX-J allowed if P-junction screening on
 
         def get_jk(self, mol=None, dm=None, hermi=1, with_j=True, with_k=True,
@@ -165,6 +173,8 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
         def post_kernel(self, envs):
             self._in_scf = False
             self._last_dm = 0
+            self._last_vj = 0
+            self._last_vk = 0
 
         def nuc_grad_method(self):
             raise NotImplementedError

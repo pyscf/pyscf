@@ -35,7 +35,6 @@ void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
         CVHFOpt *opt0 = (CVHFOpt *)malloc(sizeof(CVHFOpt));
         opt0->nbas = nbas;
         opt0->ngrids = 0;
-        opt0->pscreen = 0;
         opt0->direct_scf_cutoff = 1e-14;
         opt0->q_cond = NULL;
         opt0->dm_cond = NULL;

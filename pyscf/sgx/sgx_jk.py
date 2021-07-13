@@ -268,14 +268,13 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
     def jk_part(mol, grid_coords, dms, fg, weights):
-        if pjs:
-            sgxopt.set_dm(fg/numpy.sqrt(weights[None,:]), mol._atm, mol._bas, mol._env)
-            #sgxopt.set_dm(fg, mol._atm, mol._bas, mol._env)
         atm, bas, env = mol._atm, mol._bas, mol._env
         ngrids = grid_coords.shape[0]
         env = numpy.append(env, grid_coords.ravel())
-        env[11] = ngrids
-        env[12] = mol._env.size
+        env[gto.NGRIDS] = ngrids
+        env[gto.PTR_GRIDS] = mol._env.size
+        if pjs:
+            sgxopt.set_dm(fg/numpy.sqrt(weights[None,:]), mol._atm, mol._bas, env)
 
         ao_loc = moleintor.make_loc(bas, sgxopt._intor)
         shls_slice = (0, mol.nbas, 0, mol.nbas)

@@ -152,7 +152,7 @@ class SGXOpt(VHFOpt):
     def __init__(self, mol, intor=None,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
         super(SGXOpt, self).__init__(mol, intor, prescreen, qcondname, dmcondname)
-        self.is_allocd = False
+        self.ngrids = None
 
     def set_dm(self, dm, atm, bas, env):
         if self._dmcondname is not None:
@@ -180,16 +180,10 @@ class SGXOpt(VHFOpt):
                        c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                        c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                        c_env.ctypes.data_as(ctypes.c_void_p),
-                       ctypes.c_int(ngrids),
-                       ctypes.c_int(0 if self.is_allocd else 1))
+                       ctypes.c_int(ngrids))
                 self.ngrids = ngrids
             else:
-                fsetdm(self._this,
-                       dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
-                       ao_loc.ctypes.data_as(ctypes.c_void_p),
-                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
-                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                       c_env.ctypes.data_as(ctypes.c_void_p))
+                raise ValueError('Can only use SGX dm screening for SGXOpt')
 
     def get_dm_cond(self):
         '''Return an array associated to dm_cond. Contents of dm_cond can be
@@ -206,7 +200,6 @@ class SGXOpt(VHFOpt):
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),
                 ('ngrids', ctypes.c_int),
-                ('pscreen', ctypes.c_int),
                 ('_padding', ctypes.c_int),
                 ('direct_scf_cutoff', ctypes.c_double),
                 ('q_cond', ctypes.c_void_p),

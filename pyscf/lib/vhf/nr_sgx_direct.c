@@ -132,7 +132,7 @@ void SGXdot_nrk(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
 
         double *grids = env + (size_t) env[PTR_GRIDS];
         
-        if (vhfopt != NULL && vhfopt->pscreen == 1) {
+        if (vhfopt != NULL && vhfopt->dm_cond != NULL) {
                 for (k = 0; k < tot_grids; k++) {
                         shls[2] = k;
                         if (SGXnr_pj_prescreen(shls, vhfopt, atm, bas, env)) {
@@ -144,15 +144,6 @@ void SGXdot_nrk(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
                         }
                 }
                 env[NGRIDS] = tmp_ngrids;
-                /*for (k = 0; k < tot_grids; k++) {
-                        shls[2] = k;
-                        grids[3*tmp_ngrids+0] = all_grids[3*k+0];
-                        grids[3*tmp_ngrids+1] = all_grids[3*k+1];
-                        grids[3*tmp_ngrids+2] = all_grids[3*k+2];
-                        inds[tmp_ngrids] = k;
-                        tmp_ngrids++;
-                }
-                env[NGRIDS] = tmp_ngrids;*/
         } else {
                 for (k = 0; k < tot_grids; k++) {
                         shls[2] = k;
@@ -167,7 +158,7 @@ void SGXdot_nrk(int (*intor)(), SGXJKOperator **jkop, SGXJKArray **vjk,
 
         int grid0, grid1;
         const int dims[] = {ao_loc[ish+1]-ao_loc[ish], ao_loc[jsh+1]-ao_loc[jsh], tmp_ngrids};
-        for (grid0 = 0; grid0 < env[NGRIDS]; grid0 += BLKSIZE) {
+        for (grid0 = 0; grid0 < tmp_ngrids; grid0 += BLKSIZE) {
                 grid1 = MIN(grid0 + BLKSIZE, tmp_ngrids);
                 shls[2] = grid0;
                 shls[3] = grid1;
@@ -195,7 +186,6 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         int nish = ish1 - ish0;
         int di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
         int cache_size = _max_cache_size_sgx(intor, shls_slice, 2,
@@ -213,7 +203,7 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         } else {
                 fprescreen = CVHFnoscreen;
         }
-        int ngrids = env[NGRIDS];
+        int ngrids = (int) env[NGRIDS];
         double* all_grids = env+(size_t)env[PTR_GRIDS];
 
 #pragma omp parallel default(none) \
@@ -222,7 +212,7 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
                atm, bas, env, natm, \
                nish, di, cache_size, fprescreen, \
                aosym, npair, cintopt, env_size, \
-               ngrids, all_grids)
+               ngrids, all_grids, ish0, jsh0)
 {
         int i, ij, ish, jsh;
         int shls[4];
@@ -234,9 +224,9 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
                           cintopt, ncomp};
         SGXJKArray *v_priv[n_dm];
         for (i = 0; i < n_dm; i++) {
-                v_priv[i] = jkop[i]->allocate(shls_slice, ao_loc, ncomp, env[NGRIDS]);
+                v_priv[i] = jkop[i]->allocate(shls_slice, ao_loc, ncomp, ngrids);
         }
-        double *buf = malloc(sizeof(double) * env[NGRIDS]*di*di*ncomp);
+        double *buf = malloc(sizeof(double) * ngrids*di*di*ncomp);
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for nowait schedule(dynamic, 1)
         for (ij = 0; ij < npair; ij++) {
@@ -331,23 +321,20 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 
 void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                             int *atm, int natm, int *bas, int nbas, double *env,
-                            int ngrids, int alloc)
+                            int ngrids)
 {
         nbas = opt->nbas;
-        if (1) {
-                if (opt->dm_cond) {
-                        free(opt->dm_cond);
-                }
-                opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
+        if (opt->dm_cond) {
+                free(opt->dm_cond);
         }
-        opt->pscreen = 1;
+        opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
         // nbas in the input arguments may different to opt->nbas.
         // Use opt->nbas because it is used in the prescreen function
         memset(opt->dm_cond, 0, sizeof(double)*nbas*ngrids);
         opt->ngrids = ngrids;
 
         const size_t nao = ao_loc[nbas] - ao_loc[0];
-        double dmax, tmp;
+        double dmax;
         size_t i, j, jsh, iset;
         double *pdm;
         for (i = 0; i < ngrids; i++) {

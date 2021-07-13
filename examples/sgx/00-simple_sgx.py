@@ -22,8 +22,14 @@ mf.kernel()
 mf.with_df.dfj = True
 mf.kernel()
 
-# Turn on P-junction screening
+# Turn on P-junction screening to accelerate large calculations
+# (uses algorithm similar to COSX)
 mf.with_df.pjs = True
+mf.kernel()
+
+# If dfj is off at runtime, it is turned on and a user warning is issued
+# because SGX-J cannot be used with P-junction screening.
+mf.with_df.dfj = False
 mf.kernel()
 
 # Use direct J-matrix evaluation (slow, primarily for testing purposes)
