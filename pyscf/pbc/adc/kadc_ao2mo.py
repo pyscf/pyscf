@@ -324,7 +324,7 @@ def transform_integrals_df(myadc):
 
     return eris
 
-#@profile
+@profile
 def calculate_chunk_size(myadc):
 
     avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
