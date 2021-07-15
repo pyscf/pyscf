@@ -40,6 +40,7 @@ def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
     ovvv = ovvv.reshape(-1, nvir, nvir, nvir)
     del Lvv
     del Lov
+    del Lov_temp
     return ovvv    
 
 
