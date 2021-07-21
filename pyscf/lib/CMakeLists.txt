@@ -143,8 +143,9 @@ option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.4.1
+    GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
+    # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
+    GIT_TAG v4.4.2
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
@@ -176,7 +177,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/5.1.2/libxc-5.1.2.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/5.1.5/libxc-5.1.5.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
