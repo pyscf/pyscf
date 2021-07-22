@@ -314,6 +314,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
                 coulG = 4*np.pi/absG2
+                # Explicitly set 4pi/G2 = 0 when G = 0
                 coulG[G0_idx] = 0
 
         elif cell.dimension == 2:
