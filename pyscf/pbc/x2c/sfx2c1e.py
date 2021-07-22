@@ -106,6 +106,7 @@ class X2C(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
     approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'atom1e')
+    # By default, uncontracted cell.basis plus additional steep orbital is used to construct modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
@@ -120,11 +121,14 @@ class SpinFreeX2C(X2C):
             kpts_lst = numpy.zeros((1,3))
         else:
             kpts_lst = numpy.reshape(kpts, (-1,3))
-
+        # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
-        with_df = aft.AFTDF(xcell)
+        from pyscf.pbc.df import df
+        # Use DF with ewald summation technique
+        with_df = df.DF(xcell)
+        #with_df = aft.AFTDF(xcell)
         c = lib.param.LIGHT_SPEED
-        assert ('1E' in self.approx.upper())
+        assert '1E' in self.approx.upper()
         if 'ATOM' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
@@ -143,24 +147,36 @@ class SpinFreeX2C(X2C):
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        elif 'FULL_X2C' in self.approx.upper():
+            logger.info(self, 'Prepare PBC sfx2x with Chia-Nan\'s approximation...')
+            w = get_pnucp(with_df, kpts_lst)
         else:
             raise NotImplementedError
 
         t = xcell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
         s = xcell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts_lst)
-        v = with_df.get_nuc(kpts_lst)
-        #w = get_pnucp(with_df, kpts_lst)
+        if cell.pseudo:
+            raise NotImplementedError
+        else:
+            v = lib.asarray(with_df.get_nuc(kpts_lst))
         if self.basis is not None:
             s22 = s
             s21 = pbcgto.intor_cross('int1e_ovlp', xcell, cell, kpts=kpts_lst)
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            # The treatment of pnucp local part has huge effects to hcore
-            #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
-            #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
-            h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+            c = lib.param.LIGHT_SPEED
+            if 'ATOM' in self.approx.upper():
+                # The treatment of pnucp local part has huge effects to hcore
+                #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
+                #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+            elif 'FULL_X2C' in self.approx.upper():
+                xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
+
             if self.basis is not None:
+                # If cell = xcell, c = identity matrix
                 c = lib.cho_solve(s22[k], s21[k])
                 h1 = reduce(numpy.dot, (c.T, h1, c))
             if self.xuncontract and contr_coeff is not None:
@@ -219,6 +235,9 @@ def get_pnucp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
     coulG *= kws
+    # When mydf.eta == 0: Switch off Ewald tech and use the regular reciprocal space
+    # method (solving Poisson equation of nuclear charges in reciprocal space).
+    # Otherwise, the integral is split into parts in real space and parts in reciprocal space. mydf.eta is determined by kinetic energy cutoff.
     if mydf.eta == 0:
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
@@ -253,6 +272,7 @@ def get_pnucp(mydf, kpts=None):
                 wj[k] -= nucbar*2 * s
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
+    # Evaluate integrals in reciprocal space.
     for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2',
                                        intor='GTO_ft_pdotp'):
