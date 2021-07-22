@@ -382,13 +382,11 @@ void fill_sr3c2e_g(int (*intor)(), double *out,
         I1 = ao_loc[Ish+1];
         IJstart = I0*(I0+1)/2;
         di = I1 - I0;
-        // printf("Ish= %d  Iatm= %d  Ishshift= %d  ISH= %d\n", Ish, Iatm, Ishshift, ISH);
         for(Jsh=0; Jsh<=Ish; ++Jsh, ++IJsh) {
             Jatm = bassup[ATOM_OF+Jsh*BAS_SLOTS];
             IJatm = (Iatm>=Jatm)?(Iatm*(Iatm+1)/2+Jatm):(Jatm*(Jatm+1)/2+Iatm);
             Jshshift = Jsh - refshlstart_by_atm[Jatm];
             JSH = refuniqshl_map[Jsh];
-            // printf("Jsh= %d  Jatm= %d  Jshshift= %d  JSH= %d\n", Jsh, Jatm, Jshshift, JSH);
             IJSH = (ISH>=JSH)?(ISH*(ISH+1)/2+JSH):(JSH*(JSH+1)/2+ISH);
             ej = refexp[Jsh];
             J0 = ao_loc[Jsh];
@@ -408,7 +406,6 @@ void fill_sr3c2e_g(int (*intor)(), double *out,
             idij0 = refatmprd_loc[IJatm];
             Idij0 = uniqshlpr_dij_loc[IJSH];
             idij1 = idij0 + uniqshlpr_dij_loc[IJSH+1] - Idij0;
-            // printf("Ish= %d Jsh= %d  Iatm= %d Jatm= %d  idij0= %d idij1= %d  Idij0=%d \n", Ish, Jsh, Iatm, Jatm, idij0, idij1, Idij0);
             for(idij=idij0; idij<idij1; ++idij) {
                 // get cutoff for IJ
                 Idij = Idij0 + idij-idij0;
@@ -530,10 +527,13 @@ void fill_sr3c2e_g(int (*intor)(), double *out,
 void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
                    int comp, CINTOpt *cintopt,
                    int *ao_loc, int *ao_locsup, int *shl_loc,
+                   int *refuniqshl_map,
                    int *auxuniqshl_map, int nbasauxuniq,
                    double *uniq_Rcut2s, double *refexp,
-                   int *refshlprd_loc, int *refshlprdinv_lst,
-                   int *supshlpr_loc, int *supshlpr_lst, int nsupshlpr,
+                   int *refshlstart_by_atm, int *supshlstart_by_atm,
+                   int *uniqshlpr_dij_loc, // IJSH,IJSH+1 --> idij0, idij1
+                   int *refatmprd_loc,
+                   int *supatmpr_loc, int *supatmpr_lst, int nsupatmpr,
                    int *atm, int natm, int *bas, int nbas, int nbasaux,
                    double *env,
                    int *atmsup, int natmsup, int *bassup,
@@ -543,16 +543,17 @@ void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
     ao_locsup = concatenate([ao_locsup, ao_locaux])
 */
 {
-    const int *supshlpr_i_lst = supshlpr_lst;
-    const int *supshlpr_j_lst = supshlpr_lst + nsupshlpr;
+    const int *supatmpr_i_lst = supatmpr_lst;
+    const int *supatmpr_j_lst = supatmpr_lst + nsupatmpr;
     const int kshshift = nbassup - nbas;
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
     int iptrxyz, jptrxyz, kptrxyz;
-    int idij, idij0, idij1, Idij;
+    int idij, idij0, idij1, Idij, Idij0;
     int di, dj, dk, dij, dijk, dijktot, dijkmax;
     int dimax = max_shlsize(ao_loc, nbas);
     int dkmax = max_shlsize(ao_loc+nbas, nbasaux);
@@ -587,12 +588,20 @@ void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
 // <<<<<<<<
 
     for(Ish=0, IJsh=0; Ish<nbas; ++Ish) {
+        Iatm = bassup[ATOM_OF+Ish*BAS_SLOTS];
+        Ishshift = Ish - refshlstart_by_atm[Iatm];
+        ISH = refuniqshl_map[Ish];
         ei = refexp[Ish];
         I0 = ao_loc[Ish];
         I1 = ao_loc[Ish+1];
         IJstart = I0*(I0+1)/2;
         di = I1 - I0;
         for(Jsh=0; Jsh<=Ish; ++Jsh, ++IJsh) {
+            Jatm = bassup[ATOM_OF+Jsh*BAS_SLOTS];
+            IJatm = (Iatm>=Jatm)?(Iatm*(Iatm+1)/2+Jatm):(Jatm*(Jatm+1)/2+Iatm);
+            Jshshift = Jsh - refshlstart_by_atm[Jatm];
+            JSH = refuniqshl_map[Jsh];
+            IJSH = (ISH>=JSH)?(ISH*(ISH+1)/2+JSH):(JSH*(JSH+1)/2+ISH);
             ej = refexp[Jsh];
             J0 = ao_loc[Jsh];
             J1 = ao_loc[Jsh+1];
@@ -608,26 +617,30 @@ void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
                 buf_L[i] = 0;
             }
 
-            idij0 = refshlprd_loc[IJsh];
-            idij1 = refshlprd_loc[IJsh+1];
-            // printf("%d %d   %d %d\n", Ish, Jsh, idij0, idij1);
+            idij0 = refatmprd_loc[IJatm];
+            Idij0 = uniqshlpr_dij_loc[IJSH];
+            idij1 = idij0 + uniqshlpr_dij_loc[IJSH+1] - Idij0;
             for(idij=idij0; idij<idij1; ++idij) {
-                Idij = refshlprdinv_lst[idij];
+                // get cutoff for IJ
+                Idij = Idij0 + idij-idij0;
                 uniq_Rcut2s_K = uniq_Rcut2s + Idij * nbasauxuniq;
-                ijsh0 = supshlpr_loc[idij];
-                ijsh1 = supshlpr_loc[idij+1];
-                for(ijsh=ijsh0; ijsh<ijsh1; ++ijsh) {
-                    ish = supshlpr_i_lst[ijsh];
-                    jsh = supshlpr_j_lst[ijsh];
-                    shls[1] = ish;
-                    shls[0] = jsh;
-                    iptrxyz = atmsup[PTR_COORD+
-                                     bassup[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
+
+                ijatm0 = supatmpr_loc[idij];
+                ijatm1 = supatmpr_loc[idij+1];
+                for(ijatm=ijatm0; ijatm<ijatm1; ++ijatm) {
+                    iatm = supatmpr_i_lst[ijatm];
+                    jatm = supatmpr_j_lst[ijatm];
+                    iptrxyz = atmsup[PTR_COORD+iatm*ATM_SLOTS];
                     ri = envsup+iptrxyz;
-                    jptrxyz = atmsup[PTR_COORD+
-                                     bassup[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
+                    jptrxyz = atmsup[PTR_COORD+jatm*ATM_SLOTS];
                     rj = envsup+jptrxyz;
                     get_rc(rc, ri, rj, ei, ej);
+
+                    // supmol atm index to supmol shl index
+                    ish = supshlstart_by_atm[iatm] + Ishshift;
+                    jsh = supshlstart_by_atm[jatm] + Jshshift;
+                    shls[1] = ish;
+                    shls[0] = jsh;
 
                     buf_Lk = buf_L;
 
@@ -685,10 +698,11 @@ void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
                             buf_Lk += dijk;
                         } // Ksh
                     } // Katm
-                } // ijsh
+                } // ijatm
             } // idij
 
-            /* commented out for speed test purpose
+            // commented for speed test
+            /*
             buf_Lk = buf_L;
             outk = out;
             Ksh0 = shl_loc[natm];

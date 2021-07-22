@@ -658,7 +658,6 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         # drv = libpbc.fill_sr3c2e_g
 # >>>>> debug block
         if discard_integrals:
-            raise NotImplementedError
             drv = libpbc.fill_sr3c2e_g_nosave
         else:
             drv = libpbc.fill_sr3c2e_g
