@@ -714,8 +714,6 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
             fill_j3c(out)
         out = out.reshape(1,naoaux,nao2)
     else:
-        raise NotImplementedError
-
         nkptijs = len(kptij_lst)
         kpti = kptij_lst[:,0]
         kptj = kptij_lst[:,1]
@@ -740,12 +738,15 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 ao_locsup.ctypes.data_as(ctypes.c_void_p),
                 shl_loc.ctypes.data_as(ctypes.c_void_p),
+                refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                 auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nbasauxuniq),
                 Rcut2s.ctypes.data_as(ctypes.c_void_p),
                 refexp.ctypes.data_as(ctypes.c_void_p),
+                refshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                supshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                dijs_loc.ctypes.data_as(ctypes.c_void_p),
                 refatmprd_loc.ctypes.data_as(ctypes.c_void_p),
-                refatmprdinv_lst.ctypes.data_as(ctypes.c_void_p),
                 supatmpr_loc.ctypes.data_as(ctypes.c_void_p),
                 supatmpr_lst.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nsupatmpr),

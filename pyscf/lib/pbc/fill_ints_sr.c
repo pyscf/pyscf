@@ -746,10 +746,13 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
                    double complex *expLk, int nkpts,
                    int *kptij_idx, int nkptijs,
                    int *ao_loc, int *ao_locsup, int *shl_loc,
+                   int *refuniqshl_map,
                    int *auxuniqshl_map, int nbasauxuniq,
                    double *uniq_Rcut2s, double *refexp,
-                   int *refshlprd_loc, int *refshlprdinv_lst,
-                   int *supshlpr_loc, int *supshlpr_lst, int nsupshlpr,
+                   int *refshlstart_by_atm, int *supshlstart_by_atm,
+                   int *uniqshlpr_dij_loc, // IJSH,IJSH+1 --> idij0, idij1
+                   int *refatmprd_loc,
+                   int *supatmpr_loc, int *supatmpr_lst, int nsupatmpr,
                    int *atm, int natm, int *bas, int nbas, int nbasaux,
                    double *env,
                    int *atmsup, int natmsup, int *bassup,
@@ -777,16 +780,17 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
             expLk_i[i] = cimag(expLk[i]);
     }
 
-    const int *supshlpr_i_lst = supshlpr_lst;
-    const int *supshlpr_j_lst = supshlpr_lst + nsupshlpr;
+    const int *supatmpr_i_lst = supatmpr_lst;
+    const int *supatmpr_j_lst = supatmpr_lst + nsupatmpr;
     const int kshshift = nbassup - nbas;
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
-    int iatm, jatm, iptrxyz, jptrxyz, kptrxyz;
-    int idij, idij0, idij1, Idij;
+    int iptrxyz, jptrxyz, kptrxyz;
+    int idij, idij0, idij1, Idij, Idij0;
     int di, dj, dk, dij, dijk, dijktot, dijkmax;
     int dimax = max_shlsize(ao_loc, nbas);
     int dkmax = max_shlsize(ao_loc+nbas, nbasaux);
@@ -822,11 +826,19 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
 // <<<<<<<<
 
     for(Ish=0, IJsh=0; Ish<nbas; ++Ish) {
+        Iatm = bassup[ATOM_OF+Ish*BAS_SLOTS];
+        Ishshift = Ish - refshlstart_by_atm[Iatm];
+        ISH = refuniqshl_map[Ish];
         ei = refexp[Ish];
         I0 = ao_loc[Ish];
         I1 = ao_loc[Ish+1];
         di = I1 - I0;
         for(Jsh=0; Jsh<=Ish; ++Jsh, ++IJsh) {
+            Jatm = bassup[ATOM_OF+Jsh*BAS_SLOTS];
+            IJatm = (Iatm>=Jatm)?(Iatm*(Iatm+1)/2+Jatm):(Jatm*(Jatm+1)/2+Iatm);
+            Jshshift = Jsh - refshlstart_by_atm[Jatm];
+            JSH = refuniqshl_map[Jsh];
+            IJSH = (ISH>=JSH)?(ISH*(ISH+1)/2+JSH):(JSH*(JSH+1)/2+ISH);
             ej = refexp[Jsh];
             J0 = ao_loc[Jsh];
             J1 = ao_loc[Jsh+1];
@@ -838,26 +850,30 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
             pbuf2 = pbuf + dijkmax;
             cache = pbuf2 + dijkmax;
 
-            idij0 = refshlprd_loc[IJsh];
-            idij1 = refshlprd_loc[IJsh+1];
-            // printf("%d %d   %d %d\n", Ish, Jsh, idij0, idij1);
+            idij0 = refatmprd_loc[IJatm];
+            Idij0 = uniqshlpr_dij_loc[IJSH];
+            idij1 = idij0 + uniqshlpr_dij_loc[IJSH+1] - Idij0;
             for(idij=idij0; idij<idij1; ++idij) {
-                Idij = refshlprdinv_lst[idij];
+                // get cutoff for IJ
+                Idij = Idij0 + idij-idij0;
                 uniq_Rcut2s_K = uniq_Rcut2s + Idij * nbasauxuniq;
-                ijsh0 = supshlpr_loc[idij];
-                ijsh1 = supshlpr_loc[idij+1];
-                for(ijsh=ijsh0; ijsh<ijsh1; ++ijsh) {
-                    ish = supshlpr_i_lst[ijsh];
-                    jsh = supshlpr_j_lst[ijsh];
-                    shls[1] = ish;
-                    shls[0] = jsh;
-                    iatm = bassup[ATOM_OF+ish*BAS_SLOTS];
+
+                ijatm0 = supatmpr_loc[idij];
+                ijatm1 = supatmpr_loc[idij+1];
+                for(ijatm=ijatm0; ijatm<ijatm1; ++ijatm) {
+                    iatm = supatmpr_i_lst[ijatm];
+                    jatm = supatmpr_j_lst[ijatm];
                     iptrxyz = atmsup[PTR_COORD+iatm*ATM_SLOTS];
                     ri = envsup+iptrxyz;
-                    jatm = bassup[ATOM_OF+jsh*BAS_SLOTS];
                     jptrxyz = atmsup[PTR_COORD+jatm*ATM_SLOTS];
                     rj = envsup+jptrxyz;
                     get_rc(rc, ri, rj, ei, ej);
+
+                    // supmol atm index to supmol shl index
+                    ish = supshlstart_by_atm[iatm] + Ishshift;
+                    jsh = supshlstart_by_atm[jatm] + Jshshift;
+                    shls[1] = ish;
+                    shls[0] = jsh;
 
                     // pre-compute phase product for iatm/jatm pair
                     expLk_r_iatm = expLk_r + iatm * nkpts;
