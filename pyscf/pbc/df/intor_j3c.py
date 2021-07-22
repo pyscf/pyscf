@@ -462,35 +462,39 @@ def get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, bas_loc, auxbas_loc):
 def make_supmol_j3c(cell, atom_Rcuts, uniq_atms):
     return make_supmol_j2c(cell, atom_Rcuts, uniq_atms)
 
-def get_shlpr_data(cell, supmol, dcuts, dijs_lst, refuniqshl_map,
-                   dtype=np.int32):
+def get_cellpr_data(cell, supmol, uniq_atm_dcuts, uniq_atm_dijs_lst, uniq_atms,
+                    dtype=np.int32):
     """
     Return:
-        refshlprd_loc [size : nbas2+1]
-        refshlprdinv_lst [size : nbas2d]
-        supshlpr_loc [size : nbas2d+1]
-        supshlpr_lst [size : nsupshlpr]
+        refatmprd_loc [size : natm2+1]
+        supatmpr_loc [size : natm2d+1]
+        supatmpr_lst [size : nsupshlpr]
     """
     def tril_idx(i,j):
         return i*(i+1)//2+j if i>=j else j*(j+1)//2+i
 
+    dcuts = uniq_atm_dcuts
+    dijs_lst = uniq_atm_dijs_lst
     dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst])
 
     natm = cell.natm
+    natm2 = natm*(natm+1)//2
+    refuniqatm_map = [uniq_atms.index(cell.atom_symbol(i)) for i in range(natm)]
     nbas = cell.nbas
-    nbas2 = nbas*(nbas+1)//2
-    refshl_loc = np.concatenate([cell.aoslice_nr_by_atom()[:,0],[nbas]])
     Rssup = supmol.atom_coords()
-    supshlstart_by_atm = supmol.aoslice_nr_by_atom()[:,0]
 
-    refshlprdinv_lst = [None] * nbas2
-    supshlpr_loc = [None] * nbas2
-    supshlpr_lst = [None] * nbas2 * 2
+    supatmpr_loc = [None] * natm2
+    supatmpr_lst = [None] * natm2 * 2
     for Iatm in range(natm):
+        IATM = refuniqatm_map[Iatm]
         iatms = supmol._refsupatm_map[supmol._refsupatm_loc[Iatm]:
                                       supmol._refsupatm_loc[Iatm+1]]
         Ris = Rssup[iatms]
         for Jatm in range(Iatm+1):
+            IJatm = tril_idx(Iatm,Jatm)
+            JATM = refuniqatm_map[Jatm]
+            IJATM = tril_idx(IATM,JATM)
+            dcut = dcuts[IJATM]
             if Iatm == Jatm:
                 jatms = iatms
                 Rjs = Ris
@@ -503,162 +507,45 @@ def get_shlpr_data(cell, supmol, dcuts, dijs_lst, refuniqshl_map,
             dij_atmprids = np.arange(dijs.size)
             dijs = dijs.reshape(-1)
 
-            Ish0, Ish1 = refshl_loc[Iatm:Iatm+2]
-            for Ish in range(Ish0, Ish1):
-                ISH = refuniqshl_map[Ish]
-                if Iatm == Jatm:
-                    Jsh0, Jsh1 = Ish0, Ish+1
+            ids_keep = np.where(dijs <= dcut)[0]
+            if ids_keep.size == 0:
+                supatmpr_loc[IJatm] = np.array([], dtype=dtype)
+                supatmpr_lst[IJatm] = np.array([], dtype=dtype)
+                supatmpr_lst[IJatm+natm2] = np.array([], dtype=dtype)
+                continue
+
+            idij0 = dijs_loc[IJATM]
+            idij1 = dijs_loc[IJATM+1]
+            dijs_bins = dijs_lst[IJATM]
+            dijs_keep = dijs[ids_keep]
+            dijs_inverse = np.digitize(dijs_keep, bins=dijs_bins)-1
+            atmpr_keep_IJatm = []
+            for idij,dij in enumerate(dijs_bins):
+                mask = dijs_inverse==idij
+                if np.any(mask):
+                    atmpr_keep_IJatm.append(dij_atmprids[ids_keep[mask]])
                 else:
-                    Jsh0, Jsh1 = refshl_loc[Jatm:Jatm+2]
-                for Jsh in range(Jsh0, Jsh1):
-                    IJsh = tril_idx(Ish,Jsh)
-                    JSH = refuniqshl_map[Jsh]
-                    IJSH = tril_idx(ISH,JSH)
+                    atmpr_keep_IJatm.append(np.array([], dtype=int))
 
-                    ids_keep = np.where(dijs <= dcuts[IJSH])[0]
-                    if ids_keep.size == 0:
-                        refshlprdinv_lst[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_loc[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_lst[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_lst[IJsh+nbas2] = np.array([], dtype=dtype)
-                        continue
+            atmpr_len_IJatm = np.asarray([len(x)
+                                        for x in atmpr_keep_IJatm],
+                                        dtype=dtype)
+            atmpr_keep_IJatm = np.concatenate(atmpr_keep_IJatm)
+            iatms_keep = iatms[atmpr_keep_IJatm//njatm]
+            jatms_keep = jatms[atmpr_keep_IJatm%njatm]
+            # write
+            supatmpr_loc[IJatm] = atmpr_len_IJatm
+            supatmpr_lst[IJatm] = iatms_keep.astype(dtype)
+            supatmpr_lst[IJatm+natm2] = jatms_keep.astype(dtype)
+            # clear
+            atmpr_keep_IJatm = atmpr_len_IJatm = iatms_keep = jatms_keep = None
 
-                    idij0 = dijs_loc[IJSH]
-                    idij1 = dijs_loc[IJSH+1]
-                    dijs_bins = dijs_lst[IJSH]
-                    dijs_keep = dijs[ids_keep]
-                    dijs_inverse = np.digitize(dijs_keep, bins=dijs_bins)-1
-                    atmpr_keep_IJsh = []
-                    dinv_IJsh = []
-                    for idij,dij in enumerate(dijs_bins):
-                        mask = dijs_inverse==idij
-                        if np.any(mask):
-                            atmpr_keep_IJsh.append(dij_atmprids[ids_keep[mask]])
-                            dinv_IJsh.append(idij0+idij)
+    refatmprd_loc = np.cumsum([0]+[len(x) for x in supatmpr_loc]).astype(dtype)
+    supatmpr_lst = np.concatenate(supatmpr_lst)
+    supatmpr_loc = np.cumsum([0]+np.concatenate(
+                             supatmpr_loc).tolist()).astype(dtype)
 
-                    atmpr_len_IJsh = np.asarray([len(x)
-                                                for x in atmpr_keep_IJsh],
-                                                dtype=dtype)
-                    atmpr_keep_IJsh = np.concatenate(atmpr_keep_IJsh)
-                    iatms_keep = iatms[atmpr_keep_IJsh//njatm]
-                    jatms_keep = jatms[atmpr_keep_IJsh%njatm]
-                    ishs_keep = supshlstart_by_atm[iatms_keep] + (Ish-Ish0)
-                    jshs_keep = supshlstart_by_atm[jatms_keep] + (Jsh-Jsh0)
-                    # write
-                    refshlprdinv_lst[IJsh] = np.asarray(dinv_IJsh, dtype=dtype)
-                    supshlpr_loc[IJsh] = atmpr_len_IJsh
-                    supshlpr_lst[IJsh] = ishs_keep.astype(dtype)
-                    supshlpr_lst[IJsh+nbas2] = jshs_keep.astype(dtype)
-                    # clear
-                    atmpr_keep_IJsh = atmpr_len_IJsh = \
-                        iatms_keep = jatms_keep = ishs_keep = jshs_keep = None
-
-    refshlprd_loc = np.cumsum([0]+[len(x) for x in supshlpr_loc]).astype(dtype)
-    refshlprdinv_lst = np.concatenate(refshlprdinv_lst)
-    supshlpr_lst = np.concatenate(supshlpr_lst)
-    supshlpr_loc = np.cumsum([0]+np.concatenate(
-                             supshlpr_loc).tolist()).astype(dtype)
-
-    return refshlprd_loc, refshlprdinv_lst, supshlpr_lst, supshlpr_loc
-
-def get_cellpr_data_by_atom(cell, supmol, dcuts, refuniqshl_map,
-                            dtype=np.int32):
-    """
-    Return:
-        refshlprd_loc [size : nbas2+1]
-        refshlprdinv_lst [size : nbas2d]
-        supshlpr_loc [size : nbas2d+1]
-        supshlpr_lst [size : nsupshlpr]
-    """
-    def tril_idx(i,j):
-        return i*(i+1)//2+j if i>=j else j*(j+1)//2+i
-
-    dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst])
-
-    natm = cell.natm
-    nbas = cell.nbas
-    nbas2 = nbas*(nbas+1)//2
-    refshl_loc = np.concatenate([cell.aoslice_nr_by_atom()[:,0],[nbas]])
-    Rssup = supmol.atom_coords()
-    supshlstart_by_atm = supmol.aoslice_nr_by_atom()[:,0]
-
-    refshlprdinv_lst = [None] * nbas2
-    supshlpr_loc = [None] * nbas2
-    supshlpr_lst = [None] * nbas2 * 2
-    for Iatm in range(natm):
-        iatms = supmol._refsupatm_map[supmol._refsupatm_loc[Iatm]:
-                                      supmol._refsupatm_loc[Iatm+1]]
-        Ris = Rssup[iatms]
-        for Jatm in range(Iatm+1):
-            if Iatm == Jatm:
-                jatms = iatms
-                Rjs = Ris
-            else:
-                jatms = supmol._refsupatm_map[supmol._refsupatm_loc[Jatm]:
-                                              supmol._refsupatm_loc[Jatm+1]]
-                Rjs = Rssup[jatms]
-            njatm = len(jatms)
-            dijs = get_dist_mat(Ris, Rjs)
-            dij_atmprids = np.arange(dijs.size)
-            dijs = dijs.reshape(-1)
-
-            Ish0, Ish1 = refshl_loc[Iatm:Iatm+2]
-            for Ish in range(Ish0, Ish1):
-                ISH = refuniqshl_map[Ish]
-                if Iatm == Jatm:
-                    Jsh0, Jsh1 = Ish0, Ish+1
-                else:
-                    Jsh0, Jsh1 = refshl_loc[Jatm:Jatm+2]
-                for Jsh in range(Jsh0, Jsh1):
-                    IJsh = tril_idx(Ish,Jsh)
-                    JSH = refuniqshl_map[Jsh]
-                    IJSH = tril_idx(ISH,JSH)
-
-                    ids_keep = np.where(dijs <= dcuts[IJSH])[0]
-                    if ids_keep.size == 0:
-                        refshlprdinv_lst[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_loc[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_lst[IJsh] = np.array([], dtype=dtype)
-                        supshlpr_lst[IJsh+nbas2] = np.array([], dtype=dtype)
-                        continue
-
-                    idij0 = dijs_loc[IJSH]
-                    idij1 = dijs_loc[IJSH+1]
-                    dijs_bins = dijs_lst[IJSH]
-                    dijs_keep = dijs[ids_keep]
-                    dijs_inverse = np.digitize(dijs_keep, bins=dijs_bins)-1
-                    atmpr_keep_IJsh = []
-                    dinv_IJsh = []
-                    for idij,dij in enumerate(dijs_bins):
-                        mask = dijs_inverse==idij
-                        if np.any(mask):
-                            atmpr_keep_IJsh.append(dij_atmprids[ids_keep[mask]])
-                            dinv_IJsh.append(idij0+idij)
-
-                    atmpr_len_IJsh = np.asarray([len(x)
-                                                for x in atmpr_keep_IJsh],
-                                                dtype=dtype)
-                    atmpr_keep_IJsh = np.concatenate(atmpr_keep_IJsh)
-                    iatms_keep = iatms[atmpr_keep_IJsh//njatm]
-                    jatms_keep = jatms[atmpr_keep_IJsh%njatm]
-                    ishs_keep = supshlstart_by_atm[iatms_keep] + (Ish-Ish0)
-                    jshs_keep = supshlstart_by_atm[jatms_keep] + (Jsh-Jsh0)
-                    # write
-                    refshlprdinv_lst[IJsh] = np.asarray(dinv_IJsh, dtype=dtype)
-                    supshlpr_loc[IJsh] = atmpr_len_IJsh
-                    supshlpr_lst[IJsh] = ishs_keep.astype(dtype)
-                    supshlpr_lst[IJsh+nbas2] = jshs_keep.astype(dtype)
-                    # clear
-                    atmpr_keep_IJsh = atmpr_len_IJsh = \
-                        iatms_keep = jatms_keep = ishs_keep = jshs_keep = None
-
-    refshlprd_loc = np.cumsum([0]+[len(x) for x in supshlpr_loc]).astype(dtype)
-    refshlprdinv_lst = np.concatenate(refshlprdinv_lst)
-    supshlpr_lst = np.concatenate(supshlpr_lst)
-    supshlpr_loc = np.cumsum([0]+np.concatenate(
-                             supshlpr_loc).tolist()).astype(dtype)
-
-    return refshlprd_loc, refshlprdinv_lst, supshlpr_lst, supshlpr_loc
+    return refatmprd_loc, supatmpr_lst, supatmpr_loc
 
 def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
               precision=None, use_cintopt=True, safe=True, fac_type="ME",
@@ -689,7 +576,17 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
     Qauxs = get_schwartz_data(uniq_basaux, omega, keep1ctr=False, safe=True)
     dcuts = get_schwartz_dcut(uniq_bas, cell.vol, omega, precision/Qauxs.max(),
                               r0=cell.rcut, vol_correct=vol_correct_d)
+    uniq_atm_dcuts = lib.pack_tril(get_atom_Rcuts_2c(dcuts, uniq_bas_loc))
+    # print(dcuts)
+    # print(uniq_atm_dcuts)
+    uniq_atm_dijs_lst = make_dijs_lst(uniq_atm_dcuts, dstep/BOHR)
+    # print(uniq_atm_dijs_lst)
     dijs_lst = make_dijs_lst(dcuts, dstep/BOHR)
+    # print(dijs_lst)
+    dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst]).astype(np.int32)
+    uniq_atm_dijs_loc = np.cumsum([0]+[len(dijs) for dijs in uniq_atm_dijs_lst]).astype(np.int32)
+    # print(dijs_loc)
+    # print(uniq_atm_dijs_loc)
     if fac_type.upper() in ["ISFQ0","ISFQL"]:
         Qs_lst = get_schwartz_data(uniq_bas, omega, dijs_lst, keep1ctr=True,
                                    safe=True)
@@ -702,10 +599,12 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
     Rcut2s = Rcuts**2.
     bas_exps = np.array([np.asarray(b[1:])[:,0].min() for b in uniq_bas])
     atom_Rcuts = get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, uniq_bas_loc,
-                                uniq_basaux_loc)
+                                   uniq_basaux_loc)
     supmol = make_supmol_j3c(cell, atom_Rcuts, uniq_atms)
-    refshlprd_loc, refshlprdinv_lst, supshlpr_lst, supshlpr_loc = \
-                get_shlpr_data(cell, supmol, dcuts, dijs_lst, refuniqshl_map)
+    refatmprd_loc, supatmpr_lst, supatmpr_loc = \
+            get_cellpr_data(cell, supmol, uniq_atm_dcuts, uniq_atm_dijs_lst,
+                            uniq_atms)
+    # print(refatmprd_loc)
     refexp = np.asarray([cell.bas_exp(i).min() for i in range(cell.nbas)])
 
 # concatenate atm/bas/env
@@ -729,15 +628,18 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
     shl_loc = np.concatenate([cell.aoslice_nr_by_atom()[:,0],
                               auxcell.aoslice_nr_by_atom()[:,0]+nbas,
                               [nbas+nbasaux]]).astype(dtype_idx, copy=False)
-    nsupshlpr = len(supshlpr_lst)//2
+    nsupatmpr = len(supatmpr_lst)//2
     nao = cell.nao
     naoaux = auxcell.nao
 
-    nsupshlpr_tot = supmol.nbas*(supmol.nbas+1)//2
-    logger.debug1(cell, "nsupshlpr_tot= %d  nsupshlpr_keep= %d  ( %.2f %% )",
-                  nsupshlpr_tot, nsupshlpr, nsupshlpr/nsupshlpr_tot*100)
-    memsp = nsupshlpr*8/1024**2.
-    logger.debug1(cell, "mem use by shlpr data %.2f MB", memsp)
+    refshlstart_by_atm = cell.aoslice_nr_by_atom()[:,0].astype(np.int32)
+    supshlstart_by_atm = supmol.aoslice_nr_by_atom()[:,0].astype(np.int32)
+
+    nsupatmpr_tot = supmol.natm*(supmol.natm+1)//2
+    logger.debug1(cell, "nsupatmpr_tot= %d  nsupatmpr_keep= %d  ( %.2f %% )",
+                  nsupatmpr_tot, nsupatmpr, nsupatmpr/nsupatmpr_tot*100)
+    memsp = nsupatmpr*8/1024**2.
+    logger.debug1(cell, "mem use by atmpr data %.2f MB", memsp)
 
     intor = "int3c2e"
     intor, comp = mol_gto.moleintor._get_intor_and_comp(
@@ -756,6 +658,7 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         # drv = libpbc.fill_sr3c2e_g
 # >>>>> debug block
         if discard_integrals:
+            raise NotImplementedError
             drv = libpbc.fill_sr3c2e_g_nosave
         else:
             drv = libpbc.fill_sr3c2e_g
@@ -769,15 +672,18 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
                 ao_locsup.ctypes.data_as(ctypes.c_void_p),
                 shl_loc.ctypes.data_as(ctypes.c_void_p),
+                refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                 auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nbasauxuniq),
                 Rcut2s.ctypes.data_as(ctypes.c_void_p),
                 refexp.ctypes.data_as(ctypes.c_void_p),
-                refshlprd_loc.ctypes.data_as(ctypes.c_void_p),
-                refshlprdinv_lst.ctypes.data_as(ctypes.c_void_p),
-                supshlpr_loc.ctypes.data_as(ctypes.c_void_p),
-                supshlpr_lst.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nsupshlpr),
+                refshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                supshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                dijs_loc.ctypes.data_as(ctypes.c_void_p),
+                refatmprd_loc.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_loc.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_lst.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nsupatmpr),
                 atm.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(natm),
                 bas.ctypes.data_as(ctypes.c_void_p),
@@ -809,6 +715,8 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
             fill_j3c(out)
         out = out.reshape(1,naoaux,nao2)
     else:
+        raise NotImplementedError
+
         nkptijs = len(kptij_lst)
         kpti = kptij_lst[:,0]
         kptj = kptij_lst[:,1]
@@ -837,11 +745,11 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
                 ctypes.c_int(nbasauxuniq),
                 Rcut2s.ctypes.data_as(ctypes.c_void_p),
                 refexp.ctypes.data_as(ctypes.c_void_p),
-                refshlprd_loc.ctypes.data_as(ctypes.c_void_p),
-                refshlprdinv_lst.ctypes.data_as(ctypes.c_void_p),
-                supshlpr_loc.ctypes.data_as(ctypes.c_void_p),
-                supshlpr_lst.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nsupshlpr),
+                refatmprd_loc.ctypes.data_as(ctypes.c_void_p),
+                refatmprdinv_lst.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_loc.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_lst.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nsupatmpr),
                 atm.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(natm),
                 bas.ctypes.data_as(ctypes.c_void_p),
