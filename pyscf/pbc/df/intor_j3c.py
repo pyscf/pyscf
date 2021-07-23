@@ -660,7 +660,8 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         if discard_integrals:
             drv = libpbc.fill_sr3c2e_g_nosave
         else:
-            drv = libpbc.fill_sr3c2e_g
+            # drv = libpbc.fill_sr3c2e_g
+            drv = libpbc.PBCnr_sr3c2e_g_drv
         if no_screening:
             Rcut2s = np.clip(Rcut2s, 1e20, None)
 # <<<<<
@@ -694,6 +695,7 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
                 bassup.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(supmol.nbas),
                 envsup.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(envsup.size),
                 ctypes.c_char(safe))
 
         nao2 = nao*(nao+1)//2
@@ -727,6 +729,9 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         kptij_idx = np.concatenate([wherei,wherej])
 
         drv = libpbc.fill_sr3c2e_kk
+# *******
+        # drv = libpbc.fill_sr3c2e_kk_bvk
+# *******
         def fill_j3c(out):
             drv(getattr(libpbc, intor),
                 out.ctypes.data_as(ctypes.c_void_p),
