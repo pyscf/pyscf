@@ -728,7 +728,8 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         nkpts = len(kpts)
         kptij_idx = np.concatenate([wherei,wherej])
 
-        drv = libpbc.fill_sr3c2e_kk
+        # drv = libpbc.fill_sr3c2e_kk
+        drv = libpbc.PBCnr_sr3c2e_kk_drv
 # *******
         # drv = libpbc.fill_sr3c2e_kk_bvk
 # *******
@@ -766,6 +767,7 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
                 bassup.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(supmol.nbas),
                 envsup.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(envsup.size),
                 ctypes.c_char(safe))
 
         nao2 = nao*nao
