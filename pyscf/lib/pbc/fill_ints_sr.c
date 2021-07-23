@@ -1397,7 +1397,11 @@ void fill_sr3c2e_kk_ijsh(int (*intor)(), double complex *out, double *buf,
     double *buf_L1, *buf_L2, *pbuf, *pbuf2, *cache;
     buf_L1 = buf;
     buf_L2 = buf_L1 + nkptijs * dijkbuf * OF_CMPLX;
-    pbuf = buf_L2 + nkptijs * dijkbuf * OF_CMPLX;
+    if(eq_IJsh) {
+        pbuf = buf_L2;
+    } else {
+        pbuf = buf_L2 + nkptijs * dijkbuf * OF_CMPLX;
+    }
     pbuf2 = pbuf + dijkmax;
     cache = pbuf2 + dijkmax;
 
@@ -1433,7 +1437,11 @@ void fill_sr3c2e_kk_ijsh(int (*intor)(), double complex *out, double *buf,
 
             for(i=0; i<nkptijs*dijktot*OF_CMPLX; ++i) {
                 buf_L1[i] = 0;
-                buf_L2[i] = 0;
+            }
+            if(!eq_IJsh) {
+                for(i=0; i<nkptijs*dijktot*OF_CMPLX; ++i) {
+                    buf_L2[i] = 0;
+                }
             }
 
             for(idij=idij0; idij<idij1; ++idij) {
@@ -1568,10 +1576,6 @@ void fill_sr3c2e_kk_ijsh(int (*intor)(), double complex *out, double *buf,
 
             out1_k = pout1; // shape: nkptij, naux, nao2
             buf_Lk1_k = buf_L1; // shape: nkptij, dktot, dij
-            if(!eq_IJsh) {
-                out2_k = pout2;
-                buf_Lk2_k = buf_L2;
-            }
             for(ikij=0; ikij<nkptijs; ++ikij) {
 
                 outk1_k = out1_k;
@@ -1585,8 +1589,14 @@ void fill_sr3c2e_kk_ijsh(int (*intor)(), double complex *out, double *buf,
                 }
                 out1_k += nao2naux;
                 buf_Lk1_k += dijktot;
+            }
+            pout1 += dktot * nao2;
 
-                if(!eq_IJsh) {
+            if(!eq_IJsh) {
+
+                out2_k = pout2;
+                buf_Lk2_k = buf_L2;
+                for(ikij=0; ikij<nkptijs; ++ikij) {
                     outk2_k = out2_k;
                     for(k=0, kij=0; k<dktot; ++k) {
                         for(i=0; i<di; ++i) {
@@ -1599,11 +1609,8 @@ void fill_sr3c2e_kk_ijsh(int (*intor)(), double complex *out, double *buf,
                     out2_k += nao2naux;
                     buf_Lk2_k += dijktot;
                 }
-            }
-            pout1 += dktot * nao2;
-            if(!eq_IJsh) {
                 pout2 += dktot * nao2;
-            }
+            } // if eq_IJsh
 
         } // kloc
     } // Katm
@@ -1649,16 +1656,22 @@ void PBCnr_sr3c2e_kk_drv(int (*intor)(), double complex *out,
     int Ish, Jsh, IJsh, di, dj, dijkmax;
     int dkmax = GTOmax_shell_dim(ao_loc, shls_slice+4, 1);
     int nbas2 = nbas*(nbas+1)/2;
-    size_t count_lst[nbas2];
+    size_t count_lst[nbas2], count;
     for(Ish=0, IJsh=0; Ish<nbas; ++Ish) {
         di = ao_loc[Ish+1] - ao_loc[Ish];
         for(Jsh=0; Jsh<=Ish; ++Jsh, ++IJsh) {
             dj = ao_loc[Jsh+1] - ao_loc[Jsh];
             dijkmax = di*dj * dkmax;
-// MAX(INTBUFMAX, dijk) to ensure buffer is enough for at least one (i,j,k) shell
-// 2*MAX(INTBUFMAX, dijk) for (Jsh,Ish) (NOTE: COMPLEX)
 // 2*dijk for safe mode
-            count_lst[IJsh] = (dijkmax + MAX(INTBUFMAX, dijkmax)*OF_CMPLX) * 2 * nkptijs * comp;
+            count = dijkmax*2;
+// MAX(INTBUFMAX, dijk) to ensure buffer is enough for at least one (i,j,k) shell
+            if(Ish == Jsh) {
+                count += MAX(INTBUFMAX, dijkmax)*OF_CMPLX;
+            } else {
+// *2 when Ish!=Jsh for (Jsh,Ish)
+                count += MAX(INTBUFMAX, dijkmax)*OF_CMPLX*2;
+            }
+            count_lst[IJsh] = count * nkptijs * comp;
         }
     }
 
