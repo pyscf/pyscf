@@ -808,6 +808,282 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
         return out
 
 
+def get_Lsmin(cell, atom_Rcuts, uniq_atms):
+    # atms_sup, Rs_sup = suplat_by_Rcut(cell, uniq_atms, atom_Rcuts)
+    # supmol = _build_supmol_(cell, atms, Rs)
+    supmol = make_supmol_j3c(cell, atom_Rcuts, uniq_atms)
+    ls = supmol._Ls @ np.random.rand(3)
+    uniq_ls, uniq_idx = np.unique(ls, return_index=True)
+    logger.debug(cell, "keep %d/%d Ls", uniq_ls.size, ls.size)
+    return np.asarray(supmol._Ls[uniq_idx], order="C")
+def get_bvk_data(cell, Ls, bvk_kmesh):
+    ### [START] Hongzhou's style of bvk
+    # Using Ls = translations.dot(a)
+    translations = np.linalg.solve(cell.lattice_vectors().T, Ls.T)
+    # t_mod is the translations inside the BvK cell
+    t_mod = translations.round(3).astype(int) % np.asarray(bvk_kmesh)[:,None]
+    cell_loc_bvk = np.ravel_multi_index(t_mod, bvk_kmesh).astype(np.int32)
+
+    nimgs = Ls.shape[0]
+    bvk_nimgs = np.prod(bvk_kmesh)
+    iL_by_bvk = np.zeros(nimgs, dtype=int)
+    cell_loc = np.zeros(bvk_nimgs+1, dtype=int)
+    shift = 0
+    for i in range(bvk_nimgs):
+        x = np.where(cell_loc_bvk == i)[0]
+        nx = x.size
+        cell_loc[i+1] = nx
+        iL_by_bvk[shift:shift+nx] = x
+        shift += nx
+
+    cell_loc[1:] = np.cumsum(cell_loc[1:])
+    cell_loc_bvk = np.asarray(cell_loc, dtype=np.int32, order="C")
+
+    Ls = Ls[iL_by_bvk]
+    ### [END] Hongzhou's style of bvk
+    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh)
+
+    return Ls, bvkmesh_Ls, cell_loc_bvk
+def intor_j3c_srold(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
+              precision=None, use_cintopt=True, safe=True, fac_type="ME",
+              bvk_kmesh=None, reshapek=True,
+# +++++++ Use the default for the following unless you know what you are doing
+              eta_correct=True, R_correct=True,
+              vol_correct_d=False, vol_correct_R=False,
+              dstep=1,  # unit: Angstrom
+# -------
+# +++++++ debug options
+              ret_timing=False,
+              force_kcode=False,
+              discard_integrals=False,  # compute j3c and discard (no store)
+              no_screening=False,   # set Rcuts to effectively infinity
+# -------
+              ):
+
+    cput0 = np.asarray([logger.process_clock(), logger.perf_counter()])
+
+    if precision is None: precision = cell.precision
+
+    refuniqshl_map, uniq_atms, uniq_bas, uniq_bas_loc = get_refuniq_map(cell)
+    auxuniqshl_map, uniq_atms, uniq_basaux, uniq_basaux_loc = \
+                                                        get_refuniq_map(auxcell)
+    nbasauxuniq = len(uniq_basaux)
+
+    # dcuts = get_ovlp_dcut(uniq_bas, precision, r0=cell.rcut)
+    dstep_BOHR = dstep / BOHR
+    Qauxs = get_schwartz_data(uniq_basaux, omega, keep1ctr=False, safe=True)
+    dcuts = get_schwartz_dcut(uniq_bas, cell.vol, omega, precision/Qauxs.max(),
+                              r0=cell.rcut, vol_correct=vol_correct_d)
+    dcut2s = dcuts**2.
+    dijs_lst = make_dijs_lst(dcuts, dstep_BOHR)
+    dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst]).astype(np.int32)
+    if fac_type.upper() in ["ISFQ0","ISFQL"]:
+        Qs_lst = get_schwartz_data(uniq_bas, omega, dijs_lst, keep1ctr=True,
+                                   safe=True)
+    else:
+        Qs_lst = [np.zeros_like(dijs) for dijs in dijs_lst]
+    Rcuts = get_3c2e_Rcuts(uniq_bas, uniq_basaux, dijs_lst, cell.vol, omega,
+                           precision, fac_type, Qs_lst,
+                           eta_correct=eta_correct, R_correct=R_correct,
+                           vol_correct=vol_correct_R)
+    Rcut2s = Rcuts**2.
+    bas_exps = np.array([np.asarray(b[1:])[:,0].min() for b in uniq_bas])
+    atom_Rcuts = get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, uniq_bas_loc,
+                                   uniq_basaux_loc)
+    cell_rcut = atom_Rcuts.max()
+    logger.debug(cell, "img cell rcut = %.2f Bohr", cell_rcut)
+    uniqexp = np.array([np.asarray(b[1:])[:,0].min() for b in uniq_bas])
+
+# concatenate atm/bas/env
+    intor = "int3c2e"
+    intor, comp = mol_gto.moleintor._get_intor_and_comp(
+                                            cell._add_suffix(intor), None)
+    assert(comp == 1)
+    natm = cell.natm
+    nbas = cell.nbas
+    nbasaux = auxcell.nbas
+    nao = cell.nao
+    naoaux = auxcell.nao
+    atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
+                                     cell._atm, cell._bas, cell._env)
+    ao_loc = mol_gto.moleintor.make_loc(bas, intor)
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
+    ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
+                           dtype=np.int32)
+    atm, bas, env = mol_gto.conc_env(atm, bas, env,
+                                     auxcell._atm, auxcell._bas, auxcell._env)
+    env[mol_gto.PTR_RANGE_OMEGA] = -abs(omega)
+    shls_slice = (0,nbas,nbas,nbas*2,nbas*2,nbas*2+nbasaux)
+
+# lat sum truncation
+    Ls = get_Lsmin(cell, atom_Rcuts, uniq_atms)
+    # sys.exit(1)
+    # Ls = cell.get_lattice_Ls(rcut=cell_rcut)
+    nimgs = len(Ls)
+    logger.debug(cell, "Keeping %d img cells for latsum", nimgs)
+
+    if bvk_kmesh is None:
+        Ls_ = Ls
+    else:
+        Ls, bvkmesh_Ls, cell_loc_bvk = get_bvk_data(cell, Ls, bvk_kmesh)
+        Ls_ = bvkmesh_Ls
+
+    dtype_idx = np.int32
+
+    if nbas > 0:
+        cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+    else:
+        cintopt = lib.c_null_ptr()
+    if intor[:3] != 'ECP':
+        libpbc.CINTdel_pairdata_optimizer(cintopt)
+
+    cput1 = np.asarray( logger.timer(cell, 'j3c precompute', *cput0) )
+    dt0 = cput1 - cput0
+
+    kptij_lst = np.asarray(kptij_lst).reshape(-1,2,3)
+    if gamma_point(kptij_lst) and not force_kcode:
+        # drv = libpbc.fill_sr3c2e_g
+# >>>>> debug block
+        if discard_integrals:
+            drv = libpbc.fill_sr3c2e_g_nosave
+        else:
+            # drv = libpbc.fill_sr3c2e_g
+            drv = libpbc.PBCnr3c_g_bvk_drv
+        if no_screening:
+            Rcut2s = np.clip(Rcut2s, 1e20, None)
+# <<<<<
+        fill = "PBCnr3c_bvk_gs2"
+        def fill_j3c(out):
+            drv(getattr(libpbc, intor), getattr(libpbc, fill),
+                out.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(comp), ctypes.c_int(nimgs),
+                Ls.ctypes.data_as(ctypes.c_void_p),
+                (ctypes.c_int*6)(*shls_slice),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                cintopt,
+                refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbasauxuniq),
+                uniqexp.ctypes.data_as(ctypes.c_void_p),
+                dcut2s.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_double(dstep_BOHR),
+                Rcut2s.ctypes.data_as(ctypes.c_void_p),
+                dijs_loc.ctypes.data_as(ctypes.c_void_p),
+                atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+                bas.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
+                env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size)
+            )
+
+        nao2 = nao*(nao+1)//2
+        memj3c = naoaux*nao2*8/1024**2.
+        logger.debug1(cell, "estimated mem for 3c2e %.2f MB", memj3c)
+        # out = np.zeros((naoaux,nao2), dtype=np.float64)
+# >>>>> debug block
+        if discard_integrals:
+            out = np.array([0], dtype=np.float64)
+        else:
+            if out is None:
+                out = np.zeros((naoaux,nao2), dtype=np.float64)
+            else:
+                assert(out.dtype == np.float64 and out.shape == (1,naoaux,nao2))
+                out.fill(0.)
+# <<<<<
+        fill_j3c(out)
+        out = out.reshape(1,naoaux,nao2)
+    else:
+        nkptijs = len(kptij_lst)
+        kpti = kptij_lst[:,0]
+        kptj = kptij_lst[:,1]
+        kpts = unique(np.vstack([kpti,kptj]))[0]
+        expLk = np.exp(1j * lib.dot(Ls_, kpts.T))
+        wherei = np.where(abs(kpti[:,None,:]-kpts).sum(axis=2) <
+                             KPT_DIFF_TOL)[1].astype(dtype_idx)
+        wherej = np.where(abs(kptj[:,None,:]-kpts).sum(axis=2) <
+                             KPT_DIFF_TOL)[1].astype(dtype_idx)
+        nkpts = len(kpts)
+        kptij_idx = np.concatenate([wherei,wherej])
+
+        # drv = libpbc.fill_sr3c2e_kk
+        drv = libpbc.PBCnr_sr3c2e_kk_drv
+# *******
+        # drv = libpbc.fill_sr3c2e_kk_bvk
+# *******
+        def fill_j3c(out):
+            drv(getattr(libpbc, intor),
+                out.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(comp), cintopt,
+                expLk.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nkpts),
+                kptij_idx.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nkptijs),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                ao_locsup.ctypes.data_as(ctypes.c_void_p),
+                shl_loc.ctypes.data_as(ctypes.c_void_p),
+                refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbasauxuniq),
+                Rcut2s.ctypes.data_as(ctypes.c_void_p),
+                refexp.ctypes.data_as(ctypes.c_void_p),
+                refshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                supshlstart_by_atm.ctypes.data_as(ctypes.c_void_p),
+                dijs_loc.ctypes.data_as(ctypes.c_void_p),
+                refatmprd_loc.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_loc.ctypes.data_as(ctypes.c_void_p),
+                supatmpr_lst.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nsupatmpr),
+                atm.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(natm),
+                bas.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbas),
+                ctypes.c_int(nbasaux),
+                env.ctypes.data_as(ctypes.c_void_p),
+                atmsup.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(supmol.natm),
+                bassup.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(supmol.nbas),
+                envsup.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(envsup.size),
+                ctypes.c_char(safe))
+
+        nao2 = nao*nao
+        memj3c = nkptijs*naoaux*nao2*16/1024**2.
+        logger.debug1(cell, "estimated mem for 3c2e %.2f MB", memj3c)
+        if out is None:
+            out_ = np.zeros((nkptijs,naoaux,nao2), dtype=np.complex128)
+        else:
+            assert(out.dtype == np.complex128 and
+                   out.shape == (nkptijs,naoaux,nao2))
+            out.fill(0.+0.j)
+            out_ = out
+        with supmol.with_range_coulomb(-abs(omega)):
+            fill_j3c(out_)
+
+        if reshapek:
+            aosym_ks2 = abs(kpti-kptj).sum(axis=1) < KPT_DIFF_TOL
+            tril_idx = np.tril_indices(nao)
+            tril_idx = tril_idx[0] * nao + tril_idx[1]
+            out = [None] * nkptijs
+            for kij in range(nkptijs):
+                v = out_[kij]
+                if gamma_point(kptij_lst[kij]):
+                    v = v.real
+                if aosym_ks2[kij]:
+                    v = v[:,tril_idx]
+                out[kij] = v
+            out_ = None
+        else:
+            out = out_
+
+    cput0 = np.asarray( logger.timer(cell, 'j3c compute', *cput1) )
+    dt1 = cput0 - cput1
+
+    if ret_timing:
+        return out, dt0, dt1
+    else:
+        return out
+
+
 def intor_j3c_outcore(cell, auxcell, omega, erifile, dataname, comp=1,
                       max_memory=4000, kptij_lst=None, precision=None,
                       use_cintopt=True, safe=True, fac_type="ME",
@@ -876,7 +1152,8 @@ def intor_j3c_outcore(cell, auxcell, omega, erifile, dataname, comp=1,
         nkptij_p = kp1 - kp0
         mat = np.ndarray((nkptij_p,naoaux,nao2), dtype=dtype, buffer=bufs[0])
         bufs[:] = bufs[1], bufs[0]
-        intor_j3c(cell, auxcell, omega, out=mat, kptij_lst=kptij_lst_p,
+        # intor_j3c(cell, auxcell, omega, out=mat, kptij_lst=kptij_lst_p,
+        intor_j3c_srold(cell, auxcell, omega, out=mat, kptij_lst=kptij_lst_p,
                   precision=precision,
                   use_cintopt=use_cintopt,
                   safe=safe,

@@ -85,7 +85,6 @@ static int shloc_partition_by_atom(int *kshloc, int *katmloc, int *ao_loc,
     return nkshloc;
 }
 
-
 double get_dsqure(double *ri, double *rj)
 {
     double dx = ri[0]-rj[0];
@@ -365,7 +364,7 @@ void fill_sr3c2e_g(int (*intor)(), double *out,
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ish, jsh, I0, I1, J0, J1, IJstart;
     int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
     int iptrxyz, jptrxyz, kptrxyz;
@@ -861,7 +860,7 @@ void fill_sr3c2e_g_nosave(int (*intor)(), double *out,
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ish, jsh, I0, I1, J0, J1, IJstart;
     int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
     int iptrxyz, jptrxyz, kptrxyz;
@@ -1098,7 +1097,7 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ish, jsh, I0, I1, J0, J1;
     int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
     int iptrxyz, jptrxyz, kptrxyz;
@@ -1299,7 +1298,7 @@ void fill_sr3c2e_kk(int (*intor)(), double complex *out,
                             }
                         } // Ksh
                     } // Katm
-                } // ijsh
+                } // ijatm
             } // idij
         } // Jsh
     } // Ish
@@ -1766,7 +1765,7 @@ void fill_sr3c2e_kk_bvk(int (*intor)(), double complex *out,
     const int nbassupaux = nbassup + nbasaux;
     const int natmsupaux = natmsup + natm;
 
-    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ijsh, ijsh0, ijsh1, ish, jsh, I0, I1, J0, J1, IJstart;
+    int Ish, Jsh, IJsh, ISH, JSH, IJSH, Ishshift, Jshshift, ish, jsh, I0, I1, J0, J1;
     int Iatm, Jatm, IJatm, iatm, jatm, ijatm, ijatm0, ijatm1;
     int Katm, Ksh, Ksh0, Ksh1, ksh, K0, K1, KSH;
     int iptrxyz, jptrxyz, kptrxyz;
@@ -1991,7 +1990,7 @@ void fill_sr3c2e_kk_bvk(int (*intor)(), double complex *out,
                             }
                         } // Ksh
                     } // Katm
-                } // ijsh
+                } // idij
             } // idij
         } // Jsh
     } // Ish
