@@ -74,7 +74,7 @@ def sfx2c1e(mf):
         '''
         def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2C(mf.mol)
+            self.with_x2c = SpinFreeX2CHelper(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, cell=None, kpts=None, kpt=None):
@@ -98,15 +98,22 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
+        def dump_flags(self, verbose=None):
+            mf_class.dump_flags(self, verbose)
+            if self.with_x2c:
+                self.with_x2c.dump_flags(verbose)
+            return self
+
     return SFX2C1E_SCF(mf)
 
 sfx2c = sfx2c1e
 
-class X2C(x2c.X2C):
+class PBCX2CHelper(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
+    # TODO Change default to None
     approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'atom1e')
-    # By default, uncontracted cell.basis plus additional steep orbital is used to construct modified Dirac equation.
+    # By default, uncontracted cell.basis plus additional steep orbital is used to construct the modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
@@ -114,7 +121,7 @@ class X2C(x2c.X2C):
         self.cell = cell
         x2c.X2C.__init__(self, cell)
 
-class SpinFreeX2C(X2C):
+class SpinFreeX2CHelper(PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None:
@@ -124,12 +131,10 @@ class SpinFreeX2C(X2C):
         # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
         from pyscf.pbc.df import df
-        # Use DF with ewald summation technique
         with_df = df.DF(xcell)
-        #with_df = aft.AFTDF(xcell)
+
         c = lib.param.LIGHT_SPEED
-        assert '1E' in self.approx.upper()
-        if 'ATOM' in self.approx.upper():
+        if 'ATOM1E' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
             x = numpy.zeros((nao,nao))
@@ -147,8 +152,7 @@ class SpinFreeX2C(X2C):
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
-        elif 'FULL_X2C' in self.approx.upper():
-            logger.info(self, 'Prepare PBC sfx2x with Chia-Nan\'s approximation...')
+        elif 'NONE' in self.approx.upper():
             w = get_pnucp(with_df, kpts_lst)
         else:
             raise NotImplementedError
@@ -165,20 +169,19 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            c = lib.param.LIGHT_SPEED
-            if 'ATOM' in self.approx.upper():
+            if 'ATOM1E' in self.approx.upper():
                 # The treatment of pnucp local part has huge effects to hcore
                 #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
                 #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
                 h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
-            elif 'FULL_X2C' in self.approx.upper():
+            elif 'NONE' in self.approx.upper():
                 xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
                 h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
 
             if self.basis is not None:
-                # If cell = xcell, c = identity matrix
-                c = lib.cho_solve(s22[k], s21[k])
-                h1 = reduce(numpy.dot, (c.T, h1, c))
+                # If cell = xcell, U = identity matrix
+                U = lib.cho_solve(s22[k], s21[k])
+                h1 = reduce(numpy.dot, (U.T, h1, U))
             if self.xuncontract and contr_coeff is not None:
                 h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
             h1_kpts.append(h1)
@@ -209,6 +212,16 @@ class SpinFreeX2C(X2C):
         else:
             raise NotImplementedError
         return x
+
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('approx = %s', self.approx)
+        log.info('xuncontract = %d', self.xuncontract)
+        if self.basis is not None:
+            log.info('basis for X matrix = %s', self.basis)
+        return self
 
 
 # Use Ewald-like technique to compute spVsp.

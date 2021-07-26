@@ -65,9 +65,9 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
 
     j1, k1 = mf.with_df.get_jk(dms, _hermi, kpts, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
-
     vj = vk = None
     if with_j:
+        # j1 = (j1_aa, j1_bb, j1_ab)
         j1 = j1.reshape(nblocks,n_dm,nband,nao,nao)
         vj = np.zeros((n_dm,nband,nso,nso), j1.dtype)
         vj[:,:,:nao,:nao] = vj[:,:,nao:,nao:] = j1[0] + j1[1]
@@ -79,7 +79,12 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
         vk[:,:,:nao,:nao] = k1[0]
         vk[:,:,nao:,nao:] = k1[1]
         vk[:,:,:nao,nao:] = k1[2]
-        vk[:,:,nao:,:nao] = k1[2].transpose(0,1,3,2).conj()
+        if hermi:
+            # k1 = (k1_aa, k1_bb, k1_ab)
+            vk[:,:,nao:,:nao] = k1[2].conj().transpose(0,1,3,2)
+        else:
+            # k1 = (k1_aa, k1_bb, k1_ab, k1_ba)
+            vk[:,:,nao:,:nao] = k1[3]
         vk = _format_jks(vk, dm_kpts, kpts_band, kpts)
 
     return vj, vk
@@ -204,7 +209,13 @@ class KGHF(pbcghf.GHF, khf.KSCF):
     rs_density_fit = khf.KSCF.rs_density_fit
     newton = khf.KSCF.newton
 
-    x2c = None
+    def x2c1e(self):
+         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+         return x2c1e_gscf(self)
+
+    x2c = x2c1e
+    sfx2c1e = khf.KSCF.sfx2c1e
     stability = None
     nuc_grad_method = None
 
@@ -227,3 +238,9 @@ if __name__ == '__main__':
     kpts = cell.make_kpts([2,1,1])
     mf = KGHF(cell, kpts=kpts)
     mf.kernel()
+
+    # x2c1e decoractor to KGHF class.
+    #mf = KGHF(cell, kpts=kpts).x2c1e()
+    # or
+    #mf = KGHF(cell, kpts=kpts).sfx2c1e()
+    #mf.kernel()
