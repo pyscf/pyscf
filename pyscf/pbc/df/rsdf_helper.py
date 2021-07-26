@@ -1027,6 +1027,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
                       aosym='s2ij', Ls=None, comp=None, kptij_lst=None,
                       dataname='eri_mo', shls_slice=None, max_memory=2000,
                       bvk_kmesh=None,
+                      precision=None,
                       fac_type="ME",
                       eta_correct=True, R_correct=True,
                       vol_correct_d=False, vol_correct_R=False,
@@ -1053,7 +1054,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
 
 # prescreening data
     t1 = (logger.process_clock(), logger.perf_counter())
-    precision = cell.precision
+    if precision is None: precision = cell.precision
     refuniqshl_map, uniq_atms, uniq_bas, uniq_bas_loc = get_refuniq_map(cell)
     auxuniqshl_map, uniq_atms, uniq_basaux, uniq_basaux_loc = \
                                                         get_refuniq_map(auxcell)
@@ -1364,6 +1365,7 @@ def _aux_e2_spltbas(cell, cell_fat, auxcell_or_auxbasis, omega, erifile,
                     comp=None, kptij_lst=None,
                     dataname='eri_mo', shls_slice=None, max_memory=2000,
                     bvk_kmesh=None, shlpr_mask_fat=None,
+                    precision=None,
                     fac_type="ME",
                     eta_correct=True, R_correct=True,
                     vol_correct_d=False, vol_correct_R=False,
@@ -1389,24 +1391,31 @@ def _aux_e2_spltbas(cell, cell_fat, auxcell_or_auxbasis, omega, erifile,
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # prescreening data
+    cell_ = cell_fat
     t1 = (logger.process_clock(), logger.perf_counter())
-    precision = cell.precision
-    refuniqshl_map, uniq_atms, uniq_bas, uniq_bas_loc = get_refuniq_map(cell)
+    if precision is None: precision = cell_.precision
+    refuniqshl_map, uniq_atms, uniq_bas, uniq_bas_loc = get_refuniq_map(cell_)
     auxuniqshl_map, uniq_atms, uniq_basaux, uniq_basaux_loc = \
                                                         get_refuniq_map(auxcell)
 
     dstep_BOHR = dstep / BOHR
     Qauxs = get_schwartz_data(uniq_basaux, omega, keep1ctr=False, safe=True)
-    dcuts = get_schwartz_dcut(uniq_bas, cell.vol, omega, precision/Qauxs.max(),
-                              r0=cell.rcut, vol_correct=vol_correct_d)
+    dcuts = get_schwartz_dcut(uniq_bas, cell_.vol, omega, precision/Qauxs.max(),
+                              r0=cell_.rcut, vol_correct=vol_correct_d)
     dijs_lst = make_dijs_lst(dcuts, dstep_BOHR)
+    nbas = cell_.nbas
+    nbas2 = nbas*(nbas+1)//2
+    for i in range(nbas):
+        for j in range(i+1):
+            ij = i*(i+1)//2 + j
+            print(i,j, dcuts[ij])
     dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst]).astype(np.int32)
     if fac_type.upper() in ["ISFQ0","ISFQL"]:
         Qs_lst = get_schwartz_data(uniq_bas, omega, dijs_lst, keep1ctr=True,
                                    safe=True)
     else:
         Qs_lst = [np.zeros_like(dijs) for dijs in dijs_lst]
-    Rcuts = get_3c2e_Rcuts(uniq_bas, uniq_basaux, dijs_lst, cell.vol, omega,
+    Rcuts = get_3c2e_Rcuts(uniq_bas, uniq_basaux, dijs_lst, cell_.vol, omega,
                            precision, fac_type, Qs_lst,
                            eta_correct=eta_correct, R_correct=R_correct,
                            vol_correct=vol_correct_R)
@@ -1418,7 +1427,7 @@ def _aux_e2_spltbas(cell, cell_fat, auxcell_or_auxbasis, omega, erifile,
     nbasauxuniq = len(uniq_basaux)
     dcut2s = dcuts**2.
     Rcut2s = Rcuts**2.
-    Ls = get_Lsmin(cell, atom_Rcuts, uniq_atms)
+    Ls = get_Lsmin(cell_, atom_Rcuts, uniq_atms)
     prescreening_data = (refuniqshl_map, auxuniqshl_map, nbasauxuniq, uniqexp,
                          dcut2s, dstep_BOHR, Rcut2s, dijs_loc, Ls)
     log.debug("cell rcut for j3c: %.2f", cell_rcut)
@@ -1450,8 +1459,8 @@ def _aux_e2_spltbas(cell, cell_fat, auxcell_or_auxbasis, omega, erifile,
     if shlpr_mask_fat is None:
         n_compact, n_diffuse = cell_fat._nbas_each_set
         shlpr_mask_fat = np.ones((shls_slice_fat[1]-shls_slice_fat[0],
-                                    shls_slice_fat[3]-shls_slice_fat[2]),
-                                    dtype=np.int8, order="C")
+                                  shls_slice_fat[3]-shls_slice_fat[2]),
+                                  dtype=np.int8, order="C")
         shlpr_mask_fat[n_compact:,n_compact:] = 0
 
     ao_loc = cell.ao_loc_nr()
@@ -1493,16 +1502,6 @@ def _aux_e2_spltbas(cell, cell_fat, auxcell_or_auxbasis, omega, erifile,
     if bufmem > max_memory * 0.5:
         raise RuntimeError("Computing 3c2e integrals requires %.2f MB memory, which exceeds the given maximum memory %.2f MB. Try giving PySCF more memory." % (bufmem*2., max_memory))
 
-    if prescreening_type == 0:
-        pbcopt = None
-    else:
-        from pyscf.pbc.gto import _pbcintor
-        import copy
-        pcell = copy.copy(cell_fat)
-        pcell._atm, pcell._bas, pcell._env = \
-                    mol_gto.conc_env(cell_fat._atm, cell_fat._bas, cell_fat._env,
-                                 cell_fat._atm, cell_fat._bas, cell_fat._env)
-        pbcopt = PBCOpt_RSDF(pcell).init_rcut_cond(pcell, prescreening_data)
     int3c = wrap_int3c_spltbas(cell_fat, cell, auxcell, shlpr_mask_fat,
                                prescreening_data,
                                intor, aosym, comp, kptij_lst,
@@ -1629,18 +1628,6 @@ def wrap_int3c_spltbas(cell, cell0, auxcell, shlpr_mask, prescreening_data,
         kptij_idx = np.asarray(wherei*nkpts+wherej, dtype=np.int32)
         nkptij = len(kptij_lst)
 
-    if bvk_kmesh is None:
-        raise NotImplementedError
-        fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
-        drv = libpbc.PBCnr3c_drv
-    else:
-        fill = 'PBCnr3c_bvk_%s%s' % (kk_type, aosym[:2])
-        drv = libpbc.PBCnr3c_bvk_spltbas_drv
-
-    fill += "_spltbas"
-    log = logger.Logger(cell.stdout, cell.verbose)
-    log.debug("Using %s to evaluate SR integrals", fill)
-
     if cintopt is None:
         if nbas > 0:
             cintopt = _vhf.make_cintopt(atm, bas, env, intor)
@@ -1650,50 +1637,93 @@ def wrap_int3c_spltbas(cell, cell0, auxcell, shlpr_mask, prescreening_data,
 # integral of cell #0 while the lattice sum moves shls to all repeated images.
         if intor[:3] != 'ECP':
             libpbc.CINTdel_pairdata_optimizer(cintopt)
-    if pbcopt is None:
-        raise RuntimeError
-    if isinstance(pbcopt, _pbcintor.PBCOpt):
-        cpbcopt = pbcopt._this
-    else:
-        cpbcopt = lib.c_null_ptr()
 
-    if bvk_kmesh is None:
-        raise NotImplementedError
-    else:
+    if gamma_point(kptij_lst):
+        fill = 'PBCnr3c_gs2_spltbas'
+        drv = libpbc.PBCnr3c_g_spltbas_drv
+
+        log.debug("Using %s to evaluate SR integrals", fill)
+
         def int3c(shls_slice, out):
             shls_slice = (shls_slice[0], shls_slice[1],
                           nbas+shls_slice[2], nbas+shls_slice[3],
                           nbas*2+shls_slice[4], nbas*2+shls_slice[5])
-            msh_shift = (nbas-nbas0) * 2
-            shls_slice0 = (0, nbas0, nbas0, nbas0*2,
-                           shls_slice[4]-msh_shift, shls_slice[5]-msh_shift)
-            out.fill(0)
-            # for some (unknown) reason, this line is needed for the c code to use pbcopt->fprescreen
-            _ = pbcopt._this == lib.c_null_ptr()
             drv(getattr(libpbc, intor), getattr(libpbc, fill),
                 out.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nkptij), ctypes.c_int(nkpts),
                 ctypes.c_int(comp), ctypes.c_int(nimgs),
-                ctypes.c_int(bvk_nimgs),   # bvk_nimgs
                 Ls.ctypes.data_as(ctypes.c_void_p),
-                expkL.ctypes.data_as(ctypes.c_void_p),
-                kptij_idx.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*6)(*shls_slice),
                 ao_loc.ctypes.data_as(ctypes.c_void_p),
-                (ctypes.c_int*6)(*shls_slice0),    # shls_slice0
-                ao_loc0.ctypes.data_as(ctypes.c_void_p),  # ao_loc0
-                shl_idx0.ctypes.data_as(ctypes.c_void_p),   # shl_idx0
-                shl_loc0.ctypes.data_as(ctypes.c_void_p),   # shl_loc0
-                cell_loc_bvk.ctypes.data_as(ctypes.c_void_p),   # cell_loc_bvk
+                (ctypes.c_int*6)(*shls_slice0),
+                ao_loc0.ctypes.data_as(ctypes.c_void_p),
+                shl_idx0.ctypes.data_as(ctypes.c_void_p),
+                shl_loc0.ctypes.data_as(ctypes.c_void_p),
+                cintopt,
                 shlpr_mask.ctypes.data_as(ctypes.c_void_p),  # shlpr_mask
-                cintopt, cpbcopt,
+                refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(nbasauxuniq),
+                uniqexp.ctypes.data_as(ctypes.c_void_p),
+                dcut2s.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_double(dstep_BOHR),
+                Rcut2s.ctypes.data_as(ctypes.c_void_p),
+                dijs_loc.ctypes.data_as(ctypes.c_void_p),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                 bas.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
                 env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size),
                 bas0.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas0),
-                env0.ctypes.data_as(ctypes.c_void_p))
+                env0.ctypes.data_as(ctypes.c_void_p)
+                )
             return out
+
+    else:
+        if bvk_kmesh is None:
+            fill = 'PBCnr3c_%s%s' % (kk_type, aosym[:2])
+            drv = libpbc.PBCnr3c_drv
+        else:
+            fill = 'PBCnr3c_bvk_%s%s' % (kk_type, aosym[:2])
+            drv = libpbc.PBCnr3c_bvk_drv
+
+        log.debug("Using %s to evaluate SR integrals", fill)
+
+    # if bvk_kmesh is None:
+    #     raise NotImplementedError
+    # else:
+    #     def int3c(shls_slice, out):
+    #         shls_slice = (shls_slice[0], shls_slice[1],
+    #                       nbas+shls_slice[2], nbas+shls_slice[3],
+    #                       nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+    #         msh_shift = (nbas-nbas0) * 2
+    #         shls_slice0 = (0, nbas0, nbas0, nbas0*2,
+    #                        shls_slice[4]-msh_shift, shls_slice[5]-msh_shift)
+    #         out.fill(0)
+    #         # for some (unknown) reason, this line is needed for the c code to use pbcopt->fprescreen
+    #         _ = pbcopt._this == lib.c_null_ptr()
+    #         drv(getattr(libpbc, intor), getattr(libpbc, fill),
+    #             out.ctypes.data_as(ctypes.c_void_p),
+    #             ctypes.c_int(nkptij), ctypes.c_int(nkpts),
+    #             ctypes.c_int(comp), ctypes.c_int(nimgs),
+    #             ctypes.c_int(bvk_nimgs),   # bvk_nimgs
+    #             Ls.ctypes.data_as(ctypes.c_void_p),
+    #             expkL.ctypes.data_as(ctypes.c_void_p),
+    #             kptij_idx.ctypes.data_as(ctypes.c_void_p),
+    #             (ctypes.c_int*6)(*shls_slice),
+    #             ao_loc.ctypes.data_as(ctypes.c_void_p),
+    #             (ctypes.c_int*6)(*shls_slice0),    # shls_slice0
+    #             ao_loc0.ctypes.data_as(ctypes.c_void_p),  # ao_loc0
+    #             shl_idx0.ctypes.data_as(ctypes.c_void_p),   # shl_idx0
+    #             shl_loc0.ctypes.data_as(ctypes.c_void_p),   # shl_loc0
+    #             cell_loc_bvk.ctypes.data_as(ctypes.c_void_p),   # cell_loc_bvk
+    #             shlpr_mask.ctypes.data_as(ctypes.c_void_p),  # shlpr_mask
+    #             cintopt, cpbcopt,
+    #             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+    #             bas.ctypes.data_as(ctypes.c_void_p),
+    #             ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
+    #             env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size),
+    #             bas0.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas0),
+    #             env0.ctypes.data_as(ctypes.c_void_p))
+    #         return out
 
     return int3c
 

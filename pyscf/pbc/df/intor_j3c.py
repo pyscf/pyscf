@@ -387,7 +387,8 @@ def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
         Rcuts[ksh] = estimate1(ksh, R0, R1)
 
     return Rcuts
-def get_3c2e_Rcuts(bas_lst, auxbas_lst, dijs_lst, cellvol, omega, precision,
+def get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol,
+                   dijs_lst, cellvol, omega, precision,
                    fac_type, Qijs_lst, Rprec=1,
                    eta_correct=True, R_correct=True, vol_correct=False):
     """ Given a list of basis ("bas_lst") and auxiliary basis ("auxbas_lst"), determine the cutoff radius for
@@ -395,12 +396,21 @@ def get_3c2e_Rcuts(bas_lst, auxbas_lst, dijs_lst, cellvol, omega, precision,
     where i and j shls are separated by d specified by "dijs_lst".
     """
 
-    nbas = len(bas_lst)
-    n2 = nbas*(nbas+1)//2
-    nbasaux = len(auxbas_lst)
+    if isinstance(bas_lst_or_mol, mol_gto.mole.Mole):
+        mol = bas_lst_or_mol
+    else:
+        bas_lst = bas_lst_or_mol
+        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
 
-    mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
-    auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
+    if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
+        auxmol = auxbas_lst_or_mol
+    else:
+        auxbas_lst = auxbas_lst_or_auxmol
+        auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
+
+    nbas = mol.nbas
+    n2 = nbas*(nbas+1)//2
+    nbasaux = auxmol.nbas
 
     ij = 0
     Rcuts = []

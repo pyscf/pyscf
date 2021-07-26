@@ -116,51 +116,6 @@ def get_aopr_mask(cell, cell_fat, shlpr_mask_fat_c, shlpr_mask_fat_d):
     return aopr_mask_c, aopr_mask_d, aopr_loc
 
 
-def get_prescreening_data(mydf, cell_fat, precision=None, extra_precision=None,
-                          shlpr_mask=None):
-    if mydf.prescreening_type == 0:
-        return None
-
-    cell_ = mydf.cell if cell_fat is None else cell_fat
-    auxcell = mydf.auxcell
-    omega = abs(mydf.omega)
-    if mydf.prescreening_type == 3:
-        fspltbas = rsdf_helper._estimate_Rc_R12_cut2_batch
-    elif mydf.prescreening_type == 4:
-        fspltbas = rsdf_helper._estimate_Rc_R12_cut3_batch
-    else:
-        raise ValueError
-    Rc_cut_mat, R12_cut_mat = rsdf_helper.estimate_Rc_R12_cut_SPLIT_batch(
-                                                    cell_, auxcell, omega,
-                                                    precision, extra_precision,
-                                                    fspltbas, shlpr_mask)
-    return Rc_cut_mat, R12_cut_mat
-
-
-def get_safe_rcut(mydf, Rc_cut_mat, R12_cut_mat, mask):
-    if not mydf.safe_rcut:
-        return mydf.cell.rcut
-
-    lenmax = R12_cut_mat.shape[-1]
-    nRcs = Rc_cut_mat[:,mask].astype(int).ravel()
-    R12s_lst = R12_cut_mat[:,mask].reshape(-1,lenmax)
-    rmax = 0
-    for nRc,R12s in zip(nRcs,R12s_lst):
-        rmax = max(rmax, R12s[nRc] + nRc)
-
-    def rcut2negrmax(rcut):
-        return -np.linalg.norm(mydf.cell.get_lattice_Ls(rcut=rcut),axis=1).max()
-
-    xlo = rmax * 0.5
-    xhi = rmax * 0.9
-    rprec = mydf.cell.vol**0.3333333333 * 0.5
-    rcut, rmax = rsdf_helper._binary_search(rcut2negrmax, xlo, xhi, -rmax,
-                                            rprec)
-    rmax *= -1
-
-    return rcut
-
-
 def get_aux_chg(auxcell):
     r""" Compute charge of the auxiliary basis, \int_Omega dr chi_P(r)
 
@@ -374,22 +329,22 @@ def _make_j3c(mydf, cell, auxcell, cell_fat, kptij_lst, cderi_file):
     with mydf.with_range_coulomb(-omega):
         if split_basis:
             rsdf_helper._aux_e2_spltbas(
-                            cell, cell_fat, auxcell, fswap, 'int3c2e',
+                            cell, cell_fat, auxcell, omega, fswap, 'int3c2e',
                             aosym='s2',
                             kptij_lst=kptij_lst, dataname='j3c-junk',
                             max_memory=max_memory,
                             bvk_kmesh=bvk_kmesh,
-                            prescreening_type=mydf.prescreening_type,
-                            prescreening_data=prescreening_data,
                             shlpr_mask_fat=shlpr_mask_fat_c,
-                            shls_slice=shls_slice)
+                            shls_slice=shls_slice,
+                            precision=mydf.precision_R)
         else:
             rsdf_helper._aux_e2_nospltbas(
                             cell, auxcell, omega, fswap, 'int3c2e', aosym='s2',
                             kptij_lst=kptij_lst, dataname='j3c-junk',
                             max_memory=max_memory,
                             bvk_kmesh=bvk_kmesh,
-                            shls_slice=shls_slice)
+                            shls_slice=shls_slice,
+                            precision=mydf.precision_R)
     t1 = log.timer_debug1('3c2e', *t1)
 
     prescreening_data = None
@@ -732,9 +687,11 @@ class RSGDF(df.df.GDF):
 
         self.use_bvkcell = True # if True, use k-folding for SR-j3c and AFT
         self.prescreening_type = 4
-        self.split_basis = True
-        self.split_auxbasis = True
-        self.safe_mode = False  # if True, SR = Full - LR is used for j3c
+        # turned off for now!
+        # self.split_basis = True
+        # self.split_auxbasis = True
+        self.split_basis = False
+        self.split_auxbasis = False
 
         # precision for real-space lattice sum (R) and reciprocal-space Fourier transform (G).
         # Both are set to cell.precision by default and will be modified by the extra_precision determined from inverting j2c (see _make_j3c).
@@ -756,7 +713,7 @@ class RSGDF(df.df.GDF):
         # FOR EXPERTS: if you want omega_j2c to be the same as omega, set omega_j2c to be any negative number.
         self.omega_j2c = 0.4
         self.mesh_j2c = None
-        self.precision_j2c = 1e-8 * self.precision_G
+        self.precision_j2c = 1e-4 * self.precision_G
 
         # set True to force calculating j2c^(-1/2) using eigenvalue decomposition (ED); otherwise, Cholesky decomposition (CD) is used first, and ED is called only if CD fails.
         self.j2c_eig_always = False
@@ -771,9 +728,7 @@ class RSGDF(df.df.GDF):
         self._numint = None
 
         # For debugging and should be removed later
-        self.round2odd = False  # if True, mesh for j3c will be rounded to odd
-        self.use_extra_precision_R = True
-        self.safe_rcut = True
+        self.round2odd = True # if True, mesh for j3c will be rounded to odd
 
     def dump_flags(self, verbose=None):
         cell = self.cell
@@ -783,7 +738,6 @@ class RSGDF(df.df.GDF):
         log.info('******** %s ********', self.__class__)
         log.info('cell num shells = %d, num cGTOs = %d, num pGTOs = %d',
                  cell.nbas, cell.nao_nr(), cell.npgto_nr())
-        log.info('safe_mode = %s', self.safe_mode)
         log.info('use_bvkcell = %s', self.use_bvkcell)
         log.info('prescreening_type = %d', self.prescreening_type)
         log.info('split_basis = %s', self.split_basis)
@@ -865,8 +819,6 @@ class RSGDF(df.df.GDF):
         # for debugging and should be removed later
         log.info('\ndebugging flags%s', '')
         log.info('round2odd for j3c = %s', self.round2odd)
-        log.info('use_extra_precision_R = %s', self.use_extra_precision_R)
-        log.info('safe_rcut = %s', self.safe_rcut)
         log.info('%s', '')
 
         return self
@@ -1118,8 +1070,10 @@ if __name__ == "__main__":
 
         from pyscf.pbc import scf
         mydf = RSDF(cell, kpts)
+        mydf.omega = 0.9
         mydf.split_basis = False
         mydf.split_auxbasis = False
+        mydf.build()
         mf = scf.KRHF(cell, kpts=kpts)
         mf.with_df = mydf
         mf.kernel()
