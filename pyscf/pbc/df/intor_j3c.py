@@ -809,12 +809,9 @@ def intor_j3c(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
 
 
 def get_Lsmin(cell, atom_Rcuts, uniq_atms):
-    # atms_sup, Rs_sup = suplat_by_Rcut(cell, uniq_atms, atom_Rcuts)
-    # supmol = _build_supmol_(cell, atms, Rs)
     supmol = make_supmol_j3c(cell, atom_Rcuts, uniq_atms)
     ls = supmol._Ls @ np.random.rand(3)
     uniq_ls, uniq_idx = np.unique(ls, return_index=True)
-    logger.debug(cell, "keep %d/%d Ls", uniq_ls.size, ls.size)
     return np.asarray(supmol._Ls[uniq_idx], order="C")
 def get_bvk_data(cell, Ls, bvk_kmesh):
     ### [START] Hongzhou's style of bvk

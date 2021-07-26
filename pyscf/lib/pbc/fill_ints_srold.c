@@ -77,37 +77,33 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
     const int ksh0 = shls_slice[4];
     const int ksh1 = shls_slice[5];
     const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-    const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
-    const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
+    const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
+    const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
     const size_t nijk = nij * naok;
 
     const int di = ao_loc[ish+1] - ao_loc[ish];
     const int dj = ao_loc[jsh+1] - ao_loc[jsh];
     const int dij = di * dj;
     const int jp = ao_loc[jsh] - ao_loc[jsh0];
-    const int I0 = ao_loc[ish];
-    out += ((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp;
+    out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
-    int i, i0, j, k, ij, ksh, ic, dk, dijk;
+    int i, j, k, ij, ksh, ic, dk, dijk;
     double *pin, *pout;
 
     for (ksh = msh0; ksh < msh1; ksh++) {
         dk = ao_loc[ksh+1] - ao_loc[ksh];
         dijk = dij * dk;
         for (ic = 0; ic < comp; ic++) {
-            pout = out + nijk * ic + (ao_loc[ksh]-ao_loc[ksh0])*nij;
+            pout = out + nijk * ic + ao_loc[ksh]-ao_loc[ksh0];
             pin = in + dijk * ic;
-            for (k = 0; k < dk; k++) {
-                i0 = 0;
-                for (i = 0; i < di; i++) {
-                    for (j = 0; j < dj; j++) {
-                        ij = j * di + i;
-                        pout[i0+j] = pin[ij];
+            for (i = 0; i < di; i++) {
+                for (j = 0; j < dj; j++) {
+                    ij = j * di + i;
+                    for (k = 0; k < dk; k++) {
+                        pout[j*naok+k] = pin[k*dij+ij];
                     }
-                    i0 += I0+i+1;
                 }
-                pout += nij;
-                pin += dij;
+                pout += (i+ao_loc[ish]+1) * naok;
             }
         }
         in += dijk * comp;
@@ -122,44 +118,39 @@ static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
     const int ksh0 = shls_slice[4];
     const int ksh1 = shls_slice[5];
     const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-    const size_t off0 = ((size_t)ao_loc[ish0]) * (ao_loc[ish0] + 1) / 2;
-    const size_t nij = ((size_t)ao_loc[ish1]) * (ao_loc[ish1] + 1) / 2 - off0;
+    const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
+    const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
     const size_t nijk = nij * naok;
 
     const int di = ao_loc[ish+1] - ao_loc[ish];
     const int dij = di * di;
     const int jp = ao_loc[jsh] - ao_loc[jsh0];
-    const int I0 = ao_loc[ish];
-    out += (((size_t)ao_loc[ish])*(ao_loc[ish]+1)/2-off0 + jp);
+    out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
-    int i, i0, j, k, ij, ksh, ic, dk, dijk;
+    int i, j, k, ij, ksh, ic, dk, dijk;
     double *pin, *pout;
 
     for (ksh = msh0; ksh < msh1; ksh++) {
         dk = ao_loc[ksh+1] - ao_loc[ksh];
         dijk = dij * dk;
         for (ic = 0; ic < comp; ic++) {
-            pout = out + nijk * ic + (ao_loc[ksh]-ao_loc[ksh0])*nij;
+            pout = out + nijk * ic + ao_loc[ksh]-ao_loc[ksh0];
             pin = in + dijk * ic;
-            for (k = 0; k < dk; k++) {
-                i0 = 0;
-                for (i = 0; i < di; i++) {
-                    for (j = 0; j <= i; j++) {
-                        ij = j * di + i;
-                        pout[i0+j] = pin[ij];
+            for (i = 0; i < di; i++) {
+                for (j = 0; j <= i; j++) {
+                    ij = j * di + i;
+                    for (k = 0; k < dk; k++) {
+                        pout[j*naok+k] = pin[k*dij+ij];
                     }
-                    i0 += I0+i+1;
                 }
-                pout += nij;
-                pin += dij;
+                pout += (i+ao_loc[ish]+1) * naok;
             }
         }
         in += dijk * comp;
     }
 }
 
-static void _nr3c_bvk_g(
-                    int (*intor)(), void (*fsort)(), double *out,
+static void _nr3c_g(int (*intor)(), void (*fsort)(), double *out,
                     int comp, int nimgs,
                     int ish, int jsh,
                     double *buf, double *env_loc, double *Ls,
@@ -278,48 +269,48 @@ static void _nr3c_bvk_g(
     }
 }
 
-void PBCnr3c_bvk_gs2(int (*intor)(), double *out,
-                     int comp, int nimgs,
-                     int ish, int jsh,
-                     double *buf, double *env_loc, double *Ls,
-                     int *shls_slice, int *ao_loc,
-                     CINTOpt *cintopt,
-                     int *refuniqshl_map, int *auxuniqshl_map,
-                     int nbasauxuniq, double *uniqexp,
-                     double *uniq_dcut2s, double dcut_binsize,
-                     double *uniq_Rcut2s, int *uniqshlpr_dij_loc,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+void PBCnr3c_gs2(int (*intor)(), double *out,
+                 int comp, int nimgs,
+                 int ish, int jsh,
+                 double *buf, double *env_loc, double *Ls,
+                 int *shls_slice, int *ao_loc,
+                 CINTOpt *cintopt,
+                 int *refuniqshl_map, int *auxuniqshl_map,
+                 int nbasauxuniq, double *uniqexp,
+                 double *uniq_dcut2s, double dcut_binsize,
+                 double *uniq_Rcut2s, int *uniqshlpr_dij_loc,
+                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int ip = ish + shls_slice[0];
         int jp = jsh + shls_slice[2] - nbas;
         if (ip > jp) {
-             _nr3c_bvk_g(intor, &sort3c_gs2_igtj, out,
-                         comp, nimgs, ish, jsh,
-                         buf, env_loc, Ls,
-                         shls_slice, ao_loc, cintopt,
-                         refuniqshl_map, auxuniqshl_map,
-                         nbasauxuniq, uniqexp,
-                         uniq_dcut2s, dcut_binsize,
-                         uniq_Rcut2s, uniqshlpr_dij_loc,
-                         atm, natm, bas, nbas, env);
+             _nr3c_g(intor, &sort3c_gs2_igtj, out,
+                     comp, nimgs, ish, jsh,
+                     buf, env_loc, Ls,
+                     shls_slice, ao_loc, cintopt,
+                     refuniqshl_map, auxuniqshl_map,
+                     nbasauxuniq, uniqexp,
+                     uniq_dcut2s, dcut_binsize,
+                     uniq_Rcut2s, uniqshlpr_dij_loc,
+                     atm, natm, bas, nbas, env);
         } else if (ip == jp) {
-             _nr3c_bvk_g(intor, &sort3c_gs2_ieqj, out,
-                         comp, nimgs, ish, jsh,
-                         buf, env_loc, Ls,
-                         shls_slice, ao_loc, cintopt,
-                         refuniqshl_map, auxuniqshl_map,
-                         nbasauxuniq, uniqexp,
-                         uniq_dcut2s, dcut_binsize,
-                         uniq_Rcut2s, uniqshlpr_dij_loc,
-                         atm, natm, bas, nbas, env);
+             _nr3c_g(intor, &sort3c_gs2_ieqj, out,
+                     comp, nimgs, ish, jsh,
+                     buf, env_loc, Ls,
+                     shls_slice, ao_loc, cintopt,
+                     refuniqshl_map, auxuniqshl_map,
+                     nbasauxuniq, uniqexp,
+                     uniq_dcut2s, dcut_binsize,
+                     uniq_Rcut2s, uniqshlpr_dij_loc,
+                     atm, natm, bas, nbas, env);
         }
 }
 
-void PBCnr3c_g_bvk_drv(int (*intor)(), void (*fill)(), double *out,
+void PBCnr3c_g_drv(int (*intor)(), void (*fill)(), double *out,
                        int comp, int nimgs,
                        double *Ls,
                        int *shls_slice, int *ao_loc,
-                       CINTOpt *cintopt,
+                       CINTOpt *cintopt, char *shlpr_mask,
                        int *refuniqshl_map, int *auxuniqshl_map,
                        int nbasauxuniq, double *uniqexp,
                        double *uniq_dcut2s, double dcut_binsize,
@@ -351,6 +342,9 @@ void PBCnr3c_g_bvk_drv(int (*intor)(), void (*fill)(), double *out,
         for (ij = 0; ij < nish*njsh; ij++) {
             ish = ij / njsh;
             jsh = ij % njsh;
+            if (!shlpr_mask[ij]) {
+                continue;
+            }
             (*fill)(intor, out, comp, nimgs,
                     ish, jsh,
                     buf, env_loc, Ls,
