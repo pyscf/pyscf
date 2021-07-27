@@ -206,13 +206,13 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         int ngrids = (int) env[NGRIDS];
         double* all_grids = env+(size_t)env[PTR_GRIDS];
 
-#pragma omp parallel default(none) \
+#pragma omp parallel default(none) firstprivate(ish0, jsh0) \
         shared(intor, fdot, jkop, ao_loc, shls_slice, \
                dms, vjk, n_dm, ncomp, nbas, vhfopt, \
                atm, bas, env, natm, \
                nish, di, cache_size, fprescreen, \
                aosym, npair, cintopt, env_size, \
-               ngrids, all_grids, ish0, jsh0)
+               ngrids, all_grids)
 {
         int i, ij, ish, jsh;
         int shls[4];
