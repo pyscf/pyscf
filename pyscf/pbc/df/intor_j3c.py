@@ -28,6 +28,7 @@ from scipy.special import gamma, comb
 from pyscf import gto as mol_gto
 from pyscf.scf import _vhf
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.tools import k2gamma
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import BOHR
@@ -846,11 +847,11 @@ def get_bvk_data(cell, Ls, bvk_kmesh):
     cell_loc[1:] = np.cumsum(cell_loc[1:])
     cell_loc_bvk = np.asarray(cell_loc, dtype=np.int32, order="C")
 
-    Ls = Ls[iL_by_bvk]
+    Ls_sorted = np.array(Ls[iL_by_bvk], order="C")
     ### [END] Hongzhou's style of bvk
     bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh)
 
-    return Ls, bvkmesh_Ls, cell_loc_bvk
+    return Ls_sorted, bvkmesh_Ls, cell_loc_bvk
 def intor_j3c_srold(cell, auxcell, omega, kptij_lst=np.zeros((1,2,3)), out=None,
               precision=None, use_cintopt=True, safe=True, fac_type="ME",
               bvk_kmesh=None, reshapek=True,

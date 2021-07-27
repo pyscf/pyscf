@@ -29,7 +29,7 @@ from pyscf.pbc import df
 from pyscf.pbc.df.intor_j3c import (get_refuniq_map, get_schwartz_data,
                                     get_schwartz_dcut, make_dijs_lst,
                                     get_3c2e_Rcuts, get_atom_Rcuts_3c,
-                                    get_Lsmin)
+                                    get_Lsmin, get_bvk_data)
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc import tools as pbctools
 from pyscf.scf import _vhf
@@ -1232,7 +1232,8 @@ def wrap_int3c_nospltbas(cell, auxcell, shlpr_mask, prescreening_data,
     if bvk_kmesh is None:
         Ls_ = Ls
     else:
-        raise RuntimeError
+        Ls, Ls_, cell_loc_bvk = get_bvk_data(cell, Ls, bvk_kmesh)
+        bvk_nimgs = Ls_.shape[0]
 
     if gamma_point(kptij_lst):
         assert(aosym[:2] == "s2")
@@ -1252,8 +1253,10 @@ def wrap_int3c_nospltbas(cell, auxcell, shlpr_mask, prescreening_data,
         dtype = np.complex128
         kpts = unique(np.vstack([kpti,kptj]))[0]
         expkL = np.exp(1j * np.dot(kpts, Ls_.T))
-        wherei = np.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
-        wherej = np.where(abs(kptj.reshape(-1,1,3)-kpts).sum(axis=2) < KPT_DIFF_TOL)[1]
+        wherei = np.where(abs(kpti.reshape(-1,1,3)-kpts).sum(axis=2)
+                          < KPT_DIFF_TOL)[1]
+        wherej = np.where(abs(kptj.reshape(-1,1,3)-kpts).sum(axis=2)
+                          < KPT_DIFF_TOL)[1]
         nkpts = len(kpts)
         kptij_idx = np.asarray(wherei*nkpts+wherej, dtype=np.int32)
         nkptij = len(kptij_lst)
@@ -1268,12 +1271,15 @@ def wrap_int3c_nospltbas(cell, auxcell, shlpr_mask, prescreening_data,
         if intor[:3] != 'ECP':
             libpbc.CINTdel_pairdata_optimizer(cintopt)
 
+    cfunc_prefix = "PBCnr3c"
+    if not (gamma_point(kptij_lst) or bvk_kmesh is None):
+        cfunc_prefix += "_bvk"
+    fill = "%s_%s%s" % (cfunc_prefix, kk_type, aosym[:2])
+    drv = getattr(libpbc, "%s_%s_drv"%(cfunc_prefix,kk_type))
+
+    log.debug("Using %s to evaluate SR integrals", fill)
+
     if gamma_point(kptij_lst):
-        fill = 'PBCnr3c_gs2'
-        drv = libpbc.PBCnr3c_g_drv
-
-        log.debug("Using %s to evaluate SR integrals", fill)
-
         def int3c(shls_slice, out):
             shls_slice = (shls_slice[0], shls_slice[1],
                           nbas+shls_slice[2], nbas+shls_slice[3],
@@ -1301,15 +1307,47 @@ def wrap_int3c_nospltbas(cell, auxcell, shlpr_mask, prescreening_data,
                 )
             return out
 
-    else:
-        if bvk_kmesh is None:
-            fill = 'PBCnr3c_%s%s' % (kk_type, aosym[:2])
-            drv = libpbc.PBCnr3c_drv
-        else:
-            fill = 'PBCnr3c_bvk_%s%s' % (kk_type, aosym[:2])
-            drv = libpbc.PBCnr3c_bvk_drv
+    elif is_zero(kpti-kptj):  # j_only
 
-        log.debug("Using %s to evaluate SR integrals", fill)
+        raise NotImplementedError
+
+    else:
+
+        if bvk_kmesh is None:
+            raise NotImplementedError
+        else:
+            def int3c(shls_slice, out):
+                shls_slice = (shls_slice[0], shls_slice[1],
+                              nbas+shls_slice[2], nbas+shls_slice[3],
+                              nbas*2+shls_slice[4], nbas*2+shls_slice[5])
+                drv(getattr(libpbc, intor), getattr(libpbc, fill),
+                    out.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nkptij), ctypes.c_int(nkpts),
+                    ctypes.c_int(comp), ctypes.c_int(nimgs),
+                    ctypes.c_int(bvk_nimgs),
+                    Ls.ctypes.data_as(ctypes.c_void_p),
+                    expkL.ctypes.data_as(ctypes.c_void_p),
+                    kptij_idx.ctypes.data_as(ctypes.c_void_p),
+                    (ctypes.c_int*6)(*shls_slice),
+                    ao_loc.ctypes.data_as(ctypes.c_void_p),
+                    cintopt,
+                    cell_loc_bvk.ctypes.data_as(ctypes.c_void_p),   # cell_loc_bvk
+                    shlpr_mask.ctypes.data_as(ctypes.c_void_p),  # shlpr_mask
+                    refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                    auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbasauxuniq),
+                    uniqexp.ctypes.data_as(ctypes.c_void_p),
+                    dcut2s.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_double(dstep_BOHR),
+                    Rcut2s.ctypes.data_as(ctypes.c_void_p),
+                    dijs_loc.ctypes.data_as(ctypes.c_void_p),
+                    atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+                    bas.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
+                    env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size)
+                    )
+                return out
+
 
     # if bvk_kmesh is None:
     #     def int3c(shls_slice, out):
