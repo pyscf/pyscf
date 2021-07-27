@@ -38,9 +38,11 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
     if cell is None: cell = mf.cell
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if kpts is None: kpts = mf.kpts
-    if kpts_band is None: kpts_band = kpts
     nkpts = len(kpts)
-    nband = len(kpts_band)
+    if kpts_band is None:
+        nband = nkpts
+    else:
+        nband = len(kpts_band)
 
     dm_kpts = np.asarray(dm_kpts)
     nso = dm_kpts.shape[-1]
@@ -65,6 +67,7 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
 
     j1, k1 = mf.with_df.get_jk(dms, _hermi, kpts, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
+
     vj = vk = None
     if with_j:
         # j1 = (j1_aa, j1_bb, j1_ab)
