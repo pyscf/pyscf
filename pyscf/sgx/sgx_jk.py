@@ -274,7 +274,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
         env[gto.NGRIDS] = ngrids
         env[gto.PTR_GRIDS] = mol._env.size
         if pjs:
-            sgxopt.set_dm(fg/numpy.sqrt(weights[None,:]), mol._atm, mol._bas, env)
+            sgxopt.set_dm(fg / numpy.sqrt(numpy.abs(weights[None,:])),
+                          mol._atm, mol._bas, env)
 
         ao_loc = moleintor.make_loc(bas, sgxopt._intor)
         shls_slice = (0, mol.nbas, 0, mol.nbas)

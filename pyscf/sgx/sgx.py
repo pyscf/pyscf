@@ -97,15 +97,18 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             self.with_df = df
 
             # Grids/Integral quality varies during SCF. VHF cannot be
-            # constructed incrementally.
+            # constructed incrementally through standard direct SCF.
             self.direct_scf = False
+            # Set direct_scf_sgx True to use direct SCF for each
+            # grid size with SGX.
             self.direct_scf_sgx = False
 
             self._last_dm = 0
             self._last_vj = 0
             self._last_vk = 0
             self._in_scf = False
-            self._keys = self._keys.union(['auxbasis', 'with_df'])
+            self._keys = self._keys.union(['auxbasis', 'with_df',
+                                           'direct_scf_sgx'])
 
         def build(self, mol=None, **kwargs):
             if self.direct_scf:
