@@ -271,7 +271,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
 
     if ao_repr:
         mo = mycc.mo_coeff
-        print("IN ccsd_rdm.py:",dm1.shape)
         dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
     return dm1
 
