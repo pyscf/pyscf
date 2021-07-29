@@ -50,5 +50,40 @@ class KnownValues(unittest.TestCase):
         b = B()
         self.assertEqual(b.f2(), 'b')
 
+    def test_isinteger(self):
+        isinteger = lib.isinteger
+        self.assertTrue(isinteger(0))
+        self.assertTrue(isinteger(20))
+        self.assertTrue(isinteger(-10))
+        self.assertTrue(isinteger(numpy.int_(1.0)))
+        self.assertFalse(isinteger(1.0))
+        self.assertFalse(isinteger('1'))
+        self.assertFalse(isinteger(True))
+
+    def test_issequence(self):
+        issequence = lib.issequence
+        self.assertTrue(issequence([1, 2, 3]))
+        self.assertTrue(issequence(numpy.array([1, 2, 3])))
+        self.assertTrue(issequence(range(5)))
+        self.assertTrue(issequence('abcde'))
+        self.assertTrue(issequence(tuple()))
+        self.assertFalse(issequence(True))
+        self.assertFalse(issequence(2.0))
+        self.assertFalse(issequence(1))
+        self.assertFalse(issequence(dict()))
+        self.assertFalse(issequence(set()))
+
+    def test_isintsequence(self):
+        isintsequence = lib.isintsequence
+        self.assertTrue(isintsequence([2, 4, 6]))
+        self.assertTrue(isintsequence(numpy.array([2, 4, 6])))
+        self.assertTrue(isintsequence([]))
+        self.assertFalse(isintsequence([2.0, 4.0, 6.0]))
+        self.assertFalse(isintsequence(numpy.array([2.0, 4.0, 6.0])))
+        self.assertFalse(isintsequence((True, False)))
+        self.assertFalse(isintsequence('123'))
+        self.assertFalse(isintsequence(5))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,7 @@ import warnings
 import tempfile
 import functools
 import itertools
+import collections
 import ctypes
 import numpy
 import h5py
@@ -1063,6 +1064,44 @@ def git_info(repo_path):
     except IOError:
         pass
     return orig_head, head, branch
+
+
+def isinteger(obj):
+    '''
+    Check if an object is an integer.
+    '''
+    # A bool is also an int in python, but we don't want that.
+    # On the other hand, numpy.bool_ is probably not a numpy.integer, but just to be sure...
+    if isinstance(obj, (bool, numpy.bool_)):
+        return False
+    # These are actual ints we expect to encounter.
+    else:
+        return isinstance(obj, (int, numpy.integer))
+
+
+def issequence(obj):
+    '''
+    Determine if the object provided is a sequence.
+    '''
+    # These are the types of sequences that we permit.
+    # numpy.ndarray is not a subclass of collections.abc.Sequence as of version 1.19.
+    sequence_types = (collections.abc.Sequence, numpy.ndarray)
+    return isinstance(obj, sequence_types)
+
+
+def isintsequence(obj):
+    '''
+    Determine if the object provided is a sequence of integers.
+    '''
+    if not issequence(obj):
+        return False
+    elif isinstance(obj, numpy.ndarray):
+        return issubclass(obj.dtype.type, numpy.integer)
+    else:
+        are_ints = True
+        for i in obj:
+            are_ints = are_ints and isinteger(i)
+        return are_ints
 
 
 if __name__ == '__main__':

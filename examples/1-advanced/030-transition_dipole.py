@@ -4,6 +4,7 @@
 Transition density matrix and transition dipole for CASSCF/CASCI wavefunction
 '''
 
+from functools import reduce
 import numpy
 from pyscf import gto, scf, mcscf, fci
 
