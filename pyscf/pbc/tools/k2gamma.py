@@ -25,14 +25,12 @@ See also the original implementation at
 https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 '''
 
-from timeit import default_timer as timer
 from functools import reduce
 import numpy as np
 import scipy.linalg
 from pyscf import lib
-from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc import scf
+
 
 def kpts_to_kmesh(cell, kpts):
     '''Guess kmesh'''
@@ -107,143 +105,52 @@ def translation_map(nk):
                        dtype=int, buffer=np.append(idx.ravel(), 0))
     return t_map
 
-
-def rotate_mo_to_real(cell, mo_energy, mo_coeff, degen_tol=1e-3, rotate_degen=True):
-    """Applies a phase factor to each MO, minimizing the maximum imaginary element.
-
-    Typically, this should reduce the imaginary part of a non-degenerate, Gamma point orbital to zero.
-    However, for degenerate subspaces, addition treatment is required.
-    """
-
-    # Output orbitals
-    mo_coeff_out = mo_coeff.copy()
-
-    for mo_idx, mo_e in enumerate(mo_energy):
-        # Check if MO is degnerate
-        if mo_idx == 0:
-            degen = (abs(mo_e - mo_energy[mo_idx+1]) < degen_tol)
-        elif mo_idx == (len(mo_energy)-1):
-            degen = (abs(mo_e - mo_energy[mo_idx-1]) < degen_tol)
-        else:
-            degen = (abs(mo_e - mo_energy[mo_idx-1]) < degen_tol) or (abs(mo_e - mo_energy[mo_idx+1]) < degen_tol)
-        if degen and not rotate_degen:
-            continue
-
-        mo_c = mo_coeff[:,mo_idx]
-        norm_in = np.linalg.norm(mo_c.imag)
-        # Find phase which makes the largest element of |C| real
-        maxidx = np.argmax(abs(mo_c.imag))
-        maxval = mo_c[maxidx]
-        # Determine -phase of maxval and rotate to real axis
-        phase = -np.angle(maxval)
-        mo_c2 = mo_c*np.exp(1j*phase)
-
-        # Only perform rotation if imaginary norm is decreased
-        norm_out = np.linalg.norm(mo_c2.imag)
-        if (norm_out < norm_in):
-            mo_coeff_out[:,mo_idx] = mo_c2
-        else:
-            norm_out = norm_in
-        if norm_out > 1e-8 and not degen:
-            logger.warn(cell, "Non-degenerate MO %4d at E= %+12.8f Ha: ||Im(C)||= %6.2e !", mo_idx, mo_e, norm_out)
-
-    return mo_coeff_out
-
-def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None, degen_tol=1e-3, imag_tol=1e-9):
-    logger.debug(cell, "Starting mo_k2gamma")
+def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     scell, phase = get_phase(cell, kpts, kmesh)
 
-    # Supercell Gamma-point MO energies
-    e_gamma = np.hstack(mo_energy)
-    # The number of MOs may be k-point dependent (eg. due to linear dependency)
-    nmo_k = np.asarray([ck.shape[-1] for ck in mo_coeff])
-    nk = len(mo_coeff)
-    nao = mo_coeff[0].shape[0]
-    nr = phase.shape[0]
-    # Transform mo_coeff from k-points to supercell Gamma-point:
-    c_gamma = []
-    for k in range(nk):
-        c_k = np.einsum('R,um->Rum', phase[:,k], mo_coeff[k])
-        c_k = c_k.reshape(nr*nao, nmo_k[k])
-        c_gamma.append(c_k)
-    c_gamma = np.hstack(c_gamma)
-    assert c_gamma.shape == (nr*nao, sum(nmo_k))
-    # Sort according to MO energy
-    sort = np.argsort(e_gamma)
-    e_gamma, c_gamma = e_gamma[sort], c_gamma[:,sort]
-    # Determine overlap by unfolding for better accuracy
-    s_k = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts, pbcopt=lib.c_null_ptr())
-    s_gamma = to_supercell_ao_integrals(cell, kpts, s_k)
-    # Orthogonality error of unfolded MOs
-    err_orth = abs(np.linalg.multi_dot((c_gamma.conj().T, s_gamma, c_gamma)) - np.eye(c_gamma.shape[-1])).max()
-    if err_orth > 1e-4:
-        logger.error(cell, "Orthogonality error of MOs= %.2e !!!", err_orth)
-    else:
-        logger.debug(cell, "Orthogonality error of MOs= %.2e", err_orth)
+    E_g = np.hstack(mo_energy)
+    C_k = np.asarray(mo_coeff)
+    Nk, Nao, Nmo = C_k.shape
+    NR = phase.shape[0]
 
-    # Make Gamma point MOs real:
+    # Transform AO indices
+    C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
+    C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
 
-    # Try to remove imaginary parts by multiplication of simple phase factors
-    c_gamma = rotate_mo_to_real(cell, e_gamma, c_gamma, degen_tol=degen_tol)
+    E_sort_idx = np.argsort(E_g)
+    E_g = E_g[E_sort_idx]
+    C_gamma = C_gamma[:,E_sort_idx]
+    s = scell.pbc_intor('int1e_ovlp')
+    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+               - np.eye(Nmo*Nk)).max() < 1e-5)
 
     # For degenerated MOs, the transformed orbitals in super cell may not be
     # real. Construct a sub Fock matrix in super-cell to find a proper
     # transformation that makes the transformed MOs real.
-    #e_k_degen = abs(e_gamma[1:] - e_gamma[:-1]) < degen_tol
-    #degen_mask = np.append(False, e_k_degen) | np.append(e_k_degen, False)
+    E_k_degen = abs(E_g[1:] - E_g[:-1]) < 1e-3
+    degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
+    if np.any(E_k_degen):
+        if abs(C_gamma[:,~degen_mask].imag).max() < 1e-4:
+            shift = min(E_g[degen_mask]) - .1
+            f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
+                       C_gamma[:,degen_mask].conj().T)
+            assert(abs(f.imag).max() < 1e-4)
 
-    # Get eigenvalue solver with linear-dependency treatment
-    eigh = cell.eigh_factory(lindep_threshold=1e-13, fallback_mode=True)
-
-    c_gamma_out = c_gamma.copy()
-    mo_mask = (np.linalg.norm(c_gamma.imag, axis=0) > imag_tol)
-    logger.debug(cell, "Number of MOs with imaginary coefficients: %d out of %d", np.count_nonzero(mo_mask), len(mo_mask))
-    if np.any(mo_mask):
-        #mo_mask = np.s_[:]
-        #if np.any(~degen_mask):
-        #    err_imag = abs(c_gamma[:,~degen_mask].imag).max()
-        #    logger.debug(cell, "Imaginary part in non-degenerate MO coefficients= %.2e", err_imag)
-        #    # Diagonalize Fock matrix spanned by degenerate MOs only
-        #    if err_imag < 1e-8:
-        #        mo_mask = degen_mask
-
-        # F
-        #mo_mask = (np.linalg.norm(c_gamma.imag, axis=0) > imag_tol)
-
-        # Shift all MOs above the eig=0 subspace, so they can be extracted below
-        shift = 1.0 - min(e_gamma[mo_mask])
-        cs = np.dot(c_gamma[:,mo_mask].conj().T, s_gamma)
-        f_gamma = np.dot(cs.T.conj() * (e_gamma[mo_mask] + shift), cs)
-        logger.debug(cell, "Imaginary parts of Fock matrix: ||Im(F)||= %.2e  max|Im(F)|= %.2e", np.linalg.norm(f_gamma.imag), abs(f_gamma.imag).max())
-
-        e, v = eigh(f_gamma.real, s_gamma)
-
-        # Extract MOs from rank-deficient Fock matrix
-        mask = (e > 0.5)
-        assert np.count_nonzero(mask) == len(e_gamma[mo_mask])
-        e, v = e[mask], v[:,mask]
-        e_delta = e_gamma[mo_mask] - (e-shift)
-        if abs(e_delta).max() > 1e-4:
-            logger.error(cell, "Error of MO energies: ||dE||= %.2e  max|dE|= %.2e !!!", np.linalg.norm(e_delta), abs(e_delta).max())
+            e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
+            C_gamma = C_gamma.real
+            C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
         else:
-            logger.debug(cell, "Error of MO energies: ||dE||= %.2e  max|dE|= %.2e", np.linalg.norm(e_delta), abs(e_delta).max())
-        c_gamma_out[:,mo_mask] = v
+            f = np.dot(C_gamma * E_g, C_gamma.conj().T)
+            assert(abs(f.imag).max() < 1e-4)
+            e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
 
-    err_imag = abs(c_gamma_out.imag).max()
-    if err_imag > 1e-4:
-        logger.error(cell, "Imaginary part in gamma-point MOs: max|Im(C)|= %7.2e !!!", err_imag)
-    else:
-        logger.debug(cell, "Imaginary part in gamma-point MOs: max|Im(C)|= %7.2e", err_imag)
-    c_gamma_out = c_gamma_out.real
+    s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
+    # overlap between k-point unitcell and gamma-point supercell
+    s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(Nk,Nao,NR*Nao)
+    # The unitary transformation from k-adapted orbitals to gamma-point orbitals
+    mo_phase = lib.einsum('kum,kuv,vi->kmi', C_k.conj(), s_k_g, C_gamma)
 
-    # Determine mo_phase, i.e. the unitary transformation from k-adapted orbitals to gamma-point orbitals
-    s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(nk,nao,nr*nao)
-    mo_phase = []
-    for k in range(nk):
-        mo_phase_k = lib.einsum('um,uv,vi->mi', mo_coeff[k].conj(), s_k_g[k], c_gamma_out)
-        mo_phase.append(mo_phase_k)
-
-    return scell, e_gamma, c_gamma_out, mo_phase
+    return scell, E_g, C_gamma, mo_phase
 
 def k2gamma(kmf, kmesh=None):
     r'''
@@ -254,6 +161,7 @@ def k2gamma(kmf, kmesh=None):
          C_{\nu ' n'} = C_{\vecR\mu, \veck m} = \frac{1}{\sqrt{N_{\UC}}}
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
+    from pyscf.pbc import scf
     def transform(mo_energy, mo_coeff, mo_occ):
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
                                          kmf.kpts, kmesh)[:3]
@@ -277,18 +185,6 @@ def k2gamma(kmf, kmesh=None):
     mf.mo_coeff = C_gamma
     mf.mo_energy = E_g
     mf.mo_occ = mo_occ
-    mf.converged = kmf.converged
-    # Scale energy by number of primitive cells within supercell
-    mf.e_tot = len(kmf.kpts)*kmf.e_tot
-
-    # Use unfolded overlap matrix for better error cancellation
-    #s_k = kmf.cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kmf.kpts, pbcopt=lib.c_null_ptr())
-    s_k = kmf.get_ovlp()
-    ovlp = to_supercell_ao_integrals(kmf.cell, kmf.kpts, s_k)
-    assert np.allclose(ovlp, ovlp.T)
-    ovlp = (ovlp + ovlp.T) / 2
-    mf.get_ovlp = lambda *args : ovlp
-
     return mf
 
 
@@ -300,7 +196,6 @@ def to_supercell_ao_integrals(cell, kpts, ao_ints):
     NR, Nk = phase.shape
     nao = cell.nao
     scell_ints = np.einsum('Rk,kij,Sk->RiSj', phase, ao_ints, phase.conj())
-    assert abs(scell_ints.imag).max() < 1e-5
     return scell_ints.reshape(NR*nao,NR*nao).real
 
 
