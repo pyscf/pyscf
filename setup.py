@@ -62,7 +62,7 @@ EXTRAS = {
     'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
-    'properties': ['pyscf-properteis'],
+    'properties': ['pyscf-properties'],
     'semiempirical': ['pyscf-semiempirical'],
     'shciscf': ['pyscf-shciscf'],
     'cppe': ['cppe'],
