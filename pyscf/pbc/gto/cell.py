@@ -649,7 +649,7 @@ def _non_uniform_Gv_base(n):
     #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
     return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
-def get_SI(cell, Gv=None):
+def get_SI(cell, Gv=None, atmlst=None):
     '''Calculate the structure factor (0D, 1D, 2D, 3D) for all atoms; see MH (3.34).
 
     Args:
@@ -658,11 +658,16 @@ def get_SI(cell, Gv=None):
         Gv : (N,3) array
             G vectors
 
+        atmlst : list of ints
+            indices of atoms for which the structure factors are computed 
+
     Returns:
         SI : (natm, ngrids) ndarray, dtype=np.complex128
             The structure factor for each atom at each G-vector.
     '''
     coords = cell.atom_coords()
+    if atmlst:
+        coords = coords[np.asarray(atmlst)]
     ngrids = np.prod(cell.mesh)
     if Gv is None or Gv.shape[0] == ngrids:
         basex, basey, basez = cell.get_Gv_weights(cell.mesh)[1]
@@ -674,7 +679,7 @@ def get_SI(cell, Gv=None):
         SI = SIx[:,:,None,None] * SIy[:,None,:,None] * SIz[:,None,None,:]
         SI = SI.reshape(-1,ngrids)
     else:
-        SI = np.exp(-1j*np.dot(coords, Gv.T))
+        SI = lib.exp(-1j*lib.dot(coords, Gv.T))
     return SI
 
 def get_ewald_params(cell, precision=None, mesh=None):
@@ -779,13 +784,21 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
     mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    #absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
     absG2[absG2==0] = 1e200
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
-        ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
-        ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
+        ngrids = len(Gv)
+        ZSI = np.empty((ngrids,), dtype=np.complex128)
+        mem_avail = cell.max_memory - lib.current_memory()[0]
+        blksize = min(1000000, min(ngrids, max(2000, int(mem_avail*1e6/(cell.natm*16)))))
+        for ig0 in range(0, ngrids, blksize):
+            ig1 = min(ngrids, ig0+blksize)
+            ZSI[ig0:ig1] = lib.einsum("i,ij->j", chargs, cell.get_SI(Gv[ig0:ig1]))
+        #ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
+        ZexpG2 = ZSI * lib.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
     elif cell.dimension == 2:  # Truncated Coulomb

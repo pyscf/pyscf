@@ -81,9 +81,19 @@ class KnownValues(unittest.TestCase):
         out = multigrid.MultiGridFFTDF(cell_orth).get_pp()
         self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
 
+        mydf = multigrid.MultiGridFFTDF(cell_orth)
+        mydf.max_memory = 10
+        out = mydf.get_pp(max_memory=2)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
+
     def test_nonorth_get_pp(self):
         ref = df.FFTDF(cell_nonorth).get_pp()
         out = multigrid.MultiGridFFTDF(cell_nonorth).get_pp()
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
+
+        mydf = multigrid.MultiGridFFTDF(cell_nonorth)
+        mydf.max_memory = 10
+        out = mydf.get_pp(max_memory=2)
         self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
 
     def test_orth_get_nuc_kpts(self):

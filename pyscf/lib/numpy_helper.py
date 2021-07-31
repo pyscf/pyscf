@@ -1074,6 +1074,50 @@ def expm(a):
         y, buf = buf, y
     return y
 
+def exp(a):
+    # out = exp(a)
+    dtype = a.dtype
+    if dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdexp", None)
+    elif dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzexp", None)
+    else:
+        raise TypeError
+    a = numpy.asarray(a, order='C')
+    out = numpy.empty_like(a, order='C')
+    assert(a.flags.c_contiguous)
+    assert(out.flags.c_contiguous)
+    n = a.size
+    fn(out.ctypes.data_as(ctypes.c_void_p), 
+       a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
+    return out
+
+def multiply_sum(a, b, axis=0):
+    # out = einsum("ij,ij->j", a, b) if axis == 0
+    # out = einsum("ij,ij->i", a, b) if axis == 1
+    dtype = numpy.result_type(a,b)
+    a = numpy.asarray(a, order='C', dtype=dtype)
+    b = numpy.asarray(b, order='C', dtype=dtype)
+    nrow, ncol = a.shape
+    if axis == 0:
+        out = numpy.zeros((ncol,), order='C', dtype=dtype)
+    else:
+        out = numpy.zeros((nrow,), order='C', dtype=dtype)
+    assert(a.flags.c_contiguous)
+    assert(b.flags.c_contiguous)
+    assert(out.flags.c_contiguous)
+
+    if dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdmultiplysum", None)
+    elif dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzmultiplysum", None)
+    else:
+        raise TypeError
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(nrow), ctypes.c_int(ncol), ctypes.c_int(axis))
+    return out
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array

@@ -30,6 +30,7 @@ from pyscf.dft.numint import libdft, BLKSIZE
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto.pseudo.pp_int import get_pp_nl
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.lib.kpts_helper import gamma_point
@@ -60,7 +61,8 @@ RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
 IMAG_TOL = 1e-9
-
+MIN_BLKSIZE = 13**3
+MAX_BLKSIZE = 51**3
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
              xctype='LDA', kpts=None, mesh=None, offset=None, submesh=None):
@@ -322,10 +324,11 @@ def get_nuc(mydf, kpts=None):
         vne = vne[0]
     return numpy.asarray(vne)
 
-def get_pp(mydf, kpts=None):
+def get_pp(mydf, kpts=None, max_memory=2000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
+    import time
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -333,14 +336,22 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     mesh = mydf.mesh
-    SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv)
-    vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
+    ngrids = len(Gv)
+    vpplocG = numpy.zeros((ngrids,), dtype=numpy.complex128)
+
+    mem_avail = max(max_memory, mydf.max_memory - lib.current_memory()[0])
+    blksize = min(MAX_BLKSIZE, min(ngrids, max(MIN_BLKSIZE, int(mem_avail*1e6/((cell.natm*2)*16)))))
+
+    for ig0 in range(0, ngrids, blksize):
+        ig1 = min(ngrids, ig0+blksize)
+        vpplocG_batch = pseudo.get_vlocG(cell, Gv[ig0:ig1])
+        SI = cell.get_SI(Gv[ig0:ig1])
+        #vpplocG[ig0:ig1] += -numpy.einsum('ij,ij->j', SI, vpplocG_batch)
+        vpplocG[ig0:ig1] += -lib.multiply_sum(SI, vpplocG_batch, axis=0)
+
     # from get_jvloc_G0 function
     vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
-    ngrids = len(vpplocG)
-
     vpp = _get_j_pass2(mydf, vpplocG, kpts_lst)[0]
 
     # vppnonloc evaluated in reciprocal space
@@ -354,14 +365,61 @@ def get_pp(mydf, kpts=None):
     fakemol._bas[0,gto.PTR_EXP  ] = ptr+3
     fakemol._bas[0,gto.PTR_COEFF] = ptr+4
 
-    # buf for SPG_lmi upto l=0..3 and nl=3
-    buf = numpy.empty((48,ngrids), dtype=numpy.complex128)
+    SPG_lm_aoGs = []
+    for ia in range(cell.natm):
+        symb = cell.atom_symbol(ia)
+        if symb not in cell._pseudo:
+            SPG_lm_aoGs.append(None)
+            continue
+        pp = cell._pseudo[symb]
+        p1 = 0
+        for l, proj in enumerate(pp[5:]):
+            rl, nl, hl = proj
+            if nl > 0:
+                p0, p1 = p1, p1+nl*(l*2+1)
+        SPG_lm_aoGs.append(numpy.zeros((p1, cell.nao), dtype=numpy.complex128))
 
-    def vppnl_by_k(kpt):
-        Gk = Gv + kpt
-        G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
+    def vppnl_by_k(cell, kpt):
+        mem_avail = max(max_memory, mydf.max_memory - lib.current_memory()[0])
+        blksize = min(MAX_BLKSIZE, min(ngrids, max(MIN_BLKSIZE, int(mem_avail*1e6/((48+cell.nao+13+3)*16)))))
         vppnl = 0
+        for ig0 in range(0, ngrids, blksize):
+            ig1 = min(ngrids, ig0+blksize)
+            ng = ig1 - ig0
+            # buf for SPG_lmi upto l=0..3 and nl=3
+            buf = numpy.empty((48,ng), dtype=numpy.complex128)
+            Gk = Gv[ig0:ig1] + kpt
+            G_rad = lib.norm(Gk, axis=1)
+            aokG = ft_ao.ft_ao(cell, Gv[ig0:ig1], kpt=kpt) * (ngrids/cell.vol)
+            for ia in range(cell.natm):
+                symb = cell.atom_symbol(ia)
+                if symb not in cell._pseudo:
+                    continue
+                pp = cell._pseudo[symb]
+                p1 = 0
+                for l, proj in enumerate(pp[5:]):
+                    rl, nl, hl = proj
+                    if nl > 0:
+                        fakemol._bas[0,gto.ANG_OF] = l
+                        fakemol._env[ptr+3] = .5*rl**2
+                        fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
+                        pYlm_part = fakemol.eval_gto('GTOval', Gk)
+
+                        p0, p1 = p1, p1+nl*(l*2+1)
+                        # pYlm is real, SI[ia] is complex
+                        pYlm = numpy.ndarray((nl,l*2+1,ng), dtype=numpy.complex128, buffer=buf[p0:p1])
+                        for k in range(nl):
+                            qkl = pseudo.pp._qli(G_rad*rl, l, k)
+                            pYlm[k] = pYlm_part.T * qkl
+                        #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
+                        #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
+                        #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                        #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+                if p1 > 0:
+                    SPG_lmi = buf[:p1]
+                    SPG_lmi *= cell.get_SI(Gv[ig0:ig1], [ia,]).conj()
+                    SPG_lm_aoGs[ia] += lib.zdot(SPG_lmi, aokG)
+            buf = None        
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
             if symb not in cell._pseudo:
@@ -371,38 +429,19 @@ def get_pp(mydf, kpts=None):
             for l, proj in enumerate(pp[5:]):
                 rl, nl, hl = proj
                 if nl > 0:
-                    fakemol._bas[0,gto.ANG_OF] = l
-                    fakemol._env[ptr+3] = .5*rl**2
-                    fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
-                    pYlm_part = fakemol.eval_gto('GTOval', Gk)
-
                     p0, p1 = p1, p1+nl*(l*2+1)
-                    # pYlm is real, SI[ia] is complex
-                    pYlm = numpy.ndarray((nl,l*2+1,ngrids), dtype=numpy.complex128, buffer=buf[p0:p1])
-                    for k in range(nl):
-                        qkl = pseudo.pp._qli(G_rad*rl, l, k)
-                        pYlm[k] = pYlm_part.T * qkl
-                    #:SPG_lmi = numpy.einsum('g,nmg->nmg', SI[ia].conj(), pYlm)
-                    #:SPG_lm_aoG = numpy.einsum('nmg,gp->nmp', SPG_lmi, aokG)
-                    #:tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                    #:vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-            if p1 > 0:
-                SPG_lmi = buf[:p1]
-                SPG_lmi *= SI[ia].conj()
-                SPG_lm_aoGs = lib.zdot(SPG_lmi, aokG)
-                p1 = 0
-                for l, proj in enumerate(pp[5:]):
-                    rl, nl, hl = proj
-                    if nl > 0:
-                        p0, p1 = p1, p1+nl*(l*2+1)
-                        hl = numpy.asarray(hl)
-                        SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
-                        tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
-                        vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+                    hl = numpy.asarray(hl)
+                    SPG_lm_aoG = SPG_lm_aoGs[ia][p0:p1].reshape(nl,l*2+1,-1)
+                    tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
+                    vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
         return vppnl * (1./ngrids**2)
 
+    fn_pp_nl = vppnl_by_k
+    if ngrids > MAX_BLKSIZE:
+        fn_pp_nl = get_pp_nl
+
     for k, kpt in enumerate(kpts_lst):
-        vppnl = vppnl_by_k(kpt)
+        vppnl = fn_pp_nl(cell, kpt)
         if gamma_point(kpt):
             vpp[k] = vpp[k].real + vppnl.real
         else:

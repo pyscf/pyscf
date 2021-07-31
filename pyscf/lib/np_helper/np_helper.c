@@ -15,6 +15,8 @@
 
 #include <stdlib.h>
 #include "np_helper/np_helper.h"
+#include "config.h"
+#include <math.h>
 
 void NPdset0(double *p, const size_t n)
 {
@@ -46,4 +48,61 @@ void NPzcopy(double complex *out, const double complex *in, const size_t n)
         for (i = 0; i < n; i++) {
                 out[i] = in[i];
         }
+}
+
+void NPdmultiplysum(double* out, double* a, double* b, int nrow, int ncol, int axis)
+{
+    if (axis == 0){
+        #pragma omp parallel for schedule(static)
+        for (size_t j = 0; j < ncol; j++) {
+            for (size_t i = 0; i < nrow; i++) {
+                out[j] += a[i*ncol+j] * b[i*ncol+j];
+            }
+        }
+    }
+    else{
+        #pragma omp parallel for schedule(static)
+        for (size_t i = 0; i < nrow; i++) {
+            for (size_t j = 0; j < ncol; j++){
+                out[i] += a[i*ncol+j] * b[i*ncol+j];
+            }
+        }
+    }
+}
+
+void NPzmultiplysum(double complex* out, double complex* a, double complex* b, 
+                    int nrow, int ncol, int axis)
+{
+    if (axis == 0){
+        #pragma omp parallel for schedule(static)
+        for (size_t j = 0; j < ncol; j++) {
+            for (size_t i = 0; i < nrow; i++) {
+                out[j] += a[i*ncol+j] * b[i*ncol+j];
+            }
+        }
+    }
+    else{
+        #pragma omp parallel for schedule(static)
+        for (size_t i = 0; i < nrow; i++) {
+            for (size_t j = 0; j < ncol; j++){
+                out[i] += a[i*ncol+j] * b[i*ncol+j];
+            }
+        }
+    }
+}
+
+void NPdexp(double* out, double* a, int n)
+{
+    #pragma omp parallel for schedule(static)
+    for (size_t i=0; i<n; i++) {
+        out[i] = exp(a[i]);
+    }
+}
+
+void NPzexp(double complex* out, double complex* a, int n)
+{
+    #pragma omp parallel for schedule(static)
+    for (size_t i=0; i<n; i++) {
+        out[i] = cexp(a[i]);
+    }
 }

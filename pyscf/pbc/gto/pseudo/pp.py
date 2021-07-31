@@ -69,7 +69,8 @@ def get_gth_vlocG(cell, Gv):
     vlocG = pp_int.get_gth_vlocG_part1(cell, Gv)
 
     # Add the C1, C2, C3, C4 contributions
-    G2 = np.einsum('ix,ix->i', Gv, Gv)
+    #G2 = np.einsum('ix,ix->i', Gv, Gv)
+    G2 = lib.multiply_sum(Gv, Gv, axis=1)
     for ia in range(cell.natm):
         symb = cell.atom_symbol(ia)
         if symb not in cell._pseudo:
@@ -89,7 +90,7 @@ def get_gth_vlocG(cell, Gv):
         if nexp >= 4:
             cfacs += cexp[3] * (105 - 105*G2_red + 21*G2_red**2 - G2_red**3)
 
-        vlocG[ia,:] -= (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G2_red) * cfacs
+        vlocG[ia,:] -= (2*np.pi)**(3/2.)*rloc**3*lib.exp(-0.5*G2_red) * cfacs
 
     return vlocG
 
