@@ -33,6 +33,7 @@ ALIAS = {
     'gthpbe'     : 'gth-pbe.dat'    ,
     'gthpbesol'  : 'gth-pbesol.dat' ,
     'gthhf'      : 'gth-hf.dat'     ,
+    'gth2hf'     : 'gth2-hf.dat'    ,
 }
 
 def parse(string):
@@ -67,7 +68,7 @@ def load(pseudo_name, symb):
             Atomic symbol, Special characters will be removed.
 
     Examples:
-        Load GTH-BLYP pseudopotential of carbon 
+        Load GTH-BLYP pseudopotential of carbon
 
     >>> cell = gto.Cell()
     >>> cell.pseudo = {'C': load('gth-blyp', 'C')}
