@@ -64,6 +64,18 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     nvir = nmo - nocc
     nkpts = mp.nkpts
 
+    with_df_ints = mp.with_df_ints and isinstance(mp._scf.with_df, df.GDF)
+
+    mem_avail = mp.max_memory - lib.current_memory()[0]
+    mem_usage = (nkpts * (nocc * nvir)**2) * 16 / 1e6
+    if with_df_ints:
+        naux = mp._scf.with_df.auxcell.nao_nr()
+        mem_usage += (nkpts**2 * naux * nocc * nvir) * 16 / 1e6
+    if with_t2:
+        mem_usage += (nkpts**3 * (nocc * nvir)**2) * 16 / 1e6
+    if mem_usage > mem_avail:
+        raise MemoryError('Insufficient memory! MP2 memory usage {:.2f} MB (currently available {:.2f} MB)'.format(mem_usage, mem_avail))
+
     eia = np.zeros((nocc,nvir))
     eijab = np.zeros((nocc,nocc,nvir,nvir))
 
@@ -82,8 +94,6 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
         t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=complex)
     else:
         t2 = None
-
-    with_df_ints = mp.with_df_ints and isinstance(mp._scf.with_df, df.GDF)
 
     # Build 3-index DF tensor Lov
     if with_df_ints:
