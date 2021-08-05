@@ -74,7 +74,8 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     if with_t2:
         mem_usage += (nkpts**3 * (nocc * nvir)**2) * 16 / 1e6
     if mem_usage > mem_avail:
-        raise MemoryError('Insufficient memory! MP2 memory usage {:.2f} MB (currently available {:.2f} MB)'.format(mem_usage, mem_avail))
+        raise MemoryError('Insufficient memory! MP2 memory usage %d MB (currently available %d MB)'
+                          % (mem_usage, mem_avail))
 
     eia = np.zeros((nocc,nvir))
     eijab = np.zeros((nocc,nocc,nvir,nvir))
