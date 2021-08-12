@@ -53,10 +53,7 @@ def binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
         if first_time: first_time = False
         xlo *= 0.5
         if count > MAX_RESCALE:
-            if ERR_HANDLE == "raise":
-                raise RuntimeError
-            else:
-                return xlo
+            return xlo
         count += 1
     if xlo_rescaled and xlo*2 < xhi:
         xhi = xlo * 2
@@ -69,7 +66,7 @@ def binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
                 break
             xhi *= 1.5
             if count > MAX_RESCALE:
-                raise RuntimeError
+                raise RuntimeError("Failed to find a rhs bound.")
             count += 1
         if xhi_rescaled and xhi/1.5 > xlo:
             xlo = xhi / 1.5
@@ -101,7 +98,7 @@ def get_refuniq_map(cell):
     uniq_atms = []
     for i in range(cell.natm):
         atm = cell.atom_symbol(i)
-        if not atm in uniq_atms:
+        if atm not in uniq_atms:
             uniq_atms.append(atm)
         if len(uniq_atms) == n:
             break
@@ -180,7 +177,6 @@ def get_Lsmin(cell, Rcuts, uniq_atms, dimension=None):
         atm_to_keep.append(atm1_ids[mask_])
     atm_to_keep = np.sort(np.concatenate(atm_to_keep))
 
-    atms_sup = np.concatenate([atms_ref, atms_all[atm_to_keep]])
     Rs_sup = np.vstack([Rs_ref, Rs_all[atm_to_keep]])
 # atom posvec to (uniq) cell posvec
     latvec = cell.lattice_vectors()
@@ -203,7 +199,7 @@ def get_multipole(l, alp):
 def get_2c2e_Rcut(bas_lst, cellvol, omega, precision, Rprec=1.,
                   lmp=True, lasympt=True,
                   eta_correct=True, R_correct=False, vol_correct=False):
-    """ Given a list of pgto by "bas_lst", determine the cutoff radii for j2c lat sum s.t. the truncation error drops below "precision". j2c is estimated as
+    r""" Given a list of pgto by "bas_lst", determine the cutoff radii for j2c lat sum s.t. the truncation error drops below "precision". j2c is estimated as
 
         j12(R) ~ C1*C2 * O1 * O2 * Gamma(l12+0.5, eta*Rc^2) /
                     (pi^0.5 * Rc^(l12+1))
@@ -403,9 +399,7 @@ def get_schwartz_dcut(bas_lst, cellvol, omega, precision, r0=None, safe=True,
         prec0 = precision * min(etas[ish,jsh],1.)
         def fcheck(R):
             mol._env[mol._atm[1,mol_gto.PTR_COORD]] = R
-            I = get_norm(
-                    fintor_sreri(mol, intor, shls_slice, omega, safe)
-                )**0.5
+            I = get_norm(fintor_sreri(mol, intor, shls_slice, omega, safe))**0.5
 # >>>>>>> debug block
             I *= fac
 # <<<<<<<
@@ -443,7 +437,7 @@ def get_bincoeff(d,e1,e2,l1,l2):
 def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
                          fac_type, Qij, Rprec=1,
                          vol_correct=False, eta_correct=True, R_correct=True):
-    """ Determine for AO shlpr (ish,jsh) separated by dij, the cutoff radius for
+    r""" Determine for AO shlpr (ish,jsh) separated by dij, the cutoff radius for
             2-norm( (ksh|v_SR(omega)|ish,jsh) ) < precision
         The estimator used here is
             ~ 0.5/pi * exp(-etaij*dij^2) * O_{k,lk} *
@@ -485,7 +479,7 @@ def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
     """
 # sanity check for estimators
     FAC_TYPE = fac_type.upper()
-    if not FAC_TYPE in [
+    if FAC_TYPE not in [
             "ISF0",  # (ss|s)
             "ISF",   # (ss|X)
             "ISFQ0", # (Q_ss|X)
@@ -631,14 +625,12 @@ def get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol,
         mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
 
     if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
-        auxmol = auxbas_lst_or_mol
+        auxmol = auxbas_lst_or_auxmol
     else:
         auxbas_lst = auxbas_lst_or_auxmol
         auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
 
     nbas = mol.nbas
-    n2 = nbas*(nbas+1)//2
-    nbasaux = auxmol.nbas
 
     ij = 0
     Rcuts = []
@@ -668,7 +660,6 @@ def get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, bas_loc, auxbas_loc):
     nbasaux = auxbas_loc[-1]
     Rcuts_ = Rcuts.reshape(-1,nbasaux)
     dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst])
-    betas = np.maximum(bas_exps[:,None],bas_exps) / (bas_exps[:,None]+bas_exps)
 
     atom_Rcuts = np.zeros((natm,natm))
     for katm in range(natm):    # aux atm
@@ -903,6 +894,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     if isinstance(auxcell_or_auxbasis, mol_gto.Mole):
         auxcell = auxcell_or_auxbasis
     else:
+        from pyscf.pbc.df.incore import make_auxcell
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # prescreening data
@@ -1076,8 +1068,8 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
-    atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
-                                     cell._atm, cell._bas, cell._env)
+            atm, bas, env = mol_gto.conc_env(cell._atm, cell._bas, cell._env,
+                                             cell._atm, cell._bas, cell._env)
     ao_loc = mol_gto.moleintor.make_loc(bas, intor)
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
     ao_loc = np.asarray(np.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),

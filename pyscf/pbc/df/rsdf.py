@@ -149,7 +149,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     if cell.dimension == 3:
         qaux = get_aux_chg(auxcell)
     else:
-        quax = np.zeros(auxcell.nao_nr())
+        qaux = np.zeros(auxcell.nao_nr())
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
@@ -253,8 +253,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     bvk_kmesh=bvk_kmesh,
                     precision=mydf.precision_R)
     t1 = log.timer_debug1('3c2e', *t1)
-
-    prescreening_data = None
 
     # recompute g0 and Gvectors for j3c
     g0 = np.pi/omega**2./cell.vol
@@ -545,8 +543,8 @@ class RSGDF(df.df.GDF):
 
     def _rsh_build(self):
         # find kmax
-        kpts = self.kpts if self.kpts_band is None else np.vstack([self.kpts,
-                                                                self.kpts_band])
+        kpts = self.kpts if self.kpts_band is None else np.vstack(
+                                                    [self.kpts, self.kpts_band])
         b = self.cell.reciprocal_vectors()
         scaled_kpts = np.linalg.solve(b.T, kpts.T).T
         scaled_kpts[scaled_kpts > 0.49999999] -= 1
