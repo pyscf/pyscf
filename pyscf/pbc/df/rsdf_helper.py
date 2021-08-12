@@ -727,7 +727,7 @@ def get_bvk_data(cell, Ls, bvk_kmesh):
 
     return Ls_sorted, bvkmesh_Ls, cell_loc_bvk
 
-""" Helper functions for determining omega/mesh and basis splitting
+""" determining omega/mesh and basis splitting
 """
 def estimate_ke_cutoff_for_omega_kpt_corrected(cell, omega, precision, kmax):
     fac = 32*np.pi**2    # Qiming
@@ -769,145 +769,6 @@ def estimate_mesh_for_omega(cell, omega, precision=None, kmax=0,
         mesh = df.df._round_off_to_odd_mesh(mesh)
 
     return ke_cutoff, mesh
-
-def _estimate_mesh_primitive(cell, precision, round2odd=True):
-    ''' Estimate the minimum mesh for the diffuse shells.
-    '''
-    if round2odd:
-        fround = lambda x: df.df._round_off_to_odd_mesh(x)
-    else:
-        fround = lambda x: x
-
-    # from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
-    # kecuts = _primitive_gto_cutoff(cell, cell.precision)[1]
-
-    from pyscf.pbc.gto.cell import _estimate_ke_cutoff
-    kecuts = [None] * cell.nbas
-    for ib in range(cell.nbas):
-        nprim = cell.bas_nprim(ib)
-        nctr = cell.bas_nctr(ib)
-        es = cell.bas_exp(ib)
-        cs = np.max(np.abs(cell.bas_ctr_coeff(ib)), axis=1)
-        l = cell.bas_angular(ib)
-        kecuts[ib] = _estimate_ke_cutoff(es, l, cs, precision=precision)
-
-    latvecs = cell.lattice_vectors()
-    meshs = [None] * cell.nbas
-    for ib in range(cell.nbas):
-        meshs[ib] = np.asarray([fround(pbctools.cutoff_to_mesh(latvecs, ke))
-                               for ke in kecuts[ib]])
-
-    return meshs
-
-def _estimate_mesh_lr(cell_fat, precision, round2odd=True):
-    ''' Estimate the minimum mesh for the diffuse shells.
-    '''
-    if round2odd:
-        fround = lambda x: df.df._round_off_to_odd_mesh(x)
-    else:
-        fround = lambda x: x
-
-    nc, nd = cell_fat._nbas_each_set
-    # from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
-    # kecuts = _primitive_gto_cutoff(cell_fat, cell_fat.precision)[1]
-    # kecut = np.max([np.max(kecuts[ib]) for ib in range(nc, cell_fat.nbas)])
-
-    from pyscf.pbc.gto.cell import _estimate_ke_cutoff
-    kecut = 0.
-    for ib in range(nc,nc+nd):
-        nprim = cell_fat.bas_nprim(ib)
-        nctr = cell_fat.bas_nctr(ib)
-        es = cell_fat.bas_exp(ib)
-        cs = np.max(np.abs(cell_fat.bas_ctr_coeff(ib)), axis=1)
-        l = cell_fat.bas_angular(ib)
-        kecut = max(kecut, np.max(_estimate_ke_cutoff(es, l, cs,
-                    precision=precision)))
-    mesh_lr = fround(pbctools.cutoff_to_mesh(cell_fat.lattice_vectors(), kecut))
-
-    return mesh_lr
-
-def _reorder_cell(cell, eta_smooth, npw_max=None, precision=None,
-                  round2odd=True, verbose=None):
-    """ Split each shell by eta_smooth or npw_max into diffuse (d) and compact (c). Then reorder them such that compact shells come first.
-
-    This function is modified from the one under the same name in pyscf/pbc/scf/rsjk.py.
-    """
-    if precision is None: precision = cell.precision
-
-    from pyscf.gto import NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF, ATOM_OF
-    log = logger.new_logger(cell, verbose)
-
-    # Split shells based on exponents
-    ao_loc = cell.ao_loc_nr()
-
-    cell_fat = copy.copy(cell)
-
-    if not npw_max is None:
-        from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
-        meshs = _estimate_mesh_primitive(cell, precision, round2odd=round2odd)
-        eta_safe = 10.
-
-    _env = cell._env.copy()
-    compact_bas = []
-    diffuse_bas = []
-    # xxx_bas_idx maps the shells in the new cell to the original cell
-    compact_bas_idx = []
-    diffuse_bas_idx = []
-
-    for ib, orig_bas in enumerate(cell._bas):
-        nprim = orig_bas[NPRIM_OF]
-        nctr = orig_bas[NCTR_OF]
-
-        pexp = orig_bas[PTR_EXP]
-        pcoeff = orig_bas[PTR_COEFF]
-        es = cell.bas_exp(ib)
-        cs = cell._libcint_ctr_coeff(ib)
-
-        if npw_max is None:
-            compact_mask = es >= eta_smooth
-            diffuse_mask = ~compact_mask
-        else:
-            npws = np.prod(meshs[ib], axis=1)
-            # The "_estimate_ke_cutoff" function sometimes fails for pGTOs with very large exponents. Here we enforce all pGTOs whose exponents are greater than eta_safe to be compact.
-            compact_mask = (npws > npw_max) | (es > eta_safe)
-            diffuse_mask = ~compact_mask
-
-        c_compact = cs[compact_mask]
-        c_diffuse = cs[diffuse_mask]
-        _env[pcoeff:pcoeff+nprim*nctr] = np.hstack([
-            c_compact.T.ravel(),
-            c_diffuse.T.ravel(),
-        ])
-        _env[pexp:pexp+nprim] = np.hstack([
-            es[compact_mask],
-            es[diffuse_mask],
-        ])
-
-        if c_compact.size > 0:
-            bas = orig_bas.copy()
-            bas[NPRIM_OF] = c_compact.shape[0]
-            bas[PTR_EXP] = pexp
-            bas[PTR_COEFF] = pcoeff
-            compact_bas.append(bas)
-            compact_bas_idx.append(ib)
-
-        if c_diffuse.size > 0:
-            bas = orig_bas.copy()
-            bas[NPRIM_OF] = c_diffuse.shape[0]
-            bas[PTR_EXP] = pexp + c_compact.shape[0]
-            bas[PTR_COEFF] = pcoeff + c_compact.size
-            diffuse_bas.append(bas)
-            diffuse_bas_idx.append(ib)
-
-    cell_fat._env = _env
-    cell_fat._bas = np.asarray(compact_bas + diffuse_bas,
-                               dtype=np.int32, order='C').reshape(-1, mol_gto.BAS_SLOTS)
-    cell_fat._bas_idx = np.asarray(compact_bas_idx + diffuse_bas_idx,
-                                   dtype=np.int32)
-    cell_fat._nbas_each_set = (len(compact_bas_idx), len(diffuse_bas_idx))
-    cell_fat._nbas_c, cell_fat._nbas_d = cell_fat._nbas_each_set
-
-    return cell_fat
 
 """ short-range j2c via screened lattice sum
 """
@@ -1011,7 +872,7 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
 
     return mat
 
-""" Helper functions for short-range j3c via real space lattice sum
+""" short-range j3c via real space lattice sum
     Modified from pyscf.pbc.df.outcore/incore
 """
 def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
