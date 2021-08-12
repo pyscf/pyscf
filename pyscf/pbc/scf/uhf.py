@@ -252,5 +252,3 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_uhf(mf, self)
         return self
-
-
