@@ -43,7 +43,9 @@ def unique(kpts):
         digits = int(-np.log10(KPT_DIFF_TOL))
         uniq_index, uniq_inverse = np.unique(
             kpts.round(digits), return_index=True, return_inverse=True, axis=0)[1:3]
-        return kpts[uniq_index], uniq_index, uniq_inverse
+        idx = uniq_index.argsort()
+        rank = idx.argsort()
+        return kpts[uniq_index[idx]], uniq_index[idx], rank[uniq_inverse]
     except TypeError:
         # Old numpy does not support unique of 2D array
         nkpts = len(kpts)
