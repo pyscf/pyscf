@@ -81,10 +81,13 @@ def conj_mapping(cell, kpts):
     minus_kpts = -scaled_kpts
     minus_kpts[minus_kpts == -.5] = .5
     uniq_m_kpts, m_index, m_inverse = unique(minus_kpts)
-    if abs(uniq_kpts - uniq_m_kpts).max() > KPT_DIFF_TOL:
+    lex_order = np.lexsort(uniq_kpts.T)
+    m_lex_order = np.lexsort(uniq_m_kpts.T)
+    if abs(uniq_kpts[lex_order] - uniq_m_kpts[m_lex_order]).max() > KPT_DIFF_TOL:
         raise KPointSymmetryError('k points not symmetric')
 
-    return index[m_inverse]
+    index[lex_order] = m_lex_order
+    return index
 
 def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
