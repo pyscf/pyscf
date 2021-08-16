@@ -1074,22 +1074,125 @@ def expm(a):
         y, buf = buf, y
     return y
 
-def exp(a):
-    # out = exp(a)
+def exp(a, out=None, **kwargs):
+    ''' 
+    Multi-threaded numpy.exp
+    '''
+    if not (a.flags.c_contiguous or a.flags.f_contiguous):
+        return numpy.exp(a, out=out, **kwargs)
+
     dtype = a.dtype
     if dtype == numpy.double:
         fn = getattr(_np_helper, "NPdexp", None)
     elif dtype == numpy.complex128:
         fn = getattr(_np_helper, "NPzexp", None)
     else:
-        raise TypeError
-    a = numpy.asarray(a, order='C')
-    out = numpy.empty_like(a, order='C')
-    assert(a.flags.c_contiguous)
-    assert(out.flags.c_contiguous)
+        return numpy.exp(a, out=out, **kwargs)
+
+    if out is None:
+        out = numpy.empty_like(a)
+    else:
+        if (out.dtype != a.dtype or 
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.exp(a, out=out, **kwargs)
+
+    if a.flags.c_contiguous:
+        a = numpy.asarray(a, order='C')
+        out = numpy.asarray(out, order='C')
+    elif a.flags.f_contiguous:
+        a = numpy.asarray(a, order='F')
+        out = numpy.asarray(out, order='F')
+
     n = a.size
     fn(out.ctypes.data_as(ctypes.c_void_p), 
        a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
+    return out
+
+def sum(a, axis=-1, dtype=None, out=None, **kwargs):
+    '''
+    Multi-threaded numpy.sum
+    '''
+    if not (a.flags.c_contiguous or a.flags.f_contiguous):
+        return numpy.sum(a, axis, dtype, out, **kwargs)
+    if dtype is None:
+        dtype = a.dtype
+    if dtype != a.dtype:
+        return numpy.sum(a, axis, dtype, out, **kwargs)
+
+    if dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdsum", None)
+    elif dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzsum", None)
+    else:
+        return numpy.sum(a, axis, dtype, out, **kwargs)
+
+    if axis == len(a.shape)-1:
+        axis = -1
+    elif axis + len(a.shape) == 0:
+        axis = 0
+
+    if axis == -1 and a.flags.c_contiguous:
+        lda = a.shape[-1]
+        a = numpy.asarray(a, order='C')
+        out_shape = tuple(a.shape[:-1])
+        if out is None:
+            out = numpy.empty(out_shape, order='C', dtype=dtype)
+        else:
+            if ((numpy.asarray(out.shape) - numpy.asarray(out_shape)).sum() != 0 or
+                (not out.flags.c_contiguous) or out.dtype != dtype):
+                return numpy.sum(a, axis, dtype, out, **kwargs)
+    elif axis == 0 and a.flags.f_contiguous:
+        lda = a.shape[0]
+        a = numpy.asarray(a, order='F')
+        out_shape = tuple(a.shape[1:])
+        if out is None:
+            out = numpy.empty(out_shape, order='F', dtype=dtype)
+        else:
+            if ((numpy.asarray(out.shape) - numpy.asarray(out_shape)).sum() != 0 or
+                (not out.flags.f_contiguous) or out.dtype != dtype):
+                return numpy.sum(a, axis, dtype, out, **kwargs)
+    else: 
+        return numpy.sum(a, axis, dtype, out, **kwargs)    
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(lda), ctypes.c_int(out.size))
+    return out
+
+def add(a, b, out=None, **kwargs):
+    if (a.shape != b.shape or a.dtype != b.dtype or 
+        not(a.flags.c_contiguous or a.flags.f_contiguous) or
+        not(b.flags.c_contiguous or b.flags.f_contiguous)):
+        return numpy.add(a, b, out, **kwargs)
+
+    if a.dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdadd", None)
+    elif a.dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzadd", None)
+    else:
+        return numpy.add(a, b, out, **kwargs)
+
+    if out is None:
+        if a.flags.c_contiguous:
+            out = numpy.empty_like(a, order='C')
+        else:
+            out = numpy.empty_like(a, order='F')
+    else:
+        if (a.shape != out.shape or 
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.add(a, b, out, **kwargs)
+
+    if a.flags.c_contiguous:
+        if not out.flags.c_contiguous:
+            return numpy.add(a, b, out, **kwargs)
+        b = numpy.asarray(b, order='C')
+    else:
+        if not out.flags.f_contiguous:
+            return numpy.add(a, b, out, **kwargs)
+        b = numpy.asarray(b, order='F')
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p), 
+       b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(out.size))
     return out
 
 def multiply_sum(a, b, axis=0):

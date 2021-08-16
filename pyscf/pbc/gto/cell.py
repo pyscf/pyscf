@@ -491,6 +491,151 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
+def bas_prim_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
+    '''
+    precision ~ g(r)
+    '''
+    l = cell.bas_angular(bas_id)
+    es = cell.bas_exp(bas_id)
+    cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
+    log_prec = np.log(precision)
+    log_cs = np.log(cs)
+    r = 5.
+    r = ((l*np.log(r) + log_cs - log_prec) / es)**.5
+    r = ((l*np.log(r) + log_cs - log_prec) / es)**.5
+    return r.max()
+
+def rcut_by_shells(cell, precision=None, r0=5.):
+    if precision is None:
+        precision = cell.precision
+
+    bas = np.asarray(cell._bas, order='C')
+    env = np.asarray(cell._env, order='C')
+    nbas = len(bas)
+    out = np.empty((nbas,), order='C', dtype=np.double)
+    func = getattr(libpbc, "rcut_by_shells", None)
+    try:
+        func(out.ctypes.data_as(ctypes.c_void_p),
+             bas.ctypes.data_as(ctypes.c_void_p),
+             env.ctypes.data_as(ctypes.c_void_p),
+             ctypes.c_int(nbas), 
+             ctypes.c_double(r0), ctypes.c_double(precision))
+    except:
+        raise RuntimeError("Failed to get rcut.")
+    return out
+
+def rcut_by_atom_types(cell, precision=None):
+    if precision is None:
+        precision = cell.precision
+    atom_types = mole.atom_types(cell._atom, cell._basis)
+    rcuts={}
+    for atom_symb, ia in atom_types.items():
+        atm_idx = ia[0]
+        rcuts[atom_symb] = []
+        for ib in range(len(cell._bas)):
+            idx = cell.bas_atom(ib)
+            if idx == atm_idx:
+                rcut = cell.bas_prim_rcut(ib, precision=precision)
+                rcuts[atom_symb].append(rcut)
+    return rcuts
+
+def rcut_by_shells_old(cell, precision=None):
+    if precision is None:
+        precision = cell.precision
+
+    if len(cell._atom) != cell._bas[-1][0]+1: 
+        # possibly a concatenated cell
+        return np.array([cell.bas_prim_rcut(ib, precision)
+                        for ib in range(cell.nbas)])
+
+    rcuts = rcut_by_atom_types(cell, precision=precision)
+
+    atom_types = mole.atom_types(cell._atom, cell._basis)
+    out = np.empty([len(cell._bas),], order='C', dtype=np.double)
+    ib = 0
+    while ib < len(cell._bas):
+        ia = cell.bas_atom(ib)
+        for symb, atm_idx in atom_types.items():
+            if ia in atm_idx:
+                out[ib:ib+len(rcuts[symb])] = np.asarray(rcuts[symb])
+                ib += len(rcuts[symb])
+                break
+    assert ib == len(cell._bas)
+    return out
+
+class NeighborPair(ctypes.Structure):
+    _fields_ = [("nimgs", ctypes.c_int),
+                ("Ls_list", ctypes.POINTER(ctypes.c_int))]
+
+class NeighborList(ctypes.Structure):
+    _fields_ = [("nish", ctypes.c_int),
+                ("njsh", ctypes.c_int),
+                ("nimgs", ctypes.c_int),
+                ("pairs", ctypes.POINTER(ctypes.POINTER(NeighborPair)))]
+
+def build_neighbor_list_for_shlpairs(cell0, cell1, Ls=None):
+    if Ls is None:
+        Ls = cell0.get_lattice_Ls()
+    Ls = np.asarray(Ls, order='C', dtype=np.double)
+    nimgs = len(Ls)
+
+    ish_atm = np.asarray(cell0._atm, order='C', dtype=np.int32)
+    ish_bas = np.asarray(cell0._bas, order='C', dtype=np.int32)
+    ish_env = np.asarray(cell0._env, order='C', dtype=np.double)
+    nish = len(ish_bas)
+    ish_rcut = np.asarray(cell0.rcut_by_shells(), order='C', dtype=np.double)
+
+    jsh_atm = np.asarray(cell1._atm, order='C', dtype=np.int32)
+    jsh_bas = np.asarray(cell1._bas, order='C', dtype=np.int32)
+    jsh_env = np.asarray(cell1._env, order='C', dtype=np.double)
+    njsh = len(jsh_bas)
+    jsh_rcut = np.asarray(cell1.rcut_by_shells(), order='C', dtype=np.double)
+
+    nl = ctypes.POINTER(NeighborList)()
+    func = getattr(libpbc, "build_neighbor_list", None)
+    try:
+        func(ctypes.byref(nl),
+             ish_atm.ctypes.data_as(ctypes.c_void_p),
+             ish_bas.ctypes.data_as(ctypes.c_void_p),
+             ish_env.ctypes.data_as(ctypes.c_void_p),
+             ish_rcut.ctypes.data_as(ctypes.c_void_p),
+             jsh_atm.ctypes.data_as(ctypes.c_void_p),
+             jsh_bas.ctypes.data_as(ctypes.c_void_p),
+             jsh_env.ctypes.data_as(ctypes.c_void_p),
+             jsh_rcut.ctypes.data_as(ctypes.c_void_p),
+             ctypes.c_int(nish), ctypes.c_int(njsh),
+             Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs))
+    except:
+        raise RuntimeError("Failed to get neighbor list.")
+    return nl
+
+def free_neighbor_list(nl):
+    func = getattr(libpbc, "del_neighbor_list", None)
+    try:
+        func(ctypes.byref(nl))
+    except:
+        raise RuntimeError("Failed to free neighbor list.")
+
+def neighbor_list_to_ndarray(cell0, cell1, nl):
+    nish = cell0.nbas
+    njsh = cell1.nbas
+    Ls_list = []
+    Ls_idx = []
+    nLtot = 0
+    for i in range(nish):
+        for j in range(njsh):
+            pair = nl.contents.pairs[i*njsh+j]
+            nL = pair.contents.nimgs
+            nLtot += nL
+            for iL in range(nL):
+                idx = pair.contents.Ls_list[iL]
+                Ls_list.append(idx)
+            if nL > 0:
+                Ls_idx.extend([nLtot-nL, nLtot])
+            else:
+                Ls_idx.extend([-1,-1])
+    return np.asarray(Ls_list), np.asarray(Ls_idx)
+
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation based on cubic lattice'''
     # This function estimates the energy cutoff for (ii|ii) type of electron
@@ -1608,6 +1753,9 @@ class Cell(mole.Mole):
         return self
 
     bas_rcut = bas_rcut
+    bas_prim_rcut = bas_prim_rcut
+    rcut_by_atom_types = rcut_by_atom_types
+    rcut_by_shells = rcut_by_shells
 
     get_lattice_Ls = pbctools.get_lattice_Ls
 

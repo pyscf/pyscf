@@ -118,8 +118,16 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.info(mf, 'Set gradient conv threshold to %g', conv_tol_grad)
 
     mol = mf.mol
+    s1e = mf.get_ovlp(mol)
+    if not hasattr(mol, 'rcut'):
+        cond = lib.cond(s1e, p=1)
+        logger.debug(mf, 'cond(S) = %s', cond)
+        if numpy.max(cond)*1e-17 > conv_tol:
+            logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+
     if dm0 is None:
-        dm = mf.get_init_guess(mol, mf.init_guess)
+        dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
     else:
         dm = dm0
 
@@ -130,13 +138,6 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
     scf_conv = False
     mo_energy = mo_coeff = mo_occ = None
-
-    s1e = mf.get_ovlp(mol)
-    cond = lib.cond(s1e)
-    logger.debug(mf, 'cond(S) = %s', cond)
-    if numpy.max(cond)*1e-17 > conv_tol:
-        logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                    'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     # Skip SCF iterations. Compute only the total energy of the initial density
     if mf.max_cycle <= 0:
@@ -596,14 +597,14 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm[0] + dm[1]
 
 
-def get_init_guess(mol, key='minao'):
+def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
             One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
-    return RHF(mol).get_init_guess(mol, key)
+    return RHF(mol).get_init_guess(mol, key, **kwargs)
 
 
 # eigenvalue of d is 1
@@ -1562,7 +1563,7 @@ class SCF(lib.StreamObject):
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
-    def get_init_guess(self, mol=None, key='minao'):
+    def get_init_guess(self, mol=None, key='minao', **kwargs):
         if not isinstance(key, (str, unicode)):
             return key
 

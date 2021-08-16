@@ -554,7 +554,7 @@ class KSCF(pbchf.SCF):
             self.check_sanity()
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None:
             cell = self.cell
         dm_kpts = None
@@ -579,7 +579,9 @@ class KSCF(pbchf.SCF):
         if dm_kpts is None:
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
-        ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
+        ne = np.einsum('kij,kji->', dm_kpts, s1e).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relate to the charged system.
         nkpts = len(self.kpts)

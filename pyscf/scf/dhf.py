@@ -264,14 +264,14 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     return dm
 
 
-def get_init_guess(mol, key='minao'):
+def get_init_guess(mol, key='minao', **kwargs):
     '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
             One of 'minao', 'atom', 'huckel', 'hcore', '1e', 'chkfile'.
     '''
-    return UHF(mol).get_init_guess(mol, key)
+    return UHF(mol).get_init_guess(mol, key, **kwargs)
 
 def time_reversal_matrix(mol, mat):
     ''' T(A_ij) = A[T(i),T(j)]^*

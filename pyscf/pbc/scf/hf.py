@@ -51,7 +51,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
-    cond = np.max(lib.cond(s))
+    cond = np.max(lib.cond(s, p=1))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
@@ -717,10 +717,10 @@ class SCF(mol_hf.SCF):
             makov_payne_correction(self)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm)
+        dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):
@@ -838,15 +838,19 @@ def _format_jks(vj, dm, kpts_band):
         vj = vj[0]
     return vj
 
-def normalize_dm_(mf, dm):
+def normalize_dm_(mf, dm, s1e=None):
     '''
     Scale density matrix to make it produce the correct number of electrons.
     '''
     cell = mf.cell
+    if s1e is None:
+        s1e = mf.get_ovlp(cell)
     if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        ne = np.einsum('ij,ji->', dm, mf.get_ovlp(cell)).real
+        ne = lib.einsum('ij,ji->', dm, s1e).real
     else:
-        ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
+        ne = 0
+        for dm_i in dm:
+            ne += lib.einsum('ij,ji->', dm_i, s1e).real
     if abs(ne - cell.nelectron).sum() > 1e-7:
         logger.debug(mf, 'Big error detected in the electron number '
                      'of initial guess density matrix (Ne/cell = %g)!\n'

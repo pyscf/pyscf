@@ -51,12 +51,16 @@ INIT_MESH_ORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_orth', (12,12,
 INIT_MESH_NONORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_nonorth', (32,32,32))
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 1.3)
 TASKS_TYPE = getattr(__config__, 'pbc_dft_multigrid_tasks_type', 'ke_cut') # 'rcut'
+NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', None)
 
 # RHOG_HIGH_ORDER=True will compute the high order derivatives of electron
 # density in real space and FT to reciprocal space.  Set RHOG_HIGH_ORDER=False
 # to approximate the density derivatives in reciprocal space (without
 # evaluating the high order derivatives in real space).
 RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
+
+
+PP_WITH_ERF = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
@@ -325,6 +329,40 @@ def get_nuc(mydf, kpts=None):
     return numpy.asarray(vne)
 
 def get_pp(mydf, kpts=None, max_memory=2000):
+    if not PP_WITH_ERF:
+        return _get_pp_without_erf(mydf, kpts, max_memory)
+    else:
+        return _get_pp_with_erf(mydf, kpts, max_memory)
+
+def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
+    '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    '''
+    from pyscf import gto
+    import time
+    cell = mydf.cell
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+
+    mesh = mydf.mesh
+    Gv = cell.get_Gv(mesh)
+    mydf.vpplocG_part1 = pseudo.pp_int.get_pp_loc_part1_gs(cell, Gv)
+    #vpp1 = _get_j_pass2(mydf, vpplocG_part1, kpts_lst)[0]
+    vpp = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+
+    for k, kpt in enumerate(kpts_lst):
+        vppnl = get_pp_nl(cell, kpt)
+        if gamma_point(kpt):
+            vpp[k] = vpp[k].real + vppnl.real #+ vpp1[k].real
+        else:
+            vpp[k] += vppnl #+ vpp1[k]
+
+    if kpts is None or numpy.shape(kpts) == (3,):
+        vpp = vpp[0]
+    return numpy.asarray(vpp)
+
+def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     from pyscf import gto
@@ -345,14 +383,18 @@ def get_pp(mydf, kpts=None, max_memory=2000):
 
     for ig0 in range(0, ngrids, blksize):
         ig1 = min(ngrids, ig0+blksize)
-        vpplocG_batch = pseudo.get_vlocG(cell, Gv[ig0:ig1])
+        #vpplocG_batch = pseudo.get_vlocG(cell, Gv[ig0:ig1])
+        vpplocG_batch = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv[ig0:ig1])
         SI = cell.get_SI(Gv[ig0:ig1])
         #vpplocG[ig0:ig1] += -numpy.einsum('ij,ij->j', SI, vpplocG_batch)
         vpplocG[ig0:ig1] += -lib.multiply_sum(SI, vpplocG_batch, axis=0)
 
     # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
+    #vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
     vpp = _get_j_pass2(mydf, vpplocG, kpts_lst)[0]
+    vpp2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+    for k, kpt in enumerate(kpts_lst):
+        vpp[k] += vpp2[k]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -990,10 +1032,19 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ngrids = numpy.prod(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
+
+    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+        for i in range(nset):
+            vG[i] += mydf.vpplocG_part1 * 2
+
     ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
+
+    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+        for i in range(nset):
+            vG[i] -= mydf.vpplocG_part1
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -1650,6 +1701,15 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         ke1 *= KE_RATIO
         ke_delimeter.append(ke1)
 
+    if NGRIDS:
+        ke1 = cell.ke_cutoff
+        ke_delimeter = [ke1,]
+        for i in range(NGRIDS-1):
+            ke1 /= KE_RATIO
+            ke_delimeter.append(ke1)
+        ke_delimeter.append(0)
+        ke_delimeter.reverse()
+
     tasks = []
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
@@ -1733,7 +1793,8 @@ class MultiGridFFTDF(fft.FFTDF):
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         fft.FFTDF.__init__(self, cell, kpts)
         self.tasks = None
-        self._keys = self._keys.union(['tasks'])
+        self.vpplocG_part1 = None
+        self._keys = self._keys.union(['tasks','vpplocG_part1'])
 
     def build(self):
         self.tasks = multi_grids_tasks(self.cell, self.mesh, self.verbose)

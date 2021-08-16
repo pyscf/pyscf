@@ -219,10 +219,10 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
+        dm = pbchf.normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):

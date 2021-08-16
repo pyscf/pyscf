@@ -13,6 +13,7 @@
     limitations under the License.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include "np_helper/np_helper.h"
 #include "config.h"
@@ -104,5 +105,70 @@ void NPzexp(double complex* out, double complex* a, int n)
     #pragma omp parallel for schedule(static)
     for (size_t i=0; i<n; i++) {
         out[i] = cexp(a[i]);
+    }
+}
+
+void NPdsum(double* out, double* a, int lda, int n)
+{
+    size_t nrow = (size_t) n;
+    size_t ncol = (size_t) lda;
+
+#pragma omp parallel
+{
+    size_t i, j;
+    double *aa;
+    if (ncol < 4) {
+        #pragma omp parallel for schedule(static)
+        for (i=0; i<n; i++) {
+            out[i] = 0;
+            aa = a + i*ncol;
+            for (j=0; j<ncol; j++) {
+                out[i] += aa[j];
+            }
+        }
+    }
+    else {
+        #pragma omp for schedule(static)
+        for (i=0; i<nrow; i++) {
+            out[i] = 0;
+            aa = a + i*ncol;
+            for (j=0; j<ncol-3; j+=4) {
+                out[i] += aa[j];
+                out[i] += aa[j+1];
+                out[i] += aa[j+2];
+                out[i] += aa[j+3];
+            }
+            for (j=j; j<ncol; j++) {
+                out[i] += aa[j];
+            }
+        }
+    }
+}
+}
+
+void NPzsum(double complex* out, double complex* a, int lda, int n)
+{
+    #pragma omp parallel for schedule(static)
+    for (size_t i=0; i<n; i++) {
+        out[i] = 0;
+        for (size_t j=0; j<lda; j++) {
+            out[i] += a[i*lda+j];
+        }
+    }
+}
+
+void NPdadd(double* out, double* a, double* b, int n)
+{
+    #pragma omp parallel for schedule(static)
+    for (size_t i=0; i<n; i++) {
+        out[i] = a[i] + b[i];
+    }
+}
+
+void NPzadd(double complex* out, double complex* a, double complex* b, int n)
+{
+    #pragma omp parallel for schedule(static)
+    for (size_t i=0; i<n; i++) {
+        out[i] = a[i] + b[i];
     }
 }

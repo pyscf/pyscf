@@ -127,8 +127,8 @@ def _break_dm_spin_symm(mol, dm):
             dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
     return dma, dmb
 
-def get_init_guess(mol, key='minao'):
-    return UHF(mol).get_init_guess(mol, key)
+def get_init_guess(mol, key='minao', **kwargs):
+    return UHF(mol).get_init_guess(mol, key, **kwargs)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix

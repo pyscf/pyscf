@@ -27,8 +27,12 @@ import ctypes
 import copy
 import numpy
 import scipy.special
+from pyscf import __config__
 from pyscf import lib
 from pyscf import gto
+from pyscf.pbc.lib.kpts_helper import gamma_point
+
+EPS_PPL = getattr(__config__, "pbc_gto_pseudo_eps_ppl", 1e-2)
 
 libpbc = lib.load_library('libpbc')
 
@@ -37,13 +41,53 @@ def get_pp_loc_part1(cell, kpts=None):
     '''
     raise NotImplementedError
 
+
+def get_pp_loc_part1_gs(cell, Gv):
+    from pyscf.pbc import tools
+    coulG = tools.get_coulG(cell, Gv=Gv)
+    G2 = numpy.einsum('ix,ix->i', Gv, Gv)
+    G0idx = numpy.where(G2==0)[0]
+    ngrid = len(G2)
+    Gv = numpy.asarray(Gv, order='C', dtype=numpy.double)
+    coulG = numpy.asarray(coulG, order='C', dtype=numpy.double)
+    G2 = numpy.asarray(G2, order='C', dtype=numpy.double)
+ 
+    coords = cell.atom_coords()
+    coords = numpy.asarray(coords, order='C', dtype=numpy.double)
+    Z = numpy.empty([cell.natm,], order='C', dtype=numpy.double)
+    rloc = numpy.empty([cell.natm,], order='C', dtype=numpy.double)
+    for ia in range(cell.natm):
+        Z[ia] = cell.atom_charge(ia)
+        symb = cell.atom_symbol(ia)
+        if symb in cell._pseudo:
+            rloc[ia] = cell._pseudo[symb][1]
+        else:
+            rloc[ia] = -999
+
+    out = numpy.empty((ngrid,), order='C', dtype=numpy.complex128)
+    fn = getattr(libpbc, "pp_loc_part1_gs", None)
+    try:
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           coulG.ctypes.data_as(ctypes.c_void_p),
+           Gv.ctypes.data_as(ctypes.c_void_p),
+           G2.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(G0idx), ctypes.c_int(ngrid),
+           Z.ctypes.data_as(ctypes.c_void_p),
+           coords.ctypes.data_as(ctypes.c_void_p),
+           rloc.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(cell.natm))
+    except:
+        raise RuntimeError("Failed to get vlocG part1.")
+    return out
+
+
 def get_gth_vlocG_part1(cell, Gv):
     '''PRB, 58, 3641 Eq (5) first term
     '''
     from pyscf.pbc import tools
     coulG = tools.get_coulG(cell, Gv=Gv)
-    #G2 = numpy.einsum('ix,ix->i', Gv, Gv)
-    G2 = lib.multiply_sum(Gv, Gv, axis=1)
+    G2 = numpy.einsum('ix,ix->i', Gv, Gv)
+    #G2 = lib.multiply_sum(Gv, Gv, axis=1)
     G0idx = numpy.where(G2==0)[0]
 
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -118,12 +162,15 @@ def get_pp_loc_part2(cell, kpts=None):
               'int3c1e_r4_origk', 'int3c1e_r6_origk')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
-    for cn in range(1, 5):
-        fakecell = fake_cell_vloc(cell, cn)
-        if fakecell.nbas > 0:
-            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
-                              kptij_lst=kptij_lst)
-            buf += numpy.einsum('...i->...', v)
+    if gamma_point(kpts_lst):
+        buf = get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst)
+    else:
+        for cn in range(1, 5):
+            fakecell = fake_cell_vloc(cell, cn)
+            if fakecell.nbas > 0:
+                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
+                                  kptij_lst=kptij_lst)
+                buf += numpy.einsum('...i->...', v)
 
     if isinstance(buf, int):
         if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
@@ -145,6 +192,113 @@ def get_pp_loc_part2(cell, kpts=None):
     return vpploc
 
 
+def get_pp_loc_part2_gamma(cell, intors, kptij_lst):
+    from pyscf.pbc.df import incore
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
+    Ls = cell.get_lattice_Ls()
+    max_memory = cell.max_memory - lib.current_memory()[0]
+    nao_pair = cell.nao * (cell.nao + 1) // 2
+    blksize = max(1, int(max_memory*.95*1e6 / (nao_pair*8))-2)
+    count = 0
+    buf = None
+    for cn in range(1, 5):
+        fakecell = fake_cell_vloc(cell, cn)
+        if fakecell.nbas > 0:
+            neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
+            for ib0 in range(0, fakecell.nbas, blksize):
+                ib1 = min(ib0 + blksize, fakecell.nbas)
+                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
+                                  kptij_lst=kptij_lst,
+                                  shls_slice=(0, cell.nbas, 0, cell.nbas, ib0, ib1),
+                                  neighbor_list=neighbor_list)
+                if count == 0:
+                    buf = lib.sum(v, axis=-1)
+                else:
+                    buf = lib.add(buf, lib.sum(v, axis=-1), out=buf)
+                v = None
+                count += 1
+            free_neighbor_list(neighbor_list)
+    return buf
+
+
+def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst):
+    from pyscf.pbc.df import incore
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
+    Ls = cell.get_lattice_Ls()
+    count = 0
+    buf = None
+    for cn in range(1, 5):
+        fakecell = fake_cell_vloc(cell, cn)
+        if fakecell.nbas > 0:
+            neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
+            v = incore.aux_e2_sum_auxbas(cell, fakecell, intors[cn], aosym='s2', comp=1,
+                                         kptij_lst=kptij_lst, neighbor_list=neighbor_list)
+            if count == 0:
+                buf = v
+            else:
+                buf = lib.add(buf, v, out=buf)
+            v = None
+            count += 1
+            free_neighbor_list(neighbor_list)
+    return buf
+
+
+def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts_lst):
+    # XXX only works for Gamma point
+    offset = [0] * 3
+    hl_table = numpy.empty((len(hl_blocks),6), order='C', dtype=numpy.int32)
+    hl_data = []
+    ptr = 0
+    for ib, hl in enumerate(hl_blocks):
+        hl_dim = hl.shape[0]
+        hl_table[ib,0], hl_table[ib,1] = hl_dim, ptr
+        ptr += hl_dim**2
+        hl_data.extend(list(hl.ravel()))
+        l = fakecell.bas_angular(ib)
+        nd = 2 * l + 1
+        hl_table[ib,2] = nd
+        for i in range(hl_dim):
+            p0 = offset[i]
+            hl_table[ib, i+3] = offset[i]
+            offset[i] += nd
+    hl_data = numpy.asarray(hl_data, order='C', dtype=numpy.double)
+    ppnl = []
+    nao = cell.nao_nr()
+    for k, kpt in enumerate(kpts_lst):
+        ptr_ppnl_half0 = lib.c_null_ptr()
+        ptr_ppnl_half1 = lib.c_null_ptr()
+        ptr_ppnl_half2 = lib.c_null_ptr()
+        if len(ppnl_half[0]) > 0:
+            ppnl_half0 = ppnl_half[0][k].real
+            ppnl_half0 = numpy.asarray(ppnl_half0, order='C', dtype=numpy.double)
+            ptr_ppnl_half0 = ppnl_half0.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[1]) > 0:
+            ppnl_half1 = ppnl_half[1][k].real
+            ppnl_half1 = numpy.asarray(ppnl_half1, order='C', dtype=numpy.double)
+            ptr_ppnl_half1 = ppnl_half1.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[2]) > 0:
+            ppnl_half2 = ppnl_half[2][k].real
+            ppnl_half2 = numpy.asarray(ppnl_half2, order='C', dtype=numpy.double)
+            ptr_ppnl_half2 = ppnl_half2.ctypes.data_as(ctypes.c_void_p)
+
+        ppnl_k = numpy.empty((nao,nao), order='C', dtype=numpy.double)
+        fn = getattr(libpbc, "contract_ppnl", None)
+        try:
+            fn(ppnl_k.ctypes.data_as(ctypes.c_void_p), 
+               ptr_ppnl_half0, ptr_ppnl_half1, ptr_ppnl_half2, 
+               hl_table.ctypes.data_as(ctypes.c_void_p),
+               hl_data.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(len(hl_blocks)),
+               ctypes.c_int(nao))
+        except:
+            raise RuntimeError("Failed to contract ppnl.")
+    ppnl.append(ppnl_k)
+
+    if len(kpts_lst) == 1:
+        ppnl = ppnl[0]
+    return ppnl
+
+
 def get_pp_nl(cell, kpts=None):
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -155,6 +309,10 @@ def get_pp_nl(cell, kpts=None):
     fakecell, hl_blocks = fake_cell_vnl(cell)
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
     nao = cell.nao_nr()
+
+    if gamma_point(kpts_lst):
+        return _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts_lst)
+
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
     # We set this equal to zeros in case hl_blocks loop is skipped
@@ -227,6 +385,7 @@ def fake_cell_vloc(cell, cn=0):
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
     fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
+    fakecell.precision = EPS_PPL
     return fakecell
 
 # sqrt(Gamma(l+1.5)/Gamma(l+2i+1.5))

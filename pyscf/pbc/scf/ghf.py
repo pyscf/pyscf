@@ -108,10 +108,10 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
         '''
         raise NotImplementedError
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_ghf.GHF.get_init_guess(self, cell, key)
-        dm = pbchf.normalize_dm_(self, dm)
+        dm = pbchf.normalize_dm_(self, dm, s1e)
         return dm
 
     def convert_from_(self, mf):

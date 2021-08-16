@@ -301,7 +301,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
 #?            dm_kpts = lib.asarray([dm_kpts*.5,]*2)
 #?        return dm_kpts
 #?
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None:
             cell = self.cell
         dm_kpts = None
@@ -328,7 +328,9 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
             # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
             dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
 
-        ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
+        ne = np.einsum('xkij,kji->', dm_kpts, s1e).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relates to the charged system.
         nkpts = len(self.kpts)
