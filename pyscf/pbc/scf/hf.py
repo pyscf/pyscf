@@ -51,17 +51,19 @@ def get_ovlp(cell, kpt=np.zeros(3)):
 # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
-    cond = np.max(lib.cond(s, p=1))
-    if cond * cell.precision > 1e2:
-        prec = 1e2 / cond
-        rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
-        if cell.rcut < rmin:
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
-                        'Integral accuracy may be not enough.\n      '
-                        'You can adjust  cell.precision  or  cell.rcut  to '
-                        'improve accuracy.  Recommended values are\n      '
-                        'cell.precision = %.2g  or smaller.\n      '
-                        'cell.rcut = %.4g  or larger.', prec, rmin)
+    #skip cond for big system
+    if cell.verbose >= logger.DEBUG and cell.nao < 5000:
+        cond = np.max(lib.cond(s, p=1))
+        if cond * cell.precision > 1e2:
+            prec = 1e2 / cond
+            rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
+            if cell.rcut < rmin:
+                logger.warn(cell, 'Singularity detected in overlap matrix.  '
+                            'Integral accuracy may be not enough.\n      '
+                            'You can adjust  cell.precision  or  cell.rcut  to '
+                            'improve accuracy.  Recommended values are\n      '
+                            'cell.precision = %.2g  or smaller.\n      '
+                            'cell.rcut = %.4g  or larger.', prec, rmin)
     return s
 
 
@@ -720,7 +722,9 @@ class SCF(mol_hf.SCF):
     def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
-        dm = normalize_dm_(self, dm, s1e)
+        #atom guess should have the correct electron number
+        if key != 'atom':
+            dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):

@@ -22,7 +22,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.lib import param
 from pyscf.data import elements
-from pyscf.scf import hf, rohf
+from pyscf.scf import hf, rohf, atom_hf_pp
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
@@ -51,7 +51,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
         atm._ecpbas[:,0] = 0
         if element in mol._pseudo:
             atm._pseudo = {element: mol._pseudo.get(element)}
-            raise NotImplementedError
+            #raise NotImplementedError
         atm.spin = atm.nelectron % 2
 
         nao = atm.nao
@@ -60,6 +60,12 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
             mo_occ = mo_energy = numpy.zeros(nao)
             mo_coeff = numpy.zeros((nao,nao))
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
+        elif atm._pseudo:
+            atm.a = None
+            atm_hf = atom_hf_pp.AtomSCFPP(atm)
+            atm_hf.kernel()
+            atm_scf_result[element] = (atm_hf.e_tot, atm_hf.mo_energy,
+                                       atm_hf.mo_coeff, atm_hf.mo_occ)
         else:
             if atm.nelectron == 1:
                 atm_hf = AtomHF1e(atm)

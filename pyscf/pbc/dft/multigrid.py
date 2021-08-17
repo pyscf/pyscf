@@ -350,13 +350,13 @@ def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
     mydf.vpplocG_part1 = pseudo.pp_int.get_pp_loc_part1_gs(cell, Gv)
     #vpp1 = _get_j_pass2(mydf, vpplocG_part1, kpts_lst)[0]
     vpp = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
+    vppnl = get_pp_nl(cell, kpts_lst)
 
     for k, kpt in enumerate(kpts_lst):
-        vppnl = get_pp_nl(cell, kpt)
         if gamma_point(kpt):
-            vpp[k] = vpp[k].real + vppnl.real #+ vpp1[k].real
+            vpp[k] = vpp[k].real + vppnl[k].real #+ vpp1[k].real
         else:
-            vpp[k] += vppnl #+ vpp1[k]
+            vpp[k] += vppnl[k] #+ vpp1[k]
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]

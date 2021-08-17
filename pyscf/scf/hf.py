@@ -120,11 +120,12 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mol = mf.mol
     s1e = mf.get_ovlp(mol)
     if not hasattr(mol, 'rcut'):
-        cond = lib.cond(s1e, p=1)
-        logger.debug(mf, 'cond(S) = %s', cond)
-        if numpy.max(cond)*1e-17 > conv_tol:
-            logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
-                        'SCF may be inaccurate and hard to converge.', numpy.max(cond))
+        if mf.verbose >= logger.DEBUG and mol.nao < 5000:
+            cond = lib.cond(s1e, p=1)
+            logger.debug(mf, 'cond(S) = %s', cond)
+            if numpy.max(cond)*1e-17 > conv_tol:
+                logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
+                            'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
     if dm0 is None:
         dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
@@ -481,7 +482,11 @@ def init_guess_by_atom(mol):
 
         if symb in atm_scf:
             e_hf, e, c, occ = atm_scf[symb]
-            dm = numpy.dot(c*occ, c.conj().T)
+            if occ.ndim == 2:
+                dm = numpy.dot(c[0]*occ[0], c[0].conj().T)
+                dm += numpy.dot(c[1]*occ[1], c[1].conj().T)
+            else:
+                dm = numpy.dot(c*occ, c.conj().T)
         else:  # symb's basis is not specified in the input
             nao_atm = aoslice[ia,3] - aoslice[ia,2]
             dm = numpy.zeros((nao_atm, nao_atm))

@@ -243,8 +243,13 @@ def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst):
     return buf
 
 
-def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts_lst):
+def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
     # XXX only works for Gamma point
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+
     offset = [0] * 3
     hl_table = numpy.empty((len(hl_blocks),6), order='C', dtype=numpy.int32)
     hl_data = []
@@ -292,9 +297,9 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts_lst):
                ctypes.c_int(nao))
         except:
             raise RuntimeError("Failed to contract ppnl.")
-    ppnl.append(ppnl_k)
+        ppnl.append(ppnl_k)
 
-    if len(kpts_lst) == 1:
+    if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
     return ppnl
 
@@ -311,7 +316,7 @@ def get_pp_nl(cell, kpts=None):
     nao = cell.nao_nr()
 
     if gamma_point(kpts_lst):
-        return _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts_lst)
+        return _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts)
 
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
