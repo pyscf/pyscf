@@ -20,8 +20,10 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
+from pyscf import dft
 from pyscf.sgx import sgx
 from pyscf.sgx import sgx_jk
+import os
 
 class KnownValues(unittest.TestCase):
     def test_sgx_jk(self):
@@ -99,6 +101,36 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+
+
+class PJunctionScreening(unittest.TestCase):
+
+    @unittest.skip("computationally expensive test")
+    def test_pjs(self):
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        fname = os.path.join(cwd, 'a12.xyz')
+        mol = gto.M(atom=fname, basis='sto-3g')
+
+        mf = dft.RKS(mol)
+        mf.xc = 'PBE'
+        mf.kernel()
+        dm = mf.make_rdm1()
+
+        mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
+        mf.with_df.dfj = True
+        mf.build()
+        en0 = mf.energy_tot(dm=dm)
+        en0scf = mf.kernel()
+
+        # Turn on P-junction screening. dfj must also be true.
+        mf.with_df.pjs = True
+        mf.direct_scf_tol = 1e-10
+        mf.build()
+        en1 = mf.energy_tot(dm=dm)
+        en1scf = mf.kernel()
+
+        self.assertAlmostEqual(abs(en1-en0), 0, 10)
+        self.assertAlmostEqual(abs(en1scf-en0scf), 0, 10)
 
 
 if __name__ == "__main__":
