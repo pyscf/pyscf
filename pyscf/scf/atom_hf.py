@@ -62,6 +62,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
         elif atm._pseudo:
             atm.a = None
+            atm.verbose= 0 
             atm_hf = atom_hf_pp.AtomSCFPP(atm)
             atm_hf.kernel()
             atm_scf_result[element] = (atm_hf.e_tot, atm_hf.mo_energy,

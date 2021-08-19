@@ -500,7 +500,7 @@ def init_guess_by_atom(mol):
         dm = reduce(numpy.dot, (cart2sph, dm, cart2sph.T))
 
     for k, v in atm_scf.items():
-        logger.debug1(mol, 'Atom %s, E = %.12g', k, v[0])
+        logger.debug(mol, 'Atom %s, E = %.12g', k, v[0])
     return dm
 
 def init_guess_by_huckel(mol):
