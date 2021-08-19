@@ -101,10 +101,41 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (1725,3))
+        self.assertEqual(Ls.shape, (599,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
+
+    def test_get_lattice_Ls1(self):
+        cell = pbcgto.Cell()
+        cell.verbose = 0
+        cell.a = '''
+-10.11124892   0.          10.11124892
+  0.          10.11124892  10.11124892
+-10.11124892  10.11124892   0.        '''
+        cell.atom = '''
+C   0.          0.          0.
+C  13.48166522  6.74083261  6.74083261
+C  15.16687337  8.42604076  8.42604076
+C  13.48166522 10.11124892 10.11124892
+C  15.16687337 11.79645707 11.79645707
+C  10.11124892 13.48166522 10.11124892
+C  11.79645707 15.16687337 11.79645707
+C  13.48166522 13.48166522 13.48166522
+C  15.16687337 15.16687337 15.16687337
+'''
+        cell.unit= 'B'
+        cell.basis = 'gth-dzvp'
+        cell.pseudo = 'gth-pade'
+        cell.build()
+        Ls = cell.get_lattice_Ls()
+        self.assertTrue(Ls.shape[0] > 140)
+
+        S = cell.pbc_intor('int1e_ovlp')
+        w, v = numpy.linalg.eigh(S)
+        self.assertTrue(w.min() > 0)
+
+        self.assertAlmostEqual(numpy.linalg.cond(S), 9671.407340831005, 8)
 
     def test_super_cell(self):
         numpy.random.seed(2)
