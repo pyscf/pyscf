@@ -32,9 +32,10 @@ mf.with_df.pjs = True
 mf.kernel()
 
 # direct_scf_sgx turns on direct SCF for SGX
-# It might require smaller grids_thrd to avoid numerical noise.
+# JK matrix is rebuilt from scratch every rebuild_nsteps steps
 mf.direct_scf_sgx = True
-mf.with_df.grids_thrd = 1e-12
+# If grids_level_i == grids_level_j, no grid switch occurs
+mf.with_df.grids_level_i = 1
 mf.kernel()
 
 # If dfj is off at runtime, it is turned on and a user warning is issued

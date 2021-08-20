@@ -102,15 +102,25 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             # Set direct_scf_sgx True to use direct SCF for each
             # grid size with SGX.
             self.direct_scf_sgx = False
+            # Set rebuild_nsteps to control how many direct SCF steps
+            # are taken between resets of the SGX JK matrix.
+            # Default 5, only used if direct_scf_sgx = True
+            self.rebuild_nsteps = 5
 
             self._last_dm = 0
             self._last_vj = 0
             self._last_vk = 0
             self._in_scf = False
             self._keys = self._keys.union(['auxbasis', 'with_df',
-                                           'direct_scf_sgx'])
+                                           'direct_scf_sgx',
+                                           'rebuild_nsteps'])
 
         def build(self, mol=None, **kwargs):
+            if self.direct_scf_sgx:
+                self._nsteps_direct = 0
+                self._last_dm = 0
+                self._last_vj = 0
+                self._last_vk = 0
             if self.direct_scf:
                 self.with_df.build(level=self.with_df.grids_level_f)
             else:
@@ -146,9 +156,12 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                 self.opt = self.init_direct_scf(mol)
 
             if self._in_scf and not self.direct_scf:
-                if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd:
+                if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
+                    and with_df.grids_level_f != with_df.grids_level_i:
+                    # only reset if grids_level_f and grids_level_i differ
                     logger.debug(self, 'Switching SGX grids')
                     with_df.build(level=with_df.grids_level_f)
+                    self._nsteps_direct = 0
                     self._in_scf = False
                     self._last_dm = 0
                     self._last_vj = 0
@@ -158,14 +171,19 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                 vj, vk = with_df.get_jk(dm-self._last_dm, hermi, self.opt,
                                         with_j, with_k,
                                         self.direct_scf_tol, omega)
-
                 vj += self._last_vj
                 vk += self._last_vk
-
                 self._last_dm = numpy.asarray(dm)
                 self._last_vj = vj.copy()
                 self._last_vk = vk.copy()
-
+                self._nsteps_direct += 1
+                if self.rebuild_nsteps > 0 and \
+                    self._nsteps_direct >= self.rebuild_nsteps:
+                    logger.debug(self, 'Resetting JK matrix')
+                    self._nsteps_direct = 0
+                    self._last_dm = 0
+                    self._last_vj = 0
+                    self._last_vk = 0
             else:
                 self._last_dm = numpy.asarray(dm)
                 vj, vk = with_df.get_jk(dm, hermi, self.opt, with_j, with_k,

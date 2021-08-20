@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
 
 class PJunctionScreening(unittest.TestCase):
 
-    @unittest.skip("computationally expensive test")
+    #@unittest.skip("computationally expensive test")
     def test_pjs(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
         fname = os.path.join(cwd, 'a12.xyz')
