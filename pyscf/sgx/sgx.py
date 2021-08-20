@@ -157,7 +157,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
 
             if self._in_scf and not self.direct_scf:
                 if numpy.linalg.norm(dm - self._last_dm) < with_df.grids_switch_thrd \
-                    and with_df.grids_level_f != with_df.grids_level_i:
+                        and with_df.grids_level_f != with_df.grids_level_i:
                     # only reset if grids_level_f and grids_level_i differ
                     logger.debug(self, 'Switching SGX grids')
                     with_df.build(level=with_df.grids_level_f)
@@ -178,7 +178,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
                 self._last_vk = vk.copy()
                 self._nsteps_direct += 1
                 if self.rebuild_nsteps > 0 and \
-                    self._nsteps_direct >= self.rebuild_nsteps:
+                        self._nsteps_direct >= self.rebuild_nsteps:
                     logger.debug(self, 'Resetting JK matrix')
                     self._nsteps_direct = 0
                     self._last_dm = 0
