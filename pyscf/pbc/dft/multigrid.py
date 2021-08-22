@@ -1668,7 +1668,7 @@ def _primitive_gto_cutoff(cell, precision=None):
     required precsion'''
     if precision is None:
         precision = cell.precision * EXTRA_PREC
-    log_prec = numpy.log(precision)
+    log_prec = min(numpy.log(precision), 0)
 
     rcut = []
     ke_cutoff = []

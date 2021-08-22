@@ -486,7 +486,8 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
         # cover the basis that sitting out of the cell.
         # See issue https://github.com/pyscf/pyscf/issues/1017
         scaled_atom_coords = cell.atom_coords().dot(b.T)
-        boundary_penalty = abs(scaled_atom_coords).max(axis=0)
+        boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
+                                   abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
         nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
     else:
         rcut = max((np.asarray(nimgs))/heights_inv)
@@ -516,11 +517,17 @@ def _discard_edge_images(cell, Ls, rcut):
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
     atom_boundary_max = scaled_atom_coords.max(axis=0)
     atom_boundary_min = scaled_atom_coords.min(axis=0)
-    boundary_dist = atom_boundary_max - atom_boundary_min
+    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
+    # images are converged.
+    ovlp_penalty = atom_boundary_max - atom_boundary_min
+    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
+    # of the primitive cell converged
+    boundary_max = np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)
+    boundary_min = np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)
     boundary_penalty = lib.cartesian_prod([
-        [-boundary_dist[0], 0, boundary_dist[0]],
-        [-boundary_dist[1], 0, boundary_dist[1]],
-        [-boundary_dist[2], 0, boundary_dist[2]]])
+        [boundary_min[0], 0, boundary_max[0]],
+        [boundary_min[1], 0, boundary_max[1]],
+        [boundary_min[2], 0, boundary_max[2]]])
     shifts = boundary_penalty.dot(a)
     Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
     # cell0 (Ls == 0) should always be included.
