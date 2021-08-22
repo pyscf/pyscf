@@ -97,9 +97,9 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1040, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1361, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1146, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1465, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()

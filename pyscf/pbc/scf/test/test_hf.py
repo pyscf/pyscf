@@ -293,6 +293,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -315,6 +316,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -368,6 +370,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -390,6 +393,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]

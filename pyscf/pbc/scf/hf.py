@@ -51,7 +51,8 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
     s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
-    hermi_error = abs(s - s.conj().T).max()
+    s = lib.asarray(s)
+    hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '

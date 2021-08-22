@@ -110,10 +110,10 @@ class KnownValues(unittest.TestCase):
         nkpts = 3
         c = numpy.random.random((3,nao,nao)) + numpy.random.random((3,nao,nao)) * 1j
         c1 = pscf.addons.project_mo_nr2nr(cell, c[0], cell)
-        self.assertAlmostEqual(abs(c[0]-c1).max(), 0, 12)
+        self.assertAlmostEqual(abs(c[0]-c1).max(), 0, 11)
 
         c1 = numpy.array(pscf.addons.project_mo_nr2nr(cell, c, cell, kpts=kpts))
-        self.assertAlmostEqual(abs(c-c1).max(), 0, 12)
+        self.assertAlmostEqual(abs(c-c1).max(), 0, 11)
 
     def test_convert_to_scf(self):
         from pyscf.pbc import dft

@@ -474,6 +474,9 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
+    '''rcut based on the overlap integrals. This estimation is too conservative
+    in many cases. A possible replacement can be the value of the basis
+    function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
     C = (c**2)*(2*l+1) / (precision * LATTICE_SUM_PENALTY)
     r0 = 20
     # +1. to ensure np.log returning positive value

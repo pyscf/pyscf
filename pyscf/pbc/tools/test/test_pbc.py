@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (1389,3))
+        self.assertEqual(Ls.shape, (2099,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
@@ -136,7 +136,7 @@ C  15.16687337 15.16687337 15.16687337
         w, v = numpy.linalg.eigh(S)
         self.assertTrue(w.min() > 0)
         self.assertAlmostEqual(abs(S - S.T.conj()).max(), 0, 13)
-        self.assertAlmostEqual(w.min(), 0.0007176363230, 9)
+        self.assertAlmostEqual(w.min(), 0.0007176363230, 8)
 
     def test_super_cell(self):
         numpy.random.seed(2)
@@ -210,4 +210,3 @@ C  15.16687337 15.16687337 15.16687337
 if __name__ == '__main__':
     print("Full Tests for pbc.tools")
     unittest.main()
-

@@ -513,6 +513,9 @@ def _discard_edge_images(cell, Ls, rcut):
     '''
     Discard images if no basis in the image would contribute to lattice sum.
     '''
+    if rcut <= 0:
+        return np.zeros((1, 3))
+
     a = cell.lattice_vectors()
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
     atom_boundary_max = scaled_atom_coords.max(axis=0)
@@ -522,13 +525,12 @@ def _discard_edge_images(cell, Ls, rcut):
     ovlp_penalty = atom_boundary_max - atom_boundary_min
     # atom_boundary_min-1 ensures the values of basis at the grids on the edge
     # of the primitive cell converged
-    boundary_max = np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)
-    boundary_min = np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)
-    boundary_penalty = lib.cartesian_prod([
-        [boundary_min[0], 0, boundary_max[0]],
-        [boundary_min[1], 0, boundary_max[1]],
-        [boundary_min[2], 0, boundary_max[2]]])
-    shifts = boundary_penalty.dot(a)
+    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
+    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
+    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
+    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
     Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
     # cell0 (Ls == 0) should always be included.
     Ls_mask[len(Ls)//2] = True
