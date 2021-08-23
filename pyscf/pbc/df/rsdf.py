@@ -477,7 +477,7 @@ class RSGDF(df.df.GDF):
         # The default is npw_max = 350 ~ 7x7x7 PWs for 3D isotropic systems.
         # Once omega is determined, mesh_compact is determined for (L|g^lr|pq) to achieve given accuracy.
         self.npw_max = 350
-        self._omega_min = 0.1
+        self._omega_min = 0.3
         self.omega = None
         self.ke_cutoff = None
         self.mesh_compact = None
