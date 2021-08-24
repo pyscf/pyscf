@@ -756,6 +756,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def rs_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.pbc.df import rsdf_jk
+        return rsdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
