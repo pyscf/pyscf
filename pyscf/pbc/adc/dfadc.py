@@ -72,10 +72,6 @@ def  get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
 
     ''' Returns approximate vvvv integrals used in restricted implementation'''
 
-    #nocc = myadc.nocc
-    #nmo = myadc.nmo
-    #nvir = nmo - nocc
-    #naux = myadc.with_df.get_naoaux()
     naux = vv1.shape[0]
     nvir = vv1.shape[1]
 
