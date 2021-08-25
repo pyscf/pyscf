@@ -77,7 +77,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     P_k = rdm1_lo[s, k][U_mesh]
                     SC = np.dot(S_k, C_k)
                     vxc[s, k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k * 2.0)
-                                      * (val * 0.5), SC.conj().T)
+                                      * (val * 0.5), SC.conj().T).astype(vxc.dtype,copy=False)
                     E_U += (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
                     P_loc += P_k
                 P_loc = P_loc.real / nkpts
