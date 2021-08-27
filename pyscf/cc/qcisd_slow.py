@@ -22,7 +22,7 @@ The 4-index integrals are saved on disk entirely (without using any symmetry).
 
 Note MO integrals are treated in chemist's notation
 
-Ref: 
+Ref:
 '''
 
 
