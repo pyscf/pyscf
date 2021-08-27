@@ -434,7 +434,7 @@ RQCISD = QCISD
 
 
 if __name__ == '__main__':
-    from pyscf import gto, scf
+    from pyscf import scf
 
     mol = gto.Mole()
     #mol.atom = [
