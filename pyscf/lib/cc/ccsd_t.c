@@ -35,13 +35,14 @@ typedef struct {
  * - 2 * w.transpose(2,1,0) - 2 * w.transpose(0,2,1)
  * - 2 * w.transpose(1,0,2)
  */
-static void add_and_permute(double *out, double *w, double *v, int n)
+static void add_and_permute(double *out, double *w, double *v, int n, double fac)
 {
         int nn = n * n;
         int nnn = nn * n;
         int i, j, k;
 
         for (i = 0; i < nnn; i++) {
+                v[i] *= fac;
                 v[i] += w[i];
         }
 
@@ -227,7 +228,7 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
                         int nirrep, int *o_ir_loc, int *v_ir_loc,
                         int *oo_ir_loc, int *orbsym, double *fvo,
                         double *vooo, double *cache1, void **cache,
-                        int *permute_idx)
+                        int *permute_idx, double fac)
 {
         int nooo = nocc * nocc * nocc;
         int *idx0 = permute_idx;
@@ -268,7 +269,7 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
                 sym_wv(w0, v0, wtmp, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx5);
         }
-        add_and_permute(z0, w0, v0, nocc);
+        add_and_permute(z0, w0, v0, nocc, fac);
 
         double et;
         if (a == c) {
@@ -411,7 +412,57 @@ void CCsd_t_contract(double *e_tot,
                 c = jobs[k].c;
                 e += contract6(nocc, nvir, a, b, c, mo_energy, t1Thalf, t2T,
                                nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx);
+                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx,
+                               1.0);
+        }
+        free(t1Thalf);
+        free(cache1);
+#pragma omp critical
+        *e_tot += e;
+}
+        free(permute_idx);
+}
+
+void QCIsd_t_contract(double *e_tot,
+                      double *mo_energy, double *t1T, double *t2T,
+                      double *vooo, double *fvo,
+                      int nocc, int nvir, int a0, int a1, int b0, int b1,
+                      int nirrep, int *o_ir_loc, int *v_ir_loc,
+                      int *oo_ir_loc, int *orbsym,
+                      void *cache_row_a, void *cache_col_a,
+                      void *cache_row_b, void *cache_col_b)
+{
+        int da = a1 - a0;
+        int db = b1 - b0;
+        CacheJob *jobs = malloc(sizeof(CacheJob) * da*db*b1);
+        size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
+                                        cache_row_a, cache_col_a,
+                                        cache_row_b, cache_col_b, sizeof(double));
+        int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
+        _make_permute_indices(permute_idx, nocc);
+#pragma omp parallel default(none) \
+        shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+{
+        int a, b, c;
+        size_t k;
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
+        double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
+        double *fvohalf = t1Thalf + nvir*nocc;
+        for (k = 0; k < nvir*nocc; k++) {
+                t1Thalf[k] = t1T[k] * .5;
+                fvohalf[k] = fvo[k] * .5;
+        }
+        double e = 0;
+#pragma omp for schedule (dynamic, 4)
+        for (k = 0; k < njobs; k++) {
+                a = jobs[k].a;
+                b = jobs[k].b;
+                c = jobs[k].c;
+                e += contract6(nocc, nvir, a, b, c, mo_energy, t1Thalf, t2T,
+                               nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
+                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx,
+                               2.0);
         }
         free(t1Thalf);
         free(cache1);
@@ -426,13 +477,14 @@ void CCsd_t_contract(double *e_tot,
  * Complex version of all functions
  */
 static void zadd_and_permute(double complex *out, double complex *w,
-                             double complex *v, int n)
+                             double complex *v, int n, double fac)
 {
         int nn = n * n;
         int nnn = nn * n;
         int i, j, k;
 
         for (i = 0; i < nnn; i++) {
+                v[i] *= fac;
                 v[i] += w[i];
         }
 
@@ -504,7 +556,7 @@ zcontract6(int nocc, int nvir, int a, int b, int c,
            int nirrep, int *o_ir_loc, int *v_ir_loc,
            int *oo_ir_loc, int *orbsym, double complex *fvo,
            double complex *vooo, double complex *cache1, void **cache,
-           int *permute_idx)
+           int *permute_idx, double fac)
 {
         int nooo = nocc * nocc * nocc;
         int *idx0 = permute_idx;
@@ -530,7 +582,7 @@ zcontract6(int nocc, int nvir, int a, int b, int c,
         zget_wv(w0, v0, wtmp, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a, idx3);
         zget_wv(w0, v0, wtmp, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b, idx4);
         zget_wv(w0, v0, wtmp, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a, idx5);
-        zadd_and_permute(z0, w0, v0, nocc);
+        zadd_and_permute(z0, w0, v0, nocc, fac);
 
         double complex et;
         if (a == c) {
@@ -584,7 +636,60 @@ void CCsd_t_zcontract(double complex *e_tot,
                 c = jobs[k].c;
                 e += zcontract6(nocc, nvir, a, b, c, mo_energy, t1Thalf, t2T,
                                nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx);
+                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx,
+                               1.0);
+        }
+        free(t1Thalf);
+        free(cache1);
+#pragma omp critical
+        *e_tot += e;
+}
+        free(permute_idx);
+}
+
+void QCIsd_t_zcontract(double complex *e_tot,
+                       double *mo_energy, double complex *t1T, double complex *t2T,
+                       double complex *vooo, double complex *fvo,
+                       int nocc, int nvir, int a0, int a1, int b0, int b1,
+                       int nirrep, int *o_ir_loc, int *v_ir_loc,
+                       int *oo_ir_loc, int *orbsym,
+                       void *cache_row_a, void *cache_col_a,
+                       void *cache_row_b, void *cache_col_b)
+{
+        int da = a1 - a0;
+        int db = b1 - b0;
+        CacheJob *jobs = malloc(sizeof(CacheJob) * da*db*b1);
+        size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
+                                        cache_row_a, cache_col_a,
+                                        cache_row_b, cache_col_b,
+                                        sizeof(double complex));
+
+        int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
+        _make_permute_indices(permute_idx, nocc);
+
+#pragma omp parallel default(none) \
+        shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvo, jobs, e_tot, permute_idx)
+{
+        int a, b, c;
+        size_t k;
+        double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*3+2));
+        double complex *t1Thalf = malloc(sizeof(double complex) * nvir*nocc * 2);
+        double complex *fvohalf = t1Thalf + nvir*nocc;
+        for (k = 0; k < nvir*nocc; k++) {
+                t1Thalf[k] = t1T[k] * .5;
+                fvohalf[k] = fvo[k] * .5;
+        }
+        double complex e = 0;
+#pragma omp for schedule (dynamic, 4)
+        for (k = 0; k < njobs; k++) {
+                a = jobs[k].a;
+                b = jobs[k].b;
+                c = jobs[k].c;
+                e += zcontract6(nocc, nvir, a, b, c, mo_energy, t1Thalf, t2T,
+                               nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
+                               fvohalf, vooo, cache1, jobs[k].cache, permute_idx,
+                               2.0);
         }
         free(t1Thalf);
         free(cache1);
@@ -638,7 +743,7 @@ static void MPICCget_wv(double *w, double *v, double *cache,
 static double MPICCcontract6(int nocc, int nvir, int a, int b, int c,
                              double *mo_energy, double *t1T, double *fvo,
                              int *slices, double **data_ptrs, double *cache1,
-                             int *permute_idx)
+                             int *permute_idx, double fac)
 {
         const int a0 = slices[0];
         const int a1 = slices[1];
@@ -688,7 +793,7 @@ static double MPICCcontract6(int nocc, int nvir, int a, int b, int c,
         MPICCget_wv(w0, v0, wtmp, fvo, vooo_b, vvop_bc, t1T, t2T_b, t2T_a, nocc, nvir, b, c, a, b0, c0, a0, idx3);
         MPICCget_wv(w0, v0, wtmp, fvo, vooo_c, vvop_ca, t1T, t2T_c, t2T_b, nocc, nvir, c, a, b, c0, a0, b0, idx4);
         MPICCget_wv(w0, v0, wtmp, fvo, vooo_c, vvop_cb, t1T, t2T_c, t2T_a, nocc, nvir, c, b, a, c0, b0, a0, idx5);
-        add_and_permute(z0, w0, v0, nocc);
+        add_and_permute(z0, w0, v0, nocc, fac);
 
         double et;
         if (a == c) {
@@ -763,7 +868,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
                 c = jobs[k].c;
                 e += MPICCcontract6(nocc, nvir, a, b, c, mo_energy, t1Thalf,
                                     fvohalf, slices, data_ptrs, cache1,
-                                    permute_idx);
+                                    permute_idx, 1.0);
         }
         free(t1Thalf);
         free(cache1);
