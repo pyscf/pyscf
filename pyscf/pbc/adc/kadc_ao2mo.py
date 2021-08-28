@@ -119,12 +119,6 @@ def transform_integrals_outcore(myadc):
     orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
     orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
-    #if gamma_point(cc.kpts):
-    #    dtype = np.double
-    #else:
-    #    dtype = np.complex128
-    #dtype = np.result_type(dtype, *mo_coeff[0]).char
-
     eris = lambda:None
     eris.feri = feri = lib.H5TmpFile()
 
@@ -243,15 +237,6 @@ def transform_integrals_df(myadc):
     orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
     orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
-    #if gamma_point(cc.kpts):
-    #    dtype = np.double
-    #else:
-    #    dtype = np.complex128
-    #dtype = np.result_type(dtype, *mo_coeff[0]).char
-
-    #eris = lambda:None
-    #eris.feri = feri = lib.H5TmpFile()
-
     # The momentum conservation array
     kconserv = myadc.khelper.kconserv
     
@@ -259,11 +244,6 @@ def transform_integrals_df(myadc):
     with_df = myadc.with_df
     naux = with_df.get_naoaux()
     eris = lambda:None
-
-    #if gamma_point(kpts):
-    #    dtype = np.double
-    #else:
-    #    dtype = np.complex128
 
     eris.dtype = dtype = np.result_type(dtype)
     eris.Lpq_mo = Lpq_mo = np.empty((nkpts, nkpts), dtype=object)
@@ -324,12 +304,9 @@ def transform_integrals_df(myadc):
 
     return eris
 
-#@profile
 def calculate_chunk_size(myadc):
 
     avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
-    #nocc = myadc.nocc
-    #nmo = myadc.nmo
     nocc = [np.count_nonzero(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]
     nocc = np.amax(nocc)
     nmo = [len(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]
