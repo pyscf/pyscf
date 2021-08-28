@@ -21,6 +21,7 @@ Short range part of ECP under PBC
 '''
 
 from functools import reduce
+import copy
 import numpy
 from pyscf import lib
 from pyscf.pbc import gto
@@ -37,15 +38,13 @@ def ecp_int(cell, kpts=None):
     cell, contr_coeff = gto.cell._split_basis(cell)
     lib.logger.debug1(cell, 'nao %d -> nao %d', *(contr_coeff.shape))
 
-    ecpcell = gto.Cell()
-    ecpcell._atm = cell._atm
+    ecpcell = copy.copy(cell)
     # append a fictitious s function to mimic the auxiliary index in pbc.incore.
     # ptr2last_env_idx to force PBCnr3c_fill_* function to copy the entire "env"
     ptr2last_env_idx = len(cell._env) - 1
     ecpbas = numpy.vstack([[0, 0, 1, 1, 0, ptr2last_env_idx, 0, 0],
                            cell._ecpbas]).astype(numpy.int32)
     ecpcell._bas = ecpbas
-    ecpcell._env = cell._env
     # In pbc.incore _ecpbas is appended to two sets of cell._bas and the
     # fictitious s function.
     cell._env[AS_ECPBAS_OFFSET] = cell.nbas * 2 + 1

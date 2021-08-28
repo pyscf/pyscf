@@ -81,7 +81,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -91,6 +91,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         LkI = numpy.asarray(aoaux.imag, order='C')
 
         j2c_k = fuse(fuse(j2c[k]).T).T.copy()
+        j2c_k = (j2c_k + j2c_k.conj().T) * .5
         if is_zero(kpt):  # kpti == kptj
             j2c_k -= lib.dot(LkR*coulG, LkR.T)
             j2c_k -= lib.dot(LkI*coulG, LkI.T)
@@ -99,7 +100,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j2cR, j2cI = zdotCN(LkR*coulG, LkI*coulG, LkR.T, LkI.T)
             j2c_k -= j2cR + j2cI * 1j
         fswap['j2c/%d'%k] = j2c_k
-        aoaux = LkR = LkI = j2cR = j2cI = coulG = None
+        aoaux = LkR = LkI = j2cR = j2cI = coulG = j2c_k = None
     j2c = None
 
     def cholesky_decomposed_metric(uniq_kptji_id):

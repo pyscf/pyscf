@@ -101,10 +101,42 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (1725,3))
+        self.assertEqual(Ls.shape, (2099,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
+
+    def test_get_lattice_Ls1(self):
+        cell = pbcgto.Cell()
+        cell.verbose = 0
+        cell.a = '''
+-10.11124892   0.          10.11124892
+  0.          10.11124892  10.11124892
+-10.11124892  10.11124892   0.        '''
+        cell.atom = '''
+C   0.          0.          0.
+C  13.48166522  6.74083261  6.74083261
+C  15.16687337  8.42604076  8.42604076
+C  13.48166522 10.11124892 10.11124892
+C  15.16687337 11.79645707 11.79645707
+C  10.11124892 13.48166522 10.11124892
+C  11.79645707 15.16687337 11.79645707
+C  13.48166522 13.48166522 13.48166522
+C  15.16687337 15.16687337 15.16687337
+'''
+        cell.unit= 'B'
+        cell.basis = 'gth-dzvp'
+        cell.pseudo = 'gth-pade'
+        cell.precision = 1e-10
+        cell.build()
+        Ls = cell.get_lattice_Ls()
+        self.assertTrue(Ls.shape[0] > 140)
+
+        S = cell.pbc_intor('int1e_ovlp')
+        w, v = numpy.linalg.eigh(S)
+        self.assertTrue(w.min() > 0)
+        self.assertAlmostEqual(abs(S - S.T.conj()).max(), 0, 13)
+        self.assertAlmostEqual(w.min(), 0.0007176363230, 8)
 
     def test_super_cell(self):
         numpy.random.seed(2)
@@ -122,7 +154,7 @@ class KnownValues(unittest.TestCase):
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([7,14,10])))
+        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([8, 15, 11])))
         cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)
@@ -178,4 +210,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for pbc.tools")
     unittest.main()
-

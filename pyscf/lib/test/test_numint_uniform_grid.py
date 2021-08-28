@@ -23,7 +23,8 @@ cell_orth = gto.M(atom='H1 1 1 0; H2 0 0 1',
                                [2, (.7, .8, .2), (.2, .2, 1)]]},
                   unit='B',
                   mesh=[7,6,5],
-                  a=numpy.eye(3)*8)
+                  a=numpy.eye(3)*8,
+                  precision=1e-8)
 
 mol_orth = cell_orth.copy()
 mol_orth.dimension = 0
@@ -35,7 +36,8 @@ cell_north = gto.M(atom='H1 1 1 0; H2 0 0 1',
                                 [2, (.7, .8, .2), (.2, .2, 1)]]},
                    unit='B',
                    mesh=[7,6,5],
-                   a=numpy.eye(3)*8+numpy.random.rand(3,3))
+                   a=numpy.eye(3)*8+numpy.random.rand(3,3),
+                   precision=1e-8)
 
 mol_north = cell_north.copy()
 mol_north.dimension = 0

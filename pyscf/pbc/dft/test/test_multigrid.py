@@ -216,7 +216,7 @@ class KnownValues(unittest.TestCase):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0, with_j=True)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 8)
-        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
     def test_eval_rhoG_orth_kpts(self):
         numpy.random.seed(9)
@@ -232,7 +232,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_orth, ao_kpts, dm, hermi=0, xctype='LDA')
         rhoR = tools.ifft(rhoG[0], cell_orth.mesh).real
         rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_orth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
@@ -245,7 +245,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_orth, ao_kpts, dm, xctype='GGA')
         rhoR = tools.ifft(rhoG[0], cell_orth.mesh).real
         rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_nonorth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_nonorth)
@@ -258,7 +258,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='GGA')
         rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh).real
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
 
     def test_gen_rhf_response(self):
         numpy.random.seed(9)
@@ -408,7 +408,7 @@ class KnownValues(unittest.TestCase):
         v = multigrid.nr_uks_fxc(mg_df, xc, (dm_he, dm_he), (dm1, dm1), kpts=kpts)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
-        self.assertAlmostEqual(abs(v-ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 8)
 
     def test_rcut_vs_ke_cut(self):
         xc = 'lda,'

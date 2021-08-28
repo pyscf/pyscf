@@ -132,12 +132,13 @@ class KnownValues(unittest.TestCase):
         check2 = kmdf.get_eri((kpts[0]+5e-9,kpts[1]+5e-9,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
 
-#    def test_get_eri_0123_high_cost(self):
-#        eri0123 = kmdf.get_eri(kpts[:4])
-#        self.assertTrue(eri0123.dtype == numpy.complex128)
-#        self.assertAlmostEqual(eri0123.real.sum(), 410.38308763371651, 6)
-#        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
-#        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
+    @unittest.skip('Reference seems wrong')
+    def test_get_eri_0123_high_cost(self):
+        eri0123 = kmdf.get_eri(kpts[:4])
+        self.assertTrue(eri0123.dtype == numpy.complex128)
+        self.assertAlmostEqual(eri0123.real.sum(), 410.38308763371651, 6)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
+        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
 
     def test_get_eri_gamma_1(self):
         odf = mdf.MDF(cell1)
@@ -161,8 +162,9 @@ class KnownValues(unittest.TestCase):
         eri1111 = kmdf1.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
         self.assertTrue(eri1111.dtype == numpy.complex128)
         self.assertAlmostEqual(eri1111.real.sum(), 44.106518037762719, 6)
-        self.assertAlmostEqual(abs(eri1111.imag).sum(), 11.560980263508144, 6)
-        self.assertAlmostEqual(lib.fp(eri1111), (5.8655421128841088+0.034457178081070433j), 7)
+        self.assertAlmostEqual(abs(eri1111.imag).sum(), 11.560980263508144, 5)
+        self.assertAlmostEqual(lib.fp(eri1111),
+                               (5.8655421128841088+0.034457178081070433j), 6)
         check2 = kmdf1.get_eri((kpts[1]+5e-9,kpts[1]+5e-9,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
 
@@ -182,15 +184,14 @@ class KnownValues(unittest.TestCase):
         check2 = kmdf1.get_eri((kpts[0]+5e-9,kpts[1]+5e-9,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
 
-#    def test_get_eri_0123_1(self):
-#        eri0123 = kmdf1.get_eri(kpts[:4])
-#        self.assertTrue(eri0123.dtype == numpy.complex128)
-#        self.assertAlmostEqual(eri0123.real.sum(), 85.318309473904634, 6)
-#        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
-#        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
-
+    @unittest.skip('Reference seems wrong')
+    def test_get_eri_0123_1(self):
+        eri0123 = kmdf1.get_eri(kpts[:4])
+        self.assertTrue(eri0123.dtype == numpy.complex128)
+        self.assertAlmostEqual(eri0123.real.sum(), 85.318309473904634, 6)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
+        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
 
 if __name__ == '__main__':
     print("Full Tests for mdf")
     unittest.main()
-
