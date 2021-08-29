@@ -80,7 +80,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         foo = fock[occidx[:,None],occidx]
         fvv = fock[viridx[:,None],viridx]
 
-    hdiag = (fvv.diagonal().reshape(-1,1) - foo.diagonal()).T
+    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
@@ -887,10 +887,10 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     foo = numpy.diag(mo_energy[occidx])
     fvv = numpy.diag(mo_energy[viridx])
 
-    hdiag = (fvv.diagonal().reshape(-1,1) - foo.diagonal()).T
+    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
+    hdiag = numpy.hstack((hdiag.ravel(), -hdiag.ravel()))
 
     mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
     vresp = mf.gen_response(singlet=singlet, hermi=0)

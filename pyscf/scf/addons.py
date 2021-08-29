@@ -31,6 +31,7 @@ from pyscf import __config__
 
 LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
 CHOLESKY_THRESHOLD = getattr(__config__, 'scf_addons_cholesky_threshold', 1e-10)
+FORCE_PIVOTED_CHOLESKY = getattr(__config__, 'scf_addons_force_cholesky', False)
 LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def smearing_(*args, **kwargs):
@@ -303,7 +304,7 @@ def mom_occ_(mf, occorb, setocc):
             log.error('mom alpha electron occupation numbers do not match: %d, %d',
                       nocc_a, int(numpy.sum(mo_occ[0])))
         if (int(numpy.sum(mo_occ[1])) != nocc_b):
-            log.error('mom alpha electron occupation numbers do not match: %d, %d',
+            log.error('mom beta electron occupation numbers do not match: %d, %d',
                       nocc_b, int(numpy.sum(mo_occ[1])))
 
         #output 1-dimension occupation number for restricted open-shell
@@ -483,7 +484,8 @@ def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
 
 def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
                        lindep=LINEAR_DEP_TRIGGER,
-                       cholesky_threshold=CHOLESKY_THRESHOLD):
+                       cholesky_threshold=CHOLESKY_THRESHOLD,
+                       force_pivoted_cholesky=FORCE_PIVOTED_CHOLESKY):
     '''
     Args:
         threshold : float
@@ -495,13 +497,13 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     '''
     s = mf.get_ovlp()
     cond = numpy.max(lib.cond(s))
-    if cond < 1./lindep:
+    if cond < 1./lindep and not force_pivoted_cholesky:
         return mf
 
     logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
-    if(cond < 1./numpy.finfo(s.dtype).eps):
-        logger.info(mf, 'Using canonical orthogonalization')
+    if(cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
+        logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
         def eigh(h, s):
             x = canonical_orth_(s, threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))
@@ -512,6 +514,8 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
     else:
         logger.info(mf, 'Using partial Cholesky orthogonalization '
                     '(doi:10.1063/1.5139948, doi:10.1103/PhysRevA.101.032504)')
+        logger.info(mf, 'Using threshold {} for pivoted Cholesky'.format(cholesky_threshold))
+        logger.info(mf, 'Using threshold {} to orthogonalize the subbasis'.format(threshold))
         def eigh(h, s):
             x = partial_cholesky_orth_(s, canthr=threshold, cholthr=cholesky_threshold)
             xhx = reduce(numpy.dot, (x.T.conj(), h, x))

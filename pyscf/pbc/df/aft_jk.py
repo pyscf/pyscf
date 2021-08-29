@@ -44,29 +44,34 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     weight = 1./len(kpts)
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         _update_vj_(vj_kpts, aoaoks, dms, coulG[p0:p1], weight)
-    aoaoks = p0 = p1 = None
+        aoaoks = None
 
     if gamma_point(kpts):
         vj_kpts = vj_kpts.real.copy()
     return _format_jks(vj_kpts, dm_kpts, kpts_band, kpts)
 
 def _update_vj_(vj_kpts, aoaoks, dms, coulG, weight):
-    n_dm = vj_kpts.shape[0]
+    r'''Compute the Coulomb matrix
+    J_{kl} = \sum_{ij} \sum_G 4\pi/G^2 * FT(\rho_{ij}) IFT(\rho_{kl}) dm_{ji}
+    for analytical FT tensor FT(\rho_{ij})
+    '''
+    # FT(\rho_{ij, kpt}) = \int exp(-i G*r) conj(\psi_{i,kpt}) \psi_{j,kpt} dr
+    # IFT(\rho_{ij, kpt}) = \int exp(i G*r) conj(\psi_{i,kpt}) \psi_{j,kpt} dr
+    # IFT(\rho_{ij, kpt}) = conj(FT(\rho_{ji, kpt}))
+    # rhoG[k] = einsum('ij,gji->g', dms[i,k], IFT(\rho))
+    #         = einsum('ij,gji->g', dms[i,k], aoao.conj().transpose(0,2,1))
+    #         = einsum('ij,gij->g', dms[i,k].conj(), aoao).conj()
+    # vG = sum_k rhoG[k] * coulG
+    # vj[k] = einsum('g,gji->g', vG, aoao[k])
     nao = vj_kpts.shape[-1]
-    vG = [0] * n_dm
+    rhoG = 0
     for k, aoao in enumerate(aoaoks):
         aoao = aoao.reshape(-1,nao,nao)
-        for i in range(n_dm):
-            # einsum('ij,Lji->L', dms[i,k], aoao.conj())
-            # = einsum('ij,Lji->L', dms[i,k].conj(), aoao).conj()
-            rho = numpy.einsum('ij,Lji->L', dms[i,k], aoao).conj()
-            vG[i] += rho * coulG
-    for i in range(n_dm):
-        vG[i] *= weight
+        rhoG += numpy.einsum('nij,Lij->nL', dms[:,k].conj(), aoao).conj()
+    vG = rhoG * coulG * weight
     for k, aoao in enumerate(aoaoks):
         aoao = aoao.reshape(-1,nao,nao)
-        for i in range(n_dm):
-            vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i], aoao)
+        vj_kpts[:,k] += numpy.einsum('nL,Lij->nij', vG, aoao)
 
 def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
@@ -80,19 +85,16 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     mesh = mydf.mesh
     coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
     ngrids = len(coulG)
-    vG = numpy.zeros((nset,ngrids), dtype=numpy.complex128)
+    rhoG = numpy.zeros((nset,ngrids), dtype=numpy.complex128)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
 
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
-        #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
-            for i in range(nset):
-                rho = numpy.einsum('ij,Lji->L', dms[i,k],
-                                   aoao.reshape(-1,nao,nao).conj())
-                vG[i,p0:p1] += rho * coulG[p0:p1]
+            rhoG[:,p0:p1] += numpy.einsum('nij,Lij->nL', dms[:,k].conj(),
+                                          aoao.reshape(-1,nao,nao)).conj()
     aoao = aoaoks = p0 = p1 = None
     weight = 1./len(kpts)
-    vG *= weight
+    vG = rhoG * coulG * weight
     t1 = log.timer_debug1('get_j pass 1 to compute J(G)', *t1)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -101,9 +103,8 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_band,
                                         max_memory=max_memory):
         for k, aoao in enumerate(aoaoks):
-            for i in range(nset):
-                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1],
-                                             aoao.reshape(-1,nao,nao))
+            vj_kpts[:,k] += numpy.einsum('nL,Lij->nij', vG[:,p0:p1],
+                                         aoao.reshape(-1,nao,nao))
     aoao = aoaoks = p0 = p1 = None
 
     if gamma_point(kpts_band):

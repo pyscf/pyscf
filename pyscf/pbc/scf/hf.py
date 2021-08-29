@@ -48,9 +48,16 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
+    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
+    s = lib.asarray(s)
+    hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
+    if hermi_error > cell.precision and hermi_error > 1e-12:
+        logger.warn(cell, '%.4g error found in overlap integrals. '
+                    'cell.precision  or  cell.rcut  can be adjusted to '
+                    'improve accuracy.')
+
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond

@@ -62,10 +62,11 @@ EXTRAS = {
     'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
-    'properties': ['pyscf-properteis'],
+    'properties': ['pyscf-properties'],
     'semiempirical': ['pyscf-semiempirical'],
     'shciscf': ['pyscf-shciscf'],
     'cppe': ['cppe'],
+    'pyqmc':['pyqmc'],
 }
 EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
 # extras which should not be installed by "all" components

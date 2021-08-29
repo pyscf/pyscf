@@ -163,7 +163,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(td.xy[2])
-        self.assertAlmostEqual(g1[0,2], -0.25240005833657309, 8)
+        self.assertAlmostEqual(g1[0,2], -0.25240005833657309, 6)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))

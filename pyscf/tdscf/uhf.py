@@ -73,8 +73,8 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-    e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+    e_ia_a = mo_energy[0][viridxa] - mo_energy[0][occidxa,None]
+    e_ia_b = mo_energy[1][viridxb] - mo_energy[1][occidxb,None]
     e_ia = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
     hdiag = e_ia
     if wfnsym is not None and mol.symmetry:
@@ -643,7 +643,6 @@ class TDA(TDMixin):
         viridxb = numpy.where(mo_occ[1]==0)[0]
         e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
         e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-        e_ia_max = max(e_ia_a.max(), e_ia_b.max())
 
         if wfnsym is not None and mol.symmetry:
             if isinstance(wfnsym, str):
@@ -656,6 +655,7 @@ class TDA(TDMixin):
             e_ia_b[(orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym] = 1e99
 
         e_ia = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
+        e_ia_max = e_ia.max()
         nov = e_ia.size
         nstates = min(nstates, nov)
         e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
@@ -754,12 +754,12 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         sym_forbidb = (orbsymb_in_d2h[occidxb,None] ^ orbsymb_in_d2h[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-    e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-    e_ia = hdiag = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+    e_ia_a = mo_energy[0][viridxa] - mo_energy[0][occidxa,None]
+    e_ia_b = mo_energy[1][viridxb] - mo_energy[1][occidxb,None]
+    e_ia = hdiag = numpy.hstack((e_ia_a.ravel(), e_ia_b.ravel()))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
-    hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
+    hdiag = numpy.hstack((hdiag, -hdiag))
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.8-mem_now)

@@ -91,7 +91,7 @@ mf.kernel()
 # below.  Assuming in the first pass, the GDF 3-index tensors are saved with
 # the following code
 #
-mf = scf.RHF(cell, cell.make_kpts([2,2,2])).density_fit(auxbasis=auxbasis)
+mf = scf.KRHF(cell, cell.make_kpts([2,2,2])).density_fit(auxbasis=auxbasis)
 mf.with_df._cderi_to_save = 'pbc_gdf.h5'
 mf.kernel()
 

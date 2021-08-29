@@ -136,7 +136,12 @@ def make_modchg_basis(auxcell, smooth_eta):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    # _estimate_rcut is based on the integral overlap. It's likely too tight for
+    # rcut of the model charge. Using the value of functions at rcut seems enough
+    # chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    rcut = 15.
+    chgcell.rcut = (numpy.log(4*numpy.pi*rcut**2/auxcell.precision) / smooth_eta)**.5
+
     logger.debug1(auxcell, 'make compensating basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
@@ -183,7 +188,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+    # Generally speaking, the int2c2e integrals with lattice sum applied on
+    # |j> are not necessary hermitian because int2c2e cannot be made converged
+    # with regular lattice sum unless the lattice sum vectors (from
+    # cell.get_lattice_Ls) are symmetric. After adding the planewaves
+    # contributions and fuse(fuse(j2c)), the output matrix is hermitian.
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
@@ -197,15 +207,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aoaux = None
 
             if is_zero(kpt):  # kpti == kptj
-                j2c[k][naux:] -= lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
-                j2c[k][naux:] -= lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+                j2c_p  = lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
+                j2c_p += lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
             else:
                 j2cR, j2cI = zdotCN(LkR[naux:]*coulG[p0:p1],
                                     LkI[naux:]*coulG[p0:p1], LkR.T, LkI.T)
-                j2c[k][naux:] -= j2cR + j2cI * 1j
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
-            LkR = LkI = None
+                j2c_p = j2cR + j2cI * 1j
+            j2c[k][naux:] -= j2c_p
+            j2c[k][:naux,naux:] -= j2c_p[:,:naux].conj().T
+            j2c_p = LkR = LkI = None
+        # Symmetrizing the matrix is not must if the integrals converged.
+        # Since symmetry cannot be enforced in the pbc_intor('int2c2e'),
+        # the aggregated j2c here may have error in hermitian if the range of
+        # lattice sum is not big enough.
+        j2c[k] = (j2c[k] + j2c[k].conj().T) * .5
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
