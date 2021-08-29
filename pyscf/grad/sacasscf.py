@@ -176,13 +176,11 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
             dm2_ao += lib.einsum('ijw,pi,qj->pqw', dm2buf, moL_cas[p0:p1], mo_cas[q0:q1])
             dm2_ao += lib.einsum('ijw,pi,qj->pqw', dm2buf, mo_cas[p0:p1], moL_cas[q0:q1])
             shls_slice = (shl0,shl1,b0,b1,0,mol.nbas,0,mol.nbas)
-            gc.collect ()
             eri1 = mol.intor('int2e_ip1', comp=3, aosym='s2kl',
                              shls_slice=shls_slice).reshape(3,p1-p0,nf,nao_pair)
             # MRH: I still don't understand why there is a minus here!
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
-            gc.collect ()
             t0 = logger.timer (mc, 'SA-CASSCF Lorb_dot_dgorb atom {} ({},{}|{})'.format (ia, p1-p0, nf, nao_pair), *t0)
         # MRH: core-core and core-active 2RDM terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1L[p0:p1]) * 2
@@ -297,12 +295,10 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
             q0, q1 = q1, q1 + nf
             dm2_ao = lib.einsum('ijw,pi,qj->pqw', dm2buf, mo_cas[p0:p1], mo_cas[q0:q1])
             shls_slice = (shl0,shl1,b0,b1,0,mol.nbas,0,mol.nbas)
-            gc.collect ()
             eri1 = mol.intor('int2e_ip1', comp=3, aosym='s2kl',
                              shls_slice=shls_slice).reshape(3,p1-p0,nf,nao_pair)
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
-            gc.collect ()
             t0 = logger.timer (mc, 'SA-CASSCF Lci_dot_dgci atom {} ({},{}|{})'.format (ia, p1-p0, nf, nao_pair), *t0)
         # MRH: dm1 -> dm_cas in the line below. Also eliminate core-core terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm_cas[p0:p1]) * 2

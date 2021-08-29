@@ -242,8 +242,6 @@ class _ERIS(object):
             self.vhf_c = (numpy.einsum('ipq->pq', self.jkcpp) + self.jC_pp,
                           numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
         else:
-            import gc
-            gc.collect()
             log = logger.Logger(casscf.stdout, casscf.verbose)
             max_memory = max(2000, casscf.max_memory*.9-mem_now)
             if ((mem_outcore+mem_now) < casscf.max_memory*.9):
