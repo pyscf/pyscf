@@ -79,31 +79,31 @@ class KnownValues(unittest.TestCase):
         mo_coeff = numpy.random.random((2,nao,nmo))
         eris = cc.uccsd._make_eris_incore(ucc1, mo_coeff)
 
-        self.assertAlmostEqual(lib.finger(eris.oooo), 4.9638849382825754, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovoo),-1.3623681896983584, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovov), 125.81550684442163, 11)
-        self.assertAlmostEqual(lib.finger(eris.oovv), 55.123681017639598, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovvo), 133.48083527898248, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovvv), 59.421927525288183, 11)
-        self.assertAlmostEqual(lib.finger(eris.vvvv), 43.556602622204778, 11)
-        self.assertAlmostEqual(lib.finger(eris.OOOO),-407.05319440524585, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVOO), 56.284299937160796, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVOV),-287.72899895597448, 11)
-        self.assertAlmostEqual(lib.finger(eris.OOVV),-85.484299959144522, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVVO),-228.18996145476956, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVVV),-10.715902258877399, 11)
-        self.assertAlmostEqual(lib.finger(eris.VVVV),-89.908425473958303, 11)
-        self.assertAlmostEqual(lib.finger(eris.ooOO),-336.65979260175226, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovOO),-16.405125847288176, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovOV), 231.59042209500075, 11)
-        self.assertAlmostEqual(lib.finger(eris.ooVV), 20.338077193028354, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovVO), 206.48662856981386, 11)
-        self.assertAlmostEqual(lib.finger(eris.ovVV),-71.273249852220516, 11)
-        self.assertAlmostEqual(lib.finger(eris.vvVV), 172.47130671068496, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVoo),-19.927660309103977, 11)
-        self.assertAlmostEqual(lib.finger(eris.OOvv),-27.761433381797019, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVvo),-140.09648311337384, 11)
-        self.assertAlmostEqual(lib.finger(eris.OVvv), 40.700983950220547, 11)
+        self.assertAlmostEqual(lib.fp(eris.oooo), 4.9638849382825754, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovoo),-1.3623681896983584, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovov), 125.81550684442163, 11)
+        self.assertAlmostEqual(lib.fp(eris.oovv), 55.123681017639598, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovvo), 133.48083527898248, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovvv), 59.421927525288183, 11)
+        self.assertAlmostEqual(lib.fp(eris.vvvv), 43.556602622204778, 11)
+        self.assertAlmostEqual(lib.fp(eris.OOOO),-407.05319440524585, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVOO), 56.284299937160796, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVOV),-287.72899895597448, 11)
+        self.assertAlmostEqual(lib.fp(eris.OOVV),-85.484299959144522, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVVO),-228.18996145476956, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVVV),-10.715902258877399, 11)
+        self.assertAlmostEqual(lib.fp(eris.VVVV),-89.908425473958303, 11)
+        self.assertAlmostEqual(lib.fp(eris.ooOO),-336.65979260175226, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovOO),-16.405125847288176, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovOV), 231.59042209500075, 11)
+        self.assertAlmostEqual(lib.fp(eris.ooVV), 20.338077193028354, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovVO), 206.48662856981386, 11)
+        self.assertAlmostEqual(lib.fp(eris.ovVV),-71.273249852220516, 11)
+        self.assertAlmostEqual(lib.fp(eris.vvVV), 172.47130671068496, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVoo),-19.927660309103977, 11)
+        self.assertAlmostEqual(lib.fp(eris.OOvv),-27.761433381797019, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVvo),-140.09648311337384, 11)
+        self.assertAlmostEqual(lib.fp(eris.OVvv), 40.700983950220547, 11)
 
         uccsd.MEMORYMIN, bak = 0, uccsd.MEMORYMIN
         ucc1.max_memory = 0
@@ -352,7 +352,7 @@ class KnownValues(unittest.TestCase):
         myucc.max_memory, bak = 0, myucc.max_memory
         vt2 = eris._contract_vvVV_t2(myucc, t2, eris.vvVV)
         myucc.max_memory = bak
-        self.assertAlmostEqual(lib.finger(vt2), 12.00904827896089, 11)
+        self.assertAlmostEqual(lib.fp(vt2), 12.00904827896089, 11)
         idxa = lib.square_mat_in_trilu_indices(nvira)
         idxb = lib.square_mat_in_trilu_indices(nvirb)
         vvVV = eris.vvVV[:,idxb][idxa]
@@ -371,7 +371,7 @@ class KnownValues(unittest.TestCase):
         myucc.max_memory, bak = 0, myucc.max_memory
         vt2 = eris._contract_VVVV_t2(myucc, t2, eris.VVVV)
         myucc.max_memory = bak
-        self.assertAlmostEqual(lib.finger(vt2), 47.903883794299404-50.501573400833429j, 11)
+        self.assertAlmostEqual(lib.fp(vt2), 47.903883794299404-50.501573400833429j, 11)
         ref = lib.einsum('acbd,ijcd->ijab', eris.VVVV, t2)
         self.assertAlmostEqual(abs(vt2 - ref).max(), 0, 11)
 
@@ -397,11 +397,11 @@ class KnownValues(unittest.TestCase):
         t2ab = numpy.random.random((nocca,noccb,nvira,nvirb))
         t1a = numpy.zeros((nocca,nvira))
         t1b = numpy.zeros((noccb,nvirb))
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
+        self.assertAlmostEqual(lib.fp(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
         fakeris.vvVV = None
         mycc.direct = True
         mycc.max_memory = 0
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
+        self.assertAlmostEqual(lib.fp(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
 
         t1 = (numpy.random.random((nocca,nvira)), numpy.random.random((noccb,nvirb)))
         t2 = (numpy.random.random((nocca,nocca,nvira,nvira)),
@@ -409,12 +409,12 @@ class KnownValues(unittest.TestCase):
               numpy.random.random((noccb,noccb,nvirb,nvirb)))
         t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1[0]),  49.912690337392938, 10)
-        self.assertAlmostEqual(lib.finger(t1[1]),  74.596097348134776, 10)
-        self.assertAlmostEqual(lib.finger(t2[0]), -41.784696524955393, 10)
-        self.assertAlmostEqual(lib.finger(t2[1]), -9675.767769478574, 7)
-        self.assertAlmostEqual(lib.finger(t2[2]),  270.75447826471577, 8)
-        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 6)
+        self.assertAlmostEqual(lib.fp(t1[0]),  49.912690337392938, 10)
+        self.assertAlmostEqual(lib.fp(t1[1]),  74.596097348134776, 10)
+        self.assertAlmostEqual(lib.fp(t2[0]), -41.784696524955393, 10)
+        self.assertAlmostEqual(lib.fp(t2[1]), -9675.767769478574, 6)
+        self.assertAlmostEqual(lib.fp(t2[2]),  270.75447826471577, 7)
+        self.assertAlmostEqual(lib.fp(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 6)
 
     def test_vector_to_amplitudes(self):
         t1, t2 = myucc.vector_to_amplitudes(myucc.amplitudes_to_vector(myucc.t1, myucc.t2))

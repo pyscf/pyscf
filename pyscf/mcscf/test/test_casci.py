@@ -221,8 +221,8 @@ class KnownValues(unittest.TestCase):
         # another state
         #self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 9)
         self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 9)
-        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 9)
-        self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 9)
+        self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 8)
+        self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 8)
 
     def test_reset(self):
         myci = mcscf.CASCI(scf.RHF(molsym), 4, 4).density_fit()
