@@ -57,7 +57,7 @@ def get_version():
 VERSION = get_version()
 
 EXTRAS = {
-    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
+    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
     'dftd3': ['pyscf-dftd3'],
     'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
