@@ -459,6 +459,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                 for root in range(1, len(ci)):
                     casdm1 += mc.fcisolver.make_rdm1(ci[root], mc.ncas,
                                                      mc.nelecas)
+                casdm1 /= len(ci)
             else:
                 log.warn('Mulitple states found in CASCI solver. '
                          'First state is used to compute the Fock matrix'
