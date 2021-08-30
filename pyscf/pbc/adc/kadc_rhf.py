@@ -22,7 +22,6 @@ import pyscf.ao2mo as ao2mo
 import pyscf.adc
 import pyscf.adc.radc
 from pyscf.adc import radc_ao2mo
-
 import itertools
 
 from itertools import product
@@ -40,6 +39,11 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 
+# Note : All interals are in Chemist's notation except for vvvv
+#        Eg.of momentum conservation : 
+#        Chemist's  oovv(ijab) : ki - kj + ka - kb 
+#        Amplitudes t2(ijab)  : ki + kj - ka - kba
+
 def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.method = adc.method.lower()
@@ -48,9 +52,9 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     cput0 = (time.clock(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
-    #if adc.verbose >= logger.WARN:
-    #    adc.check_sanity()
-    #adc.dump_flags()
+    if adc.verbose >= logger.WARN:
+        adc.check_sanity()
+    adc.dump_flags()
 
     if eris is None:
         eris = adc.transform_integrals()
@@ -58,16 +62,18 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
     size = adc.vector_size()
     nroots = min(nroots,size)
     nkpts = adc.nkpts
+    nmo = adc.nmo
 
     if kptlist is None:
         kptlist = range(nkpts)
     
-    #if dtype is None:
     dtype = np.result_type(adc.t2[0])
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
-    convs = np.zeros((len(kptlist),nroots), dtype)
+    conv = np.zeros((len(kptlist),nroots), dtype)
+    P = np.zeros((len(kptlist),nroots), np.float)
+    X = np.zeros((len(kptlist),nmo,nroots), dtype)
 
     imds = adc.get_imds(eris)
 
@@ -81,43 +87,35 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         evals_k = evals_k.real
         evals[k] = evals_k
         evecs[k] = evecs_k
-        convs[k] = conv_k
-        print (conv_k)
+        conv[k] = conv_k
 
-    adc.U = np.array(evecs).T.copy()
+        U = np.array(evecs[k]).T.copy()
+
+        if adc.compute_properties:
+            spec_fac,spec_amp = adc.get_properties(kshift,U,nroots)
+            P[k] = spec_fac
+            X[k] = spec_amp
+
+    nfalse = np.shape(conv)[0] - np.sum(conv)
+
+    str = ("\n*************************************************************"
+           "\n            ADC calculation summary"
+           "\n*************************************************************")
+    logger.info(adc, str)
+    if nfalse >= 1:
+        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
 
     for k, kshift in enumerate(kptlist):
-        P,X = adc.get_properties(kshift,nroots)
+        for n in range(nroots):
+            print_string = ('%s k-point %d | root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, kshift, n, evals[k][n], evals[k][n]*27.2114))
+            if adc.compute_properties:
+                print_string += ("|  Spec factors = %10.8f  " % P[k][n])
+            print_string += ("|  conv = %s" % conv[n])
+            logger.info(adc, print_string)
 
-    print (evals)
-    print (P)
-#    exit()
-#
-#    adc.U = np.array(U).T.copy()
-#
-#     T = adc.get_trans_moments
-#
-#    nfalse = np.shape(conv)[0] - np.sum(conv)
-#
-#    str = ("\n*************************************************************"
-#           "\n            ADC calculation summary"
-#           "\n*************************************************************")
-#    logger.info(adc, str)
-#
-#    if nfalse >= 1:
-#        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
-#
-#    for n in range(nroots):
-#        print_string = ('%s root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, n, adc.E[n], adc.E[n]*27.2114))
-#        if adc.compute_properties:
-#            print_string += ("|  Spec factors = %10.8f  " % adc.P[n])
-#        print_string += ("|  conv = %s" % conv[n])
-#        logger.info(adc, print_string)
-#
-#    log.timer('ADC', *cput0)
-#
-    return convs, evals, evecs
-    #return evals
+    log.timer('ADC', *cput0)
+
+    return evals, evecs, P, X
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -133,8 +131,8 @@ def compute_amplitudes(myadc, eris):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    #if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-    #    raise NotImplementedError(myadc.method)
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        raise NotImplementedError(myadc.method)
 
     nmo = myadc.nmo
     nocc = myadc.nocc
@@ -156,6 +154,7 @@ def compute_amplitudes(myadc, eris):
    
     kconserv = myadc.khelper.kconserv
     touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
+
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         if touched[ki, kj, ka]:
             continue
@@ -274,7 +273,6 @@ def compute_amplitudes(myadc, eris):
             for kk in range(nkpts):
 
                     kc = kconserv[ki,ka,kk]
-                    #kb = kconserv[kj,kc,kk]
                     kb = kconserv[kj,kk,kc]
                     t2_2[ki,kj,ka] -= lib.einsum('jkcb,kica->ijab',eris_oovv[kj,kk,kc].conj(),t2_1[kk,ki,kc],optimize=True)
 
@@ -414,11 +412,18 @@ class RADC(pyscf.adc.radc.RADC):
         self.method = "adc(2)"
         self.method_type = "ip"
 
+        self.max_space = getattr(__config__, 'adc_kadc_RADC_max_space', 12)
+        self.max_cycle = getattr(__config__, 'adc_kadc_RADC_max_cycle', 50)
+        self.conv_tol = getattr(__config__, 'adc_kadc_RADC_conv_tol', 1e-7)
+        self.tol_residual = getattr(__config__, 'adc_kadc_RADC_tol_res', 1e-4)
+        self.scf_energy = mf.e_tot
+
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.cell = self._scf.cell
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self.frozen = frozen
+        self.compute_properties = True
 
         self._nocc = None
         self._nmo = None
@@ -429,23 +434,17 @@ class RADC(pyscf.adc.radc.RADC):
         self.e_corr = None
         self.imds = lambda:None
 
-        ##################################################
-        # don't modify the following attributes, unless you know what you are doing
-#        self.keep_exxdiv = False
-#
-#        keys = set(['kpts', 'khelper', 'ip_partition',
-#                    'ea_partition', 'max_space', 'direct'])
-#        self._keys = self._keys.union(keys)
-#        self.__imds__ = None
+        self.keep_exxdiv = False
+        keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff',
+                    'mol', 'mo_energy', 'max_memory', 'incore_complete',
+                    'scf_energy', 'e_tot', 't1', 'frozen', 'chkfile',
+                    'max_space', 't2', 'mo_occ', 'max_cycle','kpts', 'khelper'))
+
+        self._keys = set(self.__dict__.keys()).union(keys)
 
         self.mo_energy = mf.mo_energy
-        #madelung = tools.madelung(self.cell, self.kpts)
-        #self.mo_energy = [_adjust_occ(mo_e, np.array(self.mo_occ).shape[1], -madelung)
-        #                      for k, mo_e in enumerate(self.mo_energy)]
 
-    #transform_integrals = kadc_ao2mo.transform_integrals_outcore
-    #transform_integrals = kadc_ao2mo.transform_integrals_incore
-    transform_integrals = kadc_ao2mo.transform_integrals_df
+    transform_integrals = kadc_ao2mo.transform_integrals_incore
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
     compute_amplitudes_energy = compute_amplitudes_energy
@@ -470,12 +469,28 @@ class RADC(pyscf.adc.radc.RADC):
 
     def kernel_gs(self):
 
-        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+        nmo = self._nmo
+        nao = self.cell.nao_nr()
+        nmo_pair = nmo * (nmo+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        mem_now = lib.current_memory()[0]
+
+        if getattr(self, 'with_df', None):
            if getattr(self, 'with_df', None): 
                self.with_df = self.with_df
            else :
                self.with_df = self._scf.with_df
            self.chnk_size = self.get_chnk_size()
+
+           def df_transform():
+               return kadc_ao2mo.transform_integrals_df(self)
+           self.transform_integrals = df_transform
+        elif (self._scf._eri is None or
+              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+            def outcore_transform():
+                return kadc_ao2mo.transform_integrals_outcore(self)
+            self.transform_integrals = outcore_transform
         eris = self.transform_integrals()
         self.e_corr,self.t1,self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
 
@@ -493,64 +508,56 @@ class RADC(pyscf.adc.radc.RADC):
             self.check_sanity()
         self.dump_flags_gs()
     
-#        nmo = self._nmo
-#        nao = self.mo_coeff.shape[0]
-#        nmo_pair = nmo * (nmo+1) // 2
-#        nao_pair = nao * (nao+1) // 2
-#        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
-#        mem_now = lib.current_memory()[0]
-#
-        if getattr(self, 'with_df', None) or getattr(self._scf, 'with_df', None):  
+        nmo = self.nmo
+        nao = self.cell.nao_nr()
+        nmo_pair = nmo * (nmo+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        mem_now = lib.current_memory()[0]
+
+        if getattr(self, 'with_df', None):
            if getattr(self, 'with_df', None): 
                self.with_df = self.with_df
            else :
                self.with_df = self._scf.with_df
            self.chnk_size = self.get_chnk_size()
-#
-#           def df_transform():
-#              return radc_ao2mo.transform_integrals_df(self)
-#           self.transform_integrals = df_transform
-#        elif (self._scf._eri is None or
-#            (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
-#           def outcore_transform():
-#               return radc_ao2mo.transform_integrals_outcore(self)
-#           self.transform_integrals = outcore_transform
 
-        eris = self.transform_integrals() 
+           def df_transform():
+               return kadc_ao2mo.transform_integrals_df(self)
+           self.transform_integrals = df_transform
+        elif (self._scf._eri is None or
+              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+            def outcore_transform():
+                return kadc_ao2mo.transform_integrals_outcore(self)
+            self.transform_integrals = outcore_transform
+
+        eris = self.transform_integrals()
             
-#       self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
-        print ("MP2:",self.e_corr)
-#       self._finalize()
-#
+        print ("MPn:",self.e_corr)
+        self._finalize()
+
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-             con, e, v = self.ea_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
-#            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
-#
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+
         elif(self.method_type == "ip"):
-             #e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
-             con, e, v = self.ip_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
+             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
             raise NotImplementedError(self.method_type)
-#        self._adc_es = adc_es
-#        return e_exc, v_exc, spec_fac, x
-        return con, e, v
+        self._adc_es = adc_es
+        return e_exc, v_exc, spec_fac, x
 
     def ip_adc(self, nroots=1, guess=None, eris=None, kptlist=None):
         adc_es = RADCIP(self)
-        con, e, v = adc_es.kernel(nroots, guess, eris, kptlist)
-        #e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
-        #return e_exc, v_exc, spec_fac, x, adc_es
-        return con, e, v
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
     def ea_adc(self, nroots=1, guess=None, eris=None, kptlist=None):
         adc_es = RADCEA(self)
-        con, e, v = adc_es.kernel(nroots, guess, eris, kptlist)
-        #e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
-        #return e_exc, v_exc, spec_fac, x, adc_es
-        return con, e, v
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
 
 
 def ea_vector_size(adc):
@@ -605,8 +612,8 @@ def get_imds_ea(adc, eris=None):
     e_vir = np.array(e_vir)
 
     idn_vir = np.identity(nvir)
-##    if eris is None:
-##        eris = adc.transform_integrals()
+    if eris is None:
+        eris = adc.transform_integrals()
 
     eris_ovov = eris.ovov
 
@@ -900,9 +907,9 @@ def get_imds_ip(adc, eris=None):
     idn_occ = np.identity(nocc)
     M_ij = np.empty((nkpts,nocc,nocc),dtype=mo_coeff.dtype)
 
-#    if eris is None:
-#        eris = adc.transform_integrals()
-#
+    if eris is None:
+        eris = adc.transform_integrals()
+
     # i-j block
     # Zeroth-order terms
 
@@ -2104,7 +2111,7 @@ def get_trans_moments(adc,kshift):
     T = np.array(T)
     return T
 
-def renormalize_eigenvectors_ea(adc, kshift, nroots=1):
+def renormalize_eigenvectors_ea(adc, kshift, U, nroots=1):
 
     nkpts = adc.nkpts
     nocc = adc.t2[0].shape[3]
@@ -2115,8 +2122,6 @@ def renormalize_eigenvectors_ea(adc, kshift, nroots=1):
     n_doubles = nkpts * nkpts * nocc * nvir * nvir
 
     dim = n_singles + n_doubles
-
-    U = adc.U
 
     for I in range(U.shape[1]):
         U1 = U[:n_singles,I]
@@ -2133,7 +2138,7 @@ def renormalize_eigenvectors_ea(adc, kshift, nroots=1):
 
     return U
 
-def renormalize_eigenvectors_ip(adc, kshift, nroots=1):
+def renormalize_eigenvectors_ip(adc, kshift, U, nroots=1):
 
     nkpts = adc.nkpts
     nocc = adc.t2[0].shape[3]
@@ -2144,8 +2149,6 @@ def renormalize_eigenvectors_ip(adc, kshift, nroots=1):
     n_doubles = nkpts * nkpts * nvir * nocc * nocc
 
     dim = n_singles + n_doubles
-
-    U = adc.U
 
     for I in range(U.shape[1]):
         U1 = U[:n_singles,I]
@@ -2162,13 +2165,13 @@ def renormalize_eigenvectors_ip(adc, kshift, nroots=1):
 
     return U
 
-def get_properties(adc, kshift, nroots=1):
+def get_properties(adc, kshift, U, nroots=1):
 
     #Transition moments
     T = adc.get_trans_moments(kshift)
     
     #Spectroscopic amplitudes
-    U = adc.renormalize_eigenvectors(kshift,nroots)
+    U = adc.renormalize_eigenvectors(kshift,U,nroots)
     X = np.dot(T, U).reshape(-1, nroots)
     
     #Spectroscopic factors
@@ -2215,37 +2218,19 @@ class RADCEA(RADC):
             Spectroscopic amplitudes for each EA transition.
     '''
     def __init__(self, adc):
-        #self.mol = adc.mol
-        #self.verbose = adc.verbose
-        #self.stdout = adc.stdout
-        #self.max_memory = adc.max_memory
-        self.max_space = 60
-        self.max_cycle = 200
-        self.conv_tol  = 1e-7
-        self.tol_residual =1e-3
+        self.verbose = adc.verbose
+        self.stdout = adc.stdout
+        self.max_memory = adc.max_memory
+        self.max_space = adc.max_space
+        self.max_cycle = adc.max_cycle
+        self.conv_tol  = adc.conv_tol
+        self.tol_residual  = adc.tol_residual
         self.t1 = adc.t1
         self.t2 = adc.t2
-        #self.imds = adc.imds
-        #self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
         self._scf = adc._scf
-        self._nocc = adc._nocc
-        #self._nvir = adc._nvir
-        self._nmo = adc._nmo
-        #self.mo_coeff = adc.mo_coeff
-        #self.mo_energy = adc.mo_energy
-        #self.nmo = adc._nmo
-        #self.transform_integrals = adc.transform_integrals
-        self.with_df = adc.with_df
-        self.chnk_size = adc.chnk_size
-        #self.compute_properties = adc.compute_properties
-        #self.E = None
-        #self.U = None
-        #self.P = None
-        #self.X = None
-        #self.evec_print_tol = adc.evec_print_tol
-        #self.spec_factor_print_tol = adc.spec_factor_print_tol
+        self.compute_properties = adc.compute_properties
 
         self.kpts = adc._scf.kpts
         self.verbose = adc.verbose
@@ -2257,6 +2242,10 @@ class RADCEA(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_occ = adc.mo_occ
         self.frozen = adc.frozen
+
+        self._nocc = adc._nocc
+        self._nmo = adc._nmo
+        self._nvir = adc._nvir
 
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
@@ -2276,10 +2265,6 @@ class RADCEA(RADC):
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors_ea
     get_properties = get_properties
-    #analyze_spec_factor = analyze_spec_factor
-    #analyze_eigenvector = analyze_eigenvector_ip
-    #analyze = analyze
-    #compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
@@ -2344,37 +2329,20 @@ class RADCIP(RADC):
             Spectroscopic amplitudes for each IP transition.
     '''
     def __init__(self, adc):
-        #self.mol = adc.mol
-        #self.verbose = adc.verbose
-        #self.stdout = adc.stdout
-        #self.max_memory = adc.max_memory
-        self.max_space = 60
-        self.max_cycle = 100
-        self.conv_tol  = 1e-7
-        self.tol_residual  = 1e-3
+        self.verbose = adc.verbose
+        self.stdout = adc.stdout
+        self.max_memory = adc.max_memory
+        self.max_space = adc.max_space
+        self.max_cycle = adc.max_cycle
+        self.conv_tol  = adc.conv_tol
+        self.tol_residual  = adc.tol_residual
+
         self.t1 = adc.t1
         self.t2 = adc.t2
-        #self.imds = adc.imds
-        #self.e_corr = adc.e_corr
         self.method = adc.method
         self.method_type = adc.method_type
         self._scf = adc._scf
-        self._nocc = adc._nocc
-        #self._nvir = adc._nvir
-        self._nmo = adc._nmo
-        #self.mo_coeff = adc.mo_coeff
-        #self.mo_energy = adc.mo_energy
-        #self.nmo = adc._nmo
-        #self.transform_integrals = adc.transform_integrals
-        self.with_df = adc.with_df
-        self.chnk_size = adc.chnk_size
-        #self.compute_properties = adc.compute_properties
-        #self.E = None
-        #self.U = None
-        #self.P = None
-        #self.X = None
-        #self.evec_print_tol = adc.evec_print_tol
-        #self.spec_factor_print_tol = adc.spec_factor_print_tol
+        self.compute_properties = adc.compute_properties
 
         self.kpts = adc._scf.kpts
         self.verbose = adc.verbose
@@ -2386,6 +2354,10 @@ class RADCIP(RADC):
         self.mo_coeff = adc.mo_coeff
         self.mo_occ = adc.mo_occ
         self.frozen = adc.frozen
+
+        self._nocc = adc._nocc
+        self._nmo = adc._nmo
+        self._nvir = adc._nvir
 
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
@@ -2405,10 +2377,6 @@ class RADCIP(RADC):
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors_ip
     get_properties = get_properties
-    #analyze_spec_factor = analyze_spec_factor
-    #analyze_eigenvector = analyze_eigenvector_ip
-    #analyze = analyze
-    #compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
@@ -2428,30 +2396,6 @@ class RADCIP(RADC):
         for p in range(g.shape[1]):
             guess.append(g[:,p])
         return guess
-
-    #def get_init_guess(self, kshift, imds, nroots=1, diag=None, ascending = True):
-    #    if diag is None :
-    #        diag = self.ip_adc_diag()
-    #    idx = None
-    #    dtype = getattr(diag, 'dtype', np.complex)
-    #    if ascending:
-    #        idx = np.argsort(diag)
-    #    else:
-    #        idx = np.argsort(diag)[::-1]
-    #    guess = np.zeros((diag.shape[0], nroots), dtype=dtype)
-    #    #min_shape = min(diag.shape[0], nroots)
-    #    #guess[:min_shape,:min_shape] = np.identity(min_shape)
-    #    e,v = np.linalg.eigh(imds[kshift])
-    #    print (v)
-    #    exit()
-    #    guess[:self.nocc,:] = v.reshape(-1)
-    #    exit()
-    #    g = np.zeros((diag.shape[0], nroots), dtype=dtype)
-    #    g[idx] = guess.copy()
-    #    guess = []
-    #    for p in range(g.shape[1]):
-    #        guess.append(g[:,p])
-    #    return guess
 
     def gen_matvec(self,kshift,imds=None, eris=None):
         if imds is None: imds = self.get_imds(eris)
