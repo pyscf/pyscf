@@ -301,7 +301,10 @@ class Cube(object):
             f.write(f'PySCF Version: {pyscf.__version__}  Date: {time.ctime()}\n')
             f.write(f'{mol.natm:5d}')
             f.write('%12.6f%12.6f%12.6f\n' % tuple(self.boxorig.tolist()))
-            delta = (self.box.T * [self.xs[1], self.ys[1], self.zs[1]]).T
+            dx = self.xs[-1] if len(self.xs) == 1 else self.xs[1]
+            dy = self.ys[-1] if len(self.ys) == 1 else self.ys[1]
+            dz = self.zs[-1] if len(self.zs) == 1 else self.zs[1]
+            delta = (self.box.T * [dx,dy,dz]).T
             f.write(f'{self.nx:5d}{delta[0,0]:12.6f}{delta[0,1]:12.6f}{delta[0,2]:12.6f}\n')
             f.write(f'{self.ny:5d}{delta[1,0]:12.6f}{delta[1,1]:12.6f}{delta[1,2]:12.6f}\n')
             f.write(f'{self.nz:5d}{delta[2,0]:12.6f}{delta[2,1]:12.6f}{delta[2,2]:12.6f}\n')
