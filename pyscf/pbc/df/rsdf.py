@@ -123,7 +123,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     omega = abs(mydf.omega)
 
-    if mydf.use_bvk:
+    if mydf.use_bvk and mydf.kpts_band is None:
         bvk_kmesh = kpts_to_kmesh(cell, mydf.kpts)
         if bvk_kmesh is None:
             log.debug("Non-Gamma-inclusive kmesh is found. bvk kmesh is not used.")
