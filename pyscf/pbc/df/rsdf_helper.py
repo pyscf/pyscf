@@ -138,7 +138,11 @@ def get_Lsmin(cell, Rcuts, uniq_atms, dimension=None):
 # build cell plus imgs
     b = cell.reciprocal_vectors(norm_to=1)
     heights_inv = np.linalg.norm(b, axis=1)
-    nimgs = np.ceil(Rcut*heights_inv + 1.1).astype(int)
+    # see issue #1017 and PR #1044 for details of boundary_penalty
+    scaled_atom_coords = cell.atom_coords().dot(b.T)
+    boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
+                               abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
+    nimgs = np.ceil(Rcut * heights_inv + boundary_penalty).astype(int)
     if dimension is None:
         dimension = cell.dimension
     if dimension == 0:
