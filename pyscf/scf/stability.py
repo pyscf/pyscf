@@ -54,11 +54,12 @@ def rhf_stability(mf, internal=True, external=False, verbose=None):
         internal stability and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
     if internal:
-        mo_i = rhf_internal(mf, verbose=verbose)
+        mo_i, stable_i = rhf_internal(mf, verbose=verbose)
     if external:
-        mo_e = rhf_external(mf, verbose=verbose)
-    return mo_i, mo_e
+        mo_e, stable_e = rhf_external(mf, verbose=verbose)
+    return mo_i, mo_e, stable_i, stable_e
 
 def uhf_stability(mf, internal=True, external=False, verbose=None):
     '''
@@ -80,11 +81,12 @@ def uhf_stability(mf, internal=True, external=False, verbose=None):
         internal stability and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
     if internal:
-        mo_i = uhf_internal(mf, verbose=verbose)
+        mo_i, stable_i = uhf_internal(mf, verbose=verbose)
     if external:
-        mo_e = uhf_external(mf, verbose=verbose)
-    return mo_i, mo_e
+        mo_e, stable_e = uhf_external(mf, verbose=verbose)
+    return mo_i, mo_e, stable_i, stable_e
 
 def rohf_stability(mf, internal=True, external=False, verbose=None):
     '''
@@ -104,11 +106,12 @@ def rohf_stability(mf, internal=True, external=False, verbose=None):
         the required stable condition.
     '''
     mo_i = mo_e = None
+    stable_i = stable_e = None
     if internal:
-        mo_i = rohf_internal(mf, verbose=verbose)
+        mo_i, stable_i = rohf_internal(mf, verbose=verbose)
     if external:
-        mo_e = rohf_external(mf, verbose=verbose)
-    return mo_i, mo_e
+        mo_e, stable_e = rohf_external(mf, verbose=verbose)
+    return mo_i, mo_e, stable_i, stable_e
 
 def ghf_stability(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -116,6 +119,7 @@ def ghf_stability(mf, verbose=None):
     g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ,
                                             with_symmetry=with_symmetry)
     hdiag *= 2
+    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -131,16 +135,18 @@ def ghf_stability(mf, verbose=None):
     if e < -1e-5:
         log.note('GHF wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        stable = False
     else:
         log.note('GHF wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
-    return mo
+    return mo, stable
 
 def rhf_internal(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rhf(mf, mf.mo_coeff, mf.mo_occ,
                                             with_symmetry=with_symmetry)
     hdiag *= 2
+    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -161,10 +167,11 @@ def rhf_internal(mf, with_symmetry=True, verbose=None):
     if e < -1e-5:
         log.note('RHF/RKS wavefunction has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        stable = False
     else:
         log.note('RHF/RKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
-    return mo
+    return mo, stable
 
 def _rotate_mo(mo_coeff, mo_occ, dx):
     dr = hf.unpack_uniq_var(dx, mo_occ)
@@ -240,6 +247,7 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
 def rhf_external(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     hop1, hdiag1, hop2, hdiag2 = _gen_hop_rhf_external(mf, with_symmetry)
+    stable = True
 
     def precond(dx, e, x0):
         hdiagd = hdiag1 - e
@@ -264,16 +272,18 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
     if e3 < -1e-5:
         log.note('RHF/RKS wavefunction has a RHF/RKS -> UHF/UKS instability.')
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
+        stable = False
     else:
         log.note('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stability analysis')
         mo = (mf.mo_coeff, mf.mo_coeff)
-    return mo
+    return mo, stable
 
 def rohf_internal(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     g, hop, hdiag = newton_ah.gen_g_hop_rohf(mf, mf.mo_coeff, mf.mo_occ,
                                              with_symmetry=with_symmetry)
     hdiag *= 2
+    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -289,10 +299,11 @@ def rohf_internal(mf, with_symmetry=True, verbose=None):
     if e < -1e-5:
         log.note('ROHF wavefunction has an internal instability.')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        stable = False
     else:
         log.note('ROHF wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
-    return mo
+    return mo, stable
 
 def rohf_external(mf, with_symmetry=True, verbose=None):
     raise NotImplementedError
@@ -302,6 +313,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
     g, hop, hdiag = newton_ah.gen_g_hop_uhf(mf, mf.mo_coeff, mf.mo_occ,
                                             with_symmetry=with_symmetry)
     hdiag *= 2
+    stable = True
     def precond(dx, e, x0):
         hdiagd = hdiag - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -320,10 +332,11 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
         nvira = numpy.count_nonzero(mf.mo_occ[0]==0)
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:nocca*nvira]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[nocca*nvira:]))
+        stable = False
     else:
         log.note('UHF/UKS wavefunction is stable in the internal stability analysis')
         mo = mf.mo_coeff
-    return mo
+    return mo, stable
 
 def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     mol = mf.mol
@@ -429,6 +442,7 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
 def uhf_external(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
     hop1, hdiag1, hop2, hdiag2 = _gen_hop_uhf_external(mf, with_symmetry)
+    stable = True
 
     def precond(dx, e, x0):
         hdiagd = hdiag1 - e
@@ -473,9 +487,10 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
         mo = numpy.dot(mo, u)
         mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
                            mo[:,nocca:nmo], mo[:,nmo+noccb:]])
+        stable = False
     else:
         log.note('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stability analysis')
-    return mo
+    return mo, stable
 
 
 if __name__ == '__main__':
