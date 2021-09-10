@@ -38,7 +38,6 @@ mf.stability(external=True)
 # The initial guess can be used to make density matrix and fed into a new SCF
 # iteration (see 15-initial_guess.py).
 #
-print('O2')
 mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*')
 mf = scf.UHF(mol).run()
 mo1 = mf.stability()[0]
@@ -79,10 +78,10 @@ def stable_opt_internal(mf):
         mo1, _, stable, _ = mf.stability()
         cyc += 1
     if not stable:
-        raise RuntimeError('Stability Opt failed after %d attempts.' % cyc)
+        log.note('Stability Opt failed after %d attempts' % cyc)
     return mf
-
-mol = gto.M(atom='O 0 0 0; O 0 0 1.3', basis='631g*')
-mf = scf.UHF(mol).run()
-mf = stable_opt_internal(mf)
+print('loop example')
+mol = gto.M(atom='C 0 0 0; C 0 0 2.0', basis='631g*')
+mf2 = scf.UHF(mol).run()
+mf2 = stable_opt_internal(mf2)
 
