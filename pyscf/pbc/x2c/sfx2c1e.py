@@ -122,6 +122,9 @@ class PBCX2CHelper(x2c.X2C):
         x2c.X2C.__init__(self, cell)
 
 class SpinFreeX2CHelper(PBCX2CHelper):
+    def get_pnucp(self, mydf, kpts=None):
+        return get_pnucp(mydf, kpts=None)
+
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None:
@@ -153,7 +156,7 @@ class SpinFreeX2CHelper(PBCX2CHelper):
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         elif 'NONE' in self.approx.upper():
-            w = get_pnucp(with_df, kpts_lst)
+            w = self.get_pnucp(with_df, kpts_lst)
         else:
             raise NotImplementedError
 
@@ -274,7 +277,11 @@ def get_pnucp(mydf, kpts=None):
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+        # TODO where does this come from?
         if cell.dimension == 3:
+            # bas_exp: expoenents (ndarray) of the given shell.
+            # Why do we only consider the lowest expoenent? Also nuccell.bas_exp(1)[0] does not belong to atom 1 always.
+            # --> This is because of the special construction of nuccell: only one s orbital with exponent = mydf.eta for each atom.
             nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
             nucbar *= numpy.pi/cell.vol
 

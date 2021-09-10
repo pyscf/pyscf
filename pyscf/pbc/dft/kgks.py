@@ -29,6 +29,7 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kghf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
@@ -80,6 +81,11 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
             ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_a+dm_b, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
+
+    # Check ks._numint.r_vxc in pyscf.dft.dks.py: It takes the entire dm and generate vxc with off-diagonal spin block.
+    #max_memory = ks.max_memory - lib.current_memory()[0]
+    #n, exc, vxc = ks._numint.r_vxc(mol, ks.grids, ks.xc, dm, hermi=hermi,
+    #                               max_memory=max_memory)
 
     # vxc_spblk = ([alpha, beta], nkpts, nao, nao)
     n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), 0,
@@ -160,6 +166,15 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
 
     density_fit = rks._patch_df_beckegrids(kghf.KGHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kghf.KGHF.mix_density_fit)
+    newton = khf.KSCF.newton
+
+    def x2c1e(self):
+         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+         return x2c1e_gscf(self)
+
+    x2c = x2c1e
+    sfx2c1e = khf.KSCF.sfx2c1e
 
     stability = None
     def nuc_grad_method(self):

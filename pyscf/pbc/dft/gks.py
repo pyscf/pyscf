@@ -128,7 +128,6 @@ class GKS(rks.KohnShamDFT, pbcghf.GHF):
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
 
-    # TODO Check details of these
     density_fit = rks._patch_df_beckegrids(pbcghf.GHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcghf.GHF.mix_density_fit)
 
