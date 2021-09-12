@@ -59,10 +59,10 @@ DEFAULT_AUXBASIS = {
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
     '321g'        : ('def2-svp-jkfit'         , 'def2-svp-rifit'     ),
     '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),
-    '631+g'       : ('heavy-aug-cc-pvdz-jkfit', 'heavyaug-cc-pvdz-ri'),
+    '631+g'       : ('heavy-aug-cc-pvdz-jkfit', None                 ),
     '631++g'      : ('aug-cc-pvdz-jkfit'      , 'aug-cc-pvdz-ri'     ),
     '6311g'       : ('cc-pvtz-jkfit'          , 'cc-pvtz-ri'         ),
-    '6311+g'      : ('heavy-aug-cc-pvtz-jkfit', 'heavyaug-cc-pvtz-ri'),
+    '6311+g'      : ('heavy-aug-cc-pvtz-jkfit', None                 ),
     '6311++g'     : ('aug-cc-pvtz-jkfit'      , 'aug-cc-pvtz-ri'     ),
 }
 
