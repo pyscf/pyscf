@@ -491,43 +491,75 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
-def bas_prim_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
+def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION, rcut=0, max_cycle=100):
     '''
-    precision ~ g(r)
+    Estimate the cutoff radii of primitive Gaussian functions.
     '''
+    log_cs = np.log(coeff)
+    log_prec = np.log(precision)
+    if l == 0:
+        return np.sqrt((log_cs-log_prec) / alpha)
+
+    rmin = max(np.sqrt(0.5 * l / alpha).min(), rcut)
+    eps = min(rmin, 1e-3)
+    for i in range(max_cycle):
+        tmp = (l*np.log(rcut) + log_cs - log_prec)/alpha
+        rcut, rcut_old = tmp**.5, rcut
+        if abs(rcut - rcut_old).max() < eps:
+            return rcut
+    return rcut
+
+def shell_rcut(cell, bas_id, precision=None, rcut=5.):
+    '''
+    Estimate the cutoff radius of a shell,
+    based on the cutoff radii of primitive Gaussian functions.
+    '''
+    if precision is None:
+        precision = cell.precision
     l = cell.bas_angular(bas_id)
     es = cell.bas_exp(bas_id)
-    cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
-    log_prec = np.log(precision)
-    log_cs = np.log(cs)
-    r = 5.
-    r = ((l*np.log(r) + log_cs - log_prec) / es)**.5
-    r = ((l*np.log(r) + log_cs - log_prec) / es)**.5
+    cs = abs(cell._libcint_ctr_coeff(bas_id)).max(axis=1)
+    r = pgf_rcut(l, es, cs, precision, rcut)
     return r.max()
 
-def rcut_by_shells(cell, precision=None, r0=5.):
+def _rcut_by_shells_c(cell, precision=None, rcut=5., return_pgf_radius=False):
+    '''
+    Compute shell radii by looping over all shells.
+    '''
     if precision is None:
         precision = cell.precision
 
     bas = np.asarray(cell._bas, order='C')
     env = np.asarray(cell._env, order='C')
     nbas = len(bas)
-    out = np.empty((nbas,), order='C', dtype=np.double)
+    shell_radius = np.empty((nbas,), order='C', dtype=np.double)
+    if return_pgf_radius:
+        nprim = bas[:,mole.NPRIM_OF].max()
+        # be careful that the unused memory blocks are not initialized
+        pgf_radius = np.empty((nbas,nprim), order='C', dtype=np.double)   
+        ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius)
+    else:
+        ptr_pgf_radius = lib.c_null_ptr()
     func = getattr(libpbc, "rcut_by_shells", None)
     try:
-        func(out.ctypes.data_as(ctypes.c_void_p),
+        func(shell_radius.ctypes.data_as(ctypes.c_void_p),
+             ptr_pgf_radius, 
              bas.ctypes.data_as(ctypes.c_void_p),
              env.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(nbas), 
-             ctypes.c_double(r0), ctypes.c_double(precision))
+             ctypes.c_int(nbas), ctypes.c_double(rcut), 
+             ctypes.c_double(precision))
     except:
-        raise RuntimeError("Failed to get rcut.")
-    return out
+        raise RuntimeError("Failed to get shell rcut.")
+    if return_pgf_radius:
+        return shell_radius, pgf_radius
+    return shell_radius
 
-def rcut_by_atom_types(cell, precision=None):
+def rcut_by_atom_types(cell, precision=None, rcut=5., atom_types=None):
     if precision is None:
         precision = cell.precision
-    atom_types = mole.atom_types(cell._atom, cell._basis)
+    if atom_types is None:
+        atom_types = mole.atom_types(cell._atom, cell._basis)
+
     rcuts={}
     for atom_symb, ia in atom_types.items():
         atm_idx = ia[0]
@@ -535,23 +567,28 @@ def rcut_by_atom_types(cell, precision=None):
         for ib in range(len(cell._bas)):
             idx = cell.bas_atom(ib)
             if idx == atm_idx:
-                rcut = cell.bas_prim_rcut(ib, precision=precision)
-                rcuts[atom_symb].append(rcut)
+                r = cell.shell_rcut(ib, precision=precision, rcut=rcut)
+                rcuts[atom_symb].append(r)
     return rcuts
 
-def rcut_by_shells_old(cell, precision=None):
+def rcut_by_shells(cell, precision=None, rcut=5., return_pgf_radius=False):
     if precision is None:
         precision = cell.precision
 
-    if len(cell._atom) != cell._bas[-1][0]+1: 
-        # possibly a concatenated cell
-        return np.array([cell.bas_prim_rcut(ib, precision)
-                        for ib in range(cell.nbas)])
+    # C code is much faster
+    return _rcut_by_shells_c(cell, precision, rcut, return_pgf_radius)
 
-    rcuts = rcut_by_atom_types(cell, precision=precision)
+    if len(cell._atom) != (np.unique(cell._bas[:,0]).max() + 1):
+        # possibly a concatenated cell, for which atom types are unknown
+        # in such case, compute rcut for each shell
+        return _rcut_by_shells_c(cell, precision, rcut)
 
     atom_types = mole.atom_types(cell._atom, cell._basis)
-    out = np.empty([len(cell._bas),], order='C', dtype=np.double)
+    rcuts = rcut_by_atom_types(cell, precision=precision, rcut=rcut, 
+                               atom_types=atom_types)
+
+    out = np.empty([len(cell._bas),])
+    '''
     ib = 0
     while ib < len(cell._bas):
         ia = cell.bas_atom(ib)
@@ -561,6 +598,11 @@ def rcut_by_shells_old(cell, precision=None):
                 ib += len(rcuts[symb])
                 break
     assert ib == len(cell._bas)
+    '''
+    bas_atom_idx = cell._bas[:,0]
+    for symb, atm_idx in atom_types.items():
+        for ia in atm_idx:
+            out[np.where(bas_atom_idx == ia)[0]] = rcuts[symb]
     return out
 
 class NeighborPair(ctypes.Structure):
@@ -573,23 +615,35 @@ class NeighborList(ctypes.Structure):
                 ("nimgs", ctypes.c_int),
                 ("pairs", ctypes.POINTER(ctypes.POINTER(NeighborPair)))]
 
-def build_neighbor_list_for_shlpairs(cell0, cell1, Ls=None):
+def build_neighbor_list_for_shlpairs(cell0, cell1, Ls=None,
+                                     ish_rcut=None, jsh_rcut=None, hermi=0):
     if Ls is None:
         Ls = cell0.get_lattice_Ls()
     Ls = np.asarray(Ls, order='C', dtype=np.double)
     nimgs = len(Ls)
 
+    if hermi == 1:
+        assert cell1 is cell0
+
     ish_atm = np.asarray(cell0._atm, order='C', dtype=np.int32)
     ish_bas = np.asarray(cell0._bas, order='C', dtype=np.int32)
     ish_env = np.asarray(cell0._env, order='C', dtype=np.double)
     nish = len(ish_bas)
-    ish_rcut = np.asarray(cell0.rcut_by_shells(), order='C', dtype=np.double)
+    if ish_rcut is None:
+        ish_rcut = np.asarray(cell0.rcut_by_shells(), order='C', dtype=np.double)
 
-    jsh_atm = np.asarray(cell1._atm, order='C', dtype=np.int32)
-    jsh_bas = np.asarray(cell1._bas, order='C', dtype=np.int32)
-    jsh_env = np.asarray(cell1._env, order='C', dtype=np.double)
+    if cell1 is cell0:
+        jsh_atm = ish_atm
+        jsh_bas = ish_bas
+        jsh_env = ish_env
+        jsh_rcut = ish_rcut
+    else:
+        jsh_atm = np.asarray(cell1._atm, order='C', dtype=np.int32)
+        jsh_bas = np.asarray(cell1._bas, order='C', dtype=np.int32)
+        jsh_env = np.asarray(cell1._env, order='C', dtype=np.double)
+        if jsh_rcut is None:
+            jsh_rcut = np.asarray(cell1.rcut_by_shells(), order='C', dtype=np.double)
     njsh = len(jsh_bas)
-    jsh_rcut = np.asarray(cell1.rcut_by_shells(), order='C', dtype=np.double)
 
     nl = ctypes.POINTER(NeighborList)()
     func = getattr(libpbc, "build_neighbor_list", None)
@@ -604,7 +658,8 @@ def build_neighbor_list_for_shlpairs(cell0, cell1, Ls=None):
              jsh_env.ctypes.data_as(ctypes.c_void_p),
              jsh_rcut.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(nish), ctypes.c_int(njsh),
-             Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs))
+             Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs),
+             ctypes.c_int(hermi))
     except:
         raise RuntimeError("Failed to get neighbor list.")
     return nl
@@ -617,6 +672,13 @@ def free_neighbor_list(nl):
         raise RuntimeError("Failed to free neighbor list.")
 
 def neighbor_list_to_ndarray(cell0, cell1, nl):
+    '''
+    Returns:
+        Ls_list: (nLtot,) ndarray
+            indices of Ls
+        Ls_idx: (2 x nish x njsh,) ndarray
+            starting and ending indices in Ls_list
+    '''
     nish = cell0.nbas
     njsh = cell1.nbas
     Ls_list = []
@@ -1753,7 +1815,7 @@ class Cell(mole.Mole):
         return self
 
     bas_rcut = bas_rcut
-    bas_prim_rcut = bas_prim_rcut
+    shell_rcut = shell_rcut
     rcut_by_atom_types = rcut_by_atom_types
     rcut_by_shells = rcut_by_shells
 

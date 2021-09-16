@@ -20,7 +20,7 @@
  */
 
 #include <stdlib.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include <math.h>
 #include <assert.h>
 #include <complex.h>
@@ -196,12 +196,13 @@ static double gto_rcut(double alpha, int l, double c, double log_prec)
         return r;
 }
 
-static int _has_overlap(int nx0, int nx1, int nx_per_cell)
+int _has_overlap(int nx0, int nx1, int nx_per_cell)
 {
-        return nx0 < nx1 + 3;
+        //return nx0 < nx1 + 3;
+        return nx0 <= nx1;
 }
 
-static int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
+int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
 {
         int ngridx;
         if (nimgx == 1) {
@@ -1717,7 +1718,7 @@ void GTOreverse_vrr2d_ket(double *g00, double *g01,
         }
 }
 
-static void _cart_to_xyz(double *dm_xyz, double *dm_cart,
+void _cart_to_xyz(double *dm_xyz, double *dm_cart,
                          int floorl, int topl, int l1)
 {
         int l1l1 = l1 * l1;
@@ -2594,7 +2595,7 @@ static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
                     offset, submesh, mesh, cache);
 }
 
-static int _rho_cache_size(int l, int comp, int *mesh)
+int _rho_cache_size(int l, int comp, int *mesh)
 {
         int l1 = l * 2 + 1;
         int cache_size = 0;

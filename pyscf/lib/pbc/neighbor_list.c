@@ -54,7 +54,7 @@ void init_neighbor_list(NeighborList** nl, int nish, int njsh, int nimgs)
 void build_neighbor_list(NeighborList** nl,
                          int* ish_atm, int* ish_bas, double* ish_env, double* ish_rcut, 
                          int* jsh_atm, int* jsh_bas, double* jsh_env, double* jsh_rcut,
-                         int nish, int njsh, double* Ls, int nimgs)
+                         int nish, int njsh, double* Ls, int nimgs, int hermi)
 {
     init_neighbor_list(nl, nish, njsh, nimgs);
     NeighborList* nl0 = *nl;
@@ -74,6 +74,9 @@ void build_neighbor_list(NeighborList** nl,
         ish_atm_id = ish_bas[ish*BAS_SLOTS+ATOM_OF];
         ish_ratm = ish_env + ish_atm[ish_atm_id*ATM_SLOTS+PTR_COORD];
         for (jsh=0; jsh<njsh; jsh++) {
+            if (hermi == 1 && jsh < ish) {
+                continue;
+            }
             jsh_radius = jsh_rcut[jsh];
             jsh_atm_id = jsh_bas[jsh*BAS_SLOTS+ATOM_OF];
             jsh_ratm = jsh_env + jsh_atm[jsh_atm_id*ATM_SLOTS+PTR_COORD];

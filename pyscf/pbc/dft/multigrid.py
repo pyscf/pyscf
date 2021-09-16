@@ -51,7 +51,6 @@ INIT_MESH_ORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_orth', (12,12,
 INIT_MESH_NONORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_nonorth', (32,32,32))
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 1.3)
 TASKS_TYPE = getattr(__config__, 'pbc_dft_multigrid_tasks_type', 'ke_cut') # 'rcut'
-NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', None)
 
 # RHOG_HIGH_ORDER=True will compute the high order derivatives of electron
 # density in real space and FT to reciprocal space.  Set RHOG_HIGH_ORDER=False
@@ -1026,7 +1025,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
+    rhoG = mydf._eval_rhoG(dm_kpts, hermi, kpts, deriv)
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
@@ -1077,7 +1076,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if xctype == 'LDA':
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
-        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        veff = mydf._get_j_pass2(wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
             wv_freq[:,0] += vG.reshape(nset,*mesh) * .5
@@ -1701,15 +1700,6 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
         ke1 *= KE_RATIO
         ke_delimeter.append(ke1)
 
-    if NGRIDS:
-        ke1 = cell.ke_cutoff
-        ke_delimeter = [ke1,]
-        for i in range(NGRIDS-1):
-            ke1 /= KE_RATIO
-            ke_delimeter.append(ke1)
-        ke_delimeter.append(0)
-        ke_delimeter.reverse()
-
     tasks = []
     for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
         # shells which have high exps (small rcut)
@@ -1838,7 +1828,8 @@ class MultiGridFFTDF(fft.FFTDF):
         return vj, vk
 
     get_rho = get_rho
-
+    _eval_rhoG = _eval_rhoG
+    _get_j_pass2 = _get_j_pass2
 
 def multigrid(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
