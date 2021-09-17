@@ -133,7 +133,8 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                            dtype=numpy.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  auxcell._atm, auxcell._bas, auxcell._env)
-    Ls = cell.get_lattice_Ls()
+    rcut = max(cell.rcut, auxcell.rcut)
+    Ls = cell.get_lattice_Ls(rcut=rcut)
     nimgs = len(Ls)
     nbas = cell.nbas
 

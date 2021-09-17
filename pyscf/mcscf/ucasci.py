@@ -162,6 +162,7 @@ class UCASCI(casci.CASCI):
     def ncore(self):
         if self._ncore is None:
             ncorelec = self.mol.nelectron - sum(self.nelecas)
+            assert ncorelec >= 0
             if ncorelec % 2:
                 ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
             else:
@@ -174,8 +175,10 @@ class UCASCI(casci.CASCI):
         if x is None:
             self._ncore = x
         elif isinstance(x, (int, numpy.integer)):
+            assert x >= 0
             self._ncore = (x, x)
         else:
+            assert x[0] >= 0 and x[1] >= 0
             self._ncore = (x[0], x[1])
 
     def dump_flags(self, verbose=None):
@@ -193,6 +196,19 @@ class UCASCI(casci.CASCI):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        return self
+
+    def check_sanity(self):
+        assert self.ncas > 0
+        ncore = self.ncore
+        nmo = self.mo_coeff[0].shape[1]
+        nvir_alpha = nmo - ncore[0] - self.ncas
+        nvir_beta  = nmo - ncore[1]  - self.ncas
+        assert ncore[0] >= 0 and ncore[1] >= 0
+        assert nvir_alpha >= 0 and nvir_beta >= 0
+        assert sum(ncore) + sum(self.nelecas) == self.mol.nelectron
+        assert 0 <= self.nelecas[0] <= self.ncas
+        assert 0 <= self.nelecas[1] <= self.ncas
         return self
 
     def get_hcore(self, mol=None):
@@ -258,8 +274,7 @@ class UCASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
 
         log = logger.Logger(self.stdout, self.verbose)

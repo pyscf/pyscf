@@ -78,12 +78,12 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         mo_coeff = numpy.random.random(mf.mo_coeff.shape)
         eris = cc.ccsd.CCSD(mf).ao2mo(mo_coeff)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.962033460861587 , 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3666078517246127, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.962033460861587 , 11)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3666078517246127, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.122525571320871, 11)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48517302161068, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48517302161068, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 59.418747028576142, 11)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.562457227975969, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.562457227975969, 11)
 
 
     def test_df_ipccsd(self):
