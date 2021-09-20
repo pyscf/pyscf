@@ -576,7 +576,7 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
         vj_kpts = vj_kpts[0]
     return vj_kpts
 
-
+'''
 def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), hermi=1, verbose=None):
     cell = mydf.cell
     nkpts = len(kpts)
@@ -607,7 +607,7 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), hermi=1, verbose=None):
         sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
         wv = tools.ifft(sub_vG, mesh).real.reshape(nset,4,ngrids)
         wv = numpy.asarray(wv, order='C')
-
+'''
 
 
 class MultiGridFFTDF2(multigrid.MultiGridFFTDF):
