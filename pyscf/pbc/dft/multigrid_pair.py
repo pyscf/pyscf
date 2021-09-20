@@ -473,8 +473,8 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0,
         else:
             n_mat = weights.shape[0]
     elif xctype == 'GGA':
-        if hermi == 1:
-            raise RuntimeError('hermi=1 is not supported for GGA functional')
+        #if hermi == 1:
+        #    raise RuntimeError('hermi=1 is not supported for GGA functional')
         if weights.ndim == 2:
             weights = weights.reshape(-1, 4, np.prod(mesh))
         else:
@@ -575,6 +575,39 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     if nset == 1:
         vj_kpts = vj_kpts[0]
     return vj_kpts
+
+
+def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), hermi=1, verbose=None):
+    cell = mydf.cell
+    nkpts = len(kpts)
+    nao = cell.nao_nr()
+    nx, ny, nz = mydf.mesh
+    vG = vG.reshape(-1,4,nx,ny,nz)
+    nset = vG.shape[0]
+
+    task_list = getattr(mydf, 'task_list', None)
+    if task_list is None:
+        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+
+    if gamma_point(kpts):
+        veff = numpy.zeros((nset,nkpts,nao,nao))
+    else:
+        veff = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
+
+    nlevels = task_list.contents.nlevels
+    meshes = task_list.contents.gridlevel_info.contents.mesh
+    meshes = np.ctypeslib.as_array(meshes, shape=(nlevels,3))
+    for ilevel in range(nlevels):
+        mesh = meshes[ilevel]
+        ngrids = np.prod(mesh)
+
+        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(numpy.int32)
+        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(numpy.int32)
+        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
+        sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
+        wv = tools.ifft(sub_vG, mesh).real.reshape(nset,4,ngrids)
+        wv = numpy.asarray(wv, order='C')
+
 
 
 class MultiGridFFTDF2(multigrid.MultiGridFFTDF):

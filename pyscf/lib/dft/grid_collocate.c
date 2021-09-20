@@ -1,5 +1,5 @@
 #include <stdio.h>
-//#include <time.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -15,6 +15,7 @@
 #define EIJCUTOFF        60
 #define PTR_EXPDROP      16
 #define MAX_THREADS     256
+#define MESH_BLK        4
 
 double CINTsquare_dist(const double *r1, const double *r2);
 double CINTcommon_fac_sp(int l);
@@ -287,7 +288,6 @@ void transform_dm_inverse(double* dm_cart, double* dm, int comp,
     const char TRANS_N = 'N';
     const double D1 = 1;
     const double D0 = 0;
-    //double* buf = (double*) malloc(sizeof(double) * ncol*nao_i);
     double *buf = cache;
 
     int ic;
@@ -300,7 +300,6 @@ void transform_dm_inverse(double* dm_cart, double* dm, int comp,
         pdm += naoi * naoj;
         dm_cart += nao_i * nao_j;
     }
-    //free(buf);
 }
 
 
@@ -332,14 +331,12 @@ void transform_dm(double* dm_cart, double* dm,
     const char TRANS_N = 'N';
     const double D1 = 1;
     double beta = 0;
-    //double* buf = (double*) malloc(sizeof(double) * nrow*nao_j);
     double *buf = cache;
     //einsum("pi,ij,qj->pq", coeff_i, dm, coeff_j)
     dgemm_(&TRANS_T, &TRANS_N, &nao_j, &nrow, &ncol,
            &D1, jsh_contr_coeff, &ncol, pdm, &naoj, &beta, buf, &nao_j);
     dgemm_(&TRANS_N, &TRANS_N, &nao_j, &nao_i, &nrow,
            &D1, buf, &nao_j, ish_contr_coeff, &nrow, &beta, dm_cart, &nao_j);
-    //free(buf);
 }
 
 
@@ -596,12 +593,146 @@ static void _orth_ints(double *out, double *weights,
         int ycols = mesh[2];
         double *weightyz = cache;
         double *weightz = weightyz + l1*xcols;
+        double *weights_submesh = weightz + l1l1*ycols;
 
-        if (nimgx == 1) {
+        int is_x_split = 0, is_y_split = 0, is_z_split = 0;
+        int xmap[ngridx], ymap[ngridy], zmap[ngridz];
+        int ix, iy, iz, nx, ny, nz;
+
+        if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) is_x_split = 1;
+        if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) is_y_split = 1;
+        if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) is_z_split = 1;
+
+        if (ngridy * ngridz < mesh[1] * mesh[2] / MESH_BLK) {
+            if (nimgx == 1) {
+                for (ix = 0; ix < ngridx; ix++) {
+                    xmap[ix] = ix + nx0;
+                }
+            } else if (is_x_split == 1) {
+                for (ix = 0; ix < nx1; ix++) {
+                    xmap[ix] = ix;
+                }
+                nx = nx0 - nx1;
+                for (ix = nx1; ix < ngridx; ix++) {
+                    xmap[ix] = ix + nx;
+                }
+            } else {
+                for (ix = 0; ix < mesh[0]; ix++) {
+                    xmap[ix] = ix;
+                }
+            }
+
+            if (nimgy == 1) {
+                for (iy = 0; iy < ngridy; iy++) {
+                    ymap[iy] = iy + ny0;
+                }
+            } else if (is_y_split == 1) {
+                for (iy = 0; iy < ny1; iy++) {
+                    ymap[iy] = iy;
+                }
+                ny = ny0 - ny1;
+                for (iy = ny1; iy < ngridy; iy++) {
+                    ymap[iy] = iy + ny;
+                }
+            } else {
+                for (iy = 0; iy < mesh[1]; iy++) {
+                    ymap[iy] = iy;
+                }
+            }
+
+            if (nimgz == 1) {
+                for (iz = 0; iz < ngridz; iz++) {
+                    zmap[iz] = iz + nz0;
+                }
+            } else if (is_z_split == 1) {
+                for (iz = 0; iz < nz1; iz++) {
+                    zmap[iz] = iz;
+                }
+                nz = nz0 - nz1;
+                for (iz = nz1; iz < ngridz; iz++) {
+                    zmap[iz] = iz + nz;
+                }
+            } else{
+                for (iz = 0; iz < mesh[2]; iz++) {
+                    zmap[iz] = iz;
+                }
+            }
+
+
+            xcols = ngridy * ngridz;
+            int mesh_yz = mesh[1] * mesh[2];
+            for (ix = 0; ix < ngridx; ix++) {
+            for (iy = 0; iy < ngridy; iy++) {
+            for (iz = 0; iz < ngridz; iz++) {
+                weights_submesh[ix*xcols+iy*ngridz+iz] = weights[xmap[ix]*mesh_yz+ymap[iy]*mesh[2]+zmap[iz]];
+            }}}
+
+            if (nimgx == 1) {
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &ngridx,
+                       &fac, weights_submesh, &xcols, xs_exp+nx0, mesh,
+                       &D0, weightyz, &xcols);
+            } else if (is_x_split == 1) {
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &nx1,
+                       &fac, weights_submesh, &xcols, xs_exp, mesh,
+                       &D0, weightyz, &xcols);
+                nx = mesh[0] - nx0;
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &nx,
+                       &fac, weights_submesh+nx1*xcols, &xcols, xs_exp+nx0, mesh,
+                       &D1, weightyz, &xcols);
+            } else {
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, mesh,
+                       &fac, weights_submesh, &xcols, xs_exp, mesh,
+                       &D0, weightyz, &xcols);
+            }
+
+            if (nimgy == 1) {
+                for (lx = 0; lx <= topl; lx++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1, &ngridy,
+                               &D1, weightyz+lx*xcols, &ngridz, ys_exp+ny0, mesh+1,
+                               &D0, weightz+lx*l1*ngridz, &ngridz);
+                }
+            } else if (is_y_split == 1) {
+                ny = mesh[1] - ny0;
+                for (lx = 0; lx <= topl; lx++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1, &ny1,
+                               &D1, weightyz+lx*xcols, &ngridz, ys_exp, mesh+1,
+                               &D0, weightz+lx*l1*ngridz, &ngridz);
+                        dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1, &ny,
+                               &D1, weightyz+lx*xcols+ny1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
+                               &D1, weightz+lx*l1*ngridz, &ngridz);
+                }
+            } else {
+                for (lx = 0; lx <= topl; lx++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1, mesh+1,
+                               &D1, weightyz+lx*xcols, &ngridz, ys_exp, mesh+1,
+                               &D0, weightz+lx*l1*ngridz, &ngridz);
+                }
+            }
+
+            if (nimgz == 1) {
+                dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &ngridz,
+                       &D1, zs_exp+nz0, mesh+2, weightz, &ngridz,
+                       &D0, out, &l1);
+            } else if (is_z_split == 1) {
+                dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &nz1,
+                       &D1, zs_exp, mesh+2, weightz, &ngridz,
+                       &D0, out, &l1);
+                nz = mesh[2] - nz0;;
+                dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &nz,
+                       &D1, zs_exp+nz0, mesh+2, weightz+nz1, &ngridz,
+                       &D1, out, &l1);
+            } else {
+                dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, mesh+2,
+                       &D1, zs_exp, mesh+2, weightz, mesh+2,
+                       &D0, out, &l1);
+            }
+        }
+        else{
+            if (nimgx == 1) {
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &ngridx,
                        &fac, weights+nx0*xcols, &xcols, xs_exp+nx0, mesh,
                        &D0, weightyz, &xcols);
-        } else if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) {
+            } else if (is_x_split == 1) {
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &nx1,
                        &fac, weights, &xcols, xs_exp, mesh,
                        &D0, weightyz, &xcols);
@@ -609,19 +740,19 @@ static void _orth_ints(double *out, double *weights,
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &ngridx,
                        &fac, weights+nx0*xcols, &xcols, xs_exp+nx0, mesh,
                        &D1, weightyz, &xcols);
-        } else {
+            } else {
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, mesh,
                        &fac, weights, &xcols, xs_exp, mesh,
                        &D0, weightyz, &xcols);
-        }
+            }
 
-        if (nimgy == 1) {
+            if (nimgy == 1) {
                 for (lx = 0; lx <= topl; lx++) {
                         dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, &ngridy,
                                &D1, weightyz+lx*xcols+ny0*ycols, &ycols, ys_exp+ny0, mesh+1,
                                &D0, weightz+lx*l1*ycols, &ycols);
                 }
-        } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
+            } else if (is_y_split == 1) {
                 ngridy = mesh[1] - ny0;
                 for (lx = 0; lx <= topl; lx++) {
                         dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, &ny1,
@@ -631,19 +762,19 @@ static void _orth_ints(double *out, double *weights,
                                &D1, weightyz+lx*xcols+ny0*ycols, &ycols, ys_exp+ny0, mesh+1,
                                &D1, weightz+lx*l1*ycols, &ycols);
                 }
-        } else {
+            } else {
                 for (lx = 0; lx <= topl; lx++) {
                         dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, mesh+1,
                                &D1, weightyz+lx*xcols, &ycols, ys_exp, mesh+1,
                                &D0, weightz+lx*l1*ycols, &ycols);
                 }
-        }
+            }
 
-        if (nimgz == 1) {
+            if (nimgz == 1) {
                 dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &ngridz,
                        &D1, zs_exp+nz0, mesh+2, weightz+nz0, mesh+2,
                        &D0, out, &l1);
-        } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
+            } else if (is_z_split == 1) {
                 dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &nz1,
                        &D1, zs_exp, mesh+2, weightz, mesh+2,
                        &D0, out, &l1);
@@ -651,13 +782,13 @@ static void _orth_ints(double *out, double *weights,
                 dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, &ngridz,
                        &D1, zs_exp+nz0, mesh+2, weightz+nz0, mesh+2,
                        &D1, out, &l1);
-        } else {
+            } else {
                 dgemm_(&TRANS_T, &TRANS_N, &l1, &l1l1, mesh+2,
                        &D1, zs_exp, mesh+2, weightz, mesh+2,
                        &D0, out, &l1);
+            }
         }
 }
-
 
 
 static void _orth_rho(double *rho, double *dm_xyz,
@@ -694,75 +825,123 @@ static void _orth_rho(double *rho, double *dm_xyz,
         const char TRANS_T = 'T';
         const double D0 = 0;
         const double D1 = 1;
-        int xcols = mesh[1] * mesh[2];
+        int mesh_yz = mesh[1] * mesh[2];
+        int xcols = ngridy * ngridz;
         double *xyr = cache;
-        double *xqr = xyr + l1l1 * mesh[2];
-        int l;
+        double *xqr = xyr + l1l1 * ngridz;
+        double *pqr = xqr + l1 * xcols;
+        int l, ix, iy, iz, nx, ny, nz;
+        int xmap[ngridx];
+        int ymap[ngridy];
+        int zmap[ngridz];
 
         if (nimgz == 1) {
-                memset(xyr, 0, (l1l1 * mesh[2])*sizeof(double));
                 dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1l1, &l1,
                        &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
-                       &D0, xyr+nz0, mesh+2);
+                       &D0, xyr, &ngridz);
+                for (iz = 0; iz < ngridz; iz++) {
+                    zmap[iz] = iz + nz0;
+                }
         } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
-                memset(xyr, 0, (l1l1 * mesh[2])*sizeof(double));
-                ngridz = mesh[2]-nz0;
-                dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1l1, &l1,
+                nz = mesh[2]-nz0;
+                dgemm_(&TRANS_N, &TRANS_N, &nz, &l1l1, &l1,
                        &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
-                       &D0, xyr+nz0, mesh+2);
+                       &D0, xyr+nz1, &ngridz);
                 dgemm_(&TRANS_N, &TRANS_N, &nz1, &l1l1, &l1,
                        &fac, zs_exp, mesh+2, dm_xyz, &l1,
-                       &D0, xyr, mesh+2);
+                       &D0, xyr, &ngridz);
+                for (iz = 0; iz < nz1; iz++) {
+                    zmap[iz] = iz;
+                }
+                nz = nz0 - nz1;
+                for (iz = nz1; iz < ngridz; iz++) {
+                    zmap[iz] = iz + nz;
+                }
         }
         else{
                 dgemm_(&TRANS_N, &TRANS_N, mesh+2, &l1l1, &l1,
                        &fac, zs_exp, mesh+2, dm_xyz, &l1,
                        &D0, xyr, mesh+2);
+                for (iz = 0; iz < mesh[2]; iz++) {
+                    zmap[iz] = iz;
+                }
         }
 
         if (nimgy == 1) {
                 for (l = 0; l <= topl; l++) {
-                        memset(xqr+l*xcols, 0, (ny0*mesh[2])*sizeof(double));
-                        memset(xqr+l*xcols+ny1*mesh[2], 0, ((mesh[1]-ny1)*mesh[2])*sizeof(double));
-                        dgemm_(&TRANS_N, &TRANS_T, mesh+2, &ngridy, &l1,
-                               &D1, xyr+l*l1*mesh[2], mesh+2, ys_exp+ny0, mesh+1,
-                               &D0, xqr+l*xcols+ny0*mesh[2], mesh+2);
+                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ngridy, &l1,
+                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
+                               &D0, xqr+l*xcols, &ngridz);
+                }
+                for (iy = 0; iy < ngridy; iy++) {
+                    ymap[iy] = iy + ny0;
                 }
         } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
+                ny = mesh[1] - ny0;
                 for (l = 0; l <= topl; l++) {
-                        memset(xqr+l*xcols+ny1*mesh[2], 0, ((ny0-ny1)*mesh[2])*sizeof(double));
-                        dgemm_(&TRANS_N, &TRANS_T, mesh+2, &ny1, &l1,
-                               &D1, xyr+l*l1*mesh[2], mesh+2, ys_exp, mesh+1,
-                               &D0, xqr+l*xcols, mesh+2);
-                        ngridy = mesh[1] - ny0;
-                        dgemm_(&TRANS_N, &TRANS_T, mesh+2, &ngridy, &l1,
-                               &D1, xyr+l*l1*mesh[2], mesh+2, ys_exp+ny0, mesh+1,
-                               &D0, xqr+l*xcols+ny0*mesh[2], mesh+2);
+                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ny1, &l1,
+                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp, mesh+1,
+                               &D0, xqr+l*xcols, &ngridz);
+                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ny, &l1,
+                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
+                               &D0, xqr+l*xcols+ny1*ngridz, &ngridz);
+                }
+                for (iy = 0; iy < ny1; iy++) {
+                    ymap[iy] = iy;
+                }
+                ny = ny0 - ny1;
+                for (iy = ny1; iy < ngridy; iy++) {
+                    ymap[iy] = iy + ny;
                 }
         } else {
                 for (l = 0; l <= topl; l++) {
-                        dgemm_(&TRANS_N, &TRANS_T, mesh+2, mesh+1, &l1,
-                               &D1, xyr+l*l1*mesh[2], mesh+2, ys_exp, mesh+1,
-                               &D0, xqr+l*xcols, mesh+2);
+                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, mesh+1, &l1,
+                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp, mesh+1,
+                               &D0, xqr+l*xcols, &ngridz);
+                }
+                for (iy = 0; iy < mesh[1]; iy++) {
+                    ymap[iy] = iy;
                 }
         }
 
         if (nimgx == 1) {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &ngridx, &l1,
                        &D1, xqr, &xcols, xs_exp+nx0, mesh,
-                       &D1, rho+nx0*xcols, &xcols);
+                       &D0, pqr, &xcols);
+                for (ix = 0; ix < ngridx; ix++) {
+                    xmap[ix] = ix + nx0;
+                }
         } else if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx1, &l1,
                        &D1, xqr, &xcols, xs_exp, mesh,
-                       &D1, rho, &xcols);
-                ngridx = mesh[0] - nx0;
-                dgemm_(&TRANS_N, &TRANS_T, &xcols, &ngridx, &l1,
+                       &D0, pqr, &xcols);
+                nx = mesh[0] - nx0;
+                dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx, &l1,
                        &D1, xqr, &xcols, xs_exp+nx0, mesh,
-                       &D1, rho+nx0*xcols, &xcols);
+                       &D0, pqr+nx1*xcols, &xcols);
+                for (ix = 0; ix < nx1; ix++) {
+                    xmap[ix] = ix;
+                }
+                nx = nx0 - nx1;
+                for (ix = nx1; ix < ngridx; ix++) {
+                    xmap[ix] = ix + nx;
+                }
         } else {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, mesh, &l1,
                        &D1, xqr, &xcols, xs_exp, mesh,
-                       &D1, rho, &xcols);
+                       &D0, pqr, &xcols);
+                for (ix = 0; ix < mesh[0]; ix++) {
+                    xmap[ix] = ix;
+                }
+        }
+
+        // TODO optimize the following loops using e.g. axpy
+        for (ix = 0; ix < ngridx; ix++) {
+            for (iy = 0; iy < ngridy; iy++) {
+                for (iz = 0; iz < ngridz; iz++) {
+                    rho[xmap[ix]*mesh_yz+ymap[iy]*mesh[2]+zmap[iz]] += pqr[ix*xcols+iy*ngridz+iz];
+                }
+            }
         }
 }
 
@@ -931,6 +1110,7 @@ int eval_mat_lda_orth(double *weights, double *out, int comp,
 
         double *dm_xyz = cache;
         cache += l1l1l1;
+
         _orth_ints(dm_xyz, weights, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
 
@@ -1109,6 +1289,7 @@ static int _ints_cache_size(int l, int nprim, int nctr, int* mesh, double radius
     size += 3 * (ncart + l1);
     size += l1 * mesh[1] * mesh[2];
     size += l1l1 * mesh[2];
+    size += mesh[0] * mesh[1] * mesh[2] / MESH_BLK;
     size += nctr * ncart * nprim * ncart;
     return size+1000000;
 }
@@ -1131,6 +1312,7 @@ static int _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radius,
     size += 3 * (_LEN_CART[l] + l1);
     size += l1l1 * mesh[2];
     size += l1 * mesh[1] * mesh[2];
+    size += mesh[0] * mesh[1] * mesh[2]; // usually don't need so much
     return size+1000000;
 }
 
@@ -1200,7 +1382,6 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
 {
     TaskList* tl = *task_list;
     GridLevel_Info* gridlevel_info = tl->gridlevel_info;
-    //int nlevels = gridlevel_info->nlevels;
 
     const int ish0 = shls_slice[0];
     const int ish1 = shls_slice[1];
@@ -1395,7 +1576,6 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
 #pragma omp parallel
 {
     PGFPair *pgfpair = NULL;
-    //PGFPair *prev_pgfpair = NULL;
     int itask, i, ish, jsh, ijsh, ijsh_ntasks;
     int *task_idx = NULL;
     double *cache0 = malloc(sizeof(double) * cache_size);
