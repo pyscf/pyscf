@@ -42,6 +42,7 @@ typedef struct Task_struct {
 
 typedef struct TaskList_struct {
     int nlevels;
+    int hermi;
     GridLevel_Info* gridlevel_info;
     Task** tasks;
 } TaskList;

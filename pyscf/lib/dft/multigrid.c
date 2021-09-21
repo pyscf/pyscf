@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
@@ -240,10 +239,11 @@ void del_task(Task** task)
 }
 
 
-void init_task_list(TaskList** task_list, GridLevel_Info* gridlevel_info, int nlevels)
+void init_task_list(TaskList** task_list, GridLevel_Info* gridlevel_info, int nlevels, int hermi)
 {
     TaskList* tl = (TaskList*) malloc(sizeof(TaskList));
     tl->nlevels = nlevels;
+    tl->hermi = hermi;
     tl->gridlevel_info = gridlevel_info;
     tl->tasks = (Task**) malloc(sizeof(Task*)*nlevels);
     int i;
@@ -311,7 +311,7 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
 {
     GridLevel_Info *gl_info = *gridlevel_info;
     int nlevels = gl_info->nlevels;
-    init_task_list(task_list, gl_info, nlevels);
+    init_task_list(task_list, gl_info, nlevels, hermi);
     double max_radius[nlevels];
 
 //#pragma omp parallel

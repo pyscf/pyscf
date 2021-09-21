@@ -8,7 +8,6 @@ from pyscf import pbc
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 from pyscf.pbc.dft import multigrid
-from pyscf.pbc.dft import multigrid_pair
 
 cell=pbcgto.Cell()
 
@@ -224,7 +223,7 @@ print('mesh=', cell.mesh)
 mf=pbcdft.RKS(cell)
 mf.xc = "LDA, VWN"
 mf.init_guess='atom' # atom guess is fast
-mf.with_df = multigrid_pair.MultiGridFFTDF2(cell)
+mf.with_df = multigrid.MultiGridFFTDF2(cell)
 
 dm = mf.get_init_guess(key="atom")
 mf.get_veff(dm = dm)

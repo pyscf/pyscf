@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -981,12 +979,196 @@ static void _get_dm_to_dm_xyz_coeff(double* coeff, double* rij, int lmax, double
 }
 
 
-static void _dm_xyz_to_dm(double* dm_xyz, double* dm, int comp, int li, int lj, double* ri, double* rj, double* cache)
+static void _v1_loop_x(double* pv1, double* v1_xyz,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int lx_i_m1 = lx_i - 1;
+    int lx_i_p1 = lx_i + 1;
+    int lx_j_m1 = lx_j - 1;
+    int lx_j_p1 = lx_j + 1;
+    double cx, cy, cz, cyz;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jy = 0; jy <= ly_j; jy++) {
+        cy = pcy[jy+_LEN_CART0[ly_j]];
+        ly = ly_i + jy;
+        for (jz = 0; jz <= lz_j; jz++) {
+            cz = pcz[jz+_LEN_CART0[lz_j]];
+            lz = lz_i + jz;
+            cyz = cy * cz;
+            for (jx = 0; jx <= lx_j_m1; jx++) {
+                cx = pcx[jx+_LEN_CART0[lx_j_m1]] * lx_j;
+                lx = lx_i + jx;
+                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jx = 0; jx <= lx_j_p1; jx++) {
+                cx = pcx[jx+_LEN_CART0[lx_j_p1]] * fac_j;
+                lx = lx_i + jx;
+                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jx = 0; jx <= lx_j; jx++) {
+                if (lx_i > 0) {
+                    cx = pcx[jx+_LEN_CART0[lx_j]] * lx_i;
+                    lx = lx_i_m1 + jx;
+                    pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
+                }
+                cx = pcx[jx+_LEN_CART0[lx_j]] * fac_i;
+                lx = lx_i_p1 + jx;
+                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+        }
+    }
+}
+
+
+static void _v1_loop_y(double* pv1, double* v1_xyz,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int ly_i_m1 = ly_i - 1;
+    int ly_i_p1 = ly_i + 1;
+    int ly_j_m1 = ly_j - 1;
+    int ly_j_p1 = ly_j + 1;
+    double cx, cy, cz, cxz;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cx = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jz = 0; jz <= lz_j; jz++) {
+            cz = pcz[jz+_LEN_CART0[lz_j]];
+            lz = lz_i + jz;
+            cxz = cx * cz;
+            for (jy = 0; jy <= ly_j_m1; jy++) {
+                cy = pcy[jy+_LEN_CART0[ly_j_m1]] * ly_j;
+                ly = ly_i + jy;
+                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jy = 0; jy <= ly_j_p1; jy++) {
+                cy = pcy[jy+_LEN_CART0[ly_j_p1]] * fac_j;
+                ly = ly_i + jy;
+                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jy = 0; jy <= ly_j; jy++) {
+                if (ly_i > 0) {
+                    cy = pcy[jy+_LEN_CART0[ly_j]] * ly_i;
+                    ly = ly_i_m1 + jy;
+                    pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
+                }
+                cy = pcy[jy+_LEN_CART0[ly_j]] * fac_i;
+                ly = ly_i_p1 + jy;
+                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+        }
+    }
+}
+
+
+static void _v1_loop_z(double* pv1, double* v1_xyz,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int lz_i_m1 = lz_i - 1;
+    int lz_i_p1 = lz_i + 1;
+    int lz_j_m1 = lz_j - 1;
+    int lz_j_p1 = lz_j + 1;
+    double cx, cy, cz, cxy;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cx = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jy = 0; jy <= ly_j; jy++) {
+            cy = pcy[jy+_LEN_CART0[ly_j]];
+            ly = ly_i + jy;
+            cxy = cx * cy;
+            for (jz = 0; jz <= lz_j_m1; jz++) {
+                cz = pcz[jz+_LEN_CART0[lz_j_m1]] * lz_j;
+                lz = lz_i + jz;
+                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jz = 0; jz <= lz_j_p1; jz++) {
+                cz = pcz[jz+_LEN_CART0[lz_j_p1]] * fac_j;
+                lz = lz_i + jz;
+                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+            for (jz = 0; jz <= lz_j; jz++) {
+                if (lz_i > 0) {
+                    cz = pcz[jz+_LEN_CART0[lz_j]] * lz_i;
+                    lz = lz_i_m1 + jz;
+                    pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
+                }
+                cz = pcz[jz+_LEN_CART0[lz_j]] * fac_i;
+                lz = lz_i_p1 + jz;
+                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
+            }
+        }
+    }
+}
+
+
+static void _v1_xyz_to_v1(void (*_v1_loop)(), double* v1_xyz, double* v1,
+                          int li, int lj, double ai, double aj,
+                          double* ri, double* rj, double* cache)
+{
+    int lx_i, ly_i, lz_i;
+    int lx_j, ly_j, lz_j;
+    double rij[3];
+
+    rij[0] = ri[0] - rj[0];
+    rij[1] = ri[1] - rj[1];
+    rij[2] = ri[2] - rj[2];
+
+    int l1 = li + lj + 2;
+    int l1l1 = l1 * l1;
+    double *coeff = cache;
+    int dj = _LEN_CART[lj+1];
+    cache += 3 * dj;
+
+    _get_dm_to_dm_xyz_coeff(coeff, rij, lj+1, cache);
+
+    double *pcx = coeff;
+    double *pcy = pcx + dj;
+    double *pcz = pcy + dj;
+    double *pv1 = v1;
+    for (lx_i = li; lx_i >= 0; lx_i--) {
+        for (ly_i = li-lx_i; ly_i >= 0; ly_i--) {
+            lz_i = li - lx_i - ly_i;
+            for (lx_j = lj; lx_j >= 0; lx_j--) {
+                for (ly_j = lj-lx_j; ly_j >= 0; ly_j--) {
+                    lz_j = lj - lx_j - ly_j;
+                    _v1_loop(pv1, v1_xyz, pcx, pcy, pcz, ai, aj,
+                             lx_i, ly_i, lz_i, lx_j, ly_j, lz_j, l1, l1l1);
+                    pv1 += 1;
+                }
+            }
+        }
+    }
+}
+
+
+static void _dm_xyz_to_dm(double* dm_xyz, double* dm, int li, int lj, double* ri, double* rj, double* cache)
 {
     int lx, ly, lz;
     int lx_i, ly_i, lz_i;
     int lx_j, ly_j, lz_j;
-    int ic, jx, jy, jz;
+    int jx, jy, jz;
     double rij[3];
 
     rij[0] = ri[0] - rj[0];
@@ -1006,7 +1188,6 @@ static void _dm_xyz_to_dm(double* dm_xyz, double* dm, int comp, int li, int lj, 
     double *pcy = pcx + dj;
     double *pcz = pcy + dj;
     double *pdm = dm;
-    for (ic = 0; ic < comp; ic++) {
     for (lx_i = li; lx_i >= 0; lx_i--) {
         for (ly_i = li-lx_i; ly_i >= 0; ly_i--) {
             lz_i = li - lx_i - ly_i;
@@ -1030,7 +1211,7 @@ static void _dm_xyz_to_dm(double* dm_xyz, double* dm, int comp, int li, int lj, 
                 }
             }
         }
-    }}
+    }
 }
 
 
@@ -1086,11 +1267,60 @@ static void _dm_to_dm_xyz(double* dm_xyz, double* dm, int li, int lj, double* ri
 }
 
 
+int eval_mat_gga_orth(double *weights, double *out, int comp,
+                      int li, int lj, double ai, double aj,
+                      double *ri, double *rj, double fac, double cutoff,
+                      int dimension, double *a, double *b,
+                      int *mesh, double *cache)
+{
+        int topl = li + lj + 1;
+        int l1 = topl+1;
+        int l1l1l1 = l1 * l1 * l1;
+        double *mat_xyz = cache;
+        cache += l1l1l1;
+        int img_slice[6];
+        int grid_slice[6];
+        double *xs_exp, *ys_exp, *zs_exp;
+
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, mesh,
+                                        topl, dimension, cutoff,
+                                        ai, aj, ri, rj, a, b, cache);
+        if (data_size == 0) {
+                return 0;
+        }
+        cache += data_size;
+
+        size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+        double *vx = weights + ngrids;
+        double *vy = vx + ngrids;
+        double *vz = vy + ngrids;
+
+        _orth_ints(mat_xyz, weights, li+lj, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _dm_xyz_to_dm(mat_xyz, out, li, lj, ri, rj, cache);
+
+        _orth_ints(mat_xyz, vx, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+
+        _orth_ints(mat_xyz, vy, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+
+        _orth_ints(mat_xyz, vz, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+
+        return 1;
+}
+
+
 int eval_mat_lda_orth(double *weights, double *out, int comp,
-                        int li, int lj, double ai, double aj,
-                        double *ri, double *rj, double fac, double cutoff,
-                        int dimension, double *a, double *b,
-                        int *mesh, double *cache)
+                      int li, int lj, double ai, double aj,
+                      double *ri, double *rj, double fac, double cutoff,
+                      int dimension, double *a, double *b,
+                      int *mesh, double *cache)
 {
         int topl = li + lj;
         int l1 = topl+1;
@@ -1114,7 +1344,7 @@ int eval_mat_lda_orth(double *weights, double *out, int comp,
         _orth_ints(dm_xyz, weights, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
 
-        _dm_xyz_to_dm(dm_xyz, out, comp, li, lj, ri, rj, cache);
+        _dm_xyz_to_dm(dm_xyz, out, li, lj, ri, rj, cache);
         return 1;
 }
 

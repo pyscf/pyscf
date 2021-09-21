@@ -1025,7 +1025,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    rhoG = mydf._eval_rhoG(dm_kpts, hermi, kpts, deriv)
+    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
@@ -1076,7 +1076,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if xctype == 'LDA':
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
-        veff = mydf._get_j_pass2(wv_freq, kpts_band, verbose=log)
+        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
             wv_freq[:,0] += vG.reshape(nset,*mesh) * .5
@@ -1828,8 +1828,11 @@ class MultiGridFFTDF(fft.FFTDF):
         return vj, vk
 
     get_rho = get_rho
-    _eval_rhoG = _eval_rhoG
-    _get_j_pass2 = _get_j_pass2
+
+
+class MultiGridFFTDF2(MultiGridFFTDF):
+    pass
+
 
 def multigrid(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
