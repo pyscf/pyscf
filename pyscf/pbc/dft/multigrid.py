@@ -417,7 +417,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
         for l, proj in enumerate(pp[5:]):
             rl, nl, hl = proj
             if nl > 0:
-                p0, p1 = p1, p1+nl*(l*2+1)
+                p1 = p1+nl*(l*2+1)
         SPG_lm_aoGs.append(numpy.zeros((p1, cell.nao), dtype=numpy.complex128))
 
     def vppnl_by_k(cell, kpt):
@@ -460,7 +460,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
                     SPG_lmi = buf[:p1]
                     SPG_lmi *= cell.get_SI(Gv[ig0:ig1], [ia,]).conj()
                     SPG_lm_aoGs[ia] += lib.zdot(SPG_lmi, aokG)
-            buf = None        
+            buf = None
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
             if symb not in cell._pseudo:
@@ -1032,7 +1032,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
 
-    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] += mydf.vpplocG_part1 * 2
 
@@ -1041,7 +1041,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] -= mydf.vpplocG_part1
 

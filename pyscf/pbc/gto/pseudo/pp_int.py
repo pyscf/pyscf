@@ -51,7 +51,7 @@ def get_pp_loc_part1_gs(cell, Gv):
     Gv = numpy.asarray(Gv, order='C', dtype=numpy.double)
     coulG = numpy.asarray(coulG, order='C', dtype=numpy.double)
     G2 = numpy.asarray(G2, order='C', dtype=numpy.double)
- 
+
     coords = cell.atom_coords()
     coords = numpy.asarray(coords, order='C', dtype=numpy.double)
     Z = numpy.empty([cell.natm,], order='C', dtype=numpy.double)
@@ -76,8 +76,8 @@ def get_pp_loc_part1_gs(cell, Gv):
            coords.ctypes.data_as(ctypes.c_void_p),
            rloc.ctypes.data_as(ctypes.c_void_p),
            ctypes.c_int(cell.natm))
-    except:
-        raise RuntimeError("Failed to get vlocG part1.")
+    except Exception as e:
+        raise RuntimeError("Failed to get vlocG part1. %s" % e)
     return out
 
 
@@ -263,7 +263,7 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
         nd = 2 * l + 1
         hl_table[ib,2] = nd
         for i in range(hl_dim):
-            p0 = offset[i]
+            #p0 = offset[i]
             hl_table[ib, i+3] = offset[i]
             offset[i] += nd
     hl_data = numpy.asarray(hl_data, order='C', dtype=numpy.double)
@@ -289,14 +289,14 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
         ppnl_k = numpy.empty((nao,nao), order='C', dtype=numpy.double)
         fn = getattr(libpbc, "contract_ppnl", None)
         try:
-            fn(ppnl_k.ctypes.data_as(ctypes.c_void_p), 
-               ptr_ppnl_half0, ptr_ppnl_half1, ptr_ppnl_half2, 
+            fn(ppnl_k.ctypes.data_as(ctypes.c_void_p),
+               ptr_ppnl_half0, ptr_ppnl_half1, ptr_ppnl_half2,
                hl_table.ctypes.data_as(ctypes.c_void_p),
                hl_data.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(len(hl_blocks)),
                ctypes.c_int(nao))
-        except:
-            raise RuntimeError("Failed to contract ppnl.")
+        except Exception as e:
+            raise RuntimeError("Failed to contract ppnl. %s" % e)
         ppnl.append(ppnl_k)
 
     if kpts is None or numpy.shape(kpts) == (3,):

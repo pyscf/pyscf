@@ -1075,7 +1075,7 @@ def expm(a):
     return y
 
 def exp(a, out=None, **kwargs):
-    ''' 
+    '''
     Multi-threaded numpy.exp
     '''
     if not (a.flags.c_contiguous or a.flags.f_contiguous):
@@ -1092,7 +1092,7 @@ def exp(a, out=None, **kwargs):
     if out is None:
         out = numpy.empty_like(a)
     else:
-        if (out.dtype != a.dtype or 
+        if (out.dtype != a.dtype or
             not (out.flags.c_contiguous or out.flags.f_contiguous)):
             return numpy.exp(a, out=out, **kwargs)
 
@@ -1104,7 +1104,7 @@ def exp(a, out=None, **kwargs):
         out = numpy.asarray(out, order='F')
 
     n = a.size
-    fn(out.ctypes.data_as(ctypes.c_void_p), 
+    fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
     return out
 
@@ -1151,15 +1151,15 @@ def sum(a, axis=-1, dtype=None, out=None, **kwargs):
             if ((numpy.asarray(out.shape) - numpy.asarray(out_shape)).sum() != 0 or
                 (not out.flags.f_contiguous) or out.dtype != dtype):
                 return numpy.sum(a, axis, dtype, out, **kwargs)
-    else: 
-        return numpy.sum(a, axis, dtype, out, **kwargs)    
+    else:
+        return numpy.sum(a, axis, dtype, out, **kwargs)
 
     fn(out.ctypes.data_as(ctypes.c_void_p),
        a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(lda), ctypes.c_int(out.size))
     return out
 
 def add(a, b, out=None, **kwargs):
-    if (a.shape != b.shape or a.dtype != b.dtype or 
+    if (a.shape != b.shape or a.dtype != b.dtype or
         not(a.flags.c_contiguous or a.flags.f_contiguous) or
         not(b.flags.c_contiguous or b.flags.f_contiguous)):
         return numpy.add(a, b, out, **kwargs)
@@ -1177,7 +1177,7 @@ def add(a, b, out=None, **kwargs):
         else:
             out = numpy.empty_like(a, order='F')
     else:
-        if (a.shape != out.shape or 
+        if (a.shape != out.shape or
             not (out.flags.c_contiguous or out.flags.f_contiguous)):
             return numpy.add(a, b, out, **kwargs)
 
@@ -1191,7 +1191,7 @@ def add(a, b, out=None, **kwargs):
         b = numpy.asarray(b, order='F')
 
     fn(out.ctypes.data_as(ctypes.c_void_p),
-       a.ctypes.data_as(ctypes.c_void_p), 
+       a.ctypes.data_as(ctypes.c_void_p),
        b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(out.size))
     return out
 

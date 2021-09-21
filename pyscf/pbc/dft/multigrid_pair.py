@@ -97,8 +97,8 @@ def init_gridlevel_info(cutoff, rel_cutoff, mesh):
            cutoff.ctypes.data_as(ctypes.c_void_p),
            mesh.ctypes.data_as(ctypes.c_void_p),
            ctypes.c_int(nlevels), ctypes.c_double(rel_cutoff))
-    except:
-        raise RuntimeError("Failed to init grid level info")
+    except Exception as e:
+        raise RuntimeError("Failed to init grid level info. %s" % e)
     return gridlevel_info
 
 
@@ -109,11 +109,11 @@ def init_rs_grid(gridlevel_info, comp):
     rs_grid = ctypes.POINTER(RS_Grid)()
     fn = getattr(libdft, "init_rs_grid", None)
     try:
-        fn(ctypes.byref(rs_grid), 
+        fn(ctypes.byref(rs_grid),
            ctypes.byref(gridlevel_info),
            ctypes.c_int(comp))
-    except:
-        raise RuntimeError("Failed to initialize real space multigrid data.")
+    except Exception as e:
+        raise RuntimeError("Failed to initialize real space multigrid data. %s" % e)
     return rs_grid
 
 
@@ -153,7 +153,7 @@ def build_task_list(cell0, gridlevel_info, cell1=None, Ls=None, hermi=0, precisi
     njsh = len(jsh_bas)
 
     nl = build_neighbor_list_for_shlpairs(cell0, cell1,
-                                          ish_rcut=ish_rcut, jsh_rcut=jsh_rcut, 
+                                          ish_rcut=ish_rcut, jsh_rcut=jsh_rcut,
                                           hermi=hermi)
 
     task_list = ctypes.POINTER(TaskList)()
@@ -174,13 +174,13 @@ def build_task_list(cell0, gridlevel_info, cell1=None, Ls=None, hermi=0, precisi
              ctypes.c_int(nish), ctypes.c_int(njsh),
              Ls.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_double(precision), ctypes.c_int(hermi))
-    except:
-        raise RuntimeError("Failed to get task list.")
+    except Exception as e:
+        raise RuntimeError("Failed to get task list. %s" % e)
     return task_list
 
 
 def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
-             dimension=None, cell1=None, shls_slice1=None, Ls=None, 
+             dimension=None, cell1=None, shls_slice1=None, Ls=None,
              a=None, ignore_imag=False):
     '''
     Collocate density (opt. gradients) on the real-space grid.
@@ -240,7 +240,7 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
     if dimension is None:
         dimension = cell0.dimension
     assert dimension == getattr(cell1, "dimension", None)
- 
+
     if Ls is None and dimension > 0:
         Ls = np.asarray(cell0.get_lattice_Ls(), order='C')
     elif Ls is None and dimension == 0:
@@ -298,8 +298,8 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
                 jsh_bas.ctypes.data_as(ctypes.c_void_p),
                 jsh_env.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(cell0.cart))
-        except:
-            raise RuntimeError("Failed to compute rho.")
+        except Exception as e:
+            raise RuntimeError("Failed to compute rho. %s" % e)
         return rs_rho
 
     gridlevel_info = task_list.contents.gridlevel_info
@@ -390,7 +390,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
 
 def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0,
-             xctype='LDA', kpts=None, grid_level=None, dimension=None, mesh=None, 
+             xctype='LDA', kpts=None, grid_level=None, dimension=None, mesh=None,
              cell1=None, shls_slice1=None, Ls=None, a=None):
 
     cell0 = cell
@@ -514,8 +514,8 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0,
                 jsh_bas.ctypes.data_as(ctypes.c_void_p),
                 jsh_env.ctypes.data_as(ctypes.c_void_p),
                 ctypes.c_int(cell0.cart))
-        except:
-            raise RuntimeError("Failed to compute rho.")
+        except Exception as e:
+            raise RuntimeError("Failed to compute rho. %s" % e)
         return mat
 
     out = []
@@ -660,7 +660,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
 
-    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] += mydf.vpplocG_part1 * 2
 
@@ -669,7 +669,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if not mydf.vpplocG_part1 is None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] -= mydf.vpplocG_part1
 

@@ -242,7 +242,7 @@ def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=numpy.zer
 
 
 def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', comp=None,
-           kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
+                      kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals \sum_L (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
@@ -264,7 +264,7 @@ def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', co
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-    naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
+    #naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
 
     nkptij = len(kptij_lst)
 
@@ -297,8 +297,8 @@ def aux_e2_sum_auxbas(cell, auxcell_or_auxbasis, intor='int3c2e', aosym='s1', co
 
 
 def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
-               kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None,
-               neighbor_list=None):
+                          kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None,
+                          neighbor_list=None):
     intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
@@ -314,8 +314,8 @@ def wrap_int3c_sum_auxbas(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     nimgs = len(Ls)
     nbas = cell.nbas
 
-    kpti = kptij_lst[:,0]
-    kptj = kptij_lst[:,1]
+    #kpti = kptij_lst[:,0]
+    #kptj = kptij_lst[:,1]
     if gamma_point(kptij_lst):
         kk_type = 'g'
         nkpts = nkptij = 1

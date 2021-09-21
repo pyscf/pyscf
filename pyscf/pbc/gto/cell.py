@@ -536,20 +536,20 @@ def _rcut_by_shells_c(cell, precision=None, rcut=5., return_pgf_radius=False):
     if return_pgf_radius:
         nprim = bas[:,mole.NPRIM_OF].max()
         # be careful that the unused memory blocks are not initialized
-        pgf_radius = np.empty((nbas,nprim), order='C', dtype=np.double)   
+        pgf_radius = np.empty((nbas,nprim), order='C', dtype=np.double)
         ptr_pgf_radius = lib.ndarray_pointer_2d(pgf_radius)
     else:
         ptr_pgf_radius = lib.c_null_ptr()
     func = getattr(libpbc, "rcut_by_shells", None)
     try:
         func(shell_radius.ctypes.data_as(ctypes.c_void_p),
-             ptr_pgf_radius, 
+             ptr_pgf_radius,
              bas.ctypes.data_as(ctypes.c_void_p),
              env.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(nbas), ctypes.c_double(rcut), 
+             ctypes.c_int(nbas), ctypes.c_double(rcut),
              ctypes.c_double(precision))
-    except:
-        raise RuntimeError("Failed to get shell rcut.")
+    except Exception as e:
+        raise RuntimeError("Failed to get shell rcut. %s" % e)
     if return_pgf_radius:
         return shell_radius, pgf_radius
     return shell_radius
@@ -584,7 +584,7 @@ def rcut_by_shells(cell, precision=None, rcut=5., return_pgf_radius=False):
         return _rcut_by_shells_c(cell, precision, rcut)
 
     atom_types = mole.atom_types(cell._atom, cell._basis)
-    rcuts = rcut_by_atom_types(cell, precision=precision, rcut=rcut, 
+    rcuts = rcut_by_atom_types(cell, precision=precision, rcut=rcut,
                                atom_types=atom_types)
 
     out = np.empty([len(cell._bas),])
@@ -660,16 +660,16 @@ def build_neighbor_list_for_shlpairs(cell0, cell1, Ls=None,
              ctypes.c_int(nish), ctypes.c_int(njsh),
              Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs),
              ctypes.c_int(hermi))
-    except:
-        raise RuntimeError("Failed to get neighbor list.")
+    except Exception as e:
+        raise RuntimeError("Failed to get neighbor list. %s" % e)
     return nl
 
 def free_neighbor_list(nl):
     func = getattr(libpbc, "del_neighbor_list", None)
     try:
         func(ctypes.byref(nl))
-    except:
-        raise RuntimeError("Failed to free neighbor list.")
+    except Exception as e:
+        raise RuntimeError("Failed to free neighbor list. %s" % e)
 
 def neighbor_list_to_ndarray(cell0, cell1, nl):
     '''
@@ -866,7 +866,7 @@ def get_SI(cell, Gv=None, atmlst=None):
             G vectors
 
         atmlst : list of ints
-            indices of atoms for which the structure factors are computed 
+            Indices of atoms for which the structure factors are computed.
 
     Returns:
         SI : (natm, ngrids) ndarray, dtype=np.complex128

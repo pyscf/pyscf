@@ -40,7 +40,7 @@ def _aux_e2(cell, auxcell, intor, aosym='s1', comp=1):
     nbas = cell.nbas
     shls_slice = (0, nbas, nbas, nbas*2, nbas*2, nbas*2+auxcell.nbas)
     comp = 1
-    out = gto.moleintor.getints3c(intor, atm, bas, env, shls_slice=shls_slice, 
+    out = gto.moleintor.getints3c(intor, atm, bas, env, shls_slice=shls_slice,
                                   comp=comp, aosym=aosym, ao_loc=ao_loc)
     return out
 
@@ -100,7 +100,6 @@ def _int_vnl(cell, fakecell, hl_blocks):
         atm = numpy.asarray(atm, dtype=numpy.int32)
         bas = numpy.asarray(bas, dtype=numpy.int32)
         env = numpy.asarray(env, dtype=numpy.double)
-        natm = len(atm)
         nbas = len(bas)
         shls_slice = (cell.nbas, nbas, 0, cell.nbas)
         ao_loc = gto.moleintor.make_loc(bas, intor)
