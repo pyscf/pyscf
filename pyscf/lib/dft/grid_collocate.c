@@ -1655,6 +1655,14 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
 {
     TaskList* tl = *task_list;
     GridLevel_Info* gridlevel_info = tl->gridlevel_info;
+    Task *task = (tl->tasks)[grid_level];
+    int ntasks = task->ntasks;
+    if (ntasks <= 0) {
+        return;
+    }
+    double max_radius = task->radius;
+    PGFPair **pgfpairs = task->pgfpairs;
+    int* mesh = gridlevel_info->mesh + grid_level*3;
 
     const int ish0 = shls_slice[0];
     const int ish1 = shls_slice[1];
@@ -1695,13 +1703,6 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
         get_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1, jsh_bas, jsh_env, cart);
     }
 
-    Task *task = (tl->tasks)[grid_level];
-    int ntasks = task->ntasks;
-    double max_radius = task->radius;
-    PGFPair **pgfpairs = task->pgfpairs;
-    int* mesh = gridlevel_info->mesh + grid_level*3;
-
-    //Shlpair_Task_Index *shlpair_task_idx = get_shlpair_task_index(pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
     int *task_loc;
     int nblock = get_task_loc(&task_loc, pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
 
@@ -1750,10 +1751,10 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
                       ish, jsh, ish0, jsh0, naoi, naoj);
         }
     }
-
     free(cache0);
 }
 
+    free(task_loc);
     del_cart2sph_coeff(cart2sph_coeff_i, gto_norm_i, ish0, ish1);
     if (hermi != 1) {
         del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
@@ -1822,6 +1823,9 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
     for (ilevel = 0; ilevel < nlevels; ilevel++) {
         task = (tl->tasks)[ilevel];
         ntasks = task->ntasks;
+        if (ntasks <= 0) {
+            continue;
+        }
         pgfpairs = task->pgfpairs;
         max_radius = task->radius;
 
@@ -1881,6 +1885,7 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
         free(rho_priv);
     }
 }
+    free(task_loc);
     } // loop ilevel
 
     del_cart2sph_coeff(cart2sph_coeff_i, gto_norm_i, ish0, ish1);

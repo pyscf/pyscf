@@ -64,7 +64,8 @@ class TaskList(ctypes.Structure):
                 ("tasks", ctypes.POINTER(ctypes.POINTER(Task)))]
 
 
-def multi_grids_tasks(cell, ke_cutoff=None, hermi=0, rel_cutoff=REL_CUTOFF, ngrids=NGRIDS):
+def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
+                      ngrids=NGRIDS, ke_ratio=KE_RATIO, rel_cutoff=REL_CUTOFF):
     if ke_cutoff is None:
         ke_cutoff = cell.ke_cutoff
     if ke_cutoff is None:
@@ -72,7 +73,7 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0, rel_cutoff=REL_CUTOFF, ngri
     ke1 = ke_cutoff
     cutoff = [ke1,]
     for i in range(ngrids-1):
-        ke1 /= KE_RATIO
+        ke1 /= ke_ratio
         cutoff.append(ke1)
     cutoff.reverse()
     a = cell.lattice_vectors()
@@ -328,7 +329,9 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
     task_list = getattr(mydf, 'task_list', None)
     if task_list is None:
-        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
 
     assert(deriv < 2)
 
@@ -541,9 +544,13 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
 
     task_list = getattr(mydf, 'task_list', None)
     if task_list is None:
-        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
     if hermi < task_list.contents.hermi:
-        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
 
     at_gamma_point = gamma_point(kpts)
     if at_gamma_point:
@@ -590,9 +597,13 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
 
     task_list = getattr(mydf, 'task_list', None)
     if task_list is None:
-        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
     if hermi < task_list.contents.hermi:
-        mydf.task_list = task_list = multi_grids_tasks(cell, hermi=hermi)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
 
     if gamma_point(kpts):
         veff = np.zeros((nset,nkpts,nao,nao))

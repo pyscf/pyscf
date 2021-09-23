@@ -1831,8 +1831,9 @@ class MultiGridFFTDF(fft.FFTDF):
 
 
 class MultiGridFFTDF2(MultiGridFFTDF):
-    pass
-
+    ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
+    ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
+    rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 15.0)
 
 def multigrid(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
