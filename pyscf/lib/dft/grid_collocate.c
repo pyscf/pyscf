@@ -1576,7 +1576,7 @@ static void fill_tril(double* mat, int comp, int* ish_ao_loc, int* jsh_ao_loc,
 }
 
 
-static Shlpair_Task_Index* get_shlpair_task_index(PGFPair** pgfpairs, int ntasks, 
+Shlpair_Task_Index* get_shlpair_task_index(PGFPair** pgfpairs, int ntasks, 
             int ish0, int ish1, int jsh0, int jsh1, int hermi)
 {
     const int nish = ish1 - ish0;
@@ -1607,6 +1607,45 @@ static Shlpair_Task_Index* get_shlpair_task_index(PGFPair** pgfpairs, int ntasks
 }
 
 
+int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
+                 int ish0, int ish1, int jsh0, int jsh1, int hermi)
+{
+    int n = -2;
+    int ish_prev = -1;
+    int jsh_prev = -1;
+    int itask, ish, jsh;
+    int *buf = (int*)malloc(sizeof(int) * ntasks*2);
+    PGFPair *pgfpair;
+    for(itask = 0; itask < ntasks; itask++){
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        jsh = pgfpair->jsh;
+        if (ish < ish0 || ish >= ish1) {
+            continue;
+        }
+        if (jsh < jsh0 || jsh >= jsh1) {
+            continue;
+        }
+        if (hermi == 1 && jsh < ish) {
+            continue;
+        }
+
+        if (ish != ish_prev || jsh != jsh_prev) {
+            n += 2;
+            buf[n] = itask;
+            ish_prev = ish;
+            jsh_prev = jsh;
+        }
+        if (ish == ish_prev && jsh == jsh_prev) {
+            buf[n+1] = itask+1;
+        }
+    }
+    n += 2;
+    *task_loc = (int*)realloc(buf, sizeof(int) * n);
+    return n;
+}
+
+
 void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** task_list,
                    int comp, int hermi, int grid_level, 
                    int *shls_slice, int* ish_ao_loc, int* jsh_ao_loc,
@@ -1623,7 +1662,7 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
     const int jsh1 = shls_slice[3];
     const int nish = ish1 - ish0;
     const int njsh = jsh1 - jsh0;
-    const int nijsh = nish * njsh;
+    //const int nijsh = nish * njsh;
     const int naoi = ish_ao_loc[ish1] - ish_ao_loc[ish0];
     const int naoj = jsh_ao_loc[jsh1] - jsh_ao_loc[jsh0];
 
@@ -1662,7 +1701,9 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
     PGFPair **pgfpairs = task->pgfpairs;
     int* mesh = gridlevel_info->mesh + grid_level*3;
 
-    Shlpair_Task_Index *shlpair_task_idx = get_shlpair_task_index(pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
+    //Shlpair_Task_Index *shlpair_task_idx = get_shlpair_task_index(pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
+    int *task_loc;
+    int nblock = get_task_loc(&task_loc, pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
 
     int cache_size = _ints_cache_size(MAX(ish_lmax,jsh_lmax),
                                       MAX(ish_nprim_max, jsh_nprim_max),
@@ -1671,56 +1712,45 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
 
 #pragma omp parallel
 {
-    int i, ish, jsh, itask;
-    int ijsh, ijsh_ntasks;
+    int ish, jsh, itask, iblock;
     int li, lj, ish_nprim, jsh_nprim;
-    int *task_idx = NULL;
     PGFPair *pgfpair = NULL;
+    double *ptr_gto_norm_i, *ptr_gto_norm_j;
     double *cache0 = malloc(sizeof(double) * cache_size);
     double *dm_cart = cache0;
     int len_dm_cart = comp*ish_nprim_max*_LEN_CART[ish_lmax]*jsh_nprim_max*_LEN_CART[jsh_lmax];
     double *cache = dm_cart + len_dm_cart;
 
     #pragma omp for schedule(dynamic)
-    for(ijsh = 0; ijsh < nijsh; ijsh++){
-        ish = ijsh / njsh;
-        jsh = ijsh % njsh; 
-
-        if (hermi == 1 && jsh < ish) {
-            continue;
-        }
-        
-        ish += ish0;
-        jsh += jsh0;
-        ijsh_ntasks = get_task_index(shlpair_task_idx, &task_idx, ish, jsh);
-        if (ijsh_ntasks <= 0) {
-            continue;
-        }
-
+    for (iblock = 0; iblock < nblock; iblock+=2) {
+        itask = task_loc[iblock];
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        jsh = pgfpair->jsh;
+        ptr_gto_norm_i = gto_norm_i[ish];
+        ptr_gto_norm_j = gto_norm_j[jsh];
         li = ish_bas[ANG_OF+ish*BAS_SLOTS];
         lj = jsh_bas[ANG_OF+jsh*BAS_SLOTS];
         ish_nprim = ish_bas[NPRIM_OF+ish*BAS_SLOTS];
         jsh_nprim = jsh_bas[NPRIM_OF+jsh*BAS_SLOTS];
-        len_dm_cart = comp*ish_nprim*_LEN_CART[li]*jsh_nprim*_LEN_CART[lj]; 
+        len_dm_cart = comp*ish_nprim*_LEN_CART[li]*jsh_nprim*_LEN_CART[lj];
         memset(dm_cart, 0, len_dm_cart * sizeof(double));
-        for (i = 0; i < ijsh_ntasks; i++) {
-            itask = task_idx[i];
+        for (; itask < task_loc[iblock+1]; itask++) {
             pgfpair = pgfpairs[itask];
             _apply_ints(eval_ints, weights, dm_cart, pgfpair, comp, 1.0, dimension, a, b, mesh,
-                        gto_norm_i[ish], gto_norm_j[jsh], ish_atm, ish_bas, ish_env,
+                        ptr_gto_norm_i, ptr_gto_norm_j, ish_atm, ish_bas, ish_env,
                         jsh_atm, jsh_bas, jsh_env, Ls, cache);
         }
-
         transform_dm_inverse(dm_cart, mat, comp,
                              cart2sph_coeff_i[ish], cart2sph_coeff_j[jsh],
                              ish_ao_loc, jsh_ao_loc, ish_bas, jsh_bas,
                              ish, jsh, ish0, jsh0, naoi, naoj, cache);
-
         if (hermi == 1 && ish != jsh) {
             fill_tril(mat, comp, ish_ao_loc, jsh_ao_loc,
                       ish, jsh, ish0, jsh0, naoi, naoj);
         }
     }
+
     free(cache0);
 }
 
@@ -1728,44 +1758,6 @@ void grid_eval_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** 
     if (hermi != 1) {
         del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
     }
-    del_shlpair_task_index(shlpair_task_idx);
-    free(shlpair_task_idx);
-}
-
-
-int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
-                 int ish0, int ish1, int jsh0, int jsh1, int hermi)
-{
-    int n = 0;
-    int ish_prev = -1;
-    int jsh_prev = -1;
-    int itask, ish, jsh;
-    int *buf = (int*)malloc(sizeof(int) * (ntasks+1));
-    PGFPair *pgfpair;
-    for(itask = 0; itask < ntasks; itask++){
-        pgfpair = pgfpairs[itask];
-        ish = pgfpair->ish;
-        jsh = pgfpair->jsh;
-        if (ish < ish0 || ish >= ish1) {
-            continue;
-        }
-        if (jsh < jsh0 || jsh >= jsh1) {
-            continue;
-        }
-        if (hermi == 1 && jsh < ish) {
-            continue;
-        }
-
-        if (ish != ish_prev || jsh != jsh_prev) {
-            buf[n] = itask;
-            n += 1;
-            ish_prev = ish;
-            jsh_prev = jsh;
-        }
-    }
-    buf[n] = ntasks;
-    *task_loc = (int*)realloc(buf, sizeof(int) * (n+1));
-    return n;
 }
 
 
@@ -1846,8 +1838,9 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
 
 #pragma omp parallel
 {
-    PGFPair *pgfpair = NULL, *prev_pgfpair=NULL;
+    PGFPair *pgfpair = NULL;
     int iblock, itask, ish, jsh;
+    double *ptr_gto_norm_i, *ptr_gto_norm_j;
     double *cache0 = malloc(sizeof(double) * cache_size);
     double *dm_cart = cache0;
     double *dm_pgf = cache0 + ish_nprim_max*_LEN_CART[ish_lmax]*jsh_nprim_max*_LEN_CART[jsh_lmax];
@@ -1863,31 +1856,24 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
     rhobufs[thread_id] = rho_priv;
 
     #pragma omp for schedule(dynamic)
-    for (iblock = 0; iblock < nblock; iblock++) {
-    for (itask = task_loc[iblock]; itask < task_loc[iblock+1]; itask++){
+    for (iblock = 0; iblock < nblock; iblock+=2) {
+        itask = task_loc[iblock];
         pgfpair = pgfpairs[itask];
         ish = pgfpair->ish;
         jsh = pgfpair->jsh;
-        if (ish < ish0 || ish >= ish1) {
-            continue;
+        ptr_gto_norm_i = gto_norm_i[ish];
+        ptr_gto_norm_j = gto_norm_j[jsh];
+        transform_dm(dm_cart, dm, cart2sph_coeff_i[ish],
+                     cart2sph_coeff_j[jsh], ish_ao_loc, jsh_ao_loc,
+                     ish_bas, jsh_bas, ish, jsh, ish0, jsh0, naoj, cache);
+        for (; itask < task_loc[iblock+1]; itask++) {
+            pgfpair = pgfpairs[itask];
+            get_dm_pgf(dm_pgf, dm_cart, pgfpair, ish_bas, jsh_bas, hermi);
+            _apply_rho(eval_rho, rho_priv, dm_pgf, pgfpair, comp, dimension, a, b, mesh,
+                       ptr_gto_norm_i, ptr_gto_norm_j, ish_atm, ish_bas, ish_env,
+                       jsh_atm, jsh_bas, jsh_env, Ls, cache);
         }
-        if (jsh < jsh0 || jsh >= jsh1) {
-            continue;
-        }
-        if (hermi == 1 && jsh < ish) {
-            continue;
-        }
-        if (!pgfpairs_with_same_shells(pgfpair, prev_pgfpair)) {
-            transform_dm(dm_cart, dm, cart2sph_coeff_i[ish],
-                         cart2sph_coeff_j[jsh], ish_ao_loc, jsh_ao_loc,
-                         ish_bas, jsh_bas, ish, jsh, ish0, jsh0, naoj, cache);
-        }
-        get_dm_pgf(dm_pgf, dm_cart, pgfpair, ish_bas, jsh_bas, hermi);
-        _apply_rho(eval_rho, rho_priv, dm_pgf, pgfpair, comp, dimension, a, b, mesh,
-                   gto_norm_i[ish], gto_norm_j[jsh], ish_atm, ish_bas, ish_env,
-                   jsh_atm, jsh_bas, jsh_env, Ls, cache);
-        prev_pgfpair = pgfpair;
-    }}
+    }
 
     free(cache0);
     NPomp_dsum_reduce_inplace(rhobufs, comp*ngrids);
