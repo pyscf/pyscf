@@ -32,7 +32,8 @@ void contract_ppnl(double* out,
     const double D0 = 0.;
 
     size_t nao_pair = (size_t) nao*nao;
-    for (size_t i = 0; i < nao_pair; i++) {
+    size_t i;
+    for (i = 0; i < nao_pair; i++) {
         out[i] = 0;
     }
 

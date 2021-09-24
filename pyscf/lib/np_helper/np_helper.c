@@ -53,59 +53,75 @@ void NPzcopy(double complex *out, const double complex *in, const size_t n)
 
 void NPdmultiplysum(double* out, double* a, double* b, int nrow, int ncol, int axis)
 {
+#pragma omp parallel
+{
+    size_t i, j;
     if (axis == 0){
-        #pragma omp parallel for schedule(static)
-        for (size_t j = 0; j < ncol; j++) {
-            for (size_t i = 0; i < nrow; i++) {
+        #pragma omp for schedule(static)
+        for (j = 0; j < ncol; j++) {
+            for (i = 0; i < nrow; i++) {
                 out[j] += a[i*ncol+j] * b[i*ncol+j];
             }
         }
     }
     else{
-        #pragma omp parallel for schedule(static)
-        for (size_t i = 0; i < nrow; i++) {
-            for (size_t j = 0; j < ncol; j++){
+        #pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++) {
+            for (j = 0; j < ncol; j++){
                 out[i] += a[i*ncol+j] * b[i*ncol+j];
             }
         }
     }
+}
 }
 
 void NPzmultiplysum(double complex* out, double complex* a, double complex* b, 
                     int nrow, int ncol, int axis)
 {
+#pragma omp parallel
+{
+    size_t i, j;
     if (axis == 0){
-        #pragma omp parallel for schedule(static)
-        for (size_t j = 0; j < ncol; j++) {
-            for (size_t i = 0; i < nrow; i++) {
+        #pragma omp for schedule(static)
+        for (j = 0; j < ncol; j++) {
+            for (i = 0; i < nrow; i++) {
                 out[j] += a[i*ncol+j] * b[i*ncol+j];
             }
         }
     }
     else{
-        #pragma omp parallel for schedule(static)
-        for (size_t i = 0; i < nrow; i++) {
-            for (size_t j = 0; j < ncol; j++){
+        #pragma omp for schedule(static)
+        for (i = 0; i < nrow; i++) {
+            for (j = 0; j < ncol; j++){
                 out[i] += a[i*ncol+j] * b[i*ncol+j];
             }
         }
     }
 }
+}
 
 void NPdexp(double* out, double* a, int n)
 {
-    #pragma omp parallel for schedule(static)
-    for (size_t i=0; i<n; i++) {
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
         out[i] = exp(a[i]);
     }
+}
 }
 
 void NPzexp(double complex* out, double complex* a, int n)
 {
-    #pragma omp parallel for schedule(static)
-    for (size_t i=0; i<n; i++) {
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
         out[i] = cexp(a[i]);
     }
+}
 }
 
 void NPdsum(double* out, double* a, int lda, int n)
@@ -148,27 +164,39 @@ void NPdsum(double* out, double* a, int lda, int n)
 
 void NPzsum(double complex* out, double complex* a, int lda, int n)
 {
-    #pragma omp parallel for schedule(static)
-    for (size_t i=0; i<n; i++) {
+#pragma omp parallel
+{
+    size_t i, j;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
         out[i] = 0;
-        for (size_t j=0; j<lda; j++) {
+        for (j = 0; j < lda; j++) {
             out[i] += a[i*lda+j];
         }
     }
 }
+}
 
 void NPdadd(double* out, double* a, double* b, int n)
 {
-    #pragma omp parallel for schedule(static)
-    for (size_t i=0; i<n; i++) {
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
         out[i] = a[i] + b[i];
     }
+}
 }
 
 void NPzadd(double complex* out, double complex* a, double complex* b, int n)
 {
-    #pragma omp parallel for schedule(static)
-    for (size_t i=0; i<n; i++) {
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
         out[i] = a[i] + b[i];
     }
+}
 }

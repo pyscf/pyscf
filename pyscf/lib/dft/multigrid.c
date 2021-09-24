@@ -385,7 +385,8 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
     }
 //}
 
-    for (int i = 0; i < nlevels; i++) {
+    int i;
+    for (i = 0; i < nlevels; i++) {
         Task *t0 = ((*task_list)->tasks)[i];
         t0->radius = max_radius[i];
     }

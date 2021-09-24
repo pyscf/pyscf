@@ -52,18 +52,21 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
                     double r0, double precision)
 {
     int max_cycle = RCUT_MAX_CYCLE;
-    #pragma omp parallel for schedule(static)
-    for (int ib = 0; ib < nbas; ib ++) {
+#pragma omp parallel
+{
+    int ib, ic, p;
+    #pragma omp for schedule(static)
+    for (ib = 0; ib < nbas; ib ++) {
         int l = bas[ANG_OF+ib*BAS_SLOTS];
         int nprim = bas[NPRIM_OF+ib*BAS_SLOTS];
         int ptr_exp = bas[PTR_EXP+ib*BAS_SLOTS];
         int nctr = bas[NCTR_OF+ib*BAS_SLOTS];
         int ptr_c = bas[PTR_COEFF+ib*BAS_SLOTS];
         double rcut_max = 0, rcut;
-        for (int p=0; p<nprim; p++) {
+        for (p = 0; p < nprim; p++) {
             double alpha = env[ptr_exp+p];
             double cmax = 0;
-            for (int ic=0; ic<nctr; ic++) {
+            for (ic = 0; ic < nctr; ic++) {
                 cmax = MAX(fabs(env[ptr_c+ic*nprim+p]), cmax);
             }
             rcut = pgf_rcut(l, alpha, cmax, precision, r0, max_cycle);
@@ -74,4 +77,5 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
         }
         shell_radius[ib] = rcut_max;
     }
+}
 }
