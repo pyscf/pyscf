@@ -65,7 +65,8 @@ def kpts_to_kmesh(cell, kpts):
     return kmesh
 
 
-def weighted_coulG(cell, omega, kpt=np.zeros(3), exx=False, mesh=None):
+def weighted_coulG(mydf, omega, kpt=np.zeros(3), exx=False, mesh=None):
+    cell = mydf.cell
     if cell.omega != 0:
         raise RuntimeError('RSGDF cannot be used '
                            'to evaluate the long-range HF exchange in RSH '
@@ -75,7 +76,7 @@ def weighted_coulG(cell, omega, kpt=np.zeros(3), exx=False, mesh=None):
         omega_ = None
     else:
         omega_ = omega
-    coulG = pbctools.get_coulG(cell, kpt, False, None, mesh, Gv,
+    coulG = pbctools.get_coulG(cell, kpt, False, mydf, mesh, Gv,
                                omega=omega_)
     coulG *= kws
     return coulG
@@ -187,7 +188,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 qaux2 = np.outer(qaux,qaux)
             j2c[k] -= qaux2 * g0_j2c
         # long-range part via aft
-        coulG_lr = weighted_coulG(cell, omega_j2c, kpt, False, mesh_j2c)
+        coulG_lr = mydf.weighted_coulG(omega_j2c, kpt, False, mesh_j2c)
         for p0, p1 in lib.prange(0, ngrids, blksize):
             aoaux = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, b, gxyz[p0:p1],
                                 Gvbase, kpt).T
@@ -279,7 +280,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (0, auxcell.nbas)
         Gaux = ft_ao.ft_ao(auxcell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        wcoulG_lr = weighted_coulG(cell, omega, kpt, False, mesh)
+        wcoulG_lr = mydf.weighted_coulG(omega, kpt, False, mesh)
         Gaux *= wcoulG_lr.reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
@@ -460,6 +461,7 @@ class RSGDF(df.df.GDF):
 
     # class methods defined outside the class
     _make_j3c = _make_j3c
+    weighted_coulG = weighted_coulG
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         if cell.dimension < 3:
