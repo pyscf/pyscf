@@ -100,6 +100,9 @@ NUC_ECP = 4  # atoms with pseudo potential
 BASE = getattr(__config__, 'BASE', 0)
 NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
+# Whether to disable the explicit call to gc.collect(). gc.collect() may cause
+# non-negligible overhead (https://github.com/pyscf/pyscf/issues/1038).
+DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -2310,7 +2313,8 @@ class Mole(lib.StreamObject):
                 name, the given point group symmetry will be used.
 
         '''
-        gc.collect()  # To release circular referred objects
+        if not DISABLE_GC:
+            gc.collect()  # To release circular referred objects
 
         if isinstance(dump_input, (str, unicode)):
             sys.stderr.write('Assigning the first argument %s to mol.atom\n' %
