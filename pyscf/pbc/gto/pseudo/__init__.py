@@ -33,7 +33,7 @@ ALIAS = {
     'gthpbe'     : 'gth-pbe.dat'    ,
     'gthpbesol'  : 'gth-pbesol.dat' ,
     'gthhf'      : 'gth-hf.dat'     ,
-    'gth2hf'     : 'gth2-hf.dat'    ,
+    'gthhfrev'   : 'gth-hf-rev.dat' ,
 }
 
 def parse(string):
