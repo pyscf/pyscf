@@ -832,12 +832,12 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                      scf.hf_symm.RHF   : scf.ghf_symm.GHF,
                      scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
                      scf.uhf_symm.UHF  : scf.ghf_symm.GHF,
-                     dft.rks.RKS       : None,
-                     dft.roks.ROKS     : None,
-                     dft.uks.UKS       : None,
-                     dft.rks_symm.RKS  : None,
-                     dft.rks_symm.ROKS : None,
-                     dft.uks_symm.UKS  : None}
+                     dft.rks.RKS       : dft.gks.GKS,
+                     dft.roks.ROKS     : dft.gks.GKS,
+                     dft.uks.UKS       : dft.gks.GKS,
+                     dft.rks_symm.RKS  : dft.gks_symm.GKS,
+                     dft.rks_symm.ROKS : dft.gks_symm.GKS,
+                     dft.uks_symm.UKS  : dft.gks_symm.GKS}
         out = _object_without_soscf(mf, known_cls, remove_df)
 
     return update_mo_(mf, out)
