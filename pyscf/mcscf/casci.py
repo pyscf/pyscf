@@ -307,13 +307,13 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
 
         if occ2_idx.size > 0:
-            log.debug('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
-                      occ2_idx, cas_occ[occ2_idx])
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
+                     occ2_idx, cas_occ[occ2_idx])
             full_occ2_idx = numpy.append(numpy.arange(ncore), ncore + occ2_idx)
             _diag_subfock_(full_occ2_idx)
         if occ0_idx.size > 0:
-            log.debug('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
-                      occ0_idx, cas_occ[occ0_idx])
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
+                     occ0_idx, cas_occ[occ0_idx])
             full_occ0_idx = numpy.append(ncore + occ0_idx, numpy.arange(nocc, nmo))
             _diag_subfock_(full_occ0_idx)
 
