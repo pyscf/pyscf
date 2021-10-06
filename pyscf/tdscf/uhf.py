@@ -25,16 +25,15 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf import __config__
 
-OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_uhf_get_nto_threshold', 0.3)
-REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
+OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
+REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 # Low excitation filter to avoid numerical instability
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_positive_eig_threshold', 1e-3)
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
 def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
@@ -591,26 +590,6 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
 class TDMixin(rhf.TDMixin):
 
-    def dump_flags(self, verbose=None):
-        log = logger.new_logger(self, verbose)
-        log.info('\n')
-        log.info('******** %s for %s ********',
-                 self.__class__, self._scf.__class__)
-        log.info('nstates = %d', self.nstates)
-        log.info('wfnsym = %s', self.wfnsym)
-        log.info('conv_tol = %g', self.conv_tol)
-        log.info('eigh lindep = %g', self.lindep)
-        log.info('eigh level_shift = %g', self.level_shift)
-        log.info('eigh max_space = %d', self.max_space)
-        log.info('eigh max_cycle = %d', self.max_cycle)
-        log.info('chkfile = %s', self.chkfile)
-        log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, lib.current_memory()[0])
-        if not self._scf.converged:
-            log.warn('Ground state SCF is not converged')
-        log.info('\n')
-        return self
-
     @lib.with_doc(get_ab.__doc__)
     def get_ab(self, mf=None):
         if mf is None: mf = self._scf
@@ -627,6 +606,9 @@ class TDMixin(rhf.TDMixin):
 
 @lib.with_doc(rhf.TDA.__doc__)
 class TDA(TDMixin):
+
+    singlet = None
+
     def gen_vind(self, mf):
         '''Compute Ax'''
         return gen_tda_hop(mf, wfnsym=self.wfnsym)
@@ -808,6 +790,9 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
 
 class TDHF(TDMixin):
+
+    singlet = None
+
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf):
         return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)

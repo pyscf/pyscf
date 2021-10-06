@@ -1341,7 +1341,7 @@ def time_reversal_map(mol):
 
 CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
 
-def energy_nuc(mol, charges=None, coords=None):
+def classical_coulomb_energy(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
@@ -1358,6 +1358,8 @@ def energy_nuc(mol, charges=None, coords=None):
         raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+energy_nuc = classical_coulomb_energy
 
 def inter_distance(mol, coords=None):
     '''

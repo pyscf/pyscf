@@ -45,6 +45,7 @@ class VHFOpt(object):
             self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         self._dmcondname = dmcondname
+        self._qcondname = qcondname
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),

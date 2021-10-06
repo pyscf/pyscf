@@ -191,6 +191,7 @@ def X2C(mol, *args):
     return x2c.UHF(mol, *args)
 
 def sfx2c1e(mf):
+    '''spin-free (the scalar part) X2C with 1-electron X-matrix'''
     return mf.sfx2c1e()
 sfx2c = sfx2c1e
 

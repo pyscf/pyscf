@@ -639,6 +639,13 @@ try:
         get_veff = dks.get_veff
         energy_elec = rks.energy_elec
 
+        @property
+        def collinear(self):
+            return self._numint.collinear
+        @collinear.setter
+        def collinear(self, val):
+            self._numint.collinear = val
+
     UKS = X2C_UKS
 
     class X2C_RKS(X2C_UKS):

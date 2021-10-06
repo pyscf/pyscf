@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,108 +26,41 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
+from pyscf.dft import gks
 
 
+@lib.with_doc(gks.get_veff.__doc__)
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    '''Coulomb + XC functional
+    if ks.nlc != '':
+        raise NotImplementedError(ks.nlc)
+    return gks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
-    .. note::
-        This function will change the ks object.
+
+def energy_elec(ks, dm=None, h1e=None, vhf=None):
+    r'''Electronic part of DKS energy.
+
+    Note this function has side effects which cause mf.scf_summary updated.
 
     Args:
-        ks : an instance of :class:`RKS`
-            XC functional are controlled by ks.xc attribute.  Attribute
-            ks.grids might be initialized.
-        dm : ndarray or list of ndarrays
-            A density matrix or a list of density matrices
+        ks : an instance of DFT class
 
-    Kwargs:
-        dm_last : ndarray or a list of ndarrays or 0
-            The density matrix baseline.  If not 0, this function computes the
-            increment of HF potential w.r.t. the reference HF potential matrix.
-        vhf_last : ndarray or a list of ndarrays or 0
-            The reference Vxc potential matrix.
-        hermi : int
-            Whether J, K matrix is hermitian
-
-            | 0 : no hermitian or symmetric
-            | 1 : hermitian
-            | 2 : anti-hermitian
+        dm : 2D ndarray
+            one-partical density matrix
+        h1e : 2D ndarray
+            Core hamiltonian
 
     Returns:
-        matrix Veff = J + Vxc.  Veff can be a list matrices, if the input
-        dm is a list of density matrices.
+        DKS electronic energy and the 2-electron contribution
     '''
-    if mol is None: mol = ks.mol
-    if dm is None: dm = ks.make_rdm1()
-    t0 = (logger.process_clock(), logger.perf_counter())
-
-    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
-
-    if ks.grids.coords is None:
-        ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
-            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm, ks.grids)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-
-    if hermi == 2:  # because rho = 0
-        n, exc, vxc = 0, 0, 0
-    else:
-        max_memory = ks.max_memory - lib.current_memory()[0]
-        n, exc, vxc = ks._numint.r_vxc(mol, ks.grids, ks.xc, dm, hermi=hermi,
-                                       max_memory=max_memory)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
-
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
-    if abs(hyb) < 1e-10:
-        vk = None
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vj', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm, hermi)
-            vj += vhf_last.vj
-        else:
-            vj = ks.get_j(mol, dm, hermi)
-        vxc += vj
-    else:
-        if (ks._eri is None and ks.direct_scf and
-            getattr(vhf_last, 'vk', None) is not None):
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj, vk = ks.get_jk(mol, ddm, hermi)
-            vk *= hyb
-            if abs(omega) > 1e-10:  # For range separated Coulomb operator
-                vklr = ks.get_k(mol, ddm, hermi, omega=omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
-            vj += vhf_last.vj
-            vk += vhf_last.vk
-        else:
-            vj, vk = ks.get_jk(mol, dm, hermi)
-            vk *= hyb
-            if abs(omega) > 1e-10:
-                vklr = ks.get_k(mol, dm, hermi, omega=omega)
-                vklr *= (alpha - hyb)
-                vk += vklr
-        vxc += vj - vk
-
-        if ground_state:
-            exc -= numpy.einsum('ij,ji', dm, vk).real * hyb * .5
-
-    if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
-    else:
-        ecoul = None
-
-    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
-    return vxc
-
-
-energy_elec = rks.energy_elec
+    e1, e2 = rks.energy_elec(ks, dm, h1e, vhf)
+    if not ks.with_ssss and ks.ssss_approx == 'Visscher':
+        e2 += _vischer_ssss_correction(mf, dm)
+        mf.scf_summary['e2'] = e2
+    return e1, e2
 
 
 class DKS(rks.KohnShamDFT, dhf.DHF):
-    '''Dirac-Kohn-Sham'''
+    '''Kramers unrestricted Dirac-Kohn-Sham'''
     def __init__(self, mol, xc='LDA,VWN'):
         from pyscf.dft import r_numint
         dhf.DHF.__init__(self, mol)
@@ -151,6 +84,13 @@ class DKS(rks.KohnShamDFT, dhf.DHF):
         return x2chf
     x2c = x2c1e
 
+    @property
+    def collinear(self):
+        return self._numint.collinear
+    @collinear.setter
+    def collinear(self, val):
+        self._numint.collinear = val
+
 UKS = UDKS = DKS
 
 class RDKS(DKS, dhf.RDHF):
@@ -165,5 +105,12 @@ class RDKS(DKS, dhf.RDHF):
         x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
+
+    @property
+    def collinear(self):
+        return self._numint.collinear
+    @collinear.setter
+    def collinear(self, val):
+        self._numint.collinear = val
 
 RKS = RDKS
