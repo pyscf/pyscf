@@ -143,7 +143,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
 def make_hdiag(h1e, eri, norb, nelec):
     '''Diagonal Hamiltonian for Davidson preconditioner
     '''
-    if h1e.dtype == numpy.complex or eri.dtype == numpy.complex:
+    if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
 
     neleca, nelecb = _unpack_nelec(nelec)
@@ -173,7 +173,7 @@ def make_hdiag(h1e, eri, norb, nelec):
 def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''Modify 2e Hamiltonian to include 1e Hamiltonian contribution.
     '''
-    if h1e.dtype == numpy.complex or eri.dtype == numpy.complex:
+    if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
 
     if not isinstance(nelec, (int, numpy.number)):
@@ -192,7 +192,7 @@ def pspace(h1e, eri, norb, nelec, hdiag=None, np=400):
     if norb > 63:
         raise NotImplementedError('norb > 63')
 
-    if h1e.dtype == numpy.complex or eri.dtype == numpy.complex:
+    if h1e.dtype == numpy.complex128 or eri.dtype == numpy.complex128:
         raise NotImplementedError('Complex Hamiltonian')
 
     neleca, nelecb = _unpack_nelec(nelec)

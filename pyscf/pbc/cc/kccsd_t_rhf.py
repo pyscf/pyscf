@@ -101,8 +101,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     # Create necessary temporary eris for fast read
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    t1T = np.array([x.T for x in t1], dtype=np.complex128, order='C')
+    fvo = np.array([x.T for x in fov], dtype=np.complex128, order='C')
     cpu1 = log.timer_debug1('CCSD(T) tmp eri creation', *cpu1)
 
     #def get_w_old(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1, out=None):
@@ -193,33 +193,33 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
         mo_offset = np.array([ki,kj,kk,ka,kb,kc], dtype=np.int32)
 
-        vvop_ab = np.asarray(data[0][0], dtype=np.complex, order='C')
-        vvop_ac = np.asarray(data[0][1], dtype=np.complex, order='C')
-        vvop_ba = np.asarray(data[0][2], dtype=np.complex, order='C')
-        vvop_bc = np.asarray(data[0][3], dtype=np.complex, order='C')
-        vvop_ca = np.asarray(data[0][4], dtype=np.complex, order='C')
-        vvop_cb = np.asarray(data[0][5], dtype=np.complex, order='C')
+        vvop_ab = np.asarray(data[0][0], dtype=np.complex128, order='C')
+        vvop_ac = np.asarray(data[0][1], dtype=np.complex128, order='C')
+        vvop_ba = np.asarray(data[0][2], dtype=np.complex128, order='C')
+        vvop_bc = np.asarray(data[0][3], dtype=np.complex128, order='C')
+        vvop_ca = np.asarray(data[0][4], dtype=np.complex128, order='C')
+        vvop_cb = np.asarray(data[0][5], dtype=np.complex128, order='C')
 
-        vooo_aj = np.asarray(data[1][0], dtype=np.complex, order='C')
-        vooo_ak = np.asarray(data[1][1], dtype=np.complex, order='C')
-        vooo_bi = np.asarray(data[1][2], dtype=np.complex, order='C')
-        vooo_bk = np.asarray(data[1][3], dtype=np.complex, order='C')
-        vooo_ci = np.asarray(data[1][4], dtype=np.complex, order='C')
-        vooo_cj = np.asarray(data[1][5], dtype=np.complex, order='C')
+        vooo_aj = np.asarray(data[1][0], dtype=np.complex128, order='C')
+        vooo_ak = np.asarray(data[1][1], dtype=np.complex128, order='C')
+        vooo_bi = np.asarray(data[1][2], dtype=np.complex128, order='C')
+        vooo_bk = np.asarray(data[1][3], dtype=np.complex128, order='C')
+        vooo_ci = np.asarray(data[1][4], dtype=np.complex128, order='C')
+        vooo_cj = np.asarray(data[1][5], dtype=np.complex128, order='C')
 
-        t2T_cj = np.asarray(data[2][0], dtype=np.complex, order='C')
-        t2T_bk = np.asarray(data[2][1], dtype=np.complex, order='C')
-        t2T_ci = np.asarray(data[2][2], dtype=np.complex, order='C')
-        t2T_ak = np.asarray(data[2][3], dtype=np.complex, order='C')
-        t2T_bi = np.asarray(data[2][4], dtype=np.complex, order='C')
-        t2T_aj = np.asarray(data[2][5], dtype=np.complex, order='C')
+        t2T_cj = np.asarray(data[2][0], dtype=np.complex128, order='C')
+        t2T_bk = np.asarray(data[2][1], dtype=np.complex128, order='C')
+        t2T_ci = np.asarray(data[2][2], dtype=np.complex128, order='C')
+        t2T_ak = np.asarray(data[2][3], dtype=np.complex128, order='C')
+        t2T_bi = np.asarray(data[2][4], dtype=np.complex128, order='C')
+        t2T_aj = np.asarray(data[2][5], dtype=np.complex128, order='C')
 
-        t2T_cb = np.asarray(data[3][0], dtype=np.complex, order='C')
-        t2T_bc = np.asarray(data[3][1], dtype=np.complex, order='C')
-        t2T_ca = np.asarray(data[3][2], dtype=np.complex, order='C')
-        t2T_ac = np.asarray(data[3][3], dtype=np.complex, order='C')
-        t2T_ba = np.asarray(data[3][4], dtype=np.complex, order='C')
-        t2T_ab = np.asarray(data[3][5], dtype=np.complex, order='C')
+        t2T_cb = np.asarray(data[3][0], dtype=np.complex128, order='C')
+        t2T_bc = np.asarray(data[3][1], dtype=np.complex128, order='C')
+        t2T_ca = np.asarray(data[3][2], dtype=np.complex128, order='C')
+        t2T_ac = np.asarray(data[3][3], dtype=np.complex128, order='C')
+        t2T_ba = np.asarray(data[3][4], dtype=np.complex128, order='C')
+        t2T_ab = np.asarray(data[3][5], dtype=np.complex128, order='C')
 
         data = [vvop_ab, vvop_ac, vvop_ba, vvop_bc, vvop_ca, vvop_cb,
                 vooo_aj, vooo_ak, vooo_bi, vooo_bk, vooo_ci, vooo_cj,
@@ -229,8 +229,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
         data_ptrs = (ctypes.c_void_p*24)(*data_ptrs)
 
         a0, a1, b0, b1, c0, c1 = task
-        t3Tw = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
-        t3Tv = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex, order='C')
+        t3Tw = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex128, order='C')
+        t3Tv = np.empty((a1-a0,b1-b0,c1-c0) + (nocc,)*3, dtype=np.complex128, order='C')
 
         drv = _ccsd.libcc.CCsd_zcontract_t3T
         drv(t3Tw.ctypes.data_as(ctypes.c_void_p),

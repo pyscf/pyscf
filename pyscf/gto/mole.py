@@ -207,7 +207,7 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
         assert(l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
-    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
+    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex128)
     cmat = numpy.eye(nf)
     fn = moleintor.libcgto.CINTc2s_ket_spinor_sf1
     fn(c2smat.ctypes.data_as(ctypes.c_void_p),
@@ -1162,7 +1162,7 @@ def loads(molstr):
                 c = numpy.zeros(shape)
                 c[numpy.array(x),numpy.array(y)] = numpy.array(val_real)
             else:
-                c = numpy.zeros(shape, dtype=numpy.complex)
+                c = numpy.zeros(shape, dtype=numpy.complex128)
                 val = numpy.array(val_real) + numpy.array(val_imag) * 1j
                 c[numpy.array(x),numpy.array(y)] = val
             symm_orb.append(c)

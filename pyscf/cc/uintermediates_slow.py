@@ -71,7 +71,7 @@ def cc_Wvvvv(t1,t2,eris):
     #tmp = einsum('mb,amef->abef',t1,eris_vovv)
     #Wabef = eris.vvvv - tmp + tmp.transpose(1,0,2,3)
     #Wabef += 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
-    if t1.dtype == np.complex: ds_type = 'c16'
+    if t1.dtype == np.complex128: ds_type = 'c16'
     else: ds_type = 'f8'
     _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)
@@ -118,7 +118,7 @@ def Woooo(t1,t2,eris):
 def Wvvvv(t1,t2,eris):
     tau = make_tau(t2,t1,t1)
     #Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
-    if t1.dtype == np.complex: ds_type = 'c16'
+    if t1.dtype == np.complex128: ds_type = 'c16'
     else: ds_type = 'f8'
     _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     fimd = h5py.File(_tmpfile1.name)

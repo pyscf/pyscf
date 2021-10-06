@@ -1231,7 +1231,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex128)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1394,7 +1394,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex128)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1975,7 +1975,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex128)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -2146,7 +2146,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex128)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
