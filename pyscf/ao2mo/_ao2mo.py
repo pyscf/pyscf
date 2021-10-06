@@ -229,7 +229,7 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     else:
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
-    out = numpy.ndarray((comp,nkl,ij_count), dtype=numpy.complex, buffer=out)
+    out = numpy.ndarray((comp,nkl,ij_count), dtype=numpy.complex128, buffer=out)
     if out.size == 0:
         return out
 

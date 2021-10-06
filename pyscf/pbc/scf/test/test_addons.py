@@ -315,7 +315,7 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts([Nkx,Nky,1])
 
         def gen_H_tb(t,Nx,Ny,kvec):
-            H = numpy.zeros((Nx,Ny,Nx,Ny),dtype=numpy.complex)
+            H = numpy.zeros((Nx,Ny,Nx,Ny),dtype=numpy.complex128)
             for i in range(Nx):
                 for j in range(Ny):
                     if i == Nx-1:

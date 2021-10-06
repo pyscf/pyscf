@@ -189,7 +189,7 @@ class KnownValues(unittest.TestCase):
         orbspin[1::2] = 1
         orbspin[nocc-1] = 0
         orbspin[nocc  ] = 1
-        eri1 = numpy.zeros([nao*2]*4, dtype=numpy.complex)
+        eri1 = numpy.zeros([nao*2]*4, dtype=numpy.complex128)
         idxa = numpy.where(orbspin == 0)[0]
         idxb = numpy.where(orbspin == 1)[0]
         eri1[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] = eri0aa

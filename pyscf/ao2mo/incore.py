@@ -127,7 +127,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
                           mo_coeffs[0].conj(), mo_coeffs[1],
                           mo_coeffs[2].conj(), mo_coeffs[3])
 
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
 # transform e1
@@ -187,7 +187,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     >>> print(eri1.shape)
     (55, 28)
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     eri_ao = numpy.asarray(eri_ao, order='C')

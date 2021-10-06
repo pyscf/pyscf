@@ -86,7 +86,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 class DFGMP2(dfmp2.DFMP2):
     def loop_ao2mo(self, mo_coeff, nocc, orbspin):
         nao, nmo = mo_coeff.shape
-        complex_orb = mo_coeff.dtype == np.complex
+        complex_orb = mo_coeff.dtype == np.complex128
         if orbspin is None:
             moa = mo_coeff[:nao//2]
             mob = mo_coeff[nao//2:]

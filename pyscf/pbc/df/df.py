@@ -847,7 +847,7 @@ def fuse_auxcell(mydf, auxcell):
             else:
                 npq = Lpq.shape[1]
                 Lpq_sph = numpy.empty((naux_sph,npq), dtype=Lpq.dtype)
-            if Lpq.dtype == numpy.complex:
+            if Lpq.dtype == numpy.complex128:
                 npq *= 2  # c2s_fn supports double only, *2 to handle complex
             for i in range(auxcell.nbas):
                 l  = auxcell.bas_angular(i)
