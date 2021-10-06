@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
+
+'''
+Numerical integration functions for RKS and UKS with real AO basis
+'''
 
 import warnings
 import ctypes
@@ -168,10 +172,10 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         rho = numpy.empty((4,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
         #:rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
-        rho[0] = _contract_rho(c0, ao[0])
+        rho[0] = _contract_rho(ao[0], c0)
         for i in range(1, 4):
             #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i])
-            rho[i] = _contract_rho(c0, ao[i])
+            rho[i] = _contract_rho(ao[i], c0)
             rho[i] *= 2 # *2 for +c.c. in the next two lines
             #c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
             #rho[i] += numpy.einsum('pi,pi->p', c1, ao[0])
@@ -184,16 +188,18 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         rho[5] = 0
         for i in range(1, 4):
             #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i]) * 2 # *2 for +c.c.
-            rho[i] = _contract_rho(c0, ao[i]) * 2
+            rho[i] = _contract_rho(ao[i], c0) * 2
             c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
             #:rho[5] += numpy.einsum('pi,pi->p', c1, ao[i])
-            rho[5] += _contract_rho(c1, ao[i])
+            rho[5] += _contract_rho(ao[i], c1)
         XX, YY, ZZ = 4, 7, 9
         ao2 = ao[XX] + ao[YY] + ao[ZZ]
+        # \nabla^2 rho
         #:rho[4] = numpy.einsum('pi,pi->p', c0, ao2)
-        rho[4] = _contract_rho(c0, ao2)
+        rho[4] = _contract_rho(ao2, c0)
         rho[4] += rho[5]
         rho[4] *= 2
+        # tau = 1/2 (\nabla f)^2
         rho[5] *= .5
     return rho
 
@@ -243,7 +249,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     pos = mo_occ > OCCDROP
-    if pos.sum() > 0:
+    if numpy.any(pos):
         cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
@@ -289,7 +295,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             rho = numpy.zeros((6,ngrids))
 
     neg = mo_occ < -OCCDROP
-    if neg.sum() > 0:
+    if numpy.any(neg):
         cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc)
@@ -2395,63 +2401,15 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
 
-
-class NumInt(object):
+class _NumIntMixin(lib.StreamObject):
     libxc = libxc
-
-    def __init__(self):
-        self.omega = None  # RSH paramter
-
-    @lib.with_doc(nr_vxc.__doc__)
-    def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
-               max_memory=2000, verbose=None):
-        if spin == 0:
-            return self.nr_rks(mol, grids, xc_code, dms, relativity, hermi,
-                               max_memory, verbose)
-        else:
-            return self.nr_uks(mol, grids, xc_code, dms, relativity, hermi,
-                               max_memory, verbose)
-
-    @lib.with_doc(nr_fxc.__doc__)
-    def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
-               rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
-        if spin == 0:
-            return self.nr_rks_fxc(mol, grids, xc_code, dm0, dms, relativity,
-                                   hermi, rho0, vxc, fxc, max_memory, verbose)
-        else:
-            return self.nr_uks_fxc(mol, grids, xc_code, dm0, dms, relativity,
-                                   hermi, rho0, vxc, fxc, max_memory, verbose)
-
-        #@lib.with_doc(nr_sap.__doc__)
-    def nr_sap(self, mol, grids, max_memory=2000, verbose=None):
-        return self.nr_sap_vxc(mol, grids, max_memory, verbose)
-
-    nr_rks = nr_rks
-    nr_uks = nr_uks
-    nr_sap_vxc = nr_sap_vxc
-    nr_rks_fxc = nr_rks_fxc
-    nr_uks_fxc = nr_uks_fxc
-    cache_xc_kernel  = cache_xc_kernel
-    get_rho = get_rho
 
     @lib.with_doc(eval_ao.__doc__)
     def eval_ao(self, mol, coords, deriv=0, shls_slice=None,
                 non0tab=None, out=None, verbose=None):
         return eval_ao(mol, coords, deriv, shls_slice, non0tab, out, verbose)
 
-    @lib.with_doc(make_mask.__doc__)
-    def make_mask(self, mol, coords, relativity=0, shls_slice=None,
-                  verbose=None):
-        return make_mask(mol, coords, relativity, shls_slice, verbose)
-
-    @lib.with_doc(eval_rho2.__doc__)
-    def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
-                  verbose=None):
-        return eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
-
-    @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, verbose)
+    get_rho = get_rho
 
     def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
@@ -2519,12 +2477,12 @@ class NumInt(object):
     def rsh_coeff(self, xc_code):
         return self.libxc.rsh_coeff(xc_code)
 
+    @lib.with_doc(libxc.eval_xc.__doc__)
     def eval_xc(self, xc_code, rho, spin=0, relativity=0, deriv=1, omega=None,
                 verbose=None):
         if omega is None: omega = self.omega
         return self.libxc.eval_xc(xc_code, rho, spin, relativity, deriv,
                                   omega, verbose)
-    eval_xc.__doc__ = libxc.eval_xc.__doc__
 
     def _xc_type(self, xc_code):
         return self.libxc.xc_type(xc_code)
@@ -2550,6 +2508,60 @@ class NumInt(object):
         else:
             hyb = self.hybrid_coeff(xc_code, spin)
         return omega, alpha, hyb
+
+class NumInt(_NumIntMixin):
+    '''Numerical integration methods for non-relativistic RKS and UKS'''
+
+    def __init__(self):
+        self.omega = None  # RSH paramter
+
+    @lib.with_doc(nr_vxc.__doc__)
+    def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
+               max_memory=2000, verbose=None):
+        if spin == 0:
+            return self.nr_rks(mol, grids, xc_code, dms, relativity, hermi,
+                               max_memory, verbose)
+        else:
+            return self.nr_uks(mol, grids, xc_code, dms, relativity, hermi,
+                               max_memory, verbose)
+    get_vxc = nr_vxc
+
+    @lib.with_doc(nr_fxc.__doc__)
+    def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
+               rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
+        if spin == 0:
+            return self.nr_rks_fxc(mol, grids, xc_code, dm0, dms, relativity,
+                                   hermi, rho0, vxc, fxc, max_memory, verbose)
+        else:
+            return self.nr_uks_fxc(mol, grids, xc_code, dm0, dms, relativity,
+                                   hermi, rho0, vxc, fxc, max_memory, verbose)
+    get_fxc = nr_fxc
+
+    @lib.with_doc(nr_sap_vxc.__doc__)
+    def nr_sap(self, mol, grids, max_memory=2000, verbose=None):
+        return self.nr_sap_vxc(mol, grids, max_memory, verbose)
+
+    nr_rks = nr_rks
+    nr_uks = nr_uks
+    nr_sap_vxc = nr_sap_vxc
+    nr_rks_fxc = nr_rks_fxc
+    nr_uks_fxc = nr_uks_fxc
+    cache_xc_kernel  = cache_xc_kernel
+
+    @lib.with_doc(make_mask.__doc__)
+    def make_mask(self, mol, coords, relativity=0, shls_slice=None,
+                  verbose=None):
+        return make_mask(mol, coords, relativity, shls_slice, verbose)
+
+    @lib.with_doc(eval_rho.__doc__)
+    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
+        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, verbose)
+
+    @lib.with_doc(eval_rho2.__doc__)
+    def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
+                  verbose=None):
+        return eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab, xctype, verbose)
+
 _NumInt = NumInt
 
 

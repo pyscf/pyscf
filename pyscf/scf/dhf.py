@@ -107,26 +107,31 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
 
     if not mf.with_ssss and mf.ssss_approx == 'Visscher':
-        # Visscher point charge corrections for small component, TCA, 98, 68
-        # Note there is a small difference to Visscher's work. The model
-        # charges in Visscher's work are obtained from atomic calculations.
-        # Charges here are Mulliken charges on small components.
-        aoslice = mf.mol.aoslice_2c_by_atom()
-        n2c = dm[0].shape[0] // 2
-        s = mf.get_ovlp()
-        ss_mul_charges = []
-        for p0, p1 in aoslice[:,2:] + n2c:
-            mul_charge = numpy.einsum('ij,ji->', s[n2c:,p0:p1], dm[p0:p1,n2c:])
-            ss_mul_charges.append(mul_charge.real)
-        ss_mul_charges = numpy.array(ss_mul_charges)
-        e_coul_ss = gto.energy_nuc(mf.mol, ss_mul_charges)
-        e_coul += e_coul_ss
-        mf.scf_summary['e_coul_ss'] = e_coul_ss
-        logger.debug(mf, 'Visscher corrections for small component = %.14g', e_coul_ss)
+        e_coul += _vischer_ssss_correction(mf, dm)
 
-    mf.scf_summary['e1'] = e1.real
-    mf.scf_summary['e2'] = e_coul.real
-    return (e1+e_coul).real, e_coul
+    mf.scf_summary['e1'] = e1
+    mf.scf_summary['e2'] = e_coul
+    return e1+e_coul, e_coul
+
+def _visscher_ssss_correction(mf, dm):
+    '''
+    Visscher point charge corrections for small component, TCA, 98, 68
+    Note there is a small difference to Visscher's work. The model
+    charges in Visscher's work are obtained from atomic calculations.
+    Charges here are Mulliken charges on small components.
+    '''
+    aoslice = mf.mol.aoslice_2c_by_atom()
+    n2c = dm[0].shape[0] // 2
+    s = mf.get_ovlp()
+    ss_mul_charges = []
+    for p0, p1 in aoslice[:,2:] + n2c:
+        mul_charge = numpy.einsum('ij,ji->', s[n2c:,p0:p1], dm[p0:p1,n2c:])
+        ss_mul_charges.append(mul_charge.real)
+    ss_mul_charges = numpy.array(ss_mul_charges)
+    e_coul_ss = gto.classical_coulomb_energy(mf.mol, ss_mul_charges)
+    mf.scf_summary['e_coul_ss'] = e_coul_ss
+    logger.debug(mf, 'Visscher corrections for small component = %.14g', e_coul_ss)
+    return e_coul_ss
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
@@ -403,6 +408,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
+# Kramers unrestricted Dirac-Hartree-Fock
 class DHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for Dirac-Hartree-Fock
@@ -839,7 +845,7 @@ def _proj_dmll(mol_nr, dm_nr, mol):
 
     n2c = proj.shape[0]
     n4c = n2c * 2
-    dm = numpy.zeros((n4c,n4c), dtype=complex)
+    dm = numpy.zeros((n4c,n4c), dtype=numpy.complex128)
     # *.5 because alpha and beta are summed in project_mo_nr2r
     dm_ll = reduce(numpy.dot, (proj, dm_nr*.5, proj.T.conj()))
     dm[:n2c,:n2c] = (dm_ll + time_reversal_matrix(mol, dm_ll)) * .5

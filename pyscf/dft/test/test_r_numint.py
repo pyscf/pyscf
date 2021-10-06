@@ -46,25 +46,25 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rho0-rho1).max(), 0, 9)
         self.assertTrue(numpy.allclose(m0, m1))
 
-    def test_eval_mat(self):
-        numpy.random.seed(10)
-        ngrids = 100
-        coords = numpy.random.random((ngrids,3))*20
-        rho = numpy.random.random((ngrids))
-        m = numpy.random.random((3,ngrids)) * .05
-        vxc = [numpy.random.random((2,ngrids)).T, None, None, None]
-        weight = numpy.random.random(ngrids)
-        aoLa, aoLb, aoSa, aoSb = r_numint.eval_ao(mol, coords, deriv=1)
-
-        s = numpy.linalg.norm(m, axis=0)
-        m_pauli = numpy.einsum('xp,xij,p->pij', m, lib.PauliMatrices, 1./(s+1e-300))
-        aoL = numpy.array([aoLa[0],aoLb[0]])
-
-        mat0 = numpy.einsum('pi,p,pj->ij', aoLa[0].conj(), weight*vxc[0][:,0], aoLa[0])
-        mat0+= numpy.einsum('pi,p,pj->ij', aoLb[0].conj(), weight*vxc[0][:,0], aoLb[0])
-        mat0+= numpy.einsum('api,p,pab,bpj->ij', aoL.conj(), weight*vxc[0][:,1], m_pauli, aoL)
-        mat1 = r_numint.eval_mat(mol, (aoLa[0], aoLb[0]), weight, (rho, m), vxc, xctype='LDA')
-        self.assertTrue(numpy.allclose(mat0, mat1))
+#    def test_eval_mat(self):
+#        numpy.random.seed(10)
+#        ngrids = 100
+#        coords = numpy.random.random((ngrids,3))*20
+#        rho = numpy.random.random((ngrids))
+#        m = numpy.random.random((3,ngrids)) * .05
+#        vxc = [numpy.random.random((2,ngrids)).T, None, None, None]
+#        weight = numpy.random.random(ngrids)
+#        aoLa, aoLb, aoSa, aoSb = r_numint.eval_ao(mol, coords, deriv=1)
+#
+#        s = numpy.linalg.norm(m, axis=0)
+#        m_pauli = numpy.einsum('xp,xij,p->pij', m, lib.PauliMatrices, 1./(s+1e-300))
+#        aoL = numpy.array([aoLa[0],aoLb[0]])
+#
+#        mat0 = numpy.einsum('pi,p,pj->ij', aoLa[0].conj(), weight*vxc[0][:,0], aoLa[0])
+#        mat0+= numpy.einsum('pi,p,pj->ij', aoLb[0].conj(), weight*vxc[0][:,0], aoLb[0])
+#        mat0+= numpy.einsum('api,p,pab,bpj->ij', aoL.conj(), weight*vxc[0][:,1], m_pauli, aoL)
+#        mat1 = r_numint.eval_mat(mol, (aoLa[0], aoLb[0]), weight, (rho, m), vxc, xctype='LDA')
+#        self.assertTrue(numpy.allclose(mat0, mat1))
 
     def test_rsh_omega(self):
         rho0 = numpy.array([[1., 1., 0.1, 0.1],
@@ -92,7 +92,21 @@ class KnownValues(unittest.TestCase):
         #?self.assertAlmostEqual(float(vxc[1][0,0]), 0, 7)
         #?self.assertAlmostEqual(float(vxc[1][0,1]), 0, 7)
 
-#    def test_vxc(self):
+
+    def test_vxc1(self):
+        mol = gto.M(atom=[
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+            basis='6311g*')
+        mf = dft.dks.DKS(mol)
+        mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
+        mf.grids.prune = None
+        mf.grids.build()
+        dm = mf.get_init_guess(key='minao')
+        res = mf._numint.r_vxc(mol, mf.grids, mf.xc, dm, spin=0)
+        self.assertAlmostEqual(res[1], -8.631807003163278, 11)
+
 #    def test_fxc(self):
 
 if __name__ == "__main__":

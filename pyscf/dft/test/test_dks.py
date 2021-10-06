@@ -22,15 +22,15 @@ from pyscf.dft import dks
 class KnownValues(unittest.TestCase):
     def test_dks_lda(self):
         mol = gto.Mole()
-        mol.atom = [['Ne',(0.,0.,0.)]]
+        mol.atom = 'O'
         mol.basis = 'uncsto3g'
         mol.verbose = 7
         mol.output = '/dev/null'
         mol.build()
-        mf = dks.DKS(mol)
-        mf.xc = 'lda,'
+        mf = dks.UDKS(mol)
+        mf.xc = 'lda,vwn'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -126.041808355268, 9)
+        self.assertAlmostEqual(eks4, -73.7094356147537, 9)
         mol.stdout.close()
 
     def test_x2c_uks_lda(self):
@@ -40,7 +40,7 @@ class KnownValues(unittest.TestCase):
         mol.verbose = 7
         mol.output = '/dev/null'
         mol.build()
-        mf = dks.DKS(mol).x2c()
+        mf = dks.UDKS(mol).x2c()
         mf.xc = 'lda,'
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -126.03378903205831, 9)
@@ -53,20 +53,64 @@ class KnownValues(unittest.TestCase):
         mol.verbose = 7
         mol.output = '/dev/null'
         mol.build()
-        mf = dks.DKS(mol)
+        mf = dks.UDKS(mol)
         mf.xc = 'lda + .2*HF'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -126.51704683045618, 9)
+        self.assertAlmostEqual(eks4, -128.47760358113405, 9)
 
-        mf = dks.DKS(mol)
+        mf = dks.UDKS(mol)
         mf.xc = 'lda + .2*HF'
         mf.omega = .5
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -126.41264813604408, 9)
+        self.assertAlmostEqual(eks4, -127.9514067989949, 9)
+        mol.stdout.close()
+
+    def test_collinear_dks_lda(self):
+        mol = gto.Mole()
+        mol.atom = 'O'
+        mol.spin = None
+        mol.basis = 'uncsto3g'
+        mol.verbose = 7
+        mol.output = '/dev/null'
+        mol.build()
+        mf = dks.UDKS(mol)
+        mf.xc = 'lda,vwn'
+        mf.collinear = True
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -73.70943481836206, 9)
+        mol.stdout.close()
+
+    def test_collinear_dks_gga(self):
+        mol = gto.Mole()
+        mol.atom = 'O'
+        mol.spin = None
+        mol.basis = 'uncsto3g'
+        mol.verbose = 7
+        mol.output = '/dev/null'
+        mol.build()
+        mf = dks.UDKS(mol)
+        mf.xc = 'pbe'
+        mf.collinear = True
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -74.18146688246404, 9)
+        mol.stdout.close()
+
+    def test_collinear_x2c_uks_gga(self):
+        mol = gto.Mole()
+        mol.atom = 'O'
+        mol.spin = None
+        mol.basis = 'uncsto3g'
+        mol.verbose = 7
+        mol.output = '/dev/null'
+        mol.build()
+        mf = dks.UDKS(mol).x2c()
+        mf.xc = 'pbe'
+        mf.collinear = True
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -74.17829715850523, 9)
         mol.stdout.close()
 
 
 if __name__ == "__main__":
     print("Test DKS")
     unittest.main()
-

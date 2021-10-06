@@ -16,70 +16,85 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Numerical integration functions for (4-component) DKS with j-adapted AO basis
+'''
+
 import numpy
 from pyscf import lib
 from pyscf.dft import numint
-from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, BLKSIZE
+from pyscf.dft.numint import _dot_ao_dm, _dot_ao_ao, _scale_ao, BLKSIZE
 
 
 def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
             non0tab=None, out=None, verbose=None):
+    '''Evaluates the value of 2-component or 4-component j-adapted basis on grids.
+    '''
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     feval = 'GTOval_spinor_deriv%d' % deriv
-    aoLa, aoLb = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
-    if with_s:
-        assert(deriv <= 1)  # only GTOval_ipsp_spinor
-        ngrid, nao = aoLa.shape[-2:]
-        if out is not None:
-            aoSa = numpy.empty((comp,nao,ngrid), dtype=numpy.complex128)
-            aoSb = numpy.empty((comp,nao,ngrid), dtype=numpy.complex128)
-        else:
-            out = numpy.ndarray((4,comp,nao,ngrid), dtype=numpy.complex128, buffer=out)
-            aoSa, aoSb = out[2:]
-        comp = 1
-        ao = mol.eval_gto('GTOval_sp_spinor', coords, comp, shls_slice, non0tab)
-        aoSa[0] = ao[0].T
-        aoSb[0] = ao[1].T
-        fevals = ['GTOval_sp_spinor', 'GTOval_ipsp_spinor']
-        p1 = 1
-        for n in range(1, deriv+1):
-            comp = (n+1)*(n+2)//2
-            ao = mol.eval_gto(fevals[n], coords, comp, shls_slice, non0tab)
-            p0, p1 = p1, p1 + comp
-            for k in range(comp):
-                aoSa[p0:p1] = ao[0].transpose(0,2,1)
-                aoSb[p0:p1] = ao[1].transpose(0,2,1)
-        aoSa = aoSa.transpose(0,2,1)
-        aoSb = aoSb.transpose(0,2,1)
-        if deriv == 0:
-            aoSa = aoSa[0]
-            aoSb = aoSb[0]
-        return aoLa, aoLb, aoSa, aoSb
+    if not with_s:
+        # aoLa, aoLb = aoL
+        ao = aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
     else:
-        return aoLa, aoLb
+        assert(deriv <= 1)  # only GTOval_ipsp_spinor
+        ngrids = coords.shape[0]
+        nao = mol.nao_2c()
+        ao = numpy.ndarray((4,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
+        aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=ao[:2])
+        ao = ao.transpose(0,1,3,2)
+        aoS = ao[2:]
+        aoSa, aoSb = aoS
+        feval_gto = ['GTOval_sp_spinor', 'GTOval_ipsp_spinor']
+        p1 = 0
+        for n in range(deriv+1):
+            comp = (n+1)*(n+2)//2
+            p0, p1 = p1, p1 + comp
+            aoSa[p0:p1], aoSb[p0:p1] = mol.eval_gto(
+                feval_gto[n], coords, comp, shls_slice, non0tab)
 
-def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
-    aoa, aob = ao
-    out = _dot_ao_dm(mol, aoa, dm, non0tab, shls_slice, ao_loc, out=out)
-    rhoaa = numpy.einsum('pi,pi->p', aoa.real, out.real)
-    rhoaa+= numpy.einsum('pi,pi->p', aoa.imag, out.imag)
-    rhoba = numpy.einsum('pi,pi->p', aob, out.conj())
-    out = _dot_ao_dm(mol, aob, dm, non0tab, shls_slice, ao_loc, out=out)
-    rhoab = numpy.einsum('pi,pi->p', aoa, out.conj())
-    rhobb = numpy.einsum('pi,pi->p', aob.real, out.real)
-    rhobb+= numpy.einsum('pi,pi->p', aob.imag, out.imag)
+        if deriv == 0:
+            ao = ao[:,0]
+    return ao
+
+def _dot_spinor_dm(mol, ket, dm, non0tab, shls_slice, ao_loc):
+    ket_a, ket_b = ket
+    outa = _dot_ao_dm(mol, ket_a, dm, non0tab, shls_slice, ao_loc)
+    outb = _dot_ao_dm(mol, ket_b, dm, non0tab, shls_slice, ao_loc)
+    return outa, outb
+
+def _contract_rho2x2(bra, ket):
+    '''rho2x2 = sum_i |ket_i> <bra_i|
+    '''
+    ket_a, ket_b = ket
+    bra_a, bra_b = bra
+    rhoaa = numpy.einsum('pi,pi->p', ket_a.real, bra_a.real)
+    rhoaa+= numpy.einsum('pi,pi->p', ket_a.imag, bra_a.imag)
+    rhoab = numpy.einsum('pi,pi->p', ket_a, bra_b.conj())
+    rhoba = numpy.einsum('pi,pi->p', ket_b, bra_a.conj())
+    rhobb = numpy.einsum('pi,pi->p', ket_b.real, bra_b.real)
+    rhobb+= numpy.einsum('pi,pi->p', ket_b.imag, bra_b.imag)
     return rhoaa, rhoab, rhoba, rhobb
 
 def _rho2x2_to_rho_m(rho2x2):
+    # rho = einsum('xgi,ij,xgj->g', ket, dm, bra.conj())
+    # mx = einsum('xy,ygi,ij,xgj->g', sx, ket, dm, bra.conj())
+    # my = einsum('xy,ygi,ij,xgj->g', sy, ket, dm, bra.conj())
+    # mz = einsum('xy,ygi,ij,xgj->g', sz, ket, dm, bra.conj())
     raa, rab, rba, rbb = rho2x2
-    rho = (raa + rbb).real
-    mx = rab.real + rba.real
-    my = rba.imag - rab.imag
-    mz = raa - rbb
-    m = numpy.vstack((mx, my, mz))
-    return rho, m
+    ngrids = raa.size
+    rho_m = numpy.empty((4, ngrids))
+    rho, mx, my, mz = rho_m
+    rho[:] = raa.real + rbb.real
+    mx[:] = rab.real + rba.real
+    my[:] = rba.imag - rab.imag
+    mz[:] = raa.real - rbb.real
+    return rho_m
 
-#TODO: \nabla^2 rho and tau = 1/2 (\nabla f)^2
+def _get_rho_m(mol, ket, dm, bra, non0tab, shls_slice, ao_loc):
+    out = _dot_spinor_dm(mol, ket, dm, non0tab, shls_slice, ao_loc)
+    tmp = _contract_rho2x2(bra, out)
+    return _rho2x2_to_rho_m(tmp)
+
 def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     aoa, aob = ao
     ngrids, nao = aoa.shape[-2:]
@@ -92,77 +107,153 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     ao_loc = mol.ao_loc_2c()
 
     if xctype == 'LDA':
-        tmp = _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc)
-        rho, m = _rho2x2_to_rho_m(tmp)
+        rho_m = _get_rho_m(mol, ao, dm, ao, non0tab, shls_slice, ao_loc)
     elif xctype == 'GGA':
-        raise NotImplementedError
+        # first 4 ~ (rho, m), second 4 ~ (rho0, dx, dy, dz)
+        rho_m = numpy.empty((4, 4, ngrids))
+        c0 = _dot_spinor_dm(mol, ao[:,0], dm, non0tab, shls_slice, ao_loc)
+        rho_m[:,0] = _rho2x2_to_rho_m(_contract_rho2x2(ao[:,0], c0))
+        for i in range(1, 4):
+            rho_m[:,i] = _rho2x2_to_rho_m(_contract_rho2x2(ao[:,i], c0))
+            rho_m[:,i] *= 2  # *2 for +c.c. corresponding to |dx ao> dm < ao|
     else: # meta-GGA
-        raise NotImplementedError
+        rho_m = numpy.zeros((4, 6, ngrids))
+        c0 = _dot_spinor_dm(mol, ao[:,0], dm, non0tab, shls_slice, ao_loc)
+        rho_m[:,0] = _rho2x2_to_rho_m(_contract_rho2x2(ao[:,0], c0))
+        for i in range(1, 4):
+            rho_m[:,i] = _rho2x2_to_rho_m(_contract_rho2x2(ao[:,i], c0))
+            rho_m[:,i] *= 2  # *2 for +c.c. corresponding to |dx ao> dm < ao|
+            c1 = _dot_spinor_dm(mol, ao[:,1], dm, non0tab, shls_slice, ao_loc)
+            rho_m[:,5] += _contract_rho2x2(ao[i], c1)
+        XX, YY, ZZ = 4, 7, 9
+        ao2 = ao[XX] + ao[YY] + ao[ZZ]
+        # \nabla^2 rho
+        rho_m[:,4] = _rho2x2_to_rho_m(_contract_rho2x2(ao2, c0))
+        rho_m[:,4] += rho_m[:,5]
+        rho_m[:,4] *= 2
+        # tau = 1/2 (\nabla f)^2
+        rho_m[:,5] *= .5
+
+    rho, m = rho_m[0], rho_m[1:]
     return rho, m
 
-def _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc):
+def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                      on_LL_block=True):
+    '''Vxc matrix of non-collinear LDA'''
     aoa, aob = ao
     r, m = rho
+    vrho = vxc[0]
     vr, vm = vrho.T
-    aow = numpy.empty_like(aoa)
-#    aow = numpy.einsum('pi,p->pi', aoa, weight*vr, out=aow)
-#    mat = _dot_ao_ao(mol, aoa, aow, non0tab, shls_slice, ao_loc)
-#    aow = numpy.einsum('pi,p->pi', aob, weight*vr, out=aow)
-#    mat+= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-#
-#    s = lib.norm(m, axis=0)
-#    ws = vm * weight / (s+1e-300)
-#    aow = numpy.einsum('pi,p->pi', aoa, ws*m[0], out=aow)  # Mx
-#    tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-#    mat+= tmp + tmp.T.conj()
-#    aow = numpy.einsum('pi,p->pi', aoa, ws*m[1], out=aow)  # My
-#    tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-#    mat+= (tmp - tmp.T.conj()) * 1j
-#    aow = numpy.einsum('pi,p->pi', aoa, ws*m[2], out=aow)  # Mz
-#    mat+= _dot_ao_ao(mol, aoa, aow, non0tab, shls_slice, ao_loc)
-#    aow = numpy.einsum('pi,p->pi', aob, ws*m[2], out=aow)
-#    mat-= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-
     s = lib.norm(m, axis=0)
+
     idx = s < 1e-20
     with numpy.errstate(divide='ignore',invalid='ignore'):
         ws = vm * weight / s
     ws[idx] = 0
 
-    aow = numpy.einsum('pi,p->pi', aoa, ws*m[0], out=aow)  # Mx
+    # * .5 because of v+v.conj().T in r_vxc
+    wv = .5 * weight * vr
+    if on_LL_block:
+        ws *= .5
+    else:  # for SS block
+        # flip the sign for small components because
+        # M = \beta\Sigma = [sigma,  0    ]
+        #                   [0    , -sigma]
+        ws *= -.5
+
+    # einsum('g,g,xgi,xgj->ij', vr, weight, ao, ao)
+    # + einsum('xy,g,g,xgi,ygj->ij', sx, vm*m[0]/s, weight, ao, ao)
+    # + einsum('xy,g,g,xgi,ygj->ij', sy, vm*m[1]/s, weight, ao, ao)
+    # + einsum('xy,g,g,xgi,ygj->ij', sz, vm*m[2]/s, weight, ao, ao)
+    aow = None
+    aow = _scale_ao(aoa, ws*m[0], out=aow)  # Mx
     tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-    mat = tmp + tmp.T.conj()
-    aow = numpy.einsum('pi,p->pi', aoa, ws*m[1], out=aow)  # My
+    mat = tmp + tmp.conj().T
+    aow = _scale_ao(aoa, ws*m[1], out=aow)  # My
     tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
-    mat+= (tmp - tmp.T.conj()) * 1j
-    aow = numpy.einsum('pi,p->pi', aoa, weight*vr, out=aow)
-    aow+= numpy.einsum('pi,p->pi', aoa, ws*m[2])  # Mz
+    mat+= (tmp - tmp.conj().T) * 1j
+    aow = _scale_ao(aoa, wv, out=aow)
+    aow+= _scale_ao(aoa, ws*m[2])  # Mz
     mat+= _dot_ao_ao(mol, aoa, aow, non0tab, shls_slice, ao_loc)
-    aow = numpy.einsum('pi,p->pi', aob, weight*vr, out=aow)
-    aow-= numpy.einsum('pi,p->pi', aob, ws*m[2])  # Mz
+    aow = _scale_ao(aob, wv, out=aow)
+    aow-= _scale_ao(aob, ws*m[2])  # Mz
     mat+= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
     return mat
 
-def eval_mat(mol, ao, weight, rho, vxc,
-             non0tab=None, xctype='LDA', verbose=None):
-    aoa, aob = ao
-    xctype = xctype.upper()
-    ngrids, nao = aoa.shape[-2:]
+def _ncol_gga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                      on_LL_block=True):
+    '''Vxc matrix of non-collinear GGA'''
+    raise NotImplementedError
 
-    if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.uint8)
-    shls_slice = (0, mol.nbas)
-    ao_loc = mol.ao_loc_2c()
-    if xctype == 'LDA':
-        vrho = vxc[0]
-        mat = _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc)
-    else:
-        raise NotImplementedError
+def _ncol_mgga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                       on_LL_block=True):
+    '''Vxc matrix of non-collinear MGGA'''
+    raise NotImplementedError
+
+def _dks_gga_wv0(rho, vxc, weight):
+    r, (mx, my, mz) = rho
+    rhoa = (r + mz) * .5
+    rhob = (r - mz) * .5
+    return numint._uks_gga_wv0((rhoa, rhob), vxc, weight)
+
+def _col_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                     on_LL_block=True):
+    '''Vxc matrix of collinear LDA'''
+    vrho = vxc[0]
+    aoa, aob = ao
+    if on_LL_block:
+        wva, wvb = .5 * weight * vrho.T
+    else:  # for SS block
+        # v_rho = (vxc_a + vxc_b) * .5
+        # v_mz  = (vxc_a - vxc_b) * .5
+        # For small components, M = \beta\Sigma leads to
+        # (v_rho - sigma_z*v_mz) = [vxc_b, 0    ]
+        #                          [0    , vxc_a]
+        wvb, wva = .5 * weight * vrho.T
+    mat  = _dot_ao_ao(mol, aoa, _scale_ao(aoa, wva), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob, _scale_ao(aob, wvb), non0tab, shls_slice, ao_loc)
     return mat
 
-def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
+def _col_gga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                     on_LL_block=True):
+    '''Vxc matrix of collinear GGA'''
+    if on_LL_block:
+        wva, wvb = _dks_gga_wv0(rho, vxc, weight)
+    else:  # for SS block
+        wvb, wva = _dks_gga_wv0(rho, vxc, weight)
+    aoa, aob = ao
+    mat  = _dot_ao_ao(mol, aoa[0], _scale_ao(aoa[:4], wva[:4]), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob[0], _scale_ao(aob[:4], wvb[:4]), non0tab, shls_slice, ao_loc)
+    return mat
+
+def _col_mgga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
+                      on_LL_block=True):
+    '''Vxc matrix of collinear MGGA'''
+    if on_LL_block:
+        wva, wvb = _dks_gga_wv0(rho, vxc, weight)
+    else:
+        wvb, wva = _dks_gga_wv0(rho, vxc, weight)
+    aoa, aob = ao
+    mat  = _dot_ao_ao(mol, aoa[0], _scale_ao(aoa[:4], wva[:4]), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob[0], _scale_ao(aob[:4], wvb[:4]), non0tab, shls_slice, ao_loc)
+
+    vtau = vxc[3]
+    if on_LL_block:
+        wva, wvb = .25 * weight * vtau.T
+    else:
+        wvb, wva = .25 * weight * vtau.T
+    mat += _dot_ao_ao(mol, aoa[1], _scale_ao(aoa[1], wva), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aoa[2], _scale_ao(aoa[2], wva), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aoa[3], _scale_ao(aoa[3], wva), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob[1], _scale_ao(aob[1], wvb), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob[2], _scale_ao(aob[2], wvb), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, aob[3], _scale_ao(aob[3], wvb), non0tab, shls_slice, ao_loc)
+    return mat
+
+def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=1, hermi=1,
           max_memory=2000, verbose=None):
+    '''Calculate 2-component or 4-component Vxc matrix in j-adapted basis
+    '''
     xctype = ni._xc_type(xc_code)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
@@ -170,41 +261,52 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
 
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
     with_s = (nao == n2c*2)  # 4C DM
-
     nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
     matLL = numpy.zeros((nset,n2c,n2c), dtype=numpy.complex128)
-    matSS = numpy.zeros((nset,n2c,n2c), dtype=numpy.complex128)
-    if xctype == 'LDA':
+    matSS = numpy.zeros_like(matLL)
+
+    if xctype in ('LDA', 'GGA', 'MGGA'):
+        f_eval_mat = {
+            ('LDA' , True ): (_col_lda_vxc_mat  , 0),
+            ('GGA' , True ): (_col_gga_vxc_mat  , 1),
+            ('MGGA', True ): (_col_mgga_vxc_mat , 2),
+            ('LDA' , False): (_ncol_lda_vxc_mat , 0),
+            ('GGA' , False): (_ncol_gga_vxc_mat , 1),
+            ('MGGA', False): (_ncol_mgga_vxc_mat, 2)
+        }
+        fmat, ao_deriv = f_eval_mat[(xctype, ni.collinear)]
+
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, 0, with_s, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, with_s, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, spin=1,
                                       relativity=relativity, deriv=1,
                                       verbose=verbose)[:2]
-                vrho = vxc[0]
                 den = rho[0] * weight
                 nelec[idm] += den.sum()
                 excsum[idm] += (den*exc).sum()
 
-                matLL[idm] += _vxc2x2_to_mat(mol, ao[:2], weight, rho, vrho,
-                                             mask, shls_slice, ao_loc)
+                matLL[idm] += fmat(mol, ao[:2], weight, rho, vxc,
+                                   mask, shls_slice, ao_loc, True)
                 if with_s:
-                    matSS[idm] += _vxc2x2_to_mat(mol, ao[2:], weight, rho, vrho,
-                                                 mask, shls_slice, ao_loc)
-                rho = exc = vxc = vrho = None
-    elif xctype == 'GGA':
-        raise NotImplementedError
+                    matSS[idm] += fmat(mol, ao[2:], weight, rho, vxc,
+                                       mask, shls_slice, ao_loc, False)
+
+        matLL = matLL + matLL.conj().transpose(0,2,1)
+        if with_s:
+            matSS = matSS + matSS.conj().transpose(0,2,1)
+    elif xctype == 'HF':
+        pass
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
     if with_s:
-        c1 = .5 / lib.param.LIGHT_SPEED
+        matSS *= (.5 / lib.param.LIGHT_SPEED)**2
         vmat = numpy.zeros((nset,nao,nao), dtype=numpy.complex128)
-        for idm in range(nset):
-            vmat[idm,:n2c,:n2c] = matLL[idm]
-            vmat[idm,n2c:,n2c:] = matSS[idm] * c1**2
+        vmat[:,:n2c,:n2c] = matLL
+        vmat[:,n2c:,n2c:] = matSS
     else:
         vmat = matLL
 
@@ -213,6 +315,193 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         excsum = excsum[0]
     return nelec, excsum, vmat.reshape(dms.shape)
 
+def _dks_lda_wv1(rho0, rho1, vxc, fxc, weight):
+    u_u, u_d, d_d = fxc[0].T
+    rho1, (m1x, m1y, m1z) = rho1
+    rho1a = (rho1 + m1z) * .5
+    rho1b = (rho1 - m1z) * .5
+    # * .5 because v+v.T is applied in the caller
+    wva = (u_u * rho1a + u_d * rho1b) * weight * .5
+    wvb = (u_d * rho1a + d_d * rho1b) * weight * .5
+    return wva, wvb
+
+def _dks_gga_wv1(rho0, rho1, vxc, fxc, weight):
+    r0, (m0x, m0y, m0z) = rho0
+    r1, (m1x, m1y, m1z) = rho1
+    rho0 = ((r0 + m0z) * .5, (r0 - m0z) * .5)
+    rho1 = ((r1 + m1z) * .5, (r1 - m1z) * .5)
+    return numint._uks_gga_wv1(rho0, rho1, vxc, fxc, weight)
+
+def _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight):
+    r0, (m0x, m0y, m0z) = rho0
+    r1, (m1x, m1y, m1z) = rho1
+    rho0 = ((r0 + m0z) * .5, (r0 - m0z) * .5)
+    rho1 = ((r1 + m1z) * .5, (r1 - m1z) * .5)
+    return numint._uks_mgga_wv1(rho0, rho1, vxc, fxc, weight)
+
+def _col_lda_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
+                     non0tab, shls_slice, ao_loc, on_LL_block=True):
+    '''Kernel matrix of collinear LDA'''
+    if on_LL_block:
+        wva, wvb = _dks_lda_wv1(rho0, rho1, vxc, fxc, weight)
+    else:
+        wvb, wva = _dks_lda_wv1(rho0, rho1, vxc, fxc, weight)
+    aoa, aob = ao
+    mat  = _dot_ao_ao(mol, _scale_ao(aoa, wva), aoa, non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, _scale_ao(aob, wvb), aob, non0tab, shls_slice, ao_loc)
+    return mat
+
+def _col_gga_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
+                     non0tab, shls_slice, ao_loc, on_LL_block=True):
+    '''Kernel matrix of collinear GGA'''
+    if on_LL_block:
+        wva, wvb = _dks_gga_wv1(rho0, rho1, vxc, fxc, weight)
+    else:
+        wvb, wva = _dks_gga_wv1(rho0, rho1, vxc, fxc, weight)
+    aoa, aob = ao
+    aow = None
+    aow = _scale_ao(aoa[:4], wva[:4], aow)
+    mat = _dot_ao_ao(mol, aow, aoa[0], non0tab, shls_slice, ao_loc)
+    aow = _scale_ao(aob[:4], wvb[:4], aow)
+    mat += _dot_ao_ao(mol, aow, aob[0], non0tab, shls_slice, ao_loc)
+    return mat
+
+def _col_mgga_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
+                      non0tab, shls_slice, ao_loc, on_LL_block=True):
+    '''Kernel matrix of collinear MGGA'''
+    if on_LL_block:
+        wva, wvb = _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight)
+    else:
+        wvb, wva = _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight)
+    aoa, aob = ao
+    aow = None
+    aow = _scale_ao(aoa[:4], wva[:4], aow)
+    mat = _dot_ao_ao(mol, aow, aoa[0], non0tab, shls_slice, ao_loc)
+    aow = _scale_ao(aob[:4], wvb[:4], aow)
+    mat += _dot_ao_ao(mol, aow, aob[0], non0tab, shls_slice, ao_loc)
+
+    mat += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wva[5], aow), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wva[5], aow), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wva[5], aow), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wvb[5], aow), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wvb[5], aow), non0tab, shls_slice, ao_loc)
+    mat += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wvb[5], aow), non0tab, shls_slice, ao_loc)
+    return mat
+
+def r_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=1, hermi=0,
+          rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
+    '''Calculate 2-component or 4-component Vxc matrix in j-adapted basis
+    '''
+    xctype = ni._xc_type(xc_code)
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_2c()
+    n2c = ao_loc[-1]
+    if not ni.collinear:
+        raise NotImplementedError('non-collinear fxc')
+
+    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
+    with_s = (nao == n2c*2)  # 4C DM
+
+    if rho0 is None and (xctype != 'LDA' or fxc is None):
+        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1)[0]
+    else:
+        make_rho0 = None
+
+    shls_slice = (0, mol.nbas)
+    ao_loc = mol.ao_loc_2c()
+
+    matLL = numpy.zeros((nset,n2c,n2c), dtype=dms.dtype)
+    matSS = numpy.zeros_like(matLL)
+    if xctype in ('LDA', 'GGA', 'MGGA'):
+        f_eval_mat = {
+            'LDA' : (_col_lda_fxc_mat  , 0),
+            'GGA' : (_col_gga_fxc_mat  , 1),
+            'MGGA': (_col_mgga_fxc_mat , 2),
+        }
+        fmat, ao_deriv = f_eval_mat[xctype]
+
+        _rho0 = None
+        p1 = 0
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+            p0, p1 = p1, p1 + weight.size
+            if rho0 is not None:
+                if xctype == 'LDA':
+                    _rho0 = [numpy.asarray(rho0[0][p0:p1], order='C'),
+                             numpy.asarray(rho0[1][:,p0:p1], order='C')]
+                else:
+                    _rho0 = [numpy.asarray(rho0[0][:,p0:p1], order='C'),
+                             numpy.asarray(rho0[1][:,:,p0:p1], order='C')]
+            elif make_rho0 is not None:
+                _rho0 = make_rho0(0, ao, mask, xctype)
+
+            if vxc is None or fxc is None:
+                _vxc, _fxc = ni.eval_xc(xc_code, _rho0, spin=1,
+                                        relativity=relativity, deriv=2,
+                                        verbose=verbose)[1:3]
+            else:
+                _vxc = [None if x is None else x[p0:p1] for x in vxc]
+                _fxc = [None if x is None else x[p0:p1] for x in fxc]
+
+            for i in range(nset):
+                rho1 = make_rho1(i, ao, mask, xctype)
+                matLL[i] += fmat(mol, ao[:2], weight, _rho0, rho1, _vxc, _fxc,
+                                 mask, shls_slice, ao_loc)
+                if with_s:
+                    matSS[i] += fmat(mol, ao[2:], weight, _rho0, rho1, _vxc, _fxc,
+                                     mask, shls_slice, ao_loc, False)
+
+        # for (\nabla\mu) \nu + \mu (\nabla\nu)
+        matLL = matLL + matLL.conj().transpose(0,2,1)
+        if with_s:
+            matSS = matSS + matSS.conj().transpose(0,2,1)
+
+    elif xctype == 'HF':
+        pass
+    else:
+        raise NotImplementedError(f'r_fxc for functional {xc_code}')
+
+    if with_s:
+        matSS *= (.5 / lib.param.LIGHT_SPEED)**2
+        vmat = numpy.zeros((nset,nao,nao), dtype=numpy.complex128)
+        vmat[:,:n2c,:n2c] = matLL
+        vmat[:,n2c:,n2c:] = matSS
+    else:
+        vmat = matLL
+
+    if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        vmat = vmat[0]
+    return vmat
+
+def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=1,
+                    max_memory=2000):
+    '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
+    DFT hessian module etc.
+    '''
+    xctype = ni._xc_type(xc_code)
+    if xctype == 'MGGA':
+        ao_deriv = 2
+    elif xctype == 'GGA':
+        ao_deriv = 1
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
+    else:
+        ao_deriv = 0
+
+    dm = numpy.dot(mo_coeff * mo_occ, mo_coeff.conj().T)
+    hermi = 1
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi)
+    rho = []
+    m = []
+    for ao, mask, weight, coords \
+            in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+        rho_m = make_rho(0, ao, mask, xctype)
+        rho.append(rho_m[0])
+        m.append(rho_m[1])
+    rho = (numpy.hstack(rho), numpy.hstack(m))
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, relativity=1, deriv=2,
+                          verbose=0)[1:3]
+    return rho, vxc, fxc
 
 def get_rho(ni, mol, dm, grids, max_memory=2000):
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, hermi=1)
@@ -227,10 +516,16 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     return rho
 
 
-class RNumInt(numint.NumInt):
+class RNumInt(numint._NumIntMixin):
+    '''NumInt for j-adapted (spinor) basis'''
+    def __init__(self):
+        self.omega = None  # RSH paramter
+        self.collinear = False
 
-    r_vxc = nr_vxc = r_vxc
     get_rho = get_rho
+    cache_xc_kernel = cache_xc_kernel
+    get_vxc = r_vxc = r_vxc
+    get_fxc = r_fxc = r_fxc
 
     def eval_ao(self, mol, coords, deriv=0, with_s=True, shls_slice=None,
                 non0tab=None, out=None, verbose=None):
@@ -303,38 +598,34 @@ class RNumInt(numint.NumInt):
     def eval_xc(self, xc_code, rho, spin=1, relativity=0, deriv=1, omega=None,
                 verbose=None):
         if omega is None: omega = self.omega
-        # JTCC, 2, 257
-        r, m = rho[:2]
-        s = lib.norm(m, axis=0)
-        rhou = (r + s) * .5
-        rhod = (r - s) * .5
-        rho = (rhou, rhod)
-        xc = self.libxc.eval_xc(xc_code, rho, 1, relativity, deriv,
-                                omega, verbose)
-        exc, vxc = xc[:2]
-        # update vxc[0] inplace
-        vrho = vxc[0]
-        vr, vm = (vrho[:,0]+vrho[:,1])*.5, (vrho[:,0]-vrho[:,1])*.5
-        vrho[:,0] = vr
-        vrho[:,1] = vm
+        if self.collinear:
+            r, (mx, my, mz) = rho
+            rhou = (r + mz) * .5
+            rhod = (r - mz) * .5
+            rho = (rhou, rhod)
+            xc = self.libxc.eval_xc(xc_code, rho, 1, relativity, deriv,
+                                    omega, verbose)
+        else:
+            # JTCC, 2, 257
+            r, m = rho
+            s = lib.norm(m, axis=0)
+            rhou = (r + s) * .5
+            rhod = (r - s) * .5
+            rho = (rhou, rhod)
+            xc = self.libxc.eval_xc(xc_code, rho, 1, relativity, deriv,
+                                    omega, verbose)
+            exc, vxc = xc[:2]
+            # update vxc[0] inplace
+            vrho = vxc[0]
+            vr, vm = (vrho[:,0]+vrho[:,1])*.5, (vrho[:,0]-vrho[:,1])*.5
+            vrho[:,0] = vr
+            vrho[:,1] = vm
+            # TODO:
+            # vsigma_rr = (vxc[1][0] + vxc[1][1] + fxc[1][2]) / 4
+            # vsigma_rs = (vxc[1][0] - vxc[1][2]) / 2
+            # vsigma_ss = (vxc[1][0] - vxc[1][1] + fxc[1][2]) / 4
+            # vtau_r = (vxc[3][0] + vxc[3][1]) / 2
+            # vtau_s = (vxc[3][0] - vxc[3][1]) / 2
         return xc
+
 _RNumInt = RNumInt
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf.dft import dks
-
-    mol = gto.M(atom=[
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)]],
-        basis='6311g*')
-    mf = dks.UKS(mol)
-    mf.grids.atom_grid = {"H": (30, 194), "O": (30, 194),}
-    mf.grids.prune = None
-    mf.grids.build()
-    dm = mf.get_init_guess(key='minao')
-
-    res = mf._numint.r_vxc(mol, mf.grids, mf.xc, dm, spin=0)
-    print(res[1] - 0)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -227,7 +227,49 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        raise NotImplementedError
+        ni = mf._numint
+        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+        if getattr(mf, 'nlc', '') != '':
+            raise NotImplementedError('NLC')
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.UKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            raise NotImplementedError
+
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
+        dm0 = None
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        def vind(dm1):
+            if hermi == 2:
+                v1 = numpy.zeros_like(dm1)
+            else:
+                v1 = ni.nr_gks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
+                                   rho0, vxc, fxc, max_memory=max_memory)
+            if not hybrid:
+                if with_j:
+                    vj = mf.get_j(mol, dm1, hermi=hermi)
+                    v1 += vj
+            else:
+                if with_j:
+                    vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 += vj - vk
+                else:
+                    vk = mf.get_k(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 -= vk
+            return v1
 
     elif with_j:
         def vind(dm1):
@@ -250,7 +292,49 @@ def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        raise NotImplementedError
+        ni = mf._numint
+        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+        if getattr(mf, 'nlc', '') != '':
+            raise NotImplementedError('NLC')
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.UKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            raise NotImplementedError
+
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
+        dm0 = None
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        def vind(dm1):
+            if hermi == 2:
+                raise NotImplementedError
+            else:
+                v1 = ni.r_fxc(mol, mf.grids, mf.xc, dm0, dm1, 1, hermi,
+                              rho0, vxc, fxc, max_memory=max_memory)
+            if not hybrid:
+                if with_j:
+                    vj = mf.get_j(mol, dm1, hermi=hermi)
+                    v1 += vj
+            else:
+                if with_j:
+                    vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 += vj - vk
+                else:
+                    vk = mf.get_k(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 -= vk
+            return v1
 
     elif with_j:
         def vind(dm1):

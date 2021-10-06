@@ -65,23 +65,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
+    ks.initialize_grids(mol, dm)
+
     t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
-
-    if ks.grids.coords is None:
-        ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
-            # Filter grids the first time setup grids
-            ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc != '':
-        if ks.nlcgrids.coords is None:
-            ks.nlcgrids.build(with_non0tab=True)
-            if ks.small_rho_cutoff > 1e-20 and ground_state:
-                # Filter grids the first time setup grids
-                ks.nlcgrids = prune_small_rho_grids_(ks, mol, dm, ks.nlcgrids)
-            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     ni = ks._numint
     if hermi == 2:  # because rho = 0
@@ -247,13 +235,15 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji->', h1e, dm)
-    e2 = vhf.ecoul + vhf.exc
-    ks.scf_summary['e1'] = e1.real
-    ks.scf_summary['coul'] = vhf.ecoul.real
-    ks.scf_summary['exc'] = vhf.exc.real
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return (e1+e2).real, e2
+    e1 = numpy.einsum('ij,ji->', h1e, dm).real
+    ecoul = vhf.ecoul.real
+    exc = vhf.exc.real
+    e2 = ecoul + exc
+    ks.scf_summary['e1'] = e1
+    ks.scf_summary['coul'] = ecoul
+    ks.scf_summary['exc'] = exc
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+    return e1+e2, e2
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
@@ -467,6 +457,34 @@ class KohnShamDFT(object):
         hf.SCF.reset(self, mol)
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
+        return self
+
+    def initialize_grids(self, mol=None, dm=None):
+        '''Initialize self.grids the first time call get_veff'''
+        if mol is None: mol = self.mol
+
+        if self.grids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.grids.build(with_non0tab=True)
+            if (self.small_rho_cutoff > 1e-20 and
+                # dm.ndim == 2 indicates ground state
+                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                # Filter grids the first time setup grids
+                self.grids = prune_small_rho_grids_(self, self.mol, dm,
+                                                    self.grids)
+            t0 = logger.timer(self, 'setting up grids', *t0)
+
+        if self.nlc != '':
+            if self.nlcgrids.coords is None:
+                t0 = (logger.process_clock(), logger.perf_counter())
+                self.nlcgrids.build(with_non0tab=True)
+                if (self.small_rho_cutoff > 1e-20 and
+                    # dm.ndim == 2 indicates ground state
+                    isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                    # Filter grids the first time setup grids
+                    self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
+                                                           self.nlcgrids)
+                t0 = logger.timer(self, 'setting up nlc grids', *t0)
         return self
 
 # Update the KohnShamDFT label in scf.hf module

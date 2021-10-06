@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,17 +15,11 @@
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Ref:
-# Chem Phys Lett, 256, 454
-# J. Mol. Struct. THEOCHEM, 914, 3
-#
 
 
 import numpy
 from pyscf import lib
-from pyscf import symm
-from pyscf.tdscf import rhf
-from pyscf.scf import hf_symm
+from pyscf.tdscf import dhf
 from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
@@ -34,17 +28,13 @@ from pyscf import __config__
 POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
-class TDA(rhf.TDA):
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrks
-        return tdrks.Gradients(self)
+class TDA(dhf.TDA):
+    pass
 
-class TDDFT(rhf.TDHF):
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrks
-        return tdrks.Gradients(self)
+class TDDFT(dhf.TDHF):
+    pass
 
-RPA = TDRKS = TDDFT
+RPA = TDDKS = TDDFT
 
 class TDDFTNoHybrid(TDDFT, TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
@@ -52,43 +42,28 @@ class TDDFTNoHybrid(TDDFT, TDA):
     init_guess = TDA.init_guess
 
     def gen_vind(self, mf):
-        wfnsym = self.wfnsym
-        singlet = self.singlet
-
-        mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert(mo_coeff.dtype == numpy.double)
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff.shape
-        occidx = numpy.where(mo_occ==2)[0]
-        viridx = numpy.where(mo_occ==0)[0]
+        n2c = nmo // 2
+        occidx = n2c + numpy.where(mo_occ[n2c:] == 1)[0]
+        viridx = n2c + numpy.where(mo_occ[n2c:] == 0)[0]
         nocc = len(occidx)
         nvir = len(viridx)
         orbv = mo_coeff[:,viridx]
         orbo = mo_coeff[:,occidx]
 
-        if wfnsym is not None and mol.symmetry:
-            if isinstance(wfnsym, str):
-                wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
-            wfnsym = wfnsym % 10  # convert to D2h subgroup
-            orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
-            sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
-
         e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
-        if wfnsym is not None and mol.symmetry:
-            e_ia[sym_forbid] = 0
         d_ia = numpy.sqrt(e_ia)
         ed_ia = e_ia * d_ia
         hdiag = e_ia.ravel() ** 2
 
-        vresp = mf.gen_response(singlet=singlet, hermi=1)
+        vresp = mf.gen_response(mo_coeff, mo_occ, hermi=1)
 
         def vind(zs):
             zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
-            # *2 for double occupancy
-            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia*2, orbo, orbv.conj())
+            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia, orbo, orbv.conj())
             # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
             dmov = dmov + dmov.conj().transpose(0,2,1)
 
@@ -108,8 +83,8 @@ class TDDFTNoHybrid(TDDFT, TDA):
         cpu0 = (lib.logger.process_clock(), lib.logger.perf_counter())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
-            raise RuntimeError('%s cannot be used with hybrid functional'
-                               % self.__class__)
+            raise RuntimeError(f'{self.__class__} cannot be used with hybrid functional')
+
         self.check_sanity()
         self.dump_flags()
         if nstates is None:
@@ -138,8 +113,9 @@ class TDDFTNoHybrid(TDDFT, TDA):
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ
-        occidx = numpy.where(mo_occ==2)[0]
-        viridx = numpy.where(mo_occ==0)[0]
+        n2c = mo_occ.size // 2
+        occidx = n2c + numpy.where(mo_occ[n2c:] == 1)[0]
+        viridx = n2c + numpy.where(mo_occ[n2c:] == 0)[0]
         e_ia = (mo_energy[viridx,None] - mo_energy[occidx]).T
         e_ia = numpy.sqrt(e_ia)
         def norm_xy(w, z):
@@ -148,7 +124,7 @@ class TDDFTNoHybrid(TDDFT, TDA):
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
-            norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
+            norm = numpy.sqrt(1./norm)
             return (x*norm, y*norm)
 
         idx = numpy.where(w2 > POSTIVE_EIG_THRESHOLD**2)[0]
@@ -163,35 +139,6 @@ class TDDFTNoHybrid(TDDFT, TDA):
         self._finalize()
         return self.e, self.xy
 
-    def nuc_grad_method(self):
-        from pyscf.grad import tdrks
-        return tdrks.Gradients(self)
-
-
-class dRPA(TDDFTNoHybrid):
-    def __init__(self, mf):
-        if not isinstance(mf, KohnShamDFT):
-            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
-        mf = mf.to_rhf()
-        # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
-        # xc='0*LDA' is equivalent to xc=''
-        #mf.xc = '0.0*LDA'
-        mf.xc = ''
-        TDDFTNoHybrid.__init__(self, mf)
-
-TDH = dRPA
-
-class dTDA(TDA):
-    def __init__(self, mf):
-        if not isinstance(mf, KohnShamDFT):
-            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
-        mf = mf.to_rhf()
-        # commit fc8d1967995b7e033b60d4428ddcca87aac78e4f handles xc='' .
-        # xc='0*LDA' is equivalent to xc=''
-        #mf.xc = '0.0*LDA'
-        mf.xc = ''
-        TDA.__init__(self, mf)
-
 
 def tddft(mf):
     '''Driver to create TDDFT or TDDFTNoHybrid object'''
@@ -201,16 +148,7 @@ def tddft(mf):
         return TDDFTNoHybrid(mf)
 
 from pyscf import dft
-dft.rks.RKS.TDA           = dft.rks_symm.RKS.TDA           = lib.class_as_method(TDA)
-dft.rks.RKS.TDHF          = dft.rks_symm.RKS.TDHF          = None
-#dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = lib.class_as_method(TDDFT)
-dft.rks.RKS.TDDFTNoHybrid = dft.rks_symm.RKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
-dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = tddft
-dft.rks.RKS.dTDA          = dft.rks_symm.RKS.dTDA          = lib.class_as_method(dTDA)
-dft.rks.RKS.dRPA          = dft.rks_symm.RKS.dRPA          = lib.class_as_method(dRPA)
-dft.roks.ROKS.TDA           = dft.rks_symm.ROKS.TDA           = None
-dft.roks.ROKS.TDHF          = dft.rks_symm.ROKS.TDHF          = None
-dft.roks.ROKS.TDDFT         = dft.rks_symm.ROKS.TDDFT         = None
-dft.roks.ROKS.TDDFTNoHybrid = dft.rks_symm.ROKS.TDDFTNoHybrid = None
-dft.roks.ROKS.dTDA          = dft.rks_symm.ROKS.dTDA          = None
-dft.roks.ROKS.dRPA          = dft.rks_symm.ROKS.dRPA          = None
+dft.dks.DKS.TDA           = lib.class_as_method(TDA)
+dft.dks.DKS.TDHF          = None
+dft.dks.DKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.dks.DKS.TDDFT         = tddft

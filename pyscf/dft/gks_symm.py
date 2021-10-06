@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,10 @@ from pyscf.dft import rks
 class GKS(ghf_symm.GHF, rks.KohnShamDFT):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol, xc='LDA,VWN'):
+        from pyscf.dft.numint2c import NumInt2C
         ghf_symm.GHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
+        self._numint = NumInt2C()
 
     def dump_flags(self, verbose=None):
         ghf_symm.GHF.dump_flags(self, verbose)

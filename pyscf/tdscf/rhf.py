@@ -31,6 +31,7 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
+# To ensure .gen_response() methods are registered
 from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf import __config__
@@ -677,7 +678,9 @@ class TDMixin(lib.StreamObject):
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        if self.singlet:
+        if self.singlet is None:
+            log.info('nstates = %d', self.nstates)
+        elif self.singlet:
             log.info('nstates = %d singlet', self.nstates)
         else:
             log.info('nstates = %d triplet', self.nstates)

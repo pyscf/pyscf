@@ -956,6 +956,7 @@ class NumInt(numint.NumInt):
         else:
             return self.nr_uks(cell, grids, xc_code, dms, hermi,
                                kpt, kpts_band, max_memory, verbose)
+    get_vxc = nr_vxc
 
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
@@ -1118,6 +1119,7 @@ class KNumInt(numint.NumInt):
         else:
             return self.nr_uks(cell, grids, xc_code, dms, hermi,
                                kpts, kpts_band, max_memory, verbose)
+    get_vxc = nr_vxc
 
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0, kpts=None, kpts_band=None,
