@@ -391,3 +391,213 @@ void build_task_list(TaskList** task_list, NeighborList** neighbor_list,
         t0->radius = max_radius[i];
     }
 }
+
+
+int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
+                 int ish0, int ish1, int jsh0, int jsh1, int hermi)
+{
+    int n = -2;
+    int ish_prev = -1;
+    int jsh_prev = -1;
+    int itask, ish, jsh;
+    int *buf = (int*)malloc(sizeof(int) * ntasks*2);
+    PGFPair *pgfpair;
+    for(itask = 0; itask < ntasks; itask++){
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        jsh = pgfpair->jsh;
+        if (ish < ish0 || ish >= ish1) {
+            continue;
+        }
+        if (jsh < jsh0 || jsh >= jsh1) {
+            continue;
+        }
+        if (hermi == 1 && jsh < ish) {
+            continue;
+        }
+
+        if (ish != ish_prev || jsh != jsh_prev) {
+            n += 2;
+            buf[n] = itask;
+            ish_prev = ish;
+            jsh_prev = jsh;
+        }
+        if (ish == ish_prev && jsh == jsh_prev) {
+            buf[n+1] = itask+1;
+        }
+    }
+    n += 2;
+    *task_loc = (int*)realloc(buf, sizeof(int) * n);
+    return n;
+}
+
+
+/*
+int get_task_loc_diff_ish(int** task_loc, PGFPair** pgfpairs, int ntasks,
+                          int ish0, int ish1)
+{
+    int n = -2;
+    int ish_prev = -1;
+    int itask, ish;
+    int *buf = (int*)malloc(sizeof(int) * ntasks*2);
+    PGFPair *pgfpair;
+    for(itask = 0; itask < ntasks; itask++){
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        if (ish < ish0 || ish >= ish1) {
+            continue;
+        }
+
+        if (ish != ish_prev) {
+            n += 2;
+            buf[n] = itask;
+            ish_prev = ish;
+        }
+        if (ish == ish_prev) {
+            buf[n+1] = itask+1;
+        }
+    }
+    n += 2;
+    *task_loc = (int*)realloc(buf, sizeof(int) * n);
+    return n;
+}
+*/
+
+/*
+typedef struct Task_Index_struct {
+    int ntasks;
+    int bufsize;
+    int* task_index;
+} Task_Index;
+
+
+void init_task_index(Task_Index* task_idx)
+{
+    task_idx->ntasks = 0;
+    task_idx->bufsize = 10;
+    task_idx->task_index = (int*)malloc(sizeof(int) * task_idx->bufsize);
+}
+
+
+void update_task_index(Task_Index* task_idx, int itask)
+{
+    task_idx->ntasks += 1;
+    if (task_idx->bufsize < task_idx->ntasks) {
+        task_idx->bufsize += 10;
+        task_idx->task_index = (int*)realloc(task_idx->task_index, sizeof(int) * task_idx->bufsize);
+    }
+    task_idx->task_index[task_idx->ntasks-1] = itask;
+}
+
+
+void del_task_index(Task_Index* task_idx)
+{
+    if (!task_idx) {
+        return;
+    }
+    if (task_idx->task_index) {
+        free(task_idx->task_index);
+    }
+    task_idx->ntasks = 0;
+    task_idx->bufsize = 0;
+}
+
+
+typedef struct Shlpair_Task_Index_struct {
+    int nish;
+    int njsh;
+    int ish0;
+    int jsh0;
+    Task_Index *task_index;
+} Shlpair_Task_Index;
+
+
+void init_shlpair_task_index(Shlpair_Task_Index* shlpair_task_idx,
+                             int ish0, int jsh0, int nish, int njsh)
+{
+    shlpair_task_idx->ish0 = ish0;
+    shlpair_task_idx->jsh0 = jsh0;
+    shlpair_task_idx->nish = nish;
+    shlpair_task_idx->njsh = njsh;
+    shlpair_task_idx->task_index = (Task_Index*)malloc(sizeof(Task_Index)*nish*njsh);
+
+    int ijsh;
+    for (ijsh = 0; ijsh < nish*njsh; ijsh++) {
+        init_task_index(shlpair_task_idx->task_index + ijsh);
+    }
+}
+
+
+void update_shlpair_task_index(Shlpair_Task_Index* shlpair_task_idx,
+                               int ish, int jsh, int itask)
+{
+    int ish0 = shlpair_task_idx->ish0;
+    int jsh0 = shlpair_task_idx->jsh0;
+    int njsh = shlpair_task_idx->njsh;
+    int ioff = ish - ish0;
+    int joff = jsh - jsh0;
+
+    update_task_index(shlpair_task_idx->task_index + ioff*njsh+joff, itask);
+}
+
+
+int get_task_index(Shlpair_Task_Index* shlpair_task_idx, int** idx, int ish, int jsh)
+{
+    int ish0 = shlpair_task_idx->ish0;
+    int jsh0 = shlpair_task_idx->jsh0;
+    int njsh = shlpair_task_idx->njsh;
+    int ioff = ish - ish0;
+    int joff = jsh - jsh0;
+    Task_Index *task_idx = shlpair_task_idx->task_index + ioff*njsh+joff;
+    int ntasks = task_idx->ntasks;
+    *idx = task_idx->task_index;
+    return ntasks;
+}
+
+
+void del_shlpair_task_index(Shlpair_Task_Index* shlpair_task_idx)
+{
+    if (!shlpair_task_idx) {
+        return;
+    }
+
+    int nish = shlpair_task_idx->nish;
+    int njsh = shlpair_task_idx->njsh;
+    int ijsh;
+    for (ijsh = 0; ijsh < nish*njsh; ijsh++) {
+        del_task_index(shlpair_task_idx->task_index + ijsh);
+    }
+    free(shlpair_task_idx->task_index);
+}
+
+
+Shlpair_Task_Index* get_shlpair_task_index(PGFPair** pgfpairs, int ntasks,
+            int ish0, int ish1, int jsh0, int jsh1, int hermi)
+{
+    const int nish = ish1 - ish0;
+    const int njsh = jsh1 - jsh0;
+
+    Shlpair_Task_Index* shlpair_task_idx = (Shlpair_Task_Index*) malloc(sizeof(Shlpair_Task_Index));
+    init_shlpair_task_index(shlpair_task_idx, ish0, jsh0, nish, njsh);
+
+    int itask;
+    int ish, jsh;
+    PGFPair *pgfpair = NULL;
+    for(itask = 0; itask < ntasks; itask++){
+        pgfpair = pgfpairs[itask];
+        ish = pgfpair->ish;
+        if (ish < ish0 || ish >= ish1) {
+            continue;
+        }
+        jsh = pgfpair->jsh;
+        if (jsh < jsh0 || jsh >= jsh1) {
+            continue;
+        }
+        if (hermi == 1 && jsh < ish) {
+            continue;
+        }
+        update_shlpair_task_index(shlpair_task_idx, ish, jsh, itask);
+    }
+    return shlpair_task_idx;
+}
+*/

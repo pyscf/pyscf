@@ -84,6 +84,26 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
+#   Detect and enable FFTW
+#set(CMAKE_MODULE_PATH_SAVED ${CMAKE_MODULE_PATH})
+#set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+#find_package(FFTW)
+#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH_SAVED})
+#if(FFTW_FOUND)
+#    message(STATUS "Found FFTW: ${PATH_FFTW_INCLUDE}")
+#    include_directories(${PATH_FFTW_INCLUDE})
+#    verify_fftw(FFTW_VERIFIED)
+#    if(NOT FFTW_VERIFIED)
+#        message(STATUS "Cannot use this FFTW (compatibility issue detected)")
+#        unset(FFTW_FOUND)
+#        unset(FFTW_LIBRARIES)
+#    endif(NOT FFTW_VERIFIED)
+#endif(FFTW_FOUND)
+#if(NOT FFTW_FOUND)
+#    set(WITHOUT_FFTW TRUE)
+#    message(STATUS "Build without FFTW")
+#endif(NOT FFTW_FOUND)
+
 find_package(OpenMP)
 if(OPENMP_FOUND)
   set(HAVE_OPENMP 1)

@@ -195,13 +195,12 @@ static double gto_rcut(double alpha, int l, double c, double log_prec)
         return r;
 }
 
-int _has_overlap(int nx0, int nx1, int nx_per_cell)
+static int _has_overlap(int nx0, int nx1, int nx_per_cell)
 {
-        //return nx0 < nx1 + 3;
-        return nx0 <= nx1;
+        return nx0 < nx1 + 3;
 }
 
-int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
+static int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
 {
         int ngridx;
         if (nimgx == 1) {

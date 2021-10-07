@@ -1,6 +1,7 @@
-#include <stdbool.h>
-#if !defined(HAVE_DEFINED_MULTIGRID_H)
+#ifndef HAVE_DEFINED_MULTIGRID_H
 #define HAVE_DEFINED_MULTIGRID_H
+
+#include <stdbool.h>
 
 #define BINOMIAL(n, i)  (_BINOMIAL_COEF[_LEN_CART0[n]+i])
 
@@ -46,4 +47,8 @@ typedef struct TaskList_struct {
     GridLevel_Info* gridlevel_info;
     Task** tasks;
 } TaskList;
+
+
+int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
+                 int ish0, int ish1, int jsh0, int jsh1, int hermi);
 #endif
