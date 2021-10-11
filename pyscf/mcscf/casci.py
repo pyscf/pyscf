@@ -32,6 +32,7 @@ from pyscf import __config__
 WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
 LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 PENALTY = getattr(__config__, 'mcscf_casci_CASCI_fix_spin_shift', 0.2)
+FRAC_OCC_THRESHOLD = 1e-6
 
 if sys.version_info < (3,):
     RANGE_TYPE = list
@@ -262,19 +263,20 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     ncas = mc.ncas
     nocc = ncore + ncas
     nelecas = mc.nelecas
+    nmo = mo_coeff.shape[1]
     if casdm1 is None:
         casdm1 = mc.fcisolver.make_rdm1(ci, ncas, nelecas)
     # orbital symmetry is reserved in this _eig call
-    occ, ucas = mc._eig(-casdm1, ncore, nocc)
+    cas_occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
-        casorb_idx = numpy.argsort(occ.round(9), kind='mergesort')
-        occ = occ[casorb_idx]
+        casorb_idx = numpy.argsort(cas_occ.round(9), kind='mergesort')
+        cas_occ = cas_occ[casorb_idx]
         ucas = ucas[:,casorb_idx]
 
-    occ = -occ
+    cas_occ = -cas_occ
     mo_occ = numpy.zeros(mo_coeff.shape[1])
     mo_occ[:ncore] = 2
-    mo_occ[ncore:nocc] = occ
+    mo_occ[ncore:nocc] = cas_occ
 
     mo_coeff1 = mo_coeff.copy()
     mo_coeff1[:,ncore:nocc] = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
@@ -283,7 +285,39 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         if sort:
             orbsym[ncore:nocc] = orbsym[ncore:nocc][casorb_idx]
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
+    else:
+        orbsym = numpy.zeros(nmo, dtype=int)
 
+    # When occupancies of active orbitals equal to 2 or 0, these orbitals
+    # need to be canonicalized along with inactive(core or virtual) orbitals
+    # using general Fock matrix. Because they are strongly coupled with
+    # inactive orbitals, the 0th order Hamiltonian of MRPT methods can be
+    # strongly affected. Numerical uncertainty may be found in the perturbed
+    # correlation energy.
+    # See issue https://github.com/pyscf/pyscf/issues/1041
+    occ2_idx = numpy.where(2 - cas_occ < FRAC_OCC_THRESHOLD)[0]
+    occ0_idx = numpy.where(cas_occ < FRAC_OCC_THRESHOLD)[0]
+    if occ2_idx.size > 0 or occ0_idx.size > 0:
+        fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+
+        def _diag_subfock_(idx):
+            c = mo_coeff1[:,idx]
+            fock = reduce(numpy.dot, (c.conj().T, fock_ao, c))
+            w, c = mc._eig(fock, None, None, orbsym[idx])
+            mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
+
+        if occ2_idx.size > 0:
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with core orbitals',
+                     occ2_idx, cas_occ[occ2_idx])
+            full_occ2_idx = numpy.append(numpy.arange(ncore), ncore + occ2_idx)
+            _diag_subfock_(full_occ2_idx)
+        if occ0_idx.size > 0:
+            log.warn('Active orbitals %s (occs = %s) are canonicalized with external orbitals',
+                     occ0_idx, cas_occ[occ0_idx])
+            full_occ0_idx = numpy.append(ncore + occ0_idx, numpy.arange(nocc, nmo))
+            _diag_subfock_(full_occ0_idx)
+
+    # Rotate CI according to the unitary coefficients ucas if applicable
     fcivec = None
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
         if isinstance(ci, numpy.ndarray):
@@ -336,7 +370,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         # where_natorb gives the new locations of the natural orbitals
         where_natorb = mo_1to1map(ucas)
         log.debug('where_natorb %s', str(where_natorb))
-        log.info('Natural occ %s', str(occ))
+        log.info('Natural occ %s', str(cas_occ))
         if with_meta_lowdin:
             log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
             label = mc.mol.ao_labels()
@@ -425,6 +459,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
+
     if cas_natorb:
         mo_coeff1, ci, mc.mo_occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                                  verbose, with_meta_lowdin)
@@ -434,8 +469,28 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mo_coeff1 = mo_coeff.copy()
         log.info('Density matrix diagonal elements %s', casdm1.diagonal())
 
-    fock = reduce(numpy.dot, (mo_coeff1.conj().T, fock_ao, mo_coeff1))
-    mo_energy = fock.diagonal().copy()
+    mo_energy = numpy.einsum('pi,pi->i', mo_coeff1.conj(), fock_ao.dot(mo_coeff1))
+
+    if getattr(mo_coeff, 'orbsym', None) is not None:
+        orbsym = mo_coeff.orbsym
+    else:
+        orbsym = numpy.zeros(nmo, dtype=int)
+
+    def _diag_subfock_(idx):
+        if idx.size > 1:
+            c = mo_coeff1[:,idx]
+            fock = reduce(numpy.dot, (c.conj().T, fock_ao, c))
+            # note the last argument orbysm is needed by mc1step_symm._eig
+            w, c = mc._eig(fock, None, None, orbsym[idx])
+
+            if sort:
+                sub_order = numpy.argsort(w.round(9), kind='mergesort')
+                w = w[sub_order]
+                c = c[:,sub_order]
+                orbsym[idx] = orbsym[idx][sub_order]
+
+            mo_coeff1[:,idx] = mo_coeff1[:,idx].dot(c)
+            mo_energy[idx] = w
 
     mask = numpy.ones(nmo, dtype=bool)
     frozen = getattr(mc, 'frozen', None)
@@ -446,36 +501,11 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             mask[frozen] = False
     core_idx = numpy.where(mask[:ncore])[0]
     vir_idx = numpy.where(mask[nocc:])[0] + nocc
+    _diag_subfock_(core_idx)
+    _diag_subfock_(vir_idx)
 
-    if getattr(mo_coeff, 'orbsym', None) is not None:
-        orbsym = mo_coeff.orbsym
-    else:
-        orbsym = numpy.zeros(nmo, dtype=int)
-
-    if len(core_idx) > 0:
-        # note the last two args of ._eig for mc1step_symm
-        # mc._eig function is called to handle symmetry adapated fock
-        w, c1 = mc._eig(fock[core_idx[:,None],core_idx], 0, ncore,
-                        orbsym[core_idx])
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-            orbsym[core_idx] = orbsym[core_idx][idx]
-        mo_coeff1[:,core_idx] = numpy.dot(mo_coeff1[:,core_idx], c1)
-        mo_energy[core_idx] = w
-
-    if len(vir_idx) > 0:
-        w, c1 = mc._eig(fock[vir_idx[:,None],vir_idx], nocc, nmo,
-                        orbsym[vir_idx])
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-            orbsym[vir_idx] = orbsym[vir_idx][idx]
-        mo_coeff1[:,vir_idx] = numpy.dot(mo_coeff1[:,vir_idx], c1)
-        mo_energy[vir_idx] = w
-
+    # orbsym is required only for symmetry-adapted methods. Here to use
+    # mo_coeff.orbsym to test if a symmetry-adapted calculation.
     if getattr(mo_coeff, 'orbsym', None) is not None:
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 

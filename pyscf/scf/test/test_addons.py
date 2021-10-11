@@ -273,13 +273,13 @@ class KnownValues(unittest.TestCase):
         from pyscf.soscf import newton_ah
         addons.convert_to_rhf(dft.RKS(mol))
         addons.convert_to_uhf(dft.RKS(mol))
-        #addons.convert_to_ghf(dft.RKS(mol))
+        addons.convert_to_ghf(dft.RKS(mol))
         addons.convert_to_rhf(dft.UKS(mol))
         addons.convert_to_uhf(dft.UKS(mol))
-        #addons.convert_to_ghf(dft.UKS(mol))
+        addons.convert_to_ghf(dft.UKS(mol))
         #addons.convert_to_rhf(dft.GKS(mol))
         #addons.convert_to_uhf(dft.GKS(mol))
-        #addons.convert_to_ghf(dft.GKS(mol))
+        addons.convert_to_ghf(dft.GKS(mol))
 
         self.assertTrue(isinstance(addons.convert_to_rhf(mf), scf.rhf.RHF))
         self.assertTrue(isinstance(addons.convert_to_uhf(mf), scf.uhf.UHF))
