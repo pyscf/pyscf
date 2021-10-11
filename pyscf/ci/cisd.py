@@ -272,8 +272,9 @@ def tn_addrs_signs(norb, nelec, n_excite):
     vacuum to HF vacuum.
     '''
     if n_excite > nelec:
-        print("Warning: Not enough occupied orbitals to excite.")
-        return [0], [0]
+        #print("Warning: Not enough occupied orbitals to excite.")
+        #return [0], [0]
+        return [], []
     nocc = nelec
 
     hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)

@@ -356,7 +356,7 @@ def get_frozen_mask(mp):
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
         moidx[mp._nmo:] = False
     elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
@@ -537,7 +537,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return (self.e_hf or self._scf.e_tot) + self.e_corr
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, hf_reference="legacy"):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
         Args:
             with_t2 : bool
@@ -554,14 +554,7 @@ class MP2(lib.StreamObject):
         if self.e_hf is None:
             self.e_hf = self._scf.e_tot
 
-        if hasattr(hf_reference, "lower"):
-            if hf_reference.lower() == "auto":
-                hf_reference = (self._scf.converged and numpy.allclose(eris.fock, numpy.diag(eris.mo_energy)))
-            elif hf_reference.lower() == "legacy":
-                hf_reference = self._scf.converged
-            else:
-                raise ValueError("Unknown value for argument hf_reference: %s" % hf_reference)
-        if hf_reference:
+        if self._scf.converged:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
         else:
             self.converged, self.e_corr, self.t2 = _iterative_kernel(self, eris)
