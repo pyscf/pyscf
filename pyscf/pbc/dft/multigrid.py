@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 '''Multigrid to compute DFT integrals'''
@@ -25,11 +26,12 @@ import scipy.linalg
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
+from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF, PTR_ZETA, PTR_KIND
 from pyscf.dft.numint import libdft, BLKSIZE
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto.cell import pgf_rcut
 from pyscf.pbc.gto.pseudo.pp_int import get_pp_nl
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
@@ -58,7 +60,7 @@ TASKS_TYPE = getattr(__config__, 'pbc_dft_multigrid_tasks_type', 'ke_cut') # 'rc
 # evaluating the high order derivatives in real space).
 RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
 
-
+PP_WITH_RHO_CORE = getattr(__config__, 'pbc_dft_multigrid_pp_with_rho_core', True)
 PP_WITH_ERF = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
 
 PTR_EXPDROP = 16
@@ -327,11 +329,93 @@ def get_nuc(mydf, kpts=None):
         vne = vne[0]
     return numpy.asarray(vne)
 
+def make_rho_core(cell, precision=None):
+    if precision is None:
+        precision = cell.precision
+
+    symbs = numpy.asarray(list(cell._pseudo.keys()))
+    symbs = numpy.sort(symbs)
+    rloc = []
+    charge = []
+    for symb in symbs:
+        rloc.append(cell._pseudo[symb][1])
+        charge.append(numpy.sum(cell._pseudo[symb][0]))
+    rloc = numpy.asarray(rloc)
+    charge = numpy.asarray(charge)
+    zeta = 1. / ((numpy.sqrt(2) * rloc) ** 2)
+    coeff = charge * ((zeta / numpy.pi) ** 1.5)
+
+    prec = precision ** 2
+    radius = pgf_rcut(0, zeta, coeff, precision=prec)
+    radius = numpy.asarray(radius, order='C', dtype=numpy.double)
+
+    atm = numpy.asarray(cell._atm.copy(), order='C', dtype=numpy.int32)
+    env = numpy.asarray(cell._env.copy(), order='C', dtype=numpy.double)
+    for ia in range(cell.natm):
+        symb = cell.atom_symbol(ia)
+        if symb not in symbs:
+            logger.warn(cell, "No pseudo-potential found for symbol %s" % symb)
+            return None
+        else:
+            ikind = numpy.where(symb == symbs)[0]
+            atm[ia, PTR_KIND] = ikind
+            env[atm[ia, PTR_ZETA]] = zeta[ikind]
+
+    a = numpy.asarray(cell.lattice_vectors(), order='C', dtype=numpy.double)
+    if abs(a - numpy.diag(a.diagonal())).max() < 1e-12:
+        orth = 1
+    else:
+        orth = 0
+
+    b = numpy.asarray(numpy.linalg.inv(a.T), order='C', dtype=numpy.double)
+    mesh = numpy.asarray(cell.mesh, order='C', dtype=numpy.int32)
+    rho_core = numpy.zeros((numpy.prod(mesh),), order='C', dtype=numpy.double)
+    func = getattr(libdft, 'build_core_density', None)
+    try:
+        func(rho_core.ctypes.data_as(ctypes.c_void_p),
+             atm.ctypes.data_as(ctypes.c_void_p),
+             env.ctypes.data_as(ctypes.c_void_p),
+             ctypes.c_int(cell.natm), 
+             radius.ctypes.data_as(ctypes.c_void_p),
+             ctypes.c_int(len(radius)),
+             mesh.ctypes.data_as(ctypes.c_void_p), 
+             ctypes.c_int(cell.dimension),
+             a.ctypes.data_as(ctypes.c_void_p),
+             b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(orth))
+    except Exception as e:
+        raise RuntimeError("Failed to compute rho_core. %s" % e)
+    return rho_core
+
 def get_pp(mydf, kpts=None, max_memory=2000):
     if not PP_WITH_ERF:
+        mydf.vpplocG_part1 = _get_vpplocG_part1(mydf)
         return _get_pp_without_erf(mydf, kpts, max_memory)
     else:
         return _get_pp_with_erf(mydf, kpts, max_memory)
+
+def _get_vpplocG_part1(mydf):
+    cell = mydf.cell
+    mesh = mydf.mesh
+
+    if not PP_WITH_RHO_CORE:
+        Gv = cell.get_Gv(mesh)
+        vpplocG_part1 = pseudo.pp_int.get_pp_loc_part1_gs(cell, Gv)
+    else:
+        # compute rho_core in real space then transform to G space
+        weight = cell.vol / numpy.prod(mesh)
+        rho_core = make_rho_core(cell)
+        rhoG_core = weight * tools.fft(rho_core, mesh)
+        coulG = tools.get_coulG(cell, mesh=mesh)
+        vpplocG_part1 = rhoG_core * coulG
+        # G = 0 contribution
+        chargs = cell.atom_charges()
+        rloc = []
+        for ia in range(cell.natm):
+            symb = cell.atom_symbol(ia)
+            rloc.append(cell._pseudo[symb][1])
+        rloc = numpy.asarray(rloc)
+        vpplocG_part1[0] += 2. * numpy.pi * numpy.sum(rloc * rloc * chargs)
+    return vpplocG_part1
 
 def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -344,10 +428,6 @@ def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    mesh = mydf.mesh
-    Gv = cell.get_Gv(mesh)
-    mydf.vpplocG_part1 = pseudo.pp_int.get_pp_loc_part1_gs(cell, Gv)
-    #vpp1 = _get_j_pass2(mydf, vpplocG_part1, kpts_lst)[0]
     vpp = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
     vppnl = get_pp_nl(cell, kpts_lst)
 
@@ -1032,7 +1112,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
 
-    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
+    if getattr(mydf, "vpplocG_part1", None) is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] += mydf.vpplocG_part1 * 2
 
@@ -1041,7 +1121,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
+    if getattr(mydf, "vpplocG_part1", None) is not None and not PP_WITH_ERF:
         for i in range(nset):
             vG[i] -= mydf.vpplocG_part1
 

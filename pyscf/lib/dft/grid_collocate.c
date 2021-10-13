@@ -11,7 +11,7 @@
 #include "dft/grid_common.h"
 
 #define MAX_THREADS     256
-
+#define PTR_KIND        5
 
 static void transform_dm(double* dm_cart, double* dm,
                          double* ish_contr_coeff, double* jsh_contr_coeff,
@@ -309,6 +309,25 @@ static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radi
 }
 
 
+static size_t _rho_core_cache_size(int* mesh, double radius, double* a)
+{
+    size_t size = 0;
+    size_t mesh_size = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+    int l1 = 1;
+    int l1l1 = l1 * l1;
+    int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
+    int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+    size += l1 * (mesh[0] + mesh[1] + mesh[2]);
+    size += l1 * nmx + nmx;
+    size += l1l1 * l1;
+    size += l1l1 * mesh[2];
+    size += l1 * mesh[1] * mesh[2];
+    size += mesh_size; // usually don't need so much
+    size += 1000000;
+    return size;
+}
+
+
 void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskList** task_list,
                         int comp, int hermi, int *shls_slice, int* ish_ao_loc, int* jsh_ao_loc,
                         int dimension, double* Ls, double* a, double* b,
@@ -439,4 +458,64 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
     if (hermi != 1) {
         del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
     }
+}
+
+
+void build_core_density(double* rho, int* atm, double* env, int natm, double* radius, int nkind,
+                        int* mesh, int dimension, double* a, double* b, int orth)
+{
+    size_t ngrids;
+    ngrids = ((size_t) mesh[0]) * mesh[1] * mesh[2];
+    void (*eval_rho)();
+    if (orth == 1) {
+        eval_rho = make_rho_lda_orth;
+    }
+    else {
+        exit(1);
+    }
+    double *rhobufs[MAX_THREADS];
+
+    int ikind;
+    double max_radius = 0;
+    for (ikind = 0; ikind < nkind; ikind++) {
+        max_radius = MAX(max_radius, radius[ikind]);
+    }
+    size_t cache_size =  _rho_core_cache_size(mesh, max_radius, a);
+
+#pragma omp parallel private(ikind)
+{
+    int ia;
+    double alpha, alpha_half, charge, rad, fac;
+    double dm[] = {1.0};
+    double *r0;
+    double *cache = (double*) malloc(sizeof(double) * cache_size);
+
+    int thread_id = omp_get_thread_num();
+    double *rho_priv;
+    if (thread_id == 0) {
+        rho_priv = rho;
+    } else {
+        rho_priv = calloc(ngrids, sizeof(double));
+    }
+    rhobufs[thread_id] = rho_priv;
+
+    #pragma omp for schedule(static)
+    for (ia = 0; ia < natm; ia++) {
+        ikind = atm[ia*ATM_SLOTS+PTR_KIND];
+        rad = radius[ikind];
+        alpha = env[atm[ia*ATM_SLOTS+PTR_ZETA]];
+        alpha_half = alpha / 2;
+        charge = (double)atm[ia*ATM_SLOTS+CHARGE_OF];
+        r0 = env + atm[ia*ATM_SLOTS+PTR_COORD];
+        fac = -charge * pow(alpha / M_PI, 1.5);
+        eval_rho(rho_priv, dm, 1, 0, 0, alpha_half, alpha_half, r0, r0,
+                 fac, rad, dimension, a, b, mesh, cache);
+    }
+    free(cache);
+
+    NPomp_dsum_reduce_inplace(rhobufs, ngrids);
+    if (thread_id != 0) {
+        free(rho_priv);
+    }
+}
 }

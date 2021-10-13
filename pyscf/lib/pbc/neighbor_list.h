@@ -1,13 +1,10 @@
-#if !defined(HAVE_DEFINED_NEIGHBORPAIR_H)
-#define HAVE_DEFINED_NEIGHBORPAIR_H
+#ifndef HAVE_DEFINED_NEIGHBOR_LIST_H
+#define HAVE_DEFINED_NEIGHBOR_LIST_H
 typedef struct NeighborPair_struct {
     int nimgs;
     int *Ls_list;
 } NeighborPair;
-#endif
 
-#if !defined(HAVE_DEFINED_NEIGHBORLIST_H)
-#define HAVE_DEFINED_NEIGHBORLIST_H
 typedef struct NeighborList_struct {
     int nish;
     int njsh;
@@ -15,4 +12,3 @@ typedef struct NeighborList_struct {
     NeighborPair **pairs;
 } NeighborList;
 #endif
-

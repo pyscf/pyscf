@@ -51,7 +51,7 @@ WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
-
+RCUT_EPS = 1e-3
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -491,22 +491,24 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
-def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION, rcut=0, max_cycle=100):
+def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION, r0=0, max_cycle=100):
     '''
     Estimate the cutoff radii of primitive Gaussian functions.
     '''
-    log_cs = np.log(coeff)
-    log_prec = np.log(precision)
-    if l == 0:
-        return np.sqrt((log_cs-log_prec) / alpha)
+    log_c_by_prec= np.log(coeff / precision)
+    if np.all(l==0):
+        rcut = np.sqrt(log_c_by_prec / alpha)
+        return rcut
 
-    rmin = max(np.sqrt(0.5 * l / alpha).min(), rcut)
-    eps = min(rmin, 1e-3)
+    rmin = np.sqrt(.5 * l / alpha)
+    eps = min(rmin/10, RCUT_EPS);
+    rcut = np.maximum(r0, rmin+eps);
     for i in range(max_cycle):
-        tmp = (l*np.log(rcut) + log_cs - log_prec)/alpha
-        rcut, rcut_old = tmp**.5, rcut
+        rcut_old = rcut
+        rcut = np.sqrt((l*np.log(rcut) + log_c_by_prec) / alpha)
         if abs(rcut - rcut_old).max() < eps:
             return rcut
+    warnings.warn("pgf_rcut did not converge")
     return rcut
 
 def shell_rcut(cell, bas_id, precision=None, rcut=5.):

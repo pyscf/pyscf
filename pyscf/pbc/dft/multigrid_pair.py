@@ -735,7 +735,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
                kpts_band=None, verbose=None):
     if kpts is None: kpts = mydf.kpts
-    log = logger.new_logger(mydf, verbose)
+    #log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
