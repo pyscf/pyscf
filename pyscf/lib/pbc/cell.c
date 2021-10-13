@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <complex.h>
 #include "config.h"
 #include "cint.h"
 #include "pbc/cell.h"
@@ -76,6 +77,27 @@ void rcut_by_shells(double* shell_radius, double** ptr_pgf_rcut,
             rcut_max = MAX(rcut, rcut_max);
         }
         shell_radius[ib] = rcut_max;
+    }
+}
+}
+
+void get_SI(complex double* out, double* coords, double* Gv, int natm, int ngrid)
+{
+#pragma omp parallel
+{
+    int i, ia;
+    double RG;
+    double *pcoords, *pGv;
+    complex double *pout;
+    #pragma omp for schedule(static)
+    for (ia = 0; ia < natm; ia++) {
+        pcoords = coords + ia * 3;
+        pout = out + ((size_t)ia) * ngrid;
+        for (i = 0; i < ngrid; i++) {
+            pGv = Gv + i * 3;
+            RG = pcoords[0] * pGv[0] + pcoords[1] * pGv[1] + pcoords[2] * pGv[2];
+            pout[i] = cos(RG) - _Complex_I * sin(RG);
+        }
     }
 }
 }

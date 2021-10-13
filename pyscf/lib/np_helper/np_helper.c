@@ -100,6 +100,30 @@ void NPzmultiplysum(double complex* out, double complex* a, double complex* b,
 }
 }
 
+void NPcos(double* out, double* a, int n)
+{
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
+        out[i] = cos(a[i]);
+    }
+}
+}
+
+void NPsin(double* out, double* a, int n)
+{
+#pragma omp parallel
+{
+    size_t i;
+    #pragma omp for schedule(static)
+    for (i = 0; i < n; i++) {
+        out[i] = sin(a[i]);
+    }
+}
+}
+
 void NPdexp(double* out, double* a, int n)
 {
 #pragma omp parallel

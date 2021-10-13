@@ -1108,6 +1108,54 @@ def exp(a, out=None, **kwargs):
        a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
     return out
 
+def cos(a, out=None, **kwargs):
+    '''
+    Multi-threaded numpy.cos
+    '''
+    if not (a.flags.c_contiguous or a.flags.f_contiguous):
+        return numpy.cos(a, out=out, **kwargs)
+    fn = getattr(_np_helper, "NPcos", None)
+    if out is None:
+        out = numpy.empty_like(a)
+    else:
+        if (out.dtype != a.dtype or
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.exp(a, out=out, **kwargs)
+    if a.flags.c_contiguous:
+        a = numpy.asarray(a, order='C')
+        out = numpy.asarray(out, order='C')
+    elif a.flags.f_contiguous:
+        a = numpy.asarray(a, order='F')
+        out = numpy.asarray(out, order='F')
+    n = a.size
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
+    return out
+
+def sin(a, out=None, **kwargs):
+    '''
+    Multi-threaded numpy.sin
+    '''
+    if not (a.flags.c_contiguous or a.flags.f_contiguous):
+        return numpy.cos(a, out=out, **kwargs)
+    fn = getattr(_np_helper, "NPsin", None)
+    if out is None:
+        out = numpy.empty_like(a)
+    else:
+        if (out.dtype != a.dtype or
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.exp(a, out=out, **kwargs)
+    if a.flags.c_contiguous:
+        a = numpy.asarray(a, order='C')
+        out = numpy.asarray(out, order='C')
+    elif a.flags.f_contiguous:
+        a = numpy.asarray(a, order='F')
+        out = numpy.asarray(out, order='F')
+    n = a.size
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n))
+    return out
+
 def sum(a, axis=-1, dtype=None, out=None, **kwargs):
     '''
     Multi-threaded numpy.sum

@@ -888,7 +888,20 @@ def get_SI(cell, Gv=None, atmlst=None):
         SI = SIx[:,:,None,None] * SIy[:,None,:,None] * SIz[:,None,None,:]
         SI = SI.reshape(-1,ngrids)
     else:
-        SI = lib.exp(-1j*lib.dot(coords, Gv.T))
+        #SI = np.exp(-1j*lib.dot(coords, Gv.T))
+        fn = getattr(libpbc, 'get_SI', None)
+        natm = coords.shape[0]
+        ngrids = Gv.shape[0]
+        SI = np.empty((natm, ngrids), order='C', dtype=np.complex128)
+        coords = np.asarray(coords, order='C', dtype=np.double)
+        Gv = np.asarray(Gv, order='C', dtype=np.double)
+        try:
+            fn(SI.ctypes.data_as(ctypes.c_void_p),
+               coords.ctypes.data_as(ctypes.c_void_p),
+               Gv.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(natm), ctypes.c_int(ngrids))
+        except Exception as e:
+            raise RuntimeError("Failed to get structure factor. %s" % e)
     return SI
 
 def get_ewald_params(cell, precision=None, mesh=None):
@@ -1002,12 +1015,12 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ngrids = len(Gv)
         ZSI = np.empty((ngrids,), dtype=np.complex128)
         mem_avail = cell.max_memory - lib.current_memory()[0]
-        blksize = min(1000000, min(ngrids, max(2000, int(mem_avail*1e6/(cell.natm*16)))))
+        blksize = min(ngrids, max(mesh[2], int((mem_avail*1e6 - cell.natm*24)/((3+cell.natm*2)*8))))
         for ig0 in range(0, ngrids, blksize):
             ig1 = min(ngrids, ig0+blksize)
             ZSI[ig0:ig1] = lib.einsum("i,ij->j", chargs, cell.get_SI(Gv[ig0:ig1]))
         #ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
-        ZexpG2 = ZSI * lib.exp(-absG2/(4*ew_eta**2))
+        ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
         ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
     elif cell.dimension == 2:  # Truncated Coulomb
