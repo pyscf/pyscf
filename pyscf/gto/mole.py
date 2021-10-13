@@ -2197,6 +2197,16 @@ class Mole(lib.StreamObject):
         else:
             self.spin = int(round(2*x, 4))
 
+    @property
+    def enuc(self):
+        '''nuclear repulsion energy'''
+        if self._enuc is None:
+            self._enuc = self.energy_nuc()
+        return self._enuc
+    @enuc.setter
+    def enuc(self, enuc):
+        self._enuc = enuc
+
     def __getattr__(self, key):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
         from Mole object.
@@ -2606,7 +2616,7 @@ class Mole(lib.StreamObject):
 
         if self.verbose >= logger.INFO:
             self.stdout.write('\n')
-            logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
+            logger.info(self, 'nuclear repulsion = %.15g', self.enuc)
             if self.symmetry:
                 if self.topgroup == self.groupname:
                     logger.info(self, 'point group symmetry = %s', self.topgroup)
@@ -3369,7 +3379,7 @@ class Mole(lib.StreamObject):
 
     energy_nuc = energy_nuc
     def get_enuc(self):
-        return self.energy_nuc()
+        return self.enuc
 
     sph_labels = spheric_labels = sph_labels
     cart_labels = cart_labels

@@ -695,7 +695,7 @@ class SCF(mol_hf.SCF):
         return self.get_jk(cell, dm, hermi, kpt)
 
     def energy_nuc(self):
-        return self.cell.energy_nuc()
+        return self.cell.enuc
 
     get_bands = get_bands
 
