@@ -15,8 +15,25 @@ int get_nctr_max(int ish0, int ish1, int* bas);
 void get_cart2sph_coeff(double** contr_coeff, double** gto_norm,
                         int ish0, int ish1, int* bas, double* env, int cart);
 void del_cart2sph_coeff(double** contr_coeff, double** gto_norm, int ish0, int ish1);
-inline int _has_overlap(int nx0, int nx1, int nx_per_cell);
-inline int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell);
+
+static inline int _has_overlap(int nx0, int nx1, int nx_per_cell)
+{
+    return nx0 <= nx1;
+}
+
+static inline int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
+{
+    int ngridx;
+    if (nimgx == 1) {
+        ngridx = nx1 - nx0;
+    } else if (nimgx == 2 && !_has_overlap(nx0, nx1, nx_per_cell)) {
+        ngridx = nx1 - nx0 + nx_per_cell;
+    } else {
+        ngridx = nx_per_cell;
+    }
+    return ngridx;
+}
+
 int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                      double a, double b, double cutoff,
                      double xi, double xj, double ai, double aj,

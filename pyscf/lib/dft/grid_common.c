@@ -7,6 +7,7 @@
 #include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
 #include "dft/multigrid.h"
+#include "dft/grid_common.h"
 
 #define EXPMIN         -700
 
@@ -135,26 +136,6 @@ void del_cart2sph_coeff(double** contr_coeff, double** gto_norm, int ish0, int i
     }
     free(contr_coeff);
     free(gto_norm);
-}
-
-
-inline int _has_overlap(int nx0, int nx1, int nx_per_cell)
-{
-    return nx0 <= nx1;
-}
-
-
-inline int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
-{
-        int ngridx;
-        if (nimgx == 1) {
-                ngridx = nx1 - nx0;
-        } else if (nimgx == 2 && !_has_overlap(nx0, nx1, nx_per_cell)) {
-                ngridx = nx1 - nx0 + nx_per_cell;
-        } else {
-                ngridx = nx_per_cell;
-        }
-        return ngridx;
 }
 
 
