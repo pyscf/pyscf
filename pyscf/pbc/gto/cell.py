@@ -501,8 +501,8 @@ def pgf_rcut(l, alpha, coeff, precision=INTEGRAL_PRECISION, r0=0, max_cycle=100)
         return rcut
 
     rmin = np.sqrt(.5 * l / alpha)
-    eps = min(rmin/10, RCUT_EPS);
-    rcut = np.maximum(r0, rmin+eps);
+    eps = min(rmin/10, RCUT_EPS)
+    rcut = np.maximum(r0, rmin+eps)
     for i in range(max_cycle):
         rcut_old = rcut
         rcut = np.sqrt((l*np.log(rcut) + log_c_by_prec) / alpha)

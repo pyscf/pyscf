@@ -375,10 +375,10 @@ def make_rho_core(cell, precision=None):
         func(rho_core.ctypes.data_as(ctypes.c_void_p),
              atm.ctypes.data_as(ctypes.c_void_p),
              env.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(cell.natm), 
+             ctypes.c_int(cell.natm),
              radius.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(len(radius)),
-             mesh.ctypes.data_as(ctypes.c_void_p), 
+             mesh.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(cell.dimension),
              a.ctypes.data_as(ctypes.c_void_p),
              b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(orth))
