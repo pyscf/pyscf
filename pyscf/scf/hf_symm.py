@@ -382,7 +382,8 @@ class SymAdaptedRHF(hf.RHF):
             check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
-    eig = eig
+    def eig(self, h, s, corth=None):
+        return eig(self, h, s)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = hf.RHF.get_grad(self, mo_coeff, mo_occ, fock)
