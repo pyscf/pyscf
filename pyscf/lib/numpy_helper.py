@@ -36,6 +36,15 @@ try:
 except (ImportError, OSError):
     FOUND_TBLIS = False
 
+CUPY_BLAS = getattr(misc.__config__, 'lib_cupy_blas', False)
+CUPY_BLAS_MIN_SIZE = getattr(misc.__config__, 'lib_cupy_blas_min_size', 1000)
+if CUPY_BLAS:
+    try:
+        import cupy
+    except ImportError:
+        raise ImportError("Cupy is not available.")
+
+
 _np_helper = misc.load_library('libnp_helper')
 
 BLOCK_DIM = 192
@@ -736,7 +745,33 @@ def zdot(a, b, alpha=1, c=None, beta=0):
 
     return _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
-def dot(a, b, alpha=1, c=None, beta=0):
+def dot_cupy(a, b, alpha=1, c=None, beta=0):
+    atype = a.dtype
+    btype = b.dtype
+    ctype = numpy.result_type(atype, btype)
+    if ctype == numpy.float64:
+        ctype_single = cupy.float32
+    elif ctype == numpy.complex128:
+        ctype_single = cupy.complex64
+    else:
+        raise TypeError('Unsupported dtype in lib.dot: %s.' % ctype)
+
+    a = cupy.asarray(a, dtype=ctype_single)
+    b = cupy.asarray(b, dtype=ctype_single)
+    ab = cupy.dot(a, b)
+    ab = numpy.asarray(ab.get(), dtype=ctype)
+    if alpha != 1:
+        ab *= alpha
+    if c is not None and beta != 0:
+        c = c*beta + ab
+    else:
+        c = ab
+    return c
+
+def dot(a, b, alpha=1, c=None, beta=0, backend=None):
+    if CUPY_BLAS and a.shape[-1] > CUPY_BLAS_MIN_SIZE and backend=='cupy':
+        return dot_cupy(a, b, alpha, c, beta)
+
     atype = a.dtype
     btype = b.dtype
 

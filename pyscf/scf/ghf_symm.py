@@ -143,7 +143,7 @@ class GHF(ghf.GHF):
                             mol.nelectron-nelec_fix, ' '.join(float_irname))
         return ghf.GHF.build(self, mol)
 
-    def eig(self, h, s):
+    def eig(self, h, s, corth=None):
         mol = self.mol
         if not mol.symmetry:
             return self._eigh(h, s)

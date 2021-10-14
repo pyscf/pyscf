@@ -1,8 +1,12 @@
-import cProfile
-import pstats
-import pyscf
-import numpy
+#setup cupy backend for blas
+from os.path import expanduser
+home_dir = expanduser("~")
+f = open(home_dir+'/.pyscf_conf.py', 'a')
+f.write('lib_cupy_blas = True')
+f.close()
 
+import numpy
+import pyscf
 from pyscf import lib
 from pyscf import pbc
 from pyscf.pbc import gto as pbcgto
@@ -209,21 +213,21 @@ H      12.103020       8.841164      10.006916
 H      11.491592       8.576221       8.647557
 """
 cell.basis='gth-tzv2p'
-cell.ke_cutoff=140  # in a.u.
-cell.max_memory=100000 # 100 Gb
-cell.precision=1e-6
+cell.ke_cutoff=140  # kinetic energy cutoff in a.u.
+cell.max_memory=20000 # 20 Gb
+cell.precision=1e-6 # integral precision
 cell.pseudo='gth-pade'
 cell.verbose=5
 cell.build()
-cell = pbc.tools.super_cell(cell, [2,2,2])
-print('nao=', cell.nao)
-print('mesh=', cell.mesh)
+#cell = pbc.tools.super_cell(cell, [1,2,2]) #build super cell by replicating unit cell
+#print('nao=', cell.nao)
+#print('mesh=', cell.mesh)
 
 
 mf=pbcdft.RKS(cell)
 mf.xc = "LDA, VWN"
 mf.init_guess='atom' # atom guess is fast
 mf.with_df = multigrid.MultiGridFFTDF2(cell)
+#mf.with_df.rel_cutoff = 15.0 # increase this for higher accuracy
 
-dm = mf.get_init_guess(key="atom")
-mf.get_veff(dm = dm)
+mf.kernel()

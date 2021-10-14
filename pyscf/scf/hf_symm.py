@@ -558,7 +558,7 @@ class SymAdaptedROHF(rohf.ROHF):
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)
-    def eig(self, fock, s):
+    def eig(self, fock, s, corth=None):
         e, c = eig(self, fock, s)
         if getattr(fock, 'focka', None) is not None:
             mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))

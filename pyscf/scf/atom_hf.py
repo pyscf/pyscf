@@ -99,7 +99,7 @@ class AtomSphAverageRHF(hf.RHF):
         hf.RHF.dump_flags(self, log)
         log.info('atom = %s', self.mol.atom_symbol(0))
 
-    def eig(self, f, s):
+    def eig(self, f, s, corth=None):
         mol = self.mol
         ao_ang = _angular_momentum_for_each_ao(mol)
 

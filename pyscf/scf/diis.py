@@ -20,7 +20,7 @@
 DIIS
 """
 
-from functools import reduce
+from functools import reduce, partial
 import numpy
 import scipy.linalg
 import scipy.optimize
@@ -62,7 +62,7 @@ SCFDIIS = SCF_DIIS = DIIS = CDIIS
 def get_err_vec(s, d, f):
     '''error vector = SDF - FDS'''
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(numpy.dot, (s,d,f))
+        sdf = reduce(partial(lib.dot, backend='cupy'), (s,d,f))
         errvec = sdf.T.conj() - sdf
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:

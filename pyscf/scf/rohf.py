@@ -376,7 +376,7 @@ class ROHF(hf.RHF):
     get_occ = get_occ
 
     @lib.with_doc(hf.eig.__doc__)
-    def eig(self, fock, s):
+    def eig(self, fock, s, corth=None):
         e, c = self._eigh(fock, s)
         if getattr(fock, 'focka', None) is not None:
             mo_ea = numpy.einsum('pi,pi->i', c.conj(), fock.focka.dot(c)).real
