@@ -1183,8 +1183,8 @@ def eig_cupy(h, s, corth=None):
     c = cupy.dot(corth, v)
     w = numpy.asarray(w.get(), dtype=dtype)
     c = numpy.asarray(c.get(), dtype=dtype)
-    idx = numpy.argmax(abs(c.real), axis=0)
-    c[:,c[idx,numpy.arange(len(w))].real<0] *= -1
+    #idx = numpy.argmax(abs(c.real), axis=0)
+    #c[:,c[idx,numpy.arange(len(w))].real<0] *= -1
     return w, c
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
