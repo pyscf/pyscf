@@ -203,11 +203,11 @@ fast_newton = addons.fast_newton
 
 def KS(mol, *args):
     from pyscf import dft
-    return dft.KS(mol)
+    return dft.KS(mol, *args)
 
 def RKS(mol, *args):
     from pyscf import dft
-    return dft.RKS(mol)
+    return dft.RKS(mol, *args)
 
 def ROKS(mol, *args):
     from pyscf import dft
