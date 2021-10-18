@@ -123,7 +123,7 @@ class KnownValues(unittest.TestCase):
 
         gcc1 = gccsd.GCCSD(scf.addons.convert_to_ghf(mf)).run()
         e1 = gcc1.eaccsd(nroots=6, koopmans=True)[0]
-        self.assertAlmostEqual(abs(e1-e).max(), 0, 6)
+        self.assertAlmostEqual(abs(e1-e).max(), 0, delta=1e-6)
 
 
     def test_eomee(self):
