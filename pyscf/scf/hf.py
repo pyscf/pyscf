@@ -136,8 +136,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     # TODO move the following to a better place
     # Currently, this will introduce errors due to shape mismatch between x and h
     # and is not compatible with remove_linear_dep_ and as_scanner
-    from pyscf.scf import atom_hf
-    if not GEN_EIGH: 
+    if not GEN_EIGH:
         from pyscf.scf import atom_hf, atom_hf_pp
         incompatible = (hasattr(mf, 'irrep_nelec') or
                         isinstance(mf, atom_hf.AtomSphAverageRHF) or
