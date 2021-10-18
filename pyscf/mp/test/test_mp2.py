@@ -35,6 +35,7 @@ mol.basis = {'H': 'cc-pvdz',
 mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-14
+mf.max_cycle = 100
 mf.scf()
 
 def tearDownModule():
