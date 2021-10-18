@@ -51,6 +51,14 @@ PROJECT_OUT_CONV_EIGS = \
 
 FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', False)
 
+CUBLAS = getattr(__config__, 'lib_cublas', False)
+if CUBLAS:
+    try:
+        # use cupy as the backend for now
+        import cupy
+    except ImportError:
+        raise ImportError("CUBLAS backend is not available.")
+
 
 def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     '''Solve generalized eigenvalue problem  h v = w s v.
@@ -593,11 +601,19 @@ def make_diag_precond(diag, level_shift=0):
     return precond
 
 
+def eigh_cublas(a, *args, **kwargs):
+    return cupy.linalg.eigh(a)
+
 def eigh(a, *args, **kwargs):
-    nroots = kwargs.get('nroots', 1)
+    if CUBLAS and isinstance(a, cupy.ndarray):
+        return eigh_cublas(a)
+    # default to compute all eigen vectors
+    nroots = kwargs.get('nroots', None)
     if isinstance(a, numpy.ndarray) and a.ndim == 2:
         e, v = scipy.linalg.eigh(a)
-        if nroots == 1:
+        if nroots is None:
+            return e, v
+        elif nroots == 1:
             return e[0], v[:,0]
         else:
             return e[:nroots], v[:,:nroots].T
@@ -1564,6 +1580,24 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
 
     return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
+
+def cholesky_cublas(a):
+    return cupy.linalg.cholesky(a)
+
+def cholesky(a):
+    '''Cholesky decomposition.'''
+    if CUBLAS and isinstance(a, cupy.ndarray):
+        return cholesky_cublas(a)
+    return numpy.linalg.cholesky(a)
+
+def inv_cublas(a):
+    return cupy.linalg.inv(a)
+
+def inv(a):
+    '''Compute the (multiplicative) inverse of a matrix.'''
+    if CUBLAS and isinstance(a, cupy.ndarray):
+        return inv_cublas(a)
+    return numpy.linalg.inv(a)
 
 class _Xlist(list):
     def __init__(self):

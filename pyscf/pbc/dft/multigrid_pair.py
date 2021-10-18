@@ -740,7 +740,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+    kpts_band, _ = _format_kpts_band(kpts_band, kpts), kpts_band
 
     mesh = mydf.mesh
     ngrids = np.prod(mesh)

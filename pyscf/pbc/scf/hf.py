@@ -52,7 +52,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
     #skip cond for big system
-    if cell.verbose >= logger.DEBUG and cell.nao < 5000:
+    if cell.verbose >= logger.DEBUG and cell.nao < 2000:
         cond = np.max(lib.cond(s, p=1))
         if cond * cell.precision > 1e2:
             prec = 1e2 / cond

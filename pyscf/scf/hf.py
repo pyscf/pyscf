@@ -23,7 +23,7 @@ Hartree-Fock
 import sys
 import tempfile
 
-from functools import reduce, partial
+from functools import reduce
 import numpy
 import scipy.linalg
 import h5py
@@ -41,14 +41,12 @@ PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
 MUTE_CHKFILE = getattr(__config__, 'scf_hf_SCF_mute_chkfile', False)
-CUPY_BLAS = getattr(__config__, 'lib_cupy_blas', False)
-CUPY_BLAS_MIN_SIZE = getattr(__config__, 'lib_cupy_blas_min_size', 2000)
 
-if CUPY_BLAS:
-    try:
-        import cupy
-    except ImportError:
-        raise ImportError("Cupy is not available.")
+GEN_EIGH = getattr(__config__, 'scf_hf_gen_eigh', True)
+CUBLAS = getattr(__config__, 'lib_cublas', False)
+if CUBLAS:
+    # currently no support for generalized eigenvalue problem
+    GEN_EIGH = False
 
 # For code compatibility in python-2 and python-3
 if sys.version_info >= (3,):
@@ -128,27 +126,29 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     mol = mf.mol
     s1e = mf.get_ovlp(mol)
     if not hasattr(mol, 'rcut'):
-        if mf.verbose >= logger.DEBUG and mol.nao < 5000:
+        if mf.verbose >= logger.DEBUG and mol.nao < 2000:
             cond = lib.cond(s1e, p=1)
             logger.debug(mf, 'cond(S) = %s', cond)
             if numpy.max(cond)*1e-17 > conv_tol:
                 logger.warn(mf, 'Singularity detected in overlap matrix (condition number = %4.3g). '
                             'SCF may be inaccurate and hard to converge.', numpy.max(cond))
 
-    if CUPY_BLAS and mol.nao > CUPY_BLAS_MIN_SIZE:
-        stype = s1e.dtype
-        if stype == numpy.float64:
-            stype_single = cupy.float32
-        elif stype == numpy.complex128:
-            stype_single = cupy.complex64
-        else:
-            stype_single = cupy.float32
-        s1e_cupy = cupy.asarray(s1e, dtype=stype_single)
-        L = cupy.linalg.cholesky(s1e_cupy)
-        L_inv_T = cupy.linalg.inv(L).T.conj()
-        corth = numpy.asarray(L_inv_T.get(), dtype=stype)
-    else:
-        corth = None
+    # TODO move the following to a better place
+    # Currently, this will introduce errors due to shape mismatch between x and h
+    # and is not compatible with remove_linear_dep_ and as_scanner
+    from pyscf.scf import atom_hf
+    if not GEN_EIGH: 
+        from pyscf.scf import atom_hf, atom_hf_pp
+        incompatible = (hasattr(mf, 'irrep_nelec') or
+                        isinstance(mf, atom_hf.AtomSphAverageRHF) or
+                        isinstance(mf, atom_hf_pp.AtomSCFPP))
+
+        if not incompatible:
+            from pyscf.scf import addons
+            x = addons.cholesky_orth_(s1e)
+            def eigh(h, s):
+                return eig_orth(h, s, x)
+            mf._eigh = eigh
 
     if dm0 is None:
         dm = mf.get_init_guess(mol, mf.init_guess, s1e=s1e)
@@ -166,7 +166,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     # Skip SCF iterations. Compute only the total energy of the initial density
     if mf.max_cycle <= 0:
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
-        mo_energy, mo_coeff = mf.eig(fock, s1e, corth)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
@@ -194,7 +194,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         last_hf_e = e_tot
 
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis)
-        mo_energy, mo_coeff = mf.eig(fock, s1e, corth)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
@@ -232,7 +232,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
-        mo_energy, mo_coeff = mf.eig(fock, s1e, corth)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm, dm_last = mf.make_rdm1(mo_coeff, mo_occ), dm
         dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
@@ -679,12 +679,17 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
         mo_occ : 1D ndarray
             Occupancy
     '''
+    dtype = mo_coeff.dtype
     mocc = mo_coeff[:,mo_occ>0]
 # DO NOT make tag_array for dm1 here because this DM array may be modified and
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return lib.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T, backend='cupy')
+    mocc = lib.device_put(mocc)
+    occ = lib.device_put(mo_occ[mo_occ>0])
+    dm1 = lib.dot(mocc*occ, mocc.conj().T)
+    dm1 = lib.device_get(dm1, dtype=dtype)
+    return dm1
 
 
 ################################################
@@ -991,9 +996,12 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     '''
     occidx = mo_occ > 0
     viridx = ~occidx
-    g = reduce(partial(lib.dot, backend='cupy'),
-               (mo_coeff[:,viridx].conj().T, fock_ao,
-                mo_coeff[:,occidx])) * 2
+    dtype = mo_coeff.dtype
+    mo_v = lib.device_put(mo_coeff[:,viridx].conj().T)
+    mo_o = lib.device_put(mo_coeff[:,occidx])
+    fock_ao = lib.device_put(fock_ao)
+    g = reduce(lib.dot, (mo_v, fock_ao, mo_o)) * 2
+    g = lib.device_get(g, dtype=dtype)
     return g.ravel()
 
 
@@ -1147,45 +1155,29 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
 mulliken_pop_meta_lowdin_ao = mulliken_meta
 
 
-def eig(h, s):
+def eig(h, s1e):
     '''Solver for generalized eigenvalue problem
 
     .. math:: HC = SCE
     '''
-    e, c = scipy.linalg.eigh(h, s)
+    e, c = scipy.linalg.eigh(h, s1e)
     idx = numpy.argmax(abs(c.real), axis=0)
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     return e, c
 
-def eig_cupy(h, s, corth=None):
-    '''Solver for generalized eigenvalue problem with cupy
-
-    .. math:: HC = SCE
-    '''
-    dtype = h.dtype
-    if dtype == numpy.float64:
-        dtype_single = cupy.float32
-    elif dtype == numpy.complex128:
-        dtype_single = cupy.complex64
+def eig_orth(h, s, x=None):
+    if x is None:
+        return eig(h, s)
     else:
-        dtype_single = cupy.float32
-
-    if corth is None:
-        s = cupy.asarray(s, dtype=dtype_single)
-        L = cupy.linalg.cholesky(s)
-        corth = cupy.linalg.inv(L).T.conj()
-    else:
-        corth = cupy.asarray(corth, dtype=dtype_single)
-
-    h = cupy.asarray(h, dtype=dtype_single)
-    h_prim = cupy.dot(cupy.dot(corth.T.conj(), h), corth)
-    w, v = cupy.linalg.eigh(h_prim)
-    c = cupy.dot(corth, v)
-    w = numpy.asarray(w.get(), dtype=dtype)
-    c = numpy.asarray(c.get(), dtype=dtype)
-    #idx = numpy.argmax(abs(c.real), axis=0)
-    #c[:,c[idx,numpy.arange(len(w))].real<0] *= -1
-    return w, c
+        dtype = h.dtype
+        h = lib.device_put(h)
+        x = lib.device_put(x)
+        h_orth = lib.dot(lib.dot(x.T.conj(), h), x)
+        e, c = lib.linalg.eigh(h_orth)
+        c = lib.dot(x, c)
+        e = lib.device_get(e, dtype=dtype)
+        c = lib.device_get(c, dtype=dtype)
+        return e, c
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -1544,19 +1536,16 @@ class SCF(lib.StreamObject):
         return self
 
 
-    def _eigh(self, h, s, corth=None):
-        if CUPY_BLAS and h.shape[-1] > CUPY_BLAS_MIN_SIZE:
-            return eig_cupy(h, s, corth)
-        else:
-            return eig(h, s)
+    def _eigh(self, h, s):
+        return eig(h, s)
 
     @lib.with_doc(eig.__doc__)
-    def eig(self, h, s, corth=None):
+    def eig(self, h, s):
         # An intermediate call to self._eigh so that the modification to eig function
         # can be applied on different level.  Different SCF modules like RHF/UHF
         # redefine only the eig solver and leave the other modifications (like removing
         # linear dependence, sorting eigenvlaue) to low level ._eigh
-        return self._eigh(h, s, corth)
+        return self._eigh(h, s)
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol

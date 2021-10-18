@@ -125,4 +125,3 @@ class AtomSCFPP(scf.uhf.UHF):
         h += get_pp_nl(mol)
         h += get_pp_loc(mol)
         return h
-

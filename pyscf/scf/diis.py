@@ -20,7 +20,7 @@
 DIIS
 """
 
-from functools import reduce, partial
+from functools import reduce
 import numpy
 import scipy.linalg
 import scipy.optimize
@@ -61,15 +61,25 @@ SCFDIIS = SCF_DIIS = DIIS = CDIIS
 
 def get_err_vec(s, d, f):
     '''error vector = SDF - FDS'''
+    dtype = f.dtype
     if isinstance(f, numpy.ndarray) and f.ndim == 2:
-        sdf = reduce(partial(lib.dot, backend='cupy'), (s,d,f))
+        s = lib.device_put(s)
+        d = lib.device_put(d)
+        f = lib.device_put(f)
+        sdf = reduce(lib.dot, (s,d,f))
         errvec = sdf.T.conj() - sdf
+        errvec = lib.device_get(errvec, dtype=dtype)
 
     elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
         errvec = []
         for i in range(f.shape[0]):
-            sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-            errvec.append((sdf.T.conj() - sdf))
+            s_i = lib.device_put(s[i])
+            d_i = lib.device_put(d[i])
+            f_i = lib.device_put(f[i])
+            sdf = reduce(lib.dot, (s_i, d_i, f_i))
+            errvec_i = sdf.T.conj() - sdf
+            errvec_i = lib.device_get(errvec_i, dtype=dtype)
+            errvec.append(errvec_i)
         errvec = numpy.vstack(errvec)
 
     elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF

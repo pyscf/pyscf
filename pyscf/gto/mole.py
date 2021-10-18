@@ -2409,6 +2409,9 @@ class Mole(lib.StreamObject):
             # number of electrons are consistent.
             self.nelec
 
+        # reset nuclear energy
+        self.enuc = None
+
         if self.symmetry:
             self._build_symmetry()
 
@@ -2868,6 +2871,9 @@ class Mole(lib.StreamObject):
         else:
             mol.symmetry = symmetry
             mol.build(False, False)
+
+        # reset nuclear energy
+        mol.enuc = None
 
         if mol.verbose >= logger.INFO:
             logger.info(mol, 'New geometry')

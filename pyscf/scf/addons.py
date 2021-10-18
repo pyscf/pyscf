@@ -441,6 +441,15 @@ def canonical_orth_(S, thr=1e-7):
     X = numpy.dot(numpy.diag(normlz), X)
     return X
 
+def cholesky_orth_(s):
+    # TODO add pivoted cholesky
+    dtype = s.dtype
+    s = lib.device_put(s)
+    L = lib.linalg.cholesky(s)
+    x = lib.linalg.inv(L).T.conj()
+    x = lib.device_get(x, dtype=dtype)
+    return x
+
 def partial_cholesky_orth_(S, canthr=1e-7, cholthr=1e-9):
     '''Partial Cholesky orthogonalization for curing overcompleteness.
 

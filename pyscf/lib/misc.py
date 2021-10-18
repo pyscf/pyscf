@@ -39,6 +39,15 @@ except ImportError:
 from pyscf.lib import param
 from pyscf import __config__
 
+CUBLAS = getattr(__config__, 'lib_cublas', False)
+if CUBLAS:
+    try:
+        # use cupy as the backend for now
+        import cupy
+    except ImportError:
+        raise ImportError("CUBLAS backend is not available.")
+CUBLAS_SINGLE_PREC = getattr(__config__, 'lib_cublas_single_precision', False)
+
 if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
@@ -1108,6 +1117,46 @@ def ndarray_pointer_2d(array):
            numpy.arange(array.shape[0])*array.strides[0]).astype(numpy.uintp)
     ptr = ptr.ctypes.data_as(ctypes.c_void_p)
     return ptr
+
+
+def get_cublas_dtype(dtype):
+    if CUBLAS_SINGLE_PREC:
+        if dtype == numpy.float64:
+            return numpy.float32
+        elif dtype == numpy.complex128:
+            return numpy.complex64
+        else:
+            return dtype
+    else:
+        return dtype
+
+
+# In the future, we should use something like jax.DeviceArray
+def device_put(a, device=None):
+    '''Put array on device.'''
+    if device is not None:
+        raise NotImplementedError
+    if CUBLAS:
+        if isinstance(a, cupy.ndarray):
+            a_on_device = a
+        else:
+            dtype = get_cublas_dtype(a.dtype)
+            a_on_device = cupy.asarray(a, dtype=dtype)
+    else:
+        a_on_device = a
+    return a_on_device
+
+
+def device_get(a_on_device, dtype=None):
+    '''Get array from device.'''
+    if CUBLAS:
+        if isinstance(a_on_device, cupy.ndarray):
+            a = numpy.asarray(a_on_device.get(), dtype=dtype)
+        else:
+            a = numpy.asarray(a_on_device, dtype=dtype)
+    else:
+        a = numpy.asarray(a_on_device, dtype=dtype)
+    return a
 
 
 if __name__ == '__main__':

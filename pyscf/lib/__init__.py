@@ -23,6 +23,7 @@ from pyscf.lib import parameters
 param = parameters
 from pyscf.lib import numpy_helper
 from pyscf.lib import linalg_helper
+linalg = linalg_helper
 from pyscf.lib import scipy_helper
 from pyscf.lib import logger
 from pyscf.lib import misc

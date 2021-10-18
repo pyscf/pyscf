@@ -31,6 +31,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
 
     atm_template = copy.copy(mol)
     atm_template.charge = 0
+    atm_template.enuc = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
     atm_template.cart = False  # AtomSphAverageRHF does not support cartensian basis
@@ -99,7 +100,7 @@ class AtomSphAverageRHF(hf.RHF):
         hf.RHF.dump_flags(self, log)
         log.info('atom = %s', self.mol.atom_symbol(0))
 
-    def eig(self, f, s, corth=None):
+    def eig(self, f, s):
         mol = self.mol
         ao_ang = _angular_momentum_for_each_ao(mol)
 
