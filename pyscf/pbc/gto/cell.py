@@ -1913,6 +1913,7 @@ class Cell(mole.Mole):
         mol = self.view(mole.Mole)
         delattr(mol, 'a')
         delattr(mol, '_mesh')
+        mol.enuc = None #reset nuclear energy
         if mol.symmetry:
             mol._build_symmetry()
         return mol

@@ -481,9 +481,9 @@ class KnownValues(unittest.TestCase):
         hc = eom.matvec(vector, 0, imds)
         self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 8)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 8)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
@@ -491,9 +491,9 @@ class KnownValues(unittest.TestCase):
         hc = eom.matvec(vector, 0, imds)
         self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 8)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 8)
 
     def test_eomea_l_matvec(self):
         cell = gto.Cell()
@@ -545,22 +545,22 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 8)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 8)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 8)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
 
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 8)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 8)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 8)
 
 if __name__ == '__main__':
     print("eom_kccsd_rhf tests")

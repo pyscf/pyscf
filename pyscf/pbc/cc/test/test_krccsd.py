@@ -245,14 +245,14 @@ class KnownValues(unittest.TestCase):
         rand_cc._scf.with_df = pbc_df.GDF(kmf.cell, kmf.kpts)
         eris3 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff,
                                      method='outcore')
-        self.assertAlmostEqual(finger(eris3.oooo),  0.13807643618081983+0.02706881005926997j, 12)
-        self.assertAlmostEqual(finger(eris3.ooov),  0.11503403213521873-0.04088028212967049j, 12)
-        self.assertAlmostEqual(finger(eris3.oovv), -0.23166000424452704+0.01922808953198968j, 12)
-        self.assertAlmostEqual(finger(eris3.ovov), -0.4333329222923895 -0.2542273009739961j , 12)
-        self.assertAlmostEqual(finger(eris3.voov), -0.3851423191571177 +0.26086853075652333j, 12)
-        self.assertAlmostEqual(finger(eris3.vovv), -0.12653400070346893+0.17634730801555784j, 12)
+        self.assertAlmostEqual(finger(eris3.oooo),  0.13807643618081983+0.02706881005926997j, 9)
+        self.assertAlmostEqual(finger(eris3.ooov),  0.11503403213521873-0.04088028212967049j, 9)
+        self.assertAlmostEqual(finger(eris3.oovv), -0.23166000424452704+0.01922808953198968j, 9)
+        self.assertAlmostEqual(finger(eris3.ovov), -0.4333329222923895 -0.2542273009739961j , 9)
+        self.assertAlmostEqual(finger(eris3.voov), -0.3851423191571177 +0.26086853075652333j, 9)
+        self.assertAlmostEqual(finger(eris3.vovv), -0.12653400070346893+0.17634730801555784j, 9)
         self.assertAlmostEqual(finger(np.array(eris3.Lpv.tolist())),
-                               -2.2567245766867092+0.7648803028093745j, 12)
+                               -2.2567245766867092+0.7648803028093745j, 9)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, ecc1_bench=-0.9646107739333411):
         assert cell.mesh == [7, 7, 7]
