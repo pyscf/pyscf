@@ -24,7 +24,7 @@ void transform_dm_inverse(double* dm_cart, double* dm, int comp,
 
     int nrow = i1 - i0;
     int ncol = j1 - j0;
-    double* pdm = dm + i0*naoj + j0;
+    double* pdm = dm + ((size_t)naoj) * i0 + j0;
 
     int l_i = ish_bas[ANG_OF+ish*BAS_SLOTS];
     int ncart_i = _LEN_CART[l_i];
@@ -48,7 +48,7 @@ void transform_dm_inverse(double* dm_cart, double* dm, int comp,
                &D1, jsh_contr_coeff, &ncol, dm_cart, &nao_j, &D0, buf, &ncol);
         dgemm_(&TRANS_N, &TRANS_T, &ncol, &nrow, &nao_i,
                &D1, buf, &ncol, ish_contr_coeff, &nrow, &D0, pdm, &naoj);
-        pdm += naoi * naoj;
+        pdm += ((size_t)naoi) * naoj;
         dm_cart += nao_i * nao_j;
     }
 }
@@ -63,9 +63,10 @@ static void fill_tril(double* mat, int comp, int* ish_ao_loc, int* jsh_ao_loc,
     int j1 = jsh_ao_loc[jsh+1] - jsh_ao_loc[jsh0];
     int ni = i1 - i0;
     int nj = j1 - j0;
+    size_t nao2 = ((size_t)naoi) * naoj;
 
-    double *pmat_up = mat + i0*naoj + j0;
-    double *pmat_low = mat + j0*naoj + i0;
+    double *pmat_up = mat + i0*((size_t)naoj) + j0;
+    double *pmat_low = mat + j0*((size_t)naoj) + i0;
     int ic, i, j;
     for (ic = 0; ic < comp; ic++) {
         for (i = 0; i < ni; i++) {
@@ -73,8 +74,8 @@ static void fill_tril(double* mat, int comp, int* ish_ao_loc, int* jsh_ao_loc,
                 pmat_low[j*naoj+i] = pmat_up[i*naoj+j];
             }
         }
-        pmat_up += naoi * naoj;
-        pmat_low += naoi * naoj;
+        pmat_up += nao2;
+        pmat_low += nao2;
     }
 }
 
@@ -182,7 +183,7 @@ static void _orth_ints(double *out, double *weights,
 
 
             xcols = ngridy * ngridz;
-            int mesh_yz = mesh[1] * mesh[2];
+            size_t mesh_yz = ((size_t)mesh[1]) * mesh[2];
             for (ix = 0; ix < ngridx; ix++) {
             for (iy = 0; iy < ngridy; iy++) {
             for (iz = 0; iz < ngridz; iz++) {
@@ -652,6 +653,7 @@ static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
 static size_t _ints_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* a, int comp)
 {
     size_t size = 0;
+    size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
     int l1 = 2 * l + 1;
     int l1l1 = l1 * l1;
     int ncart = _LEN_CART[l];
@@ -666,7 +668,7 @@ static size_t _ints_cache_size(int l, int nprim, int nctr, int* mesh, double rad
     size += 3 * (ncart + l1);
     size += l1 * mesh[1] * mesh[2];
     size += l1l1 * mesh[2];
-    size += mesh[0] * mesh[1] * mesh[2] / MESH_BLK;
+    size += ngrids / MESH_BLK;
     size += nctr * ncart * nprim * ncart;
     size += 1000000;
     //printf("Memory allocated per thread for make_mat: %ld MB.\n", size*sizeof(double) / 1000000);

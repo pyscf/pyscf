@@ -26,7 +26,7 @@ static void transform_dm(double* dm_cart, double* dm,
 
     int nrow = i1 - i0;
     int ncol = j1 - j0;
-    double* pdm = dm + i0*naoj + j0;
+    double* pdm = dm + ((size_t)naoj) * i0 + j0;
 
     int l_i = ish_bas[ANG_OF+ish*BAS_SLOTS];
     int ncart_i = _LEN_CART[l_i];
@@ -83,7 +83,7 @@ static void _orth_rho(double *rho, double *dm_xyz,
         const char TRANS_T = 'T';
         const double D0 = 0;
         const double D1 = 1;
-        int mesh_yz = mesh[1] * mesh[2];
+        size_t mesh_yz = ((size_t)mesh[1]) * mesh[2];
         int xcols = ngridy * ngridz;
         double *xyr = cache;
         double *xqr = xyr + l1l1 * ngridz;
