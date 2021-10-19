@@ -34,9 +34,11 @@ mol.spin = 2
 mol.build()
 mf = scf.UHF(mol)
 mf.conv_tol = 1e-14
+mf.max_cycle = 100
 mf.scf()
 gmf = scf.GHF(mol)
 gmf.conv_tol = 1e-14
+gmf.max_cycle = 100
 gmf.scf()
 
 def tearDownModule():
