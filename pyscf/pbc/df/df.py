@@ -923,16 +923,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
-
-        dat = h5group[key]
-        if isinstance(dat, h5py.Group):
-            # Check whether the integral tensor is stored with old data
-            # foramt (v1.5.1 or older). The old format puts the entire
-            # 3-index tensor in an HDF5 dataset. The new format divides
-            # the tensor into pieces and stores them in different groups.
-            # The code below combines the slices into a single tensor.
-            dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
+        swap = False
     else:
         # swap ki,kj due to the hermiticity
         kptji = kpti_kptj[[1,0]]
@@ -949,16 +940,17 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
-
+        swap = True
 #TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
 # the 3D tensor if it is too big.
-        dat = _load_and_unpack(h5group[key])
+    dat = _load_and_unpack(h5group[key],swap)
     return dat
 
 class _load_and_unpack(object):
     '''Load data lazily'''
-    def __init__(self, dat):
+    def __init__(self, dat, swap):
         self.dat = dat
+        self.swap = swap
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
@@ -966,9 +958,12 @@ class _load_and_unpack(object):
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
-        nao = int(numpy.sqrt(v.shape[-1]))
-        v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
-        return v1.reshape(v.shape)
+        if self.swap:
+            nao = int(numpy.sqrt(v.shape[-1]))
+            v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+            return v1.reshape(v.shape)
+        else:
+            return v
     def __array__(self):
         '''Create a numpy array'''
         return self[()]
