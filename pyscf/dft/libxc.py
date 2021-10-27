@@ -1486,8 +1486,14 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:  # GGA
         if spin == 0:
             nvar = 2
+            assert len(rho_u.shape) == 2
+            assert rho_u.shape[0] == 4
         else:
             nvar = 5
+            for rho_ud in [rho_u, rho_d]:
+                assert len(rho_ud.shape) == 2
+                assert rho_ud.shape[0] == 4
+
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
     outbuf = numpy.zeros((outlen,ngrids))
