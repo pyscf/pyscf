@@ -186,10 +186,13 @@ def get_pp_loc_part1(mydf, kpts=None):
             # rho_ij(G) nuc(-G) / G^2
             # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
             if gamma_point(kpts_lst[k]):
-                vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
-                vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
+                #vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
+                #vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
+                vj[k] += numpy.dot(vG[p0:p1].real, aoao.real)
+                vj[k] += numpy.dot(vG[p0:p1].imag, aoao.imag)
             else:
-                vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
+                #vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
+                vj[k] += numpy.dot(vG[p0:p1].conj(), aoao)
         t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
     log.timer_debug1('contracting Vnuc', *t0)
 
