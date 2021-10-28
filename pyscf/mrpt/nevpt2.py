@@ -658,7 +658,6 @@ class NEVPT(lib.StreamObject):
         else:
             return self.ci[root]
 
-
     def for_dmrg(self):
         '''Some preprocess for dmrg-nevpt'''
         if not self._mc.natorb:
@@ -733,7 +732,7 @@ example examples/dmrg/32-dmrg_casscf_nevpt2_for_FeS.py''')
         #By defaut, _mc is canonicalized for the first root.
         #For SC-NEVPT based on compressed MPS perturber functions, _mc was already canonicalized.
         if (not self.canonicalized):
-            self.mo_coeff, self.ci, self.mo_energy = self.canonicalize(
+            self.mo_coeff, self.ci[self.root], self.mo_energy = self.canonicalize(
                 self.mo_coeff, ci=self.load_ci(), cas_natorb=True, verbose=self.verbose)
 
         if getattr(self.fcisolver, 'nevpt_intermediate', None):
