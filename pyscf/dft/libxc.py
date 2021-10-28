@@ -1486,13 +1486,26 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:  # GGA
         if spin == 0:
             nvar = 2
-            assert len(rho_u.shape) == 2
-            assert rho_u.shape[0] == 4
         else:
             nvar = 5
-            for rho_ud in [rho_u, rho_d]:
-                assert len(rho_ud.shape) == 2
-                assert rho_ud.shape[0] == 4
+
+    # Check that the density rho has the appropriate shape
+    if nvar == 1 or (nvar ==2 and spin > 0):  # LDA
+        for rho_ud in [rho_u, rho_d]:
+            assert rho_ud.shape[0] == 1
+
+    elif nvar == 2 or nvar == 5:  # GGA
+        for rho_ud in [rho_u, rho_d]:
+            assert rho_ud.shape[0] == 4
+
+    elif nvar == 4 or nvar == 9:  # MGGA
+        # Are the condition on rho different than for GGA ?
+        for rho_ud in [rho_u, rho_d]:
+            assert rho_ud.shape[0] == 4
+
+
+    else:
+        raise ValueError("Unknow nvar {}".format(nvar))
 
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
