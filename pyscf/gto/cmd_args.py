@@ -18,13 +18,20 @@
 import sys
 import pyscf.lib.logger
 
+try:
+    from mpi4py import MPI
+    MPI_comm = MPI.COMM_WORLD
+    MPI_rank = MPI_comm.Get_rank()
+except (ImportError, ModuleNotFoundError):
+    MPI = False
+
 import argparse
 
 def cmd_args():
     '''
     get input from cmdline
     '''
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument('-v', '--verbose',
                         action='store_false', dest='verbose', default=0,
                         help='make lots of noise')
@@ -38,6 +45,13 @@ def cmd_args():
                         help='maximum memory to use (in MB)')
 
     (opts, args_left) = parser.parse_known_args()
+
+    # Append MPI rank to output file
+    if MPI and opts.output is not None and MPI_rank > 0:
+        logname, ext = opts.output.rsplit(".", 1)
+        opts.output = logname + (".mpi%d" % MPI_rank)
+        if ext:
+            opts.output += (".%s" % ext)
 
     if opts.quite:
         opts.verbose = pyscf.lib.logger.QUIET

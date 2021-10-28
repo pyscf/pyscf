@@ -212,7 +212,7 @@ def CASSCF(mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
 RCASSCF = CASSCF
 
 
-def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
+def CASCI(mf_or_mol, ncas, nelecas, ncore=None, **kwargs):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf_or_mol, gto.Mole):
@@ -227,9 +227,9 @@ def CASCI(mf_or_mol, ncas, nelecas, ncore=None):
         return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore, **kwargs)
     else:
-        mc = casci.CASCI(mf, ncas, nelecas, ncore)
+        mc = casci.CASCI(mf, ncas, nelecas, ncore, **kwargs)
     return mc
 
 RCASCI = CASCI

@@ -51,6 +51,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
+    # For tailored CC
+    if mycc.tailor_func is not None:
+        t1, t2 = mycc.tailor_func(t1, t2)
+
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
     eccsd = mycc.energy(t1, t2, eris)
@@ -67,6 +71,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
+        # For tailored CC
+        if mycc.tailor_func is not None:
+            t1new, t2new = mycc.tailor_func(t1new, t2new)
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
         tmpvec -= mycc.amplitudes_to_vector(t1, t2)
         normt = numpy.linalg.norm(tmpvec)
@@ -914,6 +921,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
         self.level_shift = 0
+        # For tailored CC
+        self.tailor_func = None
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -1129,17 +1138,17 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self)
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False, eris=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
-        if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        if l1 is None: l1, l2 = self.solve_lambda(t1, t2, eris=eris)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1151,7 +1160,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:

@@ -44,6 +44,7 @@ from pyscf.lib import logger
 from pyscf.gto import cmd_args
 from pyscf.gto import basis
 from pyscf.gto import moleintor
+from pyscf.gto import helper
 from pyscf.gto.eval_gto import eval_gto
 from pyscf.gto.ecp import core_configuration
 from pyscf import __config__
@@ -1353,9 +1354,16 @@ def energy_nuc(mol, charges=None, coords=None):
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
+        raise_err = False
         for atm_idx in numpy.argwhere(rr<1e-5):
-            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
-        raise RuntimeError('Ill geometry')
+            # Only raise error if atoms with charge != 0 have the same coordinates
+            if charges[atm_idx[0]] * charges[atm_idx[1]] != 0:
+                logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+                raise_err = True
+            # At least one of the atoms is a ghost atom; suppress divide by 0 warning
+            else:
+                rr[atm_idx[0], atm_idx[1]] = 1e200
+        if raise_err: raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
 
@@ -2107,6 +2115,10 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
+
+        # Linear dependency treatment
+        self.lindep_threshold = None
+        self.lindep_method = 'canonical-orth'
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6), dtype=numpy.int32)
@@ -2343,16 +2355,16 @@ class Mole(lib.StreamObject):
             # StringIO() does not have attribute 'name'
             and getattr(self.stdout, 'name', None) != self.output):
 
-            if self.verbose > logger.QUIET:
-                if os.path.isfile(self.output):
-                    print('overwrite output file: %s' % self.output)
-                else:
-                    print('output file: %s' % self.output)
+            #if self.verbose > logger.QUIET:
+            #    if os.path.isfile(self.output):
+            #        print('overwrite output file: %s' % self.output)
+            #    else:
+            #        print('output file: %s' % self.output)
 
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
-                self.stdout = open(self.output, 'w')
+                self.stdout = open(self.output, 'a')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -2507,9 +2519,9 @@ class Mole(lib.StreamObject):
         return gto_norm(l, expnt)
 
 
-    def dump_input(self):
+    def dump_input(self, dump_input_file=False):
         import __main__
-        if hasattr(__main__, '__file__'):
+        if dump_input_file and hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
                 finput = open(filename, 'r')
@@ -2631,6 +2643,62 @@ class Mole(lib.StreamObject):
 
         logger.info(self, 'CPU time: %12.2f', logger.process_clock())
         return self
+
+    def eigh_factory(self, lindep_threshold=None, lindep_method=None, fallback_mode=False):
+        """Create generalized eigenproblem solver, with linear dependency treatment.
+
+        Parameters
+        ----------
+        lindep_threshold : float, optional
+        lindep_method : str, optional
+        fallback_mode : bool, optional
+
+        Returns
+        -------
+        eigh : function
+            Diagonalizer.
+        """
+
+        # Get default values from Mole object:
+        ldt = lindep_threshold or self.lindep_threshold
+        ldm = lindep_method or self.lindep_method
+
+        # No linear-dependency treatment
+        if not ldt or not ldm:
+            return scipy.linalg.eigh
+
+        # Canonical orthogonalization
+        elif ldm.lower() == 'canonical-orth':
+            def eigh(a, b=None, type=1):
+                # If fallback_mode is true, attempt a normal eigh first:
+                e = c = None
+                if fallback_mode:
+                    try:
+                        e, c = scipy.linalg.eigh(a, b, type=type)
+                    except scipy.linalg.LinAlgError:
+                        pass
+                # Use canonical orthogonalization
+                if e is None:
+                    if type != 1:
+                        raise NotImplementedError()
+                    if b is None:
+                        return np.linalg.eigh(a)
+                    x = helper.canonical_orth(b, threshold=ldt)
+                    n0, n1 = x.shape
+                    logger.debug(self, "Removing linearly dependent bfns: method= %s threshold= %.1e N(tot)= %4d N(removed)= %3d", ldm, ldt, n0, (n0-n1))
+                    xax = np.linalg.multi_dot((x.T.conj(), a, x))
+                    e, c = np.linalg.eigh(xax)
+                    c = np.dot(x, c)
+                # PySCF sign convention
+                argmax = numpy.argmax(abs(c.real), axis=0)
+                switch = c[argmax,np.arange(len(e))].real < 0
+                c[:,switch] *= -1
+                return e, c
+        else:
+            raise NotImplementedError()
+
+        return eigh
+
 
     def set_common_origin(self, coord):
         '''Update common origin for integrals of dipole, rxp etc.
@@ -2890,6 +2958,71 @@ class Mole(lib.StreamObject):
         return (len(self._ecpbas) > 0 and
                 numpy.any(self._ecpbas[:,SO_TYPE_OF] == 1))
 
+    def make_counterpoise_fragments(self, fragments, full_basis=True, add_rest_fragment=True, dump_input=True):
+        '''Make mol objects for counterpoise calculations.
+
+        Parameters
+        ----------
+        fragments : iterable
+        full_basis : bool, optional
+        add_rest_fragment : bool, optional
+
+        Returns
+        -------
+        fmols : list
+        '''
+        GHOST_PREFIX = "GHOST-"
+        atom = self.format_atom(self.atom, unit=1.0)
+        atom_symbols = [self.atom_symbol(atm_id) for atm_id in range(self.natm)]
+
+        def make_frag_mol(frag):
+            f_mask = numpy.isin(atom_symbols, frag)
+            if sum(f_mask) == 0:
+                raise ValueError("No atoms found for fragment: %r", frag)
+            fmol = self.copy()
+            fatom = []
+            for atm_id, atm in enumerate(atom):
+                sym = atm[0]
+                # Atom is in fragment
+                if f_mask[atm_id]:
+                    fatom.append(atm)
+                # Atom is NOT in fragment [only append if full basis == True]
+                elif full_basis:
+                    sym_new = GHOST_PREFIX + sym
+                    fatom.append([sym_new, atm[1]])
+                    # Change basis dictionary
+                    if isinstance(fmol.basis, dict) and (sym in fmol.basis.keys()):
+                        fmol.basis[sym_new] = fmol.basis[sym]
+                        del fmol.basis[sym]
+                # Remove from basis [not necessary, since atom is not present anymore, but cleaner]:
+                elif isinstance(fmol.basis, dict) and (sym in fmol.basis.keys()):
+                    del fmol.basis[sym]
+
+            # Rebuild fragment mol object
+            fmol.atom = fatom
+            fmol._built = False
+            fmol.build(dump_input, False)
+            return fmol
+
+        fmols = []
+        for frag in fragments:
+            fmol = make_frag_mol(frag)
+            fmols.append(fmol)
+
+        # Add fragment containing all atoms not part of any specified fragments
+        if add_rest_fragment:
+            rest_mask = numpy.full((self.natm,), True)
+            # Set all atoms to False that are part of a fragment
+            for frag in fragments:
+                rest_mask = numpy.logical_and(numpy.isin(atom_symbols, frag, invert=True), rest_mask)
+            if numpy.any(rest_mask):
+                rest_frag = numpy.asarray(atom_symbols)[rest_mask]
+                fmol = make_frag_mol(rest_frag)
+                fmols.append(fmol)
+
+        # TODO: Check that no atom is part of more than one fragments
+
+        return fmols
 
 #######################################################
 #NOTE: atm_id or bas_id start from 0

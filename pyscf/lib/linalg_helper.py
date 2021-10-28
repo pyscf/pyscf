@@ -104,8 +104,7 @@ def eigh_by_blocks(h, s=None, labels=None):
         labels : list
 
     Returns:
-        w, v.  w is the eigenvalue vector; v is the eigenfunction array;
-        seig is the eigenvalue vector of the metric s.
+        w, v.  w is the eigenvalue vector; v is the eigenfunction array.
 
     Examples:
 
@@ -147,7 +146,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     if s is None:
         p0 = 0
         for label in set(labels):
-            idx = labels == label
+            idx = (labels == label)
             e, c = scipy.linalg.eigh(h[idx][:,idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)
@@ -155,7 +154,7 @@ def eigh_by_blocks(h, s=None, labels=None):
     else:
         p0 = 0
         for label in set(labels):
-            idx = labels == label
+            idx = (labels == label)
             e, c = scipy.linalg.eigh(h[idx][:,idx], s[idx][:,idx])
             cs[idx,p0:p0+e.size] = c
             es.append(e)
@@ -1471,7 +1470,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
 
 
 def cho_solve(a, b, strict_sym_pos=True):
-    '''Solve ax = b, where a is a postive definite hermitian matrix
+    '''Solve ax = b, where a is a positive definite hermitian matrix
 
     Kwargs:
         strict_sym_pos (bool) : Whether to impose the strict positive definition

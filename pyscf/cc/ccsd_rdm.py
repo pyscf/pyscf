@@ -214,7 +214,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2, with_frozen=True, ao_repr=False):
     r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -226,9 +226,9 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
+    return _make_rdm1(mycc, d1, with_frozen=with_frozen, ao_repr=ao_repr)
 
-def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm2(mycc, t1, t2, l1, l2, with_frozen=True, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -240,7 +240,7 @@ def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=with_frozen,
                       ao_repr=ao_repr)
 
 def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):

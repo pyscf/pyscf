@@ -20,6 +20,7 @@ RMP2
 
 
 import copy
+import functools
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -30,6 +31,7 @@ from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
+einsum = functools.partial(numpy.einsum, optimize=True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
     if mo_energy is not None or mo_coeff is not None:
@@ -63,8 +65,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        emp2 += einsum('jab,jab', t2i, gi) * 2
+        emp2 -= einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
@@ -113,8 +115,8 @@ def energy(mp, t2, eris):
     '''MP2 energy'''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
-    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov)
+    emp2  = einsum('ijab,iajb', t2, eris_ovov) * 2
+    emp2 -= einsum('ijab,ibja', t2, eris_ovov)
     return emp2.real
 
 def update_amps(mp, t2, eris):
@@ -140,7 +142,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
+def make_rdm1(mp, t2=None, eris=None, with_frozen=True, ao_repr=False):
     r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
@@ -161,7 +163,7 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
@@ -319,7 +321,7 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
 def get_nocc(mp):
     if mp._nocc is not None:
         return mp._nocc
-    elif mp.frozen is None:
+    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
         nocc = numpy.count_nonzero(mp.mo_occ > 0)
         assert(nocc > 0)
         return nocc
@@ -339,7 +341,7 @@ def get_nocc(mp):
 def get_nmo(mp):
     if mp._nmo is not None:
         return mp._nmo
-    elif mp.frozen is None:
+    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
@@ -354,17 +356,17 @@ def get_frozen_mask(mp):
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
         moidx[mp._nmo:] = False
-    elif mp.frozen is None:
+    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
         pass
     elif isinstance(mp.frozen, (int, numpy.integer)):
         moidx[:mp.frozen] = False
     elif len(mp.frozen) > 0:
         moidx[list(mp.frozen)] = False
     else:
-        raise NotImplementedError
+        raise NotImplementedError()
     return moidx
 
 
