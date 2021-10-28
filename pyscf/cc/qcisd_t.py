@@ -68,7 +68,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     o_ir_loc = o_ir_loc.astype(numpy.int32)
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
-    if dtype == numpy.complex:
+    if dtype == numpy.complex128:
         drv = _ccsd.libcc.QCIsd_t_zcontract
     else:
         drv = _ccsd.libcc.QCIsd_t_contract

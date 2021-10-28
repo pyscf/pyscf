@@ -4589,7 +4589,7 @@ static int _offset_cart[] = {0, 1, 4, 10, 20, 35, 56, 84, 120,
  * Obtained by the function below for l = 0..4
  *
 def angular_moment_matrix(l):
-    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex))
+    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex128))
     lx = numpy.zeros_like(lz)
     ly = numpy.zeros_like(lz)
     for mi in range(-l, l+1):

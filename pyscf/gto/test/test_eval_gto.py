@@ -50,7 +50,7 @@ class KnownValues(unittest.TestCase):
 
         val = mol.eval_gto('GTOval_spinor', r)
         self.assertEqual(val.shape, (2,100,120))
-        self.assertTrue(val.dtype == numpy.complex)
+        self.assertTrue(val.dtype == numpy.complex128)
         self.assertAlmostEqual(lib.fp(val), -2.029604328041736+0.80571570114202995j, 9)
 
         val = mol.eval_gto('GTOval_ip', r)
@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
 
         val = mol.eval_gto('GTOval_spinor_deriv3', r)
         self.assertEqual(val.shape, (2,20,100,120))
-        self.assertTrue(val.dtype == numpy.complex)
+        self.assertTrue(val.dtype == numpy.complex128)
         self.assertAlmostEqual(lib.fp(val), -2470.5090409822333+64.324145522087917j, 8)
 
         mol1 = mol.copy()
@@ -120,7 +120,7 @@ class KnownValues(unittest.TestCase):
 
         val = mol1.eval_gto('GTOval_spinor_deriv4', r1)
         self.assertEqual(val.shape, (2,35,70,144))
-        self.assertTrue(val.dtype == numpy.complex)
+        self.assertTrue(val.dtype == numpy.complex128)
         self.assertAlmostEqual(lib.fp(val), 91.706259060820059+147.16582428195531j, 9)
 
         ref = val
