@@ -20,6 +20,7 @@
 Non-relativistic analytical nuclear gradients for restricted Hartree Fock with kpoints sampling
 '''
 import numpy as np
+from scipy.special import erfc
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as molgrad
@@ -27,7 +28,6 @@ from pyscf.pbc.gto.pseudo.pp import get_vlocG, get_alphas, get_projG, projG_li, 
 from pyscf.pbc.dft.numint import eval_ao_kpts
 from pyscf.pbc import gto, tools
 from pyscf.gto import mole
-import scipy
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
@@ -208,47 +208,53 @@ def hcore_generator(mf, cell=None, kpts=None):
         return hcore
     return hcore_deriv
 
-def grad_nuc(cell, atmlst):
+def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     '''
-    Derivatives of nuclear repulsion energy wrt nuclear coordinates
+    Nuclear derivatives for ewald summation of nuclear charges.
+
+    See Also:
+        pyscf.pbc.gto.cell.ewald
     '''
-    ew_eta = cell.get_ewald_params()[0]
+    if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
+    if ew_cut is None: ew_cut = cell.get_ewald_params()[1]
+
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-    Lall = cell.get_lattice_Ls()
-    natom = len(chargs)
-    ewovrl_grad = np.zeros([natom,3])
+    Lall = cell.get_lattice_Ls(rcut=ew_cut)
 
-    for i, qi in enumerate(chargs):
-        ri = coords[i]
-        for j in range(natom):
-            if j == i:
-                continue
-            qj = chargs[j]
-            rj = coords[j]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            r = r.reshape(len(r),1)
-            ewovrl_grad[i] += np.sum(- (qi * qj / r ** 3 * r1 *
-                                        scipy.special.erfc(ew_eta * r).reshape(len(r),1)), axis = 0)
-            ewovrl_grad[i] += np.sum(- qi * qj / r ** 2 * r1 * 2 * ew_eta / np.sqrt(np.pi) *
-                                     np.exp(-ew_eta**2 * r ** 2).reshape(len(r),1), axis = 0)
+    rLij = coords[:,None,:] - coords[None,:,:] + Lall[:,None,None,:]
+    r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
+    r[r<1e-16] = 1e100
 
+    fac = 2 * ew_eta / np.sqrt(np.pi)
+    tmp = (erfc(ew_eta * r) / r**3 +
+           fac * np.exp(-ew_eta**2 * r ** 2) / r**2)
+    r = None
+    ewovrl_grad = -np.einsum('i,j,Lij,Lijx->ix', chargs, chargs, tmp, rLij)
+    rLij = tmp = None
+
+    ewg_grad = np.zeros_like(ewovrl_grad)
     mesh = gto.cell._cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
-    absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    #absG2 = np.einsum('gi,gi->g', Gv, Gv)
+    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
     absG2[absG2==0] = 1e200
-    ewg_grad = np.zeros([natom,3])
-    SI = cell.get_SI(Gv)
-    if cell.low_dim_ft_type is None or cell.dimension == 3:
-        coulG = 4*np.pi / absG2
-        coulG *= weights
-        ZSI = np.einsum("i,ij->j", chargs, SI)
-        ZexpG2 = coulG * np.exp(-absG2/(4*ew_eta**2))
-        ZexpG2_mod = ZexpG2.reshape(len(ZexpG2),1) * Gv
-    for i, qi in enumerate(chargs):
-        Zfac = np.imag(ZSI * SI[i].conj()) * qi
-        ewg_grad[i] = - np.sum(Zfac.reshape((len(Zfac),1)) * ZexpG2_mod, axis = 0)
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        coulG = 4*np.pi / absG2 * weights
+        coulG *= np.exp(-absG2 / (4*ew_eta**2))
+        
+        ngrids = len(Gv)
+        mem_avail = cell.max_memory - lib.current_memory()[0]
+        blksize = min(ngrids, max(mesh[2], int((mem_avail*1e6 - cell.natm*12*8)/((10+cell.natm*2)*8))))
+        for ig0 in range(0, ngrids, blksize):
+            ig1 = min(ngrids, ig0+blksize)
+            SI = cell.get_SI(Gv[ig0:ig1])
+            ZSI = np.einsum("i,ij->j", chargs, SI)
+            tmp = coulG[ig0:ig1,None] * Gv[ig0:ig1]
+            ewg_grad += np.einsum('i,ig,gx,g->ix', chargs, SI, tmp, ZSI.conj()).imag
+            tmp = None
+    else:
+        raise NotImplementedError
 
     ew_grad = ewg_grad + ewovrl_grad
     if atmlst is not None:

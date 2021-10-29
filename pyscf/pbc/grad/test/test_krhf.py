@@ -14,19 +14,14 @@
 # limitations under the License.
 
 import unittest
-from pyscf import lib
-from pyscf.pbc import scf, gto, grad
 import numpy as np
-
-def finger(mat):
-    return abs(mat).sum()
+from pyscf.lib.misc import finger
+from pyscf.pbc import scf, gto, grad
 
 cell = gto.Cell()
-cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391]]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
+a = 3.370137329
+cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [.5*a, .5*a, .5*a + 0.01]]]
+cell.a = np.asarray([[0, a, a], [a, 0, a], [a, a, 0]])
 cell.basis = 'gth-szv'
 cell.verbose= 4
 cell.pseudo = 'gth-pade'
@@ -36,17 +31,28 @@ cell.build()
 kpts = cell.make_kpts([1,1,2])
 disp = 1e-5
 
+def tearDownModule():
+    global cell, a, kpts, disp
+    cell.stdout.close()
+    del cell, a, kpts, disp
+
 
 class KnownValues(unittest.TestCase):
     def test_krhf_grad(self):
         g_scan = scf.KRHF(cell, kpts, exxdiv=None).nuc_grad_method().as_scanner()
         g = g_scan(cell)[1]
-        self.assertAlmostEqual(finger(g), 0.11476575559553441, 6)
+        self.assertAlmostEqual(finger(g), -0.07021772172215038, 7)
 
         mfs = g_scan.base.as_scanner()
-        e1 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391+disp/2.0]]])
-        e2 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391-disp/2.0]]])
-        self.assertAlmostEqual(g[1,2], (e1-e2)/disp, 6)
+        e1 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [.5*a, .5*a, .5*a + 0.01 + disp/2.0]]])
+        e2 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [.5*a, .5*a, .5*a + 0.01 - disp/2.0]]])
+        self.assertAlmostEqual(g[1,2], (e1-e2)/disp, 7)
+
+    def test_grad_nuc(self):
+        gnuc = grad.krhf.grad_nuc(cell)
+        gref = np.asarray([[0, 0, -8.75413236e-03],
+                           [0, 0, 8.75413236e-03]])
+        self.assertAlmostEqual(abs(gnuc-gref).max(), 0, 9)
 
 if __name__ == "__main__":
     print("Full Tests for KRHF Gradients")
