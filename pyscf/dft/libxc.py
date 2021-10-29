@@ -1499,9 +1499,8 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             assert rho_ud.shape[0] == 4
 
     elif nvar == 4 or nvar == 9:  # MGGA
-        # Are the condition on rho different than for GGA ?
         for rho_ud in [rho_u, rho_d]:
-            assert rho_ud.shape[0] == 4
+            assert rho_ud.shape[0] == 6
 
 
     else:
