@@ -141,22 +141,27 @@ include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 option(WITH_F12 "Compling F12 integrals" ON)
 if(BUILD_LIBCINT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+  set(CMAKE_ARGS_LIBCINT -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
+    -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
+    -DKEEP_GOING=1
+    -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+    -DCMAKE_INSTALL_LIBDIR:PATH=lib
+    -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+    -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+    -DBUILD_MARCH_NATIVE=${BUILD_MARCH_NATIVE})
+  if(${BLA_VENDOR} MATCHES "Intel")
+    set(CMAKE_ARGS_LIBCINT "${CMAKE_ARGS_LIBCINT} -DBLA_VENDOR=${BLA_VENDOR}")
+  else()
+    set(CMAKE_ARGS_LIBCINT "${CMAKE_ARGS_LIBCINT} -DBLA_VENDOR=${BLA_VENDOR} -DBLAS_LIBRARIES=${BLAS_LIBRARIES}")
+  endif()
+  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
     # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
     GIT_TAG v4.4.5
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
-            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
-            -DKEEP_GOING=1
-            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_INSTALL_LIBDIR:PATH=lib 
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DBLAS_LIBRARIES=${BLAS_LIBRARIES}
-            -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
-            -DBUILD_MARCH_NATIVE=${BUILD_MARCH_NATIVE}
+    CMAKE_ARGS ${CMAKE_ARGS_LIBCINT}
   )
   add_dependencies(cgto libcint)
   add_dependencies(ao2mo libcint)
