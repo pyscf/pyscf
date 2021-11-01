@@ -57,6 +57,11 @@ def kpts_to_kmesh(cell, kpts):
     """ Check if kpt mesh includes the Gamma point. Generate the bvk kmesh
     only if it does.
     """
+    kpts = np.reshape(kpts, (-1,3))
+    nkpts = len(kpts)
+    if nkpts == 1:  # single-kpt (either Gamma or shifted)
+        return None
+
     scaled_k = cell.get_scaled_kpts(kpts).round(8)
     if np.any(abs(scaled_k).sum(axis=1) < KPT_DIFF_TOL):
         kmesh = (len(np.unique(scaled_k[:,0])),
@@ -129,7 +134,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     if mydf.use_bvk and mydf.kpts_band is None:
         bvk_kmesh = kpts_to_kmesh(cell, mydf.kpts)
         if bvk_kmesh is None:
-            log.debug("Non-Gamma-inclusive kmesh is found. bvk kmesh is not used.")
+            log.debug("Single-kpt or non-Gamma-inclusive kmesh is found. "
+                      "bvk kmesh is not used.")
         else:
             log.debug("Using bvk kmesh= [%d %d %d]", *bvk_kmesh)
     else:
