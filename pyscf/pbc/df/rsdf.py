@@ -31,7 +31,8 @@ In RSGDF, the two-center and three-center Coulomb integrals are calculated in tw
 where the SR and LR integrals correpond to using the following potentials
     g_SR(r_12;omega) = erfc(omega * r_12) / r_12
     g_LR(r_12;omega) = erf(omega * r_12) / r_12
-The SR integrals are evaluated in real space using a lattice summation, while the LR integrals are evaluated in reciprocal space with a plane wave basis.
+The SR integrals are evaluated in real space using a lattice summation, while
+the LR integrals are evaluated in reciprocal space with a plane wave basis.
 '''
 
 import os
@@ -53,7 +54,8 @@ from pyscf.lib import logger
 
 
 def kpts_to_kmesh(cell, kpts):
-    """ Check if kpt mesh includes the Gamma point. Generate the bvk kmesh only if it does.
+    """ Check if kpt mesh includes the Gamma point. Generate the bvk kmesh
+    only if it does.
     """
     scaled_k = cell.get_scaled_kpts(kpts).round(8)
     if np.any(abs(scaled_k).sum(axis=1) < KPT_DIFF_TOL):
@@ -465,33 +467,48 @@ class RSGDF(df.df.GDF):
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         if cell.dimension < 3:
-            raise NotImplementedError("RSGDF for low-dimensional systems are not available yet. We recommend using cell.dimension=3 with large vacuum.")
+            raise NotImplementedError("""
+RSGDF for low-dimensional systems are not available yet. We recommend using
+cell.dimension=3 with large vacuum.""")
 
-        # if True and kpts are gamma-inclusive, RSDF will use the bvk cell trick for computing both j3c_SR and j3c_LR. If kpts are not gamma-inclusive, this attribute will be ignored.
+        # if True and kpts are gamma-inclusive, RSDF will use the bvk cell
+        # trick for computing both j3c_SR and j3c_LR. If kpts are not
+        # gamma-inclusive, this attribute will be ignored.
         self.use_bvk = True
 
-        # precision for real-space lattice sum (R) and reciprocal-space Fourier transform (G).
+        # precision for real-space lattice sum (R) and reciprocal-space
+        # Fourier transform (G).
         self.precision_R = cell.precision * 1e-2
         self.precision_G = cell.precision
 
-        # One of {omega, npw_max} must be provided, and the other will be deduced automatically from it. The priority when both are given is omega > npw_max.
-        # If omega deduced from npw_max is smaller than self._omega_min, omega = omega_min is used.
+        # One of {omega, npw_max} must be provided, and the other will be
+        # deduced automatically from it. The priority when both are given
+        # is omega > npw_max.
+        # If omega deduced from npw_max is smaller than self._omega_min,
+        # omega = omega_min is used.
         # The default is npw_max = 350 ~ 7x7x7 PWs for 3D isotropic systems.
-        # Once omega is determined, mesh_compact is determined for (L|g^lr|pq) to achieve given accuracy.
+        # Once omega is determined, mesh_compact is determined for (L|g^lr|pq)
+        # to achieve given accuracy.
         self.npw_max = 350
         self._omega_min = 0.3
         self.omega = None
         self.ke_cutoff = None
         self.mesh_compact = None
 
-        # omega and mesh for j2c. Since j2c is to be inverted, it is desirable to use (1) a "fixed" omega for reproducibility, and (2) a higher precision to minimize any round-off error caused by inversion.
-        # The extra computational cost due to the higher precision is negligible compared to the j3c build.
-        # FOR EXPERTS: if you want omega_j2c to be the same as the omega used for j3c build, set omega_j2c to be any negative number.
+        # omega and mesh for j2c. Since j2c is to be inverted, it is desirable
+        # to use (1) a "fixed" omega for reproducibility, and (2) a higher
+        # precision to minimize any round-off error caused by inversion.
+        # The extra computational cost due to the higher precision is
+        # negligible compared to the j3c build.
+        # FOR EXPERTS: if you want omega_j2c to be the same as the omega used
+        # for j3c build, set omega_j2c to be any negative number.
         self.omega_j2c = 0.4
         self.mesh_j2c = None
         self.precision_j2c = 1e-4 * self.precision_G
 
-        # set True to force calculating j2c^(-1/2) using eigenvalue decomposition (ED); otherwise, Cholesky decomposition (CD) is used first, and ED is called only if CD fails.
+        # set True to force calculating j2c^(-1/2) using eigenvalue
+        # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
+        # first, and ED is called only if CD fails.
         self.j2c_eig_always = False
 
         df.df.GDF.__init__(self, cell, kpts=kpts)

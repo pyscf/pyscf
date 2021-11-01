@@ -87,7 +87,8 @@ def binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
 def get_refuniq_map(cell):
     """
     Return:
-        refuniqshl_map[Ish] --> the uniq shl "ISH" that corresponds to ref shl "Ish".
+        refuniqshl_map[Ish]: the uniq shl "ISH" that corresponds to ref
+        shl "Ish".
         uniq_atms: a list of unique atom symbols.
         uniq_bas: concatenate basis for all uniq atomsm, i.e.,
                     [*cell._basis[atm] for atm in uniq_atms]
@@ -131,7 +132,8 @@ def get_dist_mat(rs1, rs2, dmin=1e-16):
     np.clip(d, dmin**2., None, out=d)
     return d**0.5
 def get_Lsmin(cell, Rcuts, uniq_atms, dimension=None):
-    """ Given atom-pairwise cutoff, determine the needed lattice translational vectors, Ls.
+    """ Given atom-pairwise cutoff, determine the needed lattice translational
+    vectors, Ls.
     """
     natm_uniq = len(uniq_atms)
     Rcut = Rcuts.max()
@@ -203,24 +205,28 @@ def get_multipole(l, alp):
 def get_2c2e_Rcut(bas_lst, cellvol, omega, precision, Rprec=1.,
                   lmp=True, lasympt=True,
                   eta_correct=True, R_correct=False, vol_correct=False):
-    r""" Given a list of pgto by "bas_lst", determine the cutoff radii for j2c lat sum s.t. the truncation error drops below "precision". j2c is estimated as
+    r""" Given a list of pgto by "bas_lst", determine the cutoff radii for
+    j2c lat sum s.t. the truncation error drops below "precision". j2c is
+    estimated as
 
         j12(R) ~ C1*C2 * O1 * O2 * Gamma(l12+0.5, eta*Rc^2) /
                     (pi^0.5 * Rc^(l12+1))
 
-    where l12 = l1+l2, eta = 1/(1/a1+1/a2+1/omega^2). The error introduced by truncating at Rc is
+    where l12 = l1+l2, eta = 1/(1/a1+1/a2+1/omega^2). The error introduced
+    by truncating at Rc is
 
         err ~ \int_Rc^{\infty} dR R^2 j2c(R)
             ~ \int_Rc^{\infty} dR R^2 exp(-eta * R^2)
             ~ j2c(Rc) * Rc / eta
 
-    Arguments "eta_correct" and "R_correct" control whether the corresponding correction is applied.
+    Arguments "eta_correct" and "R_correct" control whether the corresponding
+    correction is applied.
 
     Args:
-        bas_lst:
+        bas_lst (list):
             A list of basis where the cutoff is estimated for all pairs.
             Example: [[0,(0.5,1.)], [1,(10.2,-0.02),(1.7,0.5),(0.3,0.37)]]
-        cellvol:
+        cellvol (float):
             Cell volume (Bohr^3).
         omega (float):
             Range-separation parameter (only the absolute value matters).
@@ -245,7 +251,8 @@ def get_2c2e_Rcut(bas_lst, cellvol, omega, precision, Rprec=1.,
         eta_correct & R_correct (bool, default: True & False):
             if eta_correct : j2c *= max(1,1/eta)
             if R_correct   : j2c *= min(1,R)
-            Apparently, both "corrections" will make the estimate larger, which is equivalent to using a smaller "precision" (i.e., tighter thresh).
+            Both "corrections" will make the estimate larger, which is
+            equivalent to using a smaller "precision" (i.e., tighter thresh).
     """
     nbas = len(bas_lst)
     n2 = nbas*(nbas+1)//2
@@ -323,7 +330,9 @@ def get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
             "4c"-mode:  Q = 2-norm[(ab|ab)]^(1/2)
     """
     def get1ctr(bas_lst):
-        """ For a shell consists of multiple contracted GTOs, keep only the one with the greatest weight on the most diffuse primitive GTOs (since others are likely core orbitals).
+        """ For a shell consists of multiple contracted GTOs, keep only the
+        one with the greatest weight on the most diffuse primitive GTOs
+        (since others are likely core orbitals).
         """
         bas_lst_new = []
         for bas in bas_lst:
@@ -377,7 +386,9 @@ def get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
     return Qs
 def get_schwartz_dcut(bas_lst, cellvol, omega, precision, r0=None, safe=True,
                       vol_correct=False):
-    """ Given a list of basis, determine cutoff radius for the Schwartz Q between each unique shell pair to drop below "precision". The Schwartz Q is define:
+    """ Given a list of basis, determine cutoff radius for the Schwartz Q
+    between each unique shell pair to drop below "precision". The Schwartz
+    Q is define:
         Q = 2-norm[ (ab|ab) ]^(1/2)
 
     Return:
@@ -441,7 +452,8 @@ def get_bincoeff(d,e1,e2,l1,l2):
 def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
                          fac_type, Qij, Rprec=1,
                          vol_correct=False, eta_correct=True, R_correct=True):
-    r""" Determine for AO shlpr (ish,jsh) separated by dij, the cutoff radius for
+    r""" Determine for AO shlpr (ish,jsh) separated by dij, the cutoff
+    radius for
             2-norm( (ksh|v_SR(omega)|ish,jsh) ) < precision
         The estimator used here is
             ~ 0.5/pi * exp(-etaij*dij^2) * O_{k,lk} *
@@ -459,7 +471,8 @@ def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
                 L_{li,lj}^{l} = eij^((l-lij)/2) * ((lij-1)!/(l-1)!)^0.5
             else:
                 lmin = 0
-                L_{li,lj}^{l} = \sum'_{m=-l}^{l} comb(li,mi) * comb(lj,mj) * di^(li-mi) * dj^(lj-mj)
+                L_{li,lj}^{l} = \sum'_{m=-l}^{l} comb(li,mi) * comb(lj,mj) *
+                                di^(li-mi) * dj^(lj-mj)
                 where
                     mi = (l+m)/2
                     mj = (l-m)/2
@@ -467,7 +480,9 @@ def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
                     dj = ei/eij * (dij + extij)
                 where "extij" is the extent of orbital pair ij.
 
-        Similar to :func:`get_2c2e_Rcut`, the estimator is multiplied by factor of eta and/or 1/R if "eta_correct" and/or "R_correct" are set to True.
+        Similar to :func:`get_2c2e_Rcut`, the estimator is multiplied by
+        factor of eta and/or 1/R if "eta_correct" and/or "R_correct" are
+        set to True.
 
     Args:
         mol/auxmol (Mole object):
@@ -617,7 +632,8 @@ def get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol,
                    dijs_lst, cellvol, omega, precision,
                    fac_type, Qijs_lst, Rprec=1,
                    eta_correct=True, R_correct=True, vol_correct=False):
-    """ Given a list of basis ("bas_lst") and auxiliary basis ("auxbas_lst"), determine the cutoff radius for
+    """ Given a list of basis ("bas_lst") and auxiliary basis ("auxbas_lst"),
+    determine the cutoff radius for
         2-norm( (k|v_SR(omega)|ij) ) < precision
     where i and j shls are separated by d specified by "dijs_lst".
     """
@@ -1000,7 +1016,10 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     bufs = [buf, np.empty_like(buf)]
     bufmem = buf.size*16/1024**2.
     if bufmem > max_memory * 0.5:
-        raise RuntimeError("Computing 3c2e integrals requires %.2f MB memory, which exceeds the given maximum memory %.2f MB. Try giving PySCF more memory." % (bufmem*2., max_memory))
+        raise RuntimeError("""
+Computing 3c2e integrals requires %.2f MB memory, which exceeds the given
+maximum memory %.2f MB. Try giving PySCF more memory."""
+                           % (bufmem*2., max_memory))
 
     int3c = wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask,
                                  prescreening_data, intor, aosym, comp,
@@ -1160,7 +1179,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
                 dijs_loc.ctypes.data_as(ctypes.c_void_p),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                 bas.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCsr3c_drv
+                ctypes.c_int(nbas),
                 env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size)
                 )
             return out
@@ -1191,7 +1210,8 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
                     ctypes.c_double(dstep_BOHR),
                     Rcut2s.ctypes.data_as(ctypes.c_void_p),
                     dijs_loc.ctypes.data_as(ctypes.c_void_p),
-                    atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+                    atm.ctypes.data_as(ctypes.c_void_p),
+                    ctypes.c_int(cell.natm),
                     bas.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCsr3c_drv
                     env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size)
@@ -1213,8 +1233,8 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
                     (ctypes.c_int*6)(*shls_slice),
                     ao_loc.ctypes.data_as(ctypes.c_void_p),
                     cintopt,
-                    cell_loc_bvk.ctypes.data_as(ctypes.c_void_p),   # cell_loc_bvk
-                    shlpr_mask.ctypes.data_as(ctypes.c_void_p),  # shlpr_mask
+                    cell_loc_bvk.ctypes.data_as(ctypes.c_void_p), # cell_loc_bvk
+                    shlpr_mask.ctypes.data_as(ctypes.c_void_p),   # shlpr_mask
                     refuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                     auxuniqshl_map.ctypes.data_as(ctypes.c_void_p),
                     ctypes.c_int(nbasauxuniq),
@@ -1225,7 +1245,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
                     dijs_loc.ctypes.data_as(ctypes.c_void_p),
                     atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                     bas.ctypes.data_as(ctypes.c_void_p),
-                    ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCsr3c_drv
+                    ctypes.c_int(nbas),
                     env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size)
                     )
                 return out
