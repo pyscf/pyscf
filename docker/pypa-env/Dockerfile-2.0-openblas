@@ -8,3 +8,5 @@ ENV PATH=/opt/python/cp37-cp37m/bin:$PATH
 
 COPY build-wheels.sh /build-wheels.sh
 CMD ['/build-wheels.sh']
+
+RUN pip config set global.disable-pip-version-check true
