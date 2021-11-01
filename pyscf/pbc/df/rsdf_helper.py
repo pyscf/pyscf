@@ -509,10 +509,11 @@ def get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, cellvol, omega, precision,
 
 # get bas info
     nbasaux = auxmol.nbas
-    # some auxbasis sets like def2-ri have cGTOs --> use most diffuse pGTO
+    # some auxbasis sets like def2-ri/jkfit have cGTOs --> use most diffuse pGTO
     eks = [auxmol.bas_exp(ksh)[-1] for ksh in range(nbasaux)]
     lks = [int(auxmol.bas_angular(ksh)) for ksh in range(nbasaux)]
-    cks = [auxmol._libcint_ctr_coeff(ksh)[-1,0] for ksh in range(nbasaux)]
+    cks = [abs(auxmol._libcint_ctr_coeff(ksh)[-1]).max()
+           for ksh in range(nbasaux)]
 
     def get_lec(mol, i):
         l = int(mol.bas_angular(i))
