@@ -145,15 +145,15 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
     # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
-    GIT_TAG v4.4.5
+    GIT_TAG v4.4.6
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_CACHE_ARGS 
-	-DWITH_F12:STRING=${WITH_F12} 
-	-DWITH_RANGE_COULOMB:STRING=1
+        -DWITH_F12:STRING=${WITH_F12} 
+        -DWITH_RANGE_COULOMB:STRING=1
         -DWITH_FORTRAN:STRING=0 
-	-DWITH_CINT2_INTERFACE:STRING=0 
-	-DMIN_EXPCUTOFF:STRING=20
+        -DWITH_CINT2_INTERFACE:STRING=0 
+        -DMIN_EXPCUTOFF:STRING=20
         -DKEEP_GOING:STRING=1
         -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
         -DCMAKE_INSTALL_LIBDIR:PATH=lib 

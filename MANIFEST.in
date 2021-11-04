@@ -6,9 +6,14 @@ prune pyscf/lib/build
 
 recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so
-recursive-include pyscf/lib/deps *.dylib
 include pyscf/lib/*.so
+
+prune pyscf/lib/deps
 include pyscf/lib/*.dylib
+include pyscf/lib/libcint.dylib
+include pyscf/lib/libxc.dylib
+include pyscf/lib/libxcfun.dylib
+
 include pyscf/geomopt/log.ini
 
 recursive-exclude pyscf/lib *.c *.h
