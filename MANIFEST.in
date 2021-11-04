@@ -8,7 +8,6 @@ recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so
 include pyscf/lib/*.so
 
-prune pyscf/lib/deps
 include pyscf/lib/*.dylib
 include pyscf/lib/libcint.dylib
 include pyscf/lib/libxc.dylib
