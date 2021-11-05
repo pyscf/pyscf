@@ -941,19 +941,18 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
             else:
                 raise KeyError('Key "%s" not found' % key)
         hermi = True
-#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
-# the 3D tensor if it is too big.
+
     dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
 class _load_and_unpack(object):
     '''
-    This class returns an array-like object to an hdf5 file that can 
+    This class returns an array-like object to an hdf5 file that can
     be sliced, to allow for lazy loading
 
     hermi : boolean
     Take the conjugate transpose of the slice
-    
+
     See PR 1086 and Issue 1076
     '''
     def __init__(self, dat, hermi):
