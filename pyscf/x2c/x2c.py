@@ -89,7 +89,7 @@ class X2C(lib.StreamObject):
         elif 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
-            x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
+            x = numpy.zeros((n2c,n2c), dtype=numpy.complex128)
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -234,7 +234,7 @@ class X2C(lib.StreamObject):
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
-            x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
+            x = numpy.zeros((n2c,n2c), dtype=numpy.complex128)
             for ia in range(xmol.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
@@ -282,7 +282,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     spinor basis.
     '''
     n2c = dm.shape[0]
-    dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex)
+    dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex128)
     dd[:n2c,:n2c] = dm
     dhf._call_veff_llll(mol, dd, hermi, None)
     vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',

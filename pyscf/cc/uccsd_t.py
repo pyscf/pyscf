@@ -186,7 +186,7 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
     dtype = numpy.result_type(t2T.dtype, vooo.dtype, fock.dtype)
-    if dtype == numpy.complex:
+    if dtype == numpy.complex128:
         drv = _ccsd.libcc.CCuccsd_t_zaaa
     else:
         drv = _ccsd.libcc.CCuccsd_t_aaa
@@ -226,7 +226,7 @@ def _gen_contract_baa(ts, vooo, fock, mo_energy, orbsym, log):
 
     cpu2 = [logger.process_clock(), logger.perf_counter()]
     dtype = numpy.result_type(t2aaT.dtype, vooo.dtype)
-    if dtype == numpy.complex:
+    if dtype == numpy.complex128:
         drv = _ccsd.libcc.CCuccsd_t_zbaa
     else:
         drv = _ccsd.libcc.CCuccsd_t_baa

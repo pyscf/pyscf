@@ -79,7 +79,7 @@ def get_hcore(mol):
     t  = mol.intor('int1e_ipkin_spinor', comp=3)
     vn = mol.intor('int1e_ipnuc_spinor', comp=3)
     wn = mol.intor('int1e_ipspnucsp_spinor', comp=3)
-    h1e = numpy.zeros((3,n4c,n4c), numpy.complex)
+    h1e = numpy.zeros((3,n4c,n4c), numpy.complex128)
     h1e[:,:n2c,:n2c] = vn
     h1e[:,n2c:,:n2c] = t
     h1e[:,:n2c,n2c:] = t
@@ -93,7 +93,7 @@ def get_ovlp(mol):
 
     s  = mol.intor('int1e_ipovlp_spinor', comp=3)
     t  = mol.intor('int1e_ipkin_spinor', comp=3)
-    s1e = numpy.zeros((3,n4c,n4c), numpy.complex)
+    s1e = numpy.zeros((3,n4c,n4c), numpy.complex128)
     s1e[:,:n2c,:n2c] = s
     s1e[:,n2c:,n2c:] = t * (.5/c**2)
     return -s1e
@@ -145,7 +145,7 @@ class GradientsMixin(rhf_grad.GradientsMixin):
                 vn = z * mol.intor('int1e_iprinv_spinor', comp=3)
                 wn = z * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
 
-            v = numpy.zeros((3,n4c,n4c), numpy.complex)
+            v = numpy.zeros((3,n4c,n4c), numpy.complex128)
             v[:,:n2c,:n2c] = vn
             v[:,n2c:,n2c:] = wn * (.25/c**2)
             v[:,p0:p1]         += h1[:,p0:p1]
@@ -224,8 +224,8 @@ scf.dhf.UHF.Gradients = lib.class_as_method(Gradients)
 def _call_vhf1_llll(mol, dm):
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
-    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
             _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,
@@ -239,8 +239,8 @@ def _call_vhf1(mol, dm):
     dmls = dm[:n2c,n2c:].copy()
     dmsl = dm[n2c:,:n2c].copy()
     dmss = dm[n2c:,n2c:].copy()
-    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
             _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,

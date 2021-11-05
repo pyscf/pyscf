@@ -203,7 +203,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     time_0pass = (logger.process_clock(), logger.perf_counter())
@@ -394,7 +394,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     intor = mol._add_suffix(intor)

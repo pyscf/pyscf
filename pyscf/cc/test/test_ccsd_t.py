@@ -165,7 +165,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = eris.fock.diagonal().real
         e0 = ccsd_t.kernel(mcc, eris, t1, t2)
 
-        eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex)
+        eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex128)
         orbspin = numpy.zeros(nmo*2,dtype=int)
         orbspin[1::2] = 1
         eri2[0::2,0::2,0::2,0::2] = eri1
@@ -173,7 +173,7 @@ class KnownValues(unittest.TestCase):
         eri2[0::2,0::2,1::2,1::2] = eri1
         eri2[1::2,1::2,1::2,1::2] = eri1
         eri2 = eri2.transpose(0,2,1,3) - eri2.transpose(0,2,3,1)
-        fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex)
+        fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex128)
         fock[0::2,0::2] = eris.fock
         fock[1::2,1::2] = eris.fock
         eris1 = gccsd._PhysicistsERIs()
