@@ -498,6 +498,414 @@ static void _v1_xyz_to_v1(void (*_v1_loop)(), double* v1_xyz, double* v1,
 }
 
 
+#define SUM_NABLA_I \
+        if (lx_i > 0) { \
+            pv1[0] += lx_i * cxyzj * v1x[(lx-1)*l1l1+ly*l1+lz]; \
+        } \
+        pv1[0] += fac_i * cxyzj * v1x[(lx+1)*l1l1+ly*l1+lz]; \
+        if (ly_i > 0) { \
+            pv1[0] += ly_i * cxyzj * v1y[lx*l1l1+(ly-1)*l1+lz]; \
+        } \
+        pv1[0] += fac_i * cxyzj * v1y[lx*l1l1+(ly+1)*l1+lz]; \
+        if (lz_i > 0) { \
+            pv1[0] += lz_i * cxyzj * v1z[lx*l1l1+ly*l1+lz-1]; \
+        } \
+        pv1[0] += fac_i * cxyzj * v1z[lx*l1l1+ly*l1+lz+1];
+
+
+static void _vsigma_loop_ip1ip2_x(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int lx_j_m1 = lx_j - 1;
+    int lx_j_p1 = lx_j + 1;
+    double cxj, cyj, czj, cyzj, cxyzj;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jy = 0; jy <= ly_j; jy++) {
+        cyj = pcy[jy+_LEN_CART0[ly_j]];
+        ly = ly_i + jy;
+        for (jz = 0; jz <= lz_j; jz++) {
+            czj = pcz[jz+_LEN_CART0[lz_j]];
+            lz = lz_i + jz;
+            cyzj = cyj * czj;
+            for (jx = 0; jx <= lx_j_m1; jx++) {
+                cxj = pcx[jx+_LEN_CART0[lx_j_m1]] * lx_j;
+                cxyzj = cxj * cyzj;
+                lx = lx_i + jx;
+                SUM_NABLA_I;
+            }
+            for (jx = 0; jx <= lx_j_p1; jx++) {
+                cxj = pcx[jx+_LEN_CART0[lx_j_p1]] * fac_j;
+                cxyzj = cxj * cyzj;
+                lx = lx_i + jx;
+                SUM_NABLA_I;
+            }
+        }
+    }
+}
+
+
+static void _vsigma_loop_ip1ip2_y(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int ly_j_m1 = ly_j - 1;
+    int ly_j_p1 = ly_j + 1;
+    double cxj, cyj, czj, cxzj, cxyzj;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cxj = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jz = 0; jz <= lz_j; jz++) {
+            czj = pcz[jz+_LEN_CART0[lz_j]];
+            lz = lz_i + jz;
+            cxzj = cxj * czj;
+            for (jy = 0; jy <= ly_j_m1; jy++) {
+                cyj = pcy[jy+_LEN_CART0[ly_j_m1]] * ly_j;
+                cxyzj = cyj * cxzj;
+                ly = ly_i + jy;
+                SUM_NABLA_I;
+            }
+            for (jy = 0; jy <= ly_j_p1; jy++) {
+                cyj = pcy[jy+_LEN_CART0[ly_j_p1]] * fac_j;
+                cxyzj = cyj * cxzj;
+                ly = ly_i + jy;
+                SUM_NABLA_I;
+            }
+        }
+    }
+}
+
+
+static void _vsigma_loop_ip1ip2_z(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    int lz_j_m1 = lz_j - 1;
+    int lz_j_p1 = lz_j + 1;
+    double cxj, cyj, czj, cxyj, cxyzj;
+    double fac_i = -2.0 * ai;
+    double fac_j = -2.0 * aj;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cxj = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jy = 0; jy <= ly_j; jy++) {
+            cyj = pcy[jy+_LEN_CART0[ly_j]];
+            ly = ly_i + jy;
+            cxyj = cxj * cyj;
+            for (jz = 0; jz <= lz_j_m1; jz++) {
+                czj = pcz[jz+_LEN_CART0[lz_j_m1]] * lz_j;
+                cxyzj = czj * cxyj;
+                lz = lz_i + jz;
+                SUM_NABLA_I;
+            }
+            for (jz = 0; jz <= lz_j_p1; jz++) {
+                czj = pcz[jz+_LEN_CART0[lz_j_p1]] * fac_j;
+                cxyzj = czj * cxyj;
+                lz = lz_i + jz;
+                SUM_NABLA_I;
+            }
+        }
+    }
+}
+
+
+static void _vsigma_ip1ip2(void (*_v1_loop)(), double* v1x,
+                           double* v1y, double* v1z, double* v1,
+                           int li, int lj, double ai, double aj,
+                           double* ri, double* rj, double* cache)
+{
+    int lx_i, ly_i, lz_i;
+    int lx_j, ly_j, lz_j;
+    double rij[3];
+
+    rij[0] = ri[0] - rj[0];
+    rij[1] = ri[1] - rj[1];
+    rij[2] = ri[2] - rj[2];
+
+    int topl = li + lj + 2;
+    int l1 = topl + 1;
+    int l1l1 = l1 * l1;
+    double *coeff = cache;
+    int dj = _LEN_CART[lj+1];
+    cache += 3 * dj;
+
+    _get_dm_to_dm_xyz_coeff(coeff, rij, lj+1, cache);
+
+    double *pcx = coeff;
+    double *pcy = pcx + dj;
+    double *pcz = pcy + dj;
+    double *pv1 = v1;
+    for (lx_i = li; lx_i >= 0; lx_i--) {
+        for (ly_i = li-lx_i; ly_i >= 0; ly_i--) {
+            lz_i = li - lx_i - ly_i;
+            for (lx_j = lj; lx_j >= 0; lx_j--) {
+                for (ly_j = lj-lx_j; ly_j >= 0; ly_j--) {
+                    lz_j = lj - lx_j - ly_j;
+                    _v1_loop(pv1, v1x, v1y, v1z, pcx, pcy, pcz, ai, aj,
+                             lx_i, ly_i, lz_i, lx_j, ly_j, lz_j, l1, l1l1);
+                    pv1 += 1;
+                }
+            }
+        }
+    }
+}
+
+
+static void _vsigma_loop_lap1_x(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    double cxj, cyj, czj, cxyj, cxyzj;
+    double fac_x;
+    double fac_i = -2.0 * ai;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cxj = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jy = 0; jy <= ly_j; jy++) {
+            cyj = pcy[jy+_LEN_CART0[ly_j]];
+            ly = ly_i + jy;
+            cxyj = cxj * cyj;
+            for (jz = 0; jz <= lz_j; jz++) {
+                czj = pcz[jz+_LEN_CART0[lz_j]];
+                lz = lz_i + jz;
+                cxyzj = cxyj * czj;
+
+                fac_x = lx_i + 1;
+                pv1[0] += fac_x * fac_i * cxyzj * v1x[lx*l1l1+ly*l1+lz];
+                if (lx_i - 1 > 0) {
+                    fac_x = lx_i - 1;
+                    pv1[0] += fac_x * lx_i * cxyzj * v1x[(lx-2)*l1l1+ly*l1+lz];
+                }
+
+                if (lx_i > 0) {
+                    fac_x = lx_i;
+                    if (ly_i > 0) {
+                        pv1[0] += fac_x * ly_i * cxyzj * v1y[(lx-1)*l1l1+(ly-1)*l1+lz];
+                    }
+                    pv1[0] += fac_x * fac_i * cxyzj * v1y[(lx-1)*l1l1+(ly+1)*l1+lz];
+
+                    if (lz_i > 0) {
+                        pv1[0] += fac_x * lz_i * cxyzj * v1z[(lx-1)*l1l1+ly*l1+lz-1];
+                    }
+                    pv1[0] += fac_x * fac_i * cxyzj * v1z[(lx-1)*l1l1+ly*l1+lz+1];
+                }
+
+                fac_x = fac_i;
+                if (lx_i > 0) {
+                    pv1[0] += fac_x * lx_i * cxyzj * v1x[lx*l1l1+ly*l1+lz];
+                }
+                pv1[0] += fac_x * fac_i * cxyzj * v1x[(lx+2)*l1l1+ly*l1+lz];
+
+                if (ly_i > 0) {
+                    pv1[0] += fac_x * ly_i * cxyzj * v1y[(lx+1)*l1l1+(ly-1)*l1+lz];
+                }
+                pv1[0] += fac_x * fac_i * cxyzj * v1y[(lx+1)*l1l1+(ly+1)*l1+lz];
+
+                if (lz_i > 0) {
+                    pv1[0] += fac_x * lz_i * cxyzj * v1z[(lx+1)*l1l1+ly*l1+lz-1];
+                }
+                pv1[0] += fac_x * fac_i * cxyzj * v1z[(lx+1)*l1l1+ly*l1+lz+1];
+            }
+        }
+    }
+}
+
+
+static void _vsigma_loop_lap1_y(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    double cxj, cyj, czj, cxyj, cxyzj;
+    double fac_y;
+    double fac_i = -2.0 * ai;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cxj = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jy = 0; jy <= ly_j; jy++) {
+            cyj = pcy[jy+_LEN_CART0[ly_j]];
+            ly = ly_i + jy;
+            cxyj = cxj * cyj;
+            for (jz = 0; jz <= lz_j; jz++) {
+                czj = pcz[jz+_LEN_CART0[lz_j]];
+                lz = lz_i + jz;
+                cxyzj = cxyj * czj;
+
+                fac_y = ly_i + 1;
+                pv1[0] += fac_y * fac_i * cxyzj * v1y[lx*l1l1+ly*l1+lz];
+                if (ly_i - 1 > 0) {
+                    fac_y = ly_i - 1;
+                    pv1[0] += fac_y * ly_i * cxyzj * v1y[lx*l1l1+(ly-2)*l1+lz];
+                }
+
+                if (ly_i > 0) {
+                    fac_y = ly_i;
+                    if (lx_i > 0) {
+                        pv1[0] += fac_y * lx_i * cxyzj * v1x[(lx-1)*l1l1+(ly-1)*l1+lz];
+                    }
+                    pv1[0] += fac_y * fac_i * cxyzj * v1x[(lx+1)*l1l1+(ly-1)*l1+lz];
+
+                    if (lz_i > 0) {
+                        pv1[0] += fac_y * lz_i * cxyzj * v1z[lx*l1l1+(ly-1)*l1+lz-1];
+                    }
+                    pv1[0] += fac_y * fac_i * cxyzj * v1z[lx*l1l1+(ly-1)*l1+lz+1];
+                }
+
+                fac_y = fac_i;
+                if (lx_i > 0) {
+                    pv1[0] += fac_y * lx_i * cxyzj * v1x[(lx-1)*l1l1+(ly+1)*l1+lz];
+                }
+                pv1[0] += fac_y * fac_i * cxyzj * v1x[(lx+1)*l1l1+(ly+1)*l1+lz];
+
+                if (ly_i > 0) {
+                    pv1[0] += fac_y * ly_i * cxyzj * v1y[lx*l1l1+ly*l1+lz];
+                }
+                pv1[0] += fac_y * fac_i * cxyzj * v1y[lx*l1l1+(ly+2)*l1+lz];
+
+                if (lz_i > 0) {
+                    pv1[0] += fac_y * lz_i * cxyzj * v1z[lx*l1l1+(ly+1)*l1+lz-1];
+                }
+                pv1[0] += fac_y * fac_i * cxyzj * v1z[lx*l1l1+(ly+1)*l1+lz+1];
+            }
+        }
+    }
+}
+
+
+static void _vsigma_loop_lap1_z(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    int lx, ly, lz;
+    int jx, jy, jz;
+    double cxj, cyj, czj, cxyj, cxyzj;
+    double fac_z;
+    double fac_i = -2.0 * ai;
+
+    for (jx = 0; jx <= lx_j; jx++) {
+        cxj = pcx[jx+_LEN_CART0[lx_j]];
+        lx = lx_i + jx;
+        for (jy = 0; jy <= ly_j; jy++) {
+            cyj = pcy[jy+_LEN_CART0[ly_j]];
+            ly = ly_i + jy;
+            cxyj = cxj * cyj;
+            for (jz = 0; jz <= lz_j; jz++) {
+                czj = pcz[jz+_LEN_CART0[lz_j]];
+                lz = lz_i + jz;
+                cxyzj = cxyj * czj;
+
+                fac_z = lz_i + 1;
+                pv1[0] += fac_z * fac_i * cxyzj * v1z[lx*l1l1+ly*l1+lz];
+                if (lz_i - 1 > 0) {
+                    fac_z = lz_i - 1;
+                    pv1[0] += fac_z * lz_i * cxyzj * v1z[lx*l1l1+ly*l1+lz-2];
+                }
+
+                if (lz_i > 0) {
+                    fac_z = lz_i;
+                    if (lx_i > 0) {
+                        pv1[0] += fac_z * lx_i * cxyzj * v1x[(lx-1)*l1l1+ly*l1+lz-1];
+                    }
+                    pv1[0] += fac_z * fac_i * cxyzj * v1x[(lx+1)*l1l1+ly*l1+lz-1];
+
+                    if (ly_i > 0) {
+                        pv1[0] += fac_z * ly_i * cxyzj * v1y[lx*l1l1+(ly-1)*l1+lz-1];
+                    }
+                    pv1[0] += fac_z * fac_i * cxyzj * v1y[lx*l1l1+(ly+1)*l1+lz-1];
+                }
+
+                fac_z = fac_i;
+                if (lx_i > 0) {
+                    pv1[0] += fac_z * lx_i * cxyzj * v1x[(lx-1)*l1l1+ly*l1+lz+1];
+                }
+                pv1[0] += fac_z * fac_i * cxyzj * v1x[(lx+1)*l1l1+ly*l1+lz+1];
+
+                if (ly_i > 0) {
+                    pv1[0] += fac_z * ly_i * cxyzj * v1y[lx*l1l1+(ly-1)*l1+lz+1];
+                }
+                pv1[0] += fac_z * fac_i * cxyzj * v1y[lx*l1l1+(ly+1)*l1+lz+1];
+
+                if (lz_i > 0) {
+                    pv1[0] += fac_z * lz_i * cxyzj * v1z[lx*l1l1+ly*l1+lz];
+                }
+                pv1[0] += fac_z * fac_i * cxyzj * v1z[lx*l1l1+ly*l1+lz+2];
+            }
+        }
+    }
+}
+
+
+static void _vsigma_lap1(void (*_v1_loop)(), double* v1x,
+                         double* v1y, double* v1z, double* v1,
+                         int li, int lj, double ai, double aj,
+                         double* ri, double* rj, double* cache)
+{
+    int lx_i, ly_i, lz_i;
+    int lx_j, ly_j, lz_j;
+    double rij[3];
+
+    rij[0] = ri[0] - rj[0];
+    rij[1] = ri[1] - rj[1];
+    rij[2] = ri[2] - rj[2];
+
+    int topl = li + lj + 2;
+    int l1 = topl + 1;
+    int l1l1 = l1 * l1;
+    double *coeff = cache;
+    int dj = _LEN_CART[lj];
+    cache += 3 * dj;
+
+    _get_dm_to_dm_xyz_coeff(coeff, rij, lj, cache);
+
+    double *pcx = coeff;
+    double *pcy = pcx + dj;
+    double *pcz = pcy + dj;
+    double *pv1 = v1;
+    for (lx_i = li; lx_i >= 0; lx_i--) {
+        for (ly_i = li-lx_i; ly_i >= 0; ly_i--) {
+            lz_i = li - lx_i - ly_i;
+            for (lx_j = lj; lx_j >= 0; lx_j--) {
+                for (ly_j = lj-lx_j; ly_j >= 0; ly_j--) {
+                    lz_j = lj - lx_j - ly_j;
+                    _v1_loop(pv1, v1x, v1y, v1z, pcx, pcy, pcz, ai, aj,
+                             lx_i, ly_i, lz_i, lx_j, ly_j, lz_j, l1, l1l1);
+                    pv1 += 1;
+                }
+            }
+        }
+    }
+}
+
+
 int eval_mat_gga_orth(double *weights, double *out, int comp,
                       int li, int lj, double ai, double aj,
                       double *ri, double *rj, double fac, double cutoff,
@@ -576,6 +984,113 @@ int eval_mat_lda_orth(double *weights, double *out, int comp,
                    img_slice, grid_slice, mesh, cache);
 
         _dm_xyz_to_dm(dm_xyz, out, li, lj, ri, rj, cache);
+        return 1;
+}
+
+
+int eval_mat_lda_orth_ip1(double *weights, double *out, int comp,
+                          int li, int lj, double ai, double aj,
+                          double *ri, double *rj, double fac, double cutoff,
+                          int dimension, double *a, double *b,
+                          int *mesh, double *cache)
+{
+        int dij = _LEN_CART[li] * _LEN_CART[lj];
+        int topl = li + lj + 1;
+        int l1 = topl+1;
+        int l1l1l1 = l1*l1*l1;
+        int img_slice[6];
+        int grid_slice[6];
+        double *xs_exp, *ys_exp, *zs_exp;
+
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, mesh,
+                                        topl, dimension, cutoff,
+                                        ai, aj, ri, rj, a, b, cache);
+        if (data_size == 0) {
+                return 0;
+        }
+        cache += data_size;
+
+        double *mat_xyz = cache;
+        cache += l1l1l1;
+        double *pout_x = out;
+        double *pout_y = pout_x + dij;
+        double *pout_z = pout_y + dij;
+
+        _orth_ints(mat_xyz, weights, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
+        return 1;
+}
+
+
+int eval_mat_gga_orth_ip1(double *weights, double *out, int comp,
+                          int li, int lj, double ai, double aj,
+                          double *ri, double *rj, double fac, double cutoff,
+                          int dimension, double *a, double *b,
+                          int *mesh, double *cache)
+{
+        int dij = _LEN_CART[li] * _LEN_CART[lj];
+        int topl = li + lj + 2;
+        int l1 = topl+1;
+        int l1l1l1 = l1*l1*l1;
+        int img_slice[6];
+        int grid_slice[6];
+        double *xs_exp, *ys_exp, *zs_exp;
+
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, mesh,
+                                        topl, dimension, cutoff,
+                                        ai, aj, ri, rj, a, b, cache);
+        if (data_size == 0) {
+                return 0;
+        }
+        cache += data_size;
+
+        double *mat_xyz = cache;
+        double *mat_x = mat_xyz;
+        double *mat_y = mat_x + l1l1l1;
+        double *mat_z = mat_y + l1l1l1;
+        cache += l1l1l1*3;
+        double *pout_x = out;
+        double *pout_y = pout_x + dij;
+        double *pout_z = pout_y + dij;
+
+        size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+        double *vx = weights + ngrids;
+        double *vy = vx + ngrids;
+        double *vz = vy + ngrids;
+
+        //vrho part
+        _orth_ints(mat_xyz, weights, topl-1, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
+
+        //vsigma part
+        _orth_ints(mat_x, vx, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _orth_ints(mat_y, vy, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+        _orth_ints(mat_z, vz, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, mesh, cache);
+
+        _vsigma_ip1ip2(_vsigma_loop_ip1ip2_x, mat_x, mat_y, mat_z,
+                       pout_x, li, lj, ai, aj, ri, rj, cache);
+        _vsigma_ip1ip2(_vsigma_loop_ip1ip2_y, mat_x, mat_y, mat_z,
+                       pout_y, li, lj, ai, aj, ri, rj, cache);
+        _vsigma_ip1ip2(_vsigma_loop_ip1ip2_z, mat_x, mat_y, mat_z,
+                       pout_z, li, lj, ai, aj, ri, rj, cache);
+
+        _vsigma_lap1(_vsigma_loop_lap1_x, mat_x, mat_y, mat_z,
+                     pout_x, li, lj, ai, aj, ri, rj, cache);
+        _vsigma_lap1(_vsigma_loop_lap1_y, mat_x, mat_y, mat_z,
+                     pout_y, li, lj, ai, aj, ri, rj, cache);
+        _vsigma_lap1(_vsigma_loop_lap1_z, mat_x, mat_y, mat_z,
+                     pout_z, li, lj, ai, aj, ri, rj, cache);
         return 1;
 }
 

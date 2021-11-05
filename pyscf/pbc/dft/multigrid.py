@@ -1915,6 +1915,18 @@ class MultiGridFFTDF2(MultiGridFFTDF):
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 15.0)
 
+    def get_veff_ip1(self, xc_code, dm, kpts=None, kpts_band=None):
+        from . import multigrid_pair
+        if kpts is None:
+            if self.kpts is None:
+                kpts = numpy.zeros(1,3)
+            else:
+                kpts = self.kpts
+        kpts = kpts.reshape(-1,3)
+        vj = multigrid_pair.get_veff_ip1(self, xc_code, dm, kpts, kpts_band)
+        return vj
+
+
 def multigrid(mf):
     '''Use MultiGridFFTDF to replace the default FFTDF integration method in
     the DFT object.

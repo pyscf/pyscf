@@ -392,7 +392,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     return rhoG
 
 
-def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0,
+def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0, deriv=0,
              xctype='LDA', kpts=None, grid_level=None, dimension=None, mesh=None,
              cell1=None, shls_slice1=None, Ls=None, a=None):
 
@@ -488,6 +488,13 @@ def eval_mat(cell, weights, task_list, shls_slice=None, comp=1, hermi=0,
         raise NotImplementedError
 
     eval_fn = 'eval_mat_' + xctype.lower() + lattice_type
+    if deriv > 0:
+        if deriv == 1:
+            assert comp == 3
+            assert hermi == 0
+            eval_fn += '_ip1'
+        else:
+            raise NotImplementedError
     drv = getattr(libdft, "grid_integrate_drv", None)
 
     def make_mat(wv):
@@ -578,7 +585,66 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
 
         mat = eval_mat(cell, vR, task_list, comp=1, hermi=hermi,
                        xctype='LDA', kpts=kpts, grid_level=ilevel, mesh=mesh)
-        vj_kpts += np.asarray(mat)
+        vj_kpts += np.asarray(mat).reshape(nset,-1,nao,nao)
+        if not at_gamma_point and abs(vI).max() > IMAG_TOL:
+            raise NotImplementedError
+
+    if nset == 1:
+        vj_kpts = vj_kpts[0]
+    return vj_kpts
+
+
+def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=None):
+    if deriv == 1:
+        comp = 3
+        assert hermi == 0
+    else:
+        raise NotImplementedError
+
+    cell = mydf.cell
+    nkpts = len(kpts)
+    nao = cell.nao_nr()
+    nx, ny, nz = mydf.mesh
+    vG = vG.reshape(-1,nx,ny,nz)
+    nset = vG.shape[0]
+
+    task_list = getattr(mydf, 'task_list', None)
+    if task_list is None:
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
+    if hermi < task_list.contents.hermi:
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
+
+    at_gamma_point = gamma_point(kpts)
+    if at_gamma_point:
+        vj_kpts = np.zeros((nset,nkpts,comp,nao,nao))
+    else:
+        vj_kpts = np.zeros((nset,nkpts,comp,nao,nao), dtype=np.complex128)
+
+    nlevels = task_list.contents.nlevels
+    meshes = task_list.contents.gridlevel_info.contents.mesh
+    meshes = np.ctypeslib.as_array(meshes, shape=(nlevels,3))
+    for ilevel in range(nlevels):
+        mesh = meshes[ilevel]
+        ngrids = np.prod(mesh)
+
+        gx = np.fft.fftfreq(mesh[0], 1./mesh[0]).astype(np.int32)
+        gy = np.fft.fftfreq(mesh[1], 1./mesh[1]).astype(np.int32)
+        gz = np.fft.fftfreq(mesh[2], 1./mesh[2]).astype(np.int32)
+        sub_vG = _take_4d(vG, (None, gx, gy, gz)).reshape(nset,ngrids)
+
+        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,ngrids)
+        vR = np.asarray(v_rs.real, order='C')
+        vI = np.asarray(v_rs.imag, order='C')
+        if at_gamma_point:
+            v_rs = vR
+
+        mat = eval_mat(cell, vR, task_list, comp=comp, hermi=hermi, deriv=deriv,
+                       xctype='LDA', kpts=kpts, grid_level=ilevel, mesh=mesh)
+        vj_kpts += np.asarray(mat).reshape(nset,-1,comp,nao,nao)
         if not at_gamma_point and abs(vI).max() > IMAG_TOL:
             raise NotImplementedError
 
@@ -625,7 +691,7 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
         wv = np.asarray(wv, order='C')
 
         mat = np.asarray(eval_mat(cell, wv, task_list, comp=1, hermi=hermi,
-                         xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)).reshape(nset,nkpts,nao,nao)
+                         xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)).reshape(nset,-1,nao,nao)
         veff += mat #+ mat.conj().transpose(0,1,3,2)
         if not gamma_point(kpts):
             raise NotImplementedError
@@ -633,6 +699,65 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     if nset == 1:
         veff = veff[0]
     return veff
+
+
+def _get_gga_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=None):
+    if deriv == 1:
+        comp = 3
+        assert hermi == 0
+    else:
+        raise NotImplementedError
+
+    cell = mydf.cell
+    nkpts = len(kpts)
+    nao = cell.nao_nr()
+    nx, ny, nz = mydf.mesh
+    vG = vG.reshape(-1,4,nx,ny,nz)
+    nset = vG.shape[0]
+
+    task_list = getattr(mydf, 'task_list', None)
+    if task_list is None:
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
+    if hermi < task_list.contents.hermi:
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
+                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
+        mydf.task_list = task_list
+
+    at_gamma_point = gamma_point(kpts)
+    if at_gamma_point:
+        vj_kpts = np.zeros((nset,nkpts,comp,nao,nao))
+    else:
+        vj_kpts = np.zeros((nset,nkpts,comp,nao,nao), dtype=np.complex128)
+
+    nlevels = task_list.contents.nlevels
+    meshes = task_list.contents.gridlevel_info.contents.mesh
+    meshes = np.ctypeslib.as_array(meshes, shape=(nlevels,3))
+    for ilevel in range(nlevels):
+        mesh = meshes[ilevel]
+        ngrids = np.prod(mesh)
+
+        gx = np.fft.fftfreq(mesh[0], 1./mesh[0]).astype(np.int32)
+        gy = np.fft.fftfreq(mesh[1], 1./mesh[1]).astype(np.int32)
+        gz = np.fft.fftfreq(mesh[2], 1./mesh[2]).astype(np.int32)
+        sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
+
+        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,4,ngrids)
+        vR = np.asarray(v_rs.real, order='C')
+        vI = np.asarray(v_rs.imag, order='C')
+        if at_gamma_point:
+            v_rs = vR
+
+        mat = eval_mat(cell, vR, task_list, comp=comp, hermi=hermi, deriv=deriv,
+                       xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)
+        vj_kpts += np.asarray(mat).reshape(nset,-1,comp,nao,nao)
+        if not at_gamma_point and abs(vI).max() > IMAG_TOL:
+            raise NotImplementedError
+
+    if nset == 1:
+        vj_kpts = vj_kpts[0]
+    return vj_kpts
 
 
 def _rks_gga_wv0(rho, vxc, weight):
@@ -730,6 +855,58 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
+
+
+def get_veff_ip1(mydf, xc_code, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
+    cell = mydf.cell
+    dm_kpts = lib.asarray(dm_kpts, order='C')
+    dms = _format_dms(dm_kpts, kpts)
+    nset, nkpts, nao = dms.shape[:3]
+    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+
+    ni = mydf._numint
+    xctype = ni._xc_type(xc_code)
+
+    if xctype == 'LDA':
+        deriv = 0
+    elif xctype == 'GGA':
+        deriv = 1
+    rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
+
+    mesh = mydf.mesh
+    ngrids = np.prod(mesh)
+    coulG = tools.get_coulG(cell, mesh=mesh)
+    vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+
+    weight = cell.vol / ngrids
+    # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
+    # computing rhoR with IFFT, the weight factor is not needed.
+    rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    rhoR = rhoR.reshape(nset,-1,ngrids)
+    wv_freq = []
+    for i in range(nset):
+        exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
+        if xctype == 'LDA':
+            wv = vxc[0].reshape(1,ngrids) * weight
+        elif xctype == 'GGA':
+            wv = _rks_gga_wv0(rhoR[i], vxc, weight)
+        else:
+            raise NotImplementedError
+        wv_freq.append(tools.fft(wv, mesh))
+
+    rhoR = rhoG = None
+    wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
+    wv_freq[:,0] += vG.reshape(nset,*mesh)
+
+    if xctype == 'LDA':
+        vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
+    elif xctype == 'GGA':
+        vj_kpts = _get_gga_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
+    else:
+        raise NotImplementedError
+    vj_kpts = np.rollaxis(vj_kpts, -3)
+    vj_kpts = np.asarray([_format_jks(vj, dm_kpts, input_band, kpts) for vj in vj_kpts])
+    return vj_kpts
 
 
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,

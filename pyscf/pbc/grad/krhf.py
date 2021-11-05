@@ -242,7 +242,6 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2 * weights
         coulG *= np.exp(-absG2 / (4*ew_eta**2))
-        
         ngrids = len(Gv)
         mem_avail = cell.max_memory - lib.current_memory()[0]
         blksize = min(ngrids, max(mesh[2], int((mem_avail*1e6 - cell.natm*12*8)/((10+cell.natm*2)*8))))
