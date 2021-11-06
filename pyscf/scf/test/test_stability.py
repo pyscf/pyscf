@@ -219,6 +219,26 @@ class KnownValues(unittest.TestCase):
         mf1.kernel(mo_coeff=mo_e, mo_occ=mf1.mo_occ)
         self.assertAlmostEqual(mf1.e_tot, -149.6097443357186, 8)
 
+    def test_uhf_stability_with_status(self):
+        mf1 = scf.convert_to_uhf(mf)
+        mo_i, mo_e, stable_i, stable_e = \
+            mf1.stability(internal=True, external=True, return_status=True)
+        s  = mf1.det_ovlp(mo_i, mf1.mo_coeff, mf1.mo_occ, mf1.mo_occ,
+                          mf1.get_ovlp())[0]
+        self.assertAlmostEqual(s, 1, 9)
+        self.assertAlmostEqual(abs(mf1.mo_coeff[0]-mo_i[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(mf1.mo_coeff[1]-mo_i[1]).max(), 0, 9)
+        self.assertEqual(mo_e.shape, (56,56))
+        self.assertEqual(stable_i, True)
+        self.assertEqual(stable_e, False)
+
+        mf1 = scf.convert_to_ghf(mf).newton()
+        s = mf1.det_ovlp(mo_e, mf1.mo_coeff, mf1.mo_occ, mf1.mo_occ,
+                         mf1.get_ovlp())[0]
+        self.assertAlmostEqual(s, 0.57993272190912937, 6)
+        mf1.kernel(mo_coeff=mo_e, mo_occ=mf1.mo_occ)
+        self.assertAlmostEqual(mf1.e_tot, -149.6097443357186, 8)
+
     def test_ghf_stability(self):
         mf1 = scf.convert_to_ghf(mf)
         mo = mf1.stability()
