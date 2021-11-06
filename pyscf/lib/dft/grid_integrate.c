@@ -314,147 +314,132 @@ static void _orth_ints(double *out, double *weights,
 }
 
 
-static void _v1_loop_x(double* pv1, double* v1_xyz,
-                       double* pcx, double* pcy, double* pcz,
-                       double ai, double aj,
-                       int lx_i, int ly_i, int lz_i,
-                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
-{
-    int lx, ly, lz;
-    int jx, jy, jz;
-    int lx_i_m1 = lx_i - 1;
-    int lx_i_p1 = lx_i + 1;
-    int lx_j_m1 = lx_j - 1;
-    int lx_j_p1 = lx_j + 1;
-    double cx, cy, cz, cyz;
-    double fac_i = -2.0 * ai;
-    double fac_j = -2.0 * aj;
-
-    for (jy = 0; jy <= ly_j; jy++) {
-        cy = pcy[jy+_LEN_CART0[ly_j]];
-        ly = ly_i + jy;
-        for (jz = 0; jz <= lz_j; jz++) {
-            cz = pcz[jz+_LEN_CART0[lz_j]];
-            lz = lz_i + jz;
-            cyz = cy * cz;
-            for (jx = 0; jx <= lx_j_m1; jx++) {
-                cx = pcx[jx+_LEN_CART0[lx_j_m1]] * lx_j;
-                lx = lx_i + jx;
-                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jx = 0; jx <= lx_j_p1; jx++) {
-                cx = pcx[jx+_LEN_CART0[lx_j_p1]] * fac_j;
-                lx = lx_i + jx;
-                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jx = 0; jx <= lx_j; jx++) {
-                if (lx_i > 0) {
-                    cx = pcx[jx+_LEN_CART0[lx_j]] * lx_i;
-                    lx = lx_i_m1 + jx;
-                    pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
-                }
-                cx = pcx[jx+_LEN_CART0[lx_j]] * fac_i;
-                lx = lx_i_p1 + jx;
-                pv1[0] += cx * cyz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-        }
+#define VRHO_LOOP_IP1(X, Y, Z) \
+    int lx, ly, lz; \
+    int jx, jy, jz; \
+    int l##X##_i_m1 = l##X##_i - 1; \
+    int l##X##_i_p1 = l##X##_i + 1; \
+    double cx, cy, cz, cfac; \
+    double fac_i = -2.0 * ai; \
+    for (j##Y = 0; j##Y <= l##Y##_j; j##Y++) { \
+        c##Y = pc##Y[j##Y+_LEN_CART0[l##Y##_j]]; \
+        l##Y = l##Y##_i + j##Y; \
+        for (j##Z = 0; j##Z <= l##Z##_j; j##Z++) { \
+            c##Z = pc##Z[j##Z+_LEN_CART0[l##Z##_j]]; \
+            l##Z = l##Z##_i + j##Z; \
+            cfac = c##Y * c##Z; \
+            for (j##X = 0; j##X <= l##X##_j; j##X++) { \
+                if (l##X##_i > 0) { \
+                    c##X = pc##X[j##X+_LEN_CART0[l##X##_j]] * l##X##_i; \
+                    l##X = l##X##_i_m1 + j##X; \
+                    pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+                } \
+                c##X = pc##X[j##X+_LEN_CART0[l##X##_j]] * fac_i; \
+                l##X = l##X##_i_p1 + j##X; \
+                pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+            } \
+        } \
     }
+
+
+static void _vrho_loop_ip1_x(double* pv1, double* v1_xyz,
+                             double* pcx, double* pcy, double* pcz,
+                             double ai, double aj,
+                             int lx_i, int ly_i, int lz_i,
+                             int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    VRHO_LOOP_IP1(x,y,z);
 }
 
 
-static void _v1_loop_y(double* pv1, double* v1_xyz,
-                       double* pcx, double* pcy, double* pcz,
-                       double ai, double aj,
-                       int lx_i, int ly_i, int lz_i,
-                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+static void _vrho_loop_ip1_y(double* pv1, double* v1_xyz,
+                             double* pcx, double* pcy, double* pcz,
+                             double ai, double aj,
+                             int lx_i, int ly_i, int lz_i,
+                             int lx_j, int ly_j, int lz_j, int l1, int l1l1)
 {
-    int lx, ly, lz;
-    int jx, jy, jz;
-    int ly_i_m1 = ly_i - 1;
-    int ly_i_p1 = ly_i + 1;
-    int ly_j_m1 = ly_j - 1;
-    int ly_j_p1 = ly_j + 1;
-    double cx, cy, cz, cxz;
-    double fac_i = -2.0 * ai;
-    double fac_j = -2.0 * aj;
-
-    for (jx = 0; jx <= lx_j; jx++) {
-        cx = pcx[jx+_LEN_CART0[lx_j]];
-        lx = lx_i + jx;
-        for (jz = 0; jz <= lz_j; jz++) {
-            cz = pcz[jz+_LEN_CART0[lz_j]];
-            lz = lz_i + jz;
-            cxz = cx * cz;
-            for (jy = 0; jy <= ly_j_m1; jy++) {
-                cy = pcy[jy+_LEN_CART0[ly_j_m1]] * ly_j;
-                ly = ly_i + jy;
-                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jy = 0; jy <= ly_j_p1; jy++) {
-                cy = pcy[jy+_LEN_CART0[ly_j_p1]] * fac_j;
-                ly = ly_i + jy;
-                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jy = 0; jy <= ly_j; jy++) {
-                if (ly_i > 0) {
-                    cy = pcy[jy+_LEN_CART0[ly_j]] * ly_i;
-                    ly = ly_i_m1 + jy;
-                    pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
-                }
-                cy = pcy[jy+_LEN_CART0[ly_j]] * fac_i;
-                ly = ly_i_p1 + jy;
-                pv1[0] += cy * cxz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-        }
-    }
+    VRHO_LOOP_IP1(y,x,z);
 }
 
 
-static void _v1_loop_z(double* pv1, double* v1_xyz,
-                       double* pcx, double* pcy, double* pcz,
-                       double ai, double aj,
-                       int lx_i, int ly_i, int lz_i,
-                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+static void _vrho_loop_ip1_z(double* pv1, double* v1_xyz,
+                             double* pcx, double* pcy, double* pcz,
+                             double ai, double aj,
+                             int lx_i, int ly_i, int lz_i,
+                             int lx_j, int ly_j, int lz_j, int l1, int l1l1)
 {
-    int lx, ly, lz;
-    int jx, jy, jz;
-    int lz_i_m1 = lz_i - 1;
-    int lz_i_p1 = lz_i + 1;
-    int lz_j_m1 = lz_j - 1;
-    int lz_j_p1 = lz_j + 1;
-    double cx, cy, cz, cxy;
-    double fac_i = -2.0 * ai;
-    double fac_j = -2.0 * aj;
+    VRHO_LOOP_IP1(z,x,y);
+}
 
-    for (jx = 0; jx <= lx_j; jx++) {
-        cx = pcx[jx+_LEN_CART0[lx_j]];
-        lx = lx_i + jx;
-        for (jy = 0; jy <= ly_j; jy++) {
-            cy = pcy[jy+_LEN_CART0[ly_j]];
-            ly = ly_i + jy;
-            cxy = cx * cy;
-            for (jz = 0; jz <= lz_j_m1; jz++) {
-                cz = pcz[jz+_LEN_CART0[lz_j_m1]] * lz_j;
-                lz = lz_i + jz;
-                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jz = 0; jz <= lz_j_p1; jz++) {
-                cz = pcz[jz+_LEN_CART0[lz_j_p1]] * fac_j;
-                lz = lz_i + jz;
-                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-            for (jz = 0; jz <= lz_j; jz++) {
-                if (lz_i > 0) {
-                    cz = pcz[jz+_LEN_CART0[lz_j]] * lz_i;
-                    lz = lz_i_m1 + jz;
-                    pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
-                }
-                cz = pcz[jz+_LEN_CART0[lz_j]] * fac_i;
-                lz = lz_i_p1 + jz;
-                pv1[0] += cxy * cz * v1_xyz[lx*l1l1+ly*l1+lz];
-            }
-        }
+
+#define VSIGMA_LOOP(X, Y, Z) \
+    int lx, ly, lz; \
+    int jx, jy, jz; \
+    int l##X##_i_m1 = l##X##_i - 1; \
+    int l##X##_i_p1 = l##X##_i + 1; \
+    int l##X##_j_m1 = l##X##_j - 1; \
+    int l##X##_j_p1 = l##X##_j + 1; \
+    double cx, cy, cz, cfac; \
+    double fac_i = -2.0 * ai; \
+    double fac_j = -2.0 * aj; \
+    for (j##Y = 0; j##Y <= l##Y##_j; j##Y++) { \
+        c##Y = pc##Y[j##Y+_LEN_CART0[l##Y##_j]]; \
+        l##Y = l##Y##_i + j##Y; \
+        for (j##Z = 0; j##Z <= l##Z##_j; j##Z++) { \
+            c##Z = pc##Z[j##Z+_LEN_CART0[l##Z##_j]]; \
+            l##Z = l##Z##_i + j##Z; \
+            cfac = c##Y * c##Z; \
+            for (j##X = 0; j##X <= l##X##_j_m1; j##X++) { \
+                c##X = pc##X[j##X+_LEN_CART0[l##X##_j_m1]] * l##X##_j; \
+                l##X = l##X##_i + j##X; \
+                pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+            } \
+            for (j##X = 0; j##X <= l##X##_j_p1; j##X++) { \
+                c##X = pc##X[j##X+_LEN_CART0[l##X##_j_p1]] * fac_j; \
+                l##X = l##X##_i + j##X; \
+                pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+            } \
+            for (j##X = 0; j##X <= l##X##_j; j##X++) { \
+                if (l##X##_i > 0) { \
+                    c##X = pc##X[j##X+_LEN_CART0[l##X##_j]] * l##X##_i; \
+                    l##X = l##X##_i_m1 + j##X; \
+                    pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+                } \
+                c##X = pc##X[j##X+_LEN_CART0[l##X##_j]] * fac_i; \
+                l##X = l##X##_i_p1 + j##X; \
+                pv1[0] += c##X * cfac * v1_xyz[lx*l1l1+ly*l1+lz]; \
+            } \
+        } \
     }
+
+
+static void _vsigma_loop_x(double* pv1, double* v1_xyz,
+                           double* pcx, double* pcy, double* pcz,
+                           double ai, double aj,
+                           int lx_i, int ly_i, int lz_i,
+                           int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    VSIGMA_LOOP(x,y,z);
+}
+
+
+static void _vsigma_loop_y(double* pv1, double* v1_xyz,
+                           double* pcx, double* pcy, double* pcz,
+                           double ai, double aj,
+                           int lx_i, int ly_i, int lz_i,
+                           int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    VSIGMA_LOOP(y,x,z);
+}
+
+
+static void _vsigma_loop_z(double* pv1, double* v1_xyz,
+                           double* pcx, double* pcy, double* pcz,
+                           double ai, double aj,
+                           int lx_i, int ly_i, int lz_i,
+                           int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    VSIGMA_LOOP(z,x,y);
 }
 
 
@@ -941,15 +926,15 @@ int eval_mat_gga_orth(double *weights, double *out, int comp,
 
         _orth_ints(mat_xyz, vx, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
-        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vsigma_loop_x, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
 
         _orth_ints(mat_xyz, vy, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
-        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vsigma_loop_y, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
 
         _orth_ints(mat_xyz, vz, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
-        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vsigma_loop_z, mat_xyz, out, li, lj, ai, aj, ri, rj, cache);
 
         return 1;
 }
@@ -1019,9 +1004,9 @@ int eval_mat_lda_orth_ip1(double *weights, double *out, int comp,
 
         _orth_ints(mat_xyz, weights, topl, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
-        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
-        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
-        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
         return 1;
 }
 
@@ -1066,9 +1051,9 @@ int eval_mat_gga_orth_ip1(double *weights, double *out, int comp,
         //vrho part
         _orth_ints(mat_xyz, weights, topl-1, fac, xs_exp, ys_exp, zs_exp,
                    img_slice, grid_slice, mesh, cache);
-        _v1_xyz_to_v1(_v1_loop_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
-        _v1_xyz_to_v1(_v1_loop_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
-        _v1_xyz_to_v1(_v1_loop_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_x, mat_xyz, pout_x, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_y, mat_xyz, pout_y, li, lj, ai, aj, ri, rj, cache);
+        _v1_xyz_to_v1(_vrho_loop_ip1_z, mat_xyz, pout_z, li, lj, ai, aj, ri, rj, cache);
 
         //vsigma part
         _orth_ints(mat_x, vx, topl, fac, xs_exp, ys_exp, zs_exp,

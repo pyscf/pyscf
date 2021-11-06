@@ -844,7 +844,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     elif xctype == 'GGA':
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
-        veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
