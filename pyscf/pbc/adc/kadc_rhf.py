@@ -27,6 +27,7 @@ import itertools
 from itertools import product
 from pyscf import lib
 from pyscf.pbc import scf
+from pyscf.pbc import df
 from pyscf.pbc import mp
 from pyscf.lib import logger
 from pyscf.pbc.adc import kadc_ao2mo
@@ -39,6 +40,10 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 
+from pyscf.pbc import tools
+import h5py
+import tempfile
+
 # Note : All interals are in Chemist's notation except for vvvv
 #        Eg.of momentum conservation : 
 #        Chemist's  oovv(ijab) : ki - kj + ka - kb 
@@ -50,7 +55,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
        raise NotImplementedError(adc.method)
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
     if adc.verbose >= logger.WARN:
         adc.check_sanity()
@@ -87,7 +92,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         evals_k = evals_k.real
         evals[k] = evals_k
         evecs[k] = evecs_k
-        conv[k] = conv_k
+        conv[k] = conv_k.real
 
         U = np.array(evecs[k]).T.copy()
 
@@ -110,7 +115,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
             print_string = ('%s k-point %d | root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, kshift, n, evals[k][n], evals[k][n]*27.2114))
             if adc.compute_properties:
                 print_string += ("|  Spec factors = %10.8f  " % P[k][n])
-            print_string += ("|  conv = %s" % conv[n])
+            print_string += ("|  conv = %s" % conv[k][n])
             logger.info(adc, print_string)
 
     log.timer('ADC', *cput0)
@@ -128,7 +133,7 @@ def compute_amplitudes_energy(myadc, eris, verbose=None):
 
 def compute_amplitudes(myadc, eris):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -138,9 +143,14 @@ def compute_amplitudes(myadc, eris):
     nocc = myadc.nocc
     nvir = nmo - nocc
     nkpts = myadc.nkpts
+    cell = myadc.cell
+    kpts = myadc.kpts
+    madelung = tools.madelung(cell, kpts)
 
     # Compute first-order doubles t2 (tijab)
-    t2_1 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
+    #t2_1 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
+    f = h5py.File('myfile.hdf5','a')
+    t2_1 = f.create_dataset('t2_1', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
 
     mo_energy =  myadc.mo_energy
     mo_coeff =  myadc.mo_coeff
@@ -148,6 +158,7 @@ def compute_amplitudes(myadc, eris):
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
+    mo_e_o = mo_e_o + madelung
 
     # Get location of non-zero/padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(myadc, kind="split")
@@ -178,10 +189,9 @@ def compute_amplitudes(myadc, eris):
 
         touched[ki, kj, ka] = touched[ki, kj, kb] = True
 
-    if not isinstance(eris.oooo, np.ndarray):
-        t2_1 = radc_ao2mo.write_dataset(t2_1)
+    #if not isinstance(eris.oooo, np.ndarray):
+    #    t2_1 = radc_ao2mo.write_dataset(t2_1)
 
-    t1_2 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
     # Compute second-order singles t1 (tij)
@@ -266,6 +276,10 @@ def compute_amplitudes(myadc, eris):
         t2_2 = np.zeros_like((t2_1))
 
         t2_2 = t2_1_vvvv.copy()
+
+        if myadc.exxdiv is not None:
+           t2_2 -= 2.0 * madelung * t2_1
+
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
         
@@ -309,7 +323,7 @@ def compute_amplitudes(myadc, eris):
                     kb = kconserv[kj,kk,kc]
                     t2_2[ki,kj,ka] -= lib.einsum('iack,jkcb->ijab',eris_ovvo[ki,ka,kc].conj(),t2_1[kj,kk,kc],optimize=True)
 
-        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        #for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
             eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
                            [0,nvir,ka,mo_e_v,nonzero_vpadding],
@@ -322,11 +336,10 @@ def compute_amplitudes(myadc, eris):
 
             t2_2[ki,kj,ka] /= eijab
 
+            if not isinstance(eris.oooo, np.ndarray):
+                t2_2 = radc_ao2mo.write_dataset(t2_2)
 
-        if not isinstance(eris.oooo, np.ndarray):
-            t2_2 = radc_ao2mo.write_dataset(t2_2)
-
-
+        
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
         
     t1 = (t1_2, t1_3)
@@ -336,14 +349,14 @@ def compute_amplitudes(myadc, eris):
 
 def compute_energy(myadc, t2, eris):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
     nkpts = myadc.nkpts
 
     emp2 = 0.0
     eris_ovov = eris.ovov
     t2_amp = t2[0][:].copy()     
- 
+    
     if (myadc.method == "adc(3)"):
         t2_amp += t2[1]
 
@@ -407,6 +420,7 @@ class RADC(pyscf.adc.radc.RADC):
       
         self._scf = mf
         self.kpts = self._scf.kpts
+        self.exxdiv = self._scf.exxdiv
         self.verbose = mf.verbose
         self.max_memory = mf.max_memory
         self.method = "adc(2)"
@@ -432,6 +446,7 @@ class RADC(pyscf.adc.radc.RADC):
         self.t1 = None
         self.t2 = None
         self.e_corr = None
+        self.chnk_size = None
         self.imds = lambda:None
 
         self.keep_exxdiv = False
@@ -445,6 +460,7 @@ class RADC(pyscf.adc.radc.RADC):
         self.mo_energy = mf.mo_energy
 
     transform_integrals = kadc_ao2mo.transform_integrals_incore
+    #transform_integrals = kadc_ao2mo.transform_integrals_df
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
     compute_amplitudes_energy = compute_amplitudes_energy
@@ -469,30 +485,29 @@ class RADC(pyscf.adc.radc.RADC):
 
     def kernel_gs(self):
 
-        nmo = self._nmo
+        nmo = self.nmo
         nao = self.cell.nao_nr()
         nmo_pair = nmo * (nmo+1) // 2
         nao_pair = nao * (nao+1) // 2
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self, 'with_df', None):
-           if getattr(self, 'with_df', None): 
-               self.with_df = self.with_df
-           else :
-               self.with_df = self._scf.with_df
+        if type(self._scf.with_df) is df.GDF:
+        #if type(self._scf.with_df) is df.fft.FFTDF:
            self.chnk_size = self.get_chnk_size()
-
+           self.with_df = self._scf.with_df
            def df_transform():
                return kadc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
-        elif (self._scf._eri is None or
-              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+        elif (mem_incore+mem_now >= self.max_memory and not self.incore_complete):
             def outcore_transform():
                 return kadc_ao2mo.transform_integrals_outcore(self)
             self.transform_integrals = outcore_transform
+
         eris = self.transform_integrals()
         self.e_corr,self.t1,self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        print ("MPn:",self.e_corr)
+        self._finalize()
 
         return self.e_corr, self.t1,self.t2
 
@@ -515,18 +530,13 @@ class RADC(pyscf.adc.radc.RADC):
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
 
-        if getattr(self, 'with_df', None):
-           if getattr(self, 'with_df', None): 
-               self.with_df = self.with_df
-           else :
-               self.with_df = self._scf.with_df
+        if type(self._scf.with_df) is df.GDF:
            self.chnk_size = self.get_chnk_size()
-
+           self.with_df = self._scf.with_df
            def df_transform():
                return kadc_ao2mo.transform_integrals_df(self)
            self.transform_integrals = df_transform
-        elif (self._scf._eri is None or
-              (mem_incore+mem_now >= self.max_memory and not self.incore_complete)):
+        elif (mem_incore+mem_now >= self.max_memory and not self.incore_complete):
             def outcore_transform():
                 return kadc_ao2mo.transform_integrals_outcore(self)
             self.transform_integrals = outcore_transform
@@ -539,10 +549,10 @@ class RADC(pyscf.adc.radc.RADC):
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
 
         elif(self.method_type == "ip"):
-             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
 
         else:
             raise NotImplementedError(self.method_type)
@@ -551,12 +561,12 @@ class RADC(pyscf.adc.radc.RADC):
 
     def ip_adc(self, nroots=1, guess=None, eris=None, kptlist=None):
         adc_es = RADCIP(self)
-        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris, kptlist)
         return e_exc, v_exc, spec_fac, x, adc_es
 
     def ea_adc(self, nroots=1, guess=None, eris=None, kptlist=None):
         adc_es = RADCEA(self)
-        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris, kptlist)
         return e_exc, v_exc, spec_fac, x, adc_es
 
 
@@ -587,7 +597,7 @@ def ip_vector_size(adc):
 ##@profile
 def get_imds_ea(adc, eris=None):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -880,7 +890,7 @@ def get_imds_ea(adc, eris=None):
 
 def get_imds_ip(adc, eris=None):
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -1141,7 +1151,7 @@ def ea_adc_diag(adc,kshift,M_ab=None,eris=None):
         for ka in range(nkpts):
             kb = kconserv[kshift,ka,kj]
             d_ab = e_vir[ka][:,None] + e_vir[kb]
-            d_i = -e_occ[kj][:,None]
+            d_i = e_occ[kj][:,None]
             D_n = -d_i + d_ab.reshape(-1)
             doubles[kj,ka] += D_n.reshape(-1)
 
@@ -1292,7 +1302,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
     #Calculate sigma vector
     def sigma_(r):
-        cput0 = (time.clock(), time.time())
+        cput0 = (time.process_time(), time.time())
         log = logger.Logger(adc.stdout, adc.verbose)
 
         r1 = r[s_singles:f_singles]
@@ -1300,6 +1310,9 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
         r2 = r2.reshape(nkpts,nkpts,nocc,nvir,nvir)
         s2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=np.complex)
+        cell = adc.cell
+        kpts = adc.kpts
+        madelung = tools.madelung(cell, kpts)
 
 ############ ADC(2) ij block ############################
 
@@ -1333,7 +1346,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
                     del eris_ovvv
 
 
-########    ########## ADC(2) ajk - bil block ############################
+#########    ########## ADC(2) ajk - bil block ############################
 
                 s2[ki, kb] -= lib.einsum('i,ibc->ibc', e_occ[ki], r2[ki, kb])
                 s2[ki, kb] += lib.einsum('b,ibc->ibc', e_vir[kb], r2[ki, kb])
@@ -1377,8 +1390,9 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
                            kw = kconserv[ky,ki,kj]
                            s2[ki,kx] += lib.einsum('jwyi,jxw->ixy',eris_ovvo[kj,kw,ky],r2[kj,kx],optimize = True)
                            s2[ki,kx] -= 0.5*lib.einsum('jwyi,jwx->ixy',eris_ovvo[kj,kw,ky],r2[kj,kw],optimize = True)
-
-               
+ 
+               if adc.exxdiv is not None:
+                  s2 += -madelung * r2
         if (method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
@@ -1640,7 +1654,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
     #Calculate sigma vector
     def sigma_(r):
-        cput0 = (time.clock(), time.time())
+        cput0 = (time.process_time(), time.time())
         log = logger.Logger(adc.stdout, adc.verbose)
 
         r1 = r[s_singles:f_singles]
@@ -1648,6 +1662,9 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
         r2 = r2.reshape(nkpts,nkpts,nvir,nocc,nocc)
         s2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex)
+        cell = adc.cell
+        kpts = adc.kpts
+        madelung = tools.madelung(cell, kpts)
         
         eris_ovoo = eris.ovoo
 
@@ -1709,6 +1726,8 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
                                s2[ka,kj] -= lib.einsum('jabi,bik->ajk',eris_ovvo[kj,ka,kb],r2[kb,ki],optimize = True)
                                kb = kconserv[ki, kj, ka]
                                s2[ka,kj] += 0.5*lib.einsum('jabi,bki->ajk',eris_ovvo[kj,ka,kb],r2[kb,kk],optimize = True)
+               if adc.exxdiv is not None:
+                  s2 += madelung * r2
 
         if (method == "adc(3)"):
 
@@ -2233,6 +2252,7 @@ class RADCEA(RADC):
         self.compute_properties = adc.compute_properties
 
         self.kpts = adc._scf.kpts
+        self.exxdiv = adc.exxdiv
         self.verbose = adc.verbose
         self.max_memory = adc.max_memory
         self.method = adc.method
@@ -2251,6 +2271,7 @@ class RADCEA(RADC):
         self.e_corr = adc.e_corr
         self.mo_energy = adc.mo_energy
         self.imds = adc.imds
+        self.chnk_size = adc.chnk_size
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 
@@ -2345,6 +2366,7 @@ class RADCIP(RADC):
         self.compute_properties = adc.compute_properties
 
         self.kpts = adc._scf.kpts
+        self.exxdiv = adc.exxdiv
         self.verbose = adc.verbose
         self.max_memory = adc.max_memory
         self.method = adc.method
@@ -2363,6 +2385,7 @@ class RADCIP(RADC):
         self.e_corr = adc.e_corr
         self.mo_energy = adc.mo_energy
         self.imds = adc.imds
+        self.chnk_size = adc.chnk_size
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method', 'mo_coeff', 'mo_energy_b', 'max_memory', 't1', 'mo_energy_a', 'max_space', 't2', 'max_cycle'))
 

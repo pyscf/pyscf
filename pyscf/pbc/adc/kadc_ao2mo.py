@@ -29,7 +29,8 @@ import tempfile
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
-     cput0 = (time.clock(), time.time())
+     print ("I")
+     cput0 = (time.process_time(), time.time())
      log = logger.Logger(myadc.stdout, myadc.verbose)
      cell = myadc.cell
      kpts = myadc.kpts
@@ -37,7 +38,6 @@ def transform_integrals_incore(myadc):
      nocc = myadc.nocc
      nmo = myadc.nmo
      nvir = nmo - nocc
-
      dtype = myadc.mo_coeff[0].dtype
 
      mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
@@ -89,12 +89,13 @@ def transform_integrals_incore(myadc):
 
 def transform_integrals_outcore(myadc):
 
+    print ("O")
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
     #if not (cc.frozen is None or cc.frozen == 0):
     #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
     cell = myadc.cell
     kpts = myadc.kpts
@@ -134,7 +135,7 @@ def transform_integrals_outcore(myadc):
     eris.ovvo = feri.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
     eris.vvvv = feri.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
 
-    cput1 = time.clock(), time.time()
+    cput1 = time.process_time(), time.time()
     for kp in range(nkpts):
         for kq in range(nkpts):
             for kr in range(nkpts):
@@ -151,7 +152,7 @@ def transform_integrals_outcore(myadc):
     cput1 = log.timer_debug1('transforming oopq', *cput1)
 
     # <ia|pq> = (ip|aq)
-    cput1 = time.clock(), time.time()
+    cput1 = time.process_time(), time.time()
     for kp in range(nkpts):
         for kq in range(nkpts):
             for kr in range(nkpts):
@@ -207,9 +208,10 @@ def transform_integrals_outcore(myadc):
 
 
 def transform_integrals_df(myadc):
+    print ("df")
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
     cell = myadc.cell
     kpts = myadc.kpts
@@ -255,7 +257,7 @@ def transform_integrals_df(myadc):
     eris.vvvv = None
     eris.ovvv = None
 
-    cput0 = (time.clock(), time.time())
+    cput0 = (time.process_time(), time.time())
 
     with h5py.File(myadc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'][:]
