@@ -49,8 +49,6 @@ if (BUILD_MARCH_NATIVE)
 endif()
 
 
-cmake_policy(SET CMP0042 NEW)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Architecture specified cmake flags.  See also the templates in
@@ -113,7 +111,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 if (WIN32)
   #?
 elseif (APPLE)
-  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
+  set(CMAKE_BUILD_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
 else ()
   set(CMAKE_SKIP_BUILD_RPATH  True)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
