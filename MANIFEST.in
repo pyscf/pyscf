@@ -9,9 +9,9 @@ recursive-include pyscf/lib/deps *.so
 include pyscf/lib/*.so
 
 include pyscf/lib/*.dylib
-include pyscf/lib/libcint.dylib
-include pyscf/lib/libxc.dylib
-include pyscf/lib/libxcfun.dylib
+include pyscf/lib/deps/lib*/libcint.[45].dylib
+include pyscf/lib/deps/lib*/libxc.dylib
+include pyscf/lib/deps/lib*/libxcfun.[23].dylib
 
 include pyscf/geomopt/log.ini
 
