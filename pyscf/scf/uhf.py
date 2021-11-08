@@ -977,15 +977,15 @@ class UHF(hf.SCF):
                 Whether to return `stable_i` and `stable_e`
 
         Returns:
-            If return_status is False (default), the return value includes 
-            two set of orbitals, which are more close to the stable condition. 
-            The first corresponds to the internal stability 
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
             and the second corresponds to the external stability.
-    
-            Else, another two boolean variables (indicating current status: 
-            stable or unstable) are returned. 
-            The first corresponds to the internal stability 
-            and the second corresponds to the external stability. 
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose, return_status)

@@ -51,15 +51,15 @@ def rhf_stability(mf, internal=True, external=False, verbose=None, return_status
             Whether to return `stable_i` and `stable_e`
 
     Returns:
-        If return_status is False (default), the return value includes 
-        two set of orbitals, which are more close to the stable condition. 
-        The first corresponds to the internal stability 
+        If return_status is False (default), the return value includes
+        two set of orbitals, which are more close to the stable condition.
+        The first corresponds to the internal stability
         and the second corresponds to the external stability.
 
-        Else, another two boolean variables (indicating current status: 
-        stable or unstable) are returned. 
-        The first corresponds to the internal stability 
-        and the second corresponds to the external stability. 
+        Else, another two boolean variables (indicating current status:
+        stable or unstable) are returned.
+        The first corresponds to the internal stability
+        and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
     if return_status:
@@ -93,15 +93,15 @@ def uhf_stability(mf, internal=True, external=False, verbose=None, return_status
             Whether to return `stable_i` and `stable_e`
 
     Returns:
-        If return_status is False (default), the return value includes 
-        two set of orbitals, which are more close to the stable condition. 
-        The first corresponds to the internal stability 
+        If return_status is False (default), the return value includes
+        two set of orbitals, which are more close to the stable condition.
+        The first corresponds to the internal stability
         and the second corresponds to the external stability.
 
-        Else, another two boolean variables (indicating current status: 
-        stable or unstable) are returned. 
-        The first corresponds to the internal stability 
-        and the second corresponds to the external stability. 
+        Else, another two boolean variables (indicating current status:
+        stable or unstable) are returned.
+        The first corresponds to the internal stability
+        and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
     if return_status:
@@ -134,15 +134,15 @@ def rohf_stability(mf, internal=True, external=False, verbose=None, return_statu
             Whether to return `stable_i` and `stable_e`
 
     Returns:
-        If return_status is False (default), the return value includes 
-        two set of orbitals, which are more close to the stable condition. 
-        The first corresponds to the internal stability 
+        If return_status is False (default), the return value includes
+        two set of orbitals, which are more close to the stable condition.
+        The first corresponds to the internal stability
         and the second corresponds to the external stability.
 
-        Else, another two boolean variables (indicating current status: 
-        stable or unstable) are returned. 
-        The first corresponds to the internal stability 
-        and the second corresponds to the external stability. 
+        Else, another two boolean variables (indicating current status:
+        stable or unstable) are returned.
+        The first corresponds to the internal stability
+        and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
     if return_status:
@@ -171,11 +171,11 @@ def ghf_stability(mf, verbose=None, return_status=False):
             Whether to return `stable_i` and `stable_e`
 
     Returns:
-        If return_status is False (default), the return value includes 
-        a new set of orbitals, which are more close to the stable condition. 
+        If return_status is False (default), the return value includes
+        a new set of orbitals, which are more close to the stable condition.
 
-        Else, another one boolean variable (indicating current status: 
-        stable or unstable) is returned. 
+        Else, another one boolean variable (indicating current status:
+        stable or unstable) is returned.
     '''
     log = logger.new_logger(mf, verbose)
     with_symmetry = True
