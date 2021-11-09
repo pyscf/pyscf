@@ -240,7 +240,7 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KGHF(cell, abs_kpts, exxdiv=None)
         kmf.conv_tol = 1e-14
         escf = kmf.scf()
-        self.assertAlmostEqual(escf, -6.1870676561726574, 9)
+        self.assertAlmostEqual(escf, -6.1870676561726574, 7)
 
         # GCCSD calculation
         cc = pbcc.kccsd.CCSD(kmf)

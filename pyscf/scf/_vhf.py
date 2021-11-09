@@ -551,7 +551,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         for j in range(n_dm):
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
-    vjk = numpy.empty((njk,n_dm*ncomp,nao,nao), dtype=numpy.complex)
+    vjk = numpy.empty((njk,n_dm*ncomp,nao,nao), dtype=numpy.complex128)
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),
@@ -620,7 +620,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
-    vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex)
+    vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex128)
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),

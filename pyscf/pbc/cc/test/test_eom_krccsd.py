@@ -19,13 +19,6 @@ kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), 
 kmf.conv_tol = 1e-10
 kmf.scf()
 
-n = 15
-cell_n3 = make_test_cell.test_cell_n3([n]*3)
-kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv=None)
-kmf_n3.kernel()
-kmf_n3_ewald = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv='ewald')
-kmf_n3_ewald.kernel()
-
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
     Ps = numpy.zeros((nkpts, nkpts, nkpts, nkpts))
@@ -103,10 +96,9 @@ rand_kmf1 = make_rand_kmf(nkpts=1)
 rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
-    global cell_n3d, kmf, cell_n3, kmf_n3, kmf_n3_ewald, rand_kmf, rand_kmf1, rand_kmf2
+    global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
     cell_n3d.stdout.close()
-    cell_n3.stdout.close()
-    del cell_n3d, kmf, cell_n3, kmf_n3, kmf_n3_ewald, rand_kmf, rand_kmf1, rand_kmf2
+    del cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
@@ -258,6 +250,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)
 
     def test_n3_ee(self):
+        n = 15
+        cell_n3 = make_test_cell.test_cell_n3([n]*3)
+        kmf_n3 = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv=None)
+        kmf_n3.kernel()
+        kmf_n3_ewald = pbcscf.KRHF(cell_n3, cell_n3.make_kpts([2,1,1]), exxdiv='ewald')
+        kmf_n3_ewald.kernel()
         ehf_bench = [-8.651923514149, -10.530905169078]
         ecc_bench = [-0.155298299344, -0.093617975270]
 

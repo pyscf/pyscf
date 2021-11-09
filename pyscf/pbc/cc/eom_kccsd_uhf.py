@@ -469,7 +469,7 @@ class EOMIP(eom_kgccsd.EOMIP):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
         guess = []
@@ -970,7 +970,7 @@ class EOMEA(eom_kgccsd.EOMEA):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo

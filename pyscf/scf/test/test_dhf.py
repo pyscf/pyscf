@@ -128,7 +128,7 @@ class KnownValues(unittest.TestCase):
         n2c = h4.nao_2c()
         n4c = n2c * 2
         c1 = .5 / lib.param.LIGHT_SPEED
-        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
         eri0[:n2c,:n2c,:n2c,:n2c] = h4.intor('int2e_spinor')
         eri0[n2c:,n2c:,:n2c,:n2c] = h4.intor('int2e_spsp1_spinor') * c1**2
         eri0[:n2c,:n2c,n2c:,n2c:] = eri0[n2c:,n2c:,:n2c,:n2c].transpose(2,3,0,1)
@@ -169,7 +169,7 @@ class KnownValues(unittest.TestCase):
         n2c = h4.nao_2c()
         n4c = n2c * 2
         c1 = .5 / lib.param.LIGHT_SPEED
-        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
         eri0[:n2c,:n2c,:n2c,:n2c] = h4.intor('int2e_spinor')
         eri0[n2c:,n2c:,:n2c,:n2c] = h4.intor('int2e_spsp1_spinor') * c1**2
         eri0[:n2c,:n2c,n2c:,n2c:] = eri0[n2c:,n2c:,:n2c,:n2c].transpose(2,3,0,1)
@@ -277,7 +277,7 @@ def _fill_gaunt(mol, erig):
     idx = abs(tao)-1 # -1 for C indexing convention
     sign_mask = tao<0
 
-    eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+    eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
     eri0[:n2c,n2c:,:n2c,n2c:] = erig # ssp1ssp2
 
     eri2 = erig.take(idx,axis=0).take(idx,axis=1) # sps1ssp2

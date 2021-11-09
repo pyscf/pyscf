@@ -432,8 +432,8 @@ def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
         dmss = numpy.asarray(dm[n2c:,n2c:], order='C') * c1**2
         for erill, eriss in dfobj.loop():
             naux, nao_pair = erill.shape
-            buf = numpy.empty((naux,n2c,n2c), dtype=numpy.complex)
-            buf1 = numpy.empty((naux,n2c,n2c), dtype=numpy.complex)
+            buf = numpy.empty((naux,n2c,n2c), dtype=numpy.complex128)
+            buf1 = numpy.empty((naux,n2c,n2c), dtype=numpy.complex128)
 
             fdrv(ftrans, fmmm,
                  buf.ctypes.data_as(ctypes.c_void_p),

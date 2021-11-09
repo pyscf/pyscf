@@ -740,7 +740,6 @@ class CASSCF(casci.CASCI):
         nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], ncas, ncore, nvir)
-        assert(nvir >= 0 and ncore >= 0 and ncas >= 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
@@ -805,8 +804,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
             self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, self.e_cas, self.ci, \

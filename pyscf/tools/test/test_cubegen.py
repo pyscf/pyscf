@@ -57,6 +57,12 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(orb.shape, (12,18,15))
         self.assertAlmostEqual(lib.finger(orb), -0.8591778390706646, 9)
 
+        orb = cubegen.orbital(mol, ftmp.name, mf.mo_coeff[:,0],
+                              nx=10, ny=1, nz=1)
+        self.assertEqual(orb.shape, (10,1,1))
+        self.assertAlmostEqual(lib.finger(orb), 6.921008881822988e-09, 9)
+
+
     def test_rho(self):
         ftmp = tempfile.NamedTemporaryFile()
         rho = cubegen.density(mol, ftmp.name, mf.make_rdm1(),

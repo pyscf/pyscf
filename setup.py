@@ -57,15 +57,16 @@ def get_version():
 VERSION = get_version()
 
 EXTRAS = {
-    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2'],
+    'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
     'dftd3': ['pyscf-dftd3'],
     'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
-    'properties': ['pyscf-properteis'],
+    'properties': ['pyscf-properties'],
     'semiempirical': ['pyscf-semiempirical'],
     'shciscf': ['pyscf-shciscf'],
     'cppe': ['cppe'],
+    'pyqmc':['pyqmc'],
 }
 EXTRAS['all'] = [p for extras in EXTRAS.values() for p in extras]
 # extras which should not be installed by "all" components
@@ -90,7 +91,9 @@ class CMakeBuildExt(build_ext):
         self.spawn(cmd)
 
         self.announce('Building binaries', level=3)
-        cmd = ['cmake', '--build', self.build_temp, '-j']
+        # Do not use high level parallel compilation. OOM may be triggered
+        # when compiling certain functionals in libxc.
+        cmd = ['cmake', '--build', self.build_temp, '-j2']
         build_args = os.getenv('CMAKE_BUILD_ARGS')
         if build_args:
             cmd.extend(build_args.split(' '))
@@ -136,8 +139,8 @@ setup(
     # The ext_modules placeholder is to ensure build_ext getting initialized
     ext_modules=[Extension('pyscf_lib_placeholder', [])],
     cmdclass={'build_ext': CMakeBuildExt},
-    install_requires=['numpy>1.8,!=1.16,!=1.17',
+    install_requires=['numpy>=1.13,!=1.16,!=1.17',
                       'scipy!=1.5.0,!=1.5.1',
-                      'h5py>=2.6'],
+                      'h5py>=2.7'],
     extras_require=EXTRAS,
 )

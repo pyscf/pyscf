@@ -656,6 +656,9 @@ class _LongRangeAFT(aft.AFTDF):
         if kpts_band is not None:
             return self.get_j_for_bands(dm_kpts, hermi, kpts, kpts_band)
 
+        if len(kpts) == 1 and not is_zero(kpts):
+            raise NotImplementedError('Single k-point get-j')
+
         cell = self.cell
         dm_kpts = lib.asarray(dm_kpts, order='C')
         dms = _format_dms(dm_kpts, kpts)
