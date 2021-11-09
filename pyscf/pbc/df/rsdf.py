@@ -519,6 +519,8 @@ cell.dimension=3 with large vacuum.""")
 
         df.df.GDF.__init__(self, cell, kpts=kpts)
 
+        self.kpts = np.reshape(self.kpts, (-1,3))
+
     def dump_flags(self, verbose=None):
         cell = self.cell
         log = logger.new_logger(self, verbose)
@@ -566,7 +568,9 @@ cell.dimension=3 with large vacuum.""")
 
         return self
 
-    def _rsh_build(self):
+    def _rs_build(self):
+        log = logger.Logger(self.stdout, self.verbose)
+
         # find kmax
         kpts = self.kpts if self.kpts_band is None else np.vstack(
                                                     [self.kpts, self.kpts_band])
@@ -610,6 +614,15 @@ cell.dimension=3 with large vacuum.""")
         # build auxcell
         from pyscf.df.addons import make_auxmol
         auxcell = make_auxmol(self.cell, self.auxbasis)
+        # drop exponents
+        drop_eta = self.exp_to_discard
+        if drop_eta is not None and drop_eta > 0:
+            log.info("Drop primitive fitting functions with exponent < %s",
+                     drop_eta)
+            auxbasis = rsdf_helper.remove_exp_basis(auxcell._basis,
+                                                    amin=drop_eta)
+            auxcellnew = make_auxmol(self.cell, auxbasis)
+            auxcell = auxcellnew
 
         # determine mesh for computing j2c
         auxcell.precision = self.precision_j2c
@@ -675,7 +688,7 @@ cell.dimension=3 with large vacuum.""")
         self._kpts_build(kpts_band=kpts_band)
 
         # build for range-separation hybrid
-        self._rsh_build()
+        self._rs_build()
 
         # dump flags before the final build
         self.check_sanity()

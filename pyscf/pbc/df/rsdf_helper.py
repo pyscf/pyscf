@@ -37,6 +37,48 @@ libpbc = lib.load_library('libpbc')
 
 """ General helper functions
 """
+def remove_exp_basis_(bold, amin, amax):
+    bnew = []
+    for b in bold:
+        l = b[0]
+        ecs = np.array(b[1:])
+        if ecs.ndim == 1:
+            ecs = np.array([ecs])
+        nprim, nctr = ecs.shape
+        if nprim == 1:  # pGTO
+            e = ecs[0,0]
+            if e >= amin and e <= amax:
+                bnew.append(b)
+        else:  # cGTO
+            es = ecs[:,0]
+            ecsnew = ecs[(es>=amin)&(es<=amax)]
+            nprimnew = ecsnew.shape[0]
+            if nprimnew == 0:   # no prims left
+                continue
+            elif nprimnew == 1: # cGTO reduces to pGTO
+                bnew.append([l, [ecsnew[0,0], 1.]])
+            else:
+                csnew = ecsnew[:,1:]
+                # cGTOs having zero coeff after expn discard are removed
+                csnew = csnew[:,abs(csnew).sum(axis=0) > 1e-16]
+                esnew = ecsnew[:,:1]
+                ecsnew = np.hstack([esnew,csnew])
+                bnew.append([l] + [ec.tolist() for ec in ecsnew])
+    return bnew
+def remove_exp_basis(basis, amin=None, amax=None):
+    r""" Removing primitives with exponents \in [amin,amax]. The input basis
+    can either be PySCF's basis list or a dictionary.
+    """
+    if amin is None and amax is None:
+        return basis
+    if amin is None: amin = 0.
+    if amax is None: amax = float('inf')
+    if isinstance(basis, dict):
+        basisnew = {atm:remove_exp_basis_(blist,amin,amax)
+                    for atm,blist in basis.items()}
+    else:
+        basisnew = remove_exp_basis_(basis,amin,amax)
+    return basisnew
 def binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
                   MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
     if args is None: args = tuple()
