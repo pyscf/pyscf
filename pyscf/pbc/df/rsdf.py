@@ -487,30 +487,33 @@ cell.dimension=3 with large vacuum.""")
         self.precision_R = cell.precision * 1e-2
         self.precision_G = cell.precision
 
-        # One of {omega, npw_max} must be provided, and the other will be
-        # deduced automatically from it. The priority when both are given
-        # is omega > npw_max.
-        # If omega deduced from npw_max is smaller than self._omega_min,
-        # omega = omega_min is used.
-        # The default is npw_max = 350 ~ 7x7x7 PWs for 3D isotropic systems.
-        # Once omega is determined, mesh_compact is determined for (L|g^lr|pq)
-        # to achieve given accuracy.
+        # omega and PW mesh size for j3c.
+        # 1. If 'omega' is given, the code can search an appropriate PW mesh of
+        # size 'mesh_compact' that computes the LR-AFT of j3c to 'precision_G'.
+        # 2. If 'omega' is not given, the code will search for the maximum
+        # omega such that the size of 'mesh_compact' does not exceed 'npw_max'.
+        # The default for 'npw_max' is 350 (i.e., 7x7x7 for a 3D cubic
+        # lattice). If thus determined 'omega' is smaller than '_omega_min'
+        # (default: 0.3), 'omega' will be set to '_omega_min' and 'mesh_compact'
+        # is determined from the new 'omega' (ignoring 'npw_max').
+        # Note 1: In both cases, the user can manually overwrite the
+        # auto-determined 'mesh_compact'.
+        # Note 2: 'ke_cutoff' is not an input option. Use 'mesh_compact' directly.
         self.npw_max = 350
         self._omega_min = 0.3
         self.omega = None
         self.ke_cutoff = None
         self.mesh_compact = None
 
-        # omega and mesh for j2c. Since j2c is to be inverted, it is desirable
-        # to use (1) a "fixed" omega for reproducibility, and (2) a higher
-        # precision to minimize any round-off error caused by inversion.
-        # The extra computational cost due to the higher precision is
-        # negligible compared to the j3c build.
-        # FOR EXPERTS: if you want omega_j2c to be the same as the omega used
-        # for j3c build, set omega_j2c to be any negative number.
+        # omega and PW mesh size for j2c.
+        # Like for j3c, if 'omega_j2c' is given, the code can determine an
+        # appropriate PW mesh of size 'mesh_j2c' that computes the LR-AFT of j2c
+        # to 'precision_j2c'.
+        # The default ('omega_j2c' = 0.4 and 'precision_j2c' = 1e-14) is recommended.
+        # Like for j3c, 'mesh_j2c' can be overwritten manually.
         self.omega_j2c = 0.4
         self.mesh_j2c = None
-        self.precision_j2c = 1e-4 * self.precision_G
+        self.precision_j2c = 1e-14
 
         # set True to force calculating j2c^(-1/2) using eigenvalue
         # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
@@ -585,7 +588,7 @@ cell.dimension=3 with large vacuum.""")
         # If omega is not given, estimate it from npw_max
         r2o = True
         if self.omega is None:
-            self.omega, self.ke_cutoff, self.mesh_compact = \
+            self.omega, self.ke_cutoff, mesh_compact = \
                                 rsdf_helper.estimate_omega_for_npw(
                                                 self.cell, self.npw_max,
                                                 self.precision_G,
@@ -594,22 +597,23 @@ cell.dimension=3 with large vacuum.""")
             # if omega from npw_max is too small, use omega_min
             if self.omega < self._omega_min:
                 self.omega = self._omega_min
-                self.ke_cutoff, self.mesh_compact = \
+                self.ke_cutoff, mesh_compact = \
                                     rsdf_helper.estimate_mesh_for_omega(
                                                     self.cell, self.omega,
                                                     self.precision_G,
                                                     kmax=kmax,
                                                     round2odd=r2o)
-        else:
+            # Use the thus determined mesh_compact only if not p[rovided
+            if self.mesh_compact is None:
+                self.mesh_compact = mesh_compact
+        # If omega is provded but mesh_compact is not
+        elif self.mesh_compact is None:
             self.ke_cutoff, self.mesh_compact = \
                                 rsdf_helper.estimate_mesh_for_omega(
                                                 self.cell, self.omega,
                                                 self.precision_G,
                                                 kmax=kmax,
                                                 round2odd=r2o)
-
-        # As explained in __init__, if negative omega_j2c --> use omega
-        if self.omega_j2c < 0: self.omega_j2c = self.omega
 
         # build auxcell
         from pyscf.df.addons import make_auxmol
@@ -628,8 +632,9 @@ cell.dimension=3 with large vacuum.""")
         auxcell.precision = self.precision_j2c
         auxcell.rcut = max([auxcell.bas_rcut(ib, auxcell.precision)
                             for ib in range(auxcell.nbas)])
-        self.mesh_j2c = rsdf_helper.estimate_mesh_for_omega(
-                                auxcell, self.omega_j2c, round2odd=True)[1]
+        if self.mesh_j2c is None:
+            self.mesh_j2c = rsdf_helper.estimate_mesh_for_omega(
+                                    auxcell, self.omega_j2c, round2odd=True)[1]
         self.auxcell = auxcell
 
     def _kpts_build(self, kpts_band=None):
