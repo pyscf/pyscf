@@ -957,9 +957,10 @@ class UHF(hf.SCF):
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
-                  verbose=None):
+                  verbose=None,
+                  return_status=False):
         '''
-        Stability analysis for RHF/RKS method.
+        Stability analysis for UHF/UKS method.
 
         See also pyscf.scf.stability.uhf_stability function.
 
@@ -972,14 +973,22 @@ class UHF(hf.SCF):
             external : bool
                 External stability. Including the UHF -> GHF and real -> complex
                 stability analysis.
+            return_status: bool
+                Whether to return `stable_i` and `stable_e`
 
         Returns:
-            New orbitals that are more close to the stable condition.  The return
-            value includes two set of orbitals.  The first corresponds to the
-            internal stability and the second corresponds to the external stability.
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import uhf_stability
-        return uhf_stability(self, internal, external, verbose)
+        return uhf_stability(self, internal, external, verbose, return_status)
 
     def nuc_grad_method(self):
         from pyscf.grad import uhf
