@@ -59,8 +59,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 

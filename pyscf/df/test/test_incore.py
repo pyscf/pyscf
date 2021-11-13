@@ -144,7 +144,7 @@ class KnownValues(unittest.TestCase):
         naoaux = auxmol.nao_nr()
         j3c = j3c.reshape(nao,nao,naoaux)
 
-        eri0 = numpy.empty((nao,nao,naoaux), dtype=numpy.complex)
+        eri0 = numpy.empty((nao,nao,naoaux), dtype=numpy.complex128)
         pi = 0
         for i in range(mol.nbas):
             pj = 0

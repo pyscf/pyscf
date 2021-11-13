@@ -348,7 +348,7 @@ def make_natural_orbitals (method_obj):
 
     # Diagonalize the DM in AO (using Eqn. (1) referenced above)
     A = reduce(numpy.dot, (S, Dm, S))
-    w, v = scipy.linalg.eigh(A, b = S)
+    w, v = scipy.linalg.eigh(A, b=S)
 
     # Flip NOONs (and NOs) since they're in increasing order
     noons = numpy.flip(w)

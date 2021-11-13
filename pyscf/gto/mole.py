@@ -101,6 +101,9 @@ NUC_ECP = 4  # atoms with pseudo potential
 BASE = getattr(__config__, 'BASE', 0)
 NORMALIZE_GTO = getattr(__config__, 'NORMALIZE_GTO', True)
 DISABLE_EVAL = getattr(__config__, 'DISABLE_EVAL', False)
+# Whether to disable the explicit call to gc.collect(). gc.collect() may cause
+# non-negligible overhead (https://github.com/pyscf/pyscf/issues/1038).
+DISABLE_GC = getattr(__config__, 'DISABLE_GC', False)
 
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
@@ -205,7 +208,7 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
         assert(l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
-    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
+    c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex128)
     cmat = numpy.eye(nf)
     fn = moleintor.libcgto.CINTc2s_ket_spinor_sf1
     fn(c2smat.ctypes.data_as(ctypes.c_void_p),
@@ -1160,7 +1163,7 @@ def loads(molstr):
                 c = numpy.zeros(shape)
                 c[numpy.array(x),numpy.array(y)] = numpy.array(val_real)
             else:
-                c = numpy.zeros(shape, dtype=numpy.complex)
+                c = numpy.zeros(shape, dtype=numpy.complex128)
                 val = numpy.array(val_real) + numpy.array(val_imag) * 1j
                 c[numpy.array(x),numpy.array(y)] = val
             symm_orb.append(c)
@@ -2321,7 +2324,8 @@ class Mole(lib.StreamObject):
                 name, the given point group symmetry will be used.
 
         '''
-        gc.collect()  # To release circular referred objects
+        if not DISABLE_GC:
+            gc.collect()  # To release circular referred objects
 
         if isinstance(dump_input, (str, unicode)):
             sys.stderr.write('Assigning the first argument %s to mol.atom\n' %

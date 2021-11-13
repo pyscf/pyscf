@@ -49,8 +49,6 @@ if (BUILD_MARCH_NATIVE)
 endif()
 
 
-cmake_policy(SET CMP0042 NEW)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Architecture specified cmake flags.  See also the templates in
@@ -133,7 +131,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 if (WIN32)
   #?
 elseif (APPLE)
-  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
+  set(CMAKE_BUILD_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
 else ()
   set(CMAKE_SKIP_BUILD_RPATH  True)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
@@ -165,18 +165,22 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
     # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
-    GIT_TAG v4.4.2
+    GIT_TAG v4.4.6
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
-            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=10
-            -DKEEP_GOING=1
-            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DBLAS_LIBRARIES=${BLAS_LIBRARIES}
-            -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
-            -DBUILD_MARCH_NATIVE=${BUILD_MARCH_NATIVE}
+    CMAKE_CACHE_ARGS 
+        -DWITH_F12:STRING=${WITH_F12} 
+        -DWITH_RANGE_COULOMB:STRING=1
+        -DWITH_FORTRAN:STRING=0 
+        -DWITH_CINT2_INTERFACE:STRING=0 
+        -DMIN_EXPCUTOFF:STRING=20
+        -DKEEP_GOING:STRING=1
+        -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+        -DCMAKE_INSTALL_LIBDIR:PATH=lib 
+        -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+        -DBLAS_LIBRARIES:STRING=${BLAS_LIBRARIES}
+        -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
+        -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
   )
   add_dependencies(cgto libcint)
   add_dependencies(ao2mo libcint)
@@ -197,7 +201,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/5.1.5/libxc-5.1.5.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/5.1.7/libxc-5.1.7.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1

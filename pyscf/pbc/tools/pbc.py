@@ -480,9 +480,15 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     if nimgs is None:
         if rcut is None:
             rcut = cell.rcut
-# plus 1 image in rcut to handle the case atoms within the adjacent cells are
-# close to each other
-        nimgs = np.ceil(rcut*heights_inv + 1.1).astype(int)
+        # For atoms outside the cell, distance between certain basis of nearby
+        # images may be smaller than rcut threshold even the corresponding Ls is
+        # larger than rcut. The boundary penalty ensures that Ls would be able to
+        # cover the basis that sitting out of the cell.
+        # See issue https://github.com/pyscf/pyscf/issues/1017
+        scaled_atom_coords = cell.atom_coords().dot(b.T)
+        boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
+                                   abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
+        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
     else:
         rcut = max((np.asarray(nimgs))/heights_inv)
 
@@ -499,16 +505,36 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    if not discard:
-        return Ls
-    idx = np.zeros(len(Ls), dtype=bool)
-    idx[len(Ls)//2] = True  # cell0 (Ls == 0) should always be included.
-    for ax in (-a[0], 0, a[0]):
-        for ay in (-a[1], 0, a[1]):
-            for az in (-a[2], 0, a[2]):
-                idx |= lib.norm(Ls+(ax+ay+az), axis=1) < rcut
-    Ls = Ls[idx]
+    if discard:
+        Ls = _discard_edge_images(cell, Ls, rcut)
     return np.asarray(Ls, order='C')
+
+def _discard_edge_images(cell, Ls, rcut):
+    '''
+    Discard images if no basis in the image would contribute to lattice sum.
+    '''
+    if rcut <= 0:
+        return np.zeros((1, 3))
+
+    a = cell.lattice_vectors()
+    scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
+    atom_boundary_max = scaled_atom_coords.max(axis=0)
+    atom_boundary_min = scaled_atom_coords.min(axis=0)
+    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
+    # images are converged.
+    ovlp_penalty = atom_boundary_max - atom_boundary_min
+    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
+    # of the primitive cell converged
+    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
+    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
+    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
+    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
+    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
+    # cell0 (Ls == 0) should always be included.
+    Ls_mask[len(Ls)//2] = True
+    return Ls[Ls_mask]
 
 
 def super_cell(cell, ncopy):

@@ -737,8 +737,8 @@ def get_t3p2_imds(mycc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     # Create necessary temporary eris for fast read
     from pyscf.pbc.cc.kccsd_t_rhf import create_t3_eris, get_data_slices
     feri_tmp, t2T, eris_vvop, eris_vooo_C = create_t3_eris(mycc, kconserv, [eris.vovv, eris.oovv, eris.ooov, t2])
-    #t1T = np.array([x.T for x in t1], dtype=np.complex, order='C')
-    #fvo = np.array([x.T for x in fov], dtype=np.complex, order='C')
+    #t1T = np.array([x.T for x in t1], dtype=np.complex128, order='C')
+    #fvo = np.array([x.T for x in fov], dtype=np.complex128, order='C')
     cpu1 = logger.timer_debug1(mycc, 'CCSD(T) tmp eri creation', *cpu1)
 
     def get_w(ki, kj, kk, ka, kb, kc, a0, a1, b0, b1, c0, c1):

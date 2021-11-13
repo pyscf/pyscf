@@ -208,7 +208,7 @@ class KnownValues(unittest.TestCase):
                            [1   , (0. ,  0.7 , 0.)]],
                      basis = '631g')
         nao = mol1.nao_2c()
-        eri0 = numpy.empty((3,nao,nao,nao,nao), dtype=numpy.complex)
+        eri0 = numpy.empty((3,nao,nao,nao,nao), dtype=numpy.complex128)
         ip = 0
         for i in range(mol1.nbas):
             jp = 0

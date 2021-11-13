@@ -23,8 +23,10 @@ einsum = lib.einsum
 #TODO: optimize memory use
 
 def _gamma1_intermediates(cc, t1, t2, l1=None, l2=None):
-    if l1 is None: l1 = t1
-    if l2 is None: l2 = t2
+    if l1 is None:
+        l1 = [amp.conj() for amp in t1]
+    if l2 is None:
+        l2 = [amp.conj() for amp in t2]
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
 
@@ -110,7 +112,7 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
 
-    dtype = np.result_type(doo, dOO, dov, dOV, dvo, dVO, dvv, dVV)
+    dtype = numpy.result_type(doo, dOO, dov, dOV, dvo, dVO, dvv, dVV)
 
     dm1a = numpy.empty((nkpts,nmoa,nmoa), dtype=dtype)
     dm1a[:,:nocca,:nocca] = doo + doo.conj().transpose(0,2,1)

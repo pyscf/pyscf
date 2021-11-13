@@ -405,7 +405,7 @@ if __name__ == '__main__':
 
     orbspin = np.zeros(nao*2, dtype=int)
     orbspin[1::2] = 1
-    eri1 = np.zeros([nao*2]*4, dtype=np.complex)
+    eri1 = np.zeros([nao*2]*4, dtype=np.complex128)
     eri1[0::2,0::2,0::2,0::2] = eri1[0::2,0::2,1::2,1::2] = eri0
     eri1[1::2,1::2,0::2,0::2] = eri1[1::2,1::2,1::2,1::2] = eri0
     eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)

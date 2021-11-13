@@ -40,8 +40,7 @@ class CASSCF(newton_casscf.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = newton_casscf.kernel
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 

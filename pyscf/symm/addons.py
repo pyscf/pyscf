@@ -70,8 +70,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
     s_mo = numpy.dot(s, mo)
     norm = numpy.zeros((len(irrep_name), nmo))
     for i, csym in enumerate(symm_orb):
-        moso = numpy.dot(csym.T, s_mo)
-        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
+        moso = numpy.dot(csym.T.conj(), s_mo)
+        ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
         try:
             s_moso = lib.cho_solve(ovlpso, moso)
         except numpy.linalg.LinAlgError:
@@ -155,8 +155,8 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
     for i, ir in enumerate(irrep_id):
         idx = orbsym == ir
         csym = mol.symm_orb[i]
-        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
-        sc = lib.cho_solve(ovlpso, numpy.dot(csym.T, s_mo[:,idx]))
+        ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
+        sc = lib.cho_solve(ovlpso, numpy.dot(csym.T.conj(), s_mo[:,idx]))
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
@@ -201,8 +201,8 @@ def symmetrize_space(mol, mo, s=None,
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
-        moso = numpy.dot(csym.T, s_mo)
-        ovlpso = reduce(numpy.dot, (csym.T, s, csym))
+        moso = numpy.dot(csym.T.conj(), s_mo)
+        ovlpso = reduce(numpy.dot, (csym.T.conj(), s, csym))
 
         # excluding orbitals which are already symmetrized
         try:
@@ -227,7 +227,7 @@ def symmetrize_space(mol, mo, s=None,
     if (check and
         abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max() > tol):
         raise ValueError('Orbitals are not orthogonalized')
-    idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T, s, mo1)))
+    idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T.conj(), s, mo1)))
     return mo1[:,idx]
 
 def std_symb(gpname):

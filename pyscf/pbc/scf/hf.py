@@ -48,9 +48,16 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
+    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
+    s = lib.asarray(s)
+    hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
+    if hermi_error > cell.precision and hermi_error > 1e-12:
+        logger.warn(cell, '%.4g error found in overlap integrals. '
+                    'cell.precision  or  cell.rcut  can be adjusted to '
+                    'improve accuracy.')
+
     #skip cond for big system
     if cell.verbose >= logger.DEBUG and cell.nao < 2000:
         cond = np.max(lib.cond(s, p=1))
@@ -508,7 +515,7 @@ class SCF(mol_hf.SCF):
         self.kpt = kpt
         self.conv_tol = cell.precision * 10
 
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
+        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpt(self):

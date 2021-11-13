@@ -74,6 +74,7 @@ from pyscf.cc import gccsd
 from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
+from pyscf.cc import qcisd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -140,6 +141,41 @@ def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     else:
         return gccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 GCCSD.__doc__ = gccsd.GCCSD.__doc__
+
+
+def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    if isinstance(mf, scf.uhf.UHF):
+        raise NotImplementedError 
+    elif isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError 
+    else:
+        return RQCISD(mf, frozen, mo_coeff, mo_occ)
+QCISD.__doc__ = qcisd.QCISD.__doc__
+
+scf.hf.SCF.QCISD = QCISD
+
+def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    import numpy
+    from pyscf import lib
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, scf.uhf.UHF):
+        raise RuntimeError('RQCISD cannot be used with UHF method.')
+    elif isinstance(mf, scf.rohf.ROHF):
+        lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
+                        'is converted to UHF object and UQCISD method is called.')
+        mf = scf.addons.convert_to_uhf(mf)
+        raise NotImplementedError 
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+        raise NotImplementedError 
+
+    else:
+        return qcisd.QCISD(mf, frozen, mo_coeff, mo_occ)
+RQCISD.__doc__ = qcisd.QCISD.__doc__
 
 
 def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
