@@ -143,6 +143,32 @@ def _vxc2x2_to_mat(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc):
     mat+= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
     return mat
 
+def _vxc2x2_to_mat_S(mol, ao, weight, rho, vrho, non0tab, shls_slice, ao_loc):
+    aoa, aob = ao
+    r, m = rho
+    vr, vm = vrho.T
+    aow = numpy.empty_like(aoa)
+
+    s = lib.norm(m, axis=0)
+    idx = s < 1e-20
+    with numpy.errstate(divide='ignore',invalid='ignore'):
+        ws = vm * weight / s
+    ws[idx] = 0
+
+    aow = numpy.einsum('pi,p->pi', aoa, ws*m[0], out=aow)  # Mx
+    tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
+    mat = -tmp - tmp.T.conj()
+    aow = numpy.einsum('pi,p->pi', aoa, ws*m[1], out=aow)  # My
+    tmp = _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
+    mat-= (tmp - tmp.T.conj()) * 1j
+    aow = numpy.einsum('pi,p->pi', aoa, weight*vr, out=aow)
+    aow-= numpy.einsum('pi,p->pi', aoa, ws*m[2])  # Mz
+    mat+= _dot_ao_ao(mol, aoa, aow, non0tab, shls_slice, ao_loc)
+    aow = numpy.einsum('pi,p->pi', aob, weight*vr, out=aow)
+    aow+= numpy.einsum('pi,p->pi', aob, ws*m[2])  # Mz
+    mat+= _dot_ao_ao(mol, aob, aow, non0tab, shls_slice, ao_loc)
+    return mat
+
 def eval_mat(mol, ao, weight, rho, vxc,
              non0tab=None, xctype='LDA', verbose=None):
     aoa, aob = ao
@@ -191,7 +217,7 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 matLL[idm] += _vxc2x2_to_mat(mol, ao[:2], weight, rho, vrho,
                                              mask, shls_slice, ao_loc)
                 if with_s:
-                    matSS[idm] += _vxc2x2_to_mat(mol, ao[2:], weight, rho, vrho,
+                    matSS[idm] += _vxc2x2_to_mat_S(mol, ao[2:], weight, rho, vrho,
                                                  mask, shls_slice, ao_loc)
                 rho = exc = vxc = vrho = None
     elif xctype == 'GGA':
