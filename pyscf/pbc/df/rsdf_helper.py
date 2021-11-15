@@ -51,7 +51,7 @@ def _remove_exp_basis_(bold, amin, amax):
                 bnew.append(b)
         else:  # cGTO
             es = ecs[:,0]
-            ecsnew = ecs[(es>=amin)&(es<=amax)]
+            ecsnew = ecs[(es>=amin) & (es<=amax)]
             nprimnew = ecsnew.shape[0]
             if nprimnew == 0:   # no prims left
                 continue
@@ -90,7 +90,7 @@ def remove_exp_basis(basis, amin=None, amax=None):
         basisnew = _remove_exp_basis_(basis,amin,amax)
     return basisnew
 def _binary_search(xlo, xhi, xtol, ret_bigger, fcheck, args=None,
-                  MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
+                   MAX_RESCALE=5, MAX_CYCLE=20, early_exit=True):
     if args is None: args = tuple()
 # rescale xlo/xhi if necessary
     first_time = True
@@ -474,8 +474,8 @@ def _get_bincoeff(d,e1,e2,l1,l2):
         cbins[l] = cl
     return cbins
 def _get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, omega, precision,
-                         estimator, Qij, Rprec=1,
-                         eta_correct=True, R_correct=True):
+                          estimator, Qij, Rprec=1,
+                          eta_correct=True, R_correct=True):
     r""" Determine for AO shlpr (ish,jsh) separated by dij, the cutoff radius
     for 2-norm( (ksh|v_SR(omega)|ish,jsh) ) < precision.
 
@@ -527,13 +527,7 @@ def _get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, omega, precision,
     """
 # sanity check for estimators
     ESTIMATOR = estimator.upper()
-    if ESTIMATOR not in [
-            "ISF0",  # (ss|s)
-            "ISF",   # (ss|X)
-            "ISFQ0", # (Q_ss|X)
-            "ISFQL", # (Q_lmax|X)
-            "ME"     # \sum_l (l|X)
-        ]:
+    if ESTIMATOR not in ["ISF0", "ISF", "ISFQ0", "ISFQL", "ME"]:
         raise RuntimeError("Unknown estimator requested {}".format(estimator))
 
 # get bas info
@@ -655,10 +649,9 @@ def _get_3c2e_Rcuts_for_d(mol, auxmol, ish, jsh, dij, omega, precision,
         Rcuts[ksh] = estimate1(ksh, R0, R1)
 
     return Rcuts
-def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol,
-                   dijs_lst, omega, precision,
-                   estimator, Qijs_lst, Rprec=1,
-                   eta_correct=True, R_correct=True):
+def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
+                    precision, estimator, Qijs_lst, Rprec=1,
+                    eta_correct=True, R_correct=True):
     """ Given a list of basis ("bas_lst") and auxiliary basis ("auxbas_lst"),
     determine the cutoff radius for
         2-norm( (k|v_SR(omega)|ij) ) < precision
@@ -687,11 +680,11 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol,
             Qijs = Qijs_lst[ij]
             for dij,Qij in zip(dijs,Qijs):
                 Rcuts_dij = _get_3c2e_Rcuts_for_d(mol, auxmol, i, j, dij,
-                                                 omega, precision,
-                                                 estimator, Qij,
-                                                 Rprec=Rprec,
-                                                 eta_correct=eta_correct,
-                                                 R_correct=R_correct)
+                                                  omega, precision,
+                                                  estimator, Qij,
+                                                  Rprec=Rprec,
+                                                  eta_correct=eta_correct,
+                                                  R_correct=R_correct)
                 Rcuts.append(Rcuts_dij)
             ij += 1
     Rcuts = np.asarray(Rcuts).reshape(-1)
@@ -805,7 +798,7 @@ def estimate_omega_for_npw(cell, npw_max, precision=None, kmax=0,
 
     def omega2all(omega):
         ke_cutoff = _estimate_ke_cutoff_for_omega_kpt_corrected(cell, omega,
-                                                               precision, kmax)
+                                                                precision, kmax)
         mesh = pbctools.cutoff_to_mesh(latvecs, ke_cutoff)
         if round2odd:
             mesh = df.df._round_off_to_odd_mesh(mesh)
@@ -829,7 +822,7 @@ def estimate_mesh_for_omega(cell, omega, precision=None, kmax=0,
 
     if precision is None: precision = cell.precision
     ke_cutoff = _estimate_ke_cutoff_for_omega_kpt_corrected(cell, omega,
-                                                           precision, kmax)
+                                                            precision, kmax)
     mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
     if round2odd:
         mesh = df.df._round_off_to_odd_mesh(mesh)
@@ -882,9 +875,8 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
     if precision is None: precision = cell.precision
 
     refuniqshl_map, uniq_atms, uniq_bas, uniq_bas_loc = _get_refuniq_map(cell)
-    Rcuts = _get_2c2e_Rcut(uniq_bas, omega, precision,
-                          lmp=True, lasympt=True,
-                          eta_correct=True, R_correct=False)
+    Rcuts = _get_2c2e_Rcut(uniq_bas, omega, precision, lmp=True, lasympt=True,
+                           eta_correct=True, R_correct=False)
     Rcut2s = np.ones(Rcuts)*1e20 if no_screening else Rcuts**2.
     atom_Rcuts = _get_atom_Rcuts_2c(Rcuts, uniq_bas_loc)
     cell_rcut = atom_Rcuts.max()
@@ -964,7 +956,8 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
 """
 def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
                       intor='int3c2e', aosym='s2ij', comp=None,
-                      kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000, bvk_kmesh=None, precision=None,
+                      kptij_lst=None, dataname='eri_mo', shls_slice=None,
+                      max_memory=2000, bvk_kmesh=None, precision=None,
                       estimator="ME", verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -1009,19 +1002,19 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     dstep_BOHR = dstep / BOHR
     Qauxs = _get_schwartz_data(uniq_basaux, omega, keep1ctr=False, safe=True)
     dcuts = _get_schwartz_dcut(uniq_bas, omega, precision/Qauxs.max(),
-                              r0=cell.rcut)
+                               r0=cell.rcut)
     dijs_lst = _make_dijs_lst(dcuts, dstep_BOHR)
     dijs_loc = np.cumsum([0]+[len(dijs) for dijs in dijs_lst]).astype(np.int32)
     if estimator.upper() in ["ISFQ0","ISFQL"]:
         Qs_lst = _get_schwartz_data(uniq_bas, omega, dijs_lst, keep1ctr=True,
-                                   safe=True)
+                                    safe=True)
     else:
         Qs_lst = [np.zeros_like(dijs) for dijs in dijs_lst]
-    Rcuts = _get_3c2e_Rcuts(uniq_bas, uniq_basaux, dijs_lst, omega,
-                           precision, estimator, Qs_lst)
+    Rcuts = _get_3c2e_Rcuts(uniq_bas, uniq_basaux, dijs_lst, omega, precision,
+                            estimator, Qs_lst)
     bas_exps = np.array([np.asarray(b[1:])[:,0].min() for b in uniq_bas])
     atom_Rcuts = _get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, uniq_bas_loc,
-                                   uniq_basaux_loc)
+                                    uniq_basaux_loc)
     cell_rcut = atom_Rcuts.max()
     uniqexp = np.array([np.asarray(b[1:])[:,0].min() for b in uniq_bas])
     nbasauxuniq = len(uniq_basaux)
