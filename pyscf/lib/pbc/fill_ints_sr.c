@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <complex.h>
 #include <assert.h>
+#include <string.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
