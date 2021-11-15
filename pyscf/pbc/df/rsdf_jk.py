@@ -20,7 +20,7 @@ import numpy
 import copy
 
 def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
-    '''Generte density-fitting SCF object
+    '''Generate density-fitting SCF object
 
     Args:
         auxbasis : str or basis dict
