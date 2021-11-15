@@ -244,7 +244,7 @@ def _get_Lsmin(cell, Rcuts, uniq_atms, dimension=None):
     ids_keep = np.where(abs(np.rint(ts)-ts).sum(axis=1) < 1e-6)[0]
     Ts = ts[ids_keep]
     Ls = lib.dot(Ts, latvec)
-    ls = Ls @ np.random.rand(3)
+    ls = np.dot(Ls, np.random.rand(3))
     uniq_ls, uniq_idx = np.unique(ls, return_index=True)
     return np.asarray(Ls[uniq_idx], order="C")
 
