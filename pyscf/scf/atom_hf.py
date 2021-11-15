@@ -22,7 +22,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.lib import param
 from pyscf.data import elements
-from pyscf.scf import hf, rohf, atom_hf_pp
+from pyscf.scf import hf, rohf
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
@@ -62,10 +62,16 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
             mo_coeff = numpy.zeros((nao,nao))
             atm_scf_result[element] = (0, mo_energy, mo_coeff, mo_occ)
         elif atm._pseudo:
+            from pyscf.scf import atom_hf_pp
             atm.a = None
-            atm.verbose= 0
-            atm_hf = atom_hf_pp.AtomSCFPP(atm)
-            atm_hf.kernel()
+            if atm.nelectron == 1:
+                atm_hf = atom_hf_pp.AtomHF1ePP(atm)
+            else:
+                atm_hf = atom_hf_pp.AtomSCFPP(atm)
+                atm_hf.atomic_configuration = atomic_configuration
+
+            atm_hf.verbose = mol.verbose
+            atm_hf.run()
             atm_scf_result[element] = (atm_hf.e_tot, atm_hf.mo_energy,
                                        atm_hf.mo_coeff, atm_hf.mo_occ)
         else:
@@ -199,7 +205,7 @@ def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
 
 
 def _angular_momentum_for_each_ao(mol):
-    ao_ang = numpy.zeros(mol.nao, dtype=numpy.int)
+    ao_ang = numpy.zeros(mol.nao, dtype=numpy.int32)
     ao_loc = mol.ao_loc_nr()
     for i in range(mol.nbas):
         p0, p1 = ao_loc[i], ao_loc[i+1]

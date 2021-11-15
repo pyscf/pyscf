@@ -6,6 +6,7 @@ from pyscf import lib
 from pyscf import gto, scf
 from pyscf.dft import gen_grid, numint
 from pyscf.pbc import gto as pbcgto
+from pyscf.scf import atom_hf, rohf
 
 def get_pp_loc_part1_rs(mol, coords):
     atm_coords = mol.atom_coords()
@@ -57,6 +58,7 @@ def get_pp_loc_part2(mol):
     return vpp_loc
 
 def get_pp_loc(mol):
+    # TODO use analytic integral
     grids = gen_grid.Grids(mol)
     grids.level = 3
     grids.build(with_non0tab=True)
@@ -117,7 +119,7 @@ def _int_vnl(cell, fakecell, hl_blocks):
            int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
 
-class AtomSCFPP(scf.uhf.UHF):
+class AtomSCFPP(atom_hf.AtomSphAverageRHF):
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -125,3 +127,7 @@ class AtomSCFPP(scf.uhf.UHF):
         h += get_pp_nl(mol)
         h += get_pp_loc(mol)
         return h
+
+class AtomHF1ePP(rohf.HF1e, AtomSCFPP):
+    eig = AtomSCFPP.eig
+    get_hcore = AtomSCFPP.get_hcore
