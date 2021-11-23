@@ -20,6 +20,7 @@
 #include <complex.h>
 #include "cint.h"
 
+# if 0
 #if !defined HAVE_DEFINED_CINTENVVARS_H
 #define HAVE_DEFINED_CINTENVVARS_H
 typedef struct {
@@ -84,6 +85,7 @@ typedef struct {
 // Other definitions in CINTEnvVars are different in libcint and qcint.
 // They should not be used in this function.
 } CINTEnvVars;
+#endif
 #endif
 
 typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,

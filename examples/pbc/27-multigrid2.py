@@ -223,11 +223,16 @@ cell.build()
 #print('nao=', cell.nao)
 #print('mesh=', cell.mesh)
 
-
 mf=pbcdft.RKS(cell)
 mf.xc = "LDA, VWN"
 mf.init_guess='atom' # atom guess is fast
 mf.with_df = multigrid.MultiGridFFTDF2(cell)
-#mf.with_df.rel_cutoff = 15.0 # increase this for higher accuracy
-
+mf.with_df.ngrids = 4 # number of sets of grid points
+mf.with_df.ke_ratio = 3
+mf.with_df.rel_cutoff = 20
 mf.kernel()
+
+# Nuclear Gradients
+from pyscf.pbc.grad import rks as rks_grad
+grad = rks_grad.Gradients(mf)
+g = grad.kernel()

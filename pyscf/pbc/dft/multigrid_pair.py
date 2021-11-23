@@ -857,7 +857,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     return nelec, excsum, veff
 
 
-def get_veff_ip1(mydf, xc_code, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
+def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)

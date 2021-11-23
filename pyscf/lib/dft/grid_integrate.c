@@ -482,7 +482,7 @@ static void _v1_xyz_to_v1(void (*_v1_loop)(), double* v1_xyz, double* v1,
     }
 }
 
-
+/*
 #define SUM_NABLA_I \
         if (lx_i > 0) { \
             pv1[0] += lx_i * cxyzj * v1x[(lx-1)*l1l1+ly*l1+lz]; \
@@ -496,8 +496,8 @@ static void _v1_xyz_to_v1(void (*_v1_loop)(), double* v1_xyz, double* v1,
             pv1[0] += lz_i * cxyzj * v1z[lx*l1l1+ly*l1+lz-1]; \
         } \
         pv1[0] += fac_i * cxyzj * v1z[lx*l1l1+ly*l1+lz+1];
-
-
+*/
+/*
 static void _vsigma_loop_ip1ip2_x(double* pv1, double* v1x, double* v1y, double* v1z,
                        double* pcx, double* pcy, double* pcz,
                        double ai, double aj,
@@ -534,8 +534,73 @@ static void _vsigma_loop_ip1ip2_x(double* pv1, double* v1x, double* v1y, double*
         }
     }
 }
+*/
+
+#define COMMON_INIT(x) \
+    int l##x##_i; \
+    int lx, ly, lz; \
+    int jx, jy, jz; \
+    int lx_j_m1 = lx_j - 1; \
+    int lx_j_p1 = lx_j + 1; \
+    int ly_j_m1 = ly_j - 1; \
+    int ly_j_p1 = ly_j + 1; \
+    int lz_j_m1 = lz_j - 1; \
+    int lz_j_p1 = lz_j + 1; \
+    double ci; \
+    double cxj, cyj, czj; \
+    double cyzj, cxzj, cxyj, cxyzj; \
+    double fac_i = -2.0 * ai; \
+    double fac_j = -2.0 * aj; \
 
 
+#define SUM_NABLA_J(x, y, z) \
+    for (j##y = 0; j##y <= l##y##_j; j##y++) { \
+        c##y##j = pc##y[j##y+_LEN_CART0[l##y##_j]]; \
+        l##y = l##y##_i + j##y; \
+        for (j##z = 0; j##z <= l##z##_j; j##z++) { \
+            c##z##j = pc##z[j##z+_LEN_CART0[l##z##_j]]; \
+            l##z = l##z##_i + j##z; \
+            c##y##z##j = c##y##j * c##z##j; \
+            for (j##x = 0; j##x <= l##x##_j_m1; j##x++) { \
+                c##x##j = pc##x[j##x+_LEN_CART0[l##x##_j_m1]] * l##x##_j; \
+                cxyzj = c##x##j * c##y##z##j; \
+                l##x = l##x##_i + j##x; \
+                pv1[0] += ci * cxyzj * v1##x[lx*l1l1+ly*l1+lz]; \
+            } \
+            for (j##x = 0; j##x <= l##x##_j_p1; j##x++) { \
+                c##x##j = pc##x[j##x+_LEN_CART0[l##x##_j_p1]] * fac_j; \
+                cxyzj = c##x##j * c##y##z##j; \
+                l##x = l##x##_i + j##x; \
+                pv1[0] += ci * cxyzj * v1##x[lx*l1l1+ly*l1+lz]; \
+            } \
+        } \
+    }
+
+
+static void _vsigma_loop_ip1ip2_x(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i0, int ly_i, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    COMMON_INIT(x);
+
+    lx_i = lx_i0 + 1;
+    ci = fac_i;
+    SUM_NABLA_J(x,y,z);
+    SUM_NABLA_J(y,x,z);
+    SUM_NABLA_J(z,x,y);
+
+    if (lx_i0 > 0) {
+        lx_i = lx_i0 - 1;
+        ci = lx_i0;
+        SUM_NABLA_J(x,y,z);
+        SUM_NABLA_J(y,x,z);
+        SUM_NABLA_J(z,x,y);
+    }
+}
+
+/*
 static void _vsigma_loop_ip1ip2_y(double* pv1, double* v1x, double* v1y, double* v1z,
                        double* pcx, double* pcy, double* pcz,
                        double ai, double aj,
@@ -572,8 +637,33 @@ static void _vsigma_loop_ip1ip2_y(double* pv1, double* v1x, double* v1y, double*
         }
     }
 }
+*/
+
+static void _vsigma_loop_ip1ip2_y(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i0, int lz_i,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    COMMON_INIT(y);
+
+    ly_i = ly_i0 + 1;
+    ci = fac_i;
+    SUM_NABLA_J(x,y,z);
+    SUM_NABLA_J(y,x,z);
+    SUM_NABLA_J(z,x,y);
+
+    if (ly_i0 > 0) {
+        ly_i = ly_i0 - 1;
+        ci = ly_i0;
+        SUM_NABLA_J(x,y,z);
+        SUM_NABLA_J(y,x,z);
+        SUM_NABLA_J(z,x,y);
+    }
+}
 
 
+/*
 static void _vsigma_loop_ip1ip2_z(double* pv1, double* v1x, double* v1y, double* v1z,
                        double* pcx, double* pcy, double* pcz,
                        double ai, double aj,
@@ -608,6 +698,30 @@ static void _vsigma_loop_ip1ip2_z(double* pv1, double* v1x, double* v1y, double*
                 SUM_NABLA_I;
             }
         }
+    }
+}
+*/
+
+static void _vsigma_loop_ip1ip2_z(double* pv1, double* v1x, double* v1y, double* v1z,
+                       double* pcx, double* pcy, double* pcz,
+                       double ai, double aj,
+                       int lx_i, int ly_i, int lz_i0,
+                       int lx_j, int ly_j, int lz_j, int l1, int l1l1)
+{
+    COMMON_INIT(z);
+
+    lz_i = lz_i0 + 1;
+    ci = fac_i;
+    SUM_NABLA_J(x,y,z);
+    SUM_NABLA_J(y,x,z);
+    SUM_NABLA_J(z,x,y);
+
+    if (lz_i0 > 0) {
+        lz_i = lz_i0 - 1;
+        ci = lz_i0;
+        SUM_NABLA_J(x,y,z);
+        SUM_NABLA_J(y,x,z);
+        SUM_NABLA_J(z,x,y);
     }
 }
 

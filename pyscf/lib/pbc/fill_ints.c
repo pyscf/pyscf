@@ -863,7 +863,6 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
                          int *atm, int natm, int *bas, int nbas, double *env,
                          NeighborList** neighbor_list)
 {
-        assert(comp == 1);
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
@@ -882,8 +881,8 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
         //int kshloc[ksh1-ksh0+1];
         //int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-        int i, k;
-        int ksh, dk, iL, jL, ksh_off, jsh_off;
+        int i, k, ic;
+        int ksh, dk, dijk, iL, jL, ksh_off, jsh_off;
         int shls[3];
 
         int nshi = ish1 - ish0;
@@ -894,7 +893,7 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
         int dijmc = dij * dkmax * comp;
         double *bufL = buf + dijmc;
         double *cache = bufL + dijmc;
-        double *pbuf;
+        double *pbuf, *pbufL;
         int (*fprescreen)();
         if (pbcopt != NULL) {
                 fprescreen = pbcopt->fprescreen;
@@ -914,9 +913,11 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
         }
 
         for (ksh = ksh0; ksh < ksh1; ksh++){
+            dk = ao_loc[ksh+1] - ao_loc[ksh];
+            assert(dk < dkmax);
+            dijk = dij * dk;
             shls[2] = ksh;
             ksh_off = ksh - nshij;
-            dk = ao_loc[ksh+1] - ao_loc[ksh];
             np0_ki = (nl0->pairs)[ksh_off*nshi + ish];
             np0_kj = (nl0->pairs)[ksh_off*nshj + jsh_off];
             if (np0_ki->nimgs > 0 && np0_kj->nimgs > 0) { 
@@ -930,12 +931,15 @@ static void _nr3c_screened_sum_auxbas_fill_g(int (*intor)(), void (*fsort)(), do
                         if ((*fprescreen)(shls, pbcopt, atm, bas, env_loc)) {
                             if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas,
                                 env_loc, cintopt, cache)) {
-                                pbuf = buf;
-                                for (k = 0; k < dk; k++) {
-                                    for (i = 0; i < dij; i++) {
-                                        bufL[i] += pbuf[i];
+                                for (ic = 0; ic < comp; ic++) {
+                                    pbufL = bufL + ic * dij;
+                                    pbuf = buf + ic * dijk;
+                                    for (k = 0; k < dk; k++) {
+                                        for (i = 0; i < dij; i++) {
+                                            pbufL[i] += pbuf[i];
+                                        }
+                                        pbuf += dij;
                                     }
-                                    pbuf += dij;
                                 }
                             }
                         }
@@ -1018,7 +1022,7 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
 }
 
 
-static void sort3c_sum_auxbas_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
+static void sort2c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
                             int comp, int ish, int jsh)
 {
         const int ish0 = shls_slice[0];
@@ -1091,7 +1095,7 @@ static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
 }
 
 
-static void sort3c_sum_auxbas_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
+static void sort2c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
                             int comp, int ish, int jsh)
 {
         const int ish0 = shls_slice[0];
@@ -1119,6 +1123,41 @@ static void sort3c_sum_auxbas_gs2_ieqj(double *out, double *in, int *shls_slice,
                 }
         }
 }
+
+
+static void sort2c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
+                       int comp, int ish, int jsh)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+
+        const int di = ao_loc[ish+1] - ao_loc[ish];
+        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+        const int dij = di * dj;
+        const int ip = ao_loc[ish] - ao_loc[ish0];
+        const int jp = ao_loc[jsh] - ao_loc[jsh0];
+        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        const size_t nij = naoi * naoj;
+        out += ip * naoj + jp;
+
+        int i, j, ic;
+        double *pin, *pout;
+
+        for (ic = 0; ic < comp; ic++) {
+                pout = out + nij * ic;
+                pin = in + dij * ic;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                pout[j] = pin[j*di+i];
+                        }
+                        pout += naoj;
+                }
+        }
+}
+
 
 /* ('...LM->...', int3c) */
 void PBCnr3c_fill_gs2(int (*intor)(), double *out, int nkpts_ij,
@@ -1168,6 +1207,23 @@ void PBCnr3c_screened_fill_gs2(int (*intor)(), double *out, int nkpts_ij,
         }
 }
 
+
+void PBCnr3c_screened_sum_auxbas_fill_gs1(int (*intor)(), double *out, int nkpts_ij,
+                      int nkpts, int comp, int nimgs, int ish, int jsh,
+                      double *buf, double *env_loc, double *Ls,
+                      double *expkL_r, double *expkL_i, int *kptij_idx,
+                      int *shls_slice, int *ao_loc,
+                      CINTOpt *cintopt, PBCOpt *pbcopt,
+                      int *atm, int natm, int *bas, int nbas, double *env,
+                      NeighborList** neighbor_list)
+{
+        _nr3c_screened_sum_auxbas_fill_g(intor, &sort2c_gs1, out,
+                          nkpts_ij, nkpts, comp, nimgs, ish, jsh,
+                          buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
+                          shls_slice, ao_loc, cintopt, pbcopt, atm, natm, bas, nbas, env, neighbor_list);
+}
+
+
 void PBCnr3c_screened_sum_auxbas_fill_gs2(int (*intor)(), double *out, int nkpts_ij,
                       int nkpts, int comp, int nimgs, int ish, int jsh,
                       double *buf, double *env_loc, double *Ls,
@@ -1180,17 +1236,18 @@ void PBCnr3c_screened_sum_auxbas_fill_gs2(int (*intor)(), double *out, int nkpts
         int ip = ish + shls_slice[0];
         int jp = jsh + shls_slice[2] - nbas;
         if (ip > jp) {
-             _nr3c_screened_sum_auxbas_fill_g(intor, &sort3c_sum_auxbas_gs2_igtj, out,
+             _nr3c_screened_sum_auxbas_fill_g(intor, &sort2c_gs2_igtj, out,
                           nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                           buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                           shls_slice, ao_loc, cintopt, pbcopt, atm, natm, bas, nbas, env, neighbor_list);
         } else if (ip == jp) {
-             _nr3c_screened_sum_auxbas_fill_g(intor, &sort3c_sum_auxbas_gs2_ieqj, out,
+             _nr3c_screened_sum_auxbas_fill_g(intor, &sort2c_gs2_ieqj, out,
                           nkpts_ij, nkpts, comp, nimgs, ish, jsh,
                           buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
                           shls_slice, ao_loc, cintopt, pbcopt, atm, natm, bas, nbas, env, neighbor_list);
         }
 }
+
 
 int PBCsizeof_env(int *shls_slice,
                   int *atm, int natm, int *bas, int nbas, double *env)

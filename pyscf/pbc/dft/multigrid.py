@@ -32,6 +32,7 @@ from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.cell import pgf_rcut
+from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.gto.pseudo.pp_int import get_pp_nl
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
@@ -341,9 +342,14 @@ def get_nuc(mydf, kpts=None):
         vne = vne[0]
     return numpy.asarray(vne)
 
-def make_rho_core(cell, precision=None):
+def make_rho_core(cell, precision=None, atm_id=None):
     if precision is None:
         precision = cell.precision
+    if atm_id is None:
+        atm_id = numpy.arange(cell.natm)
+    else:
+        atm_id = numpy.asarray(atm_id)
+    natm = len(atm_id)
 
     symbs = numpy.asarray(list(cell._pseudo.keys()))
     symbs = numpy.sort(symbs)
@@ -361,10 +367,10 @@ def make_rho_core(cell, precision=None):
     radius = pgf_rcut(0, zeta, coeff, precision=prec)
     radius = numpy.asarray(radius, order='C', dtype=numpy.double)
 
-    atm = numpy.asarray(cell._atm.copy(), order='C', dtype=numpy.int32)
+    atm = numpy.asarray(cell._atm[atm_id].copy().reshape(natm,-1), order='C', dtype=numpy.int32)
     env = numpy.asarray(cell._env.copy(), order='C', dtype=numpy.double)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
+    for ia, idx in enumerate(atm_id):
+        symb = cell.atom_symbol(idx)
         if symb not in symbs:
             logger.warn(cell, "No pseudo-potential found for symbol %s" % symb)
             return None
@@ -387,7 +393,7 @@ def make_rho_core(cell, precision=None):
         func(rho_core.ctypes.data_as(ctypes.c_void_p),
              atm.ctypes.data_as(ctypes.c_void_p),
              env.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(cell.natm),
+             ctypes.c_int(natm),
              radius.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_int(len(radius)),
              mesh.ctypes.data_as(ctypes.c_void_p),
@@ -404,6 +410,7 @@ def get_pp(mydf, kpts=None, max_memory=2000):
         return _get_pp_without_erf(mydf, kpts, max_memory)
     else:
         return _get_pp_with_erf(mydf, kpts, max_memory)
+
 
 def _get_vpplocG_part1(mydf):
     cell = mydf.cell
@@ -428,6 +435,7 @@ def _get_vpplocG_part1(mydf):
         rloc = numpy.asarray(rloc)
         vpplocG_part1[0] += 2. * numpy.pi * numpy.sum(rloc * rloc * chargs)
     return vpplocG_part1
+
 
 def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -583,6 +591,78 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
     return numpy.asarray(vpp)
+
+
+def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
+    from . import multigrid_pair
+
+    if PP_WITH_ERF:
+        return 0
+
+    cell = mydf.cell
+    mesh = mydf.mesh
+    vG = mydf.vpplocG_part1
+    vG.reshape(-1,*mesh)
+
+    vpp_kpts = multigrid_pair._get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
+    if gamma_point(kpts):
+        vpp_kpts = vpp_kpts.real
+    if len(kpts) == 1:
+        vpp_kpts = vpp_kpts[0] 
+    return vpp_kpts
+
+
+def vpploc_part1_nuc_grad_generator(mydf, kpts=numpy.zeros((1,3))):
+    from . import multigrid_pair
+
+    h1 = -get_vpploc_part1_ip1(mydf, kpts=kpts)
+
+    nkpts = len(kpts)
+    cell = mydf.cell
+    mesh = mydf.mesh
+    aoslices = cell.aoslice_by_atom()
+    def hcore_deriv(atm_id):
+        weight = cell.vol / numpy.prod(mesh)
+        rho_core = make_rho_core(cell, atm_id=[atm_id,])
+        rhoG_core = weight * tools.fft(rho_core, mesh)
+        coulG = tools.get_coulG(cell, mesh=mesh)
+        vpplocG_part1 = rhoG_core * coulG
+        # G = 0 contribution
+        symb = cell.atom_symbol(atm_id)
+        rloc = cell._pseudo[symb][1]
+        vpplocG_part1[0] += 2 * numpy.pi * (rloc * rloc * cell.atom_charge(atm_id))
+        vpplocG_part1.reshape(-1,*mesh)
+        vpp_kpts = multigrid_pair._get_j_pass2_ip1(mydf, vpplocG_part1, kpts, hermi=0, deriv=1)
+        if gamma_point(kpts):
+            vpp_kpts = vpp_kpts.real
+        if len(kpts) == 1:
+            vpp_kpts = vpp_kpts[0]
+
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        if nkpts > 1:
+            for k in range(nkpts):
+                vpp_kpts[k,:,p0:p1] += h1[k,:,p0:p1]
+                vpp_kpts[k] += vpp_kpts[k].transpose(0,2,1)
+        else:
+            vpp_kpts[:,p0:p1] += h1[:,p0:p1]
+            vpp_kpts += vpp_kpts.transpose(0,2,1)
+        return vpp_kpts
+
+    return hcore_deriv
+
+
+def get_pp_nuc_grad(mydf, kpts=numpy.zeros((1,3)), atm_id=0):
+    cell = mydf.cell
+
+    vpploc_part1 = vpploc_part1_nuc_grad_generator(mydf, kpts)
+    vpp = vpploc_part1(atm_id)
+
+    vpploc_part2 = pp_int.vpploc_part2_nuc_grad_generator(cell, kpts)
+    vpp += numpy.asarray(vpploc_part2(atm_id))
+
+    vppnl = pp_int.vppnl_nuc_grad_generator(cell, kpts)
+    vpp += vppnl(atm_id)
+    return vpp
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
@@ -1888,6 +1968,7 @@ class MultiGridFFTDF(fft.FFTDF):
 
     get_pp = get_pp
     get_nuc = get_nuc
+    get_pp_nuc_grad = get_pp_nuc_grad
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald', **kwargs):
@@ -1927,7 +2008,7 @@ class MultiGridFFTDF2(MultiGridFFTDF):
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 15.0)
 
-    def get_veff_ip1(self, xc_code, dm, kpts=None, kpts_band=None):
+    def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
         from . import multigrid_pair
         if kpts is None:
             if self.kpts is None:
@@ -1935,8 +2016,10 @@ class MultiGridFFTDF2(MultiGridFFTDF):
             else:
                 kpts = self.kpts
         kpts = kpts.reshape(-1,3)
-        vj = multigrid_pair.get_veff_ip1(self, xc_code, dm, kpts, kpts_band)
+        vj = multigrid_pair.get_veff_ip1(self, dm, xc_code, kpts, kpts_band)
         return vj
+
+    get_pp_nuc_grad = get_pp_nuc_grad
 
 
 def multigrid(mf):

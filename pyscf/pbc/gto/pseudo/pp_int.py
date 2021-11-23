@@ -163,7 +163,7 @@ def get_pp_loc_part2(cell, kpts=None):
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     if gamma_point(kpts_lst):
-        buf = get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst)
+        buf = get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s2', comp=1)
     else:
         for cn in range(1, 5):
             fakecell = fake_cell_vloc(cell, cn)
@@ -192,7 +192,110 @@ def get_pp_loc_part2(cell, kpts=None):
     return vpploc
 
 
-def get_pp_loc_part2_gamma(cell, intors, kptij_lst):
+def get_pp_loc_part2_ip1(cell, kpts=None):
+    from pyscf.pbc.df import incore
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+
+    intors = ('int3c2e_ip1', 'int3c1e_ip1', 'int3c1e_ip1_r2_origk',
+              'int3c1e_ip1_r4_origk', 'int3c1e_ip1_r6_origk')
+    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
+    buf = 0
+    if gamma_point(kpts_lst):
+        buf = get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s1', comp=3)
+    else:
+        for cn in range(1, 5):
+            fakecell = fake_cell_vloc(cell, cn)
+            if fakecell.nbas > 0:
+                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s1', comp=3,
+                                  kptij_lst=kptij_lst)
+                buf += numpy.einsum('...i->...', v)
+
+    if isinstance(buf, int):
+        vpploc = [0] * nkpts
+    else:
+        nao = cell.nao
+        buf = buf.reshape(nkpts,3,nao,nao)
+        vpploc = []
+        for k, kpt in enumerate(kpts_lst):
+            v = buf[k]
+            if abs(kpt).sum() < 1e-9:  # gamma_point:
+                v = v.real
+            vpploc.append(v)
+    if nkpts == 1:
+        vpploc = vpploc[0]
+    return vpploc
+
+
+def vpploc_part2_nuc_grad_generator(cell, kpts=None):
+    from pyscf.pbc.df import incore
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
+
+    aoslices = cell.aoslice_by_atom()
+    h1 = get_pp_loc_part2_ip1(cell, kpts=kpts)
+
+    intors = ('int3c2e_ip1', 'int3c1e_ip1', 'int3c1e_ip1_r2_origk',
+              'int3c1e_ip1_r4_origk', 'int3c1e_ip1_r6_origk')
+
+    Ls = cell.get_lattice_Ls()
+
+    def pp_loc_part2_ip1_single_atom(atm_id):
+        count = 0
+        buf = 0
+        for cn in range(1, 5):
+            fakecell = fake_cell_vloc(cell, cn, [atm_id,])
+            if fakecell.nbas > 0:
+                neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
+                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s1', comp=3,
+                                  kptij_lst=kptij_lst, neighbor_list=neighbor_list)
+                if count == 0:
+                    buf = v
+                else:
+                    buf = lib.add(buf, v, out=buf)
+                v = None
+                count += 1
+                free_neighbor_list(neighbor_list)
+
+        if isinstance(buf, int):
+            vpploc = [0] * nkpts
+        else:
+            nao = cell.nao
+            buf = buf.reshape(nkpts,3,nao,nao)
+            vpploc = []
+            for k, kpt in enumerate(kpts_lst):
+                v = buf[k]
+                if abs(kpt).sum() < 1e-9:  # gamma_point:
+                    v = v.real
+                vpploc.append(v)
+        if nkpts == 1:
+            vpploc = vpploc[0]
+        return vpploc
+
+    def hcore_deriv(atm_id):
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        vpploc = pp_loc_part2_ip1_single_atom(atm_id)
+        if nkpts > 1:
+            for k in range(nkpts):
+                vpploc[k][:,p0:p1] -= h1[k][:,p0:p1]
+                vpploc[k] += vpploc[k].transpose(0,2,1).conj()
+        else:
+            vpploc[:,p0:p1] -= h1[:,p0:p1]
+            vpploc += vpploc.transpose(0,2,1).conj()
+        return vpploc
+
+    return hcore_deriv
+
+
+def get_pp_loc_part2_gamma(cell, intors, kptij_lst, aosym='s2', comp=1):
     from pyscf.pbc.df import incore
     from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
     Ls = cell.get_lattice_Ls()
@@ -200,14 +303,14 @@ def get_pp_loc_part2_gamma(cell, intors, kptij_lst):
     nao_pair = cell.nao * (cell.nao + 1) // 2
     blksize = max(1, int(max_memory*.95*1e6 / (nao_pair*8))-2)
     count = 0
-    buf = None
+    buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
             neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
             for ib0 in range(0, fakecell.nbas, blksize):
                 ib1 = min(ib0 + blksize, fakecell.nbas)
-                v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
+                v = incore.aux_e2(cell, fakecell, intors[cn], aosym=aosym, comp=comp,
                                   kptij_lst=kptij_lst,
                                   shls_slice=(0, cell.nbas, 0, cell.nbas, ib0, ib1),
                                   neighbor_list=neighbor_list)
@@ -221,17 +324,17 @@ def get_pp_loc_part2_gamma(cell, intors, kptij_lst):
     return buf
 
 
-def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst):
+def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s2', comp=1):
     from pyscf.pbc.df import incore
     from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
     Ls = cell.get_lattice_Ls()
     count = 0
-    buf = None
+    buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
             neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
-            v = incore.aux_e2_sum_auxbas(cell, fakecell, intors[cn], aosym='s2', comp=1,
+            v = incore.aux_e2_sum_auxbas(cell, fakecell, intors[cn], aosym=aosym, comp=comp,
                                          kptij_lst=kptij_lst, neighbor_list=neighbor_list)
             if count == 0:
                 buf = v
@@ -344,7 +447,104 @@ def get_pp_nl(cell, kpts=None):
     return ppnl
 
 
-def fake_cell_vloc(cell, cn=0):
+def vppnl_nuc_grad_generator(cell, kpts=None):
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+
+    fakecell, hl_blocks = fake_cell_vnl(cell)
+    intors = ('int1e_ipovlp', 'int1e_r2_origi_ip2', 'int1e_r4_origi_ip2')
+    ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
+    ppnl_half_ip2 = _int_vnl(cell, fakecell, hl_blocks, kpts_lst, intors, comp=3)
+
+    nao = cell.nao_nr()
+    buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
+    buf1 = numpy.empty((3*3*9*nao), dtype=numpy.complex128)
+
+    def pp_nl_ip1():
+        # We set this equal to zeros in case hl_blocks loop is skipped
+        # and ppnl is returned
+        ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
+        for k, kpt in enumerate(kpts_lst):
+            offset = [0] * 3
+            for ib, hl in enumerate(hl_blocks):
+                l = fakecell.bas_angular(ib)
+                nd = 2 * l + 1
+                hl_dim = hl.shape[0]
+                ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
+                ilp_ip2 = numpy.ndarray((hl_dim,3,nd,nao), dtype=numpy.complex128, buffer=buf1)
+                for i in range(hl_dim):
+                    p0 = offset[i]
+                    ilp[i] = ppnl_half[i][k][p0:p0+nd]
+                    ilp_ip2[i] = ppnl_half_ip2[i][k][:,p0:p0+nd]
+                    if i == 0:
+                        ilp_ip2[i] *= -1
+                    offset[i] = p0 + nd
+                ppnl[k] += numpy.einsum('ixlp,ij,jlq->xpq', ilp_ip2.conj(), hl, ilp)
+
+        if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+            ppnl = ppnl.real
+
+        if nkpts == 1:
+            ppnl = ppnl[0]
+        return ppnl
+
+    h1 = -pp_nl_ip1()
+
+    offset = [0] * 3
+    offsets = numpy.empty((len(hl_blocks),3), dtype=numpy.int32)
+    for ib, hl in enumerate(hl_blocks):
+        hl_dim = hl.shape[0]
+        l = fakecell.bas_angular(ib)
+        nd = 2 * l + 1
+        for i in range(hl_dim):
+            offsets[ib,i] = offset[i]
+            offset[i] += nd
+
+    aoslices = cell.aoslice_by_atom()
+    def hcore_deriv(atm_id):
+        if len(fakecell._bas) <= 0:
+            return 0
+        bas_idx = numpy.where(fakecell._bas[:,0] == atm_id)[0]
+        ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
+        for k, kpt in enumerate(kpts_lst):
+            for ib in bas_idx:
+                hl = hl_blocks[ib]
+                hl_dim = hl.shape[0]
+                l = fakecell.bas_angular(ib)
+                nd = 2 * l + 1
+                ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
+                ilp_ip2 = numpy.ndarray((hl_dim,3,nd,nao), dtype=numpy.complex128, buffer=buf1)
+                for i in range(hl_dim):
+                    p0 = offsets[ib,i]
+                    ilp[i] = ppnl_half[i][k][p0:p0+nd]
+                    ilp_ip2[i] = ppnl_half_ip2[i][k][:,p0:p0+nd]
+                    if i == 0:
+                        ilp_ip2[i] *= -1
+                ppnl[k] += numpy.einsum('ixlp,ij,jlq->xpq', ilp_ip2.conj(), hl, ilp)
+                #ppnl[k] += numpy.einsum('ilp,ij,jxlq->xpq', ilp.conj(), hl, ilp_ip2)
+
+        if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+            ppnl = ppnl.real
+        if nkpts == 1:
+            ppnl = ppnl[0]
+
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        if nkpts > 1:
+            for k in range(nkpts):
+                ppnl[k,:,p0:p1] += h1[k,:,p0:p1]
+                ppnl[k] += ppnl[k].transpose(0,2,1)
+        else:
+            ppnl[:,p0:p1] += h1[:,p0:p1]
+            ppnl += ppnl.transpose(0,2,1)
+        return ppnl
+
+    return hcore_deriv
+
+
+def fake_cell_vloc(cell, cn=0, atm_id=None):
     '''Generate fake cell for V_{loc}.
 
     Each term of V_{loc} (erf, C_1, C_2, C_3, C_4) is a gaussian type
@@ -354,17 +554,23 @@ def fake_cell_vloc(cell, cn=0):
     The kwarg cn indiciates which term to generate for the fake cell.
     If cn = 0, the erf term is generated.  C_1,..,C_4 are generated with cn = 1..4
     '''
-    fake_env = [cell.atom_coords().ravel()]
-    fake_atm = cell._atm.copy()
-    fake_atm[:,gto.PTR_COORD] = numpy.arange(0, cell.natm*3, 3)
-    ptr = cell.natm * 3
+    if atm_id is None:
+        atm_id = numpy.arange(cell.natm)
+    else:
+        atm_id = numpy.asarray(atm_id)
+    natm = len(atm_id)
+
+    fake_env = [cell.atom_coords()[atm_id].ravel()]
+    fake_atm = cell._atm[atm_id].copy().reshape(natm,-1)
+    fake_atm[:,gto.PTR_COORD] = numpy.arange(0, natm*3, 3)
+    ptr = natm * 3
     fake_bas = []
     half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    for ia in range(cell.natm):
-        if cell.atom_charge(ia) == 0:  # pass ghost atoms
+    for ia, atm in enumerate(atm_id):
+        if cell.atom_charge(atm) == 0:  # pass ghost atoms
             continue
 
-        symb = cell.atom_symbol(ia)
+        symb = cell.atom_symbol(atm)
         if cn == 0:
             if symb in cell._pseudo:
                 pp = cell._pseudo[symb]
@@ -392,6 +598,7 @@ def fake_cell_vloc(cell, cn=0):
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     fakecell.precision = EPS_PPL
     return fakecell
+
 
 # sqrt(Gamma(l+1.5)/Gamma(l+2i+1.5))
 _PLI_FAC = 1/numpy.sqrt(numpy.array((
@@ -450,8 +657,10 @@ def fake_cell_vnl(cell):
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     return fakecell, hl_blocks
 
-def _int_vnl(cell, fakecell, hl_blocks, kpts):
+def _int_vnl(cell, fakecell, hl_blocks, kpts, intors=None, comp=1):
     '''Vnuc - Vloc'''
+    if intors is None:
+        intors = ['int1e_ovlp', 'int1e_r2_origi', 'int1e_r4_origi']
     rcut = max(cell.rcut, fakecell.rcut)
     Ls = cell.get_lattice_Ls(rcut=rcut)
     nimgs = len(Ls)
@@ -476,8 +685,10 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         ao_loc = gto.moleintor.make_loc(bas, intor)
         ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
         nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-        out = numpy.empty((nkpts,ni,nj), dtype=numpy.complex128)
-        comp = 1
+        if comp == 1:
+            out = numpy.empty((nkpts,ni,nj), dtype=numpy.complex128)
+        else:
+            out = numpy.empty((nkpts,comp,ni,nj), dtype=numpy.complex128)
 
         fintor = getattr(gto.moleintor.libcgto, intor)
 
@@ -494,8 +705,8 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp'),
-           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
-           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
+    out = (int_ket(fakecell._bas[hl_dims>0], intors[0]),
+           int_ket(fakecell._bas[hl_dims>1], intors[1]),
+           int_ket(fakecell._bas[hl_dims>2], intors[2]))
     return out
 
