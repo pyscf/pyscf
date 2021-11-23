@@ -599,7 +599,6 @@ def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
     if PP_WITH_ERF:
         return 0
 
-    cell = mydf.cell
     mesh = mydf.mesh
     vG = mydf.vpplocG_part1
     vG.reshape(-1,*mesh)
@@ -608,7 +607,7 @@ def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
     if gamma_point(kpts):
         vpp_kpts = vpp_kpts.real
     if len(kpts) == 1:
-        vpp_kpts = vpp_kpts[0] 
+        vpp_kpts = vpp_kpts[0]
     return vpp_kpts
 
 

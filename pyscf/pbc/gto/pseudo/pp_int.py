@@ -346,13 +346,7 @@ def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s2', comp=1)
     return buf
 
 
-def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
-    # XXX only works for Gamma point
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
+def _prepare_hl_data(fakecell, hl_blocks):
     offset = [0] * 3
     hl_table = numpy.empty((len(hl_blocks),6), order='C', dtype=numpy.int32)
     hl_data = []
@@ -366,10 +360,21 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
         nd = 2 * l + 1
         hl_table[ib,2] = nd
         for i in range(hl_dim):
-            #p0 = offset[i]
             hl_table[ib, i+3] = offset[i]
             offset[i] += nd
     hl_data = numpy.asarray(hl_data, order='C', dtype=numpy.double)
+    return hl_table, hl_data
+
+
+def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
+    # XXX only works for Gamma point
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+
+    hl_table, hl_data = _prepare_hl_data(fakecell, hl_blocks)
+
     ppnl = []
     nao = cell.nao_nr()
     for k, kpt in enumerate(kpts_lst):
@@ -405,6 +410,76 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
     return ppnl
+
+
+def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2,
+                             comp=3, kpts=None, hl_table=None, hl_data=None, hl_id=None):
+    # XXX only works for Gamma point
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+
+    if hl_table is None:
+        hl_table, hl_data = _prepare_hl_data(fakecell, hl_blocks)
+
+    if hl_id is None:
+        hl_id = -1 # sum all atom contribution
+
+    ppnl_ip1 = []
+    nao = cell.nao_nr()
+    naux = fakecell.nao_nr()
+    for k, kpt in enumerate(kpts_lst):
+        ptr_ppnl_half0 = lib.c_null_ptr()
+        ptr_ppnl_half1 = lib.c_null_ptr()
+        ptr_ppnl_half2 = lib.c_null_ptr()
+        if len(ppnl_half[0]) > 0:
+            ppnl_half0 = ppnl_half[0][k].real
+            ppnl_half0 = numpy.asarray(ppnl_half0, order='C', dtype=numpy.double)
+            ptr_ppnl_half0 = ppnl_half0.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[1]) > 0:
+            ppnl_half1 = ppnl_half[1][k].real
+            ppnl_half1 = numpy.asarray(ppnl_half1, order='C', dtype=numpy.double)
+            ptr_ppnl_half1 = ppnl_half1.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[2]) > 0:
+            ppnl_half2 = ppnl_half[2][k].real
+            ppnl_half2 = numpy.asarray(ppnl_half2, order='C', dtype=numpy.double)
+            ptr_ppnl_half2 = ppnl_half2.ctypes.data_as(ctypes.c_void_p)
+
+        ptr_ppnl_half_ip2_0 = lib.c_null_ptr()
+        ptr_ppnl_half_ip2_1 = lib.c_null_ptr()
+        ptr_ppnl_half_ip2_2 = lib.c_null_ptr()
+        if len(ppnl_half_ip2[0]) > 0:
+            ppnl_half_ip2_0 = ppnl_half_ip2[0][k].real
+            ppnl_half_ip2_0 = numpy.asarray(ppnl_half_ip2_0, order='C', dtype=numpy.double)
+            ptr_ppnl_half_ip2_0 = ppnl_half_ip2_0.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half_ip2[1]) > 0:
+            ppnl_half_ip2_1 = ppnl_half_ip2[1][k].real
+            ppnl_half_ip2_1 = numpy.asarray(ppnl_half_ip2_1, order='C', dtype=numpy.double)
+            ptr_ppnl_half_ip2_1 = ppnl_half_ip2_1.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half_ip2[2]) > 0:
+            ppnl_half_ip2_2 = ppnl_half_ip2[2][k].real
+            ppnl_half_ip2_2 = numpy.asarray(ppnl_half_ip2_2, order='C', dtype=numpy.double)
+            ptr_ppnl_half_ip2_2 = ppnl_half_ip2_2.ctypes.data_as(ctypes.c_void_p)
+
+
+        ppnl_ip1_k = numpy.empty((comp,nao,nao), order='C', dtype=numpy.double)
+        fn = getattr(libpbc, "contract_ppnl_ip1", None)
+        try:
+            fn(ppnl_ip1_k.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+               ptr_ppnl_half0, ptr_ppnl_half1, ptr_ppnl_half2,
+               ptr_ppnl_half_ip2_0, ptr_ppnl_half_ip2_1, ptr_ppnl_half_ip2_2,
+               hl_table.ctypes.data_as(ctypes.c_void_p),
+               hl_data.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(len(hl_blocks)),
+               ctypes.c_int(nao), ctypes.c_int(naux), ctypes.c_int(hl_id))
+        except Exception as e:
+            raise RuntimeError("Failed to contract ppnl_ip1. %s" % e)
+        ppnl_ip1.append(ppnl_ip1_k)
+
+    if len(kpts_lst) == 1:
+        ppnl_ip1 = ppnl_ip1[0]
+    return ppnl_ip1
 
 
 def get_pp_nl(cell, kpts=None):
@@ -458,15 +533,25 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
     intors = ('int1e_ipovlp', 'int1e_r2_origi_ip2', 'int1e_r4_origi_ip2')
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
     ppnl_half_ip2 = _int_vnl(cell, fakecell, hl_blocks, kpts_lst, intors, comp=3)
+    # int1e_ipovlp computes ip1 so multiply -1 to get ip2
+    for k, kpt in enumerate(kpts_lst):
+        ppnl_half_ip2[0][k] *= -1
 
     nao = cell.nao_nr()
-    buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
-    buf1 = numpy.empty((3*3*9*nao), dtype=numpy.complex128)
+
+    hl_table, hl_data = _prepare_hl_data(fakecell, hl_blocks)
 
     def pp_nl_ip1():
+        if gamma_point(kpts_lst):
+            return _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks,
+                                            ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
+                                            hl_table=hl_table, hl_data=hl_data)
+
         # We set this equal to zeros in case hl_blocks loop is skipped
         # and ppnl is returned
         ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
+        buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
+        buf1 = numpy.empty((3*3*9*nao), dtype=numpy.complex128)
         for k, kpt in enumerate(kpts_lst):
             offset = [0] * 3
             for ib, hl in enumerate(hl_blocks):
@@ -479,66 +564,61 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
                     p0 = offset[i]
                     ilp[i] = ppnl_half[i][k][p0:p0+nd]
                     ilp_ip2[i] = ppnl_half_ip2[i][k][:,p0:p0+nd]
-                    if i == 0:
-                        ilp_ip2[i] *= -1
                     offset[i] = p0 + nd
                 ppnl[k] += numpy.einsum('ixlp,ij,jlq->xpq', ilp_ip2.conj(), hl, ilp)
 
         if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
             ppnl = ppnl.real
-
         if nkpts == 1:
             ppnl = ppnl[0]
         return ppnl
 
     h1 = -pp_nl_ip1()
 
-    offset = [0] * 3
-    offsets = numpy.empty((len(hl_blocks),3), dtype=numpy.int32)
-    for ib, hl in enumerate(hl_blocks):
-        hl_dim = hl.shape[0]
-        l = fakecell.bas_angular(ib)
-        nd = 2 * l + 1
-        for i in range(hl_dim):
-            offsets[ib,i] = offset[i]
-            offset[i] += nd
-
+    offsets = hl_table[:,3:]
     aoslices = cell.aoslice_by_atom()
     def hcore_deriv(atm_id):
         if len(fakecell._bas) <= 0:
             return 0
         bas_idx = numpy.where(fakecell._bas[:,0] == atm_id)[0]
-        ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
-        for k, kpt in enumerate(kpts_lst):
-            for ib in bas_idx:
-                hl = hl_blocks[ib]
-                hl_dim = hl.shape[0]
-                l = fakecell.bas_angular(ib)
-                nd = 2 * l + 1
-                ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
-                ilp_ip2 = numpy.ndarray((hl_dim,3,nd,nao), dtype=numpy.complex128, buffer=buf1)
-                for i in range(hl_dim):
-                    p0 = offsets[ib,i]
-                    ilp[i] = ppnl_half[i][k][p0:p0+nd]
-                    ilp_ip2[i] = ppnl_half_ip2[i][k][:,p0:p0+nd]
-                    if i == 0:
-                        ilp_ip2[i] *= -1
-                ppnl[k] += numpy.einsum('ixlp,ij,jlq->xpq', ilp_ip2.conj(), hl, ilp)
-                #ppnl[k] += numpy.einsum('ilp,ij,jxlq->xpq', ilp.conj(), hl, ilp_ip2)
+        assert len(bas_idx) == 1
 
-        if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
-            ppnl = ppnl.real
-        if nkpts == 1:
-            ppnl = ppnl[0]
+        if gamma_point(kpts_lst):
+            ppnl = _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks,
+                                            ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
+                                            hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
+
+        else:
+            ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
+            buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
+            buf1 = numpy.empty((3*3*9*nao), dtype=numpy.complex128)
+            for k, kpt in enumerate(kpts_lst):
+                for ib in bas_idx:
+                    hl = hl_blocks[ib]
+                    hl_dim = hl.shape[0]
+                    l = fakecell.bas_angular(ib)
+                    nd = 2 * l + 1
+                    ilp = numpy.ndarray((hl_dim,nd,nao), dtype=numpy.complex128, buffer=buf)
+                    ilp_ip2 = numpy.ndarray((hl_dim,3,nd,nao), dtype=numpy.complex128, buffer=buf1)
+                    for i in range(hl_dim):
+                        p0 = offsets[ib,i]
+                        ilp[i] = ppnl_half[i][k][p0:p0+nd]
+                        ilp_ip2[i] = ppnl_half_ip2[i][k][:,p0:p0+nd]
+                    ppnl[k] += numpy.einsum('ixlp,ij,jlq->xpq', ilp_ip2.conj(), hl, ilp)
+                    #ppnl[k] += numpy.einsum('ilp,ij,jxlq->xpq', ilp.conj(), hl, ilp_ip2)
+            if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+                ppnl = ppnl.real
+            if nkpts == 1:
+                ppnl = ppnl[0]
 
         shl0, shl1, p0, p1 = aoslices[atm_id]
         if nkpts > 1:
             for k in range(nkpts):
                 ppnl[k,:,p0:p1] += h1[k,:,p0:p1]
-                ppnl[k] += ppnl[k].transpose(0,2,1)
+                ppnl[k] += ppnl[k].transpose(0,2,1).conj()
         else:
             ppnl[:,p0:p1] += h1[:,p0:p1]
-            ppnl += ppnl.transpose(0,2,1)
+            ppnl += ppnl.transpose(0,2,1).conj()
         return ppnl
 
     return hcore_deriv
@@ -653,7 +733,7 @@ def fake_cell_vnl(cell):
 
     fakecell = copy.copy(cell)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
-    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
+    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, 8)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     return fakecell, hl_blocks
 
