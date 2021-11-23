@@ -534,8 +534,9 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
     ppnl_half_ip2 = _int_vnl(cell, fakecell, hl_blocks, kpts_lst, intors, comp=3)
     # int1e_ipovlp computes ip1 so multiply -1 to get ip2
-    for k, kpt in enumerate(kpts_lst):
-        ppnl_half_ip2[0][k] *= -1
+    if len(ppnl_half_ip2[0]) > 0:
+        for k, kpt in enumerate(kpts_lst):
+            ppnl_half_ip2[0][k] *= -1
 
     nao = cell.nao_nr()
 
@@ -581,6 +582,8 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
         if len(fakecell._bas) <= 0:
             return 0
         bas_idx = numpy.where(fakecell._bas[:,0] == atm_id)[0]
+        if len(bas_idx) < 1:
+            return 0
         assert len(bas_idx) == 1
 
         if gamma_point(kpts_lst):
