@@ -11,9 +11,7 @@ version=$(python -c 'import sys; version=sys.version_info[:2]; print("{0}.{1}".f
 if [ $version == '3.6' ]; then
     pip install 'scipy<1.2'
 elif [ $version == '3.7' ]; then
-    pip install 'scipy<1.5'
-elif [ $version == '3.8' ]; then
-    pip install 'scipy<1.6'
+    pip install 'scipy<1.2'
 else
     pip install scipy
 fi
