@@ -37,7 +37,7 @@ cell1.a = [[8, 0, 0], [0, 8, 0], [0, 0, 8]]
 cell1.basis = 'gth-szv'
 cell1.pseudo = 'gth-pade'
 cell1.ke_cutoff = 200
-cell1.verbose = 0
+cell1.verbose = 5
 cell1.build()
 
 
