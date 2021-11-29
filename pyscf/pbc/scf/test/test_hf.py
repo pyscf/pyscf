@@ -511,10 +511,10 @@ class KnownValues(unittest.TestCase):
             dm = mf.get_init_guess(key='atom')
             kdm = kmf.get_init_guess(key='atom')
 
-        self.assertAlmostEqual(lib.fp(dm), 0.18406304572515353, 8)
+        self.assertAlmostEqual(lib.fp(dm), 0.18406304572515353, 7)
 
         self.assertEqual(kdm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 0.18406304572515353, 8)
+        self.assertAlmostEqual(lib.fp(dm), 0.18406304572515353, 7)
 
     def test_atom_hf_with_pp(self):
         mol = pbcgto.Cell()
