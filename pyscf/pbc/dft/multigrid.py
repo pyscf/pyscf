@@ -62,7 +62,7 @@ TASKS_TYPE = getattr(__config__, 'pbc_dft_multigrid_tasks_type', 'ke_cut') # 'rc
 RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
 
 PP_WITH_RHO_CORE = getattr(__config__, 'pbc_dft_multigrid_pp_with_rho_core', True)
-PP_WITH_ERF = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
+#PP_WITH_ERF = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
@@ -405,7 +405,7 @@ def make_rho_core(cell, precision=None, atm_id=None):
     return rho_core
 
 def get_pp(mydf, kpts=None, max_memory=2000):
-    if not PP_WITH_ERF:
+    if not mydf.pp_with_erf:
         mydf.vpplocG_part1 = _get_vpplocG_part1(mydf)
         return _get_pp_without_erf(mydf, kpts, max_memory)
     else:
@@ -596,7 +596,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
 def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
     from . import multigrid_pair
 
-    if PP_WITH_ERF:
+    if mydf.pp_with_erf:
         return 0
 
     mesh = mydf.mesh
@@ -1203,7 +1203,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
 
-    if getattr(mydf, "vpplocG_part1", None) is not None and not PP_WITH_ERF:
+    if getattr(mydf, "vpplocG_part1", None) is not None and not mydf.pp_with_erf:
         for i in range(nset):
             vG[i] += mydf.vpplocG_part1 * 2
 
@@ -1212,7 +1212,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if getattr(mydf, "vpplocG_part1", None) is not None and not PP_WITH_ERF:
+    if getattr(mydf, "vpplocG_part1", None) is not None and not mydf.pp_with_erf:
         for i in range(nset):
             vG[i] -= mydf.vpplocG_part1
 
@@ -1951,6 +1951,8 @@ def _primitive_gto_cutoff(cell, precision=None):
 
 
 class MultiGridFFTDF(fft.FFTDF):
+    pp_with_erf = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', True)
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         fft.FFTDF.__init__(self, cell, kpts)
         self.tasks = None
@@ -2003,6 +2005,7 @@ class MultiGridFFTDF(fft.FFTDF):
 
 
 class MultiGridFFTDF2(MultiGridFFTDF):
+    pp_with_erf = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
     ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 15.0)

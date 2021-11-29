@@ -8,7 +8,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.dft import multigrid
-from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH_ORDER, IMAG_TOL, PP_WITH_ERF,
+from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH_ORDER, IMAG_TOL,
                                      _take_4d, _takebak_4d, _take_5d)
 from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs
 
@@ -796,7 +796,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
 
-    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
             vG[i] += mydf.vpplocG_part1 * 2
 
@@ -805,7 +805,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
-    if mydf.vpplocG_part1 is not None and not PP_WITH_ERF:
+    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
             vG[i] -= mydf.vpplocG_part1
 

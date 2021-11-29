@@ -25,7 +25,6 @@ from pyscf.pbc import tools
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 multigrid.R_RATIO_SUBLOOP = 0.6
-multigrid.PP_WITH_ERF = True
 
 numpy.random.seed(2)
 cell_orth = gto.M(
