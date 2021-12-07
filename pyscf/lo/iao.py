@@ -87,7 +87,10 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-10):
             invS = numpy.einsum("ai,i,bi->ab", sv[:,keep], 1/se[keep], sv[:,keep])
             p12 = numpy.dot(invS, s12)
             ctild = numpy.dot(p12, ctild)
-        ctild = vec_lowdin(ctild, s1)
+        # If there are no IAOs, there is nothing to orthogonalize here (this happens in one-electron systems,
+        # in the minority spin channel)
+        if ctild.shape[-1] > 0:
+            ctild = vec_lowdin(ctild, s1)
         ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
         ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
         #a is the set of IAOs in the original basis

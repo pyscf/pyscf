@@ -1148,7 +1148,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2, eris=eris)
         return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False, with_dm1=True):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1160,7 +1160,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr, with_dm1=with_dm1)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:

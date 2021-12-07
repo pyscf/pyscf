@@ -647,7 +647,7 @@ class UCCSD(ccsd.CCSD):
         return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, with_frozen=with_frozen, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, with_frozen=True, ao_repr=False):
-        '''2-particle density matrix in spin-oribital basis.
+        '''2-particle density matrix in spin-orbital basis.
         '''
         from pyscf.cc import uccsd_rdm
         if t1 is None: t1 = self.t1
@@ -802,7 +802,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         mo_idx = mycc.get_frozen_mask()
         self.mo_coeff = mo_coeff = \
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+        # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
