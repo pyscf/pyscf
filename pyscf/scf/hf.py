@@ -158,11 +158,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # Since the ingredients for the Fock matrix has already been built, we can
         # just go ahead and use it to determine the orthonormal basis vectors.
         fock = mf.get_fock(h1e, s1e, vhf, dm)
-        mo_energy, mo_coeff = mf.eig(fock, s1e)
-        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
-            mf_diis.Corth = mo_coeff
-        else:
-            mf_diis.Corth = mo_coeff[0]
+        _, mf_diis.Corth = mf.eig(fock, s1e)
     else:
         mf_diis = None
 
