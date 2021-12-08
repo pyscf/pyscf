@@ -158,7 +158,7 @@ def compute_amplitudes(myadc, eris):
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
-    mo_e_o = mo_e_o + madelung
+    #mo_e_o = mo_e_o + madelung
 
     # Get location of non-zero/padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(myadc, kind="split")
@@ -251,10 +251,10 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
+    if (myadc.method == "adc(3)"):
     # Compute second-order doubles t2 (tijab)
-        t2_1_vvvv = np.zeros_like((t2_1))
-
+        #t2_1_vvvv = np.zeros_like((t2_1))
+        t2_1_vvvv = f.create_dataset('t2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
         eris_ovov = eris.ovov
         eris_ovvo = eris.ovvo
@@ -273,15 +273,16 @@ def compute_amplitudes(myadc, eris):
                 else : 
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka) 
 
-        t2_2 = np.zeros_like((t2_1))
+        #t2_2 = np.zeros_like((t2_1))
 
-        t2_2 = t2_1_vvvv.copy()
+        t2_2 = f.create_dataset('t2_2', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
+        t2_2 = t2_1_vvvv
 
         if myadc.exxdiv is not None:
            t2_2 -= 2.0 * madelung * t2_1
 
-        if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
+        #if not isinstance(eris.oooo, np.ndarray):
+        #    t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
         
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             for kk in range(nkpts):
@@ -336,8 +337,8 @@ def compute_amplitudes(myadc, eris):
 
             t2_2[ki,kj,ka] /= eijab
 
-            if not isinstance(eris.oooo, np.ndarray):
-                t2_2 = radc_ao2mo.write_dataset(t2_2)
+            #if not isinstance(eris.oooo, np.ndarray):
+            #    t2_2 = radc_ao2mo.write_dataset(t2_2)
 
         
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
@@ -486,10 +487,12 @@ class RADC(pyscf.adc.radc.RADC):
     def kernel_gs(self):
 
         nmo = self.nmo
-        nao = self.cell.nao_nr()
-        nmo_pair = nmo * (nmo+1) // 2
-        nao_pair = nao * (nao+1) // 2
-        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        nocc = self.nocc
+        nvir = nmo - nocc
+        nkpts = self.nkpts
+        mem_incore = nkpts ** 3 * (nocc + nvir) ** 4
+        mem_incore *= 4
+        mem_incore *= 16 /1e6
         mem_now = lib.current_memory()[0]
 
         if type(self._scf.with_df) is df.GDF:
@@ -1949,7 +1952,8 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    if(method=="adc(2)-x"or adc.method=="adc(3)"):
+    #if(method=="adc(2)-x"or adc.method=="adc(3)"):
+    if(method=="adc(3)"):
 
         t2_2 = adc.t2[1]
         #t2_2_t = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=np.complex)
@@ -1967,9 +1971,6 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 
 ########### ADC(3) 1p part  ############################################
-
-    if(adc.method=="adc(3)"):
-
 
         if orb < nocc:
             for kk in range(nkpts):
@@ -2061,7 +2062,8 @@ def ip_compute_trans_moments(adc, orb, kshift):
         del t2_1_t
 ####### ADC(3) 2h-1p  part  ############################################
 
-    if(method=='adc(2)-x'or method=='adc(3)'):
+    #if(method=='adc(2)-x'or method=='adc(3)'):
+    if(method=='adc(3)'):
 
         t2_2 = adc.t2[1]
 
@@ -2077,7 +2079,6 @@ def ip_compute_trans_moments(adc, orb, kshift):
 
 ######### ADC(3) 1h part  ############################################
 
-    if(method=='adc(3)'):
         if orb < nocc:
             for kk in range(nkpts):
                 for kc in range(nkpts):
