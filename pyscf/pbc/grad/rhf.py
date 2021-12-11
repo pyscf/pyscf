@@ -1,8 +1,11 @@
+import ctypes
 import numpy as np
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as mol_rhf
 from pyscf.grad.rhf import _write
 
+libpbc = lib.load_library('libpbc')
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, kpt=np.zeros(3)):
     mf = mf_grad.base
@@ -32,8 +35,8 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
         h1ao = hcore_deriv(ia)
         if np.sum(kpt) < 1e-9:
             de[k] += np.einsum('xij,ij->x', h1ao, dm0)
-            de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
-            de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
+            #de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
+            #de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
         else:
             de[k] += np.einsum('xij,ji->x', h1ao, dm0)
             de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1].conj())
@@ -43,9 +46,53 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
 
         de[k] += mf_grad.extra_force(ia, locals())
 
+    if np.sum(kpt) < 1e-9:
+        de += _contract_vhf_dm(mf_grad, vhf, dm0, atmlst=atmlst) * 2
+        de -= _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * 2
+
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
+    return de
+
+
+def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None):
+    from pyscf.gto.mole import ao_loc_nr, ATOM_OF
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
+
+    t0 = (logger.process_clock(), logger.perf_counter())
+
+    mol = mf_grad.mol
+    natm = mol.natm
+    nbas = mol.nbas
+    shls_slice = np.asarray([0,nbas,0,nbas], order="C", dtype=np.int32)
+    ao_loc = np.asarray(ao_loc_nr(mol), order="C", dtype=np.int32)
+    shls_atm = np.asarray(mol._bas[:,ATOM_OF].copy(), order="C", dtype=np.int32)
+
+    de = np.zeros((natm,comp), order="C")
+    vhf = np.asarray(vhf, order="C")
+    dm = np.asarray(dm, order="C")
+
+    neighbor_list = build_neighbor_list_for_shlpairs(mol, mol)
+    func = getattr(libpbc, "contract_vhf_dm", None)
+    try:
+        func(de.ctypes.data_as(ctypes.c_void_p),
+             vhf.ctypes.data_as(ctypes.c_void_p),
+             dm.ctypes.data_as(ctypes.c_void_p),
+             ctypes.byref(neighbor_list),
+             shls_slice.ctypes.data_as(ctypes.c_void_p),
+             ao_loc.ctypes.data_as(ctypes.c_void_p),
+             shls_atm.ctypes.data_as(ctypes.c_void_p),
+             ctypes.c_int(comp), ctypes.c_int(natm),
+             ctypes.c_int(nbas))
+    except RuntimeError:
+        raise
+    free_neighbor_list(neighbor_list)
+
+    if atmlst is not None:
+        de = de[atmlst]
+
+    logger.timer(mf_grad, '_contract_vhf_dm', *t0)
     return de
 
 

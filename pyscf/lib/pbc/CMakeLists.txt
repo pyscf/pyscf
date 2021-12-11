@@ -13,7 +13,7 @@
 # limitations under the License.
 
 add_library(pbc SHARED ft_ao.c fill_ints.c optimizer.c grid_ao.c nr_direct.c 
-            neighbor_list.c cell.c pp.c)
+            neighbor_list.c cell.c pp.c hf_grad.c)
 add_dependencies(pbc cgto cvhf np_helper)
 
 set_target_properties(pbc PROPERTIES

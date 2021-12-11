@@ -215,6 +215,8 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.cell.ewald
     '''
+    t0 = (logger.process_clock(), logger.perf_counter())
+
     if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
     if ew_cut is None: ew_cut = cell.get_ewald_params()[1]
 
@@ -258,6 +260,8 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     ew_grad = ewg_grad + ewovrl_grad
     if atmlst is not None:
         ew_grad = ew_grad[atmlst]
+
+    logger.timer(cell, 'ewald force', *t0)
     return ew_grad
 
 def get_jk(mf_grad, dm, kpts):
