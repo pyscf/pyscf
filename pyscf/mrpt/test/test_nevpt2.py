@@ -161,6 +161,41 @@ class KnownValues(unittest.TestCase):
         e = nevpt2.NEVPT(mc).kernel()
         self.assertAlmostEqual(e, -0.031179434919517, 6)
 
+    def test_multistate(self):
+        # See issue #1081
+        mol = gto.M(atom='''
+        O  0.0000000000 0.0000000000 -0.1302052882
+        H  1.4891244004 0.0000000000  1.0332262019
+        H -1.4891244004 0.0000000000  1.0332262019
+        ''',
+            basis = '631g',
+            symmetry = False)
+        mf = scf.RHF(mol).run()
+
+        mc = mcscf.CASSCF(mf, 6, [4,4])
+        mc.fcisolver=fci.solver(mol,singlet=True)
+        mc.fcisolver.nroots=2
+        mc = mcscf.state_average_(mc, [0.5,0.5])
+        mc.kernel()
+        orbital = mc.mo_coeff.copy()
+
+        mc = mcscf.CASCI(mf, 6, 8)
+        mc.fcisolver=fci.solver(mol,singlet=True)
+        mc.fcisolver.nroots=2
+        mc.kernel(orbital)
+        
+        # Ground State
+        mp0 = nevpt2.NEVPT(mc, root=0)
+        mp0.kernel()
+        e0 = mc.e_tot[0] + mp0.e_corr
+        self.assertAlmostEqual(e0, -75.867171, 4) # From ORCA (4.2.1)
+
+        # First Excited State
+        mp1 = nevpt2.NEVPT(mc, root=1)
+        mp1.kernel()
+        e1 = mc.e_tot[1] + mp1.e_corr
+        self.assertAlmostEqual(e1, -75.828469, 4) # From ORCA (4.2.1)
+
 
 if __name__ == "__main__":
     print("Full Tests for nevpt2")

@@ -26,7 +26,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
-from pyscf.agf2 import aux, ragf2, uagf2, ragf2_slow
+from pyscf.agf2 import ragf2, uagf2, ragf2_slow
+from pyscf.agf2 import aux_space as aux
 
 
 def build_se_part(agf2, eri, gf_occ, gf_vir, os_factor=1.0, ss_factor=1.0):

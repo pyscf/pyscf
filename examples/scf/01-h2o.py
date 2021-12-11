@@ -28,9 +28,9 @@ mol = gto.Mole()
 mol.verbose = 5
 #mol.output = 'out_h2o'
 mol.atom = '''
-O 0 0      0
-H 0 -2.757 2.587
-H 0  2.757 2.587'''
+O        0.000000    0.000000    0.117790
+H        0.000000    0.755453   -0.471161
+H        0.000000   -0.755453   -0.471161'''
 mol.basis = 'ccpvdz'
 mol.symmetry = 1
 mol.build()
