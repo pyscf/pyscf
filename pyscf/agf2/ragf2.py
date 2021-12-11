@@ -27,7 +27,8 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo
 from pyscf.scf import _vhf
-from pyscf.agf2 import aux, mpi_helper, _agf2
+from pyscf.agf2 import mpi_helper, _agf2
+from pyscf.agf2 import aux_space as aux
 from pyscf.agf2 import chkfile as chkutil
 from pyscf.agf2.chempot import binsearch_chempot, minimize_chempot
 from pyscf.mp.mp2 import get_frozen_mask as _get_frozen_mask

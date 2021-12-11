@@ -6,11 +6,17 @@ prune pyscf/lib/build
 
 recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so
-recursive-include pyscf/lib/deps *.dylib
 include pyscf/lib/*.so
+
+# macos dynamic libraries
 include pyscf/lib/*.dylib
+include pyscf/lib/deps/lib*/libcint.[45].dylib
+include pyscf/lib/deps/lib*/libxc.dylib
+include pyscf/lib/deps/lib*/libxcfun.[23].dylib
+
 include pyscf/geomopt/log.ini
 
-recursive-exclude pyscf/lib *.c *.h
+# source code
+prune pyscf/lib/build
+recursive-include pyscf/lib *.c *.h CMakeLists.txt
 recursive-exclude pyscf/lib *.cl
-

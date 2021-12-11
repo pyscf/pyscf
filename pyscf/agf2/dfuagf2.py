@@ -27,7 +27,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import ao2mo, df
-from pyscf.agf2 import uagf2, dfragf2, aux, mpi_helper, _agf2
+from pyscf.agf2 import uagf2, dfragf2, mpi_helper, _agf2
+from pyscf.agf2 import aux_space as aux
 
 BLKMIN = getattr(__config__, 'agf2_blkmin', 100)
 
