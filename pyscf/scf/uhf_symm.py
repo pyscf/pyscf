@@ -314,10 +314,6 @@ class SymAdaptedUHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in self.mol.irrep_name:
-                    logger.warn(self, 'No irrep %s', irname)
-
             hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
@@ -379,8 +375,8 @@ class SymAdaptedUHF(uhf.UHF):
         if not mol.symmetry:
             return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
 
+        hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
-
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
         idx_eb_left = []
