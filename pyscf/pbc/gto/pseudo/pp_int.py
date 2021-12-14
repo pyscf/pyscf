@@ -587,9 +587,10 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
         if gamma_point(kpts_lst):
             if len(bas_idx) > 0:
                 assert len(bas_idx) == 1
-                ppnl = _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks,
-                                ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
-                                hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
+                ppnl = _contract_ppnl_ip1_gamma(
+                            cell, fakecell, hl_blocks,
+                            ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
+                            hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
             else:
                 ppnl = numpy.zeros((3,nao,nao), dtype=float)
         else:
