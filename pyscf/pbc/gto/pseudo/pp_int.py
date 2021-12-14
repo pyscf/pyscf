@@ -580,17 +580,18 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
     aoslices = cell.aoslice_by_atom()
     def hcore_deriv(atm_id):
         if len(fakecell._bas) <= 0:
+            # no non-local contribution
             return 0
+
         bas_idx = numpy.where(fakecell._bas[:,0] == atm_id)[0]
-        if len(bas_idx) < 1:
-            return 0
-        assert len(bas_idx) == 1
-
         if gamma_point(kpts_lst):
-            ppnl = _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks,
-                                            ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
-                                            hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
-
+            if len(bas_idx) > 0:
+                assert len(bas_idx) == 1
+                ppnl = _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks,
+                                ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
+                                hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
+            else:
+                ppnl = numpy.zeros((3,nao,nao), dtype=float)
         else:
             ppnl = numpy.zeros((nkpts,3,nao,nao), dtype=numpy.complex128)
             buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
