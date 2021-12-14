@@ -231,7 +231,9 @@ def so2ao_mo_coeff(so, irrep_mo_coeff):
 def check_irrep_nelec(mol, irrep_nelec, nelec):
     for irname in irrep_nelec:
         if irname not in mol.irrep_name:
-            logger.warn(mol, 'Molecule does not have irrep %s', irname)
+            msg =('Molecule does not have irrep %s defined in irrep_nelec.' %
+              (irname))
+            raise ValueError(msg)
 
     float_irname = []
     fix_na = 0
@@ -377,11 +379,8 @@ class SymAdaptedRHF(hf.RHF):
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
-        for irname in self.irrep_nelec:
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, 'No irrep %s', irname)
         if mol.symmetry:
-            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
+            check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
     eig = eig
@@ -400,11 +399,13 @@ class SymAdaptedRHF(hf.RHF):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
+
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if not mol.symmetry:
             return hf.RHF.get_occ(self, mo_energy, mo_coeff)
 
+        check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
@@ -539,10 +540,6 @@ class SymAdaptedROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in self.mol.irrep_name:
-                    logger.warn(self, 'No irrep %s', irname)
-
             fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
             alpha_open = beta_open = False
             for ne in self.irrep_nelec.values():
@@ -590,6 +587,7 @@ class SymAdaptedROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
+        check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
