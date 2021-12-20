@@ -4,6 +4,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as mol_rhf
 from pyscf.grad.rhf import _write
+from pyscf.pbc.gto.pseudo import pp_int
 
 libpbc = lib.load_library('libpbc')
 
@@ -15,7 +16,6 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
 
-    hcore_deriv = mf_grad.hcore_generator(mol, kpt)
     s1 = mf_grad.get_ovlp(mol, kpt)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -28,27 +28,29 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    aoslices = mol.aoslice_by_atom()
+
     de = np.zeros((len(atmlst),3))
-    for k, ia in enumerate(atmlst):
-        p0, p1 = aoslices [ia,2:]
-        h1ao = hcore_deriv(ia)
-        if np.sum(kpt) < 1e-9:
-            de[k] += np.einsum('xij,ij->x', h1ao, dm0)
-            #de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
-            #de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
-        else:
+    if np.sum(kpt) < 1e-9:
+        de += mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
+        de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
+        de += pp_int.vppnl_nuc_grad(mol, dm0)
+        h1  = -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
+        h1 += -mol.pbc_intor('int1e_ipkin', kpt=kpt)
+        de += _contract_vhf_dm(mf_grad, h1+vhf, dm0, atmlst=atmlst) * 2
+        de -= _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * 2
+        #TODO extra_force need rewrite
+    else:
+        hcore_deriv = mf_grad.hcore_generator(mol, kpt)
+        aoslices = mol.aoslice_by_atom()
+        for k, ia in enumerate(atmlst):
+            p0, p1 = aoslices [ia,2:]
+            h1ao = hcore_deriv(ia)
             de[k] += np.einsum('xij,ji->x', h1ao, dm0)
             de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1].conj())
             de[k] += np.einsum('xij,ij->x', vhf[:,p0:p1].conj(), dm0[p0:p1].conj())
             de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1].conj())
             de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1].conj(), dme0[p0:p1].conj())
-
-        de[k] += mf_grad.extra_force(ia, locals())
-
-    if np.sum(kpt) < 1e-9:
-        de += _contract_vhf_dm(mf_grad, vhf, dm0, atmlst=atmlst) * 2
-        de -= _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * 2
+            de[k] += mf_grad.extra_force(ia, locals())
 
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
@@ -119,7 +121,6 @@ def hcore_generator(mf_grad, mol=None, kpt=np.zeros(3)):
         vpp[:,p0:p1] += h1[:,p0:p1]
         vpp[:,:,p0:p1] += h1[:,p0:p1].transpose(0,2,1).conj()
         return vpp
-
     return hcore_deriv
 
 

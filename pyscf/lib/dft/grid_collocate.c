@@ -11,7 +11,7 @@
 #include "dft/grid_common.h"
 
 #define MAX_THREADS     256
-#define PTR_KIND        5
+#define PTR_RADIUS        5
 
 static void transform_dm(double* dm_cart, double* dm,
                          double* ish_contr_coeff, double* jsh_contr_coeff,
@@ -205,10 +205,10 @@ static void _orth_rho(double *rho, double *dm_xyz,
 
 
 void make_rho_lda_orth(double *rho, double *dm, int comp,
-                            int li, int lj, double ai, double aj,
-                            double *ri, double *rj, double fac, double cutoff,
-                            int dimension, double *a, double *b,
-                            int *mesh, double *cache)
+                       int li, int lj, double ai, double aj,
+                       double *ri, double *rj, double fac, double cutoff,
+                       int dimension, double *a, double *b,
+                       int *mesh, double *cache)
 {
         int topl = li + lj;
         int l1 = topl + 1;
@@ -461,31 +461,19 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
 }
 
 
-void build_core_density(double* rho, int* atm, double* env, int natm, double* radius, int nkind,
-                        int* mesh, int dimension, double* a, double* b, int orth)
+void build_core_density(void (*eval_rho)(), double* rho,
+                        int* atm, int* bas, int nbas, double* env,
+                        int* mesh, int dimension, double* a, double* b, double max_radius)
 {
     size_t ngrids;
     ngrids = ((size_t) mesh[0]) * mesh[1] * mesh[2];
-    void (*eval_rho)();
-    if (orth == 1) {
-        eval_rho = make_rho_lda_orth;
-    }
-    else {
-        exit(1);
-    }
     double *rhobufs[MAX_THREADS];
-
-    int ikind;
-    double max_radius = 0;
-    for (ikind = 0; ikind < nkind; ikind++) {
-        max_radius = MAX(max_radius, radius[ikind]);
-    }
     size_t cache_size =  _rho_core_cache_size(mesh, max_radius, a);
 
-#pragma omp parallel private(ikind)
+#pragma omp parallel
 {
-    int ia;
-    double alpha, alpha_half, charge, rad, fac;
+    int ia, ib;
+    double alpha, coeff, charge, rad, fac;
     double dm[] = {1.0};
     double *r0;
     double *cache = (double*) malloc(sizeof(double) * cache_size);
@@ -500,15 +488,15 @@ void build_core_density(double* rho, int* atm, double* env, int natm, double* ra
     rhobufs[thread_id] = rho_priv;
 
     #pragma omp for schedule(static)
-    for (ia = 0; ia < natm; ia++) {
-        ikind = atm[ia*ATM_SLOTS+PTR_KIND];
-        rad = radius[ikind];
-        alpha = env[atm[ia*ATM_SLOTS+PTR_ZETA]];
-        alpha_half = alpha / 2;
+    for (ib = 0; ib < nbas; ib++) {
+        ia = bas[ib*BAS_SLOTS+ATOM_OF];
+        alpha = env[bas[ib*BAS_SLOTS+PTR_EXP]];
+        coeff = env[bas[ib*BAS_SLOTS+PTR_COEFF]];
         charge = (double)atm[ia*ATM_SLOTS+CHARGE_OF];
         r0 = env + atm[ia*ATM_SLOTS+PTR_COORD];
-        fac = -charge * pow(alpha / M_PI, 1.5);
-        eval_rho(rho_priv, dm, 1, 0, 0, alpha_half, alpha_half, r0, r0,
+        fac = -charge * coeff;
+        rad = env[atm[ia*ATM_SLOTS+PTR_RADIUS]];
+        eval_rho(rho_priv, dm, 1, 0, 0, alpha, 0., r0, r0,
                  fac, rad, dimension, a, b, mesh, cache);
     }
     free(cache);

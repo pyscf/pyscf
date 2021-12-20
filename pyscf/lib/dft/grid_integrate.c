@@ -8,6 +8,7 @@
 #include "dft/multigrid.h"
 #include "dft/grid_common.h"
 
+#define PTR_RADIUS      5
 #define MESH_BLK        4
 
 
@@ -1290,6 +1291,28 @@ static size_t _ints_cache_size(int l, int nprim, int nctr, int* mesh, double rad
 }
 
 
+static size_t _ints_core_cache_size(int* mesh, double radius, double* a)
+{
+    size_t size = 0;
+    size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+    int l = 0, l1 = 1;
+    int l1l1 = l1 * l1;
+    int ncart = _LEN_CART[l];
+    int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
+    int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+
+    size += l1 * (mesh[0] + mesh[1] + mesh[2]);
+    size += l1 * nmx + nmx;
+    size += l1l1 * l1;
+    size += 3 * (ncart * ncart + ncart + l1);
+    size += l1 * mesh[1] * mesh[2];
+    size += l1l1 * mesh[2];
+    size += ngrids / MESH_BLK;
+    size += 1000000;
+    return size;
+}
+
+
 void grid_integrate_drv(int (*eval_ints)(), double* mat, double* weights, TaskList** task_list,
                         int comp, int hermi, int grid_level, 
                         int *shls_slice, int* ish_ao_loc, int* jsh_ao_loc,
@@ -1403,4 +1426,33 @@ void grid_integrate_drv(int (*eval_ints)(), double* mat, double* weights, TaskLi
     if (hermi != 1) {
         del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
     }
+}
+
+
+void int_gauss_charge_v_rs(int (*eval_ints)(), double* out, double* v_rs, int comp,
+                           int* atm, int* bas, int nbas, double* env,
+                           int* mesh, int dimension, double* a, double* b, double max_radius)
+{
+    size_t cache_size = _ints_core_cache_size(mesh, max_radius, a);
+
+#pragma omp parallel
+{
+    int ia, ib;
+    double alpha, coeff, charge, rad, fac;
+    double *r0;
+    double *cache = (double*) malloc(sizeof(double) * cache_size);
+    #pragma omp for schedule(static)
+    for (ib = 0; ib < nbas; ib++) {
+        ia = bas[ib*BAS_SLOTS+ATOM_OF];
+        alpha = env[bas[ib*BAS_SLOTS+PTR_EXP]];
+        coeff = env[bas[ib*BAS_SLOTS+PTR_COEFF]];
+        charge = (double)atm[ia*ATM_SLOTS+CHARGE_OF];
+        r0 = env + atm[ia*ATM_SLOTS+PTR_COORD];
+        fac = -charge * coeff;
+        rad = env[atm[ia*ATM_SLOTS+PTR_RADIUS]];
+        (*eval_ints)(v_rs, out+ia*comp, comp, 0, 0, alpha, 0.0, r0, r0, 
+                     fac, rad, dimension, a, b, mesh, cache);
+    }
+    free(cache);
+}
 }

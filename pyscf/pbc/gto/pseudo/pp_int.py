@@ -295,6 +295,46 @@ def vpploc_part2_nuc_grad_generator(cell, kpts=None):
     return hcore_deriv
 
 
+def vpploc_part2_nuc_grad(cell, dm, kpts=None):
+    '''
+    Nuclear gradients of the 2nd part of the local part of 
+    the GTH pseudo potential, contracted with the density matrix.
+    '''
+    from pyscf.pbc.df import incore
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
+    if kpts is not None and not gamma_point(kpts):
+        raise NotImplementedError("k-point sampling not available")
+
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
+
+    intors = ('int3c2e_ip1', 'int3c1e_ip1', 'int3c1e_ip1_r2_origk',
+              'int3c1e_ip1_r4_origk', 'int3c1e_ip1_r6_origk')
+
+    Ls = cell.get_lattice_Ls()
+    count = 0
+    grad = 0
+    for cn in range(1, 5):
+        fakecell = fake_cell_vloc(cell, cn)
+        if fakecell.nbas > 0:
+            neighbor_list = build_neighbor_list_for_shlpairs(fakecell, cell, Ls)
+            buf = incore.int3c1e_nuc_grad(cell, fakecell, dm, intors[cn],
+                                          kptij_lst=kptij_lst, neighbor_list=neighbor_list)
+            if count == 0:
+                grad = buf
+            else:
+                grad = lib.add(grad, buf, out=grad)
+            buf = None
+            count += 1
+            free_neighbor_list(neighbor_list)
+    grad *= -2
+    return grad
+
+
 def get_pp_loc_part2_gamma(cell, intors, kptij_lst, aosym='s2', comp=1):
     from pyscf.pbc.df import incore
     from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
@@ -346,21 +386,30 @@ def get_pp_loc_part2_gamma_smallmem(cell, intors, kptij_lst, aosym='s2', comp=1)
     return buf
 
 
+HL_TABLE_SLOTS = 7
+ATOM_OF        = 0
+ANG_OF         = 1
+HL_DIM_OF      = 2
+HL_DATA_OF     = 3
+HL_OFFSET0     = 4
+HF_OFFSET1     = 5
+HF_OFFSET2     = 6
+
 def _prepare_hl_data(fakecell, hl_blocks):
     offset = [0] * 3
-    hl_table = numpy.empty((len(hl_blocks),6), order='C', dtype=numpy.int32)
+    hl_table = numpy.empty((len(hl_blocks),HL_TABLE_SLOTS), order='C', dtype=numpy.int32)
     hl_data = []
     ptr = 0
     for ib, hl in enumerate(hl_blocks):
+        hl_table[ib,ATOM_OF] = fakecell._bas[ib,0]
+        hl_table[ib,ANG_OF] = l = fakecell.bas_angular(ib)
         hl_dim = hl.shape[0]
-        hl_table[ib,0], hl_table[ib,1] = hl_dim, ptr
+        hl_table[ib,HL_DIM_OF], hl_table[ib,HL_DATA_OF] = hl_dim, ptr
         ptr += hl_dim**2
         hl_data.extend(list(hl.ravel()))
-        l = fakecell.bas_angular(ib)
         nd = 2 * l + 1
-        hl_table[ib,2] = nd
         for i in range(hl_dim):
-            hl_table[ib, i+3] = offset[i]
+            hl_table[ib, i+HL_OFFSET0] = offset[i]
             offset[i] += nd
     hl_data = numpy.asarray(hl_data, order='C', dtype=numpy.double)
     return hl_table, hl_data
@@ -413,7 +462,8 @@ def _contract_ppnl_gamma(cell, fakecell, hl_blocks, ppnl_half, kpts=None):
 
 
 def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2,
-                             comp=3, kpts=None, hl_table=None, hl_data=None, hl_id=None):
+                             comp=3, kpts=None, hl_table=None, hl_data=None,
+                             hl_id=None):
     # XXX only works for Gamma point
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -423,8 +473,12 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
     if hl_table is None:
         hl_table, hl_data = _prepare_hl_data(fakecell, hl_blocks)
 
+    nhl = len(hl_blocks)
     if hl_id is None:
-        hl_id = -1 # sum all atom contribution
+        hl_id = numpy.arange(nhl, dtype=numpy.int32) # sum all atom contribution
+    else:
+        hl_id = numpy.asarray(hl_id, order="C", dtype=numpy.int32)
+        nhl = hl_id.size
 
     ppnl_ip1 = []
     nao = cell.nao_nr()
@@ -472,7 +526,8 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
                hl_table.ctypes.data_as(ctypes.c_void_p),
                hl_data.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(len(hl_blocks)),
-               ctypes.c_int(nao), ctypes.c_int(naux), ctypes.c_int(hl_id))
+               ctypes.c_int(nao), ctypes.c_int(naux),
+               hl_id.ctypes.data_as(ctypes.c_void_p))
         except Exception as e:
             raise RuntimeError("Failed to contract ppnl_ip1. %s" % e)
         ppnl_ip1.append(ppnl_ip1_k)
@@ -480,6 +535,80 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
     if len(kpts_lst) == 1:
         ppnl_ip1 = ppnl_ip1[0]
     return ppnl_ip1
+
+
+def _contract_vppnl_ipik_dm(cell, fakecell, dm, hl_blocks, ppnl_half, ppnl_half_ip2,
+                            comp=3, kpts=None, hl_table=None, hl_data=None):
+    # XXX only works for Gamma point
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+
+    if hl_table is None:
+        hl_table, hl_data = _prepare_hl_data(fakecell, hl_blocks)
+
+    dm = numpy.asarray(dm, order="C", dtype=float)
+    grad = numpy.zeros((cell.natm,comp), order='C', dtype=float)
+    shls_slice = (0, cell.nbas, 0, cell.nbas)
+    bas = numpy.asarray(cell._bas, order='C', dtype=numpy.int32)
+    key = 'cart' if cell.cart else 'sph'
+    ao_loc = gto.moleintor.make_loc(bas, key)
+
+    nao = cell.nao_nr()
+    naux = fakecell.nao_nr()
+    for k, kpt in enumerate(kpts_lst):
+        ptr_ppnl_half0 = lib.c_null_ptr()
+        ptr_ppnl_half1 = lib.c_null_ptr()
+        ptr_ppnl_half2 = lib.c_null_ptr()
+        if len(ppnl_half[0]) > 0:
+            ppnl_half0 = ppnl_half[0][k].real
+            ppnl_half0 = numpy.asarray(ppnl_half0, order='C', dtype=float)
+            ptr_ppnl_half0 = ppnl_half0.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[1]) > 0:
+            ppnl_half1 = ppnl_half[1][k].real
+            ppnl_half1 = numpy.asarray(ppnl_half1, order='C', dtype=float)
+            ptr_ppnl_half1 = ppnl_half1.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half[2]) > 0:
+            ppnl_half2 = ppnl_half[2][k].real
+            ppnl_half2 = numpy.asarray(ppnl_half2, order='C', dtype=float)
+            ptr_ppnl_half2 = ppnl_half2.ctypes.data_as(ctypes.c_void_p)
+
+        ptr_ppnl_half_ip2_0 = lib.c_null_ptr()
+        ptr_ppnl_half_ip2_1 = lib.c_null_ptr()
+        ptr_ppnl_half_ip2_2 = lib.c_null_ptr()
+        if len(ppnl_half_ip2[0]) > 0:
+            ppnl_half_ip2_0 = ppnl_half_ip2[0][k].real
+            ppnl_half_ip2_0 = numpy.asarray(ppnl_half_ip2_0, order='C', dtype=float)
+            ptr_ppnl_half_ip2_0 = ppnl_half_ip2_0.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half_ip2[1]) > 0:
+            ppnl_half_ip2_1 = ppnl_half_ip2[1][k].real
+            ppnl_half_ip2_1 = numpy.asarray(ppnl_half_ip2_1, order='C', dtype=float)
+            ptr_ppnl_half_ip2_1 = ppnl_half_ip2_1.ctypes.data_as(ctypes.c_void_p)
+        if len(ppnl_half_ip2[2]) > 0:
+            ppnl_half_ip2_2 = ppnl_half_ip2[2][k].real
+            ppnl_half_ip2_2 = numpy.asarray(ppnl_half_ip2_2, order='C', dtype=float)
+            ptr_ppnl_half_ip2_2 = ppnl_half_ip2_2.ctypes.data_as(ctypes.c_void_p)
+
+        fill = getattr(libpbc, 'vppnl_ip1_fill_gs1')
+        drv = getattr(libpbc, "contract_ppnl_nuc_grad", None)
+        try:
+            drv(fill,
+                grad.ctypes.data_as(ctypes.c_void_p),
+                dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+                ptr_ppnl_half0, ptr_ppnl_half1, ptr_ppnl_half2,
+                ptr_ppnl_half_ip2_0, ptr_ppnl_half_ip2_1, ptr_ppnl_half_ip2_2,
+                hl_table.ctypes.data_as(ctypes.c_void_p),
+                hl_data.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(len(hl_blocks)),
+                ctypes.c_int(nao), ctypes.c_int(naux),
+                (ctypes.c_int*4)(*shls_slice),
+                ao_loc.ctypes.data_as(ctypes.c_void_p),
+                bas.ctypes.data_as(ctypes.c_void_p),
+                ctypes.c_int(cell.natm))
+        except Exception as e:
+            raise RuntimeError("Failed to compute contract_vppnl_nuc_grad. %s" % e)
+    return grad
 
 
 def get_pp_nl(cell, kpts=None):
@@ -586,11 +715,10 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
         bas_idx = numpy.where(fakecell._bas[:,0] == atm_id)[0]
         if gamma_point(kpts_lst):
             if len(bas_idx) > 0:
-                assert len(bas_idx) == 1
                 ppnl = _contract_ppnl_ip1_gamma(
                             cell, fakecell, hl_blocks,
                             ppnl_half, ppnl_half_ip2, comp=3, kpts=kpts,
-                            hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx[0])
+                            hl_table=hl_table, hl_data=hl_data, hl_id=bas_idx)
             else:
                 ppnl = numpy.zeros((3,nao,nao), dtype=float)
         else:
@@ -627,6 +755,93 @@ def vppnl_nuc_grad_generator(cell, kpts=None):
         return ppnl
 
     return hcore_deriv
+
+
+def vppnl_nuc_grad(cell, dm, kpts=None):
+    '''
+    Nuclear gradients of the non-local part of the GTH pseudo potential,
+    contracted with the density matrix.
+    '''
+    if kpts is not None and not gamma_point(kpts):
+        raise NotImplementedError("k-point sampling not available")
+
+    if kpts is None:
+        kpts_lst = numpy.zeros((1,3))
+    else:
+        kpts_lst = numpy.reshape(kpts, (-1,3))
+    nkpts = len(kpts_lst)
+
+    fakecell, hl_blocks = fake_cell_vnl(cell)
+    intors = ('int1e_ipovlp', 'int1e_r2_origi_ip2', 'int1e_r4_origi_ip2')
+    ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
+    ppnl_half_ip2 = _int_vnl(cell, fakecell, hl_blocks, kpts_lst, intors, comp=3)
+    # int1e_ipovlp computes ip1 so multiply -1 to get ip2
+    if len(ppnl_half_ip2[0]) > 0:
+        for k, kpt in enumerate(kpts_lst):
+            ppnl_half_ip2[0][k] *= -1
+
+    grad = _contract_vppnl_ipik_dm(cell, fakecell, dm, hl_blocks, 
+                                   ppnl_half, ppnl_half_ip2, kpts=kpts)
+    grad *= -2
+    return grad
+
+
+def fake_cell_vloc_part1(cell, atm_id=None, precision=None):
+    '''
+    Generate fakecell for the non-local term of the local part of 
+    the GTH pseudo-potential. Also stores the atomic radii.
+    Differs from fake_cell_vloc(cell, cn=0) in the normalization factors.
+    '''
+    from pyscf.pbc.gto.cell import pgf_rcut
+    if atm_id is None:
+        atm_id = numpy.arange(cell.natm)
+    else:
+        atm_id = numpy.asarray(atm_id)
+    natm = len(atm_id)
+
+    if precision is None:
+        precision = cell.precision
+
+    max_radius = 0.0
+    kind = {}
+    #XXX prec may be too tight
+    prec = precision ** 2
+    for symb in cell._pseudo:
+        charge = numpy.sum(cell._pseudo[symb][0])
+        rloc = cell._pseudo[symb][1]
+        zeta = .5 / rloc**2
+        norm = (zeta / numpy.pi) ** 1.5
+        radius = pgf_rcut(0, zeta, charge*norm, precision=prec)
+        max_radius = max(radius, max_radius)
+        kind[symb] = [zeta, norm, radius]
+
+    fake_env = [cell.atom_coords()[atm_id].ravel()]
+    fake_atm = cell._atm[atm_id].copy().reshape(natm,-1)
+    fake_atm[:,gto.PTR_COORD] = numpy.arange(0, natm*3, 3)
+    ptr = natm * 3
+    fake_bas = []
+    sph_norm = .25 / numpy.pi
+    for ia, atm in enumerate(atm_id):
+        if cell.atom_charge(atm) == 0:  # pass ghost atoms
+            continue
+
+        symb = cell.atom_symbol(atm)
+        if symb in kind:
+            fake_env.append(kind[symb])
+        else:
+            alpha = 1e16
+            norm = (alpha / numpy.pi) ** 1.5
+            radius = 0.0
+            fake_env.append([alpha, norm, radius])
+        fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
+        fake_atm[ia,gto.PTR_RADIUS] = ptr+2
+        ptr += 3
+
+    fakecell = copy.copy(cell)
+    fakecell._atm = numpy.asarray(fake_atm, order="C", dtype=numpy.int32)
+    fakecell._bas = numpy.asarray(fake_bas, order="C", dtype=numpy.int32).reshape(-1, gto.BAS_SLOTS)
+    fakecell._env = numpy.asarray(numpy.hstack(fake_env), order="C", dtype=float)
+    return fakecell, max_radius
 
 
 def fake_cell_vloc(cell, cn=0, atm_id=None):
@@ -679,7 +894,7 @@ def fake_cell_vloc(cell, cn=0, atm_id=None):
 
     fakecell = copy.copy(cell)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
-    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
+    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, gto.BAS_SLOTS)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     fakecell.precision = EPS_PPL
     return fakecell
@@ -738,7 +953,7 @@ def fake_cell_vnl(cell):
 
     fakecell = copy.copy(cell)
     fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
-    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, 8)
+    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32).reshape(-1, gto.BAS_SLOTS)
     fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
     return fakecell, hl_blocks
 

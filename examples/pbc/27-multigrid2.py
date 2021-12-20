@@ -213,7 +213,7 @@ H      12.103020       8.841164      10.006916
 H      11.491592       8.576221       8.647557
 """
 cell.basis='gth-tzv2p'
-cell.ke_cutoff=140  # kinetic energy cutoff in a.u.
+cell.ke_cutoff=200  # kinetic energy cutoff in a.u.
 cell.max_memory=20000 # 20 Gb
 cell.precision=1e-6 # integral precision
 cell.pseudo='gth-pade'
@@ -224,7 +224,8 @@ cell.build()
 #print('mesh=', cell.mesh)
 
 mf=pbcdft.RKS(cell)
-mf.xc = "LDA, VWN"
+#mf.xc = "LDA, VWN"
+mf.xc = "PBE,PBE"
 mf.init_guess='atom' # atom guess is fast
 mf.with_df = multigrid.MultiGridFFTDF2(cell)
 mf.with_df.ngrids = 4 # number of sets of grid points

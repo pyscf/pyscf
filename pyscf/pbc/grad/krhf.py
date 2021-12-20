@@ -225,14 +225,15 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
 
     rLij = coords[:,None,:] - coords[None,:,:] + Lall[:,None,None,:]
-    r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
+    #r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
+    r = np.sqrt(lib.multiply_sum(rLij, rLij, axis=-1))
     r[r<1e-16] = 1e100
 
     fac = 2 * ew_eta / np.sqrt(np.pi)
     tmp = (erfc(ew_eta * r) / r**3 +
            fac * np.exp(-ew_eta**2 * r ** 2) / r**2)
     r = None
-    ewovrl_grad = -np.einsum('i,j,Lij,Lijx->ix', chargs, chargs, tmp, rLij)
+    ewovrl_grad = -lib.einsum('i,j,Lij,Lijx->ix', chargs, chargs, tmp, rLij)
     rLij = tmp = None
 
     ewg_grad = np.zeros_like(ewovrl_grad)
@@ -250,9 +251,9 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
         for ig0 in range(0, ngrids, blksize):
             ig1 = min(ngrids, ig0+blksize)
             SI = cell.get_SI(Gv[ig0:ig1])
-            ZSI = np.einsum("i,ij->j", chargs, SI)
+            ZSI = lib.einsum("i,ij->j", chargs, SI)
             tmp = coulG[ig0:ig1,None] * Gv[ig0:ig1]
-            ewg_grad += np.einsum('i,ig,gx,g->ix', chargs, SI, tmp, ZSI.conj()).imag
+            ewg_grad += lib.einsum('i,ig,gx,g->ix', chargs, SI, tmp, ZSI.conj()).imag
             tmp = None
     else:
         raise NotImplementedError

@@ -14,6 +14,7 @@
 
  *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
+ *         Xing Zhang <zhangxing.nju@gmail.com>
  */
 
 #include <stdlib.h>
@@ -30,6 +31,7 @@
 #define INTBUFMAX10     8000
 #define IMGBLK          80
 #define OF_CMPLX        2
+#define MAX_THREADS     256
 
 int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -1249,6 +1251,157 @@ void PBCnr3c_screened_sum_auxbas_fill_gs2(int (*intor)(), double *out, int nkpts
 }
 
 
+static void contract_3c1e_ipik_dm_gs1(double *grad, double* dm, double *eri,
+                                      int *shls, int *ao_loc, int *atm, int natm,
+                                      int *bas, int nbas, int comp, int nao)
+{
+    const int ish = shls[0];
+    const int jsh = shls[1];
+    const int ksh = shls[2];
+
+    const int di = ao_loc[ish+1] - ao_loc[ish];
+    const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+    const int dij = di * dj;
+    const size_t i0 = ao_loc[ish];
+    const size_t j0 = ao_loc[jsh] - nao;
+
+    const int ia = bas[ATOM_OF+ish*BAS_SLOTS];
+    const int ka = bas[ATOM_OF+ksh*BAS_SLOTS] - 2*natm;
+
+    int i, j, ic;
+    double *ptr_eri, *ptr_dm;
+    double *dm0 = dm + (i0 * nao + j0);
+    double ipi_dm[comp];
+    for (ic = 0; ic < comp; ic++) {
+        ipi_dm[ic] = 0;
+        ptr_dm = dm0;
+        ptr_eri = eri + dij * ic;
+        for (i = 0; i < di; i++) {
+            for (j = 0; j < dj; j++) {
+                ipi_dm[ic] += ptr_eri[j*di+i] * ptr_dm[j];
+            }
+            ptr_dm += nao;
+        }
+    }
+
+    for (ic = 0; ic < comp; ic++) {
+        grad[ia*comp+ic] += ipi_dm[ic];
+        grad[ka*comp+ic] -= ipi_dm[ic];
+    }
+}
+
+
+static void _nr3c1e_screened_nuc_grad_fill_g(int (*intor)(), void (*fcontract)(),
+            double *grad, double *dm, int nkpts_ij, int nkpts,
+            int comp, int nimgs, int ish, int jsh,
+            double *buf, double *env_loc, double *Ls,
+            double *expkL_r, double *expkL_i, int *kptij_idx,
+            int *shls_slice, int *ao_loc,
+            CINTOpt *cintopt, PBCOpt *pbcopt,
+            int *atm, int natm, int *bas, int nbas, double *env, int nao,
+            NeighborList** neighbor_list)
+{
+    const int ish0 = shls_slice[0];
+    //const int ish1 = shls_slice[1];
+    const int jsh0 = shls_slice[2];
+    //const int jsh1 = shls_slice[3];
+    const int ksh0 = shls_slice[4];
+    const int ksh1 = shls_slice[5];
+
+    ish += ish0;
+    jsh += jsh0;
+    int iptrxyz = atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
+    int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
+    const int di = ao_loc[ish+1] - ao_loc[ish];
+    const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+    const int dij = di * dj;
+    int dkmax = INTBUFMAX10 / dij / 2 * MIN(IMGBLK,nimgs);
+    //int kshloc[ksh1-ksh0+1];
+    //int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
+
+    int i, k, ic;
+    int ksh, dk, dijk, iL, jL, ksh_off, jsh_off;
+    int shls[3];
+
+    int idx_i, idx_j;
+
+    int dijc = dij * comp;
+    int dijmc = dijc * dkmax;
+    double *bufL = buf + dijmc;
+    double *cache = bufL + dijc;
+    double *pbuf, *pbufL;
+    int (*fprescreen)();
+    if (pbcopt != NULL) {
+            fprescreen = pbcopt->fprescreen;
+    } else {
+            fprescreen = PBCnoscreen;
+    }
+
+    shls[0] = ish;
+    shls[1] = jsh;
+    jsh_off = jsh - nbas;
+    NeighborList *nl0 = *neighbor_list;
+    NeighborPair *np0_ki, *np0_kj;
+
+    for (ksh = ksh0; ksh < ksh1; ksh++){
+        dk = ao_loc[ksh+1] - ao_loc[ksh];
+        assert(dk < dkmax);
+        dijk = dij * dk;
+        shls[2] = ksh;
+        ksh_off = ksh - nbas*2;
+        np0_ki = (nl0->pairs)[ksh_off*nbas + ish];
+        np0_kj = (nl0->pairs)[ksh_off*nbas + jsh_off];
+        if (np0_ki->nimgs > 0 && np0_kj->nimgs > 0) {
+            for (i = 0; i < dijc; i++) {
+                bufL[i] = 0;
+            }
+            for (idx_i = 0; idx_i < np0_ki->nimgs; idx_i++){
+                iL = (np0_ki->Ls_list)[idx_i];
+                shift_bas(env_loc, env, Ls, iptrxyz, iL);
+                for (idx_j = 0; idx_j < np0_kj->nimgs; idx_j++){
+                    jL = (np0_kj->Ls_list)[idx_j];
+                    shift_bas(env_loc, env, Ls, jptrxyz, jL);
+
+                    if ((*fprescreen)(shls, pbcopt, atm, bas, env_loc)) {
+                        if ((*intor)(buf, NULL, shls, atm, natm, bas, nbas,
+                                     env_loc, cintopt, cache))
+                        {
+                            for (ic = 0; ic < comp; ic++) {
+                                pbufL = bufL + ic * dij;
+                                pbuf = buf + ic * dijk;
+                                for (k = 0; k < dk; k++) {
+                                    for (i = 0; i < dij; i++) {
+                                        pbufL[i] += pbuf[i];
+                                    }
+                                    pbuf += dij;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            (*fcontract)(grad, dm, bufL, shls, ao_loc, atm, natm, bas, nbas, comp, nao);
+        }
+    }
+}
+
+
+void PBCnr3c1e_screened_nuc_grad_fill_gs1(int (*intor)(), double *out, double* dm,
+                      int nkpts_ij, int nkpts, int comp, int nimgs, int ish, int jsh,
+                      double *buf, double *env_loc, double *Ls,
+                      double *expkL_r, double *expkL_i, int *kptij_idx,
+                      int *shls_slice, int *ao_loc,
+                      CINTOpt *cintopt, PBCOpt *pbcopt,
+                      int *atm, int natm, int *bas, int nbas, double *env, int nao,
+                      NeighborList** neighbor_list)
+{
+        _nr3c1e_screened_nuc_grad_fill_g(intor, &contract_3c1e_ipik_dm_gs1, out, dm,
+                          nkpts_ij, nkpts, comp, nimgs, ish, jsh,
+                          buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
+                          shls_slice, ao_loc, cintopt, pbcopt, atm, natm, bas, nbas, env, nao, neighbor_list);
+}
+
+
 int PBCsizeof_env(int *shls_slice,
                   int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -1397,13 +1550,14 @@ void PBCnr3c_screened_sum_auxbas_drv(int (*intor)(), void (*fill)(), double comp
         const int jsh1 = shls_slice[3];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        double *expkL_r = malloc(sizeof(double) * nimgs*nkpts * OF_CMPLX);
-        double *expkL_i = expkL_r + nimgs*nkpts;
-        int i;
-        for (i = 0; i < nimgs*nkpts; i++) {
-                expkL_r[i] = creal(expkL[i]);
-                expkL_i[i] = cimag(expkL[i]);
-        }
+        double *expkL_r=NULL, *expkL_i=NULL;
+        //expkL_r = malloc(sizeof(double) * nimgs*nkpts * OF_CMPLX);
+        //expkL_i = expkL_r + nimgs*nkpts;
+        //int i;
+        //for (i = 0; i < nimgs*nkpts; i++) {
+        //        expkL_r[i] = creal(expkL[i]);
+        //        expkL_i[i] = cimag(expkL[i]);
+        //}
 
         size_t count;
         count = (nkpts * OF_CMPLX + nimgs) * INTBUFMAX10 * comp;
@@ -1428,7 +1582,73 @@ void PBCnr3c_screened_sum_auxbas_drv(int (*intor)(), void (*fill)(), double comp
         free(buf);
         free(env_loc);
 }
-        free(expkL_r);
+        //free(expkL_r);
+}
+
+
+void PBCnr3c1e_screened_nuc_grad_drv(int (*intor)(), void (*fill)(), 
+                 double* grad, double* dm,
+                 int nkpts_ij, int nkpts, int comp, int nimgs,
+                 double *Ls, double complex *expkL, int *kptij_idx,
+                 int *shls_slice, int *ao_loc,
+                 CINTOpt *cintopt, PBCOpt *pbcopt,
+                 int *atm, int natm, int *bas, int nbas, double *env, int nenv, int nao,
+                 NeighborList** neighbor_list)
+{
+        const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
+        const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
+        const int nish = ish1 - ish0;
+        const int njsh = jsh1 - jsh0;
+        double *expkL_r=NULL, *expkL_i=NULL;
+        //double *expkL_r = malloc(sizeof(double) * nimgs*nkpts * OF_CMPLX);
+        //double *expkL_i = expkL_r + nimgs*nkpts;
+        //int i;
+        //for (i = 0; i < nimgs*nkpts; i++) {
+        //        expkL_r[i] = creal(expkL[i]);
+        //        expkL_i[i] = cimag(expkL[i]);
+        //}
+
+        size_t count;
+        count = (nkpts * OF_CMPLX + nimgs) * INTBUFMAX10 * comp;
+        count+= nimgs * nkpts * OF_CMPLX;
+        const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
+                                                 atm, natm, bas, nbas, env);
+
+        double *gradbufs[MAX_THREADS];
+#pragma omp parallel
+{
+        int ish, jsh, ij;
+        double *env_loc = malloc(sizeof(double)*nenv);
+        NPdcopy(env_loc, env, nenv);
+        double *grad_loc;
+        int thread_id = omp_get_thread_num();
+        if (thread_id == 0) {
+                grad_loc = grad;
+        } else {
+                grad_loc = calloc(natm*comp, sizeof(double));
+        }
+        gradbufs[thread_id] = grad_loc;
+
+        double *buf = malloc(sizeof(double)*(count+cache_size));
+        #pragma omp for schedule(dynamic)
+        for (ij = 0; ij < nish*njsh; ij++) {
+                ish = ij / njsh;
+                jsh = ij % njsh;
+                (*fill)(intor, grad_loc, dm, nkpts_ij, nkpts, comp, nimgs, ish, jsh,
+                        buf, env_loc, Ls, expkL_r, expkL_i, kptij_idx,
+                        shls_slice, ao_loc, cintopt, pbcopt, atm, natm, bas, nbas, env, nao, neighbor_list);
+        }
+        free(buf);
+        free(env_loc);
+
+        NPomp_dsum_reduce_inplace(gradbufs, natm*comp);
+        if (thread_id != 0) {
+                free(grad_loc);
+        }
+}
+        //free(expkL_r);
 }
 
 

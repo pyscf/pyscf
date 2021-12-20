@@ -1272,11 +1272,19 @@ def multiply_sum(a, b, axis=0):
     dtype = numpy.result_type(a,b)
     a = numpy.asarray(a, order='C', dtype=dtype)
     b = numpy.asarray(b, order='C', dtype=dtype)
-    nrow, ncol = a.shape
-    if axis == 0:
-        out = numpy.zeros((ncol,), order='C', dtype=dtype)
+    if axis == -1:
+        ncol = a.shape[-1]
+        out_shape = a.shape[:(a.ndim-1)]
+        out = numpy.zeros(tuple(out_shape), order='C', dtype=dtype)
+        nrow = out.size
+    elif a.ndim == 2:
+        nrow, ncol = a.shape
+        if axis == 0:
+            out = numpy.zeros((ncol,), order='C', dtype=dtype)
+        else:
+            out = numpy.zeros((nrow,), order='C', dtype=dtype)
     else:
-        out = numpy.zeros((nrow,), order='C', dtype=dtype)
+        raise NotImplementedError
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(out.flags.c_contiguous)
