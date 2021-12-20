@@ -297,7 +297,7 @@ def vpploc_part2_nuc_grad_generator(cell, kpts=None):
 
 def vpploc_part2_nuc_grad(cell, dm, kpts=None):
     '''
-    Nuclear gradients of the 2nd part of the local part of 
+    Nuclear gradients of the 2nd part of the local part of
     the GTH pseudo potential, contracted with the density matrix.
     '''
     from pyscf.pbc.df import incore
@@ -309,7 +309,7 @@ def vpploc_part2_nuc_grad(cell, dm, kpts=None):
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
+    #nkpts = len(kpts_lst)
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
 
     intors = ('int3c2e_ip1', 'int3c1e_ip1', 'int3c1e_ip1_r2_origk',
@@ -769,7 +769,7 @@ def vppnl_nuc_grad(cell, dm, kpts=None):
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
+    #nkpts = len(kpts_lst)
 
     fakecell, hl_blocks = fake_cell_vnl(cell)
     intors = ('int1e_ipovlp', 'int1e_r2_origi_ip2', 'int1e_r4_origi_ip2')
@@ -780,7 +780,7 @@ def vppnl_nuc_grad(cell, dm, kpts=None):
         for k, kpt in enumerate(kpts_lst):
             ppnl_half_ip2[0][k] *= -1
 
-    grad = _contract_vppnl_ipik_dm(cell, fakecell, dm, hl_blocks, 
+    grad = _contract_vppnl_ipik_dm(cell, fakecell, dm, hl_blocks,
                                    ppnl_half, ppnl_half_ip2, kpts=kpts)
     grad *= -2
     return grad
@@ -788,7 +788,7 @@ def vppnl_nuc_grad(cell, dm, kpts=None):
 
 def fake_cell_vloc_part1(cell, atm_id=None, precision=None):
     '''
-    Generate fakecell for the non-local term of the local part of 
+    Generate fakecell for the non-local term of the local part of
     the GTH pseudo-potential. Also stores the atomic radii.
     Differs from fake_cell_vloc(cell, cn=0) in the normalization factors.
     '''
@@ -820,7 +820,6 @@ def fake_cell_vloc_part1(cell, atm_id=None, precision=None):
     fake_atm[:,gto.PTR_COORD] = numpy.arange(0, natm*3, 3)
     ptr = natm * 3
     fake_bas = []
-    sph_norm = .25 / numpy.pi
     for ia, atm in enumerate(atm_id):
         if cell.atom_charge(atm) == 0:  # pass ghost atoms
             continue
