@@ -23,6 +23,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import moleintor
 from pyscf.pbc import tools
+from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.dft import multigrid
@@ -896,6 +897,10 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     coulG = tools.get_coulG(cell, mesh=mesh)
     vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
 
+    if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
+        for i in range(nset):
+            vG[i] += mydf.vpplocG_part1
+
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
     # computing rhoR with IFFT, the weight factor is not needed.
@@ -925,6 +930,102 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     vj_kpts = np.rollaxis(vj_kpts, -3)
     vj_kpts = np.asarray([_format_jks(vj, dm_kpts, input_band, kpts) for vj in vj_kpts])
     return vj_kpts
+
+
+def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
+    if mydf.pp_with_erf:
+        return 0
+
+    mesh = mydf.mesh
+    vG = mydf.vpplocG_part1
+    vG.reshape(-1,*mesh)
+
+    vpp_kpts = _get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
+    if gamma_point(kpts):
+        vpp_kpts = vpp_kpts.real
+    if len(kpts) == 1:
+        vpp_kpts = vpp_kpts[0]
+    return vpp_kpts
+
+
+def vpploc_part1_nuc_grad_generator(mydf, kpts=np.zeros((1,3))):
+    h1 = -get_vpploc_part1_ip1(mydf, kpts=kpts)
+
+    nkpts = len(kpts)
+    cell = mydf.cell
+    mesh = mydf.mesh
+    aoslices = cell.aoslice_by_atom()
+    def hcore_deriv(atm_id):
+        weight = cell.vol / np.prod(mesh)
+        rho_core = make_rho_core(cell, atm_id=[atm_id,])
+        rhoG_core = weight * tools.fft(rho_core, mesh)
+        coulG = tools.get_coulG(cell, mesh=mesh)
+        vpplocG_part1 = rhoG_core * coulG
+        # G = 0 contribution
+        symb = cell.atom_symbol(atm_id)
+        rloc = cell._pseudo[symb][1]
+        vpplocG_part1[0] += 2 * np.pi * (rloc * rloc * cell.atom_charge(atm_id))
+        vpplocG_part1.reshape(-1,*mesh)
+        vpp_kpts = _get_j_pass2_ip1(mydf, vpplocG_part1, kpts, hermi=0, deriv=1)
+        if gamma_point(kpts):
+            vpp_kpts = vpp_kpts.real
+        if len(kpts) == 1:
+            vpp_kpts = vpp_kpts[0]
+
+        shl0, shl1, p0, p1 = aoslices[atm_id]
+        if nkpts > 1:
+            for k in range(nkpts):
+                vpp_kpts[k,:,p0:p1] += h1[k,:,p0:p1]
+                vpp_kpts[k] += vpp_kpts[k].transpose(0,2,1)
+        else:
+            vpp_kpts[:,p0:p1] += h1[:,p0:p1]
+            vpp_kpts += vpp_kpts.transpose(0,2,1)
+        return vpp_kpts
+    return hcore_deriv
+
+
+def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision=None):
+    cell = mydf.cell
+    fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
+    atm = fakecell._atm
+    bas = fakecell._bas
+    env = fakecell._env
+
+    a = np.asarray(cell.lattice_vectors(), order='C', dtype=float)
+    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
+        lattice_type = '_orth'
+    else:
+        lattice_type = '_nonorth'
+        raise NotImplementedError
+    eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
+
+    b = np.asarray(np.linalg.inv(a.T), order='C', dtype=float)
+    mesh = np.asarray(mydf.mesh, order='C', dtype=np.int32)
+    comp = 3
+    grad = np.zeros((len(atm),comp), order="C", dtype=float)
+    drv = getattr(libdft, 'int_gauss_charge_v_rs', None)
+
+    rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
+    ngrids = np.prod(mesh)
+    coulG = tools.get_coulG(cell, mesh=mesh)
+    vG = np.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
+    v_rs = np.asarray(tools.ifft(vG, mesh).reshape(-1,ngrids).real, order="C")
+    try:
+        drv(getattr(libdft, eval_fn),
+            grad.ctypes.data_as(ctypes.c_void_p),
+            v_rs.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(comp),
+            atm.ctypes.data_as(ctypes.c_void_p),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
+            env.ctypes.data_as(ctypes.c_void_p),
+            mesh.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(cell.dimension),
+            a.ctypes.data_as(ctypes.c_void_p),
+            b.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(max_radius))
+    except Exception as e:
+        raise RuntimeError("Failed to computed nuclear gradients of vpploc part1. %s" % e)
+    grad *= -1
+    return grad
 
 
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,

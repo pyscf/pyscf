@@ -33,7 +33,6 @@ from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
 from pyscf.pbc.gto.cell import pgf_rcut
 from pyscf.pbc.gto.pseudo import pp_int
-from pyscf.pbc.gto.pseudo.pp_int import get_pp_nl
 from pyscf.pbc.dft import numint, gen_grid
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.lib.kpts_helper import gamma_point
@@ -421,7 +420,7 @@ def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     vpp = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
-    vppnl = get_pp_nl(cell, kpts_lst)
+    vppnl = pp_int.get_pp_nl(cell, kpts_lst)
 
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
@@ -551,7 +550,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
 
     fn_pp_nl = vppnl_by_k
     if ngrids > MAX_BLKSIZE:
-        fn_pp_nl = get_pp_nl
+        fn_pp_nl = pp_int.get_pp_nl
 
     for k, kpt in enumerate(kpts_lst):
         vppnl = fn_pp_nl(cell, kpt)
@@ -565,106 +564,21 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
     return numpy.asarray(vpp)
 
 
-def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
-    from . import multigrid_pair
-
-    if mydf.pp_with_erf:
-        return 0
-
-    mesh = mydf.mesh
-    vG = mydf.vpplocG_part1
-    vG.reshape(-1,*mesh)
-
-    vpp_kpts = multigrid_pair._get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
-    if gamma_point(kpts):
-        vpp_kpts = vpp_kpts.real
-    if len(kpts) == 1:
-        vpp_kpts = vpp_kpts[0]
-    return vpp_kpts
-
-
 def vpploc_part1_nuc_grad_generator(mydf, kpts=numpy.zeros((1,3))):
-    from . import multigrid_pair
-
-    h1 = -get_vpploc_part1_ip1(mydf, kpts=kpts)
-
-    nkpts = len(kpts)
-    cell = mydf.cell
-    mesh = mydf.mesh
-    aoslices = cell.aoslice_by_atom()
-    def hcore_deriv(atm_id):
-        weight = cell.vol / numpy.prod(mesh)
-        rho_core = make_rho_core(cell, atm_id=[atm_id,])
-        rhoG_core = weight * tools.fft(rho_core, mesh)
-        coulG = tools.get_coulG(cell, mesh=mesh)
-        vpplocG_part1 = rhoG_core * coulG
-        # G = 0 contribution
-        symb = cell.atom_symbol(atm_id)
-        rloc = cell._pseudo[symb][1]
-        vpplocG_part1[0] += 2 * numpy.pi * (rloc * rloc * cell.atom_charge(atm_id))
-        vpplocG_part1.reshape(-1,*mesh)
-        vpp_kpts = multigrid_pair._get_j_pass2_ip1(mydf, vpplocG_part1, kpts, hermi=0, deriv=1)
-        if gamma_point(kpts):
-            vpp_kpts = vpp_kpts.real
-        if len(kpts) == 1:
-            vpp_kpts = vpp_kpts[0]
-
-        shl0, shl1, p0, p1 = aoslices[atm_id]
-        if nkpts > 1:
-            for k in range(nkpts):
-                vpp_kpts[k,:,p0:p1] += h1[k,:,p0:p1]
-                vpp_kpts[k] += vpp_kpts[k].transpose(0,2,1)
-        else:
-            vpp_kpts[:,p0:p1] += h1[:,p0:p1]
-            vpp_kpts += vpp_kpts.transpose(0,2,1)
-        return vpp_kpts
-
-    return hcore_deriv
+    if isinstance(mydf, MultiGridFFTDF2):
+        from . import multigrid_pair
+        return multigrid_pair.vpploc_part1_nuc_grad_generator(mydf, kpts=kpts)
+    else:
+        raise NotImplementedError
 
 
 def vpploc_part1_nuc_grad(mydf, dm, kpts=numpy.zeros((1,3)), atm_id=None, precision=None):
-    from .multigrid_pair import _eval_rhoG
-    cell = mydf.cell
-    fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
-    atm = fakecell._atm
-    bas = fakecell._bas
-    env = fakecell._env
-
-    a = numpy.asarray(cell.lattice_vectors(), order='C', dtype=float)
-    if abs(a - numpy.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
+    if isinstance(mydf, MultiGridFFTDF2):
+        from . import multigrid_pair
+        return multigrid_pair.vpploc_part1_nuc_grad(
+                    mydf, dm, kpts=kpts, atm_id=atm_id, precision=precision)
     else:
-        lattice_type = '_nonorth'
         raise NotImplementedError
-    eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
-
-    b = numpy.asarray(numpy.linalg.inv(a.T), order='C', dtype=float)
-    mesh = numpy.asarray(mydf.mesh, order='C', dtype=numpy.int32)
-    comp = 3
-    grad = numpy.zeros((len(atm),comp), order="C", dtype=float)
-    drv = getattr(libdft, 'int_gauss_charge_v_rs', None)
-
-    rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
-    ngrids = numpy.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
-    v_rs = numpy.asarray(tools.ifft(vG, mesh).reshape(-1,ngrids).real, order="C")
-    try:
-        drv(getattr(libdft, eval_fn),
-            grad.ctypes.data_as(ctypes.c_void_p),
-            v_rs.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(comp),
-            atm.ctypes.data_as(ctypes.c_void_p),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
-            env.ctypes.data_as(ctypes.c_void_p),
-            mesh.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(cell.dimension),
-            a.ctypes.data_as(ctypes.c_void_p),
-            b.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(max_radius))
-    except Exception as e:
-        raise RuntimeError("Failed to computed nuclear gradients of vpploc part1. %s" % e)
-    grad *= -1
-    return grad
 
 
 def get_pp_nuc_grad(mydf, kpts=numpy.zeros((1,3)), atm_id=0):
@@ -2039,7 +1953,6 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         return vj
 
     get_pp_nuc_grad = get_pp_nuc_grad
-    get_vpploc_part1_ip1 = get_vpploc_part1_ip1
     vpploc_part1_nuc_grad = vpploc_part1_nuc_grad
 
 def multigrid(mf):

@@ -34,8 +34,9 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
         de += mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
         de += pp_int.vpploc_part2_nuc_grad(mol, dm0)
         de += pp_int.vppnl_nuc_grad(mol, dm0)
-        h1  = -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        h1 += -mol.pbc_intor('int1e_ipkin', kpt=kpt)
+        h1  = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
+        if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
+            h1 += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
         de += _contract_vhf_dm(mf_grad, h1+vhf, dm0, atmlst=atmlst) * 2
         de -= _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * 2
         #TODO extra_force need rewrite
