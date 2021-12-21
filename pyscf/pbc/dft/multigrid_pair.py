@@ -28,7 +28,7 @@ from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.dft import multigrid
 from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH_ORDER, IMAG_TOL,
-                                     _take_4d, _takebak_4d, _take_5d)
+                                     make_rho_core, _take_4d, _takebak_4d, _take_5d)
 from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs
 
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
