@@ -271,7 +271,7 @@ def map_with_prefetch(func, *iterables):
         import imp
         global_import_lock = imp.lock_held()
 
-    if global_import_lock:
+    if not ASYNC_IO or global_import_lock:
         for task in zip(*iterables):
             yield func(*task)
 
