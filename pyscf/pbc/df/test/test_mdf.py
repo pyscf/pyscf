@@ -192,6 +192,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
         self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
 
+    # issue #1117
+    def test_cell_with_cart(self):
+        cell = pgto.M(
+            atom='Li 0 0 0; H 2 2 2',
+            a=(numpy.ones([3, 3]) - numpy.eye(3)) * 2,
+            cart=True,
+            basis={'H': '''
+H   S
+0.5    1''',
+                   'Li': '''
+Li  S
+0.8    1
+0.4    1
+Li  P
+0.8    1
+0.4    1'''})
+
+        eri0 = df.FFTDF(cell).get_eri()
+        eri1 = mdf.MDF(cell).set(auxbasis=df.aug_etb(cell)).get_eri()
+        self.assertAlmostEqual(abs(eri1-eri0).max(), 0, 5)
+
 if __name__ == '__main__':
     print("Full Tests for mdf")
     unittest.main()
