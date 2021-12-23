@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import uccsd_rdm
+from pyscf.ao2mo import _ao2mo
 from pyscf.scf import ucphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
@@ -323,8 +324,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     nvira_pair = nvira * (nvira+1) //2
     nvirb_pair = nvirb * (nvirb+1) //2
 
-    fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
-    ftrans = _ccsd.libcc.AO2MOtranse2_nr_s1
+    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+    ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s1
     fmm = _ccsd.libcc.CCmmm_transpose_sum
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     def _trans(vin, mo_coeff, orbs_slice, out=None):
