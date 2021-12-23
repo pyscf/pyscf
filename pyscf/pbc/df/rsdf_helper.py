@@ -1231,6 +1231,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
 
     if gamma_point(kptij_lst):
         def int3c(shls_slice, out):
+            assert out.dtype == dtype
             shls_slice = (shls_slice[0], shls_slice[1],
                           nbas+shls_slice[2], nbas+shls_slice[3],
                           nbas*2+shls_slice[4], nbas*2+shls_slice[5])
@@ -1261,6 +1262,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
 
         if bvk_kmesh is None:
             def int3c(shls_slice, out):
+                assert out.dtype == dtype
                 shls_slice = (shls_slice[0], shls_slice[1],
                               nbas+shls_slice[2], nbas+shls_slice[3],
                               nbas*2+shls_slice[4], nbas*2+shls_slice[5])
@@ -1292,6 +1294,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
                 return out
         else:
             def int3c(shls_slice, out):
+                assert out.dtype == dtype
                 shls_slice = (shls_slice[0], shls_slice[1],
                               nbas+shls_slice[2], nbas+shls_slice[3],
                               nbas*2+shls_slice[4], nbas*2+shls_slice[5])

@@ -20,6 +20,7 @@
 #include <complex.h>
 #include <assert.h>
 #include <string.h>
+#include <math.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
