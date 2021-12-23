@@ -76,7 +76,7 @@ def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None):
     vhf = np.asarray(vhf, order="C")
     dm = np.asarray(dm, order="C")
 
-    neighbor_list = build_neighbor_list_for_shlpairs(mol, mol)
+    neighbor_list = build_neighbor_list_for_shlpairs(mol)
     func = getattr(libpbc, "contract_vhf_dm", None)
     try:
         func(de.ctypes.data_as(ctypes.c_void_p),

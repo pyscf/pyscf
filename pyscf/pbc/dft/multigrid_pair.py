@@ -29,7 +29,6 @@ from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.dft import multigrid
 from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH_ORDER, IMAG_TOL,
                                      make_rho_core, _take_4d, _takebak_4d, _take_5d)
-from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs
 
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
@@ -137,26 +136,53 @@ def init_rs_grid(gridlevel_info, comp):
     return rs_grid
 
 
-def build_task_list(cell0, gridlevel_info, cell1=None, Ls=None, hermi=0, precision=None):
+def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precision=None):
+    '''
+    Build the task list for multigrid DFT calculations.
+
+    Arguments:
+        cell : :class:`pbc.gto.cell.Cell`
+            The :class:`Cell` instance for the bra basis functions.
+        gridlevel_info : :class:`ctypes.POINTER`
+            The C pointer of the :class:`GridLevel_Info` structure.
+        cell1 : :class:`pbc.gto.cell.Cell`, optional
+            The :class:`Cell` instance for the ket basis functions.
+            If not given, both bra and ket basis functions come from cell.
+        Ls : (*,3) array, optional
+            The cartesian coordinates of the periodic images.
+            Default is calculated by :func:`cell.get_lattice_Ls`.
+        hermi : int, optional
+            If :math:`hermi=1`, the task list is built only for
+            the upper triangle of the matrix. Default is 0.
+        precision : float, optional
+            The integral precision. Default is :attr:`cell.precision`.
+
+    Returns: :class:`ctypes.POINTER`
+        The C pointer of the :class:`TaskList` structure.
+    '''
+    from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs
     if cell1 is None:
-        cell1 = cell0
+        cell1 = cell
     if Ls is None:
-        Ls = cell0.get_lattice_Ls()
+        Ls = cell.get_lattice_Ls()
     if precision is None:
-        precision = cell0.precision
+        precision = cell.precision
 
-    if hermi == 1:
-        assert cell1 is cell0
+    if hermi == 1 and cell1 is not cell:
+        logger.warn(cell,
+                    "Set hermi=0 because cell and cell1 are not the same.")
+        hermi = 0
 
-    ish_atm = np.asarray(cell0._atm, order='C', dtype=np.int32)
-    ish_bas = np.asarray(cell0._bas, order='C', dtype=np.int32)
-    ish_env = np.asarray(cell0._env, order='C', dtype=np.double)
+    ish_atm = np.asarray(cell._atm, order='C', dtype=np.int32)
+    ish_bas = np.asarray(cell._bas, order='C', dtype=np.int32)
+    ish_env = np.asarray(cell._env, order='C', dtype=float)
     nish = len(ish_bas)
-
-    ish_rcut, ipgf_rcut = cell0.rcut_by_shells(return_pgf_radius=True)
+    ish_rcut, ipgf_rcut = cell.rcut_by_shells(precision=precision,
+                                              return_pgf_radius=True)
+    assert nish == len(ish_rcut)
     ptr_ipgf_rcut = lib.ndarray_pointer_2d(ipgf_rcut)
 
-    if cell1 is cell0:
+    if cell1 is cell:
         jsh_atm = ish_atm
         jsh_bas = ish_bas
         jsh_env = ish_env
@@ -166,13 +192,14 @@ def build_task_list(cell0, gridlevel_info, cell1=None, Ls=None, hermi=0, precisi
     else:
         jsh_atm = np.asarray(cell1._atm, order='C', dtype=np.int32)
         jsh_bas = np.asarray(cell1._bas, order='C', dtype=np.int32)
-        jsh_env = np.asarray(cell1._env, order='C', dtype=np.double)
-
-        jsh_rcut, jpgf_rcut = cell1.rcut_by_shells(return_pgf_radius=True)
+        jsh_env = np.asarray(cell1._env, order='C', dtype=float)
+        jsh_rcut, jpgf_rcut = cell1.rcut_by_shells(precision=precision,
+                                                   return_pgf_radius=True)
         ptr_jpgf_rcut = lib.ndarray_pointer_2d(jpgf_rcut)
     njsh = len(jsh_bas)
+    assert njsh == len(jsh_rcut)
 
-    nl = build_neighbor_list_for_shlpairs(cell0, cell1,
+    nl = build_neighbor_list_for_shlpairs(cell, cell1, Ls=Ls,
                                           ish_rcut=ish_rcut, jsh_rcut=jsh_rcut,
                                           hermi=hermi)
 
@@ -195,7 +222,7 @@ def build_task_list(cell0, gridlevel_info, cell1=None, Ls=None, hermi=0, precisi
              Ls.ctypes.data_as(ctypes.c_void_p),
              ctypes.c_double(precision), ctypes.c_int(hermi))
     except Exception as e:
-        raise RuntimeError("Failed to get task list. %s" % e)
+        raise RuntimeError("Failed to build task list. %s" % e)
     return task_list
 
 
