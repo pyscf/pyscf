@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <complex.h>
 #include <assert.h>
 #include "config.h"
@@ -699,6 +700,10 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + IMGBLK;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
+        if (buf == NULL) {
+                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_latsum_drv\n",
+                        sizeof(double complex)*count*INTBUFMAX*comp+400);
+        }
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
@@ -752,6 +757,10 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + bvk_nimgs;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
+        if (buf == NULL) {
+                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_bvk_drv\n",
+                        sizeof(double complex)*count*INTBUFMAX*comp+400);
+        }
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
