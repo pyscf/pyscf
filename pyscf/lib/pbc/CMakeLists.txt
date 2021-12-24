@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(pbc SHARED ft_ao.c fill_ints.c optimizer.c grid_ao.c nr_direct.c)
+add_library(pbc SHARED ft_ao.c fill_ints.c fill_ints_sr.c optimizer.c grid_ao.c nr_direct.c)
 add_dependencies(pbc cgto cvhf np_helper)
 
 set_target_properties(pbc PROPERTIES
@@ -21,4 +21,3 @@ set_target_properties(pbc PROPERTIES
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
 target_link_libraries(pbc cgto cint cvhf np_helper ${BLAS_LIBRARIES})
-

@@ -196,7 +196,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = mydf.weighted_coulG(kpt, False, mesh)
@@ -278,7 +278,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = fuse(mydf.auxbar(fused_cell))
+                vbar = mydf.auxbar(fused_cell)
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -923,16 +923,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
-
-        dat = h5group[key]
-        if isinstance(dat, h5py.Group):
-            # Check whether the integral tensor is stored with old data
-            # foramt (v1.5.1 or older). The old format puts the entire
-            # 3-index tensor in an HDF5 dataset. The new format divides
-            # the tensor into pieces and stores them in different groups.
-            # The code below combines the slices into a single tensor.
-            dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
+        hermi = False
     else:
         # swap ki,kj due to the hermiticity
         kptji = kpti_kptj[[1,0]]
@@ -949,16 +940,24 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
+        hermi = True
 
-#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
-# the 3D tensor if it is too big.
-        dat = _load_and_unpack(h5group[key])
+    dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
 class _load_and_unpack(object):
-    '''Load data lazily'''
-    def __init__(self, dat):
+    '''
+    This class returns an array-like object to an hdf5 file that can
+    be sliced, to allow for lazy loading
+
+    hermi : boolean
+    Take the conjugate transpose of the slice
+
+    See PR 1086 and Issue 1076
+    '''
+    def __init__(self, dat, hermi):
         self.dat = dat
+        self.hermi = hermi
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
@@ -966,9 +965,12 @@ class _load_and_unpack(object):
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
-        nao = int(numpy.sqrt(v.shape[-1]))
-        v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
-        return v1.reshape(v.shape)
+        if self.hermi:
+            nao = int(numpy.sqrt(v.shape[-1]))
+            v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+            return v1.reshape(v.shape)
+        else:
+            return v
     def __array__(self):
         '''Create a numpy array'''
         return self[()]

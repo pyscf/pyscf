@@ -208,6 +208,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
     get_rho = get_rho
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
 

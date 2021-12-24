@@ -135,6 +135,7 @@ class UKS(rks.KohnShamDFT, pbcuhf.UHF):
     get_rho = get_rho
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.mix_density_fit)
 
 

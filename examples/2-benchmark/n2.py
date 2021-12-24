@@ -1,23 +1,14 @@
 #!/usr/bin/env python
-import os
-import time
 import pyscf
 from pyscf.tools.mo_mapping import mo_comps
+from benchmarking_utils import setup_logger, get_cpu_timings
 
-log = pyscf.lib.logger.Logger(verbose=5)
-with open('/proc/cpuinfo') as f:
-    for line in f:
-        if 'model name' in line:
-            log.note(line[:-1])
-            break
-with open('/proc/meminfo') as f:
-    log.note(f.readline()[:-1])
-log.note('OMP_NUM_THREADS=%s\n', os.environ.get('OMP_NUM_THREADS', None))
+log = setup_logger()
 
 for bas in ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ'):
     mol = pyscf.M(atom = 'N 0 0 0; N 0 0 1.1',
                   basis = bas)
-    cpu0 = time.clock(), time.time()
+    cpu0 = get_cpu_timings()
 
     mf = mol.RHF().run()
     cpu0 = log.timer('N2 %s RHF'%bas, *cpu0)
