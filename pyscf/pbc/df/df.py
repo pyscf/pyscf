@@ -196,7 +196,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = mydf.weighted_coulG(kpt, False, mesh)
