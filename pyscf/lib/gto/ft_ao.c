@@ -1017,7 +1017,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
 
         *jempty = 1;
         for (jp = 0; jp < j_prim; jp++) {
-                envs->aj = aj[jp];
+                envs->aj[0] = aj[jp];
                 if (j_ctr == 1) {
                         fac1j = fac1 * cj[jp];
                 } else {
@@ -1025,7 +1025,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                         *iempty = 1;
                 }
                 for (ip = 0; ip < i_prim; ip++) {
-                        envs->ai = ai[ip];
+                        envs->ai[0] = ai[ip];
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
                         if (eij > EXP_CUTOFF) {
