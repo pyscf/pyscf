@@ -126,4 +126,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for aft ao2mo")
     unittest.main()
-

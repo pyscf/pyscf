@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,18 +74,19 @@ def run3c(fill, kpts, shls_slice=None):
     cintopt = lib.c_null_ptr()
     pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell, 1e-9)
 
-    libpbc.PBCnr3c_drv(getattr(libpbc, intor), getattr(libpbc, fill),
-                       out.ctypes.data_as(ctypes.c_void_p),
-                       ctypes.c_int(nkpts_ij), ctypes.c_int(nkpts),
-                       ctypes.c_int(comp), ctypes.c_int(len(Ls)),
-                       Ls.ctypes.data_as(ctypes.c_void_p),
-                       expkL.ctypes.data_as(ctypes.c_void_p),
-                       kptij_idx.ctypes.data_as(ctypes.c_void_p),
-                       (ctypes.c_int*6)(*shls_slice),
-                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, lib.c_null_ptr(),
-                       atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
-                       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-                       env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
+    drv = libpbc.PBCfill_nr3c_drv
+    drv(getattr(libpbc, intor), getattr(libpbc, fill),
+        out.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(nkpts_ij), ctypes.c_int(nkpts),
+        ctypes.c_int(comp), ctypes.c_int(len(Ls)),
+        Ls.ctypes.data_as(ctypes.c_void_p),
+        expkL.ctypes.data_as(ctypes.c_void_p),
+        kptij_idx.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*6)(*shls_slice),
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
 
 def run2c(intor, fill, kpts, shls_slice=None):
@@ -121,7 +122,11 @@ def run2c(intor, fill, kpts, shls_slice=None):
         env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell
+    del cell
+
+class KnownValues(unittest.TestCase):
     def test_fill_kk(self):
         fill = 'PBCnr3c_fill_kks1'
         out = out0 = run3c(fill, kband)

@@ -801,7 +801,7 @@ class KSCF(pbchf.SCF):
                 self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction

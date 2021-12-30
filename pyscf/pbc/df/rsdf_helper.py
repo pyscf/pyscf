@@ -22,17 +22,16 @@ import h5py
 import numpy as np
 from scipy.special import gamma, gammaincc, comb
 
-from pyscf import gto as mol_gto
-from pyscf.pbc import df
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
-from pyscf.pbc import tools as pbctools
-from pyscf.scf import _vhf
-from pyscf.pbc.tools import k2gamma
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lib.parameters import BOHR
-
-libpbc = lib.load_library('libpbc')
+from pyscf import gto as mol_gto
+from pyscf.pbc.df.gdf_builder import _round_off_to_odd_mesh
+from pyscf.pbc.df.incore import libpbc, make_auxcell
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.tools import pbc as pbctools
+from pyscf.scf import _vhf
+from pyscf.pbc.tools import k2gamma
 
 
 """ General helper functions
@@ -753,7 +752,7 @@ def _get_bvk_data(cell, Ls, bvk_kmesh):
 
     Ls_sorted = np.array(Ls[iL_by_bvk], order="C")
     ### [END] Hongzhou's style of bvk
-    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh)
+    bvkmesh_Ls = k2gamma.translation_vectors_for_kmesh(cell, bvk_kmesh, True)
 
     return Ls_sorted, bvkmesh_Ls, cell_loc_bvk
 
@@ -801,7 +800,7 @@ def estimate_omega_for_npw(cell, npw_max, precision=None, kmax=0,
                                                                 precision, kmax)
         mesh = pbctools.cutoff_to_mesh(latvecs, ke_cutoff)
         if round2odd:
-            mesh = df.df._round_off_to_odd_mesh(mesh)
+            mesh = _round_off_to_odd_mesh(mesh)
         return ke_cutoff, mesh
     def fcheck(omega):
         return np.prod(omega2all(omega)[1]) > npw_max
@@ -825,7 +824,7 @@ def estimate_mesh_for_omega(cell, omega, precision=None, kmax=0,
                                                             precision, kmax)
     mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
     if round2odd:
-        mesh = df.df._round_off_to_odd_mesh(mesh)
+        mesh = _round_off_to_odd_mesh(mesh)
 
     return ke_cutoff, mesh
 
@@ -988,7 +987,6 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     if isinstance(auxcell_or_auxbasis, mol_gto.Mole):
         auxcell = auxcell_or_auxbasis
     else:
-        from pyscf.pbc.df.incore import make_auxcell
         auxcell = make_auxcell(cell, auxcell_or_auxbasis)
 
 # prescreening data

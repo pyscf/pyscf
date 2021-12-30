@@ -50,10 +50,9 @@ class KnownValues(unittest.TestCase):
 
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((1,2,3))
-        a1 = incore.aux_e2(cell, auxcell, 'int3c1e_sph', kptij_lst=kptij_lst)
+        a1 = incore.aux_e2(cell, auxcell, 'int3c1e_sph', aosym='s1', kptij_lst=kptij_lst)
         self.assertAlmostEqual(lib.fp(a1), 0.039329191948685879-0.039836453846241987j, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.df.incore")
     unittest.main()
-
