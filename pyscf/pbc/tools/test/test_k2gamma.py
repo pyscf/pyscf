@@ -18,33 +18,27 @@ from pyscf import lib
 from pyscf.pbc import gto, scf
 from pyscf.pbc.tools import k2gamma
 
-cell = gto.Cell()
-cell.a = '''
-     1.755000    1.755000    -1.755000
-     1.755000    -1.755000    1.755000
-     -1.755000    1.755000    1.755000'''
-cell.atom = '''Li      0.00000      0.00000      0.00000'''
-#same type of basis for different elements
-cell.basis = 'gth-szv'
-cell.pseudo = {'Li': 'GTH-PBE-q3'}
-cell.mesh = [20]*3
-cell.verbose = 6
-cell.output = '/dev/null'
-cell.build()
-
-kpts = cell.make_kpts([2,2,2])
-
-mf = scf.KUKS(cell, kpts)
-mf.xc = 'lda,vwn'
-mf.kernel()
-
-def tearDownModule():
-    global cell, mf
-    del cell, mf
-
 
 class KnownValues(unittest.TestCase):
     def test_k2gamma(self):
+        cell = gto.Cell()
+        cell.a = '''
+             1.755000    1.755000    -1.755000
+             1.755000    -1.755000    1.755000
+             -1.755000    1.755000    1.755000'''
+        cell.atom = '''Li      0.00000      0.00000      0.00000'''
+        cell.basis = 'gth-szv'
+        cell.pseudo = {'Li': 'GTH-PBE-q3'}
+        cell.mesh = [20]*3
+        cell.verbose = 6
+        cell.output = '/dev/null'
+        cell.build()
+
+        kpts = cell.make_kpts([2,2,2])
+        mf = scf.KUKS(cell, kpts)
+        mf.xc = 'lda,vwn'
+        mf.kernel()
+
         popa, popb = mf.mulliken_meta()[0]
         self.assertAlmostEqual(lib.finger(popa).sum(), 1.5403023058, 7)
         self.assertAlmostEqual(lib.finger(popb).sum(), 1.5403023058, 7)
@@ -69,6 +63,30 @@ class KnownValues(unittest.TestCase):
 
         result = k2gamma.double_translation_indices([2,3,4])
         self.assertEqual(abs(ref.reshape(24,24) - result).max(), 0)
+
+    def test_kpts_to_kmesh(self):
+        cell = gto.M(atom='He 0 0 0', basis=[[0, (.3, 1)]], a=np.eye(3), verbose=0)
+        cell.rcut = 38
+        self.assertEqual(cell.nimgs.tolist(), [21, 21, 21])
+        scaled_kpts = np.array([
+                [0. ,  0,  0],
+                [0.5, -.5, .25],
+                [0.5, .25, .333333],
+        ])
+        kpts = cell.get_abs_kpts(scaled_kpts)
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.assertEqual(kmesh.tolist(), [2, 4, 12])
+
+        cell.rcut = 9
+        self.assertEqual(cell.nimgs.tolist(), [5, 5, 5])
+        scaled_kpts = np.array([
+                [0. ,  0,  0],
+                [0.5, -.5, .25],
+                [0.5, .25, .3333],
+        ])
+        kpts = cell.get_abs_kpts(scaled_kpts)
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.assertEqual(kmesh.tolist(), [2, 4, 11])
 
 
 if __name__ == '__main__':

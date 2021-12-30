@@ -226,17 +226,7 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     else:
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/mole.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
+        nuccell = aft._compensate_nuccell(mydf)
         wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1'))
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 

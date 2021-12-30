@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -61,12 +61,13 @@ void GTOx1(double *fx1, double *fy1, double *fz1,
 }
 
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
-                int l, int nprim, int nctr, size_t ngrids, double fac)
+                int l, int nprim, int nctr, size_t ngrids, double fac,
+                double *cache)
 {
         int i, j;
         double arr, maxc;
-        double logcoeff[nprim];
-        double rr[ngrids];
+        double *rr = cache;
+        double *logcoeff = cache + BLKSIZE;
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -109,13 +110,10 @@ static void _fill_grid2atm(double *grid2atm, double *coord, size_t bgrids, size_
         double *r_atm;
         for (atm_id = 0; atm_id < natm; atm_id++) {
                 r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+#pragma GCC ivdep
                 for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[0*BLKSIZE+ig] = coord[0*ngrids+ig] - r_atm[0];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[1*BLKSIZE+ig] = coord[1*ngrids+ig] - r_atm[1];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[2*BLKSIZE+ig] = coord[2*ngrids+ig] - r_atm[2];
                 }
                 grid2atm += 3*BLKSIZE;
@@ -161,7 +159,8 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
-        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
+        double *cache = eprim + NPRIMAX*BLKSIZE*2;
+        double *cart_gto = cache + 3*(ANG_MAX+2)*BLKSIZE;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -178,16 +177,16 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1, cache)) {
                         dcart = (l+1)*(l+2)/2;
                         di = nc * dcart;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         if (l <= 1) { // s, p functions
                                 (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                         env, l, np, nc, nao, ngrids, bgrids);
+                                         env, l, np, nc, nao, ngrids, bgrids, cache);
                         } else {
                                 (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                         env, l, np, nc, di, bgrids, bgrids);
+                                         env, l, np, nc, di, bgrids, bgrids, cache);
                                 pcart = cart_gto;
                                 for (i = 0; i < ncomp; i++) {
                                         pao = ao + (i*nao+ao_id)*ngrids;
@@ -224,6 +223,7 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         double *p_exp, *pcoeff, *pcoord, *ri;
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
+        double *cache = eprim + NPRIMAX*BLKSIZE*2;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -240,10 +240,10 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1, cache)) {
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                 env, l, np, nc, nao, ngrids, bgrids);
+                                 env, l, np, nc, nao, ngrids, bgrids, cache);
                 } else {
                         for (i = 0; i < ncomp; i++) {
                                 _dset0(ao+(i*nao+ao_id)*ngrids, ngrids, bgrids, nc*deg);
@@ -273,7 +273,8 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
         double complex *aob = ao + ncomp*nao*ngrids;
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
-        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
+        double *cache = eprim + NPRIMAX*BLKSIZE*2;
+        double *cart_gto = cache + 3*(ANG_MAX+2)*BLKSIZE;
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -290,13 +291,13 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1, cache)) {
                         kappa = bas[bas_id*BAS_SLOTS+KAPPA_OF];
                         dcart = (l+1)*(l+2)/2;
                         di = nc * dcart;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                 env, l, np, nc, di, bgrids, bgrids);
+                                 env, l, np, nc, di, bgrids, bgrids, cache);
                         for (i = 0; i < ncomp; i++) {
                                 pcart = cart_gto + i * di*bgrids*ncomp_e1;
                                 off = (i*nao+ao_id)*ngrids;
@@ -354,7 +355,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2 + ncart + 3*(ANG_MAX+2)));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -410,7 +411,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2 + ncart + 3*(ANG_MAX+2)));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;

@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -299,7 +299,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
         double complex *v_priv = malloc(sizeof(double complex) * jk_size);
         NPzset0(v_priv, jk_size);
         size_t bufsize = di*di*di*di*ncomp;
-        bufsize = bufsize + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
+        bufsize = bufsize + di*di*8 + MAX(bufsize, (cache_size+1)/2);  // /2 for double complex
         double complex *buf = malloc(sizeof(double complex) * bufsize);
 #pragma omp for nowait schedule(dynamic)
         for (ij = 0; ij < nbas2; ij++) {

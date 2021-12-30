@@ -51,8 +51,6 @@ WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
-# cutoff penalty due to lattice summation
-LATTICE_SUM_PENALTY = 1e-1
 
 
 # For code compatiblity in python-2 and python-3
@@ -382,13 +380,6 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
-    pbcopt = kwargs.get('pbcopt', None)
-    if pbcopt is None:
-        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
-    if isinstance(pbcopt, _pbcintor.PBCOpt):
-        cpbcopt = pbcopt._this
-    else:
-        cpbcopt = lib.c_null_ptr()
 
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
@@ -413,7 +404,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
                 Ls.ctypes.data_as(ctypes.c_void_p),
                 facx.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
                 env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -431,7 +422,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(i0, i1, j0, j1),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
         env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -467,9 +458,8 @@ def get_nimgs(cell, precision=None):
     if precision is None:
         precision = cell.precision
 
-    rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
-
     # nimgs determines the supercell size
+    rcut = estimate_rcut(cell, precision)
     nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
@@ -477,8 +467,11 @@ def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     '''rcut based on the overlap integrals. This estimation is too conservative
     in many cases. A possible replacement can be the value of the basis
     function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
-    C = (c**2)*(2*l+1) / (precision * LATTICE_SUM_PENALTY)
     r0 = 20
+    # lattice_sum_penalty is the factor in terms of lattice sum in overlap
+    # integrals
+    lattice_sum_penalty = 4 * np.pi * r0 / alpha
+    C = c**2*(2*l+1)*alpha / precision * lattice_sum_penalty
     # +1. to ensure np.log returning positive value
     r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     rcut = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
@@ -495,6 +488,33 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
+
+def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
+    '''Lattice-sum cutoff for the entire system'''
+    rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
+    if rcut:
+        rcut_max = max(rcut)
+    else:
+        rcut_max = 0
+    return rcut_max
+
+def _rcut_penalty(cell):
+    '''Basis near the boundary of a cell may be closed to basis near the
+    boundary of the neighbour image. Use a penalty for this when calling
+    estimate_rcut
+    '''
+    a = cell.lattice_vectors()
+    if cell.dimension == 3:
+        vol = np.linalg.det(a)
+        penalty = vol ** (1./3) * 3**.5
+    elif cell.dimension == 2:
+        area = np.linalg.norm(np.cross(a[0], a[1]))
+        penalty = area ** .5 * 2**.5
+    elif cell.dimension == 1:
+        penalty = np.linalg.norm(a[0])
+    else:
+        penalty = 0
+    return penalty
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation based on cubic lattice'''
@@ -525,7 +545,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
-    '''Energy cutoff estimation'''
+    '''Energy cutoff estimation for the entire system'''
     Ecut_max = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
@@ -1360,8 +1380,7 @@ class Cell(mole.Mole):
             return self
 
         if self.rcut is None or self._rcut_from_build:
-            self._rcut = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)] + [0])
+            self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
 
         _a = self.lattice_vectors()
@@ -1479,12 +1498,7 @@ class Cell(mole.Mole):
         b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
         self.rcut = max(np.asarray(x) / heights_inv)
-
-        if self.nbas == 0:
-            rcut_guess = _estimate_rcut(.05, 0, 1, 1e-8)
-        else:
-            rcut_guess = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)])
+        rcut_guess = estimate_rcut(self, self.precision)
         if self.rcut > rcut_guess*1.5:
             msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
                    'attribute for lattic sum cutoff radius.  The given nimgs '

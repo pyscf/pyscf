@@ -29,6 +29,7 @@ import numpy
 import scipy.special
 from pyscf import lib
 from pyscf import gto
+from pyscf import __config__
 
 libpbc = lib.load_library('libpbc')
 
@@ -106,43 +107,11 @@ def get_gth_vlocG_part1(cell, Gv):
 def get_pp_loc_part2(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to C1, C2, C3, C4
     '''
-    from pyscf.pbc.df import incore
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-
-    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
-              'int3c1e_r4_origk', 'int3c1e_r6_origk')
-    kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
-    buf = 0
-    for cn in range(1, 5):
-        fakecell = fake_cell_vloc(cell, cn)
-        if fakecell.nbas > 0:
-            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
-                              kptij_lst=kptij_lst)
-            buf += numpy.einsum('...i->...', v)
-
-    if isinstance(buf, int):
-        if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
-            pass
-        else:
-            lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
-                             'were not found in the system.', cell._pseudo.keys())
-        vpploc = [0] * nkpts
-    else:
-        buf = buf.reshape(nkpts,-1)
-        vpploc = []
-        for k, kpt in enumerate(kpts_lst):
-            v = lib.unpack_tril(buf[k])
-            if abs(kpt).sum() < 1e-9:  # gamma_point:
-                v = v.real
-            vpploc.append(v)
+    from pyscf.pbc.df import aft
+    vpploc = aft._IntNucBuilder(cell, kpts).get_pp_loc_part2()
     if kpts is None or numpy.shape(kpts) == (3,):
         vpploc = vpploc[0]
     return vpploc
-
 
 def get_pp_nl(cell, kpts=None):
     if kpts is None:
@@ -178,55 +147,6 @@ def get_pp_nl(cell, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
     return ppnl
-
-
-def fake_cell_vloc(cell, cn=0):
-    '''Generate fake cell for V_{loc}.
-
-    Each term of V_{loc} (erf, C_1, C_2, C_3, C_4) is a gaussian type
-    function.  The integral over V_{loc} can be transfered to the 3-center
-    integrals, in which the auxiliary basis is given by the fake cell.
-
-    The kwarg cn indiciates which term to generate for the fake cell.
-    If cn = 0, the erf term is generated.  C_1,..,C_4 are generated with cn = 1..4
-    '''
-    fake_env = [cell.atom_coords().ravel()]
-    fake_atm = cell._atm.copy()
-    fake_atm[:,gto.PTR_COORD] = numpy.arange(0, cell.natm*3, 3)
-    ptr = cell.natm * 3
-    fake_bas = []
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    for ia in range(cell.natm):
-        if cell.atom_charge(ia) == 0:  # pass ghost atoms
-            continue
-
-        symb = cell.atom_symbol(ia)
-        if cn == 0:
-            if symb in cell._pseudo:
-                pp = cell._pseudo[symb]
-                rloc, nexp, cexp = pp[1:3+1]
-                alpha = .5 / rloc**2
-            else:
-                alpha = 1e16
-            norm = half_sph_norm / gto.gaussian_int(2, alpha)
-            fake_env.append([alpha, norm])
-            fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
-            ptr += 2
-        elif symb in cell._pseudo:
-            pp = cell._pseudo[symb]
-            rloc, nexp, cexp = pp[1:3+1]
-            if cn <= nexp:
-                alpha = .5 / rloc**2
-                norm = cexp[cn-1]/rloc**(cn*2-2) / half_sph_norm
-                fake_env.append([alpha, norm])
-                fake_bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
-                ptr += 2
-
-    fakecell = copy.copy(cell)
-    fakecell._atm = numpy.asarray(fake_atm, dtype=numpy.int32)
-    fakecell._bas = numpy.asarray(fake_bas, dtype=numpy.int32)
-    fakecell._env = numpy.asarray(numpy.hstack(fake_env), dtype=numpy.double)
-    return fakecell
 
 # sqrt(Gamma(l+1.5)/Gamma(l+2i+1.5))
 _PLI_FAC = 1/numpy.sqrt(numpy.array((
@@ -294,7 +214,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
     nkpts = len(kpts)
 
     fill = getattr(libpbc, 'PBCnr2c_fill_ks1')
-    intopt = lib.c_null_ptr()
+    cintopt = lib.c_null_ptr()
 
     def int_ket(_bas, intor):
         if len(_bas) == 0:
@@ -322,7 +242,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
             Ls.ctypes.data_as(ctypes.c_void_p),
             expkL.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*4)(*(shls_slice[:4])),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, lib.c_null_ptr(),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))

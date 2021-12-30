@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -32,27 +32,32 @@
 double CINTcommon_fac_sp(int l);
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                              double *coord, double *alpha, double *coeff, double *env,
-                             int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids);
+                             int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids,
+                             double *cache);
 void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff, double *env,
-                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids);
+                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids,
+                                    double *cache);
 void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff, double *env,
-                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids);
+                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids,
+                                    double *cache);
 void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff, double *env,
-                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids);
+                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids,
+                                    double *cache);
 void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff, double *env,
-                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids);
+                                    int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids,
+                                    double *cache);
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                              double *coord, double *alpha, double *coeff,
                              double *env, int l, int np, int nc,
-                             size_t nao, size_t ngrids, size_t bgrids);
+                             size_t nao, size_t ngrids, size_t bgrids, double *cache);
 void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                 double *coord, double *alpha, double *coeff,
                                 double *env, int l, int np, int nc,
-                                size_t nao, size_t ngrids, size_t bgrids);
+                                size_t nao, size_t ngrids, size_t bgrids, double *cache);
 
 /*
  * Extend the meaning of non0table:  given shell ID and block ID,
@@ -203,6 +208,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         double *Lk_buf = aobufk + nkpts*ncomp*di_max*bgrids * OF_CMPLX;
         double complex *zLk_buf = (double complex *)Lk_buf;
         double *min_grid2atm = Lk_buf + IMGBLK * nkpts * OF_CMPLX;
+        double *cache = min_grid2atm + nimgs;
         double *pexpLk;
         int img_idx[nimgs];
         int atm_imag_max[natm];
@@ -247,10 +253,10 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((iL < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
             (min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, cache)) {
                 pao = aobuf + count * dimc;
                 (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
-                         l, np, nc, nc*deg, bgrids, bgrids);
+                         l, np, nc, nc*deg, bgrids, bgrids, cache);
                 img_idx[count] = iL;
                 count += 1;
         }
@@ -310,6 +316,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         double complex *zLk_buf = (double complex *)Lk_buf;
         double *cart_gto = Lk_buf + IMGBLK * nkpts * OF_CMPLX;
         double *min_grid2atm = cart_gto + ncomp*NCTR_CART*bgrids;
+        double *cache = min_grid2atm + nimgs;
         double *pexpLk;
         int img_idx[nimgs];
         int atm_imag_max[natm];
@@ -353,14 +360,14 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((iL < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
             (min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, cache)) {
                 pao = aobuf + ((size_t)count) * dimc;
                 if (l <= 1) { // s, p functions
                         (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
-                                 l, np, nc, nc*dcart, bgrids, bgrids);
+                                 l, np, nc, nc*dcart, bgrids, bgrids, cache);
                 } else {
                         (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff, env,
-                                 l, np, nc, nc*dcart, bgrids, bgrids);
+                                 l, np, nc, nc*dcart, bgrids, bgrids, cache);
                         pcart = cart_gto;
                         for (i = 0; i < ncomp * nc; i++) {
                                 CINTc2s_ket_sph1(pao, pcart, bgrids, bgrids, l);
@@ -433,7 +440,7 @@ void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
         size_t bufsize =((nimgs*3 + NPRIMAX*2 +
                           nkpts *param[POS_E1]*param[TENSOR]*di_max * OF_CMPLX +
                           IMGBLK*param[POS_E1]*param[TENSOR]*di_max +
-                          param[POS_E1]*param[TENSOR]*NCTR_CART) * BLKSIZE
+                          param[POS_E1]*param[TENSOR]*NCTR_CART + 3*(ANG_MAX+2)) * BLKSIZE
                          + nkpts * IMGBLK * OF_CMPLX + nimgs);
         double *buf = malloc(sizeof(double) * bufsize);
 #pragma omp for nowait schedule(dynamic, 1)

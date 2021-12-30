@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,21 +26,41 @@ https://github.com/zhcui/local-orbital-and-cdft/blob/master/k2gamma.py
 '''
 
 from functools import reduce
+from fractions import Fraction
 import numpy as np
 import scipy.linalg
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import tools
 
 
-def kpts_to_kmesh(cell, kpts):
-    '''Guess kmesh'''
-    scaled_k = cell.get_scaled_kpts(kpts).round(8)
-    kmesh = (len(np.unique(scaled_k[:,0])),
-             len(np.unique(scaled_k[:,1])),
-             len(np.unique(scaled_k[:,2])))
+def kpts_to_kmesh(cell, kpts, precision=None):
+    '''Find the minimal k-points mesh to include all input kpts'''
+    scaled_kpts = cell.get_scaled_kpts(kpts)
+    logger.debug3(cell, '    scaled_kpts kpts %s', scaled_kpts)
+    # cell.nimgs are the upper limits for kmesh
+    kmesh = np.asarray(cell.nimgs) * 2 + 1
+    if precision is None:
+        precision = cell.precision
+    for i in range(3):
+        floats = scaled_kpts[:,i]
+        uniq_floats_idx = np.unique(floats.round(6), return_index=True)[1]
+        uniq_floats = floats[uniq_floats_idx]
+        # Limit the number of images to 20 in each direction
+        fracs = [Fraction(x).limit_denominator(20) for x in uniq_floats]
+        denominators = np.unique([x.denominator for x in fracs])
+        common_denominator = reduce(np.lcm, denominators)
+        fs = common_denominator * uniq_floats
+        if abs(fs - np.rint(fs)).max() < max(precision, 1e-5):
+            kmesh[i] = min(kmesh[i], common_denominator)
+        if cell.verbose >= logger.DEBUG3:
+            logger.debug3(cell, 'dim=%d common_denominator %d  error %g',
+                          i, common_denominator, abs(fs - np.rint(fs)).max())
+            logger.debug3(cell, '    unique kpts %s', uniq_floats)
+            logger.debug3(cell, '    frac kpts %s', fracs)
     return kmesh
 
-def translation_vectors_for_kmesh(cell, kmesh):
+def translation_vectors_for_kmesh(cell, kmesh, wrap_around=False):
     '''
     Translation vectors to construct super-cell of which the gamma point is
     identical to the k-point mesh of primitive cell
@@ -49,25 +69,29 @@ def translation_vectors_for_kmesh(cell, kmesh):
     R_rel_a = np.arange(kmesh[0])
     R_rel_b = np.arange(kmesh[1])
     R_rel_c = np.arange(kmesh[2])
+    if wrap_around:
+        R_rel_a[(kmesh[0]+1)//2:] -= kmesh[0]
+        R_rel_b[(kmesh[1]+1)//2:] -= kmesh[1]
+        R_rel_c[(kmesh[2]+1)//2:] -= kmesh[2]
     R_vec_rel = lib.cartesian_prod((R_rel_a, R_rel_b, R_rel_c))
     R_vec_abs = np.einsum('nu, uv -> nv', R_vec_rel, latt_vec)
     return R_vec_abs
 
-def get_phase(cell, kpts, kmesh=None):
+def get_phase(cell, kpts, kmesh=None, wrap_around=False):
     '''
     The unitary transformation that transforms the supercell basis k-mesh
     adapted basis.
     '''
     if kmesh is None:
         kmesh = kpts_to_kmesh(cell, kpts)
-    R_vec_abs = translation_vectors_for_kmesh(cell, kmesh)
+    R_vec_abs = translation_vectors_for_kmesh(cell, kmesh, wrap_around)
 
     NR = len(R_vec_abs)
     phase = np.exp(1j*np.einsum('Ru, ku -> Rk', R_vec_abs, kpts))
     phase /= np.sqrt(NR)  # normalization in supercell
 
     # R_rel_mesh has to be construct exactly same to the Ts in super_cell function
-    scell = tools.super_cell(cell, kmesh)
+    scell = tools.super_cell(cell, kmesh, wrap_around)
     return scell, phase
 
 def double_translation_indices(kmesh):

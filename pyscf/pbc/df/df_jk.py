@@ -27,7 +27,7 @@ import copy
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
@@ -393,30 +393,6 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
             return v_kpts[0]
         else:  # dm_kpts.ndim == 4 or kpts.shape[0] == 1:  # nset=Ndm
             return v_kpts
-
-def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a*b'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI,-alpha, cR, 1   )
-    cI = lib.ddot(aR, bI, alpha, cI, beta)
-    cI = lib.ddot(aI, bR, alpha, cI, 1   )
-    return cR, cI
-
-def zdotCN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a.conj()*b'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI, alpha, cR, 1   )
-    cI = lib.ddot(aR, bI, alpha, cI, beta)
-    cI = lib.ddot(aI, bR,-alpha, cI, 1   )
-    return cR, cI
-
-def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
-    '''c = a*b.conj()'''
-    cR = lib.ddot(aR, bR, alpha, cR, beta)
-    cR = lib.ddot(aI, bI, alpha, cR, 1   )
-    cI = lib.ddot(aR, bI,-alpha, cI, beta)
-    cI = lib.ddot(aI, bR, alpha, cI, 1   )
-    return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
