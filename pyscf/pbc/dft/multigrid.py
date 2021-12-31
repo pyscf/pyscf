@@ -1941,6 +1941,17 @@ class MultiGridFFTDF2(MultiGridFFTDF):
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
     rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
 
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        fft.FFTDF.__init__(self, cell, kpts)
+        self.task_list = None
+        self.vpplocG_part1 = None
+        self._keys = self._keys.union(['task_list','vpplocG_part1'])
+
+    def __del__(self):
+        from .multigrid_pair import free_task_list
+        if self.task_list is not None:
+            free_task_list(self.task_list)
+
     def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
         from . import multigrid_pair
         if kpts is None:

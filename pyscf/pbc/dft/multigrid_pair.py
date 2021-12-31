@@ -39,7 +39,7 @@ libdft = lib.load_library('libdft')
 
 class GridLevel_Info(ctypes.Structure):
     '''
-    Info about grid levels
+    Info about the grid levels.
     '''
     _fields_ = [("nlevels", ctypes.c_int), # number of grid levels
                 ("rel_cutoff", ctypes.c_double),
@@ -48,7 +48,7 @@ class GridLevel_Info(ctypes.Structure):
 
 class RS_Grid(ctypes.Structure):
     '''
-    Values on real space multigrid
+    Values on real space multigrid.
     '''
     _fields_ = [("nlevels", ctypes.c_int),
                 ("gridlevel_info", ctypes.POINTER(GridLevel_Info)),
@@ -58,7 +58,7 @@ class RS_Grid(ctypes.Structure):
 
 class PGFPair(ctypes.Structure):
     '''
-    Primitive Gaussian function pair
+    A primitive Gaussian function pair.
     '''
     _fields_ = [("ish", ctypes.c_int),
                 ("ipgf", ctypes.c_int),
@@ -69,6 +69,9 @@ class PGFPair(ctypes.Structure):
 
 
 class Task(ctypes.Structure):
+    '''
+    A single task.
+    '''
     _fields_ = [("buf_size", ctypes.c_size_t),
                 ("ntasks", ctypes.c_size_t),
                 ("pgfpairs", ctypes.POINTER(ctypes.POINTER(PGFPair))),
@@ -76,6 +79,9 @@ class Task(ctypes.Structure):
 
 
 class TaskList(ctypes.Structure):
+    '''
+    A task list.
+    '''
     _fields_ = [("nlevels", ctypes.c_int),
                 ("hermi", ctypes.c_int),
                 ("gridlevel_info", ctypes.POINTER(GridLevel_Info)),
@@ -103,6 +109,41 @@ def multi_grids_tasks(cell, ke_cutoff=None, hermi=0,
     return task_list
 
 
+def _update_task_list(mydf, hermi=0, ngrids=None, ke_ratio=None, rel_cutoff=None):
+    '''
+    Update :attr:`task_list` if necessary.
+    '''
+    cell = mydf.cell
+    if ngrids is None:
+        ngrids = mydf.ngrids
+    if ke_ratio is None:
+        ke_ratio = mydf.ke_ratio
+    if rel_cutoff is None:
+        rel_cutoff = mydf.rel_cutoff
+
+    need_update = False
+    task_list = getattr(mydf, 'task_list', None)
+    if task_list is None:
+        need_update = True
+    else:
+        hermi_orig = task_list.contents.hermi
+        nlevels = task_list.contents.nlevels
+        rel_cutoff_orig = task_list.contents.gridlevel_info.contents.rel_cutoff
+        #TODO also need to check kenetic energy cutoff change
+        if (hermi_orig > hermi or
+                nlevels != ngrids or
+                abs(rel_cutoff_orig-rel_cutoff) > 1e-12):
+            need_update = True
+
+    if need_update:
+        if task_list is not None:
+            free_task_list(task_list)
+        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=ngrids,
+                                      ke_ratio=ke_ratio, rel_cutoff=rel_cutoff)
+        mydf.task_list = task_list
+    return task_list
+
+
 def init_gridlevel_info(cutoff, rel_cutoff, mesh):
     if cutoff[0] < 1e-15:
         cutoff = cutoff[1:]
@@ -121,6 +162,14 @@ def init_gridlevel_info(cutoff, rel_cutoff, mesh):
     return gridlevel_info
 
 
+def free_gridlevel_info(gridlevel_info):
+    fn = getattr(libdft, "del_gridlevel_info", None)
+    try:
+        fn(ctypes.byref(gridlevel_info))
+    except Exception as e:
+        raise RuntimeError("Failed to free grid level info. %s" % e)
+
+
 def init_rs_grid(gridlevel_info, comp):
     '''
     Initialize values on real space multigrid
@@ -134,6 +183,14 @@ def init_rs_grid(gridlevel_info, comp):
     except Exception as e:
         raise RuntimeError("Failed to initialize real space multigrid data. %s" % e)
     return rs_grid
+
+
+def free_rs_grid(rs_grid):
+    fn = getattr(libdft, "del_rs_grid", None)
+    try:
+        fn(ctypes.byref(rs_grid))
+    except Exception as e:
+        raise RuntimeError("Failed to free real space multigrid data. %s" % e)
 
 
 def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precision=None):
@@ -224,6 +281,18 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
     except Exception as e:
         raise RuntimeError("Failed to build task list. %s" % e)
     return task_list
+
+
+def free_task_list(task_list):
+    '''
+    Note:
+        This will also free task_list.contents.gridlevel_info.
+    '''
+    func = getattr(libdft, "del_task_list", None)
+    try:
+        func(ctypes.byref(task_list))
+    except Exception as e:
+        raise RuntimeError("Failed to free task list. %s" % e)
 
 
 def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
@@ -367,19 +436,15 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
 
 def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
                rhog_high_order=RHOG_HIGH_ORDER):
+    assert(deriv < 2)
     cell = mydf.cell
 
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-
-    assert(deriv < 2)
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     gga_high_order = False
     if deriv == 0:
@@ -428,6 +493,12 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
         gy = np.fft.fftfreq(mesh[1], 1./mesh[1]).astype(np.int32)
         gz = np.fft.fftfreq(mesh[2], 1./mesh[2]).astype(np.int32)
         _takebak_4d(rhoG, rho_freq.reshape((-1,) + tuple(mesh)), (None, gx, gy, gz))
+
+    if nset > 1:
+        for i in range(nset):
+            free_rs_grid(rs_rho[i])
+    else:
+        free_rs_grid(rs_rho)
 
     rhoG = rhoG.reshape(nset,rhodim,-1)
 
@@ -595,15 +666,8 @@ def _get_j_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     vG = vG.reshape(-1,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-    if hermi < task_list.contents.hermi:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
     if at_gamma_point:
@@ -654,15 +718,8 @@ def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=N
     vG = vG.reshape(-1,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-    if hermi < task_list.contents.hermi:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
     if at_gamma_point:
@@ -707,15 +764,8 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
     vG = vG.reshape(-1,4,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-    if hermi < task_list.contents.hermi:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     if gamma_point(kpts):
         veff = np.zeros((nset,nkpts,nao,nao))
@@ -761,15 +811,8 @@ def _get_gga_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose
     vG = vG.reshape(-1,4,nx,ny,nz)
     nset = vG.shape[0]
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-    if hermi < task_list.contents.hermi:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
     if at_gamma_point:
@@ -1069,15 +1112,8 @@ def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
     ngrids = np.prod(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh).reshape(-1, *mesh)
 
-    task_list = getattr(mydf, 'task_list', None)
-    if task_list is None:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
-    if hermi < task_list.contents.hermi:
-        task_list = multi_grids_tasks(cell, hermi=hermi, ngrids=mydf.ngrids,
-                                      ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-        mydf.task_list = task_list
+    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
+                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
 
     at_gamma_point = gamma_point(kpts)
     if at_gamma_point:
