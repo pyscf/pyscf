@@ -109,16 +109,19 @@ static void _orth_rho(double *rho, double *dm_xyz,
         int l, ix, iy, iz, nx, ny, nz;
         int xmap[ngridx];
         int ymap[ngridy];
-        int zmap[ngridz];
+
+        bool is_x_split = false, is_y_split = false, is_z_split = false;
+        if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) is_x_split = true;
+        if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) is_y_split = true;
+        if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) is_z_split = true;
+        _get_grid_mapping(xmap, nx0, nx1, ngridx, nimgx, is_x_split);
+        _get_grid_mapping(ymap, ny0, ny1, ngridy, nimgy, is_y_split);
 
         if (nimgz == 1) {
                 dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1l1, &l1,
                        &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
                        &D0, xyr, &ngridz);
-                for (iz = 0; iz < ngridz; iz++) {
-                    zmap[iz] = iz + nz0;
-                }
-        } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
+        } else if (is_z_split) {
                 nz = mesh[2]-nz0;
                 dgemm_(&TRANS_N, &TRANS_N, &nz, &l1l1, &l1,
                        &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
@@ -126,21 +129,11 @@ static void _orth_rho(double *rho, double *dm_xyz,
                 dgemm_(&TRANS_N, &TRANS_N, &nz1, &l1l1, &l1,
                        &fac, zs_exp, mesh+2, dm_xyz, &l1,
                        &D0, xyr, &ngridz);
-                for (iz = 0; iz < nz1; iz++) {
-                    zmap[iz] = iz;
-                }
-                nz = nz0 - nz1;
-                for (iz = nz1; iz < ngridz; iz++) {
-                    zmap[iz] = iz + nz;
-                }
         }
         else{
                 dgemm_(&TRANS_N, &TRANS_N, mesh+2, &l1l1, &l1,
                        &fac, zs_exp, mesh+2, dm_xyz, &l1,
                        &D0, xyr, mesh+2);
-                for (iz = 0; iz < mesh[2]; iz++) {
-                    zmap[iz] = iz;
-                }
         }
 
         if (nimgy == 1) {
@@ -149,10 +142,7 @@ static void _orth_rho(double *rho, double *dm_xyz,
                                &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
                                &D0, xqr+l*xcols, &ngridz);
                 }
-                for (iy = 0; iy < ngridy; iy++) {
-                    ymap[iy] = iy + ny0;
-                }
-        } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
+        } else if (is_y_split) {
                 ny = mesh[1] - ny0;
                 for (l = 0; l <= topl; l++) {
                         dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ny1, &l1,
@@ -162,21 +152,11 @@ static void _orth_rho(double *rho, double *dm_xyz,
                                &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
                                &D0, xqr+l*xcols+ny1*ngridz, &ngridz);
                 }
-                for (iy = 0; iy < ny1; iy++) {
-                    ymap[iy] = iy;
-                }
-                ny = ny0 - ny1;
-                for (iy = ny1; iy < ngridy; iy++) {
-                    ymap[iy] = iy + ny;
-                }
         } else {
                 for (l = 0; l <= topl; l++) {
                         dgemm_(&TRANS_N, &TRANS_T, &ngridz, mesh+1, &l1,
                                &D1, xyr+l*l1*ngridz, &ngridz, ys_exp, mesh+1,
                                &D0, xqr+l*xcols, &ngridz);
-                }
-                for (iy = 0; iy < mesh[1]; iy++) {
-                    ymap[iy] = iy;
                 }
         }
 
@@ -184,10 +164,7 @@ static void _orth_rho(double *rho, double *dm_xyz,
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &ngridx, &l1,
                        &D1, xqr, &xcols, xs_exp+nx0, mesh,
                        &D0, pqr, &xcols);
-                for (ix = 0; ix < ngridx; ix++) {
-                    xmap[ix] = ix + nx0;
-                }
-        } else if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) {
+        } else if (is_x_split) {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx1, &l1,
                        &D1, xqr, &xcols, xs_exp, mesh,
                        &D0, pqr, &xcols);
@@ -195,27 +172,38 @@ static void _orth_rho(double *rho, double *dm_xyz,
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx, &l1,
                        &D1, xqr, &xcols, xs_exp+nx0, mesh,
                        &D0, pqr+nx1*xcols, &xcols);
-                for (ix = 0; ix < nx1; ix++) {
-                    xmap[ix] = ix;
-                }
-                nx = nx0 - nx1;
-                for (ix = nx1; ix < ngridx; ix++) {
-                    xmap[ix] = ix + nx;
-                }
         } else {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, mesh, &l1,
                        &D1, xqr, &xcols, xs_exp, mesh,
                        &D0, pqr, &xcols);
-                for (ix = 0; ix < mesh[0]; ix++) {
-                    xmap[ix] = ix;
-                }
         }
 
         // TODO optimize the following loops using e.g. axpy
         for (ix = 0; ix < ngridx; ix++) {
             for (iy = 0; iy < ngridy; iy++) {
-                for (iz = 0; iz < ngridz; iz++) {
-                    rho[xmap[ix]*mesh_yz+ymap[iy]*mesh[2]+zmap[iz]] += pqr[ix*xcols+iy*ngridz+iz];
+                //for (iz = 0; iz < ngridz; iz++) {
+                //    rho[xmap[ix]*mesh_yz+ymap[iy]*mesh[2]+zmap[iz]] += pqr[ix*xcols+iy*ngridz+iz];
+                //}
+                double* restrict ptr_rho = rho + xmap[ix]*mesh_yz + ymap[iy]*mesh[2];
+                double* restrict ptr_pqr = pqr + ix*xcols + iy*ngridz;
+                if (is_z_split) {
+                    #pragma omp simd
+                    for (iz = 0; iz < nz1; iz++) {
+                        ptr_rho[iz] += ptr_pqr[iz];
+                    }
+                    ptr_rho += nz0 - nz1;
+                    #pragma omp simd
+                    for (iz = nz1; iz < ngridz; iz++) {
+                        ptr_rho[iz] += ptr_pqr[iz];
+                    }
+                } else {
+                    if (nimgz == 1) {
+                        ptr_rho += nz0;
+                    }
+                    #pragma omp simd
+                    for (iz = 0; iz < ngridz; iz++) {
+                        ptr_rho[iz] += ptr_pqr[iz];
+                    }
                 }
             }
         }

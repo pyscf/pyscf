@@ -34,6 +34,28 @@ static inline int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
     return ngridx;
 }
 
+static inline void _get_grid_mapping(int* xmap, int nx0, int nx1, int ngridx, int nimgx, bool is_x_split)
+{
+    int ix, nx;
+    if (nimgx == 1) {
+        for (ix = 0; ix < ngridx; ix++) {
+            xmap[ix] = ix + nx0;
+        }
+    } else if (is_x_split) {
+        for (ix = 0; ix < nx1; ix++) {
+            xmap[ix] = ix;
+        }
+        nx = nx0 - nx1;
+        for (ix = nx1; ix < ngridx; ix++) {
+            xmap[ix] = ix + nx;
+        }
+    } else {
+        for (ix = 0; ix < ngridx; ix++) {
+            xmap[ix] = ix;
+        }
+    }
+}
+
 int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                      double a, double b, double cutoff,
                      double xi, double xj, double ai, double aj,
