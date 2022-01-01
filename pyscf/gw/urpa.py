@@ -30,7 +30,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.ump2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf.gw.rpa import RPA, _get_scaled_legendre_roots
 
@@ -202,7 +202,7 @@ class URPA(RPA):
 
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = 'F 0 0 0'
