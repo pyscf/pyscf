@@ -30,7 +30,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf import df, dft, scf
+from pyscf import df, scf
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 
 einsum = lib.einsum
@@ -178,10 +178,7 @@ class RPA(lib.StreamObject):
             if auxbasis:
                 self.with_df.auxbasis = auxbasis
             else:
-                try:
-                    self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-                except:
-                    self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=False)
+                self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         self._keys.update(['with_df'])
 
 ##################################################
@@ -255,7 +252,6 @@ class RPA(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         nmo = self.nmo
-        nao = self.mo_coeff.shape[0]
         naux = self.with_df.get_naoaux()
         mem_incore = (2 * nmo**2*naux) * 8 / 1e6
         mem_now = lib.current_memory()[0]
@@ -271,7 +267,7 @@ class RPA(lib.StreamObject):
             raise NotImplementedError
 
 if __name__ == '__main__':
-    from pyscf import gto, dft, scf
+    from pyscf import gto, dft
     mol = gto.Mole()
     mol.verbose = 4
     mol.atom = [
