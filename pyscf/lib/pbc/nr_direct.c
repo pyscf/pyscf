@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
-#include <omp.h>
+//#include <omp.h>
 #include "config.h"
 #include "cint.h"
 #include "cint_funcs.h"
