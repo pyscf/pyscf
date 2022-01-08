@@ -101,3 +101,56 @@ void get_SI(complex double* out, double* coords, double* Gv, int natm, int ngrid
     }
 }
 }
+
+
+void get_Gv(double* Gv, double* rx, double* ry, double* rz, int* mesh, double* b)
+{
+#pragma omp parallel
+{
+    int x, y, z;
+    double *pGv;
+    #pragma omp for schedule(dynamic)
+    for (x = 0; x < mesh[0]; x++) {
+        pGv = Gv + x * (size_t)mesh[1] * mesh[2] * 3;
+        for (y = 0; y < mesh[1]; y++) {
+        for (z = 0; z < mesh[2]; z++) {
+            pGv[0]  = rx[x] * b[0];
+            pGv[0] += ry[y] * b[3];
+            pGv[0] += rz[z] * b[6];
+            pGv[1]  = rx[x] * b[1];
+            pGv[1] += ry[y] * b[4];
+            pGv[1] += rz[z] * b[7];
+            pGv[2]  = rx[x] * b[2];
+            pGv[2] += ry[y] * b[5];
+            pGv[2] += rz[z] * b[8];
+            pGv += 3;
+        }}
+    }
+}
+}
+
+void contract_rhoG_Gv(double complex* out, double complex* rhoG, double* Gv,
+                      int ndens, size_t ngrids)
+{
+    int i;
+    double complex *outx, *outy, *outz;
+    for (i = 0; i < ndens; i++) {
+        outx = out;
+        outy = outx + ngrids;
+        outz = outy + ngrids;
+#pragma omp parallel
+{
+        size_t igrid;
+        double *pGv;
+        #pragma omp for schedule(static)
+        for (igrid = 0; igrid < ngrids; igrid++) {
+            pGv = Gv + igrid * 3;
+            outx[igrid] = pGv[0] * creal(rhoG[igrid]) * _Complex_I - pGv[0] * cimag(rhoG[igrid]);
+            outy[igrid] = pGv[1] * creal(rhoG[igrid]) * _Complex_I - pGv[1] * cimag(rhoG[igrid]);
+            outz[igrid] = pGv[2] * creal(rhoG[igrid]) * _Complex_I - pGv[2] * cimag(rhoG[igrid]);
+        }
+}
+        rhoG += ngrids;
+        out += 3 * ngrids;
+    }
+}

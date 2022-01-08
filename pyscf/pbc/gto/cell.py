@@ -891,10 +891,51 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
 
     Gvbase = (rx, ry, rz)
-    Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+    #Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+    Gv = np.empty((*mesh,3), order='C', dtype=float)
+    b = np.asarray(b, order='C')
+    mesh = np.asarray(mesh, order='C', dtype=np.int32)
+    rx = np.asarray(rx, order='C')
+    ry = np.asarray(ry, order='C')
+    rz = np.asarray(rz, order='C')
+    fn = getattr(libpbc, 'get_Gv', None)
+    try:
+        fn(Gv.ctypes.data_as(ctypes.c_void_p),
+           rx.ctypes.data_as(ctypes.c_void_p),
+           ry.ctypes.data_as(ctypes.c_void_p),
+           rz.ctypes.data_as(ctypes.c_void_p),
+           mesh.ctypes.data_as(ctypes.c_void_p),
+           b.ctypes.data_as(ctypes.c_void_p))
+    except Exception as e:
+        raise RuntimeError("Failed to get Gv. %s" % e)
+    Gv = Gv.reshape(-1, 3)
+
     # 1/cell.vol == det(b)/(2pi)^3
     weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
+
+def contract_rhoG_Gv(cell, rhoG, Gv=None):
+    '''
+    einsum('np,px->nxp', 1j*rhoG, Gv)
+    '''
+    if Gv is None:
+        Gv = cell.get_Gv()
+
+    ngrids, dimension = Gv.shape
+    dimension == 3
+    rhoG = np.asarray(rhoG.reshape(-1,ngrids), order='C')
+    ndens = rhoG.shape[0]
+    out = np.empty((ndens, dimension, ngrids), dtype=np.complex128)
+
+    fn = getattr(libpbc, 'contract_rhoG_Gv', None)
+    try:
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           rhoG.ctypes.data_as(ctypes.c_void_p),
+           Gv.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(ndens), ctypes.c_size_t(ngrids))
+    except Exception as e:
+        raise RuntimeError("Failed in contract_rhoG_Gv. %s" % e)
+    return out
 
 def _non_uniform_Gv_base(n):
     #rs, ws = radi.delley(n)
@@ -1890,6 +1931,7 @@ class Cell(mole.Mole):
 
     get_Gv = get_Gv
     get_Gv_weights = get_Gv_weights
+    contract_rhoG_Gv = contract_rhoG_Gv
 
     get_SI = get_SI
 

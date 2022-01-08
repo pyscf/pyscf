@@ -33,9 +33,10 @@ def _fftn_blas(f, mesh):
     expRGy = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[2]), Gz))
     out = np.empty(f.shape, dtype=np.complex128)
-    buf = np.empty(mesh, dtype=np.complex128)
+    #buf = np.empty(mesh, dtype=np.complex128)
     for i, fi in enumerate(f):
-        buf[:] = fi.reshape(mesh)
+        #buf[:] = fi.reshape(mesh)
+        buf = lib.copy(fi.reshape(mesh), dtype=np.complex128)
         g = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, c=out[i].reshape(-1,mesh[0]))
         g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=buf.reshape(-1,mesh[1]))
         g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=out[i].reshape(-1,mesh[2]))
@@ -49,9 +50,10 @@ def _ifftn_blas(g, mesh):
     expRGy = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[2]), Gz))
     out = np.empty(g.shape, dtype=np.complex128)
-    buf = np.empty(mesh, dtype=np.complex128)
+    #buf = np.empty(mesh, dtype=np.complex128)
     for i, gi in enumerate(g):
-        buf[:] = gi.reshape(mesh)
+        #buf[:] = gi.reshape(mesh)
+        buf = lib.copy(gi.reshape(mesh), dtype=np.complex128)
         f = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, 1./mesh[0], c=out[i].reshape(-1,mesh[0]))
         f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=buf.reshape(-1,mesh[1]))
         f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=out[i].reshape(-1,mesh[2]))
@@ -236,8 +238,9 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     else:
         kG = Gv
 
-    equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
+    equal2boundary = None
     if wrap_around and abs(k).sum() > 1e-9:
+        equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
         # Here we 'wrap around' the high frequency k+G vectors into their lower
         # frequency counterparts.  Important if you want the gamma point and k-point
         # answers to agree
@@ -262,7 +265,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             kG[on_edge[:,2]== 1] -= 2 * box_edge[2]
             kG[on_edge[:,2]==-1] += 2 * box_edge[2]
 
-    absG2 = np.einsum('gi,gi->g', kG, kG)
+    #absG2 = np.einsum('gi,gi->g', kG, kG)
+    absG2 = lib.multiply_sum(kG, kG, axis=1)
 
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
@@ -310,10 +314,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # Ewald probe charge method to get the leading term of the finite size
         # error in exchange integrals
 
-        G0_idx = np.where(absG2==0)[0]
+        #G0_idx = np.where(absG2==0)[0]
+        G0_idx = 0
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
-                coulG = 4*np.pi/absG2
+                coulG = lib.multiply(4*np.pi, lib.reciprocal(absG2))
                 coulG[G0_idx] = 0
 
         elif cell.dimension == 2:
@@ -358,7 +363,8 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
             coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
-    coulG[equal2boundary] = 0
+    if equal2boundary is not None:
+        coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
     # * omega is used by RealSpaceJKBuilder which requires ewald probe charge

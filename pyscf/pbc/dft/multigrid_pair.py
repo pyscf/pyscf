@@ -504,8 +504,9 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
     if gga_high_order:
         Gv = cell.get_Gv(mydf.mesh)
-        rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
-        rhoG = np.concatenate([rhoG, rhoG1], axis=1)
+        #rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
+        rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv)
+        rhoG = lib.concatenate([rhoG, rhoG1], axis=1)
     return rhoG
 
 
@@ -788,7 +789,8 @@ def _get_gga_pass2(mydf, vG, kpts=np.zeros((1,3)), hermi=1, verbose=None):
 
         mat = np.asarray(eval_mat(cell, wv, task_list, comp=1, hermi=hermi,
                          xctype='GGA', kpts=kpts, grid_level=ilevel, mesh=mesh)).reshape(nset,-1,nao,nao)
-        veff += mat #+ mat.conj().transpose(0,1,3,2)
+        #veff += mat #+ mat.conj().transpose(0,1,3,2)
+        veff = lib.add(veff, mat, out=veff)
         if not gamma_point(kpts):
             raise NotImplementedError
 
@@ -853,8 +855,9 @@ def _rks_gga_wv0(rho, vxc, weight):
     vrho, vgamma = vxc[:2]
     ngrid = vrho.size
     wv = np.empty((4,ngrid))
-    wv[0]  = weight * vrho
-    wv[1:] = (weight * vgamma * 2) * rho[1:4]
+    wv[0]  = lib.multiply(weight, vrho, out=wv[0])
+    for i in range(1, 4):
+        wv[i] = lib.multiply(weight * 2, lib.multiply(vgamma, rho[i], out=wv[i]), out=wv[i])
     return wv
 
 
@@ -883,20 +886,29 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+    vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
+    for i, rhoG_i in enumerate(rhoG[:,0]):
+        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
 
     if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
-            vG[i] += mydf.vpplocG_part1 * 2
+            #vG[i] += mydf.vpplocG_part1 * 2
+            vG[i] = lib.add(vG[i], lib.multiply(2., mydf.vpplocG_part1), out=vG[i])
 
-    ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
-    ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
+    #ecoul = .5 * np.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
+    #ecoul+= .5 * np.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
+    ecoul = np.zeros((rhoG.shape[0],))
+    for i in range(rhoG.shape[0]):
+        ecoul[i] = .5 * lib.vdot(rhoG[i,0], vG[i]).real
+
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
     if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
-            vG[i] -= mydf.vpplocG_part1
+            #vG[i] -= mydf.vpplocG_part1
+            vG[i] = lib.subtract(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -913,11 +925,15 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         elif xctype == 'GGA':
             wv = _rks_gga_wv0(rhoR[i], vxc, weight)
 
-        nelec[i] += rhoR[i,0].sum() * weight
-        excsum[i] += (rhoR[i,0]*exc).sum() * weight
+        nelec[i] += lib.sum(rhoR[i,0]) * weight
+        excsum[i] += lib.sum(lib.multiply(rhoR[i,0],exc)) * weight
         wv_freq.append(tools.fft(wv, mesh))
     rhoR = rhoG = None
-    wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
+
+    if len(wv_freq) == 1:
+        wv_freq = wv_freq[0].reshape(nset,-1,*mesh)
+    else:
+        wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
 
     if nset == 1:
         ecoul = ecoul[0]

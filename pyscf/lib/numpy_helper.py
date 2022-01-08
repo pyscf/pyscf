@@ -1266,6 +1266,112 @@ def add(a, b, out=None, **kwargs):
        b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(out.size))
     return out
 
+def subtract(a, b, out=None, **kwargs):
+    if (a.shape != b.shape or a.dtype != b.dtype or
+        not(a.flags.c_contiguous or a.flags.f_contiguous) or
+        not(b.flags.c_contiguous or b.flags.f_contiguous)):
+        return numpy.subtract(a, b, out, **kwargs)
+
+    if a.dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdsubtract", None)
+    elif a.dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzsubtract", None)
+    else:
+        return numpy.subtract(a, b, out, **kwargs)
+
+    if out is None:
+        if a.flags.c_contiguous:
+            out = numpy.empty_like(a, order='C')
+        else:
+            out = numpy.empty_like(a, order='F')
+    else:
+        if (a.shape != out.shape or
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.subtract(a, b, out, **kwargs)
+
+    if a.flags.c_contiguous:
+        if not out.flags.c_contiguous:
+            return numpy.subtract(a, b, out, **kwargs)
+        b = numpy.asarray(b, order='C')
+    else:
+        if not out.flags.f_contiguous:
+            return numpy.subtract(a, b, out, **kwargs)
+        b = numpy.asarray(b, order='F')
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(out.size))
+    return out
+
+def multiply(a, b, out=None, **kwargs):
+    if numpy.isscalar(a) or numpy.isscalar(b):
+        dtype = numpy.result_type(a,b)
+
+        number = a if numpy.isscalar(a) else b
+        matrix = b if numpy.isscalar(a) else a
+        number = numpy.asarray([number,], dtype=dtype)
+        matrix = numpy.asarray(matrix, dtype=dtype)
+        if dtype == numpy.double:
+            fn = getattr(_np_helper, "NPdmultiply_scalar", None)
+        elif dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPzmultiply_scalar", None)
+        else:
+            return numpy.multiply(a, b, out=out, **kwargs)
+
+        if out is None:
+            out = numpy.empty_like(matrix)
+        else:
+            assert out.dtype == dtype
+            assert out.size == matrix.size
+
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           matrix.ctypes.data_as(ctypes.c_void_p),
+           number.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_size_t(out.size))
+        return out
+
+    if (a.shape != b.shape or
+        not(a.flags.c_contiguous or a.flags.f_contiguous) or
+        not(b.flags.c_contiguous or b.flags.f_contiguous)):
+        return numpy.multiply(a, b, out=out, **kwargs)
+
+    if a.dtype == b.dtype:
+        if a.dtype == numpy.double:
+            fn = getattr(_np_helper, "NPdmultiply", None)
+        elif a.dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPzmultiply", None)
+        else:
+            return numpy.multiply(a, b, out=out, **kwargs)
+    else:
+        if (a.dtype == numpy.double and b.dtype == numpy.complex128):
+            fn = getattr(_np_helper, "NPmultiply_dz", None)
+        elif (b.dtype == numpy.double and a.dtype == numpy.complex128):
+            fn = getattr(_np_helper, "NPmultiply_zd", None)
+        else:
+            return numpy.multiply(a, b, out=out, **kwargs)
+
+    if out is None:
+        if a.flags.c_contiguous:
+            out = numpy.empty_like(a, order='C')
+        else:
+            out = numpy.empty_like(a, order='F')
+    else:
+        if (a.shape != out.shape or
+            not (out.flags.c_contiguous or out.flags.f_contiguous)):
+            return numpy.multiply(a, b, out=out, **kwargs)
+
+    if a.flags.c_contiguous:
+        if not out.flags.c_contiguous or not b.flags.c_contiguous:
+            return numpy.multiply(a, b, out=out, **kwargs)
+    else:
+        if not out.flags.f_contiguous or not b.flags.f_contiguous:
+            return numpy.multiply(a, b, out=out, **kwargs)
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(out.size))
+    return out
+
 def multiply_sum(a, b, axis=0):
     # out = einsum("ij,ij->j", a, b) if axis == 0
     # out = einsum("ij,ij->i", a, b) if axis == 1
@@ -1300,6 +1406,143 @@ def multiply_sum(a, b, axis=0):
        b.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(nrow), ctypes.c_int(ncol), ctypes.c_int(axis))
     return out
+
+def reciprocal(x, out=None, order='K', dtype=None, **kwargs):
+    if (x.dtype not in [float, numpy.double, numpy.complex128]
+        or order != 'K' or not (x.flags.c_contiguous or x.flags.f_contiguous)):
+        return numpy.reciprocal(x, out=out, order=order, dtype=dtype, **kwargs)
+
+    dtype = numpy.result_type(x.dtype, dtype)
+    if out is None:
+        out = numpy.empty_like(x, dtype=dtype)
+    else:
+        assert out.dtype == dtype
+        assert out.size == x.size
+
+    if x.dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzreciprocal", None)
+    elif x.dtype == numpy.double:
+        if dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPreciprocal_d2z", None)
+        else:
+            fn = getattr(_np_helper, "NPdreciprocal", None)
+    else:
+        raise NotImplementedError
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       x.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(x.size))
+    return out
+
+def concatenate(arrays, axis=0, out=None, dtype=None, casting="same_kind"):
+    use_numpy = False
+
+    if dtype is None:
+        dtype = numpy.result_type(*arrays)
+
+    if dtype not in [float, numpy.double, numpy.complex128]:
+        use_numpy = True
+
+    c_contiguous = True
+    for array in arrays:
+        if array.dtype != dtype:
+            use_numpy = True
+        c_contiguous = c_contiguous and array.flags.c_contiguous
+
+    if not c_contiguous:
+        use_numpy = True
+
+    ndim = arrays[0].ndim
+    if axis == -1:
+        axis = ndim - 1
+    if axis == ndim - 1:
+        use_numpy = True
+
+    if use_numpy:
+        return numpy.concatenate(arrays, axis=axis, out=out, dtype=dtype, casting=casting)
+
+    shape = []
+    pointer = []
+    for array in arrays:
+        shape.append(array.shape)
+        pointer.append(array.ctypes.data)
+    shape = numpy.asarray(shape, dtype=numpy.int32)
+    pointer = numpy.asarray(pointer, dtype=numpy.uintp).ctypes.data_as(ctypes.c_void_p)
+    out_shape = shape[0].copy()
+    out_shape[axis] = shape[:,axis].sum()
+
+    if out is None:
+        out = numpy.empty(out_shape, dtype=dtype)
+    else:
+        assert (numpy.asarray(out.shape) - out_shape).sum() == 0
+        assert out.dtype == dtype
+
+    if dtype == numpy.double:
+        fn = getattr(_np_helper, "NPdconcatenate", None)
+    elif dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzconcatenate", None)
+    else:
+        raise NotImplementedError
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       pointer,
+       ctypes.c_int(len(arrays)),
+       out_shape.ctypes.data_as(ctypes.c_void_p),
+       shape.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(ndim), ctypes.c_int(axis))
+
+    return out
+
+def copy(a, order='K', subok=False, dtype=None):
+    if (subok or a.dtype not in [float, numpy.double, numpy.complex128]
+        or order != 'K' or not (a.flags.c_contiguous or a.flags.f_contiguous)):
+        return numpy.copy(numpy.asarray(a, dtype=dtype), order=order, subok=subok)
+
+    dtype = numpy.result_type(a.dtype, dtype)
+
+    out = numpy.empty_like(a, dtype=dtype)
+    #assert out.dtype == dtype
+    #assert out.size == a.size
+
+    if a.dtype == numpy.complex128:
+        fn = getattr(_np_helper, "NPzcopy", None)
+    elif a.dtype == numpy.double:
+        if dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPcopy_d2z", None)
+        else:
+            fn = getattr(_np_helper, "NPdcopy", None)
+    else:
+        raise NotImplementedError
+
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a.size))
+    return out
+
+def vdot(a, b):
+    if a.ndim > 1 or b.ndim > 1:
+        return numpy.vdot(a,b)
+
+    if (not (a.flags.c_contiguous or a.flags.f_contiguous) or
+        not (b.flags.c_contiguous or b.flags.f_contiguous)):
+        return numpy.vdot(a,b)
+
+    if a.dtype == b.dtype and a.size == b.size:
+        if a.dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPzvdot", None)
+        elif a.dtype == numpy.double:
+            fn = getattr(_np_helper, "NPdvdot", None)
+        else:
+            return numpy.vdot(a,b)
+    else:
+        return numpy.vdot(a,b)
+
+    out = numpy.zeros((1,), dtype=a.dtype)
+    fn(out.ctypes.data_as(ctypes.c_void_p),
+       a.ctypes.data_as(ctypes.c_void_p),
+       b.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_size_t(a.size))
+    return out[0]
 
 class NPArrayWithTag(numpy.ndarray):
     # Initialize kwargs in function tag_array
