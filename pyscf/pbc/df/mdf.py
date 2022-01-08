@@ -264,12 +264,13 @@ def _outcore_auxe2(dfbuilder, cderi_file, intor='int3c2e', aosym='s2', comp=None
     nkpts = kpts.shape[0]
 
     if shls_slice is None:
-        shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
+        shls_slice = [0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas]
 
     ao_loc = cell.ao_loc
     aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
-    i0, i1, j0, j1 = [ao_loc[i] for i in shls_slice[:4]]
-    k0, k1 = aux_loc[shls_slice[4]],  aux_loc[shls_slice[5]]
+    i0, i1, j0, j1 = ao_loc[list(shls_slice[:4])]
+    ksh0, ksh1 = shls_slice[4:]
+    k0, k1 = aux_loc[[ksh0, ksh1]]
     if aosym == 's1':
         nao_pair = (i1 - i0) * (j1 - j0)
     else:
@@ -320,14 +321,16 @@ def _outcore_auxe2(dfbuilder, cderi_file, intor='int3c2e', aosym='s2', comp=None
     nsteps = len(sh_ranges)
     row1 = 0
     for istep, (sh_start, sh_end, nrow) in enumerate(sh_ranges):
+        if aosym == 's2':
+            shls_slice = (sh_start, sh_end, 0, sh_end, ksh0, ksh1)
+        else:
+            shls_slice = (sh_start, sh_end, 0, cell.nbas, ksh0, ksh1)
         outR, outI = int3c(shls_slice, bufR, bufI)
         log.debug2('      step [%d/%d], shell range [%d:%d], len(buf) = %d',
                    istep+1, nsteps, sh_start, sh_end, nrow)
         cpu0 = log.timer_debug1(f'outcore_auxe2 [{istep+1}/{nsteps}]', *cpu0)
 
-        shls_slice = (sh_start, sh_end, 0, cell.nbas)
         row0, row1 = row1, row1 + nrow
-
         for k, kk_idx in enumerate(kikj_idx):
             fswap[f'{dataname}R/{kk_idx}'][row0:row1] = outR[k]
             if f'{dataname}I/{kk_idx}' in fswap:

@@ -1069,12 +1069,9 @@ def condense(opname, a, loc_x, loc_y=None):
             opname = 'NP_' + opname
         op = getattr(_np_helper, opname)
         if a.flags.f_contiguous:
-            out = numpy.zeros((nloc_x, nloc_y), order='F')
-            loc_x, loc_y = loc_y, loc_x
-            nloc_x, nloc_y = nloc_y, nloc_x
-        else:
-            a = numpy.asarray(a, order='C')
-            out = numpy.zeros((nloc_x, nloc_y))
+            a = transpose(a.T)
+        a = numpy.asarray(a, order='C')
+        out = numpy.zeros((nloc_x, nloc_y))
         _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                               a.ctypes.data_as(ctypes.c_void_p),
                               loc_x.ctypes.data_as(ctypes.c_void_p),

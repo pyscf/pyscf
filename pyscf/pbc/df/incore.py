@@ -295,6 +295,8 @@ class _Int3cBuilder(lib.StreamObject):
             cput0 = logger.process_clock(), logger.perf_counter()
             if shls_slice is None:
                 shls_slice = [0, nbasp, 0, nbasp, nbasp, nbasp + auxcell.nbas]
+            elif len(shls_slice) == 4:  # computing all auxiliary basis
+                shls_slice = shls_slice + [nbasp, nbasp + auxcell.nbas]
             else:
                 ksh0 = nbasp + shls_slice[4]
                 ksh1 = nbasp + shls_slice[5]
