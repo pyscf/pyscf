@@ -100,6 +100,19 @@ elif FFT_ENGINE == 'NUMPY+BLAS':
         else:
             return np.fft.ifftn(a, axes=(1,2,3))
 
+elif FFT_ENGINE == 'CUPY':
+    import cupy
+    def _fftn_wrapper(a):
+        a = lib.device_put(a)
+        a_fft = cupy.fft.fftn(a, axes=(1,2,3))
+        a_fft = lib.device_get(a_fft)
+        return a_fft
+    def _ifftn_wrapper(a):
+        a = lib.device_put(a)
+        a_ifft = cupy.fft.ifftn(a, axes=(1,2,3))
+        a_ifft = lib.device_get(a_ifft)
+        return a_ifft
+
 #?elif:  # 'FFTW+BLAS'
 else:  # 'BLAS'
     def _fftn_wrapper(a):
