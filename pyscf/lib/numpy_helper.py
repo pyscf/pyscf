@@ -1078,7 +1078,7 @@ def condense(opname, a, loc_x, loc_y=None):
             tmp[i] = op(a[i0:i1], axis=0)
         for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
             out[:,j] = op(tmp[:,j0:j1], axis=1)
-    return out
+        return out
 
     op = getattr(_np_helper, 'NP_' + opname)
     if a.flags.f_contiguous:
