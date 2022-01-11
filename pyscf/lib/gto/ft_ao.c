@@ -40,17 +40,18 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include <assert.h>
 #include <complex.h>
 #include "config.h"
 #include "cint.h"
+#include "gto/gto.h"
 #include "gto/ft_ao.h"
 #include "np_helper/np_helper.h"
 
 #define SQRTPI          1.7724538509055160272981674833411451
 #define EXP_CUTOFF      100
-#define NCTRMAX         72
 
 
 double CINTsquare_dist(const double *r1, const double *r2);
@@ -854,6 +855,10 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
         const size_t leni = len1 * i_ctr;
         const size_t lenj = len1 * i_ctr * j_ctr;
         double complex *gctrj = malloc(sizeof(double complex)*(lenj+leni+len1));
+        if (gctrj == NULL) {
+                fprintf(stderr, "gctrj = malloc(%zu) falied in GTO_aopair_early_contractv\n",
+                        sizeof(double complex) * (lenj + leni + len1));
+        }
         double complex *g = gctrj + lenj;
         double complex *gctri, *g1d;
 
@@ -970,6 +975,10 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                 lenj = nf * i_ctr * j_ctr * n_comp * NGv;
         }
         double complex *g = malloc(sizeof(double complex) * (len1+leng+leni+lenj));
+        if (g == NULL) {
+                fprintf(stderr, "g = malloc(%zu) falied in GTO_aopair_lazy_contract\n",
+                        sizeof(double complex) * (len1 + leng + leni + lenj));
+        }
         double complex *g1 = g + len1;
         double complex *gout, *gctri, *gctrj;
 
@@ -1008,7 +1017,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
 
         *jempty = 1;
         for (jp = 0; jp < j_prim; jp++) {
-                envs->aj = aj[jp];
+                envs->aj[0] = aj[jp];
                 if (j_ctr == 1) {
                         fac1j = fac1 * cj[jp];
                 } else {
@@ -1016,7 +1025,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                         *iempty = 1;
                 }
                 for (ip = 0; ip < i_prim; ip++) {
-                        envs->ai = ai[ip];
+                        envs->ai[0] = ai[ip];
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
                         if (eij > EXP_CUTOFF) {
@@ -1291,6 +1300,10 @@ void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
         int ic, jc, k;
         const int buflen = nfi*dj;
         double complex *buf1 = malloc(sizeof(double complex) * buflen*2 * NGv);
+        if (buf1 == NULL) {
+                fprintf(stderr, "buf1 = malloc(%zu) falied in GTO_ft_c2s_sph\n",
+                        sizeof(double complex) * buflen*2 * NGv);
+        }
         double complex *buf2 = buf1 + buflen * NGv;
         double complex *pout, *pij, *buf;
 
@@ -1347,7 +1360,15 @@ int GTO_ft_aopair_drv(double complex *out, int *dims,
         const int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
         const size_t nc = envs->nf * i_ctr * j_ctr * NGv;
         double complex *gctr = malloc(sizeof(double complex) * nc * n_comp);
+        if (gctr == NULL) {
+                fprintf(stderr, "gctr = malloc(%zu) falied in GTO_ft_aopair_drv\n",
+                        sizeof(double complex) * nc * n_comp);
+        }
         double *cache = malloc(sizeof(double) * (gs[0] + gs[1] + gs[2]) * 3);
+        if (cache == NULL) {
+                fprintf(stderr, "cache = malloc(%zu) falied in GTO_ft_aopair_drv\n",
+                        sizeof(double complex) * (gs[0] + gs[1] + gs[2]) * 3);
+        }
         if (eval_gz == NULL) {
                 eval_gz = GTO_Gv_general;
         }
@@ -1598,12 +1619,18 @@ void GTO_ft_fill_drv(int (*intor)(), FPtr_eval_gz eval_gz, void (*fill)(),
         if (intor != &GTO_ft_ovlp_cart && intor != &GTO_ft_ovlp_sph) {
                 eval_aopair = &GTO_aopair_lazy_contract;
         }
+        size_t di = GTOmax_shell_dim(ao_loc, shls_slice  , 1);
+        size_t dj = GTOmax_shell_dim(ao_loc, shls_slice+2, 1);
 
 #pragma omp parallel
 {
         int i, j, ij;
         double complex *buf = malloc(sizeof(double complex)
-                                     * NCTRMAX*NCTRMAX*comp*(size_t)nGv);
+                                     * di*dj*comp*(size_t)nGv);
+        if (buf == NULL) {
+                fprintf(stderr, "buf = malloc(%zu) falied in GTO_ft_fill_drv\n",
+                        di*dj*comp*(size_t)nGv);
+        }
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;

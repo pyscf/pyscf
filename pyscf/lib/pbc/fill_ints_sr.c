@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <complex.h>
 #include <assert.h>
+#include <string.h>
+#include <math.h>
 #include "config.h"
 #include "cint.h"
 #include "vhf/fblas.h"
@@ -28,8 +30,6 @@
 #define INTBUFMAX10     8000
 #define IMGBLK          80
 #define OF_CMPLX        2
-
-#define ABS(X)          ((X>0)?(X):(-X))
 
 int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -155,7 +155,7 @@ static void _nr2c_k_fill(int (*intor)(), double complex *out,
     int iptrxyz, dijc, ISH, JSH, IJSH, i;
     JSH = refuniqshl_map[jsh-jsh0];
     double *ri, *rj, Rij2, Rij2_cut;
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
 // <<<<<<<<<
 
     shls[1] = jsh;
@@ -417,7 +417,7 @@ static void _nr3c_g(int (*intor)(), void (*fsort)(), double *out,
     double *cache = bufL + dijmc;
     double *pbuf;
 
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
 
     shls[0] = ish;
     shls[1] = jsh;
@@ -791,7 +791,7 @@ static void _nr3c_bvk_k(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>>>
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij, kiLj, kiLi;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];
@@ -1082,7 +1082,7 @@ static void _nr3c_k(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>>>
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij, kiLj, kiLjc, kiLi;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];
@@ -1481,7 +1481,7 @@ static void _nr3c_bvk_kk(int (*intor)(), void (*fsort)(),
     double *bufkk_r, *bufkk_i, *bufkL_r, *bufkL_i, *bufL, *pbuf, *cache;
     double *buf_rs, *buf_rs0, *pbuf_rs;
 
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
 
     shls[0] = ish;
     shls[1] = jsh;
@@ -1764,7 +1764,7 @@ static void _nr3c_kk(int (*intor)(), void (*fsort)(),
     shls[0] = ish;
     shls[1] = jsh;
 // >>>>>>>>>>
-    const double omega = ABS(env_loc[PTR_RANGE_OMEGA]);
+    const double omega = fabs(env_loc[PTR_RANGE_OMEGA]);
     int Ish, Jsh, IJsh, Ksh, idij;
     Ish = refuniqshl_map[ish];
     Jsh = refuniqshl_map[jsh-nbas];

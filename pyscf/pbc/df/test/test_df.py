@@ -19,7 +19,7 @@ import pyscf.pbc
 from pyscf import ao2mo, gto
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.df import df
+from pyscf.pbc.df import df, aug_etb, FFTDF
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
 
@@ -146,6 +146,27 @@ class KnownValues(unittest.TestCase):
             cs1 = auxcell1._env[ptr1:ptr1+nprim*nc]
             self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
             self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
+
+    # issue #1117
+    def test_cell_with_cart(self):
+        cell = pgto.M(
+            atom='Li 0 0 0; H 2 2 2',
+            a=(numpy.ones([3, 3]) - numpy.eye(3)) * 2,
+            cart=True,
+            basis={'H': '''
+H   S
+0.5    1''',
+                   'Li': '''
+Li  S
+0.8    1
+0.4    1
+Li  P
+0.8    1
+0.4    1'''})
+
+        eri0 = FFTDF(cell).get_eri()
+        eri1 = df.GDF(cell).set(auxbasis=aug_etb(cell)).get_eri()
+        self.assertAlmostEqual(abs(eri1-eri0).max(), 0, 2)
 
 
 if __name__ == '__main__':

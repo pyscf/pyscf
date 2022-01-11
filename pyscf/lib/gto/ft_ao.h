@@ -20,7 +20,10 @@
 #include <complex.h>
 #include "cint.h"
 
-#if !defined HAVE_DEFINED_CINTENVVARS_H
+// HAVE_DEFINED_CINTOPT_H is defined in cint.h libcint v5.0. The CINTEnvVars
+// struct definition below is not the same to the one in cint.h . However, it
+// is compatible with both libcint v4 and libcint v5.
+#ifndef HAVE_DEFINED_CINTENVVARS_H
 #define HAVE_DEFINED_CINTENVVARS_H
 typedef struct {
         int *atm;
@@ -66,10 +69,10 @@ typedef struct {
         // Replace them with four words (ai, aj, ak, al)
         //double _padding1;
         //double rirj[3];
-        double ai;
-        double aj;
-        double ak;
-        double al;
+        double ai[1];
+        double aj[1];
+        double ak[1];
+        double al[1];
         double rkrl[3];
         double *rx_in_rijrx;
         double *rx_in_rklrx;
