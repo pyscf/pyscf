@@ -10,9 +10,9 @@ import numpy
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.    
+    atom = '''C     0.      0.      0.
               C     0.8917  0.8917  0.8917
-              C     1.7834  1.7834  0.    
+              C     1.7834  1.7834  0.
               C     2.6751  2.6751  0.8917
               C     1.7834  0.      1.7834
               C     2.6751  0.8917  2.6751
@@ -83,6 +83,9 @@ print(abs(eri - mydf.get_eri(compact=True)).max())
 #
 # Using .sr_loop method to access the 3-index tensor of gaussian density
 # fitting (GDF) for arbitrary k-points
+# The same can be achieved by using range-separated density fitting (RSDF).
+# To do so, simply change 'df.DF' to be 'df.RSDF' below.
+# see '35-range_separated_density_fit.py' for more details of RSDF.
 #
 nao = cell.nao_nr()
 mydf = df.DF(cell, kpts=kpts)
@@ -139,4 +142,3 @@ for i, kpti in enumerate(kpts):
 # Test 2-e integrals
 eri = numpy.einsum('Lpq,Lrs->pqrs', Lpq_kpts[0][3], Lrs_kpts[0][3][3])
 print(abs(eri - mydf.get_eri([kpts[0],kpts[3],kpts[3],kpts[0]]).reshape([nao]*4)).max())
-

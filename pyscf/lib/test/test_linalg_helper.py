@@ -38,6 +38,15 @@ class KnownValues(unittest.TestCase):
         e = myfci.kernel()[0]
         self.assertAlmostEqual(e, -11.579978414933732+mol.energy_nuc(), 9)
 
+    def test_davidson_large_dx(self):
+        mol = gto.M(atom='''
+                    O 0 0 0
+                    H 1.92 1.38 0
+                    H -1.92 1.38 0''', verbose=0)
+        ci = fci.FCI(mol.RHF().run()).run()
+        self.assertAlmostEqual(ci.e_tot, -74.74294263255416, 9)
+
+
 if __name__ == "__main__":
     print("Full Tests for linalg_helper")
     unittest.main()

@@ -31,7 +31,8 @@ In RSGDF, the two-center and three-center Coulomb integrals are calculated in tw
 where the SR and LR integrals correpond to using the following potentials
     g_SR(r_12;omega) = erfc(omega * r_12) / r_12
     g_LR(r_12;omega) = erf(omega * r_12) / r_12
-The SR integrals are evaluated in real space using a lattice summation, while the LR integrals are evaluated in reciprocal space with a plane wave basis.
+The SR integrals are evaluated in real space using a lattice summation, while
+the LR integrals are evaluated in reciprocal space with a plane wave basis.
 '''
 
 import os
@@ -53,8 +54,14 @@ from pyscf.lib import logger
 
 
 def kpts_to_kmesh(cell, kpts):
-    """ Check if kpt mesh includes the Gamma point. Generate the bvk kmesh only if it does.
+    """ Check if kpt mesh includes the Gamma point. Generate the bvk kmesh
+    only if it does.
     """
+    kpts = np.reshape(kpts, (-1,3))
+    nkpts = len(kpts)
+    if nkpts == 1:  # single-kpt (either Gamma or shifted)
+        return None
+
     scaled_k = cell.get_scaled_kpts(kpts).round(8)
     if np.any(abs(scaled_k).sum(axis=1) < KPT_DIFF_TOL):
         kmesh = (len(np.unique(scaled_k[:,0])),
@@ -65,7 +72,8 @@ def kpts_to_kmesh(cell, kpts):
     return kmesh
 
 
-def weighted_coulG(cell, omega, kpt=np.zeros(3), exx=False, mesh=None):
+def weighted_coulG(mydf, omega, kpt=np.zeros(3), exx=False, mesh=None):
+    cell = mydf.cell
     if cell.omega != 0:
         raise RuntimeError('RSGDF cannot be used '
                            'to evaluate the long-range HF exchange in RSH '
@@ -75,7 +83,7 @@ def weighted_coulG(cell, omega, kpt=np.zeros(3), exx=False, mesh=None):
         omega_ = None
     else:
         omega_ = omega
-    coulG = pbctools.get_coulG(cell, kpt, False, None, mesh, Gv,
+    coulG = pbctools.get_coulG(cell, kpt, False, mydf, mesh, Gv,
                                omega=omega_)
     coulG *= kws
     return coulG
@@ -123,10 +131,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     omega = abs(mydf.omega)
 
-    if mydf.use_bvk:
+    if mydf.use_bvk and mydf.kpts_band is None:
         bvk_kmesh = kpts_to_kmesh(cell, mydf.kpts)
         if bvk_kmesh is None:
-            log.debug("Non-Gamma-inclusive kmesh is found. bvk kmesh is not used.")
+            log.debug("Single-kpt or non-Gamma-inclusive kmesh is found. "
+                      "bvk kmesh is not used.")
         else:
             log.debug("Using bvk kmesh= [%d %d %d]", *bvk_kmesh)
     else:
@@ -187,7 +196,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 qaux2 = np.outer(qaux,qaux)
             j2c[k] -= qaux2 * g0_j2c
         # long-range part via aft
-        coulG_lr = weighted_coulG(cell, omega_j2c, kpt, False, mesh_j2c)
+        coulG_lr = mydf.weighted_coulG(omega_j2c, kpt, False, mesh_j2c)
         for p0, p1 in lib.prange(0, ngrids, blksize):
             aoaux = ft_ao.ft_ao(auxcell, Gv[p0:p1], None, b, gxyz[p0:p1],
                                 Gvbase, kpt).T
@@ -279,7 +288,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (0, auxcell.nbas)
         Gaux = ft_ao.ft_ao(auxcell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        wcoulG_lr = weighted_coulG(cell, omega, kpt, False, mesh)
+        wcoulG_lr = mydf.weighted_coulG(omega, kpt, False, mesh)
         Gaux *= wcoulG_lr.reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
@@ -460,39 +469,60 @@ class RSGDF(df.df.GDF):
 
     # class methods defined outside the class
     _make_j3c = _make_j3c
+    weighted_coulG = weighted_coulG
 
     def __init__(self, cell, kpts=np.zeros((1,3))):
         if cell.dimension < 3:
-            raise NotImplementedError("RSGDF for low-dimensional systems are not available yet. We recommend using cell.dimension=3 with large vacuum.")
+            raise NotImplementedError("""
+RSGDF for low-dimensional systems are not available yet. We recommend using
+cell.dimension=3 with large vacuum.""")
 
-        # if True and kpts are gamma-inclusive, RSDF will use the bvk cell trick for computing both j3c_SR and j3c_LR. If kpts are not gamma-inclusive, this attribute will be ignored.
+        # if True and kpts are gamma-inclusive, RSDF will use the bvk cell
+        # trick for computing both j3c_SR and j3c_LR. If kpts are not
+        # gamma-inclusive, this attribute will be ignored.
         self.use_bvk = True
 
-        # precision for real-space lattice sum (R) and reciprocal-space Fourier transform (G).
+        # precision for real-space lattice sum (R) and reciprocal-space
+        # Fourier transform (G).
         self.precision_R = cell.precision * 1e-2
         self.precision_G = cell.precision
 
-        # One of {omega, npw_max} must be provided, and the other will be deduced automatically from it. The priority when both are given is omega > npw_max.
-        # If omega deduced from npw_max is smaller than self._omega_min, omega = omega_min is used.
-        # The default is npw_max = 350 ~ 7x7x7 PWs for 3D isotropic systems.
-        # Once omega is determined, mesh_compact is determined for (L|g^lr|pq) to achieve given accuracy.
+        # omega and PW mesh size for j3c.
+        # 1. If 'omega' is given, the code can search an appropriate PW mesh of
+        # size 'mesh_compact' that computes the LR-AFT of j3c to 'precision_G'.
+        # 2. If 'omega' is not given, the code will search for the maximum
+        # omega such that the size of 'mesh_compact' does not exceed 'npw_max'.
+        # The default for 'npw_max' is 350 (i.e., 7x7x7 for a 3D cubic
+        # lattice). If thus determined 'omega' is smaller than '_omega_min'
+        # (default: 0.3), 'omega' will be set to '_omega_min' and 'mesh_compact'
+        # is determined from the new 'omega' (ignoring 'npw_max').
+        # Note 1: In both cases, the user can manually overwrite the
+        # auto-determined 'mesh_compact'.
+        # Note 2: 'ke_cutoff' is not an input option. Use 'mesh_compact' directly.
         self.npw_max = 350
         self._omega_min = 0.3
         self.omega = None
         self.ke_cutoff = None
         self.mesh_compact = None
 
-        # omega and mesh for j2c. Since j2c is to be inverted, it is desirable to use (1) a "fixed" omega for reproducibility, and (2) a higher precision to minimize any round-off error caused by inversion.
-        # The extra computational cost due to the higher precision is negligible compared to the j3c build.
-        # FOR EXPERTS: if you want omega_j2c to be the same as the omega used for j3c build, set omega_j2c to be any negative number.
+        # omega and PW mesh size for j2c.
+        # Like for j3c, if 'omega_j2c' is given, the code can determine an
+        # appropriate PW mesh of size 'mesh_j2c' that computes the LR-AFT of j2c
+        # to 'precision_j2c'.
+        # The default ('omega_j2c' = 0.4 and 'precision_j2c' = 1e-14) is recommended.
+        # Like for j3c, 'mesh_j2c' can be overwritten manually.
         self.omega_j2c = 0.4
         self.mesh_j2c = None
-        self.precision_j2c = 1e-4 * self.precision_G
+        self.precision_j2c = 1e-14
 
-        # set True to force calculating j2c^(-1/2) using eigenvalue decomposition (ED); otherwise, Cholesky decomposition (CD) is used first, and ED is called only if CD fails.
+        # set True to force calculating j2c^(-1/2) using eigenvalue
+        # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
+        # first, and ED is called only if CD fails.
         self.j2c_eig_always = False
 
         df.df.GDF.__init__(self, cell, kpts=kpts)
+
+        self.kpts = np.reshape(self.kpts, (-1,3))
 
     def dump_flags(self, verbose=None):
         cell = self.cell
@@ -541,7 +571,9 @@ class RSGDF(df.df.GDF):
 
         return self
 
-    def _rsh_build(self):
+    def _rs_build(self):
+        log = logger.Logger(self.stdout, self.verbose)
+
         # find kmax
         kpts = self.kpts if self.kpts_band is None else np.vstack(
                                                     [self.kpts, self.kpts_band])
@@ -556,7 +588,7 @@ class RSGDF(df.df.GDF):
         # If omega is not given, estimate it from npw_max
         r2o = True
         if self.omega is None:
-            self.omega, self.ke_cutoff, self.mesh_compact = \
+            self.omega, self.ke_cutoff, mesh_compact = \
                                 rsdf_helper.estimate_omega_for_npw(
                                                 self.cell, self.npw_max,
                                                 self.precision_G,
@@ -565,13 +597,17 @@ class RSGDF(df.df.GDF):
             # if omega from npw_max is too small, use omega_min
             if self.omega < self._omega_min:
                 self.omega = self._omega_min
-                self.ke_cutoff, self.mesh_compact = \
+                self.ke_cutoff, mesh_compact = \
                                     rsdf_helper.estimate_mesh_for_omega(
                                                     self.cell, self.omega,
                                                     self.precision_G,
                                                     kmax=kmax,
                                                     round2odd=r2o)
-        else:
+            # Use the thus determined mesh_compact only if not p[rovided
+            if self.mesh_compact is None:
+                self.mesh_compact = mesh_compact
+        # If omega is provded but mesh_compact is not
+        elif self.mesh_compact is None:
             self.ke_cutoff, self.mesh_compact = \
                                 rsdf_helper.estimate_mesh_for_omega(
                                                 self.cell, self.omega,
@@ -579,19 +615,26 @@ class RSGDF(df.df.GDF):
                                                 kmax=kmax,
                                                 round2odd=r2o)
 
-        # As explained in __init__, if negative omega_j2c --> use omega
-        if self.omega_j2c < 0: self.omega_j2c = self.omega
-
         # build auxcell
         from pyscf.df.addons import make_auxmol
         auxcell = make_auxmol(self.cell, self.auxbasis)
+        # drop exponents
+        drop_eta = self.exp_to_discard
+        if drop_eta is not None and drop_eta > 0:
+            log.info("Drop primitive fitting functions with exponent < %s",
+                     drop_eta)
+            auxbasis = rsdf_helper.remove_exp_basis(auxcell._basis,
+                                                    amin=drop_eta)
+            auxcellnew = make_auxmol(self.cell, auxbasis)
+            auxcell = auxcellnew
 
         # determine mesh for computing j2c
         auxcell.precision = self.precision_j2c
         auxcell.rcut = max([auxcell.bas_rcut(ib, auxcell.precision)
                             for ib in range(auxcell.nbas)])
-        self.mesh_j2c = rsdf_helper.estimate_mesh_for_omega(
-                                auxcell, self.omega_j2c, round2odd=True)[1]
+        if self.mesh_j2c is None:
+            self.mesh_j2c = rsdf_helper.estimate_mesh_for_omega(
+                                    auxcell, self.omega_j2c, round2odd=True)[1]
         self.auxcell = auxcell
 
     def _kpts_build(self, kpts_band=None):
@@ -650,7 +693,7 @@ class RSGDF(df.df.GDF):
         self._kpts_build(kpts_band=kpts_band)
 
         # build for range-separation hybrid
-        self._rsh_build()
+        self._rs_build()
 
         # dump flags before the final build
         self.check_sanity()

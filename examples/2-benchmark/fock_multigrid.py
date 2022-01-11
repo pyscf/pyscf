@@ -1,21 +1,11 @@
 #!/usr/bin/env python
 
-import os
-import time
 import numpy as np
 import pyscf
-from pyscf.pbc.dft import multigrid
+from pyscf import pbc
+from benchmarking_utils import setup_logger, get_cpu_timings
 
-log = pyscf.lib.logger.Logger(verbose=5)
-with open('/proc/cpuinfo') as f:
-    for line in f:
-        if 'model name' in line:
-            log.note(line[:-1])
-            break
-with open('/proc/meminfo') as f:
-    log.note(f.readline()[:-1])
-log.note('OMP_NUM_THREADS=%s\n', os.environ.get('OMP_NUM_THREADS', None))
-
+log = setup_logger()
 
 boxlen = 12.4138
 cell0 = pyscf.M(a = np.eye(3) * boxlen,
@@ -218,7 +208,7 @@ H      11.491592       8.576221       8.647557
                 max_memory = 50000,
                 precision = 1e-6)
 
-for xc in ('lsda', 'pbe'):
+for xc in ('LDA,VWN', 'pbe'):
     for images in ([1,1,1], [2,1,1], [2,2,1], [2,2,2]):
         cell = pbc.tools.super_cell(cell0, images)
         nao = cell.nao
@@ -227,8 +217,8 @@ for xc in ('lsda', 'pbe'):
         dm = dm + dm.T
 
         mf = cell.RKS().set(xc=xc)
-        mf.with_df = multigrid.MultiGridFFTDF(cell)
+        mf.with_df = pbc.dft.multigrid.MultiGridFFTDF(cell)
 
-        cpu0 = time.clock(), time.time()
+        cpu0 = get_cpu_timings()
         v = mf.get_veff(cell, dm)
         log.timer('Fock build (xc=%s, nao=%d)' % (xc, nao), *cpu0)
