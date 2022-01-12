@@ -577,7 +577,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True, ao_repr=False):
         dm2aa, dm2ab, dm2bb = rdm2aa, rdm2ab, rdm2bb
 
     if with_dm1:
-        dm1a, dm1b = _make_rdm1(mycc, d1, with_frozen=True)
+        dm1a, dm1b = _make_rdm1(mycc, d1, with_frozen=with_frozen)
         dm1a[numpy.diag_indices(nocca)] -= 1
         dm1b[numpy.diag_indices(noccb)] -= 1
 
