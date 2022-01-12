@@ -327,8 +327,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # Ewald probe charge method to get the leading term of the finite size
         # error in exchange integrals
 
-        #G0_idx = np.where(absG2==0)[0]
-        G0_idx = 0
+        G0_idx = np.where(absG2==0)[0]
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
                 coulG = lib.multiply(4*np.pi, lib.reciprocal(absG2))
