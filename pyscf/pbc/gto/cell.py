@@ -892,9 +892,11 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
 
     Gvbase = (rx, ry, rz)
     #Gv = np.dot(lib.cartesian_prod(Gvbase), b)
+
+    #NOTE mesh can be different from the input mesh
+    mesh = np.asarray([len(rx),len(ry),len(rz)], dtype=np.int32)
     Gv = np.empty((*mesh,3), order='C', dtype=float)
     b = np.asarray(b, order='C')
-    mesh = np.asarray(mesh, order='C', dtype=np.int32)
     rx = np.asarray(rx, order='C')
     ry = np.asarray(ry, order='C')
     rz = np.asarray(rz, order='C')
