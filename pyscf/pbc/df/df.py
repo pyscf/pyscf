@@ -646,7 +646,10 @@ def cderi_loader(cderi, label, kpti_kptj, ignore_key_error=False):
                     yield numpy.zeros(0)
                 else:
                     raise KeyError(f'Key {key} not found')
-            yield _KPair3CLoader(feri[label], ki, kj, nkpts, feri['aosym'][()])
+            aosym = feri['aosym'][()]
+            if isinstance(aosym, bytes):
+                aosym = aosym.decode()
+            yield _KPair3CLoader(feri[label], ki, kj, nkpts, aosym)
 
         elif 'j3c-kptij' in feri:
             # version 1 compatibility

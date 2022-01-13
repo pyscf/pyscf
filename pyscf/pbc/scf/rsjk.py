@@ -906,8 +906,9 @@ def _guess_omega(cell, kpts, mesh=None):
         # mesh = [max(4, int((nimgs * naop / nkpts**.5) ** (1./3) * 1.5))] * 3
         # mesh = [max(4, int((nimgs * naop / nkpts**(1./3)) ** (1./3) * 1.5))] * 3
         nimgs = 8 * nimgs
-        mesh = int((nimgs**2*naop**2 / (nkpts**.5 * naop * nimgs * 2e3 +
-                                        nkpts**2*nao**2))**(1./3) * 8 + 1)
+        mesh = (nimgs**2*naop**2 / (nkpts**.5 * naop * nimgs * 2e3 +
+                                    nkpts**2*nao**2))**(1./3) * 8 + 1
+        mesh = int(min((cell.max_memory*1e6/32/(.7*nao)**2)**(1./3), mesh))
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
     mesh = np.min([cell.mesh, mesh], axis=0)
     ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh[:cell.dimension]))

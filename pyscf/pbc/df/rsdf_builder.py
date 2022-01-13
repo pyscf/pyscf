@@ -611,7 +611,14 @@ class _RSGDFBuilder(_Int3cBuilder):
             else:
                 auxG *= pbctools.get_coulG(cell, -kpt, False, None, cell_d.mesh, Gv,
                                            omega=-self.omega)
-            Vaux = pbctools.ifft(auxG, cell_d.mesh)
+
+            max_memory = (self.max_memory - lib.current_memory()[0])
+            blksize = max(8, int(max_memory*.95e6/16/2/ngrids))
+            log.debug2('Block size for IFFT(Vaux) %d', blksize)
+            # Reuse auxG to reduce memory footprint
+            Vaux = auxG
+            for p0, p1 in lib.prange(0, naux, blksize):
+                Vaux[p0:p1] = pbctools.ifft(auxG[p0:p1], cell_d.mesh)
             Vaux *= np.exp(-1j * coords.dot(kpt))
             return Vaux
 
@@ -1122,8 +1129,8 @@ def _guess_omega(auxcell, kpts, mesh=None):
         # mesh = [max(4, int((8 * naux) ** (1./3) + .5))] * 3
         # mesh = [max(4, int((nimgs * naux / nkpts**.5) ** (1./3) * 0.7))] * 3
         nimgs = 8 * nimgs
-        mesh = int((nimgs**2*naux / (nkpts**.5*nimgs**.5 * 1e2 +
-                                     nkpts**2*naux))**(1./3) * 8 + 2)
+        mesh = (nimgs**2*naux / (nkpts**.5*nimgs**.5 * 1e1 + nkpts**2*naux))**(1./3) * 5 + 2
+        mesh = int(min((1e8/naux)**(1./3), mesh))
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
     ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
     if auxcell.dimension == 0:
