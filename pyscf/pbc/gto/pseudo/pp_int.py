@@ -107,8 +107,8 @@ def get_gth_vlocG_part1(cell, Gv):
 def get_pp_loc_part2(cell, kpts=None):
     '''PRB, 58, 3641 Eq (1), integrals associated to C1, C2, C3, C4
     '''
-    from pyscf.pbc.df import aft
-    vpploc = aft._IntNucBuilder(cell, kpts).get_pp_loc_part2()
+    from pyscf.pbc.df.incore import _IntNucBuilder
+    vpploc = _IntNucBuilder(cell, kpts).get_pp_loc_part2()
     if kpts is None or numpy.shape(kpts) == (3,):
         vpploc = vpploc[0]
     return vpploc

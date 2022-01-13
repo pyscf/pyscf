@@ -803,6 +803,9 @@ def make_cintopt(atm, bas, env, intor):
 
     # TODO: call specific ECP optimizers for each intor.
     if intor[:3] == 'ECP':
+        AS_ECPBAS_OFFSET = 18  # from gto/mole.py
+        if env[AS_ECPBAS_OFFSET] == 0:
+            raise RuntimeError('ecpbas or env is not properly initialized')
         foptinit = libcgto.ECPscalar_optimizer
     else:
         foptinit = getattr(libcgto, intor+'_optimizer')

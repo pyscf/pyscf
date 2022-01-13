@@ -52,7 +52,7 @@ dfobj._rs_build()
 auxcell = dfobj.auxcell
 
 def load(filename, kptij):
-    with df.cderi_loader(filename, 'j3c', kptij) as cderi:
+    with df._load3c(filename, 'j3c', kptij) as cderi:
         return cderi[:]
 
 def tearDownModule():

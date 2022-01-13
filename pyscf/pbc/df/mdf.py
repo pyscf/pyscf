@@ -37,9 +37,9 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.gdf_builder import _CCGDFBuilder, _round_off_to_odd_mesh
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
-from pyscf.pbc.df.incore import libpbc, make_auxcell, _Int3cBuilder, _ExtendedMole
+from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _round_off_to_odd_mesh
+from pyscf.pbc.df.incore import libpbc, make_auxcell
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
@@ -240,103 +240,6 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
 del(VALENCE_EXP)
 
 
-def _outcore_auxe2(dfbuilder, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                   j_only=False, dataname='j3c', shls_slice=None):
-    r'''The SR part of 3-center integrals (ij|L) with double lattice sum.
-
-    Kwargs:
-        shls_slice :
-            Indicate the shell slices in the primitive cell
-    '''
-    swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
-    fswap = lib.H5TmpFile(swapfile.name)
-    # Unlink swapfile to avoid trash files
-    swapfile = None
-
-    log = logger.new_logger(dfbuilder)
-    cell = dfbuilder.cell
-    intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
-    int3c = dfbuilder.gen_int3c_kernel(intor, aosym, comp, j_only)
-
-    auxcell = dfbuilder.auxcell
-    naux = auxcell.nao
-    kpts = dfbuilder.kpts
-    nkpts = kpts.shape[0]
-
-    if shls_slice is None:
-        shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
-
-    ao_loc = cell.ao_loc
-    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
-    i0, i1, j0, j1 = [ao_loc[i] for i in shls_slice[:4]]
-    k0, k1 = aux_loc[shls_slice[4]],  aux_loc[shls_slice[5]]
-    if aosym == 's1':
-        nao_pair = (i1 - i0) * (j1 - j0)
-    else:
-        nao_pair = i1*(i1+1)//2 - i0*(i0+1)//2
-    naux = k1 - k0
-
-    shape = (nao_pair, naux)
-    if j_only or nkpts == 1:
-        for k in range(nkpts):
-            fswap.create_dataset(f'{dataname}R/{k*nkpts+k}', shape, 'f8')
-            # exclude imaginary part for gamma point
-            if not is_zero(kpts[k]):
-                fswap.create_dataset(f'{dataname}I/{k*nkpts+k}', shape, 'f8')
-        nkpts_ij = nkpts
-        kikj_idx = [k*nkpts+k for k in range(nkpts)]
-    else:
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                fswap.create_dataset(f'{dataname}R/{ki*nkpts+kj}', shape, 'f8')
-                fswap.create_dataset(f'{dataname}I/{ki*nkpts+kj}', shape, 'f8')
-            # exclude imaginary part for gamma point
-            if is_zero(kpts[ki]):
-                del fswap[f'{dataname}I/{ki*nkpts+ki}']
-        nkpts_ij = nkpts * nkpts
-        kikj_idx = range(nkpts_ij)
-
-    if naux == 0:
-        return fswap
-
-    mem_now = lib.current_memory()[0]
-    log.debug2('memory = %s', mem_now)
-    max_memory = max(2000, dfbuilder.max_memory-mem_now)
-
-    # split the 3-center tensor (nkpts_ij, i, j, aux) along shell i.
-    # plus 1 to ensure the intermediates in libpbc do not overflow
-    buflen = min(max(int(max_memory*.9e6/16/naux/(nkpts_ij+1)), 1), nao_pair)
-    # lower triangle part
-    sh_ranges = _guess_shell_ranges(cell, buflen, aosym,
-                                    start=shls_slice[0], stop=shls_slice[1])
-    max_buflen = max([x[2] for x in sh_ranges])
-    if max_buflen > buflen:
-        log.warn('memory usage of outcore_auxe2 may be '
-                 f'{(max_buflen/buflen - 1):.2%} over max_memory')
-
-    bufR = np.empty((nkpts_ij, comp, max_buflen, naux))
-    bufI = np.empty_like(bufR)
-    cpu0 = logger.process_clock(), logger.perf_counter()
-    nsteps = len(sh_ranges)
-    row1 = 0
-    for istep, (sh_start, sh_end, nrow) in enumerate(sh_ranges):
-        outR, outI = int3c(shls_slice, bufR, bufI)
-        log.debug2('      step [%d/%d], shell range [%d:%d], len(buf) = %d',
-                   istep+1, nsteps, sh_start, sh_end, nrow)
-        cpu0 = log.timer_debug1(f'outcore_auxe2 [{istep+1}/{nsteps}]', *cpu0)
-
-        shls_slice = (sh_start, sh_end, 0, cell.nbas)
-        row0, row1 = row1, row1 + nrow
-
-        for k, kk_idx in enumerate(kikj_idx):
-            fswap[f'{dataname}R/{kk_idx}'][row0:row1] = outR[k]
-            if f'{dataname}I/{kk_idx}' in fswap:
-                fswap[f'{dataname}I/{kk_idx}'][row0:row1] = outI[k]
-        outR = outI = None
-    bufR = bufI = None
-    return fswap
-
-
 class _RSMDFBuilder(_RSGDFBuilder):
     '''
     Use the range-separated algorithm to build mixed density fitting 3-center tensor
@@ -362,11 +265,6 @@ class _RSMDFBuilder(_RSGDFBuilder):
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            rcut_sr = auxcell_c.rcut
-            rcut_sr = (-2*np.log(
-                .225*self.cell.precision * omega**4 * rcut_sr**2))**.5 / omega
-            auxcell_c.rcut = rcut_sr
-            logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
                 sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
 
@@ -400,7 +298,7 @@ class _RSMDFBuilder(_RSGDFBuilder):
                 # from the analytical 2c2e integrals. The FT-SR-2c2e for compact
                 # basis is added back in j2c_k.
                 coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
-                if auxcell.dimension >= 2 and is_zero(kpt):
+                if auxcell.dimension == 3 and is_zero(kpt):
                     G0_idx = 0  # due to np.fft.fftfreq convention
                     G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
                     coulG_sr[G0_idx] += np.pi/omega**2 * G0_weight
@@ -419,7 +317,13 @@ class _RSMDFBuilder(_RSGDFBuilder):
             j2c.append(j2c_k)
         return j2c
 
-    outcore_auxe2 = _outcore_auxe2
+    def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=False):
+        # dd_block from real-space integrals will be cancelled by AFT part
+        # anyway. It's safe to omit dd_block when computing real-space int3c2e
+        return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
+                                     dataname, shls_slice, fft_dd_block)
 
     def weighted_ft_ao(self, kpt):
         '''exp(-i*(G + k) dot r) * Coulomb_kernel'''
@@ -496,14 +400,12 @@ class _CCMDFBuilder(_CCGDFBuilder):
             j2c[k] = j2c_k
         return j2c
 
-    @lib.with_doc(_outcore_auxe2.__doc__)
+
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                      j_only=False, dataname='j3c', shls_slice=None):
-        assert not self.exclude_d_aux
-        with lib.temporary_env(self, auxcell=self.fused_cell,
-                               rs_auxcell=self.rs_fused_cell):
-            return _outcore_auxe2(self, cderi_file, intor, aosym, comp,
-                                  j_only, dataname, shls_slice)
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=False):
+        return super().outcore_auxe2(cderi_file, intor, aosym, comp, j_only,
+                                     dataname, shls_slice, fft_dd_block)
 
     def weighted_ft_ao(self, kpt):
         fused_cell = self.fused_cell
@@ -520,10 +422,11 @@ class _CCMDFBuilder(_CCGDFBuilder):
 
     def gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, aosym):
         gdf_load = _CCGDFBuilder.gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, aosym)
+        naux = self.auxcell.nao
         def load_j3c(col0, col1):
             j3cR, j3cI = gdf_load(col0, col1)
-            j3cR = [self.fuse(vR) for vR in j3cR]
-            j3cI = [self.fuse(vI) if vI is not None else None for vI in j3cI]
+            j3cR = [vR[:naux] for vR in j3cR]
+            j3cI = [vI[:naux] if vI is not None else None for vI in j3cI]
             return j3cR, j3cI
         return load_j3c
 

@@ -84,7 +84,8 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     # = (4*pi)^2 *2*eta/kmax^{n-1} e^{-kmax^2/4eta} + ... < precision
 
     # The magic number 0.2 comes from AFTDF.__init__ and GDF.__init__
-    eta = max(eta, 0.2)
+    # eta = max(eta, ETA_MIN)
+
     log_k0 = 3 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
     # The interaction between two s-type density distributions should be
@@ -278,7 +279,7 @@ class AFTDFMixin:
         if bvk_kmesh is None:
             bvk_kmesh = k2gamma.kpts_to_kmesh(cell, [kpti, kptj])
         supmol_ft = ft_ao._ExtendedMole.from_cell(cell, bvk_kmesh).strip_basis()
-        ft_kern = supmol_ft.gen_ft_kernel(aosym)
+        ft_kern = supmol_ft.gen_ft_kernel(aosym, intor=intor, comp=comp)
 
         for p0, p1 in self.prange(0, ngrids, blksize):
             aoaoR, aoaoI = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, q,
@@ -338,7 +339,8 @@ class AFTDFMixin:
         # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
         supmol_ft = ft_ao._ExtendedMole.from_cell(cell, bvk_kmesh).strip_basis()
-        ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=True)
+        ft_kern = supmol_ft.gen_ft_kernel(aosym, intor=intor, comp=comp,
+                                          return_complex=True)
 
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
         blksize = min(blksize, ngrids, 16384)

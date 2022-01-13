@@ -137,7 +137,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.kpts_band = None
         self._auxbasis = None
 
-        self.eta, self.mesh, ke_cutoff = _guess_eta(cell)
+        self.eta, self.mesh, ke_cutoff = _guess_eta(cell, kpts)
 
         # exp_to_discard to remove diffused fitting functions. The diffused
         # fitting functions may cause linear dependency in DF metric. Removing
@@ -336,7 +336,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     LpqI = lib.unpack_tril(LpqI, lib.ANTIHERMI).reshape(naux,nao**2)
             return LpqR, LpqI
 
-        with cderi_loader(self._cderi, 'j3c', kpti_kptj) as j3c:
+        with _load3c(self._cderi, 'j3c', kpti_kptj) as j3c:
             slices = lib.prange(0, j3c.shape[0], blksize)
             for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
@@ -345,8 +345,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
-            with cderi_loader(self._cderi, 'j3c-', kpti_kptj,
-                              ignore_key_error=True) as j3c:
+            with _load3c(self._cderi, 'j3c-', kpti_kptj, ignore_key_error=True) as j3c:
                 slices = lib.prange(0, j3c.shape[0], blksize)
                 for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
@@ -469,19 +468,22 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 DF = GDF
 
 
-class _load3c(object):
-    '''Read cderi from old version pyscf (<= 2.0)'''
-    def __init__(self, cderi, label, kpti_kptj, kptij_label=None,
+class _load3c:
+    #'''Read cderi from old version pyscf (<= 2.0)'''
+    '''cderi file may be stored in different formats (version 1 generated from
+    pyscf-2.0 or older, version 2 from pyscf-2.1 or newer). This function
+    can read both data formats.
+    '''
+    def __init__(self, cderi, label, kpti_kptj=None, kptij_label=None,
                  ignore_key_error=False):
         self.cderi = cderi
         self.label = label
-        if kptij_label is None:
-            self.kptij_label = label + '-kptij'
-        else:
-            self.kptij_label = kptij_label
+        self.kptij_label = kptij_label
         self.kpti_kptj = kpti_kptj
-        self.feri = None
         self.ignore_key_error = ignore_key_error
+        self.feri = None
+        self._kptij_lst = None
+        self._aosym = None
 
     def __enter__(self):
         self.feri = h5py.File(self.cderi, 'r')
@@ -492,15 +494,71 @@ class _load3c(object):
             else:
                 raise KeyError('Key "%s" not found' % self.label)
 
-        kpti_kptj = numpy.asarray(self.kpti_kptj)
-        kptij_lst = self.feri[self.kptij_label][()]
-        return _getitem(self.feri, self.label, kpti_kptj, kptij_lst,
-                        self.ignore_key_error)
+        if self.kpti_kptj is None:
+            return self.getitem
+        else:
+            return self.getitem(*self.kpti_kptj)
 
     def __exit__(self, type, value, traceback):
         self.feri.close()
 
-def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
+    @property
+    def kptij_lst(self):
+        if self._kptij_lst is None:
+            if self.data_version == 'v2':
+                self._kptij_lst = self.feri['kpts'][()]
+            else:
+                if self.kptij_label is None:
+                    kptij_label = self.label + '-kptij'
+                else:
+                    kptij_label = self.kptij_label
+                self._kptij_lst = self.feri[kptij_label][()]
+        return self._kptij_lst
+
+    @property
+    def aosym(self):
+        if self._aosym is None:
+            self._aosym = self.feri['aosym'][()]
+            if isinstance(self._aosym, bytes):
+                self._aosym = self._aosym.decode()
+        return self._aosym
+
+    @property
+    def data_version(self):
+        '''Guess the data format version'''
+        if 'kpts' in self.feri:
+            return 'v2'
+        else:
+            return 'v1'
+
+    def getitem(self, kpti, kptj):
+        assert self.feri is not None
+        if self.data_version == 'v2':
+            kpts = self.kptij_lst
+            nkpts = len(kpts)
+            ki = member(kpti, kpts)
+            kj = member(kptj, kpts)
+            if len(ki) == 0 or len(kj) == 0:
+                raise RuntimeError(f'CDERI {self.label} for kpts {kpti_kptj} is '
+                                   'not initialized.')
+
+            ki = ki[0]
+            kj = kj[0]
+            key = f'{self.label}/{ki * nkpts + kj}'
+            if key not in self.feri:
+                if ignore_key_error:
+                    return numpy.zeros(0)
+                else:
+                    raise KeyError(f'Key {key} not found')
+            return _KPair3CLoader(self.feri[self.label], ki, kj, nkpts, self.aosym)
+
+        else:  # data format version 1
+            return _getitem(self.feri, self.label, (kpti, kptj), self.kptij_lst,
+                            self.ignore_key_error)
+
+def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False,
+             aosym=None):
+    kpti_kptj = numpy.asarray(kpti_kptj)
     k_id = member(kpti_kptj, kptij_lst)
     if len(k_id) > 0:
         key = label + '/' + str(k_id[0])
@@ -583,20 +641,22 @@ class _KPair3CLoader:
     def __getitem__(self, s):
         if self.aosym == 's1' or self.kikj == self.kjki:
             dat = self.dat[str(self.kikj)]
-            return numpy.hstack([dat[str(i)][s] for i in range(self.nsegs)])
-
-        dat_ij = self.dat[str(self.kikj)]
-        dat_ji = self.dat[str(self.kjki)]
-        tril = numpy.hstack([dat_ij[str(i)][s] for i in range(self.nsegs)])
-        triu = numpy.hstack([dat_ji[str(i)][s] for i in range(self.nsegs)])
-        assert tril.dtype == numpy.complex128
-        naux, nao_pair = tril.shape
-        nao = int((nao_pair * 2)**.5)
-        out = numpy.empty((naux, nao*nao), dtype=tril.dtype)
-        libpbc.PBCunpack_tril_triu(out.ctypes.data_as(ctypes.c_void_p),
-                                   tril.ctypes.data_as(ctypes.c_void_p),
-                                   triu.ctypes.data_as(ctypes.c_void_p),
-                                   ctypes.c_int(naux), ctypes.c_int(nao))
+            out = numpy.hstack([dat[str(i)][s] for i in range(self.nsegs)])
+        elif self.aosym == 's2':
+            dat_ij = self.dat[str(self.kikj)]
+            dat_ji = self.dat[str(self.kjki)]
+            tril = numpy.hstack([dat_ij[str(i)][s] for i in range(self.nsegs)])
+            triu = numpy.hstack([dat_ji[str(i)][s] for i in range(self.nsegs)])
+            assert tril.dtype == numpy.complex128
+            naux, nao_pair = tril.shape
+            nao = int((nao_pair * 2)**.5)
+            out = numpy.empty((naux, nao*nao), dtype=tril.dtype)
+            libpbc.PBCunpack_tril_triu(out.ctypes.data_as(ctypes.c_void_p),
+                                       tril.ctypes.data_as(ctypes.c_void_p),
+                                       triu.ctypes.data_as(ctypes.c_void_p),
+                                       ctypes.c_int(naux), ctypes.c_int(nao))
+        else:
+            raise ValueError(f'Unknown aosym {self.aosym}')
         return out
 
     def __array__(self):
@@ -614,50 +674,6 @@ class _KPair3CLoader:
         else:
             nao = int((nao_pair * 2)**.5)
             return (naux, nao*nao)
-
-@contextlib.contextmanager
-def cderi_loader(cderi, label, kpti_kptj, ignore_key_error=False):
-    '''cderi file may be stored in different formats (version 1 generated from
-    pyscf-2.0 or older, version 2 from pyscf-2.1 or newer). This function
-    provides a universal interface to access CDERI data.
-    '''
-    with h5py.File(cderi, 'r') as feri:
-        if label not in feri:
-            # Return a size-0 array to skip the loop in sr_loop
-            if ignore_key_error:
-                yield numpy.zeros(0)
-            else:
-                raise KeyError(f'Key {label} not found')
-
-        if 'kpts' in feri:
-            kpti, kptj = kpti_kptj
-            kpts = numpy.asarray(feri['kpts'])
-            nkpts = len(kpts)
-            ki = member(kpti, kpts)
-            kj = member(kptj, kpts)
-            if len(ki) == 0 or len(kj) == 0:
-                raise RuntimeError(f'{label} for kpts {kpti_kptj} is not initialized.')
-
-            ki = ki[0]
-            kj = kj[0]
-            key = f'{label}/{ki * nkpts + kj}'
-            if key not in feri:
-                if ignore_key_error:
-                    yield numpy.zeros(0)
-                else:
-                    raise KeyError(f'Key {key} not found')
-            aosym = feri['aosym'][()]
-            if isinstance(aosym, bytes):
-                aosym = aosym.decode()
-            yield _KPair3CLoader(feri[label], ki, kj, nkpts, aosym)
-
-        elif 'j3c-kptij' in feri:
-            # version 1 compatibility
-            with _load3c(cderi, label, kpti_kptj, f'{label}-kptij',
-                         ignore_key_error) as j3c:
-                yield j3c
-        else:
-            raise RuntimeError(f'cderi file {cderi} not supported')
 
 def _gaussian_int(cell):
     r'''Regular gaussian integral \int g(r) dr^3'''

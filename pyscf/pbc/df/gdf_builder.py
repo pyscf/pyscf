@@ -27,18 +27,23 @@ for regular density fitting and SR-integral density fitting only.
 import os
 import copy
 import ctypes
+import tempfile
 import numpy as np
 import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger, zdotNN, zdotCN, zdotNC
+from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.tools import pbc as pbctools
+from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_builder
+from pyscf.pbc.df.rsdf_builder import _round_off_to_odd_mesh
 from pyscf.pbc.df.incore import libpbc, make_auxcell, _Int3cBuilder, _ExtendedMole
-from pyscf.pbc.lib.kpts_helper import is_zero
+from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
+                                       group_by_conj_pairs)
 
 
 class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
@@ -51,7 +56,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.fused_cell = None
         self.fuse: callable = None
         self.rs_fused_cell = None
-        self.cderi_file = None
 
         # set True to force calculating j2c^(-1/2) using eigenvalue
         # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
@@ -60,10 +64,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.linear_dep_threshold = rsdf_builder.LINEAR_DEP_THR
 
         # In real-space 3c2e integrals exclude smooth-smooth block (*|DD)
-        self.exclude_dd_block = cell.dimension > 0
-
-        # smooth aux basis MUST be explicitly evaluated in 3c2e integrals
-        self.exclude_d_aux = False
+        self.exclude_dd_block = cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
 
         _Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
@@ -95,7 +96,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if self.eta is None:
-            self.eta, self.mesh, self.ke_cutoff = _guess_eta(cell, self.mesh)
+            self.eta, self.mesh, self.ke_cutoff = _guess_eta(auxcell, kpts, self.mesh)
         elif self.mesh is None:
             self.ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta)
             mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
@@ -108,14 +109,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
 
-        # rs_auxcell is built with fused_cell so as to make
-        # rsdf_helper._outcore_auxe2 be able to compute the int3c2e integrals
-        # with double lattice sum
-        self.rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
-            auxcell, self.ke_cutoff, verbose=log)
-        self.rs_fused_cell = ft_ao._RangeSeparatedCell.from_cell(
-            self.fused_cell, self.ke_cutoff, verbose=log)
-
         supmol = _ExtendedMole.from_cell(rs_cell, kmesh)
         self.supmol = supmol.strip_basis()
 
@@ -125,10 +118,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         return self
 
     weighted_coulG = aft.weighted_coulG
-
-    def get_q_cond_aux(self):
-        '''To compute Schwarz inequality for auxiliary basis'''
-        return None
+    get_q_cond_aux = _Int3cBuilder.get_q_cond_aux
+    get_bas_map = _Int3cBuilder.get_bas_map
 
     def get_2c2e(self, uniq_kpts):
         fused_cell = self.fused_cell
@@ -176,15 +167,159 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         return j2c
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                      j_only=False, dataname='j3c', shls_slice=None):
-        assert not self.exclude_d_aux
-        with lib.temporary_env(self, auxcell=self.fused_cell,
-                               rs_auxcell=self.rs_fused_cell):
-            # The underlying outcore_auxe2 function requires auxcell (and
-            # rs_auxcell) to evaluate integrals. In GDF these integrals need to
-            # be evaluated with fused_cell (and rs_fused_cell)
-            return rsdf_builder._RSGDFBuilder.outcore_auxe2(
-                self, cderi_file, intor, aosym, comp, j_only, dataname, shls_slice)
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=None):
+        r'''The 3-center integrals (ij|L) in real space with double lattice sum.
+
+        Kwargs:
+            shls_slice :
+                Indicate the shell slices in the primitive cell
+        '''
+        swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+        fswap = lib.H5TmpFile(swapfile.name)
+        swapfile = None
+
+        log = logger.new_logger(self)
+        cell = self.cell
+        rs_cell = self.rs_cell
+        fused_cell = self.fused_cell
+        naux = self.auxcell.nao
+        kpts = self.kpts
+        nkpts = kpts.shape[0]
+
+        gamma_point_only = is_zero(kpts)
+        if gamma_point_only:
+            assert nkpts == 1
+            j_only = True
+
+        intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
+
+        if fft_dd_block is None:
+            fft_dd_block = self.exclude_dd_block
+
+        if fft_dd_block:
+            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
+                                   dataname, shls_slice)
+
+        # int3c2e for (cell, cell | fused_cell)
+        with lib.temporary_env(self, auxcell=self.fused_cell):
+            int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only)
+
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas, 0, fused_cell.nbas)
+        assert shls_slice[4] == 0 and shls_slice[5] == fused_cell.nbas
+
+        ao_loc = cell.ao_loc
+        ish0, ish1, jsh0, jsh1, ksh0, ksh1 = shls_slice
+        i0, i1, j0, j1 = ao_loc[list(shls_slice[:4])]
+        if aosym == 's1':
+            nao_pair = (i1 - i0) * (j1 - j0)
+        else:
+            nao_pair = i1*(i1+1)//2 - i0*(i0+1)//2
+
+        if fft_dd_block and np.any(rs_cell.bas_type == ft_ao.SMOOTH_BASIS):
+            merge_dd = rs_cell.merge_diffused_block(aosym)
+        else:
+            merge_dd = None
+
+        # TODO: shape = (comp, nao_pair, naux)
+        shape = (nao_pair, naux)
+        if j_only or nkpts == 1:
+            for k in range(nkpts):
+                fswap.create_dataset(f'{dataname}R/{k*nkpts+k}', shape, 'f8')
+                # exclude imaginary part for gamma point
+                if not is_zero(kpts[k]):
+                    fswap.create_dataset(f'{dataname}I/{k*nkpts+k}', shape, 'f8')
+            nkpts_ij = nkpts
+            kikj_idx = [k*nkpts+k for k in range(nkpts)]
+        else:
+            for ki in range(nkpts):
+                for kj in range(nkpts):
+                    fswap.create_dataset(f'{dataname}R/{ki*nkpts+kj}', shape, 'f8')
+                    fswap.create_dataset(f'{dataname}I/{ki*nkpts+kj}', shape, 'f8')
+                # exclude imaginary part for gamma point
+                if is_zero(kpts[ki]):
+                    del fswap[f'{dataname}I/{ki*nkpts+ki}']
+            nkpts_ij = nkpts * nkpts
+            kikj_idx = range(nkpts_ij)
+            if merge_dd:
+                uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
+                    cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
+                kpt_ij_pairs = group_by_conj_pairs(cell, uniq_kpts)[0]
+
+        if naux == 0:
+            return fswap
+
+        mem_now = lib.current_memory()[0]
+        log.debug2('memory = %s', mem_now)
+        max_memory = max(2000, self.max_memory-mem_now)
+
+        # split the 3-center tensor (nkpts_ij, i, j, aux) along shell i.
+        # plus 1 to ensure the intermediates in libpbc do not overflow
+        buflen = min(max(int(max_memory*.9e6/16/naux/(nkpts_ij+1)), 1), nao_pair)
+        # lower triangle part
+        sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
+        max_buflen = max([x[2] for x in sh_ranges])
+        if max_buflen > buflen:
+            log.warn('memory usage of outcore_auxe2 may be '
+                     f'{(max_buflen/buflen - 1):.2%} over max_memory')
+
+        cpu0 = logger.process_clock(), logger.perf_counter()
+        nsteps = len(sh_ranges)
+        row1 = 0
+        for istep, (sh_start, sh_end, nrow) in enumerate(sh_ranges):
+            if aosym == 's2':
+                shls_slice = (sh_start, sh_end, jsh0, sh_end, ksh0, ksh1)
+            else:
+                shls_slice = (sh_start, sh_end, jsh0, jsh1, ksh0, ksh1)
+            outR, outI = int3c(shls_slice)
+            log.debug2('      step [%d/%d], shell range [%d:%d], len(buf) = %d',
+                       istep+1, nsteps, sh_start, sh_end, nrow)
+            cpu0 = log.timer_debug1(f'outcore_auxe2 [{istep+1}/{nsteps}]', *cpu0)
+
+            outR = list(outR)
+            if outI is not None:
+                outI = list(outI)
+            for k, kk_idx in enumerate(kikj_idx):
+                outR[k] = self.fuse(outR[k], axis=1)
+                if f'{dataname}I/{kk_idx}' in fswap:
+                    outI[k] = self.fuse(outI[k], axis=1)
+
+            shls_slice = (sh_start, sh_end, 0, cell.nbas)
+            row0, row1 = row1, row1 + nrow
+            if merge_dd is not None:
+                if gamma_point_only:
+                    merge_dd(outR[0], fswap[f'{dataname}R-dd/0'], shls_slice)
+                elif j_only or nkpts == 1:
+                    for k in range(nkpts):
+                        merge_dd(outR[k], fswap[f'{dataname}R-dd/{k*nkpts+k}'], shls_slice)
+                        merge_dd(outI[k], fswap[f'{dataname}I-dd/{k*nkpts+k}'], shls_slice)
+                else:
+                    for k, k_conj in kpt_ij_pairs:
+                        kpt_ij_idx = np.where(uniq_inverse == k)[0]
+                        if k_conj is None:
+                            for ij_idx in kpt_ij_idx:
+                                merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
+                                merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)
+                        else:
+                            ki_lst = kpt_ij_idx // nkpts
+                            kj_lst = kpt_ij_idx % nkpts
+                            kpt_ji_idx = kj_lst * nkpts + ki_lst
+                            for ij_idx, ji_idx in zip(kpt_ij_idx, kpt_ji_idx):
+                                j3cR_dd = np.asarray(fswap[f'{dataname}R-dd/{ij_idx}'])
+                                merge_dd(outR[ij_idx], j3cR_dd, shls_slice)
+                                merge_dd(outR[ji_idx], j3cR_dd.transpose(1,0,2), shls_slice)
+                                j3cI_dd = np.asarray(fswap[f'{dataname}I-dd/{ij_idx}'])
+                                merge_dd(outI[ij_idx], j3cI_dd, shls_slice)
+                                merge_dd(outI[ji_idx],-j3cI_dd.transpose(1,0,2), shls_slice)
+
+            for k, kk_idx in enumerate(kikj_idx):
+                fswap[f'{dataname}R/{kk_idx}'][row0:row1] = outR[k]
+                if f'{dataname}I/{kk_idx}' in fswap:
+                    fswap[f'{dataname}I/{kk_idx}'][row0:row1] = outI[k]
+            outR = outI = None
+        bufR = bufI = None
+        return fswap
 
     def weighted_ft_ao(self, kpt):
         '''exp(-i*(G + k) dot r) * Coulomb_kernel for the basis of model charge'''
@@ -204,7 +339,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
 
     def gen_j3c_loader(self, h5group, kpt, kpt_ij_idx, aosym):
         cell = self.cell
-        naux = self.fused_cell.nao
+        naux = self.auxcell.nao
+        nauxc = self.fused_cell.nao
 
         # vbar is the interaction between the background charge
         # and the auxiliary basis.  0D, 1D, 2D do not have vbar.
@@ -226,7 +362,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             else:
                 ovlp = [s.ravel() for s in ovlp]
 
-            vbar = auxbar(self.fused_cell)
+            vbar = self.fuse(auxbar(self.fused_cell))
             vbar_idx = np.where(vbar != 0)[0]
             if len(vbar_idx) == 0:
                 vbar = None
@@ -235,10 +371,15 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         def load_j3c(col0, col1):
             j3cR = []
             j3cI = []
+            ncol = col1 - col0
             for k, kk in enumerate(kpt_ij_idx):
-                vR = lib.transpose(h5group[f'j3cR/{kk}'][col0:col1].reshape(-1, naux))
+                vR = np.empty((nauxc, ncol))
+                vR[naux:] = 0
+                lib.transpose(h5group[f'j3cR/{kk}'][col0:col1], out=vR)
                 if f'j3cI/{kk}' in h5group:
-                    vI = lib.transpose(h5group[f'j3cI/{kk}'][col0:col1].reshape(-1, naux))
+                    vI = np.empty((nauxc, ncol))
+                    vI[naux:] = 0
+                    lib.transpose(h5group[f'j3cI/{kk}'][col0:col1], out=vI)
                 else:
                     vI = None
                 if vbar is not None:
@@ -348,11 +489,12 @@ def make_modchg_basis(auxcell, smooth_eta):
     chgcell._atm = auxcell._atm
     chgcell._bas = np.asarray(chg_bas, dtype=np.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = np.hstack((auxcell._env, chg_env))
-    # _estimate_rcut is based on the integral overlap. It's likely too tight for
-    # rcut of the model charge. Using the value of functions at rcut seems enough
-    # chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
-    rcut = 15.
-    chgcell.rcut = (np.log(4*np.pi*rcut**2/auxcell.precision) / smooth_eta)**.5
+
+    # chgcell.rcut needs to ensure the model charges are well separated such
+    # that the Coulomb interaction between the compensated auxiliary basis can
+    # be calculated as 1/Rcut.
+    # _estimate_rcut based on the integral overlap
+    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
 
     logger.debug1(auxcell, 'make compensating basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
@@ -390,7 +532,7 @@ def fuse_auxcell(auxcell, eta):
         naux_sph = aux_loc_sph[-1]
         def fuse(Lpq, axis=0):
             if axis == 1 and Lpq.ndim == 2:
-                Lpq = Lpq.T
+                Lpq = lib.transpose(Lpq)
             Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
             if Lpq.ndim == 1:
                 npq = 1
@@ -425,7 +567,7 @@ def fuse_auxcell(auxcell, eta):
     else:
         def fuse(Lpq, axis=0):
             if axis == 1 and Lpq.ndim == 2:
-                Lpq = Lpq.T
+                Lpq = lib.transpose(Lpq)
             Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
             for i in range(auxcell.nbas):
                 l  = auxcell.bas_angular(i)
@@ -436,43 +578,36 @@ def fuse_auxcell(auxcell, eta):
                     for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
                         Lpq[i0:i1] -= chgLpq[p0:p0+nd]
             if axis == 1 and Lpq.ndim == 2:
-                Lpq = Lpq.T
+                Lpq = lib.transpose(Lpq)
             return Lpq
     return fused_cell, fuse
 
-def _round_off_to_odd_mesh(mesh):
-    # Round off mesh to the nearest odd numbers.
-    # Odd number of grids is preferred because even number of grids may break
-    # the conjugation symmetry between the k-points k and -k.
-    # When building the DF integral tensor in function _make_j3c, the symmetry
-    # between k and -k is used (function conj_j2c) to overcome the error
-    # caused by auxiliary basis linear dependency. More detalis of this
-    # problem can be found in function _make_j3c.
-    return [(i//2)*2+1 for i in mesh]
-
-def _guess_eta(cell, mesh=None):
+def _guess_eta(cell, kpts=None, mesh=None):
     '''Search for optimal eta and mesh'''
     if cell.dimension == 0:
-        eta = 0.2
         if mesh is None:
             mesh = cell.mesh
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
     elif mesh is None:
-        mesh = cell.mesh
-        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
+        a = cell.lattice_vectors()
+        eta_min = aft.estimate_eta(cell, cell.precision)
+        ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
+        mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
+
+        nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
+        nkpts = len(kpts)
+        nao = cell.nao
+        mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) * 3 + 2
+        mesh = np.max([mesh_min, [int(mesh)] * 3], axis=0)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
-        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
-        eta_guess = aft.estimate_eta(cell, cell.precision)
-        logger.debug3(cell, 'eta(mesh=%s) = %g eta_guess = %g', mesh, eta, eta_guess)
-        if eta > eta_guess:
-            eta = eta_guess
-            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, eta, cell.precision)
-            mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-                mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+        elif cell.dimension == 2:
+            mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
         mesh = _round_off_to_odd_mesh(mesh)
     else:
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
-        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+    eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return eta, mesh, ke_cutoff

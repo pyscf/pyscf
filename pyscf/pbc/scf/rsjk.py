@@ -897,7 +897,7 @@ def _guess_omega(cell, kpts, mesh=None):
         # int2e integrals ~ naop*(cell.rcut**3/cell.vol*naop)**3
         # ft_ao integrals ~ nkpts*naop*(cell.rcut**3/cell.vol*naop)*mesh**3
         #                   nkpts**2*naop**3*mesh**3
-        nimgs = cell.rcut**3 / cell.vol
+        nimgs = (cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         # mesh = [max(4, int((nimgs * naop**2 / nkpts**.5) ** (1./3) * 0.5))] * 3
         # mesh = [max(4, int((nimgs**1.5 * naop**2 / nkpts**.5) ** (1./3) * 0.2))] * 3
         # mesh = [max(4, int((nimgs**2 * naop**2 / nkpts**.5) ** (1./3) * 0.125))] * 3

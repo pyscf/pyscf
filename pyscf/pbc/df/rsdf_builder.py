@@ -65,9 +65,10 @@ class _RSGDFBuilder(_Int3cBuilder):
             self.omega = abs(cell.omega)
         else:
             self.omega = None
+        self.rs_auxcell = None
 
         # In real-space 3c2e integrals exclude smooth-smooth block (*|DD)
-        self.exclude_dd_block = cell.dimension > 0
+        self.exclude_dd_block = cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
         # In real-space 3c2e integrals exclude smooth auxiliary basis (D|**)
         self.exclude_d_aux = True
         # If both self.exclude_d_aux and self.exclude_dd_block are enabled,
@@ -105,27 +106,28 @@ class _RSGDFBuilder(_Int3cBuilder):
         auxcell = self.auxcell
         kpts = self.kpts
 
+        if self.cell.dimension == 0:
+            log.warn('_RSGDFBuilder for cell.dimension=0 may have larger error '
+                     'than _CCGDFBuilder')
+
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
         if omega is not None:
             self.omega = omega
 
-        if self.mesh is None:
-            if self.omega is None:
-                # Search a proper range-separation parameter omega that can balance the
-                # computational cost between the real space integrals and moment space
-                # integrals
-                self.omega, self.mesh, self.ke_cutoff = _guess_omega(auxcell, kpts, self.mesh)
-            else:
-                self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
-                self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-        else:
-            if self.ke_cutoff is None:
-                ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
-                self.ke_cutoff = ke_cutoff[:cell.dimension].min()
-            if self.omega is None:
-                self.omega = aft.estimate_omega_for_ke_cutoff(cell, self.ke_cutoff)
+        if self.omega is None:
+            # Search a proper range-separation parameter omega that can balance the
+            # computational cost between the real space integrals and moment space
+            # integrals
+            self.omega, self.mesh, self.ke_cutoff = _guess_omega(auxcell, kpts, self.mesh)
+        elif self.mesh is None:
+            self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
+            mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+            self.mesh = _round_off_to_odd_mesh(mesh)
+        elif self.ke_cutoff is None:
+            ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
+            self.ke_cutoff = ke_cutoff[:cell.dimension].min()
 
         log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
                  self.omega, self.ke_cutoff, self.mesh)
@@ -143,6 +145,16 @@ class _RSGDFBuilder(_Int3cBuilder):
         aux_exps = rs_auxcell.bas_exps()
         exps_d = [cell_exps[ib] for ib in range(rs_cell.nbas) if smooth_bas_mask[ib]]
         exps_c = [cell_exps[ib] for ib in range(rs_cell.nbas) if not smooth_bas_mask[ib]]
+
+        if self.exclude_d_aux:
+            compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
+            if len(compact_aux_idx) > 0:
+                exp_aux_min = np.hstack([aux_exps[ib] for ib in compact_aux_idx]).min()
+            else:
+                exp_aux_min = np.hstack(aux_exps).max()
+        else:
+            exp_aux_min = np.hstack(aux_exps).min()
+
         if not exps_c: # Only smooth functions
             rcut_sr = cell.rcut
         else:
@@ -155,11 +167,6 @@ class _RSGDFBuilder(_Int3cBuilder):
                 exp_c_min = np.hstack(exps_c).min()
                 aij = exp_d_min + exp_c_min
                 eij = exp_d_min * exp_c_min / aij
-            compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
-            if len(compact_aux_idx) > 0:
-                exp_aux_min = np.hstack([aux_exps[ib] for ib in compact_aux_idx]).min()
-            else:
-                exp_aux_min = 1.
             theta = 1/(self.omega**-2 + 1./aij + 1./exp_aux_min)
             fac = ((8*np.pi*exp_d_min*exp_c_min/(aij*exp_aux_min)**2)**.75
                    / (theta * np.pi)**.5)
@@ -177,7 +184,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                        exp_d_min, exp_c_min, exp_aux_min, rcut_sr)
 
         supmol = _ExtendedMoleSR.from_cell(rs_cell, kmesh, self.omega, rcut_sr, log)
-        self.supmol = supmol.strip_basis()
+        self.supmol = supmol.strip_basis(exp_aux_min, self.exclude_dd_block)
         log.timer_debug1('initializing supmol', *cpu0)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -250,12 +257,11 @@ class _RSGDFBuilder(_Int3cBuilder):
         '''bas_map is to assign each basis of supmol._bas the index in
         [bvk_cell-id, bas-id, image-id]
         '''
-        rs_auxcell = self.rs_auxcell
         if self.exclude_d_aux:
             # Use aux_mask to skip smooth auxiliary basis and handle them in AFT part.
-            aux_mask = (rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS).astype(np.int32)
+            aux_mask = (self.rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS).astype(np.int32)
         else:
-            aux_mask = np.ones(rs_auxcell.nbas, dtype=np.int32)
+            aux_mask = np.ones(self.rs_auxcell.nbas, dtype=np.int32)
 
         # Append aux_mask to bas_map as a temporary solution for function
         # _assemble3c in fill_ints.c
@@ -311,18 +317,16 @@ class _RSGDFBuilder(_Int3cBuilder):
         # j2c ~ (-kpt_ji | kpt_ji) => hermi=1
         auxcell = self.auxcell
         if not self.has_long_range():
+            lmax = auxcell._bas[:,ANG_OF].max()
             omega = auxcell.omega
-            rcut = auxcell.rcut
-            rcut = (-2*np.log(
-                .225*self.cell.precision * omega**4 * rcut**2))**.5 / abs(omega)
-            with lib.temporary_env(auxcell, rcut=rcut):
+            with lib.temporary_env(auxcell):
                 j2c = auxcell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-            if auxcell.dimension >= 2 and auxcell.low_dim_ft_type != 'inf_vacuum':
+            if auxcell.dimension == 3 and auxcell.low_dim_ft_type != 'inf_vacuum':
                 gamma_point_idx = member(np.zeros(3), uniq_kpts)
                 if len(gamma_point_idx) > 0:
                     # Add G=0 contribution
                     g0_fac = np.pi / omega**2 / self.cell.vol
-                    aux_chg = ft_ao.ft_ao(auxcell, np.zeros((1, 3)))[0].real
+                    aux_chg = _gaussian_int(auxcell)
                     j2c[gamma_point_idx[0]] -= g0_fac * aux_chg[:,None] * aux_chg
             return j2c
 
@@ -381,7 +385,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                 # from the analytical 2c2e integrals. The FT-SR-2c2e for compact
                 # basis is added back in j2c_k.
                 coulG_sr = self.weighted_coulG_SR(kpt, False, mesh)
-                if auxcell.dimension >= 2 and is_zero(kpt):
+                if auxcell.dimension == 3 and is_zero(kpt):
                     G0_idx = 0  # due to np.fft.fftfreq convention
                     G0_weight = kws[G0_idx] if isinstance(kws, np.ndarray) else kws
                     coulG_sr[G0_idx] += np.pi/omega**2 * G0_weight
@@ -407,7 +411,8 @@ class _RSGDFBuilder(_Int3cBuilder):
         return j2c
 
     def outcore_auxe2(self, cderi_file, intor='int3c2e', aosym='s2', comp=None,
-                      j_only=False, dataname='j3c', shls_slice=None):
+                      j_only=False, dataname='j3c', shls_slice=None,
+                      fft_dd_block=None):
         r'''The SR part of 3-center integrals (ij|L) with double lattice sum.
 
         Kwargs:
@@ -429,16 +434,6 @@ class _RSGDFBuilder(_Int3cBuilder):
 
         log = logger.new_logger(self)
         cell = self.cell
-        intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
-
-        if self.exclude_dd_block:
-            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
-                                   dataname, shls_slice)
-
-        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
-        # on how self.supmol is initialized
-        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only)
-
         rs_cell = self.rs_cell
         auxcell = self.auxcell
         naux = auxcell.nao
@@ -449,6 +444,20 @@ class _RSGDFBuilder(_Int3cBuilder):
         if gamma_point_only:
             assert nkpts == 1
             j_only = True
+
+        intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
+
+        if fft_dd_block is None:
+            fft_dd_block = self.exclude_dd_block
+
+        if fft_dd_block:
+            self._outcore_dd_block(fswap, intor, aosym, comp, j_only,
+                                   dataname, shls_slice)
+
+        # int3c may be the regular int3c2e, LR-int3c2e or SR-int3c2e, depending
+        # on how self.supmol is initialized
+        int3c = self.gen_int3c_kernel(intor, aosym, comp, j_only,
+                                      rs_auxcell=self.rs_auxcell)
 
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
@@ -464,7 +473,7 @@ class _RSGDFBuilder(_Int3cBuilder):
             nao_pair = i1*(i1+1)//2 - i0*(i0+1)//2
         naux = k1 - k0
 
-        if self.exclude_dd_block and np.any(rs_cell.bas_type == ft_ao.SMOOTH_BASIS):
+        if fft_dd_block and np.any(rs_cell.bas_type == ft_ao.SMOOTH_BASIS):
             merge_dd = rs_cell.merge_diffused_block(aosym)
         else:
             merge_dd = None
@@ -759,15 +768,15 @@ class _RSGDFBuilder(_Int3cBuilder):
         vbar = None
         # Explicitly add the G0 contributions here because FT will not be
         # applied to the j3c integrals for short range integrals.
-        if cell.dimension >= 2 and is_zero(kpt):
+        if cell.dimension == 3 and is_zero(kpt):
             if self.exclude_d_aux:
                 rs_auxcell = self.rs_auxcell
-                aux_chg = ft_ao.ft_ao(rs_auxcell, np.zeros((1, 3)))[0].real
+                aux_chg = _gaussian_int(rs_auxcell)
                 smooth_ao_idx = rs_auxcell.get_ao_type() == ft_ao.SMOOTH_BASIS
                 aux_chg[smooth_ao_idx] = 0
                 aux_chg = rs_auxcell.recontract_1d(aux_chg[:,None]).ravel()
             else:
-                aux_chg = ft_ao.ft_ao(self.auxcell, np.zeros((1, 3)))[0].real
+                aux_chg = _gaussian_int(self.auxcell)
 
             if self.exclude_dd_block:
                 rs_cell = self.rs_cell
@@ -970,11 +979,6 @@ class _RSGDFBuilder(_Int3cBuilder):
 
             cols = [sh_range[2] for sh_range in sh_ranges]
             locs = np.append(0, np.cumsum(cols))
-            if aosym == 's2':
-                locs = locs * (locs + 1) // 2
-            else:
-                locs = locs * nao
-
             # buf for ft_aopair
             buf = np.empty(nkptj*buflen*Gblksize, dtype=np.complex128)
             for istep, j3c in enumerate(lib.map_with_prefetch(load, locs[:-1], locs[1:])):
@@ -1020,7 +1024,7 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
         supmol.omega = -omega
         return supmol
 
-    def strip_basis(self):
+    def strip_basis(self, exp_aux_min=None, exclude_dd_block=False):
         '''Remove redundant remote basis'''
         rs_cell = self.rs_cell
         bas_mask = self.bas_mask
@@ -1033,7 +1037,8 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
             # compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
             # exp_aux_min = min([rs_auxcell.bas_exp(ib).min() for ib in compact_aux_idx])
             # Is the exact exp_aux_min needed here?
-            exp_aux_min = exps_c.min()
+            if exp_aux_min is None:
+                exp_aux_min = exp_min
             aij = exp_min + exps_c
             eij = exp_min * exps_c / aij
             theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
@@ -1067,14 +1072,18 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
             # determine rcut boundary for diffused functions
             exps_d = exps[~compact_bas_mask]
             if exps_d.size > 0:
-                exp_c_min = exps_c.min()
-                aij = exp_c_min + exps_d
-                eij = exp_c_min * exps_d / aij
+                if exclude_dd_block:
+                    # Just needs to estimate the upper bounds of (C,D|aux)
+                    # otherwise, we need exp_min = exp_d_min for the (D,D|aux)
+                    # upper bound estimation
+                    exp_min = exps_c.min()
+                aij = exp_min + exps_d
+                eij = exp_min * exps_d / aij
                 theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
 
-                x_ratio = 1. / (exps_d/aij + exp_c_min/theta)
+                x_ratio = 1. / (exps_d/aij + exp_min/theta)
                 exp_fac = eij * x_ratio**2 + theta * (1 - exps_d/aij*x_ratio)**2
-                fac = ((8*np.pi*exps_d*exp_c_min/(aij*exp_aux_min)**2)**.75
+                fac = ((8*np.pi*exps_d*exp_min/(aij*exp_aux_min)**2)**.75
                        / (theta * np.pi)**.5)
                 # upper_bounds are the maximum values int3c2e can reach for each
                 # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
@@ -1113,32 +1122,39 @@ class _ExtendedMoleFT(ft_ao._ExtendedMole):
 
 # ngrids ~= 8*naux = prod(mesh)
 def _guess_omega(auxcell, kpts, mesh=None):
-    a = auxcell.lattice_vectors()
-    naux = auxcell.npgto_nr()
-    nkpts = len(kpts)
-    if mesh is None:
+    if auxcell.dimension == 0:
+        if mesh is None:
+            mesh = auxcell.mesh
+        ke_cutoff = pbctools.mesh_to_cutoff(auxcell.lattice_vectors(), mesh).min()
+    elif mesh is None:
+        a = auxcell.lattice_vectors()
+        naux = auxcell.npgto_nr()
+        nkpts = len(kpts)
         rcut = auxcell.rcut
-        omega_min = 0.25
-        omega_min = 0.75 * (-np.log(auxcell.precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
+        omega_min = 0.3
+        omega_min = 0.8 * (-np.log(auxcell.precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
         ke_min = aft.estimate_ke_cutoff_for_omega(auxcell, omega_min)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
         # FIXME: balance the two workloads
         # int3c2e integrals ~ naux*(cell.rcut**3/cell.vol*nao)**2
         # ft_ao integrals ~ nkpts*nao*(cell.rcut**3/cell.vol*nao)*mesh**3
-        nimgs = auxcell.rcut**3 / auxcell.vol
-        # mesh = [max(4, int((8 * naux) ** (1./3) + .5))] * 3
-        # mesh = [max(4, int((nimgs * naux / nkpts**.5) ** (1./3) * 0.7))] * 3
-        nimgs = 8 * nimgs
-        mesh = (nimgs**2*naux / (nkpts**.5*nimgs**.5 * 1e1 + nkpts**2*naux))**(1./3) * 5 + 2
+        nimgs = (8 * auxcell.rcut**3 / auxcell.vol) ** (auxcell.dimension / 3)
+        mesh = (nimgs**2*naux / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*naux))**(1./3) * 4 + 2
         mesh = int(min((1e8/naux)**(1./3), mesh))
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-    ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
-    if auxcell.dimension == 0:
-        ke_cutoff = ke_cutoff.min()
-    else:
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
         ke_cutoff = ke_cutoff[:auxcell.dimension].min()
-    precision = auxcell.precision
-    omega = aft.estimate_omega_for_ke_cutoff(auxcell, ke_cutoff, precision)
+        if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
+            mesh[auxcell.dimension:] = auxcell.mesh[auxcell.dimension:]
+        elif auxcell.dimension == 2:
+            mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
+        mesh = _round_off_to_odd_mesh(mesh)
+    else:
+        a = auxcell.lattice_vectors()
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        ke_cutoff = ke_cutoff[:auxcell.dimension].min()
+
+    omega = aft.estimate_omega_for_ke_cutoff(auxcell, ke_cutoff, auxcell.precision)
     return omega, mesh, ke_cutoff
 
 def _eval_gto(cell, mesh, kpts):
@@ -1162,3 +1178,17 @@ def _conj_j2c(cd_j2c):
         return j2c.conj(), None, j2ctag
     else:
         return j2c.conj(), j2c_negative.conj(), j2ctag
+
+def _gaussian_int(cell):
+    r'''Regular gaussian integral \int g(r) dr^3'''
+    return ft_ao.ft_ao(cell, np.zeros((1,3)))[0].real
+
+def _round_off_to_odd_mesh(mesh):
+    # Round off mesh to the nearest odd numbers.
+    # Odd number of grids is preferred because even number of grids may break
+    # the conjugation symmetry between the k-points k and -k.
+    # When building the DF integral tensor in function _make_j3c, the symmetry
+    # between k and -k is used (function conj_j2c) to overcome the error
+    # caused by auxiliary basis linear dependency. More detalis of this
+    # problem can be found in function _make_j3c.
+    return (np.asarray(mesh) // 2) * 2 + 1

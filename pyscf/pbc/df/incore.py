@@ -139,16 +139,18 @@ def fill_2c2e(cell, auxcell_or_auxbasis, intor='int2c2e', hermi=0, kpt=np.zeros(
 class _Int3cBuilder(lib.StreamObject):
     '''helper functions to compute 3-center integral tensor with double-lattice sum
     '''
-    def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
+    def __init__(self, cell, auxcell, kpts=None):
         self.cell = cell
         self.auxcell = auxcell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.kpts = np.reshape(kpts, (-1, 3))
+        if kpts is None:
+            self.kpts = np.zeros((1, 3))
+        else:
+            self.kpts = np.reshape(kpts, (-1, 3))
 
         self.rs_cell = None
-        self.rs_auxcell = None
         # mesh to generate Born-von Karman supercell
         self.bvk_kmesh = None
         self.supmol = None
@@ -160,7 +162,6 @@ class _Int3cBuilder(lib.StreamObject):
         if cell is not None:
             self.cell = cell
         self.rs_cell = None
-        self.rs_auxcell = None
         self.supmol = None
         return self
 
@@ -176,8 +177,6 @@ class _Int3cBuilder(lib.StreamObject):
             self.ke_cutoff = KECUT_THRESHOLD
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
-        self.rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
-            self.auxcell, self.ke_cutoff, verbose=log)
 
         rcut = cell.rcut
         if False:
@@ -196,8 +195,11 @@ class _Int3cBuilder(lib.StreamObject):
         return self
 
     def gen_int3c_kernel(self, intor='int3c2e', aosym='s2', comp=None,
-                         j_only=False, reindex_k=None, return_complex=False):
+                         j_only=False, reindex_k=None, rs_auxcell=None,
+                         return_complex=False):
         '''Generate function to compute int3c2e with double lattice-sum
+
+        rs_auxcell: range-separated auxcell for gdf/rsdf module
 
         reindex_k: an index array to sort the order of k-points in output
         '''
@@ -208,7 +210,6 @@ class _Int3cBuilder(lib.StreamObject):
         supmol = self.supmol
         cell = self.cell
         auxcell = self.auxcell
-        rs_auxcell = self.rs_auxcell
         kpts = self.kpts
         nkpts = len(kpts)
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
@@ -218,20 +219,35 @@ class _Int3cBuilder(lib.StreamObject):
         # integral mask for supmol
         cutoff = cell.precision * ft_ao.LATTICE_SUM_PENALTY * 1e-2
         log.debug1('int3c_kernel integral cutoff %g', cutoff)
-        cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
+
+        def _conc_locs(cell_loc, auxcell_loc):
+            '''auxiliary basis was appended to regular AO basis when calling int3c2e
+            integrals. Composite loc combines locs from regular AO basis and auxiliary
+            basis accordingly.'''
+            comp_loc = np.append(cell_loc[:-1], cell_loc[-1] + auxcell_loc)
+            return np.asarray(comp_loc, dtype=np.int32)
+
+        if rs_auxcell is None:
+            atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
+                                         auxcell._atm, auxcell._bas, auxcell._env)
+            sh_loc = _conc_locs(supmol.sh_loc, np.arange(auxcell.nbas + 1))
+        else:
+            atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
+                                         rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
+            sh_loc = _conc_locs(supmol.sh_loc, rs_auxcell.sh_loc)
+
+        cell0_ao_loc = _conc_locs(cell.ao_loc, auxcell.ao_loc)
 
         if 'ECP' in intor:
             q_cond_aux = None
+            env[gto.AS_ECPBAS_OFFSET] = supmol.nbas + 1
+            cintopt = _vhf.make_cintopt(atm, bas, env, intor)
         else:
             q_cond_aux = self.get_q_cond_aux()
+            cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
 
         ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(cutoff, cintopt=cintopt)
         bas_map = self.get_bas_map()
-
-        atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
-                                     rs_auxcell._atm, rs_auxcell._bas, rs_auxcell._env)
-        cell0_ao_loc = _conc_locs(cell.ao_loc, auxcell.ao_loc)
-        sh_loc = _conc_locs(supmol.sh_loc, rs_auxcell.sh_loc)
 
         # Estimate the buffer size required by PBCfill_nr3c functions
         cache_size = max(_get_cache_size(cell, intor),
@@ -283,12 +299,14 @@ class _Int3cBuilder(lib.StreamObject):
             nkpts_ij = reindex_k.size
 
         drv = libpbc.PBCfill_nr3c_drv
-        is_pbcintor = int('int3c2e' in intor)
-        # is_pbcintor controls whether to call the general driver for regular
-        # intors or the efficient driver for PBCintor
+
+        # is_pbcintor controls whether to use memory efficient functions
+        # Only suppots int3c2e_sph, int3c2e_cart in current C library
+        is_pbcintor = intor in ('int3c2e_sph', 'int3c2e_cart')
         if is_pbcintor and not intor.startswith('PBC'):
             intor = 'PBC' + intor
         log.debug1('is_pbcintor = %d, intor = %s', is_pbcintor, intor)
+
         log.timer_debug1('int3c kernel initialization', *cput0)
 
         def int3c(shls_slice=None, outR=None, outI=None):
@@ -379,7 +397,7 @@ class _Int3cBuilder(lib.StreamObject):
         '''
         # Append aux_mask to bas_map as a temporary solution for function
         # _assemble3c in fill_ints.c
-        aux_mask = np.ones(self.rs_auxcell.nbas, dtype=np.int32)
+        aux_mask = np.ones(self.auxcell.nbas, dtype=np.int32)
         bas_map = np.where(self.supmol.bas_mask.ravel())[0].astype(np.int32)
         bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
         return bas_map
@@ -404,13 +422,6 @@ class _ExtendedMole(ft_ao._ExtendedMole):
             self._env.ctypes.data_as(ctypes.c_void_p))
         return ovlp > np.log(cutoff)
 
-
-def _conc_locs(cell_loc, auxcell_loc):
-    '''auxiliary basis was appended to regular AO basis when calling int3c2e
-    integrals. Composite loc combines locs from regular AO basis and auxiliary
-    basis accordingly.'''
-    comp_loc = np.append(cell_loc[:-1], cell_loc[-1] + auxcell_loc)
-    return np.asarray(comp_loc, dtype=np.int32)
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int
 def _get_cache_size(cell, intor):
@@ -443,8 +454,6 @@ class _IntNucBuilder(_Int3cBuilder):
         self.auxcell = auxcell
         if self.ke_cutoff is None:
             self.ke_cutoff = KECUT_THRESHOLD
-        self.rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
-            self.auxcell, self.ke_cutoff)
         int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True)
         vR, vI = int3c()
         return vR, vI
@@ -505,7 +514,7 @@ class _IntNucBuilder(_Int3cBuilder):
         nao_pair = nao * (nao+1) // 2
 
         kpt_allow = np.zeros(3)
-        eta, mesh, ke_cutoff = _guess_eta(cell, mesh)
+        eta, mesh, ke_cutoff = _guess_eta(cell, kpts, mesh)
         log.debug1('get_nuc/get_pp_loc_part1 mesh = %s', mesh)
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
@@ -572,14 +581,17 @@ class _IntNucBuilder(_Int3cBuilder):
         nkpts = len(kpts)
         intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
                   'int3c1e_r4_origk', 'int3c1e_r6_origk')
-        buf = 0
+        bufR = 0
+        bufI = 0
         for cn in range(1, 5):
             fake_cell = pp_int.fake_cell_vloc(cell, cn)
             if fake_cell.nbas > 0:
                 vR, vI = self.kernel(fake_cell, intors[cn], 's2', comp=1)
-                buf += (np.einsum('...i->...', vR) + np.einsum('...i->...', vI) * 1j)
+                bufR += np.einsum('...i->...', vR)
+                if vI is not None:
+                    bufI += np.einsum('...i->...', vI)
 
-        if isinstance(buf, int):
+        if isinstance(bufR, int):
             if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
                 pass
             else:
@@ -587,7 +599,7 @@ class _IntNucBuilder(_Int3cBuilder):
                                  'were not found in the system.', cell._pseudo.keys())
             vpploc = [0] * nkpts
         else:
-            buf = buf.reshape(nkpts,-1)
+            buf = (bufR + bufI * 1j).reshape(nkpts,-1)
             vpploc = []
             for k, kpt in enumerate(kpts):
                 v = lib.unpack_tril(buf[k])

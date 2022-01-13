@@ -34,7 +34,7 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
-from pyscf.pbc import df
+from pyscf.pbc.df import df
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
@@ -161,7 +161,6 @@ def _init_mp_df_eris(mp):
     Returns:
         Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts, nkpts, naux, nocc, nvir)
     """
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
 
@@ -199,14 +198,12 @@ def _init_mp_df_eris(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(mp._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df._load3c(mp._scf.with_df._cderi, 'j3c') as fload:
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+                Lpq_ao = np.asarray(fload(kpti, kptj))
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')

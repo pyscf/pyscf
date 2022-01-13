@@ -33,6 +33,7 @@ from pyscf.x2c import x2c
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.df import aft
+from pyscf.pbc.df import incore
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.scf import ghf
@@ -259,7 +260,7 @@ def get_pnucp(mydf, kpts=None):
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
     else:
-        nuccell = aft._compensate_nuccell(mydf)
+        nuccell = incore._compensate_nuccell(mydf.cell, mydf.eta)
         wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1'))
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 

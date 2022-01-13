@@ -916,12 +916,11 @@ O    SP
         s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
-        mol0.cart = True
-        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
-        c = scipy.linalg.block_diag(*ctr_coeff)
-        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
-        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
-        mol0.cart = False
+        with lib.temporary_env(mol0, cart=True):
+            pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+            c = scipy.linalg.block_diag(*ctr_coeff)
+            s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+            self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
     def test_getattr(self):
         from pyscf import scf, dft, ci, tdscf

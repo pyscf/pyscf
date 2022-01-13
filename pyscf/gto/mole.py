@@ -153,7 +153,7 @@ def gto_norm(l, expnt):
         #return math.sqrt(f)
         return 1/numpy.sqrt(gaussian_int(l*2+2, 2*expnt))
     else:
-        raise ValueError('l should be > 0')
+        raise ValueError('l should be >= 0')
 
 def cart2sph(l, c_tensor=None, normalized=None):
     '''
@@ -615,8 +615,6 @@ def decontract_basis(mol, atoms=None, to_cart=False):
                 continue
 
         lmax = mol._bas[ib0:ib1,ANG_OF].max()
-        assert all(mol._bas[ib0:ib1,KAPPA_OF] == 0)
-
         pexp = mol._bas[ib0,PTR_EXP]
         for l in range(lmax+1):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,ANG_OF] == l)[0]

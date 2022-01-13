@@ -578,11 +578,6 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
 
             cols = [sh_range[2] for sh_range in sh_ranges]
             locs = np.append(0, np.cumsum(cols))
-            if aosym == 's2':
-                locs = locs * (locs + 1) // 2
-            else:
-                locs = locs * nao
-
             # buf for ft_aopair
             buf = np.empty(nkptj*buflen*Gblksize, dtype=np.complex128)
             for istep, j3c in enumerate(lib.map_with_prefetch(load, locs[:-1], locs[1:])):

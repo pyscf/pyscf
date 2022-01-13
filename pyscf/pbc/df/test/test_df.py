@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
 
         eri4444 = kmdf.get_eri((kpts[4],kpts[4],kpts[4],kpts[4]))
         self.assertTrue(eri4444.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri4444.real.sum(), 62.55123861831842, 8)
+        self.assertAlmostEqual(eri4444.real.sum(), 62.55123861831842, 7)
         # kpts[4] ~= 0, eri4444.imag should be very closed to 0
         self.assertAlmostEqual(abs(eri4444.imag).sum(), 0, 7)
         self.assertAlmostEqual(lib.fp(eri4444), 0.6205986620420332+0j, 8)
@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
         eri1111 = kmdf.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
         self.assertTrue(eri1111.dtype == numpy.complex128)
         self.assertAlmostEqual(eri1111.real.sum(), 62.54976506061887, 8)
-        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154153948446872, 8)
+        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154153948446872, 7)
         self.assertAlmostEqual(lib.fp(eri1111), 0.6203912329366568+8.790493572227777e-05j, 8)
         check2 = kmdf.get_eri((kpts[1]+5e-8,kpts[1]+5e-8,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
@@ -111,13 +111,13 @@ class KnownValues(unittest.TestCase):
         eri0011 = kmdf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(eri0011.dtype == numpy.complex128)
         self.assertAlmostEqual(eri0011.real.sum(), 62.550501755408035, 8)
-        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080657889720216, 8)
+        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080657889720216, 7)
         self.assertAlmostEqual(lib.fp(eri0011), 0.6205470491228497+7.547569375281784e-05j, 8)
 
     def test_rsgdf_get_eri_0110(self):
         eri0110 = kmdf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(eri0110.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0110.real.sum(), 83.11360960389585, 8)
+        self.assertAlmostEqual(eri0110.real.sum(), 83.11360960389585, 7)
         self.assertAlmostEqual(abs(eri0110.imag).sum(), 5.083516745552487, 8)
         self.assertAlmostEqual(lib.fp(eri0110), 0.9700462344979466-0.331882616586239j, 8)
         check2 = kmdf.get_eri((kpts[0]+5e-8,kpts[1]+5e-8,kpts[1],kpts[0]))
