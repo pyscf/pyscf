@@ -550,14 +550,33 @@ def _init_guess_huckel_orbitals(mol):
     # Atomic basis info
     aoslice = mol.aoslice_by_atom()
 
+    # Atomic cartesian mappings
+    atcart2sph = None
+    if mol.cart:
+        atcart2sph = []
+        molcart2sph = mol.cart2sph_coeff(normalized='sp')
+        for ia in range(mol.natm):
+            # First and last bf index
+            abeg = aoslice[ia, 2]
+            aend = aoslice[ia, 3]
+            # Atomic slice
+            atsph = molcart2sph[abeg:aend,:]
+            # Find the columns with nonzero entries on the atom
+            colnorm = numpy.asarray([numpy.linalg.norm(atsph[:,i]) for i in range(atsph.shape[1])])
+            atcart2sph.append(atsph[:,colnorm!=0.0])
+
     iocc = 0
     for ia in range(mol.natm):
         # First and last bf index
         abeg = aoslice[ia, 2]
         aend = aoslice[ia, 3]
+
         for iorb in range(len(at_occ[ia])):
             if(at_occ[ia][iorb]>0.0):
-                orb_C[abeg:aend,iocc] = at_c[ia][:,iorb]
+                if mol.cart:
+                    orb_C[abeg:aend,iocc] = numpy.dot(at_c[ia][:,iorb], atcart2sph[ia].T)
+                else:
+                    orb_C[abeg:aend,iocc] = at_c[ia][:,iorb]
                 orb_E[iocc] = at_e[ia][iorb]
                 iocc=iocc+1
 
