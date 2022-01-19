@@ -279,6 +279,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             )
         else:
             dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union).set(
+                mesh=self.mesh,
                 linear_dep_threshold=self.linear_dep_threshold,
             )
         dfbuilder.make_j3c(cderi_file, j_only=self._j_only)
@@ -539,14 +540,14 @@ class _load3c:
             ki = member(kpti, kpts)
             kj = member(kptj, kpts)
             if len(ki) == 0 or len(kj) == 0:
-                raise RuntimeError(f'CDERI {self.label} for kpts {kpti_kptj} is '
+                raise RuntimeError(f'CDERI {self.label} for kpts ({kpti}, {kptj}) is '
                                    'not initialized.')
 
             ki = ki[0]
             kj = kj[0]
             key = f'{self.label}/{ki * nkpts + kj}'
             if key not in self.feri:
-                if ignore_key_error:
+                if self.ignore_key_error:
                     return numpy.zeros(0)
                 else:
                     raise KeyError(f'Key {key} not found')

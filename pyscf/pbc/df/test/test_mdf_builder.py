@@ -258,7 +258,7 @@ class KnownValues(unittest.TestCase):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
             self.assertAlmostEqual(lib.fp(v_s2[0]), 0.014867954022436673, 8)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 0.0009656916277807118+0.011048147592950475j, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 0.0009656916277807118+0.011048147592950475j, 7)
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.01509142892728263+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')

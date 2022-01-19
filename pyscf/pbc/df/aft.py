@@ -208,7 +208,7 @@ def get_nuc(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
     dfbuilder = _IntNucBuilder(mydf.cell, kpts_lst)
-    vj = dfbuilder.get_nuc()
+    vj = dfbuilder.get_nuc(mydf.mesh)
     if kpts is None or numpy.shape(kpts) == (3,):
         vj = vj[0]
     logger.timer(mydf, 'get_nuc', *t0)

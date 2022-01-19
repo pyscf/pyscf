@@ -34,6 +34,7 @@ def setUpModule():
     cell.atom = '''He    3.    2.       3.
                    He    1.    1.       1.'''
     cell.basis = 'ccpvdz'
+    cell.precision=1e-12
     cell.verbose = 0
     cell.max_memory = 1000
     cell.build(0,0)
@@ -48,13 +49,13 @@ def setUpModule():
     kmdf._prefer_ccdf = False
     kmdf.auxbasis = 'weigend'
     kmdf.kpts = kpts
-    kmdf.mesh = [11] * 3
+    kmdf.mesh = [17] * 3
 
     ccgdf = df.DF(cell)
     ccgdf._prefer_ccdf = True
     ccgdf.auxbasis = 'weigend'
     ccgdf.kpts = kpts
-    ccgdf.mesh = [11] * 3
+    ccgdf.mesh = [17] * 3
 
 def tearDownModule():
     global cell, kmdf, ccgdf
@@ -69,36 +70,37 @@ class KnownValues(unittest.TestCase):
         odf.mesh = [11]*3
         eri0000 = odf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertAlmostEqual(eri0000.real.sum(), 41.61281537829081, 8)
+        self.assertAlmostEqual(eri0000.real.sum(), 41.612815388042186, 8)
         self.assertAlmostEqual(lib.fp(eri0000), 1.9981475954967156, 8)
 
     def test_rsgdf_get_eri_gamma1(self):
         eri0000 = kmdf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertAlmostEqual(eri0000.real.sum(), 41.61281537829081, 8)
+        self.assertAlmostEqual(eri0000.real.sum(), 41.612815388042186, 8)
         self.assertAlmostEqual(lib.fp(eri0000), 1.9981475954967156, 8)
 
         eri1111 = kmdf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(eri1111.dtype == numpy.double)
-        self.assertAlmostEqual(eri1111.real.sum(), 41.61281538370225, 7)
+        self.assertAlmostEqual(eri1111.real.sum(), 41.61281538370225, 8)
         self.assertAlmostEqual(eri1111.imag.sum(), 0, 9)
         self.assertAlmostEqual(lib.fp(eri1111), 1.9981475954967156, 8)
         self.assertAlmostEqual(abs(eri1111-eri0000).max(), 0, 9)
 
         eri4444 = kmdf.get_eri((kpts[4],kpts[4],kpts[4],kpts[4]))
         self.assertTrue(eri4444.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri4444.real.sum(), 62.55123861831842, 7)
+        self.assertAlmostEqual(eri4444.real.sum(), 62.55123863003902, 8)
         # kpts[4] ~= 0, eri4444.imag should be very closed to 0
         self.assertAlmostEqual(abs(eri4444.imag).sum(), 0, 7)
+        self.assertTrue(abs(eri4444.imag).sum() > 1e-8)
         self.assertAlmostEqual(lib.fp(eri4444), 0.6205986620420332+0j, 8)
         eri0000 = ao2mo.restore(1, eri0000, cell.nao_nr()).reshape(eri4444.shape)
-        self.assertAlmostEqual(abs(eri0000-eri4444).max(), 0, 7)
+        self.assertAlmostEqual(abs(eri0000-eri4444).max(), 0, 8)
 
     def test_rsgdf_get_eri_1111(self):
         eri1111 = kmdf.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
         self.assertTrue(eri1111.dtype == numpy.complex128)
         self.assertAlmostEqual(eri1111.real.sum(), 62.54976506061887, 8)
-        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154153948446872, 7)
+        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154474705429095, 8)
         self.assertAlmostEqual(lib.fp(eri1111), 0.6203912329366568+8.790493572227777e-05j, 8)
         check2 = kmdf.get_eri((kpts[1]+5e-8,kpts[1]+5e-8,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
@@ -110,15 +112,15 @@ class KnownValues(unittest.TestCase):
     def test_rsgdf_get_eri_0011(self):
         eri0011 = kmdf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(eri0011.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0011.real.sum(), 62.550501755408035, 8)
-        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080657889720216, 7)
+        self.assertAlmostEqual(eri0011.real.sum(), 62.5505017611663, 8)
+        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080830870008819, 8)
         self.assertAlmostEqual(lib.fp(eri0011), 0.6205470491228497+7.547569375281784e-05j, 8)
 
     def test_rsgdf_get_eri_0110(self):
         eri0110 = kmdf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(eri0110.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0110.real.sum(), 83.11360960389585, 7)
-        self.assertAlmostEqual(abs(eri0110.imag).sum(), 5.083516745552487, 8)
+        self.assertAlmostEqual(eri0110.real.sum(), 83.11360962348763, 8)
+        self.assertAlmostEqual(abs(eri0110.imag).sum(), 5.083516727205381, 8)
         self.assertAlmostEqual(lib.fp(eri0110), 0.9700462344979466-0.331882616586239j, 8)
         check2 = kmdf.get_eri((kpts[0]+5e-8,kpts[1]+5e-8,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
@@ -127,36 +129,37 @@ class KnownValues(unittest.TestCase):
         eri0123 = kmdf.get_eri(kpts[:4])
         self.assertTrue(eri0123.dtype == numpy.complex128)
         self.assertAlmostEqual(eri0123.real.sum(), 83.10940286392085, 8)
-        self.assertAlmostEqual(abs(eri0123.imag.sum()), 4.9887958509e-5, 8)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 4.990140599070436e-05, 8)
         self.assertAlmostEqual(lib.fp(eri0123), 0.9695261296288074-0.33222740818370966j, 8)
 
     def test_ccgdf_get_eri_gamma1(self):
         eri0000 = ccgdf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
-        self.assertAlmostEqual(eri0000.real.sum(), 41.61281537829081, 7)
+        self.assertAlmostEqual(eri0000.real.sum(), 41.612815388042186, 8)
         self.assertAlmostEqual(lib.fp(eri0000), 1.9981475954967156, 8)
 
         eri1111 = ccgdf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(eri1111.dtype == numpy.double)
-        self.assertAlmostEqual(eri1111.real.sum(), 41.61281538370225, 7)
+        self.assertAlmostEqual(eri1111.real.sum(), 41.61281538370225, 8)
         self.assertAlmostEqual(eri1111.imag.sum(), 0, 9)
         self.assertAlmostEqual(lib.fp(eri1111), 1.9981475954967156, 8)
         self.assertAlmostEqual(abs(eri1111-eri0000).max(), 0, 9)
 
         eri4444 = ccgdf.get_eri((kpts[4],kpts[4],kpts[4],kpts[4]))
         self.assertTrue(eri4444.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri4444.real.sum(), 62.55123861831842, 8)
+        self.assertAlmostEqual(eri4444.real.sum(), 62.55123863003902, 8)
         # kpts[4] ~= 0, eri4444.imag should be very closed to 0
         self.assertAlmostEqual(abs(eri4444.imag).sum(), 0, 7)
+        self.assertTrue(abs(eri4444.imag).sum() > 1e-8)
         self.assertAlmostEqual(lib.fp(eri4444), 0.6205986620420332+0j, 8)
         eri0000 = ao2mo.restore(1, eri0000, cell.nao_nr()).reshape(eri4444.shape)
-        self.assertAlmostEqual(abs(eri0000-eri4444).max(), 0, 7)
+        self.assertAlmostEqual(abs(eri0000-eri4444).max(), 0, 8)
 
     def test_ccgdf_get_eri_1111(self):
         eri1111 = ccgdf.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
         self.assertTrue(eri1111.dtype == numpy.complex128)
         self.assertAlmostEqual(eri1111.real.sum(), 62.54976506061887, 8)
-        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154153948446872, 8)
+        self.assertAlmostEqual(abs(eri1111.imag).sum(), 0.0018154474705429095, 8)
         self.assertAlmostEqual(lib.fp(eri1111), 0.6203912329366568+8.790493572227777e-05j, 8)
         check2 = ccgdf.get_eri((kpts[1]+5e-8,kpts[1]+5e-8,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
@@ -168,15 +171,15 @@ class KnownValues(unittest.TestCase):
     def test_ccgdf_get_eri_0011(self):
         eri0011 = ccgdf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(eri0011.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0011.real.sum(), 62.550501755408035, 8)
-        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080657889720216, 8)
+        self.assertAlmostEqual(eri0011.real.sum(), 62.5505017611663, 8)
+        self.assertAlmostEqual(abs(eri0011.imag).sum(), 0.0009080830870008819, 8)
         self.assertAlmostEqual(lib.fp(eri0011), 0.6205470491228497+7.547569375281784e-05j, 8)
 
     def test_ccgdf_get_eri_0110(self):
         eri0110 = ccgdf.get_eri((kpts[0],kpts[1],kpts[1],kpts[0]))
         self.assertTrue(eri0110.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0110.real.sum(), 83.11360960389585, 8)
-        self.assertAlmostEqual(abs(eri0110.imag).sum(), 5.083516745552487, 8)
+        self.assertAlmostEqual(eri0110.real.sum(), 83.11360962348763, 8)
+        self.assertAlmostEqual(abs(eri0110.imag).sum(), 5.083516727205381, 8)
         self.assertAlmostEqual(lib.fp(eri0110), 0.9700462344979466-0.331882616586239j, 8)
         check2 = ccgdf.get_eri((kpts[0]+5e-8,kpts[1]+5e-8,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
@@ -185,7 +188,7 @@ class KnownValues(unittest.TestCase):
         eri0123 = ccgdf.get_eri(kpts[:4])
         self.assertTrue(eri0123.dtype == numpy.complex128)
         self.assertAlmostEqual(eri0123.real.sum(), 83.10940286392085, 8)
-        self.assertAlmostEqual(abs(eri0123.imag.sum()), 4.9887958509e-5, 8)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 4.990140599070436e-05, 8)
         self.assertAlmostEqual(lib.fp(eri0123), 0.9695261296288074-0.33222740818370966j, 8)
 
     def test_modrho_basis(self):

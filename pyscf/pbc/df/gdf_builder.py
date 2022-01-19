@@ -318,7 +318,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
                 if f'{dataname}I/{kk_idx}' in fswap:
                     fswap[f'{dataname}I/{kk_idx}'][row0:row1] = outI[k]
             outR = outI = None
-        bufR = bufI = None
         return fswap
 
     def weighted_ft_ao(self, kpt):

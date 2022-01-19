@@ -317,7 +317,6 @@ class _RSGDFBuilder(_Int3cBuilder):
         # j2c ~ (-kpt_ji | kpt_ji) => hermi=1
         auxcell = self.auxcell
         if not self.has_long_range():
-            lmax = auxcell._bas[:,ANG_OF].max()
             omega = auxcell.omega
             with lib.temporary_env(auxcell):
                 j2c = auxcell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
