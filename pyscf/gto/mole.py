@@ -2433,6 +2433,13 @@ class Mole(lib.StreamObject):
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
             try:
+                try:
+                    groupname0, axes0 = symm.as_subgroup(self.topgroup, np.eye(3),
+                                                         self.symmetry)
+                    self.groupname, axes = groupname0, axes0
+                except PointGroupSymmetryError:
+                    logger.info(self, 'Unable to to identify input symmetry using original axes.\n'
+                                'Different symmetry axes will be used.')
                 self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                         self.symmetry)
             except PointGroupSymmetryError:
@@ -2621,6 +2628,10 @@ class Mole(lib.StreamObject):
                 else:
                     logger.info(self, 'point group symmetry = %s, use subgroup %s',
                                 self.topgroup, self.groupname)
+                logger.info(self, "symmetry origin: %s", self._symm_orig)
+                logger.info(self, "symmetry axis x: %s", self._symm_axes[0])
+                logger.info(self, "symmetry axis y: %s", self._symm_axes[1])
+                logger.info(self, "symmetry axis z: %s", self._symm_axes[2])
                 for ir in range(self.symm_orb.__len__()):
                     logger.info(self, 'num. orbitals of irrep %s = %d',
                                 self.irrep_name[ir], self.symm_orb[ir].shape[1])
