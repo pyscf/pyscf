@@ -16,7 +16,7 @@ cmake_minimum_required (VERSION 3.5)
 project (pyscf)
 
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+  set(CMAKE_BUILD_TYPE Release)
 endif()
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
@@ -194,6 +194,9 @@ option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
+option(ENABLE_LIBXSMM "Using libxsmm" ON)
+option(BUILD_LIBXSMM "Building libxsmm" ON)
+
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
 
@@ -237,6 +240,22 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   add_dependencies(xcfun_itrf libxcfun)
   add_dependencies(dft libxcfun)
 endif() # ENABLE_XCFUN
+
+if(ENABLE_LIBXSMM AND BUILD_LIBXSMM)
+  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/libxsmm.h")
+    ExternalProject_Add(libxsmm
+      GIT_REPOSITORY https://github.com/hfp/libxsmm.git
+      GIT_TAG 1.17
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      CONFIGURE_COMMAND ""
+      BUILD_IN_SOURCE True
+      BUILD_COMMAND make -j4 PREFIX=<INSTALL_DIR> CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} STATIC=0 MALLOC=0 INTRINSICS=1 install
+      INSTALL_COMMAND ""
+    )
+    add_dependencies(dft libxsmm)
+  endif()
+endif()
 endif() # DISABLE_DFT
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")

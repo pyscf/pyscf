@@ -16,7 +16,8 @@
  * Author: Xing Zhang <zhangxing.nju@gmail.com>
  */
 
-//#include <stdio.h>
+#include <time.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -27,6 +28,7 @@
 #include "np_helper/np_helper.h"
 #include "dft/multigrid.h"
 #include "dft/grid_common.h"
+#include "dft/utils.h"
 
 #define MAX_THREADS     256
 #define PTR_RADIUS        5
@@ -60,172 +62,131 @@ static void transform_dm(double* dm_cart, double* dm,
     const double D1 = 1;
     const double D0 = 0;
     //einsum("pi,ij,qj->pq", coeff_i, dm, coeff_j)
-    dgemm_(&TRANS_T, &TRANS_N, &nao_j, &nrow, &ncol,
-           &D1, jsh_contr_coeff, &ncol, pdm, &naoj, &D0, cache, &nao_j);
-    dgemm_(&TRANS_N, &TRANS_N, &nao_j, &nao_i, &nrow,
-           &D1, cache, &nao_j, ish_contr_coeff, &nrow, &D0, dm_cart, &nao_j);
+    dgemm_wrapper(TRANS_T, TRANS_N, nao_j, nrow, ncol,
+           D1, jsh_contr_coeff, ncol, pdm, naoj, D0, cache, nao_j);
+    dgemm_wrapper(TRANS_N, TRANS_N, nao_j, nao_i, nrow,
+           D1, cache, nao_j, ish_contr_coeff, nrow, D0, dm_cart, nao_j);
+}
+
+
+static void add_rho_submesh(double* rho, double* pqr,
+                            int* mesh_lb, int* mesh_ub, int* submesh_lb,
+                            int* mesh, int* submesh)
+{
+    const int x0 = mesh_lb[0];
+    const int y0 = mesh_lb[1];
+    const int z0 = mesh_lb[2];
+
+    const int nx = mesh_ub[0] - x0;
+    const int ny = mesh_ub[1] - y0;
+    const int nz = mesh_ub[2] - z0;
+
+    const int x0_sub = submesh_lb[0];
+    const int y0_sub = submesh_lb[1];
+    const int z0_sub = submesh_lb[2];
+
+    const size_t mesh_yz = ((size_t) mesh[1]) * mesh[2];
+    const size_t submesh_yz = ((size_t) submesh[1]) * submesh[2];
+
+    int ix, iy, iz;
+    for (ix = 0; ix < nx; ix++) {
+        double* restrict ptr_rho = rho + (ix + x0) * mesh_yz + y0 * mesh[2] + z0;
+        double* restrict ptr_pqr = pqr + (ix + x0_sub) * submesh_yz + y0_sub * submesh[2] + z0_sub;
+        for (iy = 0; iy < ny; iy++) {
+            #pragma omp simd
+            for (iz = 0; iz < nz; iz++) {
+                ptr_rho[iz] += ptr_pqr[iz];
+            }
+            ptr_rho += mesh[2];
+            ptr_pqr += submesh[2];
+        }
+    }
 }
 
 
 static void _orth_rho(double *rho, double *dm_xyz,
                       double fac, int topl,
-                      int *mesh, int *img_slice, int *grid_slice,
+                      int *mesh, int *grid_slice,
                       double *xs_exp, double *ys_exp, double *zs_exp,
                       double *cache)
 {
-        int l1 = topl + 1;
-        int l1l1 = l1 * l1;
-        int nimgx0 = img_slice[0];
-        int nimgx1 = img_slice[1];
-        int nimgy0 = img_slice[2];
-        int nimgy1 = img_slice[3];
-        int nimgz0 = img_slice[4];
-        int nimgz1 = img_slice[5];
-        int nimgx = nimgx1 - nimgx0;
-        int nimgy = nimgy1 - nimgy0;
-        int nimgz = nimgz1 - nimgz0;
-        int nx0 = grid_slice[0];
-        int nx1 = MIN(grid_slice[1], mesh[0]);
-        int ny0 = grid_slice[2];
-        int ny1 = MIN(grid_slice[3], mesh[1]);
-        int nz0 = grid_slice[4];
-        int nz1 = MIN(grid_slice[5], mesh[2]);
-        int ngridx = _num_grids_on_x(nimgx, nx0, nx1, mesh[0]);
-        int ngridy = _num_grids_on_x(nimgy, ny0, ny1, mesh[1]);
-        int ngridz = _num_grids_on_x(nimgz, nz0, nz1, mesh[2]);
-        if (ngridx == 0 || ngridy == 0 || ngridz == 0) {
-                return;
-        }
+    int l1 = topl + 1;
+    int l1l1 = l1 * l1;
+    int nx0 = grid_slice[0];
+    int nx1 = grid_slice[1];
+    int ny0 = grid_slice[2];
+    int ny1 = grid_slice[3];
+    int nz0 = grid_slice[4];
+    int nz1 = grid_slice[5];
+    int ngridx = nx1 - nx0;
+    int ngridy = ny1 - ny0;
+    int ngridz = nz1 - nz0;
+    if (ngridx == 0 || ngridy == 0 || ngridz == 0) {
+        return;
+    }
 
-        const char TRANS_N = 'N';
-        const char TRANS_T = 'T';
-        const double D0 = 0;
-        const double D1 = 1;
-        size_t mesh_yz = ((size_t)mesh[1]) * mesh[2];
-        int xcols = ngridy * ngridz;
-        double *xyr = cache;
-        double *xqr = xyr + l1l1 * ngridz;
-        double *pqr = xqr + l1 * xcols;
-        int l, ix, iy, iz, nx, ny, nz;
-        int xmap[ngridx];
-        int ymap[ngridy];
+    const char TRANS_N = 'N';
+    const char TRANS_T = 'T';
+    const double D0 = 0;
+    const double D1 = 1;
+    int xcols = ngridy * ngridz;
+    double *xyr = cache;
+    double *xqr = xyr + l1l1 * ngridz;
+    double *pqr = xqr + l1 * xcols;
+    int ix, iy, iz;
 
-        bool is_x_split = false, is_y_split = false, is_z_split = false;
-        if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) is_x_split = true;
-        if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) is_y_split = true;
-        if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) is_z_split = true;
-        _get_grid_mapping(xmap, nx0, nx1, ngridx, nimgx, is_x_split);
-        _get_grid_mapping(ymap, ny0, ny1, ngridy, nimgy, is_y_split);
+    dgemm_wrapper(TRANS_N, TRANS_N, ngridz, l1l1, l1,
+                  fac, zs_exp, ngridz, dm_xyz, l1,
+                  D0, xyr, ngridz);
 
-        if (nimgz == 1) {
-                dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1l1, &l1,
-                       &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
-                       &D0, xyr, &ngridz);
-        } else if (is_z_split) {
-                nz = mesh[2]-nz0;
-                dgemm_(&TRANS_N, &TRANS_N, &nz, &l1l1, &l1,
-                       &fac, zs_exp+nz0, mesh+2, dm_xyz, &l1,
-                       &D0, xyr+nz1, &ngridz);
-                dgemm_(&TRANS_N, &TRANS_N, &nz1, &l1l1, &l1,
-                       &fac, zs_exp, mesh+2, dm_xyz, &l1,
-                       &D0, xyr, &ngridz);
-        }
-        else{
-                dgemm_(&TRANS_N, &TRANS_N, mesh+2, &l1l1, &l1,
-                       &fac, zs_exp, mesh+2, dm_xyz, &l1,
-                       &D0, xyr, mesh+2);
-        }
+    int l;
+    for (l = 0; l <= topl; l++) {
+        dgemm_wrapper(TRANS_N, TRANS_T, ngridz, ngridy, l1,
+                      D1, xyr+l*l1*ngridz, ngridz, ys_exp, ngridy,
+                      D0, xqr+l*xcols, ngridz);
+    }
 
-        if (nimgy == 1) {
-                for (l = 0; l <= topl; l++) {
-                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ngridy, &l1,
-                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
-                               &D0, xqr+l*xcols, &ngridz);
-                }
-        } else if (is_y_split) {
-                ny = mesh[1] - ny0;
-                for (l = 0; l <= topl; l++) {
-                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ny1, &l1,
-                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp, mesh+1,
-                               &D0, xqr+l*xcols, &ngridz);
-                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, &ny, &l1,
-                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp+ny0, mesh+1,
-                               &D0, xqr+l*xcols+ny1*ngridz, &ngridz);
-                }
-        } else {
-                for (l = 0; l <= topl; l++) {
-                        dgemm_(&TRANS_N, &TRANS_T, &ngridz, mesh+1, &l1,
-                               &D1, xyr+l*l1*ngridz, &ngridz, ys_exp, mesh+1,
-                               &D0, xqr+l*xcols, &ngridz);
-                }
-        }
+    dgemm_wrapper(TRANS_N, TRANS_T, xcols, ngridx, l1,
+                  D1, xqr, xcols, xs_exp, ngridx,
+                  D0, pqr, xcols);
 
-        if (nimgx == 1) {
-                dgemm_(&TRANS_N, &TRANS_T, &xcols, &ngridx, &l1,
-                       &D1, xqr, &xcols, xs_exp+nx0, mesh,
-                       &D0, pqr, &xcols);
-        } else if (is_x_split) {
-                dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx1, &l1,
-                       &D1, xqr, &xcols, xs_exp, mesh,
-                       &D0, pqr, &xcols);
-                nx = mesh[0] - nx0;
-                dgemm_(&TRANS_N, &TRANS_T, &xcols, &nx, &l1,
-                       &D1, xqr, &xcols, xs_exp+nx0, mesh,
-                       &D0, pqr+nx1*xcols, &xcols);
-        } else {
-                dgemm_(&TRANS_N, &TRANS_T, &xcols, mesh, &l1,
-                       &D1, xqr, &xcols, xs_exp, mesh,
-                       &D0, pqr, &xcols);
-        }
-
-        // TODO optimize the following loops using e.g. axpy
-        for (ix = 0; ix < ngridx; ix++) {
-            for (iy = 0; iy < ngridy; iy++) {
-                //for (iz = 0; iz < ngridz; iz++) {
-                //    rho[xmap[ix]*mesh_yz+ymap[iy]*mesh[2]+zmap[iz]] += pqr[ix*xcols+iy*ngridz+iz];
-                //}
-                double* restrict ptr_rho = rho + xmap[ix]*mesh_yz + ymap[iy]*mesh[2];
-                double* restrict ptr_pqr = pqr + ix*xcols + iy*ngridz;
-                if (is_z_split) {
-                    #pragma omp simd
-                    for (iz = 0; iz < nz1; iz++) {
-                        ptr_rho[iz] += ptr_pqr[iz];
-                    }
-                    ptr_rho += nz0 - nz1;
-                    #pragma omp simd
-                    for (iz = nz1; iz < ngridz; iz++) {
-                        ptr_rho[iz] += ptr_pqr[iz];
-                    }
-                } else {
-                    if (nimgz == 1) {
-                        ptr_rho += nz0;
-                    }
-                    #pragma omp simd
-                    for (iz = 0; iz < ngridz; iz++) {
-                        ptr_rho[iz] += ptr_pqr[iz];
-                    }
-                }
+    int submesh[3] = {ngridx, ngridy, ngridz};
+    int lb[3], ub[3];
+    for (ix = 0; ix < ngridx; ix++) {
+        lb[0] = modulo(ix + nx0, mesh[0]);
+        ub[0] = get_upper_bound(lb[0], mesh[0], ix, ngridx);
+        for (iy = 0; iy < ngridy; iy++) {
+            lb[1] = modulo(iy + ny0, mesh[1]);
+            ub[1] = get_upper_bound(lb[1], mesh[1], iy, ngridy);
+            for (iz = 0; iz < ngridz; iz++) {
+                lb[2] = modulo(iz + nz0, mesh[2]);
+                ub[2] = get_upper_bound(lb[2], mesh[2], iz, ngridz);
+                int lb_sub[3] = {ix, iy, iz};
+                add_rho_submesh(rho, pqr, lb, ub, lb_sub, mesh, submesh);
+                iz += ub[2] - lb[2] - 1;
             }
+            iy += ub[1] - lb[1] - 1;
         }
+        ix += ub[0] - lb[0] - 1;
+    }
 }
 
 
 void make_rho_lda_orth(double *rho, double *dm, int comp,
                        int li, int lj, double ai, double aj,
                        double *ri, double *rj, double fac, double cutoff,
-                       int dimension, double *a, double *b,
+                       int dimension, double* dh, double *a, double *b,
                        int *mesh, double *cache)
 {
         int topl = li + lj;
         int l1 = topl + 1;
         int l1l1l1 = l1 * l1 * l1;
-        int img_slice[6];
         int grid_slice[6];
         double *xs_exp, *ys_exp, *zs_exp;
-        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
-                                        grid_slice, mesh,
-                                        topl, dimension, cutoff,
-                                        ai, aj, ri, rj, a, b, cache);
+        int data_size = init_orth_data(&xs_exp, &ys_exp, &zs_exp,
+                                       grid_slice, dh, mesh, topl, cutoff,
+                                       ai, aj, ri, rj, cache);
+
         if (data_size == 0) {
                 return;
         }
@@ -237,21 +198,18 @@ void make_rho_lda_orth(double *rho, double *dm, int comp,
 
         _dm_to_dm_xyz(dm_xyz, dm, li, lj, ri, rj, cache);
 
-        _orth_rho(rho, dm_xyz, fac, topl, mesh,
-                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rho, dm_xyz, fac, topl, mesh, grid_slice,
+                  xs_exp, ys_exp, zs_exp, cache);
 }
 
 
 static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
-                       PGFPair* pgfpair,
-                       int comp,
-                       int dimension, double *a, double *b,
-                       int *mesh,
+                       PGFPair* pgfpair, int comp, int dimension,
+                       double* dh, double *a, double *b, int *mesh,
                        double* ish_gto_norm, double* jsh_gto_norm,
                        int *ish_atm, int *ish_bas, double *ish_env,
                        int *jsh_atm, int *jsh_bas, double *jsh_env,
-                       double* Ls,
-                       double *cache)
+                       double* Ls, double *cache)
 {
         int ish = pgfpair->ish;
         int jsh = pgfpair->jsh;
@@ -286,18 +244,19 @@ static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
         }
 
         (*eval_rho)(rho, dm, comp, li, lj, ai, aj, ri, rjL,
-                    fac, cutoff, dimension, a, b, mesh, cache);
+                    fac, cutoff, dimension, dh, a, b, mesh, cache);
 }
 
 
-static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* a)
+static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* dh)
 {
     size_t size = 0;
     size_t mesh_size = ((size_t)mesh[0]) * mesh[1] * mesh[2];
     int l1 = 2 * l + 1;
     int l1l1 = l1 * l1;
-    int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
-    int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+    //int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
+    //int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+    int nmx = get_max_num_grid_orth(dh, radius);
     size += (nprim * _LEN_CART[l]) * (nprim * _LEN_CART[l]);
     size += _LEN_CART[l]*_LEN_CART[l];
     size += nctr * _LEN_CART[l] * nprim * _LEN_CART[l];
@@ -404,12 +363,15 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
         rho = (*rs_rho)->data[ilevel];
         mesh = gridlevel_info->mesh + ilevel*3;
 
+        double dh[9];
+        get_grid_spacing(dh, a, mesh);
+
         int *task_loc;
         int nblock = get_task_loc(&task_loc, pgfpairs, ntasks, ish0, ish1, jsh0, jsh1, hermi);
 
         size_t cache_size = _rho_cache_size(MAX(ish_lmax,jsh_lmax), 
                                             MAX(ish_nprim_max, jsh_nprim_max),
-                                            MAX(ish_nctr_max, jsh_nctr_max), mesh, max_radius, a);
+                                            MAX(ish_nctr_max, jsh_nctr_max), mesh, max_radius, dh);
         size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
 
 #pragma omp parallel
@@ -445,7 +407,7 @@ void grid_collocate_drv(void (*eval_rho)(), RS_Grid** rs_rho, double* dm, TaskLi
         for (; itask < task_loc[iblock+1]; itask++) {
             pgfpair = pgfpairs[itask];
             get_dm_pgfpair(dm_pgf, dm_cart, pgfpair, ish_bas, jsh_bas, hermi);
-            _apply_rho(eval_rho, rho_priv, dm_pgf, pgfpair, comp, dimension, a, b, mesh,
+            _apply_rho(eval_rho, rho_priv, dm_pgf, pgfpair, comp, dimension, dh, a, b, mesh,
                        ptr_gto_norm_i, ptr_gto_norm_j, ish_atm, ish_bas, ish_env,
                        jsh_atm, jsh_bas, jsh_env, Ls, cache);
         }
@@ -476,6 +438,9 @@ void build_core_density(void (*eval_rho)(), double* rho,
     double *rhobufs[MAX_THREADS];
     size_t cache_size =  _rho_core_cache_size(mesh, max_radius, a);
 
+    double dh[9];
+    get_grid_spacing(dh, a, mesh);
+
 #pragma omp parallel
 {
     int ia, ib;
@@ -503,7 +468,7 @@ void build_core_density(void (*eval_rho)(), double* rho,
         fac = -charge * coeff;
         rad = env[atm[ia*ATM_SLOTS+PTR_RADIUS]];
         eval_rho(rho_priv, dm, 1, 0, 0, alpha, 0., r0, r0,
-                 fac, rad, dimension, a, b, mesh, cache);
+                 fac, rad, dimension, dh, a, b, mesh, cache);
     }
     free(cache);
 

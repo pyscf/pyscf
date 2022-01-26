@@ -157,6 +157,120 @@ void del_cart2sph_coeff(double** contr_coeff, double** gto_norm, int ish0, int i
 }
 
 
+int get_max_num_grid_orth(double* dh, double radius)
+{
+    double dx = MIN(MIN(dh[0], dh[4]), dh[8]);
+    int ngrid = 2 * (int) ceil(radius / dx) + 1;
+    return ngrid;
+}
+
+
+void get_grid_spacing(double* dh, double* a, int* mesh)
+{
+    int i, j;
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            dh[i*3+j] = a[i*3+j] / mesh[i];
+        }
+    }
+}
+
+
+int orth_components(double *xs_exp, int* bounds, double dx, double radius,
+                    double xi, double xj, double ai, double aj,
+                    int nx_per_cell, int topl, double *cache)
+{
+    double aij = ai + aj;
+    double xij = (ai * xi + aj * xj) / aij;
+    int x0_latt = (int) floor((xij - radius) / dx);
+    int x1_latt = (int) ceil((xij + radius) / dx);
+    int xij_latt = rint(xij / dx);
+    xij_latt = MAX(xij_latt, x0_latt);
+    xij_latt = MIN(xij_latt, x1_latt);
+    bounds[0] = x0_latt;
+    bounds[1] = x1_latt;
+    int ngridx = x1_latt - x0_latt;
+
+    double base_x = dx * xij_latt;
+    double x0xij = base_x - xij;
+    double _x0x0 = -aij * x0xij * x0xij;
+    if (_x0x0 < EXPMIN) {
+        return 0;
+    }
+
+    double *gridx = cache;
+    double *xs_all = xs_exp;
+    if (ngridx >= nx_per_cell) {
+        xs_all = gridx + ngridx;
+    }
+
+    double _dxdx = -aij * dx * dx;
+    double _x0dx = -2 * aij * x0xij * dx;
+    double exp_dxdx = exp(_dxdx);
+    double exp_2dxdx = exp_dxdx * exp_dxdx;
+    double exp_x0dx = exp(_x0dx + _dxdx);
+    double exp_x0x0 = exp(_x0x0);
+
+    int i;
+    int istart = xij_latt - x0_latt;
+    for (i = istart; i < ngridx; i++) {
+        xs_all[i] = exp_x0x0;
+        exp_x0x0 *= exp_x0dx;
+        exp_x0dx *= exp_2dxdx;
+    }
+
+    exp_x0dx = exp(_dxdx - _x0dx);
+    exp_x0x0 = exp(_x0x0);
+    for (i = istart-1; i >= 0; i--) {
+        exp_x0x0 *= exp_x0dx;
+        exp_x0dx *= exp_2dxdx;
+        xs_all[i] = exp_x0x0;
+    }
+
+    if (topl > 0) {
+        double x0xi = x0_latt * dx - xi;
+        for (i = 0; i < ngridx; i++) {
+            gridx[i] = x0xi + i * dx;
+        }
+        int l;
+        double *px0;
+        for (l = 1; l <= topl; l++) {
+            px0 = xs_all + (l-1) * ngridx;
+            for (i = 0; i < ngridx; i++) {
+                px0[ngridx+i] = px0[i] * gridx[i];
+            }
+        }
+    }
+
+    // add up contributions from all images to the referece image
+    if (ngridx >= nx_per_cell) {
+        memset(xs_exp, 0, (topl+1)*nx_per_cell*sizeof(double));
+        int ix, l, lb, ub, size_x;
+        for (ix = 0; ix < ngridx; ix++) {
+            lb = modulo(ix + x0_latt, nx_per_cell);
+            ub = get_upper_bound(lb, nx_per_cell, ix, ngridx);
+            size_x = ub - lb;
+            double* restrict ptr_xs_exp = xs_exp + lb;
+            double* restrict ptr_xs_all = xs_all + ix;
+            for (l = 0; l <= topl; l++) {
+                #pragma omp simd
+                for (i = 0; i < size_x; i++) {
+                    ptr_xs_exp[i] += ptr_xs_all[i];
+                }
+                ptr_xs_exp += nx_per_cell;
+                ptr_xs_all += ngridx;
+            }
+            ix += size_x - 1;
+        }
+
+        bounds[0] = 0;
+        bounds[1] = nx_per_cell;
+        ngridx = nx_per_cell;
+    }
+    return ngridx;
+}
+
+
 int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                      double a, double b, double cutoff,
                      double xi, double xj, double ai, double aj,
@@ -285,6 +399,39 @@ int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         }
     }
     return ngridx;
+}
+
+
+int init_orth_data(double **xs_exp, double **ys_exp, double **zs_exp,
+                   int *grid_slice, double* dh, int* mesh, int topl, double radius,
+                   double ai, double aj, double *ri, double *rj, double *cache)
+{
+    int l1 = topl + 1;
+    *xs_exp = cache;
+    *ys_exp = *xs_exp + l1 * mesh[0];
+    *zs_exp = *ys_exp + l1 * mesh[1];
+    int data_size = l1 * (mesh[0] + mesh[1] + mesh[2]);
+    cache += data_size;
+
+    int ngridx = orth_components(*xs_exp, grid_slice, dh[0], radius,
+                                 ri[0], rj[0], ai, aj, mesh[0], topl, cache);
+    if (ngridx == 0) {
+            return 0;
+    }
+
+    int ngridy = orth_components(*ys_exp, grid_slice+2, dh[4], radius,
+                                 ri[1], rj[1], ai, aj, mesh[1], topl, cache);
+    if (ngridy == 0) {
+            return 0;
+    }
+
+    int ngridz = orth_components(*zs_exp, grid_slice+4, dh[8], radius,
+                                 ri[2], rj[2], ai, aj, mesh[2], topl, cache);
+    if (ngridz == 0) {
+            return 0;
+    }
+
+    return data_size;
 }
 
 

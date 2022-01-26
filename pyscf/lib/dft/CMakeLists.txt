@@ -15,7 +15,7 @@
 add_library(dft SHARED 
   CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
   numint_uniform_grid.c multigrid.c grid_common.c
-  grid_collocate.c grid_integrate.c
+  grid_collocate.c grid_integrate.c utils.c
   )
 add_dependencies(dft cgto cvhf np_helper pbc)
 
@@ -24,8 +24,12 @@ set_target_properties(dft PROPERTIES
   COMPILE_FLAGS ${OpenMP_C_FLAGS}
   LINK_FLAGS ${OpenMP_C_FLAGS})
 
-target_link_libraries(dft cvhf cgto cint pbc np_helper ${BLAS_LIBRARIES})
-
+if(ENABLE_LIBXSMM)
+  add_definitions(-DHAVE_LIBXSMM)
+  target_link_libraries(dft cvhf cgto cint pbc np_helper xsmm ${BLAS_LIBRARIES})
+else()
+  target_link_libraries(dft cvhf cgto cint pbc np_helper ${BLAS_LIBRARIES})
+endif()
 
 if(ENABLE_LIBXC)
 add_library(xc_itrf SHARED libxc_itrf.c)

@@ -861,6 +861,29 @@ def _rks_gga_wv0(rho, vxc, weight):
     return wv
 
 
+def _rks_gga_wv0_pw(cell, rho, vxc, weight, mesh):
+    vrho, vgamma = vxc[:2]
+    ngrid = vrho.size
+    buf = np.empty((3,ngrid))
+    for i in range(1, 4):
+        buf[i-1] = lib.multiply(vgamma, rho[i], out=buf[i-1])
+
+    vrho_freq = tools.fft(vrho, mesh).reshape((1,ngrid))
+    buf_freq = tools.fft(buf, mesh).reshape((3,ngrid))
+    Gv = cell.get_Gv(mesh)
+    #out  = vrho_freq - 2j * np.einsum('px,xp->p', Gv, buf_freq)
+    #out *= weight
+
+    out = np.empty((ngrid,), order="C", dtype=np.complex128)
+    func = getattr(libdft, 'get_gga_vrho_gs', None)
+    func(out.ctypes.data_as(ctypes.c_void_p),
+         vrho_freq.ctypes.data_as(ctypes.c_void_p),
+         buf_freq.ctypes.data_as(ctypes.c_void_p),
+         Gv.ctypes.data_as(ctypes.c_void_p),
+         ctypes.c_double(weight), ctypes.c_int(ngrid))
+    return out
+
+
 def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
            kpts_band=None, with_j=False, return_j=False, verbose=None):
     '''
@@ -922,12 +945,17 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
             wv = vxc[0].reshape(1,ngrids) * weight
+            wv_freq.append(tools.fft(wv, mesh))
         elif xctype == 'GGA':
-            wv = _rks_gga_wv0(rhoR[i], vxc, weight)
+            #wv = _rks_gga_wv0(rhoR[i], vxc, weight)
+            #wv_freq.append(tools.fft(wv, mesh))
+            wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
+        else:
+            raise NotImplementedError
 
-        nelec[i] += lib.sum(rhoR[i,0]) * weight
-        excsum[i] += lib.sum(lib.multiply(rhoR[i,0],exc)) * weight
-        wv_freq.append(tools.fft(wv, mesh))
+        nelec[i]  += lib.sum(rhoR[i,0]) * weight
+        excsum[i] += lib.sum(lib.multiply(rhoR[i,0], exc)) * weight
+
     rhoR = rhoG = None
 
     if len(wv_freq) == 1:
@@ -949,7 +977,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     elif xctype == 'GGA':
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
-        veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
+        #veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
+        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
