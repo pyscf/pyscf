@@ -33,11 +33,12 @@ void get_gga_vrho_gs(double complex *out, double complex *vrho_gs, double comple
 {
     int i;
     int ngrid2 = 2 * ngrid;
-    #pragma omp parallel for schedule(static)
+    double complex fac = -2. * _Complex_I;
+    #pragma omp parallel for simd schedule(static)
     for (i = 0; i < ngrid; i++) {
         out[i] = ( Gv[i*3]   * vsigma1_gs[i]
                   +Gv[i*3+1] * vsigma1_gs[i+ngrid]
-                  +Gv[i*3+2] * vsigma1_gs[i+ngrid2]) * _Complex_I * (-2.) + vrho_gs[i];
+                  +Gv[i*3+2] * vsigma1_gs[i+ngrid2]) * fac + vrho_gs[i];
         out[i] *= weight;
     }
 }
