@@ -250,8 +250,8 @@ int orth_components(double *xs_exp, int* bounds, double dx, double radius,
             lb = modulo(ix + x0_latt, nx_per_cell);
             ub = get_upper_bound(lb, nx_per_cell, ix, ngridx);
             size_x = ub - lb;
-            double* restrict ptr_xs_exp = xs_exp + lb;
-            double* restrict ptr_xs_all = xs_all + ix;
+            double* __restrict ptr_xs_exp = xs_exp + lb;
+            double* __restrict ptr_xs_all = xs_all + ix;
             for (l = 0; l <= topl; l++) {
                 #pragma omp simd
                 for (i = 0; i < size_x; i++) {
