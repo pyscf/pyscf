@@ -75,7 +75,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
                                            kpt.reshape(1,3), kpts_band,
                                            with_j=True, return_j=False)
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        logger.info(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
 

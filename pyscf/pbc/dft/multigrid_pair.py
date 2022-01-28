@@ -743,7 +743,7 @@ def _get_j_pass2_ip1(mydf, vG, kpts=np.zeros((1,3)), hermi=0, deriv=1, verbose=N
         v_rs = tools.ifft(sub_vG, mesh).reshape(nset,ngrids)
         if at_gamma_point:
             vR = np.asarray(v_rs.real, order='C', dtype=float)
-            vI = None
+            #vI = None
         else:
             raise NotImplementedError
 
@@ -1044,7 +1044,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         wv_freq = wv_freq[0].reshape(nset,-1,*mesh)
     else:
         wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
-   
+
     #wv_freq[:,0] += vG.reshape(nset,*mesh)
     for i in range(nset):
         wv_freq[i,0] = lib.add(wv_freq[i,0], vG.reshape(*mesh), out=wv_freq[i,0])
