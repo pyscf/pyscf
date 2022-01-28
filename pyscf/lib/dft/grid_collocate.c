@@ -71,7 +71,7 @@ static void transform_dm(double* dm_cart, double* dm,
 
 static void add_rho_submesh(double* rho, double* pqr,
                             int* mesh_lb, int* mesh_ub, int* submesh_lb,
-                            int* mesh, int* submesh)
+                            const int* mesh, const int* submesh)
 {
     const int x0 = mesh_lb[0];
     const int y0 = mesh_lb[1];
@@ -110,17 +110,17 @@ static void _orth_rho(double *rho, double *dm_xyz,
                       double *xs_exp, double *ys_exp, double *zs_exp,
                       double *cache)
 {
-    int l1 = topl + 1;
-    int l1l1 = l1 * l1;
-    int nx0 = grid_slice[0];
-    int nx1 = grid_slice[1];
-    int ny0 = grid_slice[2];
-    int ny1 = grid_slice[3];
-    int nz0 = grid_slice[4];
-    int nz1 = grid_slice[5];
-    int ngridx = nx1 - nx0;
-    int ngridy = ny1 - ny0;
-    int ngridz = nz1 - nz0;
+    const int l1 = topl + 1;
+    const int l1l1 = l1 * l1;
+    const int nx0 = grid_slice[0];
+    const int nx1 = grid_slice[1];
+    const int ny0 = grid_slice[2];
+    const int ny1 = grid_slice[3];
+    const int nz0 = grid_slice[4];
+    const int nz1 = grid_slice[5];
+    const int ngridx = nx1 - nx0;
+    const int ngridy = ny1 - ny0;
+    const int ngridz = nz1 - nz0;
     if (ngridx == 0 || ngridy == 0 || ngridz == 0) {
         return;
     }
@@ -129,45 +129,42 @@ static void _orth_rho(double *rho, double *dm_xyz,
     const char TRANS_T = 'T';
     const double D0 = 0;
     const double D1 = 1;
-    int xcols = ngridy * ngridz;
+    const int xcols = ngridy * ngridz;
     double *xyr = cache;
     double *xqr = xyr + l1l1 * ngridz;
     double *pqr = xqr + l1 * xcols;
-    int ix, iy, iz;
+    int ix, iy, iz, l;
 
     dgemm_wrapper(TRANS_N, TRANS_N, ngridz, l1l1, l1,
                   fac, zs_exp, ngridz, dm_xyz, l1,
                   D0, xyr, ngridz);
-
-    int l;
     for (l = 0; l <= topl; l++) {
         dgemm_wrapper(TRANS_N, TRANS_T, ngridz, ngridy, l1,
                       D1, xyr+l*l1*ngridz, ngridz, ys_exp, ngridy,
                       D0, xqr+l*xcols, ngridz);
     }
-
     dgemm_wrapper(TRANS_N, TRANS_T, xcols, ngridx, l1,
                   D1, xqr, xcols, xs_exp, ngridx,
                   D0, pqr, xcols);
 
-    int submesh[3] = {ngridx, ngridy, ngridz};
+    const int submesh[3] = {ngridx, ngridy, ngridz};
     int lb[3], ub[3];
-    for (ix = 0; ix < ngridx; ix++) {
+    for (ix = 0; ix < ngridx;) {
         lb[0] = modulo(ix + nx0, mesh[0]);
         ub[0] = get_upper_bound(lb[0], mesh[0], ix, ngridx);
-        for (iy = 0; iy < ngridy; iy++) {
+        for (iy = 0; iy < ngridy;) {
             lb[1] = modulo(iy + ny0, mesh[1]);
             ub[1] = get_upper_bound(lb[1], mesh[1], iy, ngridy);
-            for (iz = 0; iz < ngridz; iz++) {
+            for (iz = 0; iz < ngridz;) {
                 lb[2] = modulo(iz + nz0, mesh[2]);
                 ub[2] = get_upper_bound(lb[2], mesh[2], iz, ngridz);
                 int lb_sub[3] = {ix, iy, iz};
                 add_rho_submesh(rho, pqr, lb, ub, lb_sub, mesh, submesh);
-                iz += ub[2] - lb[2] - 1;
+                iz += ub[2] - lb[2];
             }
-            iy += ub[1] - lb[1] - 1;
+            iy += ub[1] - lb[1];
         }
-        ix += ub[0] - lb[0] - 1;
+        ix += ub[0] - lb[0];
     }
 }
 
@@ -274,14 +271,15 @@ static size_t _rho_cache_size(int l, int nprim, int nctr, int* mesh, double radi
 }
 
 
-static size_t _rho_core_cache_size(int* mesh, double radius, double* a)
+static size_t _rho_core_cache_size(int* mesh, double radius, double* dh)
 {
     size_t size = 0;
     size_t mesh_size = ((size_t)mesh[0]) * mesh[1] * mesh[2];
     int l1 = 1;
     int l1l1 = l1 * l1;
-    int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
-    int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+    //int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
+    //int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
+    int nmx = get_max_num_grid_orth(dh, radius);
     size += l1 * (mesh[0] + mesh[1] + mesh[2]);
     size += l1 * nmx + nmx;
     size += l1l1 * l1;
@@ -435,11 +433,12 @@ void build_core_density(void (*eval_rho)(), double* rho,
 {
     size_t ngrids;
     ngrids = ((size_t) mesh[0]) * mesh[1] * mesh[2];
-    double *rhobufs[MAX_THREADS];
-    size_t cache_size =  _rho_core_cache_size(mesh, max_radius, a);
 
     double dh[9];
     get_grid_spacing(dh, a, mesh);
+
+    double *rhobufs[MAX_THREADS];
+    size_t cache_size =  _rho_core_cache_size(mesh, max_radius, dh);
 
 #pragma omp parallel
 {

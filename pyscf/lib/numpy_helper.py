@@ -1309,6 +1309,9 @@ def multiply(a, b, out=None, **kwargs):
 
         number = a if numpy.isscalar(a) else b
         matrix = b if numpy.isscalar(a) else a
+        if not (matrix.flags.c_contiguous or matrix.flags.f_contiguous):
+            return numpy.multiply(a, b, out=out, **kwargs)
+
         number = numpy.asarray([number,], dtype=dtype)
         matrix = numpy.asarray(matrix, dtype=dtype)
         if dtype == numpy.double:

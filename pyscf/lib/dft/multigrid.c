@@ -440,10 +440,10 @@ int get_task_loc(int** task_loc, PGFPair** pgfpairs, int ntasks,
         if (ish != ish_prev || jsh != jsh_prev) {
             n += 2;
             buf[n] = itask;
+            buf[n+1] = itask+1;
             ish_prev = ish;
             jsh_prev = jsh;
-        }
-        if (ish == ish_prev && jsh == jsh_prev) {
+        } else {
             buf[n+1] = itask+1;
         }
     }

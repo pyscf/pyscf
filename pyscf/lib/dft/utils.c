@@ -12,7 +12,6 @@ void dgemm_wrapper(const char transa, const char transb,
                    const double* b, const int ldb,
                    const double beta, double* c, const int ldc)
 {
-/*
 #if defined(HAVE_LIBXSMM)
     if (transa == 'N') {
         //libxsmm_dgemm(&transa, &transb, &m, &n, &k, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
@@ -26,7 +25,6 @@ void dgemm_wrapper(const char transa, const char transb,
         }
     }
 #endif
-*/
     dgemm_(&transa, &transb, &m, &n, &k, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
 }
 

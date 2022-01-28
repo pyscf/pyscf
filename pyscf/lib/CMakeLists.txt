@@ -48,6 +48,14 @@ if (BUILD_MARCH_NATIVE)
   endif()
 endif()
 
+option(BUILD_WITH_AVX2 "gcc flag -mavx2" ON)
+if(BUILD_WITH_AVX2)
+  include(CheckCCompilerFlag)
+  CHECK_C_COMPILER_FLAG("-mavx2" COMPILER_SUPPORTS_MARCH_NATIVE)
+  if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mavx2 -ftree-vectorize")
+  endif()
+endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -194,8 +202,11 @@ option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
 option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
-option(ENABLE_LIBXSMM "Using libxsmm" ON)
+option(ENABLE_LIBXSMM "Using libxsmm" OFF)
 option(BUILD_LIBXSMM "Building libxsmm" ON)
+if(APPLE)
+    set(ENABLE_LIBXSMM OFF)
+endif()
 
 if(NOT DISABLE_DFT)
 add_subdirectory(dft)
@@ -250,7 +261,7 @@ if(ENABLE_LIBXSMM AND BUILD_LIBXSMM)
       INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
       CONFIGURE_COMMAND ""
       BUILD_IN_SOURCE True
-      BUILD_COMMAND make -j4 PREFIX=<INSTALL_DIR> CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} STATIC=0 MALLOC=0 INTRINSICS=1 install
+      BUILD_COMMAND make -j4 PREFIX=<INSTALL_DIR> CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} STATIC=0 MALLOC=0 INTRINSICS=2 install
       INSTALL_COMMAND ""
     )
     add_dependencies(dft libxsmm)

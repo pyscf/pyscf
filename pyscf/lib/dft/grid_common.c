@@ -528,7 +528,7 @@ void _dm_to_dm_xyz(double* dm_xyz, double* dm, int li, int lj, double* ri, doubl
 
     _get_dm_to_dm_xyz_coeff(coeff, rij, lj, cache);
 
-    double cx, cy, cz;
+    double cx, cxy, cxyz;
     double *pcx = coeff;
     double *pcy = pcx + dj;
     double *pcz = pcy + dj;
@@ -543,12 +543,12 @@ void _dm_to_dm_xyz(double* dm_xyz, double* dm, int li, int lj, double* ri, doubl
                         cx = pcx[jx+_LEN_CART0[lx_j]];
                         lx = lx_i + jx;
                         for (jy = 0; jy <= ly_j; jy++) {
-                            cy = pcy[jy+_LEN_CART0[ly_j]];
+                            cxy = cx * pcy[jy+_LEN_CART0[ly_j]];
                             ly = ly_i + jy;
                             for (jz = 0; jz <= lz_j; jz++) {
-                                cz = pcz[jz+_LEN_CART0[lz_j]];
+                                cxyz = cxy * pcz[jz+_LEN_CART0[lz_j]];
                                 lz = lz_i + jz;
-                                dm_xyz[lx*l1l1+ly*l1+lz] += cx*cy*cz * pdm[0];
+                                dm_xyz[lx*l1l1+ly*l1+lz] += cxyz * pdm[0];
                             }
                         }
                     }
@@ -628,11 +628,13 @@ void get_dm_pgfpair(double* dm_pgf, double* dm_cart,
     int nprim_j = jsh_bas[NPRIM_OF+jsh*BAS_SLOTS];
     int ncol = nprim_j * dj;
     double *pdm = dm_cart + (ipgf*di*ncol + jpgf*dj);
+    double *pdm_pgf = dm_pgf;
     int i, j;
     for (i = 0; i < di; i++) {
         for (j = 0; j < dj; j++) {
-            dm_pgf[i*dj+j] = pdm[j];
+            pdm_pgf[j] = pdm[j];
         }
+        pdm_pgf += dj;
         pdm += ncol;
     }
 
@@ -647,10 +649,12 @@ void get_dm_pgfpair(double* dm_pgf, double* dm_cart,
         }
     }*/
     if (hermi == 1 && ish != jsh) {
+        pdm_pgf = dm_pgf;
         for (i = 0; i < di; i++) {
             for (j = 0; j < dj; j++) {
-                dm_pgf[i*dj+j] *= 2;
+                pdm_pgf[j] *= 2;
             }
+            pdm_pgf += dj;
         }
     }
 }
