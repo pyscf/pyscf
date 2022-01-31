@@ -52,7 +52,8 @@ import tempfile
 def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.method = adc.method.lower()
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
        raise NotImplementedError(adc.method)
 
     cput0 = (logger.process_clock(), logger.perf_counter())
@@ -136,7 +137,8 @@ def compute_amplitudes(myadc, eris):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nmo = myadc.nmo
@@ -158,7 +160,6 @@ def compute_amplitudes(myadc, eris):
 
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
-    #mo_e_o = mo_e_o + madelung
 
     # Get location of non-zero/padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(myadc, kind="split")
@@ -485,6 +486,17 @@ class RADC(pyscf.adc.radc.RADC):
 
 
     def kernel_gs(self):
+        assert(self.mo_coeff is not None)
+        assert(self.mo_occ is not None)
+    
+        self.method = self.method.lower()
+        #if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+            raise NotImplementedError(self.method)
+    
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags_gs()
 
         nmo = self.nmo
         nocc = self.nocc
@@ -519,7 +531,8 @@ class RADC(pyscf.adc.radc.RADC):
         assert(self.mo_occ is not None)
     
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        #if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
             raise NotImplementedError(self.method)
     
         if self.verbose >= logger.WARN:
@@ -527,10 +540,16 @@ class RADC(pyscf.adc.radc.RADC):
         self.dump_flags_gs()
     
         nmo = self.nmo
-        nao = self.cell.nao_nr()
-        nmo_pair = nmo * (nmo+1) // 2
-        nao_pair = nao * (nao+1) // 2
-        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        nocc = self.nocc
+        nvir = nmo - nocc
+        nkpts = self.nkpts
+        #nao = self.cell.nao_nr()
+        #nmo_pair = nmo * (nmo+1) // 2
+        #nao_pair = nao * (nao+1) // 2
+        #mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
+        mem_incore = nkpts ** 3 * (nocc + nvir) ** 4
+        mem_incore *= 4
+        mem_incore *= 16 /1e6
         mem_now = lib.current_memory()[0]
 
         if type(self._scf.with_df) is df.GDF:
@@ -603,7 +622,8 @@ def get_imds_ea(adc, eris=None):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -896,7 +916,8 @@ def get_imds_ip(adc, eris=None):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1106,7 +1127,8 @@ def ea_adc_diag(adc,kshift,M_ab=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1167,7 +1189,8 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1271,7 +1294,8 @@ def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
 
 def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1357,7 +1381,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
 ################ ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
 
                eris_oovv = eris.oovv
                eris_ovvo = eris.ovvo
@@ -1396,7 +1420,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
  
                if adc.exxdiv is not None:
                   s2 += -madelung * r2
-        if (method == "adc(3)"):
+        if (method == "adc(2)-c" or method =="adc(2)-xc" or method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
 
@@ -1623,7 +1647,8 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
 def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1694,7 +1719,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 ############### ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
 
                eris_oooo = eris.oooo
                eris_oovv = eris.oovv
@@ -1732,7 +1757,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
                if adc.exxdiv is not None:
                   s2 += madelung * r2
 
-        if (method == "adc(3)"):
+        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
 
@@ -1905,7 +1930,8 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 def ea_compute_trans_moments(adc, orb, kshift):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -2016,7 +2042,8 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 def ip_compute_trans_moments(adc, orb, kshift):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
