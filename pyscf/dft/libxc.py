@@ -1412,21 +1412,45 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
           | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
           | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
           | v2lapl2[:,3]
-          | vtau2[:,3]
+          | v2tau2[:,3]     = (u_u, u_d, d_d)
           | v2rholapl[:,4]
-          | v2rhotau[:,4]
+          | v2rhotau[:,4]   = (u_u, u_d, d_u, d_d)
           | v2lapltau[:,4]
           | v2sigmalapl[:,6]
-          | v2sigmatau[:,6]
+          | v2sigmatau[:,6] = (uu_u, uu_d, ud_u, ud_d, dd_u, dd_d)
 
         * kxc for restricted case:
-          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3)
+          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+           v3rho2lapl, v3rho2tau,
+           v3rhosigmalapl, v3rhosigmatau,
+           v3rholapl2, v3rholapltau, v3rhotau2,
+           v3sigma2lapl, v3sigma2tau,
+           v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+           v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
 
         * kxc for unrestricted case:
-          | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-          | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-          | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma3[:,10]    = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3rho3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
+          | v3rho2sigma[:,9]    = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+          | v3rhosigma2[:,12]   = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+          | v3sigma3[:,10]      = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3rho2lapl[:,6]
+          | v3rho2tau[:,6]      = (u_u_u, u_u_d, u_d_u, u_d_d, d_d_u, d_d_d)
+          | v3rhosigmalapl[:,12]
+          | v3rhosigmatau[:,12] = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d,
+                                   d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
+          | v3rholapl2[:,6]
+          | v3rholapltau[:,8]
+          | v3rhotau2[:,6]      = (u_u_u, u_u_d, u_d_d, d_u_u, d_u_d, d_d_d)
+          | v3sigma2lapl[:,12]
+          | v3sigma2tau[:,12]   = (uu_uu_u, uu_uu_d, uu_ud_u, uu_ud_d, uu_dd_u, uu_dd_d,
+                                   ud_ud_u, ud_ud_d, ud_dd_u, ud_dd_d, dd_dd_u, dd_dd_d)
+          | v3sigmalapl2[:,9]
+          | v3sigmalapltau[:,12]
+          | v3sigmatau2[:,9]    = (uu_u_u, uu_u_d, uu_d_d, ud_u_u, ud_u_d, ud_d_d, dd_u_u, dd_u_d, dd_d_d)
+          | v3lapl3[:,4]
+          | v3lapl2tau[:,6]
+          | v3lapltau2[:,6]
+          | v3tau3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
 
         see also libxc_itrf.c
     '''  # noqa: E501
@@ -1492,7 +1516,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # Check that the density rho has the appropriate shape
     # should it be >= or ==, in test test_xcfun.py, test_vs_libxc_rks
     # the density contain 6 rows independently of the functional
-    if nvar == 1 or (nvar ==2 and spin > 0):  # LDA
+    if nvar == 1 or (nvar == 2 and spin > 0):  # LDA
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 1
 
@@ -1503,8 +1527,6 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     elif nvar == 4 or nvar == 9:  # MGGA
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 6
-
-
     else:
         raise ValueError("Unknow nvar {}".format(nvar))
 
@@ -1559,15 +1581,36 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         if deriv > 1:
             fxc = outbuf[5:15]
         if deriv > 2:
-            kxc = outbuf[15:19]
+            kxc = outbuf[15:35]
     elif nvar == 9:  # MGGA
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, outbuf[6:8].T, outbuf[8:10].T)
         if deriv > 1:
-            fxc = (outbuf[10:13].T, outbuf[13:19].T, outbuf[19:25].T,
-                   outbuf[25:28].T, outbuf[28:31].T, outbuf[31:35].T,
-                   outbuf[35:39].T, outbuf[39:43].T, outbuf[43:49].T,
-                   outbuf[49:55].T)
+            fxc = (
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[10:13].T, outbuf[13:19].T, outbuf[19:25].T,
+                # v2lapl2, v2tau2,
+                outbuf[25:28].T, outbuf[28:31].T,
+                # v2rholapl, v2rhotau,
+                outbuf[31:35].T, outbuf[35:39].T,
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                outbuf[39:43].T, outbuf[43:49].T, outbuf[49:55].T)
+        if deriv > 2:
+            kxc = (
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[55:59].T, outbuf[59:68].T, outbuf[68:80].T, outbuf[80:90].T,
+                # v3rho2lapl, v3rho2tau,
+                outbuf[90:96].T, outbuf[96:102].T,
+                # v3rhosigmalapl, v3rhosigmatau,
+                outbuf[102:114].T, outbuf[114:126].T,
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                outbuf[126:132].T, outbuf[132:140].T, outbuf[140:146].T,
+                # v3sigma2lapl, v3sigma2tau,
+                outbuf[146:158].T, outbuf[158:170].T,
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                outbuf[170:179].T, outbuf[179:191].T, outbuf[191:200].T,
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                outbuf[200:204].T, outbuf[204:210].T, outbuf[210:216].T, outbuf[216:220].T)
     return exc, vxc, fxc, kxc
 
 

@@ -888,21 +888,21 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         if deriv > 2:
             kxc = (outbuf[3], None, None, None)
     elif nvar == 2:
-        if spin == 0:  # GGA
+        if spin == 0:  # spin unpolarized GGA
             if deriv > 0:
                 vxc = (outbuf[1], outbuf[2], None, None)
             if deriv > 1:
                 fxc = (outbuf[3], outbuf[4], outbuf[5],) + (None,)*7
             if deriv > 2:
                 kxc = outbuf[6:10]
-        else:  # LDA
+        else:  # spin polarized LDA
             if deriv > 0:
                 vxc = (outbuf[1:3].T, None, None, None)
             if deriv > 1:
                 fxc = (outbuf[3:6].T,) + (None,)*9
             if deriv > 2:
                 kxc = (outbuf[6:10].T, None, None, None)
-    elif nvar == 5:
+    elif nvar == 5:  # spin polarized GGA
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, None)
         if deriv > 1:
@@ -929,44 +929,75 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
                    None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
         if deriv > 2:
-            kxc = (outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
-                   outbuf[XC_D201], outbuf[XC_D111], outbuf[XC_D102],
-                   outbuf[XC_D021], outbuf[XC_D012], outbuf[XC_D003])
-    elif nvar == 7:
+            kxc = (
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
+                # v3rho2lapl, v3rho2tau,
+                None, outbuf[XC_D201],
+                # v3rhosigmalapl, v3rhosigmatau,
+                None, outbuf[XC_D111],
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                None, None, outbuf[XC_D102],
+                # v3sigma2lapl, v3sigma2tau,
+                None, outbuf[XC_D021],
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                None, None, outbuf[XC_D012],
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                None, None, None, outbuf[XC_D003])
+    elif nvar == 7:  # spin polarized MGGA
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
         if deriv > 1:
-            fxc = (outbuf[[XC_D2000000,XC_D1100000,XC_D0200000]].T,
-                   outbuf[[XC_D1010000,XC_D1001000,XC_D1000100,
-                           XC_D0110000,XC_D0101000,XC_D0100100]].T,
-                   outbuf[[XC_D0020000,XC_D0011000,XC_D0010100,
-                           XC_D0002000,XC_D0001100,XC_D0000200]].T,
-                   None,
-                   outbuf[[XC_D0000020,XC_D0000011,XC_D0000002]].T,
-                   None,
-                   outbuf[[XC_D1000010,XC_D1000001,XC_D0100010,XC_D0100001]].T,
-                   None, None,
-                   outbuf[[XC_D0010010,XC_D0010001,XC_D0001010,XC_D0001001,
-                           XC_D0000110,XC_D0000101]].T)
+            fxc = (
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[[XC_D2000000,XC_D1100000,XC_D0200000]].T,
+                outbuf[[XC_D1010000,XC_D1001000,XC_D1000100,
+                        XC_D0110000,XC_D0101000,XC_D0100100]].T,
+                outbuf[[XC_D0020000,XC_D0011000,XC_D0010100,
+                        XC_D0002000,XC_D0001100,XC_D0000200]].T,
+                # v2lapl2, v2tau2,
+                None,
+                outbuf[[XC_D0000020,XC_D0000011,XC_D0000002]].T,
+                # v2rholapl, v2rhotau,
+                None,
+                outbuf[[XC_D1000010,XC_D1000001,XC_D0100010,XC_D0100001]].T,
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                None, None,
+                outbuf[[XC_D0010010,XC_D0010001,XC_D0001010,XC_D0001001,
+                        XC_D0000110,XC_D0000101]].T)
         if deriv > 2:
-            kxc = (outbuf[[XC_D3000000,XC_D2100000,XC_D1200000,XC_D0300000]].T,
-                   outbuf[[XC_D2010000,XC_D2001000,XC_D2000100,
-                           XC_D1110000,XC_D1101000,XC_D1100100,
-                           XC_D0210000,XC_D0201000,XC_D0200100]].T,
-                   outbuf[[XC_D1020000,XC_D1011000,XC_D1010100,XC_D1002000,XC_D1001100,XC_D1000200,
-                           XC_D0120000,XC_D0111000,XC_D0110100,XC_D0102000,XC_D0101100,XC_D0100200]].T,
-                   outbuf[[XC_D0030000,XC_D0021000,XC_D0020100,XC_D0012000,XC_D0011100,
-                           XC_D0010200,XC_D0003000,XC_D0002100,XC_D0001200,XC_D0000300]].T,
-                   outbuf[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
-                   outbuf[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
-                           XC_D0110010,XC_D0110001,XC_D0101010,XC_D0101001,XC_D0100110,XC_D0100101]].T,
-                   outbuf[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
-                   outbuf[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
-                           XC_D0002010,XC_D0002001,XC_D0001110,XC_D0001101,XC_D0000210,XC_D0000201]].T,
-                   outbuf[[XC_D0010020,XC_D0010011,XC_D0010002,
-                           XC_D0001020,XC_D0001011,XC_D0001002,
-                           XC_D0000120,XC_D0000111,XC_D0000102]].T,
-                   outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
+            kxc = (
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[[XC_D3000000,XC_D2100000,XC_D1200000,XC_D0300000]].T,
+                outbuf[[XC_D2010000,XC_D2001000,XC_D2000100,
+                        XC_D1110000,XC_D1101000,XC_D1100100,
+                        XC_D0210000,XC_D0201000,XC_D0200100]].T,
+                outbuf[[XC_D1020000,XC_D1011000,XC_D1010100,XC_D1002000,XC_D1001100,XC_D1000200,
+                        XC_D0120000,XC_D0111000,XC_D0110100,XC_D0102000,XC_D0101100,XC_D0100200]].T,
+                outbuf[[XC_D0030000,XC_D0021000,XC_D0020100,XC_D0012000,XC_D0011100,
+                        XC_D0010200,XC_D0003000,XC_D0002100,XC_D0001200,XC_D0000300]].T,
+                # v3rho2lapl, v3rho2tau,
+                None,
+                outbuf[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
+                # v3rhosigmalapl, v3rhosigmatau,
+                None,
+                outbuf[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
+                        XC_D0110010,XC_D0110001,XC_D0101010,XC_D0101001,XC_D0100110,XC_D0100101]].T,
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                None, None,
+                outbuf[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
+                # v3sigma2lapl, v3sigma2tau,
+                None,
+                outbuf[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
+                        XC_D0002010,XC_D0002001,XC_D0001110,XC_D0001101,XC_D0000210,XC_D0000201]].T,
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                None, None,
+                outbuf[[XC_D0010020,XC_D0010011,XC_D0010002,
+                        XC_D0001020,XC_D0001011,XC_D0001002,
+                        XC_D0000120,XC_D0000111,XC_D0000102]].T,
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                None, None, None,
+                outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
     return exc, vxc, fxc, kxc
 
 
