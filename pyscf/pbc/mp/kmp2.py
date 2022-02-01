@@ -69,7 +69,13 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     mem_avail = mp.max_memory - lib.current_memory()[0]
     mem_usage = (nkpts * (nocc * nvir)**2) * 16 / 1e6
     if with_df_ints:
-        naux = mp._scf.with_df.auxcell.nao_nr()
+        mydf = mp._scf.with_df
+        if mydf.auxcell is None:
+            # Calculate naux based on precomputed GDF integrals
+            naux = mydf.get_naoaux()
+        else:
+            naux = mydf.auxcell.nao_nr()
+
         mem_usage += (nkpts**2 * naux * nocc * nvir) * 16 / 1e6
     if with_t2:
         mem_usage += (nkpts**3 * (nocc * nvir)**2) * 16 / 1e6
