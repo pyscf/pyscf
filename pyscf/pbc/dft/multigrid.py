@@ -1945,7 +1945,8 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         fft.FFTDF.__init__(self, cell, kpts)
         self.task_list = None
         self.vpplocG_part1 = None
-        self._keys = self._keys.union(['task_list','vpplocG_part1'])
+        self.rhoG = None
+        self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG'])
 
     def __del__(self):
         from .multigrid_pair import free_task_list

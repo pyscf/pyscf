@@ -390,7 +390,7 @@ class GradientsMixin(lib.StreamObject):
             self.dump_flags()
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
-        self.de = de + self.grad_nuc(atmlst=atmlst)
+        self.de = lib.add(de, self.grad_nuc(atmlst=atmlst), out=de)
         if self.mol.symmetry:
             self.de = self.symmetrize(self.de, atmlst)
         logger.timer(self, 'SCF gradients', *cput0)
