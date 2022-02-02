@@ -66,6 +66,8 @@ class Gradients (rhf_grad.GradientsMixin):
     ####################### Child classes SHOULD overwrite the methods below ######################
 
     def __init__(self, method, nlag):
+        self._conv = False
+        self.Lvec = None
         self.nlag = nlag
         self.level_shift = default_level_shift
         self.conv_atol = default_conv_atol
@@ -89,10 +91,16 @@ class Gradients (rhf_grad.GradientsMixin):
         if level_shift is None: level_shift = self.level_shift
         return LagPrec (Adiag=Adiag, level_shift=level_shift, **kwargs)
 
-
     def get_init_guess (self, bvec, Adiag, Aop, precond):
         return precond (-bvec)
 
+    @property
+    def converged (self):
+        return self._conv and getattr (self.base, 'converged', True)
+    @converged.setter
+    def converged (self, x):
+        self._conv = x
+        return self._conv and getattr (self.base, 'converged', True)
 
     ####################### Child classes SHOULD NOT overwrite the methods below ##################
 
@@ -137,9 +145,9 @@ class Gradients (rhf_grad.GradientsMixin):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        conv, Lvec, bvec, Aop, Adiag = self.solve_lagrange (level_shift=level_shift, **kwargs)
-        self.debug_lagrange (Lvec, bvec, Aop, Adiag, **kwargs)
-        #if not conv: raise RuntimeError ('Lagrange multiplier determination not converged!')
+        self.converged, self.Lvec, bvec, Aop, Adiag = self.solve_lagrange (level_shift=level_shift,
+            **kwargs)
+        self.debug_lagrange (self.Lvec, bvec, Aop, Adiag, **kwargs)
         cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 
         ham_response = self.get_ham_response (**kwargs)
@@ -149,7 +157,7 @@ class Gradients (rhf_grad.GradientsMixin):
         logger.info(self, '----------------------------------------------')
         cput1 = logger.timer (self, 'Lagrange gradient Hellmann-Feynman determination', *cput1)
 
-        LdotJnuc = self.get_LdotJnuc (Lvec, **kwargs)
+        LdotJnuc = self.get_LdotJnuc (self.Lvec, **kwargs)
         logger.info(self, '--------------- %s gradient Lagrange response ---------------',
                     self.base.__class__.__name__)
         rhf_grad._write(self, self.mol, LdotJnuc, self.atmlst)
@@ -160,24 +168,6 @@ class Gradients (rhf_grad.GradientsMixin):
         log.timer('Lagrange gradients', *cput0)
         self._finalize()
         return self.de
-
-    #def dump_flags(self):
-    #    log = logger.Logger(self.stdout, self.verbose)
-    #    log.info('\n')
-    #    if not self.base.converged:
-    #        log.warn('Ground state method not converged')
-    #    log.info('******** %s for %s ********',
-    #             self.__class__, self.base.__class__)
-    #    log.info('max_memory %d MB (current use %d MB)',
-    #             self.max_memory, lib.current_memory()[0])
-    #    return self
-
-    #def _finalize (self):
-    #    if self.verbose >= logger.NOTE:
-    #        logger.note(self, '--------------- %s gradients ---------------',
-    #                self.base.__class__.__name__)
-    #        rhf_grad._write(self, self.mol, self.de, self.atmlst)
-    #        logger.note(self, '----------------------------------------------')
 
 class LagPrec (object):
     ''' A callable preconditioner for solving the Lagrange equations.
