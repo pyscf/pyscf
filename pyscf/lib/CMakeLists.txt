@@ -48,7 +48,7 @@ if (BUILD_MARCH_NATIVE)
   endif()
 endif()
 
-option(BUILD_WITH_AVX2 "set avx2 flags" ON)
+option(BUILD_WITH_AVX2 "set avx2 flags" OFF)
 if(BUILD_WITH_AVX2)
   include(CheckCCompilerFlag)
   if("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")

@@ -192,6 +192,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         dm_last = dm
         last_hf_e = e_tot
 
+        print("debug num of small dm elements:", (dm < 1e-12).sum())
+
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis)
         mo_energy, mo_coeff = mf.eig(fock, s1e)
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
