@@ -264,6 +264,13 @@ class KnownValues(unittest.TestCase):
         v = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(abs(v).max(), 0, 9)
 
+        v = dft.numint.nr_fxc(ni, mol1, mf.grids, 'm06l,', dm0, dms)
+        self.assertAlmostEqual(lib.fp(v), -11.007699914447517, 8)
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'm06l,', mo_coeff, mo_occ, spin=0)
+        v1 = dft.numint.nr_fxc(ni, mol1, mf.grids, 'm06l,', dm0, dms,
+                               rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
     def test_rks_fxc_st(self):
         numpy.random.seed(10)
         nao = mol1.nao_nr()
@@ -303,6 +310,22 @@ class KnownValues(unittest.TestCase):
                                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'm06l,', dm0, dms, singlet=True)
+        self.assertAlmostEqual(lib.fp(v), -11.007699914447517*2, 8)
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'm06l,', [mo_coeff,mo_coeff],
+                                 [mo_occ*.5]*2, spin=1)
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'm06l,', dm0, dms, singlet=True,
+                                      rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'm06l,', dm0, dms, singlet=False)
+        self.assertAlmostEqual(lib.fp(v), -11.007699914447517*2, 8)
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'm06l,', [mo_coeff,mo_coeff],
+                                 [mo_occ*.5]*2, spin=1)
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'm06l,', dm0, dms, singlet=False,
+                                      rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
     def test_uks_fxc(self):
         numpy.random.seed(10)
         nao = mol1.nao_nr()
@@ -327,6 +350,14 @@ class KnownValues(unittest.TestCase):
         # test cache_kernel
         rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA,', mo_coeff, mo_occ, spin=1)
         v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA,', dm0, dms[0], hermi=0, spin=1,
+                               rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        v = ni.nr_fxc(mol1, mf.grids, 'm06l', dm0, dms[0], spin=1)
+        self.assertAlmostEqual(lib.fp(v), -7.08393530172142, 8)
+        # test cache_kernel
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'm06l', mo_coeff, mo_occ, spin=1)
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'm06l', dm0, dms[0], hermi=0, spin=1,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
@@ -438,4 +469,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Test numint")
     unittest.main()
-

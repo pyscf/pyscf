@@ -148,6 +148,17 @@ class KnownValues(unittest.TestCase):
         ref = [6.88046608, 7.58244885, 8.49961771, 9.30209259, 9.79775972]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
+    def test_tda_m06l(self):
+        mf = dft.UKS(mol1)
+        mf.xc = 'm06l'
+        mf.grids.prune = None
+        mf.scf()
+        td = mf.TDA()
+        es = td.kernel(nstates=5)[0] * 27.2114
+        self.assertAlmostEqual(lib.fp(es), -8.943196581335487, 6)
+        ref = [8.18683464, 8.77581263, 10.20108589, 10.55440239, 10.98105145]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+
     def test_ab_hf(self):
         mf = mf_uhf
         a, b = tdscf.TDDFT(mf_uhf).get_ab()

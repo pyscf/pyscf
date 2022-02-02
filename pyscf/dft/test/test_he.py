@@ -97,6 +97,15 @@ class KnownValues(unittest.TestCase):
         m.xc = 'b88,lyp'
         self.assertAlmostEqual(m.scf(), -2.8978518405, 9)
 
+    def test_nr_m06l(self):
+        m = mol.RKS()
+        m.xc = 'm06l'
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+
+        m = mol.UKS()
+        m.xc = 'm06l'
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+
 if __name__ == "__main__":
     print("Full Tests for He")
     unittest.main()

@@ -1548,69 +1548,97 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     vxc = fxc = kxc = None
     if nvar == 1:  # LDA
         if deriv > 0:
-            vxc = (outbuf[1], None, None, None)
+            vxc = [outbuf[1]]
         if deriv > 1:
-            fxc = (outbuf[2],) + (None,)*9
+            fxc = [outbuf[2]]
         if deriv > 2:
-            kxc = (outbuf[3], None, None, None)
+            kxc = [outbuf[3]]
     elif nvar == 2:
         if spin == 0:  # GGA
             if deriv > 0:
-                vxc = (outbuf[1], outbuf[2], None, None)
+                vxc = [outbuf[1], outbuf[2]]
             if deriv > 1:
-                fxc = (outbuf[3], outbuf[4], outbuf[5],) + (None,)*7
+                fxc = [outbuf[3], outbuf[4], outbuf[5]]
             if deriv > 2:
-                kxc = outbuf[6:10]
+                kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
         else:  # LDA
             if deriv > 0:
-                vxc = (outbuf[1:3].T, None, None, None)
+                vxc = [outbuf[1:3].T]
             if deriv > 1:
-                fxc = (outbuf[3:6].T,) + (None,)*9
+                fxc = [outbuf[3:6].T]
             if deriv > 2:
-                kxc = (outbuf[6:10].T, None, None, None)
+                kxc = [outbuf[6:10].T]
     elif nvar == 5:  # GGA
         if deriv > 0:
-            vxc = (outbuf[1:3].T, outbuf[3:6].T, None, None)
+            vxc = [outbuf[1:3].T, outbuf[3:6].T]
         if deriv > 1:
-            fxc = (outbuf[6:9].T, outbuf[9:15].T, outbuf[15:21].T) + (None,)*7
+            fxc = [outbuf[6:9].T, outbuf[9:15].T, outbuf[15:21].T]
         if deriv > 2:
-            kxc = (outbuf[21:25].T, outbuf[25:34].T, outbuf[34:46].T, outbuf[46:56].T)
+            kxc = [outbuf[21:25].T, outbuf[25:34].T, outbuf[34:46].T, outbuf[46:56].T]
     elif nvar == 4:  # MGGA
         if deriv > 0:
-            vxc = outbuf[1:5]
+            vxc = [outbuf[1], outbuf[2], None, outbuf[4]]
         if deriv > 1:
-            fxc = outbuf[5:15]
+            fxc = [
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[5], outbuf[6], outbuf[7],
+                # v2lapl2, v2tau2,
+                None, outbuf[9],
+                # v2rholapl, v2rhotau,
+                None, outbuf[11],
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                None, None, outbuf[14]]
         if deriv > 2:
-            kxc = outbuf[15:35]
+            # v3lapltau2 might not be strictly 0
+            # outbuf[18] = 0
+            kxc = [
+                # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+                outbuf[15], outbuf[16], outbuf[17], outbuf[18],
+                # v3rho2lapl, v3rho2tau,
+                None, outbuf[20],
+                # v3rhosigmalapl, v3rhosigmatau,
+                None, outbuf[22],
+                # v3rholapl2, v3rholapltau, v3rhotau2,
+                None, None, outbuf[25],
+                # v3sigma2lapl, v3sigma2tau,
+                None, outbuf[27],
+                # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+                None, None, outbuf[30],
+                # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
+                None, None, None, outbuf[34]]
     elif nvar == 9:  # MGGA
         if deriv > 0:
-            vxc = (outbuf[1:3].T, outbuf[3:6].T, outbuf[6:8].T, outbuf[8:10].T)
+            vxc = [outbuf[1:3].T, outbuf[3:6].T, None, outbuf[8:10].T]
         if deriv > 1:
-            fxc = (
+            # v2lapltau might not be strictly 0
+            # outbuf[39:43] = 0
+            fxc = [
                 # v2rho2, v2rhosigma, v2sigma2,
                 outbuf[10:13].T, outbuf[13:19].T, outbuf[19:25].T,
                 # v2lapl2, v2tau2,
-                outbuf[25:28].T, outbuf[28:31].T,
+                None, outbuf[28:31].T,
                 # v2rholapl, v2rhotau,
-                outbuf[31:35].T, outbuf[35:39].T,
+                None, outbuf[35:39].T,
                 # v2lapltau, v2sigmalapl, v2sigmatau,
-                outbuf[39:43].T, outbuf[43:49].T, outbuf[49:55].T)
+                None, None, outbuf[49:55].T]
         if deriv > 2:
-            kxc = (
+            # v3lapltau2 might not be strictly 0
+            # outbuf[204:216] = 0
+            kxc = [
                 # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
                 outbuf[55:59].T, outbuf[59:68].T, outbuf[68:80].T, outbuf[80:90].T,
                 # v3rho2lapl, v3rho2tau,
-                outbuf[90:96].T, outbuf[96:102].T,
+                None, outbuf[96:102].T,
                 # v3rhosigmalapl, v3rhosigmatau,
-                outbuf[102:114].T, outbuf[114:126].T,
+                None, outbuf[114:126].T,
                 # v3rholapl2, v3rholapltau, v3rhotau2,
-                outbuf[126:132].T, outbuf[132:140].T, outbuf[140:146].T,
+                None, None, outbuf[140:146].T,
                 # v3sigma2lapl, v3sigma2tau,
-                outbuf[146:158].T, outbuf[158:170].T,
+                None, outbuf[158:170].T,
                 # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
-                outbuf[170:179].T, outbuf[179:191].T, outbuf[191:200].T,
+                None, None, outbuf[191:200].T,
                 # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
-                outbuf[200:204].T, outbuf[204:210].T, outbuf[210:216].T, outbuf[216:220].T)
+                None, None, None, outbuf[216:220].T]
     return exc, vxc, fxc, kxc
 
 

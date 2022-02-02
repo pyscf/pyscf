@@ -469,4 +469,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Test xcfun")
     unittest.main()
-

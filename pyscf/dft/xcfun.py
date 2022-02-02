@@ -877,59 +877,66 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                             rho_d.ctypes.data_as(ctypes.c_void_p),
                             outbuf.ctypes.data_as(ctypes.c_void_p))
 
-    outbuf = outbuf.T
+    outbuf = lib.transpose(outbuf)
     exc = outbuf[0]
     vxc = fxc = kxc = None
     if nvar == 1:
         if deriv > 0:
-            vxc = (outbuf[1], None, None, None)
+            vxc = [outbuf[1]]
         if deriv > 1:
-            fxc = (outbuf[2],) + (None,)*9
+            fxc = [outbuf[2]]
         if deriv > 2:
-            kxc = (outbuf[3], None, None, None)
+            kxc = [outbuf[3]]
     elif nvar == 2:
         if spin == 0:  # spin unpolarized GGA
             if deriv > 0:
-                vxc = (outbuf[1], outbuf[2], None, None)
+                vxc = [outbuf[1], outbuf[2]]
             if deriv > 1:
-                fxc = (outbuf[3], outbuf[4], outbuf[5],) + (None,)*7
+                fxc = [outbuf[3], outbuf[4], outbuf[5]]
             if deriv > 2:
-                kxc = outbuf[6:10]
+                kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
         else:  # spin polarized LDA
             if deriv > 0:
-                vxc = (outbuf[1:3].T, None, None, None)
+                vxc = [outbuf[1:3].T]
             if deriv > 1:
-                fxc = (outbuf[3:6].T,) + (None,)*9
+                fxc = [outbuf[3:6].T]
             if deriv > 2:
-                kxc = (outbuf[6:10].T, None, None, None)
+                kxc = [outbuf[6:10].T]
     elif nvar == 5:  # spin polarized GGA
         if deriv > 0:
-            vxc = (outbuf[1:3].T, outbuf[3:6].T, None, None)
+            vxc = [outbuf[1:3].T, outbuf[3:6].T]
         if deriv > 1:
-            fxc = (outbuf[[XC_D20000,XC_D11000,XC_D02000]].T,
+            fxc = [outbuf[[XC_D20000,XC_D11000,XC_D02000]].T,
                    outbuf[[XC_D10100,XC_D10010,XC_D10001,
                            XC_D01100,XC_D01010,XC_D01001]].T,
-                   outbuf[[XC_D00200,XC_D00110,XC_D00101,XC_D00020,XC_D00011,XC_D00002]].T) + (None,)*7
+                   outbuf[[XC_D00200,XC_D00110,XC_D00101,XC_D00020,XC_D00011,XC_D00002]].T]
         if deriv > 2:
-            kxc = (outbuf[[XC_D30000,XC_D21000,XC_D12000,XC_D03000]].T,
+            kxc = [outbuf[[XC_D30000,XC_D21000,XC_D12000,XC_D03000]].T,
                    outbuf[[XC_D20100,XC_D20010,XC_D20001,
                            XC_D11100,XC_D11010,XC_D11001,
                            XC_D02100,XC_D02010,XC_D02001]].T,
                    outbuf[[XC_D10200,XC_D10110,XC_D10101,XC_D10020,XC_D10011,XC_D10002,
                            XC_D01200,XC_D01110,XC_D01101,XC_D01020,XC_D01011,XC_D01002]].T,
                    outbuf[[XC_D00300,XC_D00210,XC_D00201,XC_D00120,XC_D00111,
-                           XC_D00102,XC_D00030,XC_D00021,XC_D00012,XC_D00003]].T)
+                           XC_D00102,XC_D00030,XC_D00021,XC_D00012,XC_D00003]].T]
 # MGGA/MLGGA: Note the MLGGA interface are not implemented. MGGA only needs 3
 # input arguments.  To make the interface compatible with libxc, treat MGGA as
 # MLGGA
     elif nvar == 3:
         if deriv > 0:
-            vxc = (outbuf[1], outbuf[2], None, outbuf[3])
+            vxc = [outbuf[1], outbuf[2], None, outbuf[3]]
         if deriv > 1:
-            fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
-                   None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
+            fxc = [
+                # v2rho2, v2rhosigma, v2sigma2,
+                outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
+                # v2lapl2, v2tau2,
+                None, outbuf[XC_D002],
+                # v2rholapl, v2rhotau,
+                None, outbuf[XC_D101],
+                # v2lapltau, v2sigmalapl, v2sigmatau,
+                None, None, outbuf[XC_D011]]
         if deriv > 2:
-            kxc = (
+            kxc = [
                 # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
                 outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
                 # v3rho2lapl, v3rho2tau,
@@ -943,12 +950,12 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 # v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
                 None, None, outbuf[XC_D012],
                 # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
-                None, None, None, outbuf[XC_D003])
+                None, None, None, outbuf[XC_D003]]
     elif nvar == 7:  # spin polarized MGGA
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
         if deriv > 1:
-            fxc = (
+            fxc = [
                 # v2rho2, v2rhosigma, v2sigma2,
                 outbuf[[XC_D2000000,XC_D1100000,XC_D0200000]].T,
                 outbuf[[XC_D1010000,XC_D1001000,XC_D1000100,
@@ -964,9 +971,9 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 # v2lapltau, v2sigmalapl, v2sigmatau,
                 None, None,
                 outbuf[[XC_D0010010,XC_D0010001,XC_D0001010,XC_D0001001,
-                        XC_D0000110,XC_D0000101]].T)
+                        XC_D0000110,XC_D0000101]].T]
         if deriv > 2:
-            kxc = (
+            kxc = [
                 # v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
                 outbuf[[XC_D3000000,XC_D2100000,XC_D1200000,XC_D0300000]].T,
                 outbuf[[XC_D2010000,XC_D2001000,XC_D2000100,
@@ -997,7 +1004,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                         XC_D0000120,XC_D0000111,XC_D0000102]].T,
                 # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
                 None, None, None,
-                outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
+                outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T]
     return exc, vxc, fxc, kxc
 
 
