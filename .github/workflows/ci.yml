@@ -24,12 +24,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, ubuntu-18.04]
+        os: [macos-latest, ubuntu-18.04]
         python-version: ['3.6', '3.7', '3.8', '3.9']
         exclude:
-          - os: macos-11
+          - os: macos-latest
             python-version: '3.8'
-          - os: macos-11
+          - os: macos-latest
             python-version: '3.9'
     steps:
       - uses: actions/checkout@v2
