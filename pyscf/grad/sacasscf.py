@@ -35,7 +35,7 @@ from pyscf import lib, ao2mo, mcscf
 # ref. Mol. Phys., 99, 103 (2001); DOI: 10.1080/002689700110005642
 
 def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None,
-        verbose=None):
+                       verbose=None):
     ''' Modification of single-state CASSCF electronic energy nuclear gradient to compute instead
     the orbital Lagrange term nuclear gradient:
 
@@ -115,7 +115,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     gfock += np.dot (vhf_c, dmL_cas) # core-active, 2nd 1RDM linked
     gfock  = np.dot (s0_inv, gfock) # Definition in MO's; going (AO->MO->AO) incurs inverse ovlp
     # [ERI TERM 1]
-    gfock += reduce (np.dot, (mo_coeff, np.einsum('uviw,uvtw->it', aapaL, casdm2), mo_cas.T)) 
+    gfock += reduce (np.dot, (mo_coeff, np.einsum('uviw,uvtw->it', aapaL, casdm2), mo_cas.T))
     # [ERI TERM 2]
     gfock += reduce (np.dot, (mo_coeff, np.einsum('uviw,vuwt->it', aapa, casdm2), moL_cas.T))
     dme0 = (gfock+gfock.T)/2 # This transpose is for the overlap matrix later on
@@ -123,7 +123,6 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
 
     vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas, dmL_core, dmL_cas))
     vhf1c, vhf1a, vhf1cL, vhf1aL = vj - vk * 0.5
-    #vhf1c, vhf1a, vhf1cL, vhf1aL = mf_grad.get_veff(mol, (dm_core, dm_cas, dmL_core, dmL_cas))
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
 
@@ -137,10 +136,11 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     dm2Lbuf = np.zeros ((ncas**2,nmo,nmo))
     # MRH: The second line below transposes the L; the third line transposes the derivative
     # Both the L and the derivative have to explore all indices
-    dm2Lbuf[:,:,ncore:nocc]  = np.tensordot (Lorb[:,ncore:nocc], casdm2,
-        axes=(1,2)).transpose (1,2,0,3).reshape (ncas**2,nmo,ncas)
-    dm2Lbuf[:,ncore:nocc,:] += np.tensordot (Lorb[:,ncore:nocc], casdm2,
-        axes=(1,3)).transpose (1,2,3,0).reshape (ncas**2,ncas,nmo)
+    Lcasdm2 = np.tensordot (Lorb[:,ncore:nocc], casdm2, axes=(1,2)).transpose (1,2,0,3)
+    dm2Lbuf[:,:,ncore:nocc] = Lcasdm2.reshape (ncas**2,nmo,ncas)
+    Lcasdm2 = np.tensordot (Lorb[:,ncore:nocc], casdm2, axes=(1,3)).transpose (1,2,3,0)
+    dm2Lbuf[:,ncore:nocc,:] += Lcasdm2.reshape (ncas**2,ncas,nmo)
+    Lcasdm2 = None
     dm2Lbuf += dm2Lbuf.transpose (0,2,1)
     dm2Lbuf = np.ascontiguousarray (dm2Lbuf)
     dm2Lbuf = ao2mo._ao2mo.nr_e2(dm2Lbuf.reshape (ncas**2,nmo**2), mo_coeff.T,
@@ -162,11 +162,11 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
 
     max_memory = mc.max_memory - lib.current_memory()[0]
     blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
-    # MRH: 3 components of eri array and 1 density matrix array: 
+    # MRH: 3 components of eri array and 1 density matrix array:
     # FOUR arrays of this size are required!
     blksize = min(nao, max(2, blksize))
     logger.info (mc, 'SA-CASSCF Lorb_dot_dgorb memory remaining for eri manipulation: %f MB; using'
-        ' blocksize = %d', max_memory, blksize)
+                 ' blocksize = %d', max_memory, blksize)
     t0 = logger.timer (mc, 'SA-CASSCF Lorb_dot_dgorb 1-electron part', *t0)
 
     for k, ia in enumerate(atmlst):
@@ -190,7 +190,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
             t0 = logger.timer (mc, 'SA-CASSCF Lorb_dot_dgorb atom {} ({},{}|{})'.format (ia, p1-p0,
-                nf, nao_pair), *t0)
+                               nf, nao_pair), *t0)
         # MRH: core-core and core-active 2RDM terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1L[p0:p1]) * 2
         de_eri[k] += np.einsum('xij,ij->x', vhf1cL[:,p0:p1], dm1[p0:p1]) * 2
@@ -212,18 +212,18 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     return de
 
 def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-        eris=None, verbose=None):
+                     eris=None, verbose=None):
     ''' Modification of single-state CASSCF electronic energy nuclear gradient to compute instead
     the CI Lagrange term nuclear gradient:
 
     sum_IJ Lci_IJ d2_Ecas/d_lambda d_PIJ
 
     This involves the effective density matrices
-    ~D_pq = sum_I w_I<L_I|p'q|I> + c.c. 
+    ~D_pq = sum_I w_I<L_I|p'q|I> + c.c.
     ~d_pqrs = sum_I w_I<L_I|p'r'sq|I> + c.c.
     (NB: All-core terms ~D_ii, ~d_iijj = 0
      However, active-core terms ~d_xyii, ~d_xiiy != 0)
-    ''' 
+    '''
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
     if mf_grad is None: mf_grad = mc._scf.nuc_grad_method()
@@ -294,11 +294,11 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
 
     max_memory = mc.max_memory - lib.current_memory()[0]
     blksize = int(max_memory*.9e6/8 / (4*(aoslices[:,3]-aoslices[:,2]).max()*nao_pair))
-    # MRH: 3 components of eri array and 1 density matrix array: 
+    # MRH: 3 components of eri array and 1 density matrix array:
     # FOUR arrays of this size are required!
     blksize = min(nao, max(2, blksize))
     logger.info (mc, 'SA-CASSCF Lci_dot_dgci memory remaining for eri manipulation: %f MB; using '
-        'blocksize = %d', max_memory, blksize)
+                 'blocksize = %d', max_memory, blksize)
     t0 = logger.timer (mc, 'SA-CASSCF Lci_dot_dgci 1-electron part', *t0)
 
     for k, ia in enumerate(atmlst):
@@ -318,7 +318,7 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
             de_eri[k] -= np.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
             eri1 = dm2_ao = None
             t0 = logger.timer (mc, 'SA-CASSCF Lci_dot_dgci atom {} ({},{}|{})'.format (ia, p1-p0,
-                nf, nao_pair), *t0)
+                               nf, nao_pair), *t0)
         # MRH: dm1 -> dm_cas in the line below. Also eliminate core-core terms
         de_eri[k] += np.einsum('xij,ij->x', vhf1c[:,p0:p1], dm_cas[p0:p1]) * 2
         de_eri[k] += np.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
@@ -403,11 +403,12 @@ class Gradients (lagrange.Gradients):
             for solver in mc.fcisolver.fcisolvers:
                 self.nroots += solver.nroots
                 nea, neb = mc.fcisolver._get_nelec (solver, (neleca, nelecb))
-                self.spin_states[p0:self.nroots] = (nea - neb for x in range (solver.nroots))
-                self.na_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, nea)
-                    for x in range (solver.nroots))
-                self.nb_states[p0:self.nroots] = (cistring.num_strings (mc.ncas, neb)
-                    for x in range (solver.nroots))
+                nstr_a = cistring.num_strings (mc.ncas, nea)
+                nstr_b = cistring.num_strings (mc.ncas, neb)
+                for p1 in range (p0, self.nroots):
+                    self.spin_states[p1] = nea - neb
+                    self.na_states[p1] = nstr_a
+                    self.nb_states[p1] = nstr_b
                 p0 = self.nroots
         self.nci = sum ([na * nb for na, nb in zip (self.na_states, self.nb_states)])
         if state is not None:
@@ -424,8 +425,8 @@ class Gradients (lagrange.Gradients):
             self.e_states = np.asarray (mc.e_tot)
         if isinstance (mc, StateAverageMCSCFSolver):
             self.weights = np.asarray (mc.weights)
-        assert (len (self.weights) == self.nroots), '{} {} {}'.format (mc.fcisolver.__class__,
-            self.weights, self.nroots)
+        assert (len (self.weights) == self.nroots), '{} {} {}'.format (
+            mc.fcisolver.__class__, self.weights, self.nroots)
         lagrange.Gradients.__init__(self, mc, self.ngorb+self.nci)
         self.max_cycle = mc.max_cycle_macro
 
@@ -477,8 +478,8 @@ class Gradients (lagrange.Gradients):
         fcasscf.__dict__.update (self.base.__dict__)
         if isinstance (self.base, StateAverageMCSCFSolver):
             if isinstance (self.base.fcisolver, StateAverageMixFCISolver):
-                fcasscf = state_average_mix_(fcasscf, self.base.fcisolver.fcisolvers,
-                    self.base.weights)
+                fcasscf = state_average_mix_(
+                    fcasscf, self.base.fcisolver.fcisolvers, self.base.weights)
             else:
                 fcasscf.state_average_(self.base.weights)
         fcasscf.__dict__.update (casscf_attr)
@@ -486,7 +487,7 @@ class Gradients (lagrange.Gradients):
         return fcasscf
 
     def kernel (self, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None,
-            mf_grad=None, e_states=None, level_shift=None, **kwargs):
+                mf_grad=None, e_states=None, level_shift=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -497,17 +498,17 @@ class Gradients (lagrange.Gradients):
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
             self.converged = True
-            return casscf_grad.Gradients (self.base).kernel (mo_coeff=mo, ci=ci, atmlst=atmlst,
-                verbose=verbose)
+            return casscf_grad.Gradients (self.base).kernel (
+                mo_coeff=mo, ci=ci, atmlst=atmlst, verbose=verbose)
         if e_states is None:
             try:
                 e_states = self.e_states = np.asarray (self.base.e_states)
             except AttributeError:
                 e_states = self.e_states = np.asarray (self.base.e_tot)
         if level_shift is None: level_shift=self.level_shift
-        return lagrange.Gradients.kernel (self, state=state, atmlst=atmlst, verbose=verbose, mo=mo,
-            ci=ci, eris=eris, mf_grad=mf_grad, e_states=e_states, level_shift=level_shift,
-            **kwargs)
+        return lagrange.Gradients.kernel (
+            self, state=state, atmlst=atmlst, verbose=verbose, mo=mo, ci=ci, eris=eris,
+            mf_grad=mf_grad, e_states=e_states, level_shift=level_shift, **kwargs)
 
     def get_wfn_response (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, **kwargs):
         if state is None: state = self.state
@@ -530,7 +531,7 @@ class Gradients (lagrange.Gradients):
         return g_all
 
     def get_Aop_Adiag (self, atmlst=None, state=None, verbose=None, mo=None, ci=None, eris=None,
-            level_shift=None, **kwargs):
+                       level_shift=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -549,7 +550,7 @@ class Gradients (lagrange.Gradients):
         return self.project_Aop (Aop, ci, state), Adiag
 
     def get_ham_response (self, state=None, atmlst=None, verbose=None, mo=None, ci=None, eris=None,
-            mf_grad=None, **kwargs):
+                          mf_grad=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -563,7 +564,7 @@ class Gradients (lagrange.Gradients):
         return fcasscf_grad.kernel (mo_coeff=mo, ci=ci[state], atmlst=atmlst, verbose=verbose)
 
     def get_LdotJnuc (self, Lvec, state=None, atmlst=None, verbose=None, mo=None, ci=None,
-            eris=None, mf_grad=None, **kwargs):
+                      eris=None, mf_grad=None, **kwargs):
         if state is None: state = self.state
         if atmlst is None: atmlst = self.atmlst
         if verbose is None: verbose = self.verbose
@@ -612,8 +613,8 @@ class Gradients (lagrange.Gradients):
         def _debug_cispace (xci, label):
             xci_norm = [np.dot (c.ravel (), c.ravel ()) for c in xci]
             try:
-                xci_ss = self.base.fcisolver.states_spin_square (xci, self.base.ncas,
-                    self.base.nelecas)[0]
+                xci_ss = self.base.fcisolver.states_spin_square (
+                    xci, self.base.ncas, self.base.nelecas)[0]
             except AttributeError:
                 nelec = sum (_unpack_nelec (self.base.nelecas))
                 xci_ss = [spin_square (x, self.base.ncas, ((nelec+m)//2,(nelec-m)//2))[0]
@@ -774,8 +775,8 @@ class SACASLagPrec (lagrange.LagPrec):
 
     def ci_prec (self, xci_spins):
         Mxci = [None,] * self.nroots
-        for ix_spin, [xci, desort_spin] in enumerate (self._iterate_ci (xci_spins,
-                list(range(self.nroots)))):
+        for ix_spin, [xci, desort_spin] in enumerate (
+                self._iterate_ci (xci_spins, list(range(self.nroots)))):
             desort_spin = np.atleast_1d (np.squeeze (desort_spin))
             nroots = xci.shape[0]
             ci = self.ci[ix_spin]
