@@ -31,7 +31,7 @@ class Gradients (rhf_grad.GradientsMixin):
     Lagrange multipliers:
     L = E + \sum_i z_i L_i
     dE/dx = \partial L/\partial x iff all L_i = 0 for the given wave function
-    I.E., the Lagrange multipliers L_i cancel the direct dependence of the wave function on the 
+    I.E., the Lagrange multipliers L_i cancel the direct dependence of the wave function on the
     nuclear coordinates and allow the Hellmann-Feynman theorem to be used for some non-variational
     methods. '''
 
@@ -83,7 +83,7 @@ class Gradients (rhf_grad.GradientsMixin):
         def my_call (x):
             itvec[0] += 1
             logger.info (self, 'Lagrange optimization iteration %d, |geff| = %.8g, |dLvec| = %.8g',
-                itvec[0], linalg.norm (geff_op (x)), linalg.norm (x - Lvec_last))
+                         itvec[0], linalg.norm (geff_op (x)), linalg.norm (x - Lvec_last))
             Lvec_last[:] = x[:]
         return my_call
 
@@ -115,12 +115,12 @@ class Gradients (rhf_grad.GradientsMixin):
         precond = self.get_lagrange_precond (Adiag, level_shift=level_shift, **kwargs)
         it = np.asarray ([0])
         logger.debug(self, 'Lagrange multiplier determination intial gradient norm: %.8g',
-            linalg.norm(bvec))
+                     linalg.norm(bvec))
         my_call = self.get_lagrange_callback (Lvec_last, it, my_geff)
         Aop_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=Aop,
-            dtype=bvec.dtype)
+                                                dtype=bvec.dtype)
         prec_obj = sparse_linalg.LinearOperator ((self.nlag,self.nlag), matvec=precond,
-            dtype=bvec.dtype)
+                                                 dtype=bvec.dtype)
         x0_guess = self.get_init_guess (bvec, Adiag, Aop, precond)
         Lvec, info_int = sparse_linalg.cg(Aop_obj, -bvec, x0=x0_guess,
                                           tol=self.conv_rtol, atol=self.conv_atol,
@@ -145,8 +145,8 @@ class Gradients (rhf_grad.GradientsMixin):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        self.converged, self.Lvec, bvec, Aop, Adiag = self.solve_lagrange (level_shift=level_shift,
-            **kwargs)
+        self.converged, self.Lvec, bvec, Aop, Adiag = self.solve_lagrange (
+            level_shift=level_shift, **kwargs)
         self.debug_lagrange (self.Lvec, bvec, Aop, Adiag, **kwargs)
         cput1 = logger.timer (self, 'Lagrange gradient multiplier solution', *cput0)
 
