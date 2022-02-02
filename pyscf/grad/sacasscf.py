@@ -496,6 +496,7 @@ class Gradients (lagrange.Gradients):
             eris = self.eris = self.base.ao2mo (mo)
         if mf_grad is None: mf_grad = self.base._scf.nuc_grad_method ()
         if state is None:
+            self.converged = self.base.converged
             return casscf_grad.Gradients (self.base).kernel (mo_coeff=mo, ci=ci, atmlst=atmlst,
                 verbose=verbose)
         if e_states is None:
