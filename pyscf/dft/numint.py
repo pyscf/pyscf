@@ -1040,7 +1040,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for i, rho, ao, mask, weight, vxc in block_loop(ao_deriv):
-            wva, wvb = _uks_gga_wv0((rho_a,rho_b), vxc, weight)
+            wva, wvb = _uks_gga_wv0(rho, vxc, weight)
             #:aow = numpy.einsum('npi,np->pi', ao[:4], wva, out=aow)
             aow = _scale_ao(ao[:4], wva[:4], out=aow)
             vmat[0,i] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
