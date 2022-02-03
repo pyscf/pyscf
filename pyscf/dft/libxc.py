@@ -1500,31 +1500,37 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         all((is_lda(x) for x in fn_ids))):
         if spin == 0:
             nvar = 1
+            xctype = 'R-LDA'
         else:
             nvar = 2
+            xctype = 'U-LDA'
     elif any((is_meta_gga(x) for x in fn_ids)):
         if spin == 0:
             nvar = 4
+            xctype = 'R-MGGA'
         else:
             nvar = 9
+            xctype = 'U-MGGA'
     else:  # GGA
         if spin == 0:
             nvar = 2
+            xctype = 'R-GGA'
         else:
             nvar = 5
+            xctype = 'U-GGA'
 
     # Check that the density rho has the appropriate shape
     # should it be >= or ==, in test test_xcfun.py, test_vs_libxc_rks
     # the density contain 6 rows independently of the functional
-    if nvar == 1 or (nvar == 2 and spin > 0):  # LDA
+    if xctype[2:] == 'LDA':
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 1
 
-    elif nvar == 2 or nvar == 5:  # GGA
+    elif xctype[2:] == 'GGA':
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 4
 
-    elif nvar == 4 or nvar == 9:  # MGGA
+    elif xctype[2:] == 'MGGA':
         for rho_ud in [rho_u, rho_d]:
             assert rho_ud.shape[0] >= 6
     else:
@@ -1534,6 +1540,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
               (math.factorial(nvar) * math.factorial(deriv)))
     outbuf = numpy.zeros((outlen,ngrids))
 
+    density_threshold = 0
     _itrf.LIBXC_eval_xc(ctypes.c_int(n),
                         (ctypes.c_int*n)(*fn_ids),
                         (ctypes.c_double*n)(*facs),
@@ -1542,40 +1549,40 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                         ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
                         rho_u.ctypes.data_as(ctypes.c_void_p),
                         rho_d.ctypes.data_as(ctypes.c_void_p),
-                        outbuf.ctypes.data_as(ctypes.c_void_p))
+                        outbuf.ctypes.data_as(ctypes.c_void_p),
+                        ctypes.c_double(density_threshold))
 
     exc = outbuf[0]
     vxc = fxc = kxc = None
-    if nvar == 1:  # LDA
+    if xctype == 'R-LDA':
         if deriv > 0:
             vxc = [outbuf[1]]
         if deriv > 1:
             fxc = [outbuf[2]]
         if deriv > 2:
             kxc = [outbuf[3]]
-    elif nvar == 2:
-        if spin == 0:  # GGA
-            if deriv > 0:
-                vxc = [outbuf[1], outbuf[2]]
-            if deriv > 1:
-                fxc = [outbuf[3], outbuf[4], outbuf[5]]
-            if deriv > 2:
-                kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
-        else:  # LDA
-            if deriv > 0:
-                vxc = [outbuf[1:3].T]
-            if deriv > 1:
-                fxc = [outbuf[3:6].T]
-            if deriv > 2:
-                kxc = [outbuf[6:10].T]
-    elif nvar == 5:  # GGA
+    elif xctype == 'R-GGA':
+        if deriv > 0:
+            vxc = [outbuf[1], outbuf[2]]
+        if deriv > 1:
+            fxc = [outbuf[3], outbuf[4], outbuf[5]]
+        if deriv > 2:
+            kxc = [outbuf[6], outbuf[7], outbuf[8], outbuf[9]]
+    elif xctype == 'U-LDA':
+        if deriv > 0:
+            vxc = [outbuf[1:3].T]
+        if deriv > 1:
+            fxc = [outbuf[3:6].T]
+        if deriv > 2:
+            kxc = [outbuf[6:10].T]
+    elif xctype == 'U-GGA':
         if deriv > 0:
             vxc = [outbuf[1:3].T, outbuf[3:6].T]
         if deriv > 1:
             fxc = [outbuf[6:9].T, outbuf[9:15].T, outbuf[15:21].T]
         if deriv > 2:
             kxc = [outbuf[21:25].T, outbuf[25:34].T, outbuf[34:46].T, outbuf[46:56].T]
-    elif nvar == 4:  # MGGA
+    elif xctype == 'R-MGGA':
         if deriv > 0:
             vxc = [outbuf[1], outbuf[2], None, outbuf[4]]
         if deriv > 1:
@@ -1606,7 +1613,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                 None, None, outbuf[30],
                 # v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
                 None, None, None, outbuf[34]]
-    elif nvar == 9:  # MGGA
+    elif xctype == 'U-MGGA':
         if deriv > 0:
             vxc = [outbuf[1:3].T, outbuf[3:6].T, None, outbuf[8:10].T]
         if deriv > 1:

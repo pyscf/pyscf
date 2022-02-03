@@ -903,20 +903,19 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             raise NotImplementedError('laplacian in meta-GGA method')
         ao_deriv = 2
         for i, rho, ao, mask, weight, vxc in block_loop(ao_deriv):
-                wv = _rks_gga_wv0(rho, vxc, weight)
-                #:aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
-                aow = _scale_ao(ao[:4], wv[:4], out=aow)
-                vmat[i] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
+            wv = _rks_gga_wv0(rho, vxc, weight)
+            #:aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
+            aow = _scale_ao(ao[:4], wv[:4], out=aow)
+            vmat[i] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
 
 # FIXME: .5 * .5   First 0.5 for v+v.T symmetrization.
 # Second 0.5 is due to the Libxc convention tau = 1/2 \nabla\phi\dot\nabla\phi
-                vtau = vxc[3]
-                wv = .5 * .5 * weight * vtau
-                vmat[i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wv), mask, shls_slice, ao_loc)
-                vmat[i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wv), mask, shls_slice, ao_loc)
-                vmat[i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wv), mask, shls_slice, ao_loc)
+            vtau = vxc[3]
+            wv = .5 * .5 * weight * vtau
+            vmat[i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wv), mask, shls_slice, ao_loc)
+            vmat[i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wv), mask, shls_slice, ao_loc)
+            vmat[i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wv), mask, shls_slice, ao_loc)
 
-                rho = exc = vxc = vrho = wv = None
     elif xctype == 'HF':
         pass
     else:
@@ -1362,7 +1361,6 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 ftt = _tt[0] + _tt[1]  # u_u + u_d
                 frt = _rt[0] + _rt[1]  # u_u + u_d
                 fgt = _gt[0] + _gt[2] + _gt[4]  # uu_u + ud_u + dd_u
-                ref = ni.eval_xc(xc_code, rhoa*2, spin=0, deriv=2)[2]
             else:
                 vsigma = vsigma[0] - vsigma[1] * .5
                 frr = u_u - u_d
