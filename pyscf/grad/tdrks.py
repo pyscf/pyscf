@@ -278,7 +278,6 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                     lda_sum_(v1ao, ao, vxc[0] * weight, mask)
                 if with_kxc:
                     lda_sum_(k1ao, ao, kxc[0] * weight * rho1**2, mask)
-                vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
             if with_kxc:  # for (rho1*2)^2, *2 for alpha+beta in singlet
                 k1ao *= 4
 

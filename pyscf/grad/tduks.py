@@ -349,7 +349,6 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                 u_u_u, u_u_d, u_d_d, d_d_d = kxc[0].T * weight
                 lda_sum_(k1ao[0], ao, u_u_u*rho1a*rho1a+u_u_d*rho1a*rho1b*2+u_d_d*rho1b*rho1b, mask)
                 lda_sum_(k1ao[1], ao, u_u_d*rho1a*rho1a+u_d_d*rho1a*rho1b*2+d_d_d*rho1b*rho1b, mask)
-            vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
 
     elif xctype == 'GGA':
         def gga_sum_(vmat, ao, wv, mask):

@@ -264,10 +264,10 @@ class KnownValues(unittest.TestCase):
         v = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(abs(v).max(), 0, 9)
 
-        v = dft.numint.nr_fxc(ni, mol1, mf.grids, 'm06l,', dm0, dms)
+        v = dft.numint.nr_fxc(mol1, mf.grids, 'm06l,', dm0, dms)
         self.assertAlmostEqual(lib.fp(v), -11.007699914447517, 8)
         rvf = ni.cache_xc_kernel(mol1, mf.grids, 'm06l,', mo_coeff, mo_occ, spin=0)
-        v1 = dft.numint.nr_fxc(ni, mol1, mf.grids, 'm06l,', dm0, dms,
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'm06l,', dm0, dms,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
