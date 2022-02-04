@@ -258,6 +258,11 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
     if xctype == 'LDA':
         ao_deriv = 1
         if singlet:
+            def lda_sum_(vmat, ao, wv, mask):
+                aow = numint._scale_ao(ao[0], wv)
+                for k in range(4):
+                    vmat[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
+
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, xctype)
@@ -265,22 +270,14 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
                 wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
                 rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, xctype)
-                aow = numint._scale_ao(ao[0], wfxc * rho1)
-                for k in range(4):
-                    f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
+                lda_sum_(f1vo, ao, wfxc * rho1, mask)
                 if dmoo is not None:
                     rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, xctype)
-                    aow = numint._scale_ao(ao[0], wfxc * rho2)
-                    for k in range(4):
-                        f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
+                    lda_sum_(f1oo, ao, wfxc * rho2, mask)
                 if with_vxc:
-                    aow = numint._scale_ao(ao[0], vxc[0] * weight)
-                    for k in range(4):
-                        v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
+                    lda_sum_(v1ao, ao, vxc[0] * weight, mask)
                 if with_kxc:
-                    aow = numint._scale_ao(ao[0], kxc[0] * weight * rho1**2)
-                    for k in range(4):
-                        k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
+                    lda_sum_(k1ao, ao, kxc[0] * weight * rho1**2, mask)
                 vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
             if with_kxc:  # for (rho1*2)^2, *2 for alpha+beta in singlet
                 k1ao *= 4
@@ -291,7 +288,7 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
     elif xctype == 'GGA':
         if singlet:
             def gga_sum_(vmat, ao, wv, mask):
-                aow  = numint._scale_ao(ao[:4], wv[:4])
+                aow = numint._scale_ao(ao[:4], wv[:4])
                 tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
                 rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv, mask, ao_loc)
@@ -321,7 +318,53 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
             raise NotImplementedError('GGA triplet')
 
     elif xctype == 'MGGA':
-        raise NotImplementedError('meta-GGA')
+        XX, XY, XZ = 4, 5, 6
+        YX, YY, YZ = 5, 7, 8
+        ZX, ZY, ZZ = 6, 8, 9
+        if singlet:
+            def mgga_sum_(vmat, ao, wv, mask):
+                aow = numint._scale_ao(ao[:4], wv[:4])
+                tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
+                aow = numint._scale_ao(ao[1], wv[5], aow)
+                tmp += numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
+                aow = numint._scale_ao(ao[2], wv[5], aow)
+                tmp += numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
+                aow = numint._scale_ao(ao[3], wv[5], aow)
+                tmp += numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+                vmat[0] += tmp + tmp.T
+
+                rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv[:4], mask, ao_loc)
+                wv5 = wv[5] * 2
+                aow = numint._scale_ao(ao[1], wv5, aow)
+                rks_grad._d1_dot_(vmat[1:], mol, [ao[XX], ao[XY], ao[XZ]], aow, mask, ao_loc, True)
+                aow = numint._scale_ao(ao[2], wv5, aow)
+                rks_grad._d1_dot_(vmat[1:], mol, [ao[YX], ao[YY], ao[YZ]], aow, mask, ao_loc, True)
+                aow = numint._scale_ao(ao[3], wv5, aow)
+                rks_grad._d1_dot_(vmat[1:], mol, [ao[ZX], ao[ZY], ao[ZZ]], aow, mask, ao_loc, True)
+
+            ao_deriv = 2
+            for ao, mask, weight, coords \
+                    in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype)
+                vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
+
+                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype) * 2  # *2 for alpha + beta
+                wv = numint._rks_mgga_wv1(rho, rho1, vxc, fxc, weight)
+                mgga_sum_(f1vo, ao, wv, mask)
+
+                if dmoo is not None:
+                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype) * 2
+                    wv = numint._rks_mgga_wv1(rho, rho2, vxc, fxc, weight)
+                    mgga_sum_(f1oo, ao, wv, mask)
+                if with_vxc:
+                    wv = numint._rks_mgga_wv0(rho, vxc, weight)
+                    mgga_sum_(v1ao, ao, wv, mask)
+                if with_kxc:
+                    wv = numint._rks_mgga_wv2(rho, rho1, fxc, kxc, weight)
+                    mgga_sum_(k1ao, ao, wv, mask)
+                vxc = fxc = kxc = rho = rho1 = None
+        else:
+            raise NotImplementedError('MGGA triplet')
 
     elif xctype == 'HF':
         pass
@@ -344,97 +387,3 @@ Grad = Gradients
 
 from pyscf import tdscf
 tdscf.rks.TDA.Gradients = tdscf.rks.TDDFT.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import dft
-    from pyscf import tddft
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , 1.804)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.unit = 'B'
-    mol.basis = '631g'
-    mol.build()
-
-    mf = dft.RKS(mol)
-    mf.xc = 'LDA,'
-    mf.grids.prune = False
-    mf.conv_tol = 1e-14
-#    mf.grids.level = 6
-    mf.scf()
-
-    td = tddft.TDDFT(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=3)
-    print(g1)
-# [[ 0  0  -1.31315477e-01]
-#  [ 0  0   1.31319442e-01]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
-
-    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
-    mf = dft.RKS(mol)
-    mf.xc = 'b3lyp'
-    mf._numint.libxc = dft.xcfun
-    mf.grids.prune = False
-    mf.conv_tol = 1e-14
-    mf.scf()
-
-    td = tddft.TDA(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=3)
-    print(g1)
-# [[ 0  0  -1.21504524e-01]
-#  [ 0  0   1.21505341e-01]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
-
-    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
-    mf = dft.RKS(mol)
-    mf.xc = 'lda,'
-    mf.conv_tol = 1e-14
-    mf.kernel()
-    td = tddft.TDA(mf)
-    td.nstates = 3
-    td.singlet = False
-    e, z = td.kernel()
-    tdg = Gradients(td)
-    g1 = tdg.kernel(state=2)
-    print(g1)
-# [[ 0  0  -0.3633334]
-#  [ 0  0   0.3633334]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
-
-    mf = dft.RKS(mol)
-    mf.xc = 'b3lyp'
-    mf.conv_tol = 1e-14
-    mf.kernel()
-    td = tddft.TDA(mf)
-    td.nstates = 3
-    td.singlet = False
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=2)
-    print(g1)
-# [[ 0  0  -0.3633334]
-#  [ 0  0   0.3633334]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())

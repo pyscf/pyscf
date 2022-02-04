@@ -29,10 +29,11 @@ try:
     from pyscf.dft import libxc
     XC = libxc.XC
 except (ImportError, OSError):
-    pass
+    XC = None
 try:
     from pyscf.dft import xcfun
-    XC = xcfun.XC
+    if XC is None:
+        XC = xcfun.XC
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc

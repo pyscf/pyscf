@@ -416,12 +416,11 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             rho = ni.eval_rho2(mol, ao[:10], mo_coeff, mo_occ, mask, xctype)
             vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
 
-            wv = numint._rks_gga_wv0(rho, vxc, weight)
+            wv = numint._rks_mgga_wv0(rho, vxc, weight)
             aow = rks_grad._make_dR_dao_w(ao, wv)
             _d1d2_dot_(ipip, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            wv = .25 * weight * vxc[3]
-            aow = [numint._scale_ao(ao[i], wv) for i in range(4, 10)]
+            aow = [numint._scale_ao(ao[i], wv[5]) for i in range(4, 10)]
             _d1d2_dot_(ipip, mol, [aow[0], aow[1], aow[2]], [ao[XX], ao[XY], ao[XZ]], mask, ao_loc, False)
             _d1d2_dot_(ipip, mol, [aow[1], aow[3], aow[4]], [ao[YX], ao[YY], ao[YZ]], mask, ao_loc, False)
             _d1d2_dot_(ipip, mol, [aow[2], aow[4], aow[5]], [ao[ZX], ao[ZY], ao[ZZ]], mask, ao_loc, False)

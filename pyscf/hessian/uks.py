@@ -450,18 +450,17 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             rhob = ni.eval_rho2(mol, ao[:10], mo_coeff[1], mo_occ[1], mask, xctype)
             vxc, fxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=2)[1:3]
 
-            wva, wvb = numint._uks_gga_wv0((rhoa,rhob), vxc, weight)
+            wva, wvb = numint._uks_mgga_wv0((rhoa,rhob), vxc, weight)
             aow = rks_grad._make_dR_dao_w(ao, wva)
             rks_hess._d1d2_dot_(ipipa, mol, aow, ao[1:4], mask, ao_loc, False)
             aow = rks_grad._make_dR_dao_w(ao, wvb)
             rks_hess._d1d2_dot_(ipipb, mol, aow, ao[1:4], mask, ao_loc, False)
 
-            wva, wvb = .25 * weight * vxc[3].T
-            aow = [numint._scale_ao(ao[i], wva) for i in range(4, 10)]
+            aow = [numint._scale_ao(ao[i], wva[5]) for i in range(4, 10)]
             rks_hess._d1d2_dot_(ipipa, mol, [aow[0], aow[1], aow[2]], [ao[XX], ao[XY], ao[XZ]], mask, ao_loc, False)
             rks_hess._d1d2_dot_(ipipa, mol, [aow[1], aow[3], aow[4]], [ao[YX], ao[YY], ao[YZ]], mask, ao_loc, False)
             rks_hess._d1d2_dot_(ipipa, mol, [aow[2], aow[4], aow[5]], [ao[ZX], ao[ZY], ao[ZZ]], mask, ao_loc, False)
-            aow = [numint._scale_ao(ao[i], wvb) for i in range(4, 10)]
+            aow = [numint._scale_ao(ao[i], wvb[5]) for i in range(4, 10)]
             rks_hess._d1d2_dot_(ipipb, mol, [aow[0], aow[1], aow[2]], [ao[XX], ao[XY], ao[XZ]], mask, ao_loc, False)
             rks_hess._d1d2_dot_(ipipb, mol, [aow[1], aow[3], aow[4]], [ao[YX], ao[YY], ao[YZ]], mask, ao_loc, False)
             rks_hess._d1d2_dot_(ipipb, mol, [aow[2], aow[4], aow[5]], [ao[ZX], ao[ZY], ao[ZZ]], mask, ao_loc, False)
@@ -590,10 +589,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             rks_grad._gga_grad_sum_(vipa, mol, ao, wva, mask, ao_loc)
             rks_grad._gga_grad_sum_(vipb, mol, ao, wvb, mask, ao_loc)
 
-            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc)
-                       for i in range(4)]
-            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc)
-                       for i in range(4)]
+            ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc) for i in range(4)]
+            ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc) for i in range(4)]
             for ia in range(mol.natm):
                 wva = dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
                 wvb = dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices)
