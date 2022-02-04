@@ -260,25 +260,25 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
         if singlet:
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-                rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, 'LDA')
+                rho = ni.eval_rho2(mol, ao[0], mo_coeff, mo_occ, mask, xctype)
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
                 wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
-                rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, 'LDA')
-                aow = numpy.einsum('pi,p,p->pi', ao[0], wfxc, rho1)
+                rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, xctype)
+                aow = numint._scale_ao(ao[0], wfxc * rho1)
                 for k in range(4):
                     f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if dmoo is not None:
-                    rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, 'LDA')
-                    aow = numpy.einsum('pi,p,p->pi', ao[0], wfxc, rho2)
+                    rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, xctype)
+                    aow = numint._scale_ao(ao[0], wfxc * rho2)
                     for k in range(4):
                         f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_vxc:
-                    aow = numpy.einsum('pi,p,p->pi', ao[0], vxc[0], weight)
+                    aow = numint._scale_ao(ao[0], vxc[0] * weight)
                     for k in range(4):
                         v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_kxc:
-                    aow = numpy.einsum('pi,p,p,p->pi', ao[0], kxc[0], weight, rho1**2)
+                    aow = numint._scale_ao(ao[0], kxc[0] * weight * rho1**2)
                     for k in range(4):
                         k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
@@ -291,23 +291,22 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
     elif xctype == 'GGA':
         if singlet:
             def gga_sum_(vmat, ao, wv, mask):
-                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0])
-                aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
+                aow  = numint._scale_ao(ao[:4], wv[:4])
                 tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
                 rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv, mask, ao_loc)
             ao_deriv = 2
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
-                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
+                rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype)
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-                rho1 = ni.eval_rho(mol, ao, dmvo, mask, 'GGA') * 2  # *2 for alpha + beta
+                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype) * 2  # *2 for alpha + beta
                 wv = numint._rks_gga_wv1(rho, rho1, vxc, fxc, weight)
                 gga_sum_(f1vo, ao, wv, mask)
 
                 if dmoo is not None:
-                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, 'GGA') * 2
+                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype) * 2
                     wv = numint._rks_gga_wv1(rho, rho2, vxc, fxc, weight)
                     gga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:
@@ -321,8 +320,13 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
         else:
             raise NotImplementedError('GGA triplet')
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
+
+    elif xctype == 'HF':
+        pass
+    else:
+        raise NotImplementedError(f'td-rks for functional {xc_code}')
 
     f1vo[1:] *= -1
     if f1oo is not None: f1oo[1:] *= -1
