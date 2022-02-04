@@ -333,6 +333,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
     '''quasi-newton CASSCF optimization driver
     '''
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     log = logger.new_logger(casscf, verbose)
     cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 1-step CASSCF')
@@ -444,6 +445,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         else:
             newvecs = []
             for subvec in fcivec:
+                # CI vector obtained by builtin FCI is a numpy array
                 if not isinstance(subvec, numpy.ndarray):
                     newvecs.append(small_rot)
                 else:
@@ -1289,6 +1291,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
     def newton(self):
         from pyscf.mcscf import newton_casscf
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
