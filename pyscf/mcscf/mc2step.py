@@ -24,6 +24,7 @@ from pyscf.mcscf import mc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
+    from pyscf.mcscf.addons import StateAverageMCSCFSolver
     if verbose is None:
         verbose = casscf.verbose
     if callback is None:
