@@ -27,13 +27,13 @@ Simple usage::
 
 try:
     from pyscf.dft import libxc
-    XC = libxc.XC
+    XC = {**libxc.XC, **libxc.XC_ALIAS}
 except (ImportError, OSError):
     XC = None
 try:
     from pyscf.dft import xcfun
     if XC is None:
-        XC = xcfun.XC
+        XC = {**xcfun.XC, **xcfun.XC_ALIAS}
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc
