@@ -114,9 +114,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
-        XX, XY, XZ = 4, 5, 6
-        YX, YY, YZ = 5, 7, 8
-        ZX, ZY, ZZ = 6, 8, 9
         ao_deriv = 2
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
@@ -124,17 +121,11 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 rho = make_rho(idm, ao[:10], mask, xctype)
                 vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
                                  verbose=verbose)[1]
-                wv = numint._rks_gga_wv0(rho, vxc, weight)
+                wv = numint._rks_mgga_wv0(rho, vxc, weight)
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
 
-                vtau = vxc[3]
-                wv = .5 * weight * vtau
-                aow = numint._scale_ao(ao[1], wv)
-                _d1_dot_(vmat[idm], mol, [ao[XX], ao[XY], ao[XZ]], aow, mask, ao_loc, True)
-                aow = numint._scale_ao(ao[2], wv)
-                _d1_dot_(vmat[idm], mol, [ao[YX], ao[YY], ao[YZ]], aow, mask, ao_loc, True)
-                aow = numint._scale_ao(ao[3], wv)
-                _d1_dot_(vmat[idm], mol, [ao[ZX], ao[ZY], ao[ZZ]], aow, mask, ao_loc, True)
+                # *2 because wv[5] is scaled by 0.5 in _rks_mgga_wv0
+                _tau_grad_dot_(vmat[idm], mol, ao, wv[5]*2, mask, ao_loc, True)
 
     exc = None
     if nset == 1:
@@ -181,6 +172,18 @@ def _gga_grad_sum_(vmat, mol, ao, wv, mask, ao_loc):
     aow = _make_dR_dao_w(ao, wv[:4])
     _d1_dot_(vmat, mol, aow, ao[0], mask, ao_loc, True)
     return vmat
+
+# XX, XY, XZ = 4, 5, 6
+# YX, YY, YZ = 5, 7, 8
+# ZX, ZY, ZZ = 6, 8, 9
+def _tau_grad_dot_(vmat, mol, ao, wv, mask, ao_loc, dR1_on_bra=True):
+    '''The tau part of MGGA functional'''
+    aow = numint._scale_ao(ao[1], wv)
+    _d1_dot_(vmat, mol, [ao[4], ao[5], ao[6]], aow, mask, ao_loc, True)
+    aow = numint._scale_ao(ao[2], wv, aow)
+    _d1_dot_(vmat, mol, [ao[5], ao[7], ao[8]], aow, mask, ao_loc, True)
+    aow = numint._scale_ao(ao[3], wv, aow)
+    _d1_dot_(vmat, mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
 
 
 def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
@@ -239,9 +242,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
-        XX, XY, XZ = 4, 5, 6
-        YX, YY, YZ = 5, 7, 8
-        ZX, ZY, ZZ = 6, 8, 9
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
             mask = gen_grid.make_mask(mol, coords)
@@ -251,14 +251,9 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                                   verbose=verbose)[:2]
 
             vtmp = numpy.zeros((3,nao,nao))
-            wv = numint._rks_gga_wv0(rho, vxc, weight)
+            wv = numint._rks_mgga_wv0(rho, vxc, weight)
             _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
-            vtau = vxc[3]
-            wv = .5 * weight * vtau
-            aow = [numint._scale_ao(ao[i], wv) for i in range(1, 4)]
-            _d1_dot_(vtmp, mol, [ao[XX], ao[XY], ao[XZ]], aow[0], mask, ao_loc, True)
-            _d1_dot_(vtmp, mol, [ao[YX], ao[YY], ao[YZ]], aow[1], mask, ao_loc, True)
-            _d1_dot_(vtmp, mol, [ao[ZX], ao[ZY], ao[ZZ]], aow[2], mask, ao_loc, True)
+            _tau_grad_dot_(vtmp, mol, ao, wv[5]*2, mask, ao_loc, True)
             vmat += vtmp
 
             # response of weights

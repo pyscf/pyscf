@@ -288,10 +288,12 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             rhob = ni.eval_rho2(mol, ao[:10], mo_coeff[1], mo_occ[1], mask, xctype)
             vxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=1)[1]
 
-            wva, wvb = numint._uks_gga_wv0((rhoa,rhob), vxc, weight)
+            wva, wvb = numint._uks_mgga_wv0((rhoa,rhob), vxc, weight)
             # *2 because v.T is not applied.
             wva[0] *= 2
             wvb[0] *= 2
+            wva[5] *= 2
+            wvb[5] *= 2
             aowa = numint._scale_ao(ao[:4], wva[:4])
             aowb = numint._scale_ao(ao[:4], wvb[:4])
             for i in range(6):
@@ -310,10 +312,8 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             contract_(vmatb[4], ao, [XYZ,YYZ,YZZ], wvb, mask)
             contract_(vmatb[5], ao, [XZZ,YZZ,ZZZ], wvb, mask)
 
-            vtau = vxc[3]
-            wva, wvb = .5 * weight * vtau.T
-            aowa = [numint._scale_ao(ao[i], wva) for i in range(1, 4)]
-            aowb = [numint._scale_ao(ao[i], wvb) for i in range(1, 4)]
+            aowa = [numint._scale_ao(ao[i], wva[5]) for i in range(1, 4)]
+            aowb = [numint._scale_ao(ao[i], wvb[5]) for i in range(1, 4)]
             for i, j in enumerate([XXX, XXY, XXZ, XYY, XYZ, XZZ]):
                 vmata[i] += numint._dot_ao_ao(mol, ao[j], aowa[0], mask, shls_slice, ao_loc)
                 vmatb[i] += numint._dot_ao_ao(mol, ao[j], aowb[0], mask, shls_slice, ao_loc)
@@ -623,19 +623,12 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             rhob = ni.eval_rho2(mol, ao[:10], mo_coeff[1], mo_occ[1], mask, xctype)
             vxc, fxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=2)[1:3]
 
-            wva, wvb = numint._uks_gga_wv0((rhoa,rhob), vxc, weight)
+            wva, wvb = numint._uks_mgga_wv0((rhoa,rhob), vxc, weight)
             rks_grad._gga_grad_sum_(vipa, mol, ao, wva, mask, ao_loc)
             rks_grad._gga_grad_sum_(vipb, mol, ao, wvb, mask, ao_loc)
 
-            wva, wvb = .5 * weight * vxc[3].T
-            aow = [numint._scale_ao(ao[i], wva) for i in range(1, 4)]
-            rks_grad._d1_dot_(vipa, mol, [ao[XX], ao[XY], ao[XZ]], aow[0], mask, ao_loc, True)
-            rks_grad._d1_dot_(vipa, mol, [ao[YX], ao[YY], ao[YZ]], aow[1], mask, ao_loc, True)
-            rks_grad._d1_dot_(vipa, mol, [ao[ZX], ao[ZY], ao[ZZ]], aow[2], mask, ao_loc, True)
-            aow = [numint._scale_ao(ao[i], wvb) for i in range(1, 4)]
-            rks_grad._d1_dot_(vipb, mol, [ao[XX], ao[XY], ao[XZ]], aow[0], mask, ao_loc, True)
-            rks_grad._d1_dot_(vipb, mol, [ao[YX], ao[YY], ao[YZ]], aow[1], mask, ao_loc, True)
-            rks_grad._d1_dot_(vipb, mol, [ao[ZX], ao[ZY], ao[ZZ]], aow[2], mask, ao_loc, True)
+            rks_grad._tau_grad_dot_(vipa, mol, ao, wva[5]*2, mask, ao_loc, True)
+            rks_grad._tau_grad_dot_(vipb, mol, ao, wvb[5]*2, mask, ao_loc, True)
 
             ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc) for i in range(4)]
             ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc) for i in range(4)]

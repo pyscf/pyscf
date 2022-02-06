@@ -530,15 +530,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
                 vtau = vtau.T
             vtau = vtau[0]
         wv = weight * (.25*vtau + vlapl)
-        #:aow = numpy.einsum('pi,p->pi', ao[1], wv, out=aow)
-        aow = _scale_ao(ao[1], wv, out=aow)
-        mat += _dot_ao_ao(mol, ao[1], aow, non0tab, shls_slice, ao_loc)
-        #:aow = numpy.einsum('pi,p->pi', ao[2], wv, out=aow)
-        aow = _scale_ao(ao[2], wv, out=aow)
-        mat += _dot_ao_ao(mol, ao[2], aow, non0tab, shls_slice, ao_loc)
-        #:aow = numpy.einsum('pi,p->pi', ao[3], wv, out=aow)
-        aow = _scale_ao(ao[3], wv, out=aow)
-        mat += _dot_ao_ao(mol, ao[3], aow, non0tab, shls_slice, ao_loc)
+        mat += _tau_dot(mol, ao, wv, non0tab, shls_slice, ao_loc)
 
     return mat + mat.T.conj()
 
@@ -664,6 +656,17 @@ def _contract_rho(bra, ket):
         rho  = numpy.einsum('ip,ip->p', bra.real, ket.real)
         rho += numpy.einsum('ip,ip->p', bra.imag, ket.imag)
     return rho
+
+def _tau_dot(mol, ao, wv, mask, shls_slice, ao_loc):
+    # nabla_ao dot nabla_ao
+    # numpy.einsum('p,xpi,xpj->ij', wv, ao[1:4], ao[1:4])
+    aow = _scale_ao(ao[1], wv)
+    mat = _dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
+    aow = _scale_ao(ao[2], wv, aow)
+    mat += _dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
+    aow = _scale_ao(ao[3], wv, aow)
+    mat += _dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+    return mat
 
 def nr_vxc(mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
@@ -907,9 +910,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             #:aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
             aow = _scale_ao(ao[:4], wv[:4], out=aow)
             vmat[i] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wv[5]), mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wv[5]), mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wv[5]), mask, shls_slice, ao_loc)
+            vmat[i] += _tau_dot(mol, ao, wv[5], mask, shls_slice, ao_loc)
 
     elif xctype == 'HF':
         pass
@@ -1041,12 +1042,8 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
             #:aow = numpy.einsum('npi,np->pi', ao[:4], wvb, out=aow)
             aow = _scale_ao(ao[:4], wvb[:4], out=aow)
             vmat[1,i] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wva[5]), mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wva[5]), mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wva[5]), mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wvb[5]), mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wvb[5]), mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wvb[5]), mask, shls_slice, ao_loc)
+            vmat[0,i] += _tau_dot(mol, ao, wva[5], mask, shls_slice, ao_loc)
+            vmat[1,i] += _tau_dot(mol, ao, wvb[5], mask, shls_slice, ao_loc)
     elif xctype == 'HF':
         pass
     else:
@@ -1194,9 +1191,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
             aow = _scale_ao(ao[:4], wv[:4], out=aow)
             vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wv[5], aow), mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wv[5], aow), mask, shls_slice, ao_loc)
-            vmat[i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wv[5], aow), mask, shls_slice, ao_loc)
+            vmat[i] += _tau_dot(mol, ao, wv[5], mask, shls_slice, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[i] = vmat[i] + vmat[i].conj().T
@@ -1370,9 +1365,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
                 aow = _scale_ao(ao[:4], wv[:4], out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                vmat[i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wv[5], aow), mask, shls_slice, ao_loc)
-                vmat[i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wv[5], aow), mask, shls_slice, ao_loc)
-                vmat[i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wv[5], aow), mask, shls_slice, ao_loc)
+                vmat[i] += _tau_dot(mol, ao, wv[5], mask, shls_slice, ao_loc)
                 rho1 = None
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -1642,15 +1635,11 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             #:aow = numpy.einsum('npi,np->pi', ao, wva, out=aow)
             aow = _scale_ao(ao[:4], wva[:4], out=aow)
             vmat[0,i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wva[5], aow), mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wva[5], aow), mask, shls_slice, ao_loc)
-            vmat[0,i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wva[5], aow), mask, shls_slice, ao_loc)
+            vmat[0,i] += _tau_dot(mol, ao, wva[5], mask, shls_slice, ao_loc)
             #:aow = numpy.einsum('npi,np->pi', ao, wvb, out=aow)
             aow = _scale_ao(ao[:4], wvb[:4], out=aow)
             vmat[1,i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[1], _scale_ao(ao[1], wvb[5], aow), mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[2], _scale_ao(ao[2], wvb[5], aow), mask, shls_slice, ao_loc)
-            vmat[1,i] += _dot_ao_ao(mol, ao[3], _scale_ao(ao[3], wvb[5], aow), mask, shls_slice, ao_loc)
+            vmat[1,i] += _tau_dot(mol, ao, wvb[5], mask, shls_slice, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
             vmat[0,i] = vmat[0,i] + vmat[0,i].conj().T

@@ -125,27 +125,13 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rho_b = make_rho(1, ao[:10], mask, xctype)
             vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
                              verbose=verbose)[1]
-            wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
+            wva, wvb = numint._uks_mgga_wv0((rho_a,rho_b), vxc, weight)
             rks_grad._gga_grad_sum_(vmat[0], mol, ao, wva, mask, ao_loc)
             rks_grad._gga_grad_sum_(vmat[1], mol, ao, wvb, mask, ao_loc)
 
-            # XX, XY, XZ = 4, 5, 6
-            # YX, YY, YZ = 5, 7, 8
-            # ZX, ZY, ZZ = 6, 8, 9
-            vtau = vxc[3]
-            wva, wvb = .5 * weight * vtau.T
-            aow = numint._scale_ao(ao[1], wva)
-            rks_grad._d1_dot_(vmat[0], mol, [ao[4], ao[5], ao[6]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[2], wva)
-            rks_grad._d1_dot_(vmat[0], mol, [ao[5], ao[7], ao[8]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[3], wva)
-            rks_grad._d1_dot_(vmat[0], mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[1], wvb)
-            rks_grad._d1_dot_(vmat[1], mol, [ao[4], ao[5], ao[6]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[2], wvb)
-            rks_grad._d1_dot_(vmat[1], mol, [ao[5], ao[7], ao[8]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[3], wvb)
-            rks_grad._d1_dot_(vmat[1], mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
+            # *2 because wv[5] is scaled by 0.5 in _uks_mgga_wv0
+            rks_grad._tau_grad_dot_(vmat[0], mol, ao, wva[5]*2, mask, ao_loc, True)
+            rks_grad._tau_grad_dot_(vmat[1], mol, ao, wvb[5]*2, mask, ao_loc, True)
 
     exc = numpy.zeros((mol.natm,3))
     # - sign because nabla_X = -nabla_x
@@ -228,31 +214,20 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rho_b = make_rho(1, ao[:10], mask, xctype)
             exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
                                   verbose=verbose)[:2]
-            wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
+            wva, wvb = numint._uks_mgga_wv0((rho_a,rho_b), vxc, weight)
             vtau = vxc[3]
 
             vtmp = numpy.zeros((3,nao,nao))
             rks_grad._gga_grad_sum_(vtmp, mol, ao, wva, mask, ao_loc)
-            wva = .5 * weight * vtau[:,0]
-            aow = numint._scale_ao(ao[1], wva)
-            rks_grad._d1_dot_(vtmp, mol, [ao[4], ao[5], ao[6]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[2], wva)
-            rks_grad._d1_dot_(vtmp, mol, [ao[5], ao[7], ao[8]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[3], wva)
-            rks_grad._d1_dot_(vtmp, mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
+            # *2 because wv[5] is scaled by 0.5 in _uks_mgga_wv0
+            rks_grad._tau_grad_dot_(vtmp, mol, ao, wva[5]*2, mask, ao_loc, True)
             vmat[0] += vtmp
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho_a[0]+rho_b[0], weight1)
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[0]) * 2
 
             vtmp = numpy.zeros((3,nao,nao))
             rks_grad._gga_grad_sum_(vtmp, mol, ao, wvb, mask, ao_loc)
-            wvb = .5 * weight * vtau[:,1]
-            aow = numint._scale_ao(ao[1], wvb)
-            rks_grad._d1_dot_(vtmp, mol, [ao[4], ao[5], ao[6]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[2], wvb)
-            rks_grad._d1_dot_(vtmp, mol, [ao[5], ao[7], ao[8]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[3], wvb)
-            rks_grad._d1_dot_(vtmp, mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
+            rks_grad._tau_grad_dot_(vtmp, mol, ao, wvb[5]*2, mask, ao_loc, True)
             vmat[1] += vtmp
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[1]) * 2
 

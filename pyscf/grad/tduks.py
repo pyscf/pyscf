@@ -387,9 +387,6 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 
     elif xctype == 'MGGA':
         logger.warn(mol, 'More tests are needed for TD-MGGA')
-        XX, XY, XZ = 4, 5, 6
-        YX, YY, YZ = 5, 7, 8
-        ZX, ZY, ZZ = 6, 8, 9
         def mgga_sum_(vmat, ao, wv, mask):
             aow = numint._scale_ao(ao[:4], wv[:4])
             tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
@@ -402,13 +399,7 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
             vmat[0] += tmp + tmp.T
 
             rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv[:4], mask, ao_loc)
-            wv5 = wv[5] * 2
-            aow = numint._scale_ao(ao[1], wv5, aow)
-            rks_grad._d1_dot_(vmat[1:], mol, [ao[XX], ao[XY], ao[XZ]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[2], wv5, aow)
-            rks_grad._d1_dot_(vmat[1:], mol, [ao[YX], ao[YY], ao[YZ]], aow, mask, ao_loc, True)
-            aow = numint._scale_ao(ao[3], wv5, aow)
-            rks_grad._d1_dot_(vmat[1:], mol, [ao[ZX], ao[ZY], ao[ZZ]], aow, mask, ao_loc, True)
+            rks_grad._tau_grad_dot_(vmat[1:], mol, ao, wv[5]*2, mask, ao_loc, True)
 
         ao_deriv = 2
         for ao, mask, weight, coords \
