@@ -644,7 +644,17 @@ class SCF(hf.SCF):
 X2C_SCF = SCF
 
 class UHF(SCF):
-    pass
+    def to_ks(self, xc='HF'):
+        '''Convert the input mean-field object to an X2C-KS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.x2c import dft
+        mf = self.view(dft.UKS)
+        mf.converged = False
+        return mf
 
 X2C_UHF = UHF
 
@@ -656,6 +666,18 @@ class RHF(SCF):
 
     def _eigh(self, h, s):
         return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
+
+    def to_ks(self, xc='HF'):
+        '''Convert the input mean-field object to an X2C-KS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.x2c import dft
+        mf = self.view(dft.RKS)
+        mf.converged = False
+        return mf
 
 X2C_RHF = RHF
 

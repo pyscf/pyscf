@@ -138,7 +138,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     return rho, m
 
 def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                      on_LL_block=True):
+                      on_LL=True):
     '''Vxc matrix of non-collinear LDA'''
     aoa, aob = ao
     r, m = rho
@@ -153,7 +153,7 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
 
     # * .5 because of v+v.conj().T in r_vxc
     wv = .5 * weight * vr
-    if on_LL_block:
+    if on_LL:
         ws *= .5
     else:  # for SS block
         # flip the sign for small components because
@@ -181,12 +181,12 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
     return mat
 
 def _ncol_gga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                      on_LL_block=True):
+                      on_LL=True):
     '''Vxc matrix of non-collinear GGA'''
     raise NotImplementedError
 
 def _ncol_mgga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                       on_LL_block=True):
+                       on_LL=True):
     '''Vxc matrix of non-collinear MGGA'''
     raise NotImplementedError
 
@@ -197,11 +197,11 @@ def _dks_gga_wv0(rho, vxc, weight):
     return numint._uks_gga_wv0((rhoa, rhob), vxc, weight)
 
 def _col_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                     on_LL_block=True):
+                     on_LL=True):
     '''Vxc matrix of collinear LDA'''
     vrho = vxc[0]
     aoa, aob = ao
-    if on_LL_block:
+    if on_LL:
         wva, wvb = .5 * weight * vrho.T
     else:  # for SS block
         # v_rho = (vxc_a + vxc_b) * .5
@@ -215,9 +215,9 @@ def _col_lda_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
     return mat
 
 def _col_gga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                     on_LL_block=True):
+                     on_LL=True):
     '''Vxc matrix of collinear GGA'''
-    if on_LL_block:
+    if on_LL:
         wva, wvb = _dks_gga_wv0(rho, vxc, weight)
     else:  # for SS block
         wvb, wva = _dks_gga_wv0(rho, vxc, weight)
@@ -227,9 +227,9 @@ def _col_gga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
     return mat
 
 def _col_mgga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
-                      on_LL_block=True):
+                      on_LL=True):
     '''Vxc matrix of collinear MGGA'''
-    if on_LL_block:
+    if on_LL:
         wva, wvb = _dks_gga_wv0(rho, vxc, weight)
     else:
         wvb, wva = _dks_gga_wv0(rho, vxc, weight)
@@ -238,7 +238,7 @@ def _col_mgga_vxc_mat(mol, ao, weight, rho, vxc, non0tab, shls_slice, ao_loc,
     mat += _dot_ao_ao(mol, aob[0], _scale_ao(aob[:4], wvb[:4]), non0tab, shls_slice, ao_loc)
 
     vtau = vxc[3]
-    if on_LL_block:
+    if on_LL:
         wva, wvb = .25 * weight * vtau.T
     else:
         wvb, wva = .25 * weight * vtau.T
@@ -340,9 +340,9 @@ def _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight):
     return numint._uks_mgga_wv1(rho0, rho1, vxc, fxc, weight)
 
 def _col_lda_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
-                     non0tab, shls_slice, ao_loc, on_LL_block=True):
+                     non0tab, shls_slice, ao_loc, on_LL=True):
     '''Kernel matrix of collinear LDA'''
-    if on_LL_block:
+    if on_LL:
         wva, wvb = _dks_lda_wv1(rho0, rho1, vxc, fxc, weight)
     else:
         wvb, wva = _dks_lda_wv1(rho0, rho1, vxc, fxc, weight)
@@ -352,9 +352,9 @@ def _col_lda_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
     return mat
 
 def _col_gga_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
-                     non0tab, shls_slice, ao_loc, on_LL_block=True):
+                     non0tab, shls_slice, ao_loc, on_LL=True):
     '''Kernel matrix of collinear GGA'''
-    if on_LL_block:
+    if on_LL:
         wva, wvb = _dks_gga_wv1(rho0, rho1, vxc, fxc, weight)
     else:
         wvb, wva = _dks_gga_wv1(rho0, rho1, vxc, fxc, weight)
@@ -367,9 +367,9 @@ def _col_gga_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
     return mat
 
 def _col_mgga_fxc_mat(mol, ao, weight, rho0, rho1, vxc, fxc,
-                      non0tab, shls_slice, ao_loc, on_LL_block=True):
+                      non0tab, shls_slice, ao_loc, on_LL=True):
     '''Kernel matrix of collinear MGGA'''
-    if on_LL_block:
+    if on_LL:
         wva, wvb = _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight)
     else:
         wvb, wva = _dks_mgga_wv1(rho0, rho1, vxc, fxc, weight)

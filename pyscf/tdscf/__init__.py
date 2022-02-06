@@ -48,31 +48,27 @@ def TDHF(mf):
 
 def TDA(mf):
     if isinstance(mf, scf.uhf.UHF):
-        mf = mf.to_uhf()
         if isinstance(mf, dft.rks.KohnShamDFT):
-            return uks.TDA(mf)
+            return uks.TDA(mf.to_uks())
         else:
-            return uhf.TDA(mf)
+            return uhf.TDA(mf.to_uhf())
     else:
-        mf = mf.to_rhf()
         if isinstance(mf, dft.rks.KohnShamDFT):
-            return rks.TDA(mf)
+            return rks.TDA(mf.to_rks())
         else:
-            return rhf.TDA(mf)
+            return rhf.TDA(mf.to_rhf())
 
 def TDDFT(mf):
     if isinstance(mf, scf.uhf.UHF):
-        mf = mf.to_uhf()
         if isinstance(mf, dft.rks.KohnShamDFT):
-            return uks.tddft(mf)
+            return uks.tddft(mf.to_uks())
         else:
-            return uhf.TDHF(mf)
+            return uhf.TDHF(mf.to_uhf())
     else:
-        mf = mf.to_rhf()
         if isinstance(mf, dft.rks.KohnShamDFT):
-            return rks.tddft(mf)
+            return rks.tddft(mf.to_rks())
         else:
-            return rhf.TDHF(mf)
+            return rhf.TDHF(mf.to_rhf())
 
 TD = TDDFT
 

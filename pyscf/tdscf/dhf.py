@@ -261,7 +261,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                     b += lib.einsum('xria,xrjb->iajb', w_ov, rho_ov_b)
 
                     # aabb and bbaa
-                    w_ov = numpy.empty_like(rho_ov_a)
+                    w_ov = numpy.empty_like(rho_ov_b)
                     w_ov[0]  = numpy.einsum('r,ria->ria', u_d, rho_ov_b[0])
                     w_ov[0] += numpy.einsum('r,ria->ria', 2*u_dd, b0b1)
                     w_ov[0] += numpy.einsum('r,ria->ria',   u_ud, a0b1)

@@ -21,6 +21,7 @@
 '''
 
 
+import copy
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -61,7 +62,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
 
 
 class KohnShamDFT(rks.KohnShamDFT):
-    def __init__(self, mol, xc='LDA,VWN'):
+    def __init__(self, xc='LDA,VWN'):
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
@@ -74,6 +75,42 @@ class KohnShamDFT(rks.KohnShamDFT):
     @collinear.setter
     def collinear(self, val):
         self._numint.collinear = val
+
+    def to_rhf(self):
+        raise RuntimeError
+
+    def to_uhf(self):
+        raise RuntimeError
+
+    def to_ghf(self):
+        raise RuntimeError
+
+    def to_rks(self, xc=None):
+        raise RuntimeError
+
+    def to_uks(self, xc=None):
+        raise RuntimeError
+
+    def to_gks(self, xc=None):
+        raise RuntimeError
+
+    def to_dhf(self):
+        '''Convert the input mean-field object to a DHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = self.view(dhf.DHF)
+        mf.converged = False
+        return mf
+
+    def to_dks(self, xc=None):
+        if xc is not None and xc != self.xc:
+            mf = copy.copy(self)
+            mf.xc = xc
+            mf.converged = False
+        return self
 
 
 class DKS(KohnShamDFT, dhf.DHF):
@@ -112,5 +149,16 @@ class RDKS(KohnShamDFT, dhf.RDHF):
         x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
+
+    def to_dhf(self):
+        '''Convert the input mean-field object to a DHF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = self.view(dhf.RDHF)
+        mf.converged = False
+        return mf
 
 RKS = RDKS

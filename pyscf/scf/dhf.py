@@ -685,6 +685,40 @@ class DHF(hf.SCF):
         from pyscf.scf.stability import dhf_stability
         return dhf_stability(self, verbose, return_status)
 
+    def to_rhf(self):
+        raise RuntimeError
+
+    def to_uhf(self):
+        raise RuntimeError
+
+    def to_ghf(self):
+        raise RuntimeError
+
+    def to_rks(self, xc=None):
+        raise RuntimeError
+
+    def to_uks(self, xc=None):
+        raise RuntimeError
+
+    def to_gks(self, xc=None):
+        raise RuntimeError
+
+    def to_dhf(self):
+        return self
+
+    def to_dks(self, xc='HF'):
+        '''Convert the input mean-field object to a DKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.dft import dks
+        mf = self.view(dks.UDKS)
+        mf.xc = xc
+        mf.converged = False
+        return mf
+
 UHF = UDHF = DHF
 
 
@@ -718,6 +752,19 @@ class RDHF(DHF):
         x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
+
+    def to_dks(self, xc='HF'):
+        '''Convert the input mean-field object to a DKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.dft import dks
+        mf = self.view(dks.RDKS)
+        mf.xc = xc
+        mf.converged = False
+        return mf
 
 RHF = RDHF
 
