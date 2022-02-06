@@ -279,7 +279,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
 def gen_g_hop_dhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
-                  with_symmetry=True):
+                  with_symmetry=False):
     return gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao, h1e, with_symmetry)
 
 

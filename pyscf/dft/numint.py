@@ -1396,7 +1396,7 @@ def _rks_gga_wv1(rho0, rho1, vxc, fxc, weight):
     # sigma1 ~ \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
     sigma1 = numpy.einsum('xi,xi->i', rho0[1:4], rho1[1:4])
     ngrid = sigma1.size
-    wv = numpy.empty((4,ngrid))
+    wv = numpy.empty((4,ngrid), dtype=rho1.dtype)
     wv[0]  = frho * rho1[0]
     wv[0] += frhogamma * sigma1 * 2
     wv[1:] = (fgg * sigma1 * 4 + frhogamma * rho1[0] * 2) * rho0[1:4]
@@ -1414,7 +1414,7 @@ def _rks_gga_wv2(rho0, rho1, fxc, kxc, weight):
     r1s1 = rho1[0] * sigma1
     sigma2 = numpy.einsum('xi,xi->i', rho1[1:4], rho1[1:4])
     ngrid = sigma1.size
-    wv = numpy.empty((4,ngrid))
+    wv = numpy.empty((4,ngrid), dtype=rho1.dtype)
     wv[0]  = frrr * r1r1
     wv[0] += 4 * frrg * r1s1
     wv[0] += 4 * frgg * s1s1
@@ -1447,7 +1447,7 @@ def _rks_mgga_wv1(rho0, rho1, vxc, fxc, weight):
     frr, frg, fgg, fll, ftt, frl, frt, flt, fgl, fgt = fxc
     sigma1 = numpy.einsum('xi,xi->i', rho0[1:4], rho1[1:4])
     ngrids = sigma1.size
-    wv = numpy.zeros((6,ngrids))
+    wv = numpy.zeros((6,ngrids), dtype=rho1.dtype)
     wv[0]  = frr * rho1[0]
     wv[0] += frt * rho1[5]
     wv[0] += frg * sigma1 * 2
@@ -1481,7 +1481,7 @@ def _rks_mgga_wv2(rho0, rho1, fxc, kxc, weight):
     sigma2 = numpy.einsum('xi,xi->i', rho1[1:4], rho1[1:4])
 
     ngrid = sigma1.size
-    wv = numpy.zeros((6,ngrid))
+    wv = numpy.zeros((6,ngrid), dtype=rho1.dtype)
     wv[0]  = frrr * r1r1
     wv[0] += 4 * frrg * r1s1
     wv[0] += 4 * frgg * s1s1

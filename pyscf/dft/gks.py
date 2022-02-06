@@ -127,6 +127,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
+energy_elec = rks.energy_elec
+
 
 class GKS(rks.KohnShamDFT, ghf.GHF):
     '''Generalized Kohn-Sham'''
@@ -142,7 +144,7 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
         return self
 
     get_veff = get_veff
-    energy_elec = rks.energy_elec
+    energy_elec = energy_elec
 
     @property
     def collinear(self):

@@ -107,7 +107,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     logger.debug(mf, 'E1 = %.14g  E_coul = %.14g', e1, e_coul)
 
     if not mf.with_ssss and mf.ssss_approx == 'Visscher':
-        e_coul += _vischer_ssss_correction(mf, dm)
+        e_coul += _visscher_ssss_correction(mf, dm)
 
     mf.scf_summary['e1'] = e1
     mf.scf_summary['e2'] = e_coul
@@ -660,6 +660,30 @@ class DHF(hf.SCF):
         self._coulomb_level = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = None # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
         return self
+
+    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+        '''
+        DHF/DKS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            return_status: bool
+                Whether to return `stable_i` and `stable_e`
+
+        Returns:
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+        '''
+        from pyscf.scf.stability import dhf_stability
+        return dhf_stability(self, verbose, return_status)
 
 UHF = UDHF = DHF
 

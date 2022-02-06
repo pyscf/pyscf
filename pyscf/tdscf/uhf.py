@@ -25,6 +25,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
+from pyscf.scf import _response_functions
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -37,7 +38,7 @@ POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_thresh
 
 
 def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
-    '''(A+B)x
+    '''A x
 
     Kwargs:
         wfnsym : int or str
@@ -289,7 +290,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a_bb += iajb
                 b_bb += iajb
 
-                w_ov = numpy.empty_like(rho_ov_b)
+                w_ov = numpy.empty_like(rho_ov_a)
                 w_ov[0]  = numpy.einsum('r,ria->ria', u_d, rho_ov_b[0])
                 w_ov[0] += numpy.einsum('r,ria->ria', 2*u_dd, b0b1)
                 w_ov[0] += numpy.einsum('r,ria->ria',   u_ud, a0b1)
@@ -307,6 +308,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a_ab += iajb
                 b_ab += iajb
 
+        elif xctype == 'HF':
+            pass
         elif xctype == 'NLC':
             raise NotImplementedError('NLC')
         elif xctype == 'MGGA':

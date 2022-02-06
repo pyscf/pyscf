@@ -31,8 +31,7 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-# To ensure .gen_response() methods are registered
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -45,7 +44,7 @@ POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_thresh
 
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
-    '''Generate function to compute (A+B)x
+    '''Generate function to compute A x
 
     Kwargs:
         wfnsym : int or str
@@ -165,7 +164,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             ao_deriv = 0
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                rho = make_rho(0, ao, mask, 'LDA')
+                rho = make_rho(0, ao, mask, xctype)
                 fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[2]
                 frr = fxc[0]
 
@@ -181,7 +180,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             ao_deriv = 1
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                rho = make_rho(0, ao, mask, 'GGA')
+                rho = make_rho(0, ao, mask, xctype)
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
                 vgamma = vxc[1]
                 frho, frhogamma, fgg = fxc[:3]
@@ -205,6 +204,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                 a += iajb
                 b += iajb
 
+        elif xctype == 'HF':
+            pass
         elif xctype == 'NLC':
             raise NotImplementedError('NLC')
         elif xctype == 'MGGA':

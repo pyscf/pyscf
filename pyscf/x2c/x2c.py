@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+X2C 2-component HF methods
+'''
 
 from functools import reduce
 import copy
@@ -451,7 +454,7 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 
-class X2C_UHF(hf.SCF):
+class SCF(hf.SCF):
     '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -468,8 +471,7 @@ class X2C_UHF(hf.SCF):
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
-        if self.with_x2c:
-            self.with_x2c.dump_flags(verbose)
+        self.with_x2c.dump_flags(verbose)
         return self
 
     def init_guess_by_minao(self, mol=None):
@@ -608,9 +610,45 @@ class X2C_UHF(hf.SCF):
     def sfx2c1e(self):
         raise NotImplementedError
 
-UHF = X2C_UHF
+    def newton(self):
+        from pyscf.x2c.newton import newton
+        return newton(self)
 
-class X2C_RHF(X2C_UHF):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+        '''
+        X2C-HF/X2C-KS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            return_status: bool
+                Whether to return `stable_i` and `stable_e`
+
+        Returns:
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+        '''
+        from pyscf.x2c.stability import x2chf_stability
+        return x2chf_stability(self, verbose, return_status)
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+X2C_SCF = SCF
+
+class UHF(SCF):
+    pass
+
+X2C_UHF = UHF
+
+class RHF(SCF):
     def __init__(self, mol):
         super().__init__(mol)
         if dhf.zquatev is None:
@@ -619,53 +657,13 @@ class X2C_RHF(X2C_UHF):
     def _eigh(self, h, s):
         return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
 
-RHF = X2C_RHF
-
-try:
-    from pyscf.dft import rks, dks, gks, r_numint
-    class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
-        def __init__(self, mol):
-            X2C_UHF.__init__(self, mol)
-            rks.KohnShamDFT.__init__(self)
-            self._numint = r_numint.RNumInt()
-
-        def dump_flags(self, verbose=None):
-            hf.SCF.dump_flags(self, verbose)
-            rks.KohnShamDFT.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-        get_veff = dks.get_veff
-        energy_elec = rks.energy_elec
-
-        @property
-        def collinear(self):
-            return self._numint.collinear
-        @collinear.setter
-        def collinear(self, val):
-            self._numint.collinear = val
-
-    UKS = X2C_UKS
-
-    class X2C_RKS(X2C_UKS):
-        def __init__(self, mol):
-            super().__init__(mol)
-            if dhf.zquatev is None:
-                raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
-
-        def _eigh(self, h, s):
-            return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
-
-    RKS = X2C_RKS
-
-except ImportError:
-    pass
+X2C_RHF = RHF
 
 def x2c1e_ghf(mf):
     '''
     For the given *GHF* object, generate X2C-GSCF object in GHF spin-orbital
-    basis
+    basis. Note the orbital basis of X2C_GSCF is different to the X2C_RHF and
+    X2C_UHF objects. X2C_RHF and X2C_UHF use spinor basis.
 
     Args:
         mf : an GHF/GKS object
@@ -1018,6 +1016,7 @@ class _X2C_SCF:
 
 
 if __name__ == '__main__':
+    from pyscf.x2c import dft
     mol = mole.Mole()
     mol.build(
         verbose = 0,
@@ -1039,6 +1038,6 @@ if __name__ == '__main__':
     method.with_x2c.approx = 'atom1e'
     print('E(X2C1E) = %.12g' % method.kernel())
 
-    method = UKS(mol)
+    method = dft.UKS(mol)
     ex2c = method.kernel()
     print('E(X2C1E) = %.12g' % ex2c)
