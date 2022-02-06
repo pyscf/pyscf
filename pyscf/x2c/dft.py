@@ -21,25 +21,47 @@ from pyscf.x2c import x2c
 from pyscf.dft import dks
 
 class UKS(dks.KohnShamDFT, x2c.UHF):
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         x2c.UHF.__init__(self, mol)
-        dks.KohnShamDFT.__init__(self)
+        dks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         x2c.UHF.dump_flags(self, verbose)
         dks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
+    def to_hf(self):
+        '''Convert the input mean-field object to an X2C-HF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = self.view(x2c.UHF)
+        mf.converged = False
+        return mf
+
 X2C_UKS = UKS
 
 class RKS(dks.KohnShamDFT, x2c.RHF):
-    def __init__(self, mol):
+    def __init__(self, mol, xc='LDA,VWN'):
         x2c.RHF.__init__(self, mol)
-        dks.KohnShamDFT.__init__(self)
+        dks.KohnShamDFT.__init__(self, xc)
 
     def dump_flags(self, verbose=None):
         x2c.RHF.dump_flags(self, verbose)
         dks.KohnShamDFT.dump_flags(self, verbose)
         return self
+
+    def to_hf(self):
+        '''Convert the input mean-field object to an X2C-HF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = self.view(x2c.RHF)
+        mf.converged = False
+        return mf
 
 X2C_RKS = RKS

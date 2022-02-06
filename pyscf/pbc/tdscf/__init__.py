@@ -66,7 +66,9 @@ def TDDFT(mf):
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
         raise NotImplementedError
     from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
+    if isinstance(mf, scf.khf.KSCF):
+        return KTDDFT(mf)
+    elif isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf)
         if isinstance(mf, scf.hf.KohnShamDFT):
             return uks.tddft(mf)

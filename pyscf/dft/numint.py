@@ -1385,9 +1385,9 @@ def _rks_gga_wv0(rho, vxc, weight):
     vrho, vgamma = vxc[:2]
     ngrid = vrho.size
     wv = numpy.empty((4,ngrid))
-    wv[0]  = weight * vrho
-    wv[1:] = (weight * vgamma * 2) * rho[1:4]
-    wv[0] *= .5  # v+v.T should be applied in the caller
+    wv[0]  = vrho * .5  # v+v.T should be applied in the caller
+    wv[1:] = 2 * vgamma * rho[1:4]
+    wv[:] *= weight
     return wv
 
 def _rks_gga_wv1(rho0, rho1, vxc, fxc, weight):
@@ -1753,9 +1753,6 @@ def _uks_gga_wv2(rho0, rho1, fxc, kxc, weight):
     a1a1 = numpy.einsum('xi,xi->i', rho1a[1:4], rho1a[1:4]) * 2
     a1b1 = numpy.einsum('xi,xi->i', rho1a[1:4], rho1b[1:4]) * 2
     b1b1 = numpy.einsum('xi,xi->i', rho1b[1:4], rho1b[1:4]) * 2
-    rara = rho1a[0] * rho1a[0]
-    rarb = rho1a[0] * rho1b[0]
-    rbrb = rho1b[0] * rho1b[0]
     ab_1 = a0b1 + b0a1
 
     wva, wvb = numpy.zeros((2, 4, ngrid), dtype=rho1a.dtype)
@@ -1769,30 +1766,30 @@ def _uks_gga_wv2(rho0, rho1, fxc, kxc, weight):
     wva[1:4] += u_ud * rho1a[0] * rho1b[1:4] * 2
     wva[1:4] += d_uu * rho1b[0] * rho1a[1:4] * 4
     wva[1:4] += d_ud * rho1b[0] * rho1b[1:4] * 2
-    wva[1:4] += uu_uu * a1a1 * rho0a[1:4] * 2
     wva[1:4] += uu_uu * a0a1 * rho1a[1:4] * 4
-    wva[1:4] += uu_ud * ab_1 * rho1a[1:4] * 4
-    wva[1:4] += uu_ud * a1b1 * rho0a[1:4] * 2
-    wva[1:4] += uu_ud * a1a1 * rho0b[1:4]
     wva[1:4] += uu_ud * a0a1 * rho1b[1:4] * 2
-    wva[1:4] += uu_dd * b1b1 * rho0a[1:4] * 2
+    wva[1:4] += uu_ud * ab_1 * rho1a[1:4] * 4
     wva[1:4] += uu_dd * b0b1 * rho1a[1:4] * 4
     wva[1:4] += ud_ud * ab_1 * rho1b[1:4] * 2
+    wva[1:4] += ud_dd * b0b1 * rho1b[1:4] * 2
+    wva[1:4] += uu_uu * a1a1 * rho0a[1:4] * 2
+    wva[1:4] += uu_ud * a1b1 * rho0a[1:4] * 2
+    wva[1:4] += uu_dd * b1b1 * rho0a[1:4] * 2
+    wva[1:4] += uu_ud * a1a1 * rho0b[1:4]
     wva[1:4] += ud_ud * a1b1 * rho0b[1:4]
     wva[1:4] += ud_dd * b1b1 * rho0b[1:4]
-    wva[1:4] += ud_dd * b0b1 * rho1b[1:4] * 2
     wva[0] += u_u_uu * rho1a[0] * a0a1 * 2
     wva[0] += u_d_uu * rho1b[0] * a0a1 * 2
     wva[0] += u_u_ud * rho1a[0] * ab_1 * 2
     wva[0] += u_d_ud * rho1b[0] * ab_1 * 2
     wva[0] += u_u_dd * rho1a[0] * b0b1 * 2
     wva[0] += u_d_dd * rho1b[0] * b0b1 * 2
-    wva[1:4] += u_u_uu * rara * rho0a[1:4] * 2
-    wva[1:4] += u_u_ud * rara * rho0b[1:4]
-    wva[1:4] += u_d_uu * rarb * rho0a[1:4] * 4
-    wva[1:4] += u_d_ud * rarb * rho0b[1:4] * 2
-    wva[1:4] += d_d_uu * rbrb * rho0a[1:4] * 2
-    wva[1:4] += d_d_ud * rbrb * rho0b[1:4]
+    wva[1:4] += u_u_uu * rho1a[0] * rho1a[0] * rho0a[1:4] * 2
+    wva[1:4] += u_d_uu * rho1a[0] * rho1b[0] * rho0a[1:4] * 4
+    wva[1:4] += d_d_uu * rho1b[0] * rho1b[0] * rho0a[1:4] * 2
+    wva[1:4] += u_u_ud * rho1a[0] * rho1a[0] * rho0a[1:4]
+    wva[1:4] += u_d_ud * rho1a[0] * rho1b[0] * rho0a[1:4] * 2
+    wva[1:4] += d_d_ud * rho1b[0] * rho1b[0] * rho0a[1:4]
     wva[1:4] += u_uu_uu * rho1a[0] * a0a1 * rho0a[1:4] * 4
     wva[1:4] += d_uu_uu * rho1b[0] * a0a1 * rho0a[1:4] * 4
     wva[1:4] += u_uu_ud * rho1a[0] * ab_1 * rho0a[1:4] * 4
@@ -1854,12 +1851,12 @@ def _uks_gga_wv2(rho0, rho1, fxc, kxc, weight):
     wvb[0] += u_d_ud * rho1a[0] * ab_1 * 2
     wvb[0] += d_d_uu * rho1b[0] * a0a1 * 2
     wvb[0] += u_d_uu * rho1a[0] * a0a1 * 2
-    wvb[1:4] += u_u_ud * rara * rho0a[1:4]
-    wvb[1:4] += u_u_dd * rara * rho0b[1:4] * 2
-    wvb[1:4] += u_d_ud * rarb * rho0a[1:4] * 2
-    wvb[1:4] += u_d_dd * rarb * rho0b[1:4] * 4
-    wvb[1:4] += d_d_ud * rbrb * rho0a[1:4]
-    wvb[1:4] += d_d_dd * rbrb * rho0b[1:4] * 2
+    wvb[1:4] += d_d_dd * rho1b[0] * rho1b[0] * rho0b[1:4] * 2
+    wvb[1:4] += u_d_dd * rho1b[0] * rho1a[0] * rho0b[1:4] * 4
+    wvb[1:4] += u_u_dd * rho1a[0] * rho1a[0] * rho0b[1:4] * 2
+    wvb[1:4] += d_d_ud * rho1b[0] * rho1b[0] * rho0b[1:4]
+    wvb[1:4] += u_d_ud * rho1b[0] * rho1a[0] * rho0b[1:4] * 2
+    wvb[1:4] += u_u_ud * rho1a[0] * rho1a[0] * rho0b[1:4]
     wvb[1:4] += d_dd_dd * rho1b[0] * b0b1 * rho0b[1:4] * 4
     wvb[1:4] += u_dd_dd * rho1a[0] * b0b1 * rho0b[1:4] * 4
     wvb[1:4] += d_ud_dd * rho1b[0] * ab_1 * rho0b[1:4] * 4
@@ -2089,16 +2086,16 @@ def _uks_mgga_wv2(rho0, rho1, fxc, kxc, weight):
     wva[1:4] += d_ud * rho1b[0] * rho1b[1:4] * 2
     wva[1:4] += uu_uu * a1a1 * rho0a[1:4] * 2
     wva[1:4] += uu_uu * a0a1 * rho1a[1:4] * 4
+    wva[1:4] += uu_ud * a0a1 * rho1b[1:4] * 2
     wva[1:4] += uu_ud * ab_1 * rho1a[1:4] * 4
     wva[1:4] += uu_ud * a1b1 * rho0a[1:4] * 2
     wva[1:4] += uu_ud * a1a1 * rho0b[1:4]
-    wva[1:4] += uu_ud * a0a1 * rho1b[1:4] * 2
     wva[1:4] += uu_dd * b1b1 * rho0a[1:4] * 2
     wva[1:4] += uu_dd * b0b1 * rho1a[1:4] * 4
     wva[1:4] += ud_ud * ab_1 * rho1b[1:4] * 2
     wva[1:4] += ud_ud * a1b1 * rho0b[1:4]
-    wva[1:4] += ud_dd * b1b1 * rho0b[1:4]
     wva[1:4] += ud_dd * b0b1 * rho1b[1:4] * 2
+    wva[1:4] += ud_dd * b1b1 * rho0b[1:4]
     wva[1:4] += u_u_uu * rara * rho0a[1:4] * 2
     wva[1:4] += u_u_ud * rara * rho0b[1:4]
     wva[1:4] += u_d_uu * rarb * rho0a[1:4] * 4
@@ -2308,7 +2305,7 @@ def _uks_mgga_wv2(rho0, rho1, fxc, kxc, weight):
     wvb[5] += frgt[9 ] * rho1b[0] * ab_1                        # d_ud_d
     wvb[5] += frgt[11] * rho1b[0] * b0b1                        # d_dd_d
     wvb[5] += fggt[1 ] * a0a1 * a0a1 * .5                       # uu_uu_d
-    wvb[5] += fggt[3 ] * ab_1 * a0a1                            # uu_ud_d
+    wvb[5] += fggt[3 ] * ab_1 * a0a1 * .5                       # uu_ud_d
     wvb[5] += fggt[5 ] * b0b1 * a0a1                            # uu_dd_d
     wvb[5] += fggt[7 ] * ab_1**2 * .5                           # ud_ud_d
     wvb[5] += fggt[9 ] * b0b1 * ab_1                            # ud_dd_d
