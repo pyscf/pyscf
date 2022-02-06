@@ -46,8 +46,8 @@ class TDDFT(rhf.TDHF):
 
 RPA = TDRKS = TDDFT
 
-class TDDFTNoHybrid(TDDFT, TDA):
-    ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
+class CasidaTDDFT(TDDFT, TDA):
+    '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
     init_guess = TDA.init_guess
 
@@ -57,7 +57,7 @@ class TDDFTNoHybrid(TDDFT, TDA):
 
         mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert(mo_coeff.dtype == numpy.double)
+        assert mo_coeff.dtype == numpy.double
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff.shape
@@ -167,6 +167,7 @@ class TDDFTNoHybrid(TDDFT, TDA):
         from pyscf.grad import tdrks
         return tdrks.Gradients(self)
 
+TDDFTNoHybrid = CasidaTDDFT
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
@@ -194,17 +195,18 @@ class dTDA(TDA):
 
 
 def tddft(mf):
-    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
         return TDDFT(mf)
     else:
-        return TDDFTNoHybrid(mf)
+        return CasidaTDDFT(mf)
 
 from pyscf import dft
 dft.rks.RKS.TDA           = dft.rks_symm.RKS.TDA           = lib.class_as_method(TDA)
 dft.rks.RKS.TDHF          = dft.rks_symm.RKS.TDHF          = None
 #dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = lib.class_as_method(TDDFT)
 dft.rks.RKS.TDDFTNoHybrid = dft.rks_symm.RKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.rks.RKS.CasidaTDDFT   = dft.rks_symm.RKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.rks.RKS.TDDFT         = dft.rks_symm.RKS.TDDFT         = tddft
 dft.rks.RKS.dTDA          = dft.rks_symm.RKS.dTDA          = lib.class_as_method(dTDA)
 dft.rks.RKS.dRPA          = dft.rks_symm.RKS.dRPA          = lib.class_as_method(dRPA)

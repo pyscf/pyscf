@@ -95,8 +95,8 @@ class NumInt2C(numint._NumIntMixin):
         for ao, mask, weight, coords \
                 in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
             # rhoa and rhob have to be real
-            rhoa.append(numint.eval_rho(mol, ao, dm_a, mo_occ, mask, xctype))
-            rhob.append(numint.eval_rho(mol, ao, dm_b, mo_occ, mask, xctype))
+            rhoa.append(numint.eval_rho(mol, ao, dm_a, mask, xctype))
+            rhob.append(numint.eval_rho(mol, ao, dm_b, mask, xctype))
         rho = (np.hstack(rhoa), np.hstack(rhob))
         vxc, fxc = self.eval_xc(xc_code, rho, spin=1, relativity=0, deriv=2,
                                 verbose=0)[1:3]
@@ -115,6 +115,7 @@ class NumInt2C(numint._NumIntMixin):
                max_memory=2000, verbose=None):
         dms = np.asarray(dms)
         nao = dms.shape[-1] // 2
+        # ground state density is real
         dm_a = dms[...,:nao,:nao].real.copy()
         dm_b = dms[...,nao:,nao:].real.copy()
         ni = self.view(numint.NumInt)
@@ -124,22 +125,23 @@ class NumInt2C(numint._NumIntMixin):
         vmat[...,:nao,:nao] = vxc[0]
         vmat[...,nao:,nao:] = vxc[1]
         return n, exc, vmat
-    nr_gks_vxc = nr_vxc
-    get_vxc = nr_vxc
+    get_vxc = nr_gks_vxc = nr_vxc
 
     def nr_fxc(self, mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
                rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None):
         dms = np.asarray(dms)
         nao = dms.shape[-1] // 2
-        dms_a = dms[...,:nao,:nao].real.copy()
-        dms_b = dms[...,nao:,nao:].real.copy()
+        dm0a = dm0[:nao,:nao].real.copy()
+        dm0b = dm0[nao:,nao:].real.copy()
+        # dms_a and dms_b may be complex if they are TDDFT amplitudes
+        dms_a = dms[...,:nao,:nao].copy()
+        dms_b = dms[...,nao:,nao:].copy()
         ni = self.view(numint.NumInt)
         vmat = numint.nr_uks_fxc(
-            ni, mol, grids, xc_code, dm0, (dms_a, dms_b), relativity=0, hermi=0,
-            rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None)
+            ni, mol, grids, xc_code, (dm0a, dm0b), (dms_a, dms_b), relativity=0,
+            hermi=0, rho0=None, vxc=None, fxc=None, max_memory=2000, verbose=None)
         fxcmat = np.zeros_like(dms)
         fxcmat[...,:nao,:nao] = vmat[0]
         fxcmat[...,nao:,nao:] = vmat[1]
         return fxcmat
-    nr_gks_fxc = nr_fxc
-    get_fxc = nr_fxc
+    get_fxc = nr_gks_fxc = nr_fxc

@@ -27,6 +27,7 @@ from pyscf.lib import logger
 from pyscf.scf import dhf
 from pyscf.dft import rks
 from pyscf.dft import gks
+from pyscf.dft import r_numint
 
 
 @lib.with_doc(gks.get_veff.__doc__)
@@ -54,35 +55,18 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     '''
     e1, e2 = rks.energy_elec(ks, dm, h1e, vhf)
     if not ks.with_ssss and ks.ssss_approx == 'Visscher':
-        e2 += _vischer_ssss_correction(mf, dm)
-        mf.scf_summary['e2'] = e2
+        e2 += dhf._vischer_ssss_correction(ks, dm)
+        ks.scf_summary['e2'] = e2
     return e1, e2
 
 
-class DKS(rks.KohnShamDFT, dhf.DHF):
-    '''Kramers unrestricted Dirac-Kohn-Sham'''
+class KohnShamDFT(rks.KohnShamDFT):
     def __init__(self, mol, xc='LDA,VWN'):
-        from pyscf.dft import r_numint
-        dhf.DHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
-    def dump_flags(self, verbose=None):
-        dhf.DHF.dump_flags(self, verbose)
-        rks.KohnShamDFT.dump_flags(self, verbose)
-        return self
-
-    get_veff = get_veff
-    energy_elec = energy_elec
-
-    def x2c1e(self):
-        from pyscf.x2c import x2c
-        x2chf = x2c.UKS(self.mol)
-        x2c_keys = x2chf._keys
-        x2chf.__dict__.update(self.__dict__)
-        x2chf._keys = self._keys.union(x2c_keys)
-        return x2chf
-    x2c = x2c1e
+    get_veff = gks.get_veff
+    energy_elec = gks.energy_elec
 
     @property
     def collinear(self):
@@ -90,27 +74,43 @@ class DKS(rks.KohnShamDFT, dhf.DHF):
     @collinear.setter
     def collinear(self, val):
         self._numint.collinear = val
+
+
+class DKS(KohnShamDFT, dhf.DHF):
+    '''Kramers unrestricted Dirac-Kohn-Sham'''
+    def __init__(self, mol, xc='LDA,VWN'):
+        dhf.DHF.__init__(self, mol)
+        KohnShamDFT.__init__(self, xc)
+
+    def dump_flags(self, verbose=None):
+        dhf.DHF.dump_flags(self, verbose)
+        KohnShamDFT.dump_flags(self, verbose)
+        return self
+
+    def x2c1e(self):
+        from pyscf.x2c import dft
+        x2chf = dft.UKS(self.mol)
+        x2c_keys = x2chf._keys
+        x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
+        return x2chf
+    x2c = x2c1e
 
 UKS = UDKS = DKS
 
-class RDKS(DKS, dhf.RDHF):
+class RDKS(KohnShamDFT, dhf.RDHF):
     '''Kramers restricted Dirac-Kohn-Sham'''
-    _eigh = dhf.RDHF._eigh
+    def __init__(self, mol, xc='LDA,VWN'):
+        dhf.RDHF.__init__(self, mol)
+        KohnShamDFT.__init__(self, xc)
 
     def x2c1e(self):
-        from pyscf.x2c import x2c
-        x2chf = x2c.RKS(self.mol)
+        from pyscf.x2c import dft
+        x2chf = dft.RKS(self.mol)
         x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
         x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
     x2c = x2c1e
-
-    @property
-    def collinear(self):
-        return self._numint.collinear
-    @collinear.setter
-    def collinear(self, val):
-        self._numint.collinear = val
 
 RKS = RDKS

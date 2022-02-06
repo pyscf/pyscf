@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2021-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ class TDDFT(ghf.TDHF):
 
 RPA = TDGKS = TDDFT
 
-class TDDFTNoHybrid(TDDFT, TDA):
-    ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
+class CasidaTDDFT(TDDFT, TDA):
+    '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
     init_guess = TDA.init_guess
 
@@ -48,7 +48,7 @@ class TDDFTNoHybrid(TDDFT, TDA):
         wfnsym = self.wfnsym
         mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert(mo_coeff.dtype == numpy.double)
+        assert mo_coeff.dtype == numpy.double
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff.shape
@@ -78,16 +78,22 @@ class TDDFTNoHybrid(TDDFT, TDA):
 
         def vind(zs):
             zs = numpy.asarray(zs).reshape(-1,nocc,nvir)
-            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia, orbo, orbv.conj())
+            if wfnsym is not None and mol.symmetry:
+                zs = numpy.copy(zs)
+                zs[:,sym_forbid] = 0
+
+            dmov = lib.einsum('xov,ov,po,qv->xpq', zs, d_ia, orbo, orbv)
             # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
-            dmov = dmov + dmov.conj().transpose(0,2,1)
+            dmov = dmov + dmov.transpose(0,2,1)
 
             v1ao = vresp(dmov)
-            v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
+            v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo, orbv)
 
             # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
             v1ov += numpy.einsum('xov,ov->xov', zs, ed_ia)
             v1ov *= d_ia
+            if wfnsym is not None and mol.symmetry:
+                v1ov[:,sym_forbid] = 0
             return v1ov.reshape(v1ov.shape[0],-1)
 
         return vind, hdiag
@@ -156,16 +162,21 @@ class TDDFTNoHybrid(TDDFT, TDA):
     def nuc_grad_method(self):
         raise NotImplementedError
 
+TDDFTNoHybrid = CasidaTDDFT
+
 
 def tddft(mf):
-    '''Driver to create TDDFT or TDDFTNoHybrid object'''
-    if mf._numint.libxc.is_hybrid_xc(mf.xc):
-        return TDDFT(mf)
+    '''Driver to create TDDFT or CasidaTDDFT object'''
+    if (not mf._numint.libxc.is_hybrid_xc(mf.xc) and
+        # Casida formula can be applied for real orbitals only
+        mf.mo_coeff.dtype == numpy.double):
+        return CasidaTDDFT(mf)
     else:
-        return TDDFTNoHybrid(mf)
+        return TDDFT(mf)
 
 from pyscf import dft
 dft.gks.GKS.TDA           = dft.gks_symm.GKS.TDA           = lib.class_as_method(TDA)
 dft.gks.GKS.TDHF          = dft.gks_symm.GKS.TDHF          = None
 dft.gks.GKS.TDDFTNoHybrid = dft.gks_symm.GKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.gks.GKS.CasidaTDDFT   = dft.gks_symm.GKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.gks.GKS.TDDFT         = dft.gks_symm.GKS.TDDFT         = tddft

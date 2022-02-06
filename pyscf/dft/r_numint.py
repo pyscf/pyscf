@@ -40,7 +40,7 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
         ngrids = coords.shape[0]
         nao = mol.nao_2c()
         ao = numpy.ndarray((4,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
-        aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=ao[:2])
+        aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=ao[:2])  # noqa
         ao = ao.transpose(0,1,3,2)
         aoS = ao[2:]
         aoSa, aoSb = aoS
