@@ -1,0 +1,128 @@
+# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+#         Alexander Sokolov <alexander.y.sokolov@gmail.com>
+#
+import unittest
+import numpy
+from pyscf.pbc import gto
+from pyscf.pbc import scf,adc,mp
+from pyscf     import adc as mol_adc
+from pyscf.pbc.tools.pbc import super_cell
+
+cell = gto.M(
+    unit = 'B',
+    a = [[ 0.,          3.37013733,  3.37013733],
+         [ 3.37013733,  0.,          3.37013733],
+         [ 3.37013733,  3.37013733,  0.        ]],
+    mesh = [13]*3,
+    atom = '''He 0 0 0
+              He 1.68506866 1.68506866 1.68506866''',
+    basis = 'gth-dzv',
+    pseudo = 'gth-pade',
+    verbose = 0,
+)
+
+nmp = [1,1,2]
+
+# periodic calculation at gamma point
+kpts = cell.make_kpts((nmp))
+kpts -= kpts[0]
+kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
+kadc  = adc.KRADC(kmf)
+
+class KnownValues(unittest.TestCase):
+
+    def test_ip_adc2_k(self):
+
+        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
+
+        self.assertAlmostEqual(e[0][0], 0.03211224, 6)
+        self.assertAlmostEqual(e[0][1], 0.52088413, 6)
+        self.assertAlmostEqual(e[0][2], 0.92916398, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.89132918, 6)
+        self.assertAlmostEqual(p[0][1], 1.80157487, 6)
+        self.assertAlmostEqual(p[0][2], 0.00004972, 6)
+
+    def test_ip_adc2x_k(self):
+
+        nmp = [2,2,2]
+        kpts = cell.make_kpts((nmp))
+        kpts -= kpts[0]
+        kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
+        kadc  = adc.KRADC(kmf)
+        kadc.method = 'adc(2)-x'
+        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
+
+        self.assertAlmostEqual(e[0][0], 0.13741437, 6)
+        self.assertAlmostEqual(e[0][1], 0.65279043, 6)
+        self.assertAlmostEqual(e[0][2], 1.08236251, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.93376135, 6)
+        self.assertAlmostEqual(p[0][1], 1.90737248, 6)
+        self.assertAlmostEqual(p[0][2], 0.00357378, 6)
+
+    def test_ip_adc2c_k(self):
+
+        kadc.method = 'adc(2)-c'
+        kadc.higher_excitation = True
+        kadc.kernel_gs()
+        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
+       
+        self.assertAlmostEqual(e[0][0], 0.02686973, 6)
+        self.assertAlmostEqual(e[0][1], 0.51798709, 6)
+        self.assertAlmostEqual(e[0][2], 0.92916398, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.88496176, 6)
+        self.assertAlmostEqual(p[0][1], 1.79471337, 6)
+        self.assertAlmostEqual(p[0][2], 0.00003960, 6)
+
+    def test_ip_adc2xc_k(self):
+
+        nmp = [3,1,1]
+        kpts = cell.make_kpts((nmp))
+        kpts -= kpts[0]
+        kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
+        kadc  = adc.KRADC(kmf)
+        kadc.method = 'adc(2)-xc'
+        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
+ 
+        self.assertAlmostEqual(e[0][0], 0.21116811, 6)
+        self.assertAlmostEqual(e[0][1], 0.71795489, 6)
+        self.assertAlmostEqual(e[0][2], 0.98377928, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.90176526, 6)
+        self.assertAlmostEqual(p[0][1], 1.80077089, 6)
+        self.assertAlmostEqual(p[0][2], 0.05015164, 6)
+
+    def test_ip_adc3_k(self):
+
+        kmf = scf.KRHF(cell, kpts,exxdiv=None).run()
+        kadc  = adc.KRADC(kmf)
+        kadc.method = 'adc(3)'
+        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
+ 
+        self.assertAlmostEqual(e[0][0], 0.03297725, 6)
+        self.assertAlmostEqual(e[0][1], 0.52724032, 6)
+        self.assertAlmostEqual(e[0][2], 0.85718537, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.90849228, 6)
+        self.assertAlmostEqual(p[0][1], 1.80306363, 6)
+        self.assertAlmostEqual(p[0][2], 0.00578080, 6)
+
+if __name__ == "__main__":
+    print("k-point calculations for IP-ADC methods")
+    unittest.main()

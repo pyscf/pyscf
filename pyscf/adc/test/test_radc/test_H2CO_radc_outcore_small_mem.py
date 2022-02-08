@@ -55,6 +55,7 @@ class KnownValues(unittest.TestCase):
 
         myadc = adc.ADC(mf)
         myadc.max_memory = 1
+        myadc.higher_excitations = True
         e_adc_mp2, t_amp1, t_amp2 = myadc.kernel_gs()
 
         diff_mp2 = e_adc_mp2 - e_mp2
@@ -95,6 +96,7 @@ class KnownValues(unittest.TestCase):
 
         myadc = adc.ADC(mf)
         myadc.max_memory = 20
+        myadc.higher_excitations = True
         e_adc_mp2, t_amp1, t_amp2 = myadc.kernel_gs()
 
         diff_mp2 = e_adc_mp2 - e_mp2

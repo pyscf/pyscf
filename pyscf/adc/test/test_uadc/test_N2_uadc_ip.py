@@ -43,6 +43,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
   
+        myadc.higher_excitations = True
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
@@ -58,6 +59,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2_oneroot(self):
   
+        myadc.higher_excitations = True
         e,v,p,x = myadc.kernel()
 
         self.assertAlmostEqual(e[0], 0.5434389897908212, 6)
@@ -66,6 +68,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
   
+        myadc.higher_excitations = True
         myadc.method = "adc(2)-x"
         myadc.method_type = "ip"
         e,v,p,x = myadc.kernel(nroots=3)
@@ -80,6 +83,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc3(self):
   
+        myadc.higher_excitations = True
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
         e,v,p,x = myadc.kernel(nroots=3)

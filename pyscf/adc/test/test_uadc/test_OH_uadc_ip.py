@@ -46,6 +46,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
   
+        myadc.higher_excitations = True
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
@@ -61,6 +62,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
   
+        myadc.higher_excitations = True
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.16402828164387906, 6)
@@ -75,8 +77,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
         self.assertAlmostEqual(p[2], 0.212879313736106, 6)
 
+    def test_ip_adc2c(self):
+  
+        myadc.higher_excitations = False
+        myadc.method = "adc(2)-c"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.16402828164387906, 6)
+
+        e,v,p,x = myadc.kernel(nroots=3)
+
+        self.assertAlmostEqual(e[0], 0.46250706, 6)
+        self.assertAlmostEqual(e[1], 0.50468677, 6)
+        self.assertAlmostEqual(e[2], 0.60536708, 6)
+
+        self.assertAlmostEqual(p[0], 0.92137098, 6)
+        self.assertAlmostEqual(p[1], 0.91504755, 6)
+        self.assertAlmostEqual(p[2], 0.92588164, 6)
+
     def test_ip_adc3(self):
   
+        myadc.higher_excitations = True
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072194, 6)
@@ -95,6 +115,7 @@ class KnownValues(unittest.TestCase):
       
     def test_ip_adc3_oneroot(self):
   
+        myadc.higher_excitations = True
         myadc.method = "adc(3)"
         e,v,p,x = myadc.kernel()
 

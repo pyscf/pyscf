@@ -43,6 +43,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
   
+        myadc.higher_excitations = True
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 

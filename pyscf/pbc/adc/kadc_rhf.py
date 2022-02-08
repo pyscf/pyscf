@@ -52,7 +52,6 @@ import tempfile
 def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.method = adc.method.lower()
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
        raise NotImplementedError(adc.method)
 
@@ -137,7 +136,6 @@ def compute_amplitudes(myadc, eris):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    #if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
@@ -150,10 +148,10 @@ def compute_amplitudes(myadc, eris):
     madelung = tools.madelung(cell, kpts)
 
     # Compute first-order doubles t2 (tijab)
-    #t2_1 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
-    f = h5py.File('myfile.hdf5','a')
+    tf = tempfile.TemporaryFile() 
+    f = h5py.File(tf, 'a')
     t2_1 = f.create_dataset('t2_1', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
-
+ 
     mo_energy =  myadc.mo_energy
     mo_coeff =  myadc.mo_coeff
     mo_coeff, mo_energy = _add_padding(myadc, mo_coeff, mo_energy)
@@ -190,71 +188,68 @@ def compute_amplitudes(myadc, eris):
 
         touched[ki, kj, ka] = touched[ki, kj, kb] = True
 
-    #if not isinstance(eris.oooo, np.ndarray):
-    #    t2_1 = radc_ao2mo.write_dataset(t2_1)
-
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
-    # Compute second-order singles t1 (tij)
+    t1_2 = None
+    if myadc.higher_excitations == True or myadc.method == "adc(3)":
+        # Compute second-order singles t1 (tij)
+        t1_2 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
 
-    t1_2 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
-    eris_ovoo = eris.ovoo
+        eris_ovoo = eris.ovoo
+        for ki in range(nkpts):
+            for kk in range(nkpts):
+                for kc in range(nkpts):
+                    kd = kconserv[ki, kc, kk]
+                    ka = kconserv[kc, kk, kd]
 
-    for ki in range(nkpts):
-        for kk in range(nkpts):
-            for kc in range(nkpts):
-                kd = kconserv[ki, kc, kk]
-                ka = kconserv[kc, kk, kd]
+                    if isinstance(eris.ovvv, type(None)):
+                        chnk_size = myadc.chnk_size
+                        if chnk_size > nocc:
+                            chnk_size = nocc
+                        a = 0
+                        for p in range(0,nocc,chnk_size):
+                             eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kd], eris.Lvv[ka,kc], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                             k = eris_ovvv.shape[0]
+                             t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
+                             t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
+                             del eris_ovvv
+                             eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kc], eris.Lvv[ka,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                             t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
+                             t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
+                             del eris_ovvv
+                             a += k
+                    else:
+                        eris_ovvv = eris.ovvv[:]
+                        t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv[kk,kd,ka].conj(),t2_1[ki,kk,kc].conj(),optimize=True)
+                        t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv[kk,kd,ka].conj(),t2_1[kk,ki,kc].conj(),optimize=True)
+                        t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv[kk,kc,ka].conj(),t2_1[ki,kk,kc].conj(),optimize=True)
+                        t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv[kk,kc,ka].conj(),t2_1[kk,ki,kc].conj(),optimize=True)
+                        del eris_ovvv
 
-                if isinstance(eris.ovvv, type(None)):
-                    chnk_size = myadc.chnk_size
-                    if chnk_size > nocc:
-                        chnk_size = nocc
-                    a = 0
-                    for p in range(0,nocc,chnk_size):
-                         eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kd], eris.Lvv[ka,kc], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
-                         k = eris_ovvv.shape[0]
-                         t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
-                         t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
-                         del eris_ovvv
-                         eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kc], eris.Lvv[ka,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
-                         t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
-                         t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
-                         del eris_ovvv
-                         a += k
-                else:
-                    eris_ovvv = eris.ovvv[:]
-                    t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv[kk,kd,ka].conj(),t2_1[ki,kk,kc].conj(),optimize=True)
-                    t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv[kk,kd,ka].conj(),t2_1[kk,ki,kc].conj(),optimize=True)
-                    t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv[kk,kc,ka].conj(),t2_1[ki,kk,kc].conj(),optimize=True)
-                    t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv[kk,kc,ka].conj(),t2_1[kk,ki,kc].conj(),optimize=True)
-                    del eris_ovvv
-
-            for kl in range(nkpts):
-                kc = kconserv[kk, ki, kl]
-                ka = kconserv[kl, kc, kk]
+                for kl in range(nkpts):
+                    kc = kconserv[kk, ki, kl]
+                    ka = kconserv[kl, kc, kk]
  
-                t1_2[ki] -= 1.5*lib.einsum('lcki,klac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
-                t1_2[ki] += 0.5*lib.einsum('lcki,lkac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
-                t1_2[ki] -= 0.5*lib.einsum('kcli,lkac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
-                t1_2[ki] += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
+                    t1_2[ki] -= 1.5*lib.einsum('lcki,klac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
+                    t1_2[ki] += 0.5*lib.einsum('lcki,lkac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
+                    t1_2[ki] -= 0.5*lib.einsum('kcli,lkac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
+                    t1_2[ki] += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
 
-    for ki in range(nkpts):
-        ka = ki
-        eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
-                       [0,nvir,ka,mo_e_v,nonzero_vpadding],
-                       fac=[1.0,-1.0])
-        t1_2[ki] = t1_2[ki] / eia
+        for ki in range(nkpts):
+            ka = ki
+            eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
+                           [0,nvir,ka,mo_e_v,nonzero_vpadding],
+                           fac=[1.0,-1.0])
+            t1_2[ki] = t1_2[ki] / eia
 
-    cput0 = log.timer_debug1("Completed t1_2 amplitude calculation", *cput0)
+        cput0 = log.timer_debug1("Completed t1_2 amplitude calculation", *cput0)
 
     t2_2 = None
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
     # Compute second-order doubles t2 (tijab)
-        #t2_1_vvvv = np.zeros_like((t2_1))
         t2_1_vvvv = f.create_dataset('t2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
         eris_ovov = eris.ovov
@@ -267,14 +262,12 @@ def compute_amplitudes(myadc, eris):
                 kj = kconserv[ka, ki, kb]
                 if isinstance(eris.vvvv, np.ndarray):
                     eris_vvvv = eris.vvvv.reshape(nkpts,nkpts,nkpts,nvir*nvir,nvir*nvir)
-                    t2_1_a = t2_1.reshape(nkpts,nkpts,nkpts,nocc*nocc,nvir*nvir)
+                    t2_1_a = t2_1[:].reshape(nkpts,nkpts,nkpts,nocc*nocc,nvir*nvir)
                     t2_1_vvvv[ki, kj, ka] += np.dot(t2_1_a[ki,kj,kc], eris_vvvv[kc,kd,ka].conj()).reshape(nocc,nocc,nvir,nvir)
                 elif isinstance(eris.vvvv, type(None)):
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.Lvv,ka,kb,kc) 
                 else : 
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka) 
-
-        #t2_2 = np.zeros_like((t2_1))
 
         t2_2 = f.create_dataset('t2_2', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         t2_2 = t2_1_vvvv
@@ -282,9 +275,6 @@ def compute_amplitudes(myadc, eris):
         if myadc.exxdiv is not None:
            t2_2 -= 2.0 * madelung * t2_1
 
-        #if not isinstance(eris.oooo, np.ndarray):
-        #    t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
-        
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             for kk in range(nkpts):
 
@@ -325,7 +315,6 @@ def compute_amplitudes(myadc, eris):
                     kb = kconserv[kj,kk,kc]
                     t2_2[ki,kj,ka] -= lib.einsum('iack,jkcb->ijab',eris_ovvo[ki,ka,kc].conj(),t2_1[kj,kk,kc],optimize=True)
 
-        #for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
             eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
                            [0,nvir,ka,mo_e_v,nonzero_vpadding],
@@ -338,11 +327,11 @@ def compute_amplitudes(myadc, eris):
 
             t2_2[ki,kj,ka] /= eijab
 
-            #if not isinstance(eris.oooo, np.ndarray):
-            #    t2_2 = radc_ao2mo.write_dataset(t2_2)
 
-        
-    cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
+        cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
+     
+        if (myadc.method == "adc(3)" and myadc.higher_excitations == True):
+            raise NotImplementedError('3rd order singles amplitues not implemented')
         
     t1 = (t1_2, t1_3)
     t2 = (t2_1, t2_2)
@@ -440,6 +429,7 @@ class RADC(pyscf.adc.radc.RADC):
         self.mo_occ = mo_occ
         self.frozen = frozen
         self.compute_properties = True
+        self.higher_excitations = False
 
         self._nocc = None
         self._nmo = None
@@ -462,7 +452,6 @@ class RADC(pyscf.adc.radc.RADC):
         self.mo_energy = mf.mo_energy
 
     transform_integrals = kadc_ao2mo.transform_integrals_incore
-    #transform_integrals = kadc_ao2mo.transform_integrals_df
     compute_amplitudes = compute_amplitudes
     compute_energy = compute_energy
     compute_amplitudes_energy = compute_amplitudes_energy
@@ -488,9 +477,8 @@ class RADC(pyscf.adc.radc.RADC):
     def kernel_gs(self):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
-    
+
         self.method = self.method.lower()
-        #if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
             raise NotImplementedError(self.method)
     
@@ -508,7 +496,6 @@ class RADC(pyscf.adc.radc.RADC):
         mem_now = lib.current_memory()[0]
 
         if type(self._scf.with_df) is df.GDF:
-        #if type(self._scf.with_df) is df.fft.FFTDF:
            self.chnk_size = self.get_chnk_size()
            self.with_df = self._scf.with_df
            def df_transform():
@@ -523,7 +510,6 @@ class RADC(pyscf.adc.radc.RADC):
         self.e_corr,self.t1,self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         print ("MPn:",self.e_corr)
         self._finalize()
-
         return self.e_corr, self.t1,self.t2
 
     def kernel(self, nroots=1, guess=None, eris=None, kptlist=None):
@@ -531,7 +517,6 @@ class RADC(pyscf.adc.radc.RADC):
         assert(self.mo_occ is not None)
     
         self.method = self.method.lower()
-        #if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
             raise NotImplementedError(self.method)
     
@@ -543,10 +528,6 @@ class RADC(pyscf.adc.radc.RADC):
         nocc = self.nocc
         nvir = nmo - nocc
         nkpts = self.nkpts
-        #nao = self.cell.nao_nr()
-        #nmo_pair = nmo * (nmo+1) // 2
-        #nao_pair = nao * (nao+1) // 2
-        #mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_incore = nkpts ** 3 * (nocc + nvir) ** 4
         mem_incore *= 4
         mem_incore *= 16 /1e6
@@ -616,13 +597,11 @@ def ip_vector_size(adc):
 
     return size
 
-##@profile
 def get_imds_ea(adc, eris=None):
 
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -860,7 +839,7 @@ def get_imds_ea(adc, eris=None):
                                M_ab[ka,a:a+k] += lib.einsum('mldf,lmed,aebf->ab',t2_1[km,kl,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
                                M_ab[ka,a:a+k] += lib.einsum('lmdf,mled,aebf->ab',t2_1[kl,km,kd], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
                                M_ab[ka,a:a+k] -= lib.einsum('lmdf,lmed,aebf->ab',t2_1[kl,km,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
-                               M_ab[ka,a:a+k] += 2.*lib.einsum('mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                               M_ab[ka,a:a+k] += -2.*lib.einsum('mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
                                del eris_vvvv
 
                                eris_vvvv = dfadc.get_vvvv_df(adc, eris.Lvv[ka,kf], eris.Lvv[ke,kb], p, chnk_size)/nkpts
@@ -916,7 +895,6 @@ def get_imds_ip(adc, eris=None):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1127,7 +1105,6 @@ def ea_adc_diag(adc,kshift,M_ab=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1189,7 +1166,6 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1233,7 +1209,6 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
 
     # Compute precond in 2p1h-2p1h block
 
-    #diag[s2:f2] += e_ija[kshift].reshape(-1) 
     for ka in range(nkpts):
         for ki in range(nkpts):
             kj = kconserv[kshift,ki,ka]
@@ -1252,9 +1227,6 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
 def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
 
     log = logger.Logger(adc.stdout, adc.verbose)
-    #nocc = myadc.nocc
-    #nmo = myadc.nmo
-    #nvir = nmo - nocc
     nocc = r2.shape[0]
     nvir = r2.shape[1]
     nkpts = adc.nkpts
@@ -1263,7 +1235,6 @@ def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
     kd = kconserv[ka, kc, kb]
     r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
     r2_vvvv = np.zeros((nvir,nvir,nocc),dtype=r2.dtype)
-    #chnk_size = kadc_ao2mo.calculate_chunk_size(myadc)
     chnk_size = adc.chnk_size
     if chnk_size > nvir:
        chnk_size = nvir
@@ -1294,7 +1265,6 @@ def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
 
 def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1647,7 +1617,6 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
 def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -1930,16 +1899,16 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 def ea_compute_trans_moments(adc, orb, kshift):
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
-        raise NotImplementedError(adc.method)
+        raise notimplementederror(adc.method)
 
     method = adc.method
     nkpts = adc.nkpts
     nocc = adc.nocc
-    t2_1 = adc.t2[0]
-    t1_2 = adc.t1[0]
     nvir = adc.nmo - adc.nocc
+    t2_1 = adc.t2[0]
+    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+        t1_2 = adc.t1[0]
 
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
@@ -1951,7 +1920,8 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
     if orb < nocc:
 
-        T1 -= t1_2[kshift][orb,:]
+        if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            T1 -= t1_2[kshift][orb,:]
 
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -1978,11 +1948,9 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    #if(method=="adc(2)-x"or adc.method=="adc(3)"):
-    if(method=="adc(3)"):
+    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1]
-        #t2_2_t = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=np.complex)
 
         if orb < nocc:
 
@@ -1998,6 +1966,7 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 ########### ADC(3) 1p part  ############################################
 
+    if(method=='adc(3)'):
         if orb < nocc:
             for kk in range(nkpts):
                 for kc in range(nkpts):
@@ -2042,16 +2011,16 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 def ip_compute_trans_moments(adc, orb, kshift):
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
     nkpts = adc.nkpts
     nocc = adc.nocc
-    t2_1 = adc.t2[0]
-    t1_2 = adc.t1[0]
     nvir = adc.nmo - adc.nocc
+    t2_1 = adc.t2[0]
+    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+        t1_2 = adc.t1[0]
 
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
@@ -2074,7 +2043,8 @@ def ip_compute_trans_moments(adc, orb, kshift):
                 T1 -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[kshift,kk,kd][orb,:,:,:], t2_1[ki,kk,kd].conj(), optimize = True)
                 T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[kshift,kk,kc][orb,:,:,:], t2_1[ki,kk,kc].conj(), optimize = True)
     else :
-        T1 += t1_2[kshift][:,(orb-nocc)]
+        if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            T1 += t1_2[kshift][:,(orb-nocc)]
 
 ######## ADC(2) 2h-1p  part  ############################################
 
@@ -2089,8 +2059,7 @@ def ip_compute_trans_moments(adc, orb, kshift):
         del t2_1_t
 ####### ADC(3) 2h-1p  part  ############################################
 
-    #if(method=='adc(2)-x'or method=='adc(3)'):
-    if(method=='adc(3)'):
+    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1]
 
@@ -2106,6 +2075,7 @@ def ip_compute_trans_moments(adc, orb, kshift):
 
 ######### ADC(3) 1h part  ############################################
 
+    if(method=='adc(3)'):
         if orb < nocc:
             for kk in range(nkpts):
                 for kc in range(nkpts):
@@ -2178,7 +2148,6 @@ def renormalize_eigenvectors_ea(adc, kshift, U, nroots=1):
             for kb in range(nkpts):
                 ki = adc.khelper.kconserv[kb,kshift, ka]
                 UdotU +=  2.*np.dot(U2[ki,ka].conj().ravel(), U2[ki,ka].ravel()) - np.dot(U2[ki,ka].conj().ravel(), U2[ki,kb].transpose(0,2,1).ravel())
-        #UdotU = np.dot(U1.ravel(), U1.ravel()) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
         U[:,I] /= np.sqrt(UdotU)
 
     U = U.reshape(-1,nroots)
@@ -2205,7 +2174,6 @@ def renormalize_eigenvectors_ip(adc, kshift, U, nroots=1):
             for kk in range(nkpts):
                 ka = adc.khelper.kconserv[kj, kshift, kk]
                 UdotU +=  2.*np.dot(U2[ka,kj].conj().ravel(), U2[ka,kj].ravel()) - np.dot(U2[ka,kj].conj().ravel(), U2[ka,kk].transpose(0,2,1).ravel())
-        #UdotU = np.dot(U1.ravel(), U1.ravel()) + 2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
         U[:,I] /= np.sqrt(UdotU)
 
     U = U.reshape(-1,nroots)
@@ -2278,6 +2246,7 @@ class RADCEA(RADC):
         self.method_type = adc.method_type
         self._scf = adc._scf
         self.compute_properties = adc.compute_properties
+        self.higher_excitations = adc.higher_excitations
 
         self.kpts = adc._scf.kpts
         self.exxdiv = adc.exxdiv
@@ -2392,6 +2361,7 @@ class RADCIP(RADC):
         self.method_type = adc.method_type
         self._scf = adc._scf
         self.compute_properties = adc.compute_properties
+        self.higher_excitations = adc.higher_excitations
 
         self.kpts = adc._scf.kpts
         self.exxdiv = adc.exxdiv

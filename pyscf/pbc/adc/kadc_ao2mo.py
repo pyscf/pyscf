@@ -29,7 +29,6 @@ import tempfile
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
-     print ("I")
      cput0 = (time.process_time(), time.time())
      log = logger.Logger(myadc.stdout, myadc.verbose)
      cell = myadc.cell
@@ -80,21 +79,16 @@ def transform_integrals_incore(myadc):
               eris.ovvv[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,nocc:]/nkpts
               eris.ovvo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,:nocc]/nkpts
 
-     #if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-     if (myadc.method == "adc(3)"):
+     if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
           eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
-          #eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts)
            
      return eris
 
 
 def transform_integrals_outcore(myadc):
 
-    print ("O")
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
-    #if not (cc.frozen is None or cc.frozen == 0):
-    #    raise NotImplementedError('cc.frozen = %s' % str(cc.frozen))
 
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
@@ -170,8 +164,7 @@ def transform_integrals_outcore(myadc):
                 eris.ovvv[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, nocc:, nocc:] / nkpts
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
-    #if (myadc.method == "adc(2)-x" or myadc.method == "adc(3)"):
-    if (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
         mem_now = lib.current_memory()[0] 
         if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
             for (ikp, ikq, ikr) in khelper.symm_map.keys():
@@ -210,7 +203,6 @@ def transform_integrals_outcore(myadc):
 
 
 def transform_integrals_df(myadc):
-    print ("df")
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     cput0 = (time.process_time(), time.time())
