@@ -212,9 +212,11 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         e1 += numpy.einsum('xji,ij->x', veff1[2,:,p0:p1], dmxpy[:,p0:p1]) * 2
         e1 -= numpy.einsum('xji,ij->x', veff1[3,:,p0:p1], dmxmy[:,p0:p1]) * 2
 
+        e1 += td_grad.extra_force(ia, locals())
+
         de[k] = e1
 
-    log.timer('TDDFT nuclear gradients', *time0)
+    log.timer('TDRKS nuclear gradients', *time0)
     return de
 
 
@@ -317,9 +319,6 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
             raise NotImplementedError('GGA triplet')
 
     elif xctype == 'MGGA':
-        XX, XY, XZ = 4, 5, 6
-        YX, YY, YZ = 5, 7, 8
-        ZX, ZY, ZZ = 6, 8, 9
         if singlet:
             def mgga_sum_(vmat, ao, wv, mask):
                 aow = numint._scale_ao(ao[:4], wv[:4])

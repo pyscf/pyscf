@@ -89,14 +89,15 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         td = mf.TDA().run(nstates=3)
         tdg = td.Gradients()
-        g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.8219932174995392, 4)
+        g1 = tdg.kernel(state=2)
+        self.assertAlmostEqual(g1[0,2], -0.31324464083043635, 4)
 
         td_solver = td.as_scanner()
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[1,2]).max(), 0, 4)
 
     def test_tddft_b3lyp(self):
         mf = dft.UKS(mol).set(conv_tol=1e-12)

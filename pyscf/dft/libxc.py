@@ -1120,28 +1120,45 @@ def parse_xc(description):
           | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
           | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
           | v2lapl2[:,3]
-          | vtau2[:,3]
+          | v2tau2[:,3]     = (u_u, u_d, d_d)
           | v2rholapl[:,4]
-          | v2rhotau[:,4]
+          | v2rhotau[:,4]   = (u_u, u_d, d_u, d_d)
           | v2lapltau[:,4]
           | v2sigmalapl[:,6]
-          | v2sigmatau[:,6]
+          | v2sigmatau[:,6] = (uu_u, uu_d, ud_u, ud_d, dd_u, dd_d)
 
         * kxc for restricted case:
-          v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
-          v3rho2tau, v3rhosigmatau, v3rhotau2, v3sigma2tau, v3sigmatau2, v3tau3
+          (v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+           v3rho2lapl, v3rho2tau,
+           v3rhosigmalapl, v3rhosigmatau,
+           v3rholapl2, v3rholapltau, v3rhotau2,
+           v3sigma2lapl, v3sigma2tau,
+           v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+           v3lapl3, v3lapl2tau, v3lapltau2, v3tau3)
 
         * kxc for unrestricted case:
-          | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-          | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-          | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma3[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-          | v3rho2tau
-          | v3rhosigmatau
-          | v3rhotau2
-          | v3sigma2tau
-          | v3sigmatau2
-          | v3tau3
+          | v3rho3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
+          | v3rho2sigma[:,9]    = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
+          | v3rhosigma2[:,12]   = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
+          | v3sigma3[:,10]      = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
+          | v3rho2lapl[:,6]
+          | v3rho2tau[:,6]      = (u_u_u, u_u_d, u_d_u, u_d_d, d_d_u, d_d_d)
+          | v3rhosigmalapl[:,12]
+          | v3rhosigmatau[:,12] = (u_uu_u, u_uu_d, u_ud_u, u_ud_d, u_dd_u, u_dd_d,
+                                   d_uu_u, d_uu_d, d_ud_u, d_ud_d, d_dd_u, d_dd_d)
+          | v3rholapl2[:,6]
+          | v3rholapltau[:,8]
+          | v3rhotau2[:,6]      = (u_u_u, u_u_d, u_d_d, d_u_u, d_u_d, d_d_d)
+          | v3sigma2lapl[:,12]
+          | v3sigma2tau[:,12]   = (uu_uu_u, uu_uu_d, uu_ud_u, uu_ud_d, uu_dd_u, uu_dd_d,
+                                   ud_ud_u, ud_ud_d, ud_dd_u, ud_dd_d, dd_dd_u, dd_dd_d)
+          | v3sigmalapl2[:,9]
+          | v3sigmalapltau[:,12]
+          | v3sigmatau2[:,9]    = (uu_u_u, uu_u_d, uu_d_d, ud_u_u, ud_u_d, ud_d_d, dd_u_u, dd_u_d, dd_d_d)
+          | v3lapl3[:,4]
+          | v3lapl2tau[:,6]
+          | v3lapltau2[:,6]
+          | v3tau3[:,4]         = (u_u_u, u_u_d, u_d_d, d_d_d)
 
         see also libxc_itrf.c
     '''  # noqa: E501
