@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ def diagonalize(a, b, nroots=4):
     return lowest_e
 
 def setUpModule():
-    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'
@@ -77,15 +77,17 @@ def setUpModule():
     mf_b3lyp = dft.UKS(mol).set(xc='b3lyp', conv_tol=1e-12)
     mf_b3lyp.grids.prune = None
     mf_b3lyp = mf_b3lyp.newton().run()
+    mf_m06l = dft.UKS(mol).run(xc='m06l')
 
 def tearDownModule():
-    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
     mol.stdout.close()
-    del mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    del mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
+
 
 class KnownValues(unittest.TestCase):
     def test_nohybrid_lda(self):
-        td = tdscf.uks.TDDFTNoHybrid(mf_lda).set(conv_tol=1e-12)
+        td = tdscf.uks.CasidaTDDFT(mf_lda).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 6)
@@ -93,14 +95,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(es[:3]*27.2114), 1.294630966929489, 6)
 
         mf = dft.UKS(mol1).run(xc='lda, vwn_rpa').run()
-        td = mf.TDDFTNoHybrid()
+        td = mf.CasidaTDDFT()
         td.nstates = 5
         es = td.kernel()[0] * 27.2114
         ref = [6.94083826, 7.61492553, 8.55550045, 9.36308859, 9.84896499]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
 
     def test_nohybrid_b88p86(self):
-        td = tdscf.uks.TDDFTNoHybrid(mf_bp86).set(conv_tol=1e-12)
+        td = tdscf.uks.CasidaTDDFT(mf_bp86).set(conv_tol=1e-12)
         es = td.kernel(nstates=4)[0]
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 6)
@@ -149,11 +151,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
     def test_tda_m06l(self):
-        mf = dft.UKS(mol1)
-        mf.xc = 'm06l'
-        mf.grids.prune = None
-        mf.scf()
-        td = mf.TDA()
+        td = mf_m06l.TDA()
         es = td.kernel(nstates=5)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es), -8.943196581335487, 6)
         ref = [8.18683464, 8.77581263, 10.20108589, 10.55440239, 10.98105145]
@@ -253,6 +251,52 @@ class KnownValues(unittest.TestCase):
 
     def test_ab_b3lyp(self):
         mf = mf_b3lyp
+        a, b = tdscf.TDDFT(mf).get_ab()
+        ftda = tdscf.uhf.gen_tda_operation(mf)[0]
+        ftdhf = tdscf.uhf.gen_tdhf_operation(mf)[0]
+        nocc_a = numpy.count_nonzero(mf.mo_occ[0] == 1)
+        nvir_a = numpy.count_nonzero(mf.mo_occ[0] == 0)
+        nocc_b = numpy.count_nonzero(mf.mo_occ[1] == 1)
+        nvir_b = numpy.count_nonzero(mf.mo_occ[1] == 0)
+        numpy.random.seed(2)
+        xa, ya = numpy.random.random((2,nocc_a,nvir_a))
+        xb, yb = numpy.random.random((2,nocc_b,nvir_b))
+        x = numpy.hstack((xa.ravel(), xb.ravel()))
+        y = numpy.hstack((ya.ravel(), yb.ravel()))
+        xy = numpy.hstack((x, y))
+        ax_a = numpy.einsum('iajb,jb->ia', a[0], xa)
+        ax_a+= numpy.einsum('iajb,jb->ia', a[1], xb)
+        ax_b = numpy.einsum('jbia,jb->ia', a[1], xa)
+        ax_b+= numpy.einsum('iajb,jb->ia', a[2], xb)
+        ax = numpy.hstack((ax_a.ravel(), ax_b.ravel()))
+        self.assertAlmostEqual(abs(ax - ftda([x])).max(), 0, 9)
+
+        ay_a = numpy.einsum('iajb,jb->ia', a[0], ya)
+        ay_a+= numpy.einsum('iajb,jb->ia', a[1], yb)
+        ay_b = numpy.einsum('jbia,jb->ia', a[1], ya)
+        ay_b+= numpy.einsum('iajb,jb->ia', a[2], yb)
+        ay = numpy.hstack((ay_a.ravel(), ay_b.ravel()))
+
+        bx_a = numpy.einsum('iajb,jb->ia', b[0], xa)
+        bx_a+= numpy.einsum('iajb,jb->ia', b[1], xb)
+        bx_b = numpy.einsum('jbia,jb->ia', b[1], xa)
+        bx_b+= numpy.einsum('iajb,jb->ia', b[2], xb)
+        bx = numpy.hstack((bx_a.ravel(), bx_b.ravel()))
+
+        by_a = numpy.einsum('iajb,jb->ia', b[0], ya)
+        by_a+= numpy.einsum('iajb,jb->ia', b[1], yb)
+        by_b = numpy.einsum('jbia,jb->ia', b[1], ya)
+        by_b+= numpy.einsum('iajb,jb->ia', b[2], yb)
+        by = numpy.hstack((by_a.ravel(), by_b.ravel()))
+
+        ab1 = ax + by
+        ab2 =-bx - ay
+        ab12 = numpy.hstack((ab1.ravel(),ab2.ravel()))
+        abxy_ref = ftdhf([xy])
+        self.assertAlmostEqual(abs(ab12 - abxy_ref).max(), 0, 9)
+
+    def test_ab_mgga(self):
+        mf = mf_m06l
         a, b = tdscf.TDDFT(mf).get_ab()
         ftda = tdscf.uhf.gen_tda_operation(mf)[0]
         ftdhf = tdscf.uhf.gen_tdhf_operation(mf)[0]
@@ -410,7 +454,7 @@ class KnownValues(unittest.TestCase):
         pmol.build()
 
         mf = dft.UKS(pmol).run()
-        td = tdscf.uks.TDDFTNoHybrid(mf)
+        td = tdscf.uks.CasidaTDDFT(mf)
         td.wfnsym = 'B1'
         td.nroots = 3
         es = td.kernel()[0]

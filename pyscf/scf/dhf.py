@@ -134,7 +134,8 @@ def _visscher_ssss_correction(mf, dm):
     return e_coul_ss
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
-                   opt_llll=None, opt_ssll=None, opt_ssss=None, omega=None, verbose=None):
+                   opt_llll=None, opt_ssll=None, opt_ssss=None,
+                   omega=None, verbose=None):
     log = logger.new_logger(mol, verbose)
     with mol.with_range_coulomb(omega):
         if coulomb_allow.upper() == 'LLLL':
@@ -281,8 +282,8 @@ def get_init_guess(mol, key='minao'):
 def time_reversal_matrix(mol, mat):
     ''' T(A_ij) = A[T(i),T(j)]^*
     '''
-    n2c = mol.nao_2c()
     tao = numpy.asarray(mol.time_reversal_map())
+    n2c = tao.size
     # tao(i) = -j  means  T(f_i) = -f_j
     # tao(i) =  j  means  T(f_i) =  f_j
     idx = abs(tao) - 1  # -1 for C indexing convention
@@ -292,7 +293,7 @@ def time_reversal_matrix(mol, mat):
     #:tmat = numpy.empty_like(mat)
     #:for j in range(mat.__len__()):
     #:    for i in range(mat.__len__()):
-    #:        tmat[idx[i],idx[j]] = mat[i,j] * sign[i]*sign[j]
+    #:        tmat[idx[i],idx[j]] = mat[j,i] * sign[i]*sign[j]
     #:return tmat.conjugate()
     sign_mask = tao < 0
     if mat.shape[0] == n2c * 2:
@@ -505,18 +506,25 @@ class DHF(hf.SCF):
         n4c = len(mo_energy)
         n2c = n4c // 2
         mo_occ = numpy.zeros(n2c * 2)
+        nocc = mol.nelectron
         if mo_energy[n2c] > -1.999 * c**2:
-            mo_occ[n2c:n2c+mol.nelectron] = 1
+            mo_occ[n2c:n2c+nocc] = 1
         else:
-            lumo = mo_energy[mo_energy > -1.999 * c**2][mol.nelectron]
+            logger.warn(self, 'Variational collapse. PES mo_energy %g < -2c^2',
+                        mo_energy[n2c])
+            lumo = mo_energy[mo_energy > -1.999 * c**2][nocc]
             mo_occ[mo_energy > -1.999 * c**2] = 1
             mo_occ[mo_energy >= lumo] = 0
         if self.verbose >= logger.INFO:
-            logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
-                        n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
-                        n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
-            logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
-            logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
+            if mo_energy[n2c+nocc-1]+1e-3 > mo_energy[n2c+nocc]:
+                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
+                            mo_energy[n2c+nocc-1], mo_energy[n2c+nocc])
+            else:
+                logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
+                            nocc, mo_energy[n2c+nocc-1],
+                            nocc+1, mo_energy[n2c+nocc])
+                logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
+                logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
 
     # full density matrix for UHF
@@ -719,6 +727,8 @@ class DHF(hf.SCF):
         mf.converged = False
         return mf
 
+    to_ks = to_dks
+
 UHF = UDHF = DHF
 
 
@@ -769,22 +779,32 @@ class RDHF(DHF):
 RHF = RDHF
 
 
-def _jk_triu_(vj, vk, hermi):
-    if hermi == 0:
-        if vj.ndim == 2:
-            vj = lib.hermi_triu(vj, 1)
-        else:
-            for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu(vj[i], 1)
+def _time_reversal_triu_(mol, vj):
+    n2c = vj.shape[1]
+    idx, idy = numpy.triu_indices(n2c, 1)
+    if vj.ndim == 2:
+        Tvj = time_reversal_matrix(mol, vj)
+        vj[idx,idy] = Tvj[idx,idy]
     else:
-        if vj.ndim == 2:
-            vj = lib.hermi_triu(vj, hermi)
+        for i in range(vj.shape[0]):
+            Tvj = time_reversal_matrix(mol, vj[i])
+            vj[i,idx,idy] = Tvj[idx,idy]
+    return vj
+
+def _mat_hermi_(vk, hermi):
+    if hermi == 1:
+        if vk.ndim == 2:
             vk = lib.hermi_triu(vk, hermi)
         else:
-            for i in range(vj.shape[0]):
-                vj[i] = lib.hermi_triu(vj[i], hermi)
+            for i in range(vk.shape[0]):
                 vk[i] = lib.hermi_triu(vk[i], hermi)
-    return vj, vk
+    return vk
+
+def _jk_triu_(mol, vj, vk, hermi):
+    if hermi == 0:
+        return _time_reversal_triu_(mol, vj), vk
+    else:
+        return _mat_hermi_(vj, hermi), _mat_hermi_(vk, hermi)
 
 
 def _call_veff_llll(mol, dm, hermi=1, mf_opt=None):
@@ -792,44 +812,52 @@ def _call_veff_llll(mol, dm, hermi=1, mf_opt=None):
         n2c = dm.shape[0] // 2
         dms = dm[:n2c,:n2c].copy()
     else:
-        n2c = dm[0].shape[0] // 2
-        dms = []
-        for dmi in dm:
-            dms.append(dmi[:n2c,:n2c].copy())
+        n2c = dm.shape[1] // 2
+        dms = dm[:,:n2c,:n2c].copy()
     vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt)
-    return _jk_triu_(vj, vk, hermi)
+    return _jk_triu_(mol, vj, vk, hermi)
 
 def _call_veff_ssll(mol, dm, hermi=1, mf_opt=None):
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        n_dm = 1
-        n2c = dm.shape[0] // 2
-        dmll = dm[:n2c,:n2c].copy()
-        dmsl = dm[n2c:,:n2c].copy()
-        dmss = dm[n2c:,n2c:].copy()
-        dms = (dmll, dmss, dmsl)
+        dm1 = dm[numpy.newaxis]
     else:
-        n_dm = len(dm)
-        n2c = dm[0].shape[0] // 2
-        dms = [dmi[:n2c,:n2c].copy() for dmi in dm] \
-            + [dmi[n2c:,n2c:].copy() for dmi in dm] \
-            + [dmi[n2c:,:n2c].copy() for dmi in dm]
-    jks = ('lk->s2ij',) * n_dm \
-        + ('ji->s2kl',) * n_dm \
-        + ('jk->s1il',) * n_dm
+        dm1 = numpy.asarray(dm)
+    n_dm = len(dm1)
+    n2c = dm1.shape[1] // 2
+    dms = numpy.vstack([dm1[:,:n2c,:n2c],
+                        dm1[:,n2c:,n2c:],
+                        dm1[:,n2c:,:n2c],
+                        dm1[:,:n2c,n2c:]])
+    if hermi:
+        jks = (['lk->s2ij'] * n_dm +
+               ['ji->s2kl'] * n_dm +
+               ['jk->s1il'] * n_dm)
+    else:
+        jks = (['lk->s2ij'] * n_dm +
+               ['ji->s2kl'] * n_dm +
+               ['jk->s1il'] * n_dm +
+               ['li->s1kj'] * n_dm)
     c1 = .5 / lib.param.LIGHT_SPEED
     vx = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', jks, dms, 1,
-                            mol._atm, mol._bas, mol._env, mf_opt) * c1**2
+                            mol._atm, mol._bas, mol._env, mf_opt)
+    vx = vx.reshape(-1,n_dm,n2c,n2c) * c1**2
     vj = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
     vk = numpy.zeros((n_dm,n2c*2,n2c*2), dtype=numpy.complex128)
-    vj[:,n2c:,n2c:] = vx[      :n_dm  ,:,:]
-    vj[:,:n2c,:n2c] = vx[n_dm  :n_dm*2,:,:]
-    vk[:,n2c:,:n2c] = vx[n_dm*2:      ,:,:]
-    if n_dm == 1:
-        vj = vj.reshape(vj.shape[1:])
-        vk = vk.reshape(vk.shape[1:])
-    return _jk_triu_(vj, vk, hermi)
+    if hermi == 0:
+        vj[:,n2c:,n2c:] = _time_reversal_triu_(mol, vx[0])
+        vj[:,:n2c,:n2c] = _time_reversal_triu_(mol, vx[1])
+        vk[:,n2c:,:n2c] = vx[2]
+        vk[:,:n2c,n2c:] = vx[3]
+    else:
+        vj[:,n2c:,n2c:] = _mat_hermi_(vx[0], hermi)
+        vj[:,:n2c,:n2c] = _mat_hermi_(vx[1], hermi)
+        vk[:,n2c:,:n2c] = vx[2]
+        vk[:,:n2c,n2c:] = vx[2].conj().transpose(0,2,1)
+    vj = vj.reshape(dm.shape)
+    vk = vk.reshape(dm.shape)
+    return vj, vk
 
 def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     c1 = .5 / lib.param.LIGHT_SPEED
@@ -844,7 +872,7 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
     vj, vk = _vhf.rdirect_mapdm('int2e_spsp1spsp2_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dms, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt) * c1**4
-    return _jk_triu_(vj, vk, hermi)
+    return _jk_triu_(mol, vj, vk, hermi)
 
 def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     if with_breit:
@@ -898,14 +926,16 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
         vk[:,n2c:,:n2c] = -vk[:,:n2c,n2c:].transpose(0,2,1).conj()
     else:
         raise NotImplementedError
-    if n_dm == 1:
-        vj = vj.reshape(n2c*2,n2c*2)
-        vk = vk.reshape(n2c*2,n2c*2)
+    vj = vj.reshape(dm.shape)
+    vk = vk.reshape(dm.shape)
     c1 = .5 / lib.param.LIGHT_SPEED
     if with_breit:
-        return vj*c1**2, vk*c1**2
+        vj *= c1**2
+        vk *= c1**2
     else:
-        return -vj*c1**2, -vk*c1**2
+        vj *= -c1**2
+        vk *= -c1**2
+    return vj, vk
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     '''Project non-relativistic atomic density matrix to large component spinor

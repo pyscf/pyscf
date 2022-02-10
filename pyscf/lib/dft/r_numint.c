@@ -166,7 +166,53 @@ void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
 }
 
 void VXC_zscale_ao(double complex *aow, double complex *ao, double *wv,
-                   int comp, int nao, int ngrids)
+                    int comp, int nao, int ngrids)
+{
+#pragma omp parallel
+{
+        size_t Ngrids = ngrids;
+        size_t ao_size = nao * Ngrids;
+        int i, j, ic;
+        double complex *pao = ao;
+#pragma omp for schedule(static)
+        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
+                for (ic = 1; ic < comp; ic++) {
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                } }
+        }
+}
+}
+
+void VXC_dzscale_ao(double complex *aow, double *ao, double complex *wv,
+                    int comp, int nao, int ngrids)
+{
+#pragma omp parallel
+{
+        size_t Ngrids = ngrids;
+        size_t ao_size = nao * Ngrids;
+        int i, j, ic;
+        double *pao = ao;
+#pragma omp for schedule(static)
+        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
+                for (ic = 1; ic < comp; ic++) {
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                } }
+        }
+}
+}
+
+void VXC_zzscale_ao(double complex *aow, double complex *ao, double complex *wv,
+                    int comp, int nao, int ngrids)
 {
 #pragma omp parallel
 {

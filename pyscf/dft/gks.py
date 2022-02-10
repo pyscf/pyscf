@@ -27,6 +27,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import ghf
 from pyscf.dft import rks
+from pyscf.dft.numint2c import NumInt2C
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -133,7 +134,6 @@ energy_elec = rks.energy_elec
 class GKS(rks.KohnShamDFT, ghf.GHF):
     '''Generalized Kohn-Sham'''
     def __init__(self, mol, xc='LDA,VWN'):
-        from pyscf.dft.numint2c import NumInt2C
         ghf.GHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = NumInt2C()
@@ -141,6 +141,11 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
     def dump_flags(self, verbose=None):
         ghf.GHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
+        logger.info(self, 'collinear = %s', self._numint.collinear)
+        if self._numint.collinear[0] == 'm':
+            logger.info(self, 'mcfun spin_samples = %s', self._numint.spin_samples)
+            logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
+            logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
 
     get_veff = get_veff

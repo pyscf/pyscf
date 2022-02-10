@@ -128,6 +128,25 @@ class KnownValues(unittest.TestCase):
         v2 = dft.numint._dot_ao_ao(he2, ao, ao, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
+    def test_scale_ao(self):
+        ao = numpy.random.rand(8, 20).T
+        wv = numpy.random.rand(20)
+        self.assertAlmostEqual(abs(numpy.einsum('pi,p->pi', ao, wv) -
+                                   numint._scale_ao(ao, wv)).max(), 0, 12)
+        ao = numpy.random.rand(3, 8, 20).transpose(0,2,1)
+        wv = numpy.random.rand(3, 20) + numpy.random.rand(3, 20) * 1j
+        self.assertAlmostEqual(abs(numpy.einsum('npi,np->pi', ao, wv) -
+                                   numint._scale_ao(ao, wv)).max(), 0, 12)
+        ao = (numpy.random.rand(8, 20) + numpy.random.rand(8, 20) * 1j).T
+        wv = numpy.random.rand(20)
+        self.assertAlmostEqual(abs(numpy.einsum('pi,p->pi', ao, wv) -
+                                   numint._scale_ao(ao, wv)).max(), 0, 12)
+        ao = (numpy.random.rand(3, 8, 20) +
+              numpy.random.rand(3, 8, 20) * 1j).transpose(0,2,1)
+        wv = numpy.random.rand(3, 20) + numpy.random.rand(3, 20) * 1j
+        self.assertAlmostEqual(abs(numpy.einsum('npi,np->pi', ao, wv) -
+                                   numint._scale_ao(ao, wv)).max(), 0, 12)
+
     def test_dot_ao_ao_high_cost(self):
         non0tab = mf.grids.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)

@@ -652,6 +652,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 def _update_mf_without_soscf(mf, out, remove_df=False):
     from pyscf.soscf import newton_ah
     mf_dic = dict(mf.__dict__)
+    mf_dic.pop('_keys')
 
     # if mf is SOSCF object, avoid to overwrite the with_df method
     # FIXME: it causes bug when converting pbc-SOSCF.

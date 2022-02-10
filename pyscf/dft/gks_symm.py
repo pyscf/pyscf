@@ -24,12 +24,12 @@ from pyscf.lib import logger
 from pyscf.scf import ghf_symm
 from pyscf.dft import gks
 from pyscf.dft import rks
+from pyscf.dft.numint2c import NumInt2C
 
 
-class GKS(ghf_symm.GHF, rks.KohnShamDFT):
+class GKS(rks.KohnShamDFT, ghf_symm.GHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol, xc='LDA,VWN'):
-        from pyscf.dft.numint2c import NumInt2C
         ghf_symm.GHF.__init__(self, mol)
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = NumInt2C()
@@ -37,10 +37,22 @@ class GKS(ghf_symm.GHF, rks.KohnShamDFT):
     def dump_flags(self, verbose=None):
         ghf_symm.GHF.dump_flags(self, verbose)
         rks.KohnShamDFT.dump_flags(self, verbose)
+        logger.info(self, 'collinear = %s', self._numint.collinear)
+        if self._numint.collinear[0] == 'm':
+            logger.info(self, 'mcfun spin_samples = %s', self._numint.spin_samples)
+            logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
+            logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
         return self
 
     get_veff = gks.get_veff
     energy_elec = rks.energy_elec
+
+    @property
+    def collinear(self):
+        return self._numint.collinear
+    @collinear.setter
+    def collinear(self, val):
+        self._numint.collinear = val
 
     def nuc_grad_method(self):
         raise NotImplementedError

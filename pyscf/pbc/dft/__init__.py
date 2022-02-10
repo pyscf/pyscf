@@ -21,6 +21,7 @@ from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft import kroks
 from pyscf.pbc.dft import krkspu
 from pyscf.pbc.dft import kukspu
+from pyscf.pbc.dft.rks import KohnShamDFT
 
 UKS = uks.UKS
 ROKS = roks.ROKS

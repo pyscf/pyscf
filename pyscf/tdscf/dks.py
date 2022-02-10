@@ -24,9 +24,6 @@ from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
 
-# Low excitation filter to avoid numerical instability
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
-
 
 class TDA(dhf.TDA):
     pass
@@ -37,6 +34,7 @@ class TDDFT(dhf.TDHF):
 RPA = TDDKS = TDDFT
 
 from pyscf import dft
-dft.dks.DKS.TDA   = lib.class_as_method(TDA)
-dft.dks.DKS.TDHF  = None
-dft.dks.DKS.TDDFT = lib.class_as_method(TDDFT)
+dft.dks.DKS.TDA   = dft.dks.RDKS.TDA   = lib.class_as_method(TDA)
+dft.dks.DKS.TDHF  = dft.dks.RDKS.TDHF  = None
+dft.dks.DKS.TDDFT = dft.dks.RDKS.TDDFT = lib.class_as_method(TDDFT)
+dft.dks.DKS.CasidaTDDFT = dft.dks.RDKS.CasidaTDDFT = None

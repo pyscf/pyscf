@@ -51,7 +51,7 @@ def newton(mf):
                 nvir = nmo - nocc
                 dx = dx.reshape(nvir, nocc)
                 dx_aa = dx[::2,::2]
-                dr_aa = hf.unpack_uniq_var(dx_aa.ravel, mo_occ[::2])
+                dr_aa = hf.unpack_uniq_var(dx_aa.ravel(), mo_occ[::2])
                 u = numpy.zeros((nmo, nmo), dtype=dr_aa.dtype)
                 # Allows only the rotation within the up-up space and down-down space
                 u[::2,::2] = u[1::2,1::2] = newton_ah.expmat(dr_aa)
