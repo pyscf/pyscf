@@ -409,14 +409,12 @@ def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
-    n2c = dm.shape[0]
-    dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex128)
-    dd[:n2c,:n2c] = dm
-    dhf._call_veff_llll(mol, dd, hermi, None)
     vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dm, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt)
-    return dhf._jk_triu_(vj, vk, hermi)
+    vj = vj.reshape(dm.shape)
+    vk = vk.reshape(dm.shape)
+    return dhf._jk_triu_(mol, vj, vk, hermi)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
     return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
@@ -505,14 +503,18 @@ class SCF(hf.SCF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[:mol.nelectron] = 1
-        if mol.nelectron < len(mo_energy):
-            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        mol.nelectron, mo_energy[mol.nelectron-1],
-                        mo_energy[mol.nelectron])
+        nocc = mol.nelectron
+        mo_occ[:nocc] = 1
+        if nocc < len(mo_energy):
+            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
+                            mo_energy[nocc-1], mo_energy[nocc])
+            else:
+                logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
+                            nocc, mo_energy[nocc-1], mo_energy[nocc])
         else:
             logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
-                        mol.nelectron, mo_energy[mol.nelectron-1])
+                        nocc, mo_energy[nocc-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
@@ -611,7 +613,7 @@ class SCF(hf.SCF):
         raise NotImplementedError
 
     def newton(self):
-        from pyscf.x2c.newton import newton
+        from pyscf.x2c.newton_ah import newton
         return newton(self)
 
     def stability(self, internal=None, external=None, verbose=None, return_status=False):

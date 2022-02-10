@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@ def setUpModule():
             H     0    0.757    0.587''',
         basis = 'cc-pvdz',
     )
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 def tearDownModule():
     global mol
@@ -215,5 +220,3 @@ C     F
 if __name__ == "__main__":
     print("Full Tests for x2c")
     unittest.main()
-
-

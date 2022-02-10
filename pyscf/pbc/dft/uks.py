@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point
+Non-relativistic unrestricted Kohn-Sham for periodic systems at a single k-point
 
 See Also:
     pyscf.pbc.dft.krks.py : Non-relativistic Restricted Kohn-Sham for periodic

@@ -18,7 +18,7 @@ Generate X2C-SCF response functions
 '''
 
 from pyscf.x2c import x2c
-from pyscf.x2c._response_functions import _gen_ghf_response
+from pyscf.scf._response_functions import _gen_ghf_response
 
 def _gen_x2chf_response(mf, mo_coeff=None, mo_occ=None,
                         with_j=True, hermi=0, max_memory=None):

@@ -28,7 +28,6 @@ from pyscf.pbc.scf import _response_functions  # noqa
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(uhf.TDA):
 
@@ -130,7 +129,7 @@ class TDA(uhf.TDA):
             x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         log = logger.Logger(self.stdout, self.verbose)
@@ -251,7 +250,7 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+                                  (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         log = logger.Logger(self.stdout, self.verbose)

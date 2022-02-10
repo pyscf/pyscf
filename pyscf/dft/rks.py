@@ -382,8 +382,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.RHF(self.mol)
-        mf.__dict__.update(self.to_rks().__dict__)
+        mf = _update_keys_(scf.RHF(self.mol), self.to_rks())
         mf.converged = False
         return mf
 
@@ -394,8 +393,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.UHF(self.mol)
-        mf.__dict__.update(self.to_uks().__dict__)
+        mf = _update_keys_(scf.UHF(self.mol), self.to_uks())
         mf.converged = False
         return mf
 
@@ -406,10 +404,25 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.GHF(self.mol)
-        mf.__dict__.update(self.to_gks().__dict__)
+        mf = _update_keys_(scf.GHF(self.mol), self.to_gks())
         mf.converged = False
         return mf
+
+    def to_hf(self):
+        '''Convert the input KS object to the associated HF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        if isinstance(self, scf.hf.RHF):
+            return self.to_rhf()
+        elif isinstance(self, scf.hf.UHF):
+            return self.to_uhf()
+        elif isinstance(self, scf.hf.GHF):
+            return self.to_ghf()
+        else:
+            raise RuntimeError(f'to_hf does not support {self.__class__}')
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -446,11 +459,14 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
+        from pyscf.dft import numint2c
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
         if xc != self.xc:
             mf.converged = False
+        if not isinstance(mf._numint, numint2c.NumInt2C):
+            mf._numint = numint2c.NumInt2C()
         return mf
 
     def reset(self, mol=None):
@@ -489,6 +505,13 @@ class KohnShamDFT(object):
 
 # Update the KohnShamDFT label in scf.hf module
 hf.KohnShamDFT = KohnShamDFT
+
+def _update_keys_(mf, src):
+    src_keys = src.__dict__
+    res_keys = {key: src_keys[key] for key in mf._keys if key in src_keys}
+    res_keys.pop('_keys')
+    mf.__dict__.update(res_keys)
+    return mf
 
 def init_guess_by_vsap(mf, mol=None):
     '''Form SAP guess'''

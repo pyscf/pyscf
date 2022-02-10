@@ -66,6 +66,15 @@ class KohnShamDFT(rks.KohnShamDFT):
         rks.KohnShamDFT.__init__(self, xc)
         self._numint = r_numint.RNumInt()
 
+    def dump_flags(self, verbose=None):
+        rks.KohnShamDFT.dump_flags(self, verbose)
+        logger.info(self, 'collinear = %s', self._numint.collinear)
+        if self._numint.collinear[0] == 'm':
+            logger.info(self, 'mcfun spin_samples = %s', self._numint.spin_samples)
+            logger.info(self, 'mcfun collinear_thrd = %s', self._numint.collinear_thrd)
+            logger.info(self, 'mcfun collinear_samples = %s', self._numint.collinear_samples)
+        return self
+
     get_veff = gks.get_veff
     energy_elec = gks.energy_elec
 
@@ -105,12 +114,16 @@ class KohnShamDFT(rks.KohnShamDFT):
         mf.converged = False
         return mf
 
+    to_hf = to_dhf
+
     def to_dks(self, xc=None):
         if xc is not None and xc != self.xc:
             mf = copy.copy(self)
             mf.xc = xc
             mf.converged = False
         return self
+
+    to_ks = to_dks
 
 
 class DKS(KohnShamDFT, dhf.DHF):
@@ -135,7 +148,7 @@ class DKS(KohnShamDFT, dhf.DHF):
 
 UKS = UDKS = DKS
 
-class RDKS(KohnShamDFT, dhf.RDHF):
+class RDKS(DKS, dhf.RDHF):
     '''Kramers restricted Dirac-Kohn-Sham'''
     def __init__(self, mol, xc='LDA,VWN'):
         dhf.RDHF.__init__(self, mol)

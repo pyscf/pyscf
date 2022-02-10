@@ -13,7 +13,7 @@ mol = gto.M(atom="O", basis='unc-sto3g', verbose=4)
 mf = mol.DKS()
 mf.xc = 'pbe'
 # Enable collinear functional. DKS calls non-collinear functional by default
-mf.collinear = True
+mf.collinear = 'mcol'
 mf.kernel()
 
 mf.TDDFT.run()

@@ -136,36 +136,71 @@ class KnownValues(unittest.TestCase):
         eri0[:n2c,:n2c,n2c:,n2c:] = eri0[n2c:,n2c:,:n2c,:n2c].transpose(2,3,0,1)
         ssss = h4.intor('int2e_spsp1spsp2_spinor') * c1**4
         eri0[n2c:,n2c:,n2c:,n2c:] = ssss
+        eri0bak = eri0.copy()
+
+        # to setup mf.opt
+        mf = h4.DHF().build()
+        mf._coulomb_level = 'SSSS'
 
         numpy.random.seed(1)
         dm = numpy.random.random((2,n4c,n4c))+numpy.random.random((2,n4c,n4c))*1j
         dm = dm + dm.transpose(0,2,1).conj()
         vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
-        vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=1, coulomb_allow='SSSS')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        vj, vk = mf.get_jk(h4, dm[0], hermi=1)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         vj0 = numpy.einsum('ijkl,xlk->xij', ssss, dm[:,n2c:,n2c:])
         vk0 = numpy.einsum('ijkl,xjk->xil', ssss, dm[:,n2c:,n2c:])
-        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=0)
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=1)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         eri0[n2c:,n2c:,n2c:,n2c:] = 0
         vj0 = numpy.einsum('ijkl,xlk->xij', eri0, dm)
         vk0 = numpy.einsum('ijkl,xjk->xil', eri0, dm)
         vj, vk = scf.dhf.get_jk(h4, dm, hermi=1, coulomb_allow='SSLL')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0[n2c:,n2c:,:n2c,:n2c] = 0
+        eri0[:n2c,:n2c,n2c:,n2c:] = 0
+        vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
+        vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
+        vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=1, coulomb_allow='LLLL')
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0 = eri0bak
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,n4c,n4c))+numpy.random.random((2,n4c,n4c))*1j
+        vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
+        vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
+        vj, vk = mf.get_jk(h4, dm[0], hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        vj0 = numpy.einsum('ijkl,xlk->xij', ssss, dm[:,n2c:,n2c:])
+        vk0 = numpy.einsum('ijkl,xjk->xil', ssss, dm[:,n2c:,n2c:])
+        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0[n2c:,n2c:,n2c:,n2c:] = 0
+        vj0 = numpy.einsum('ijkl,xlk->xij', eri0, dm)
+        vk0 = numpy.einsum('ijkl,xjk->xil', eri0, dm)
+        vj, vk = scf.dhf.get_jk(h4, dm, hermi=0, coulomb_allow='SSLL')
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         eri0[n2c:,n2c:,:n2c,:n2c] = 0
         eri0[:n2c,:n2c,n2c:,n2c:] = 0
         vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
         vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=0, coulomb_allow='LLLL')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
     def test_get_jk_with_gaunt_breit_high_cost(self):
         n2c = h4.nao_2c()
@@ -310,4 +345,3 @@ def _fill_gaunt(mol, erig):
 if __name__ == "__main__":
     print("Full Tests for dhf")
     unittest.main()
-

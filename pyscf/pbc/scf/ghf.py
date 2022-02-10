@@ -43,12 +43,20 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
     dmaa = dms[:,:nao,:nao]
     dmab = dms[:,nao:,:nao]
     dmbb = dms[:,nao:,nao:]
-    dms = np.vstack((dmaa, dmbb, dmab))
+    if with_k:
+        if hermi:
+            dms = np.stack((dmaa, dmbb, dmab))
+        else:
+            dmba = dms[:,nao:,:nao]
+            dms = np.stack((dmaa, dmbb, dmab, dmba))
+        # Note the off-diagonal block breaks the hermitian
+        _hermi = 0
+    else:
+        dms = np.stack((dmaa, dmbb))
+        _hermi = 1
 
-    j1, k1 = mf.with_df.get_jk(dms, hermi, kpt, kpts_band, with_j, with_k,
+    j1, k1 = mf.with_df.get_jk(dms, _hermi, kpt, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
-    j1 = j1.reshape(3,n_dm,nao,nao)
-    k1 = k1.reshape(3,n_dm,nao,nao)
 
     vj = vk = None
     if with_j:
@@ -61,7 +69,10 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
         vk[:,:nao,:nao] = k1[0]
         vk[:,nao:,nao:] = k1[1]
         vk[:,:nao,nao:] = k1[2]
-        vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        if hermi:
+            vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        else:
+            vk[:,nao:,:nao] = k1[3]
         vk = vk.reshape(dm.shape)
 
     return vj, vk
