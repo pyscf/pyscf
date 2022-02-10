@@ -231,6 +231,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         if dump_chk:
             mf.dump_chk(locals())
 
+        if callable(callback):
+            callback(locals())
+
     logger.timer(mf, 'scf_cycle', *cput0)
     # A post-processing hook before return
     mf.post_kernel(locals())
