@@ -281,7 +281,7 @@ def canonical_occ_(mf, nelec=None):
     return mf
 canonical_occ = canonical_occ_
 
-def kconj_symmetry_(mf, preconv=False, preconv_tol=None, preconv_tol_grad=None):
+def kconj_symmetry_(mf):
     '''Perform SCF calculation assuming phi(k) = phi(-k)* orbital symmetry.
 
     If an exact degeneracies of orbital energies exists at the Fermi level, the SCF may still
@@ -295,33 +295,17 @@ def kconj_symmetry_(mf, preconv=False, preconv_tol=None, preconv_tol_grad=None):
     ----------
     mf: SCF object
         Initial mean-field object.
-    preconv_tol: bool, optional
-        If set to True, a regular SCF calculation is performed first until the in order
-        to generate an initial guess for subsequent the (k,-k)-symmetric SCF.
-        This can help avoiding exact degeneracies at the Fermi level.
-        If set to False, this pre-convergence step is skipped. Default: False.
-    preconv_tol: float, optional
-        Specifies the energy convergence threshold for the pre-convergence step.
-        If set to None, the square root of `mf.conv_tol` is used. Default: None.
-    preconv_tol_grad: float, optional
-        Specifies the SCF gradient convergence threshold for the pre-convergence step.
-        If set to None, the square root of `preconv_tol` is used. Default: None.
 
     Returns
     -------
     mf: SCF object
-        Mean-field object with modified `kernel`, `eig`, and `get_jk` rotuines,
+        Mean-field object with modified `kernel`, `eig`, and `get_jk` routines,
         ensuring a (k,-k)-symmetric solution.
     '''
 
     from pyscf.scf import uhf, ghf
     if isinstance(mf, (uhf.UHF, ghf.GHF)):
         raise NotImplementedError("k-conjugation symmetry not implemented for unrestricted/generalized spin.")
-
-    if preconv_tol is None:
-        preconv_tol = numpy.sqrt(mf.conv_tol)
-    if preconv_tol_grad is None:
-        preconv_tol_grad = numpy.sqrt(preconv_tol)
 
     def get_unique_conjugated_indices(cell, kpts):
         '''Get lists of unique k-points k, and conjugated k-points -k.'''
@@ -341,119 +325,92 @@ def kconj_symmetry_(mf, preconv=False, preconv_tol=None, preconv_tol_grad=None):
 
     kidx_uniq, kidx_conj = get_unique_conjugated_indices(mf.cell, mf.kpts)
 
-    def get_jk_builder(get_jk_orig):
-        def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
-                with_j=True, with_k=True, omega=None, **kwargs):
-            '''Only build J and K matrices at unique k-points k-conjugation symmetry.
+    def get_jk(self, cell=None, dm_kpts=None, hermi=1, kpts=None, kpts_band=None,
+            with_j=True, with_k=True, omega=None, **kwargs):
+        '''Only build J and K matrices at unique k-points k-conjugation symmetry.
 
-            Note that this will also speed up the `get_jk` call.
-            '''
-            # If kpts_band is provided, do not use (k,-k)-symmetry:
-            if kpts_band is not None:
-                return get_jk_orig(cell=cell, dm_kpts=dm_kpts, hermi=hermi, kpts=kpts,
-                    kpts_band=kpts_band, with_j=with_j, with_k=with_k, omega=omega, **kwargs)
+        Note that this will also speed up the `get_jk` call.
+        '''
+        # If kpts_band is provided, do not use (k,-k)-symmetry:
+        if kpts_band is not None:
+            return super(type(mf), self).get_jk(cell=cell, dm_kpts=dm_kpts, hermi=hermi, kpts=kpts,
+                kpts_band=kpts_band, with_j=with_j, with_k=with_k, omega=omega, **kwargs)
 
-            if kpts is None: kpts = self.kpts
-            if dm_kpts is None: dm_kpts = self.make_rdm1()
-            nkpts = len(kpts)
-            nao = dm_kpts.shape[-1]
-            # Use kpts_band to evaluate J and K matrix at reduced set of unique k-points:
-            kpts_red = kpts[kidx_uniq]
-            vj_red, vk_red = get_jk_orig(cell=cell, dm_kpts=dm_kpts, hermi=hermi, kpts=kpts,
-                    kpts_band=kpts_red, with_j=with_j, with_k=with_k, omega=omega, **kwargs)
-            selfconj = numpy.equal(kidx_uniq, kidx_conj)
-            vj = vk = None
-            # Use vj_red and vk_red evaluated at the unique k-points k to fill the values
-            # for vj and vk at both k and -k:
-            if with_j:
-                vj_red[selfconj] = vj_red[selfconj].real
-                vj = numpy.zeros((nkpts, nao, nao), dtype=complex)
-                vj[kidx_conj] = vj_red.conj()
-                vj[kidx_uniq] = vj_red
-            if with_k:
-                vk_red[selfconj] = vk_red[selfconj].real
-                vk = numpy.zeros((nkpts, nao, nao), dtype=complex)
-                vk[kidx_conj] = vk_red.conj()
-                vk[kidx_uniq] = vk_red
-            return vj, vk
-        return get_jk
+        if kpts is None: kpts = self.kpts
+        if dm_kpts is None: dm_kpts = self.make_rdm1()
+        nkpts = len(kpts)
+        nao = dm_kpts.shape[-1]
+        # Use kpts_band to evaluate J and K matrix at reduced set of unique k-points:
+        kpts_red = kpts[kidx_uniq]
+        vj_red, vk_red = super(type(mf), self).get_jk(cell=cell, dm_kpts=dm_kpts, hermi=hermi, kpts=kpts,
+                kpts_band=kpts_red, with_j=with_j, with_k=with_k, omega=omega, **kwargs)
+        selfconj = numpy.equal(kidx_uniq, kidx_conj)
+        vj = vk = None
+        # Use vj_red and vk_red evaluated at the unique k-points k to fill the values
+        # for vj and vk at both k and -k:
+        if with_j:
+            vj_red[selfconj] = vj_red[selfconj].real
+            vj = numpy.zeros((nkpts, nao, nao), dtype=complex)
+            vj[kidx_conj] = vj_red.conj()
+            vj[kidx_uniq] = vj_red
+        if with_k:
+            vk_red[selfconj] = vk_red[selfconj].real
+            vk = numpy.zeros((nkpts, nao, nao), dtype=complex)
+            vk[kidx_conj] = vk_red.conj()
+            vk[kidx_uniq] = vk_red
+        return vj, vk
 
-    def eig_builder(eig_orig):
-        def eig(self, h_kpts, s_kpts):
-            '''Diagonalize unique k-points only and infer MOs at conjugated k-points via symmetry.'''
-            nkpts = len(h_kpts)
-            # Only diagonalize unique k-points:
-            h_red = h_kpts[kidx_uniq]
-            s_red = s_kpts[kidx_uniq]
-            # Self-conjugated k-points (e.g. Gamma) should have a real Fock matrix:
-            selfconj = numpy.equal(kidx_uniq, kidx_conj)
-            h_red[selfconj] = h_red[selfconj].real
-            # Diagonalize reduced set of k-points:
-            e_red, c_red = eig_orig(h_red, s_red)
-            # Use lists and loops instead of NumPy arrays, since the number of MOs can be k-point dependent:
-            mo_energy_k = nkpts*[None]
-            mo_coeff_k = nkpts*[None]
-            for idx, (k, kconj) in enumerate(zip(kidx_uniq, kidx_conj)):
-                mo_energy_k[k] = e_red[idx]
-                mo_coeff_k[k] = c_red[idx]
-                if (kconj == k):
-                    continue
-                # Shift conjugated energies slightly, to avoid a possible exact degeneracy
-                # between HOMO and LUMO. The exact degeneracy is avoided at the price of
-                # breaking the (k,-k)-symmetry via the MO occupations in this case,
-                # but it is possible that a real gap opens during the SCF loop,
-                # such that the symmetry is restored in the end.
-                mo_energy_k[kconj] = e_red[idx] + 1e-15
-                mo_coeff_k[kconj] = c_red[idx].conj()
-            return mo_energy_k, mo_coeff_k
-        return eig
+    def eig(self, h_kpts, s_kpts):
+        '''Diagonalize unique k-points only and infer MOs at conjugated k-points via symmetry.'''
+        nkpts = len(h_kpts)
+        # Only diagonalize unique k-points:
+        h_red = h_kpts[kidx_uniq]
+        s_red = s_kpts[kidx_uniq]
+        # Self-conjugated k-points (e.g. Gamma) should have a real Fock matrix:
+        selfconj = numpy.equal(kidx_uniq, kidx_conj)
+        h_red[selfconj] = h_red[selfconj].real
+        # Diagonalize reduced set of k-points:
+        e_red, c_red = super(type(mf), self).eig(h_red, s_red)
+        # Use lists and loops instead of NumPy arrays, since the number of MOs can be k-point dependent:
+        mo_energy_k = nkpts*[None]
+        mo_coeff_k = nkpts*[None]
+        for idx, (k, kconj) in enumerate(zip(kidx_uniq, kidx_conj)):
+            mo_energy_k[k] = e_red[idx]
+            mo_coeff_k[k] = c_red[idx]
+            if (kconj == k):
+                continue
+            # Shift conjugated energies slightly, to avoid a possible exact degeneracy
+            # between HOMO and LUMO. The exact degeneracy is avoided at the price of
+            # breaking the (k,-k)-symmetry via the MO occupations in this case,
+            # but it is possible that a real gap opens during the SCF loop,
+            # such that the symmetry is restored in the end.
+            mo_energy_k[kconj] = e_red[idx] + 1e-15
+            mo_coeff_k[kconj] = c_red[idx].conj()
+        return mo_energy_k, mo_coeff_k
 
-    def get_init_guess_builder(get_init_guess_orig):
-        def get_init_guess(self, *args, **kwargs):
-            '''Create (k,-k)-symmetric initial guess density-matrix.'''
-            dm0 = get_init_guess_orig(*args, **kwargs)
-            conj_index = kpts_helper.conj_mapping(self.mol, self.kpts)
-            dm0 += dm0[conj_index].conj()
-            return dm0/2
-        return get_init_guess
+    def get_init_guess(self, *args, **kwargs):
+        '''Create (k,-k)-symmetric initial guess density-matrix.'''
+        dm0 = super(type(mf), self).get_init_guess(*args, **kwargs)
+        conj_index = kpts_helper.conj_mapping(self.mol, self.kpts)
+        dm0 += dm0[conj_index].conj()
+        return dm0/2
 
-    def replace_method(obj, name, func_builder):
-        '''Replace a method of the mean-field object.'''
-        func_orig = getattr(obj, name)
-        func_new = func_builder(func_orig)
-        setattr(obj, name, func_new.__get__(obj))
+    def kernel(self, *args, **kwargs):
+        res = super(type(mf), self).kernel(*args, **kwargs)
+        # Print a warning to the log, if (k,-k)-symmetry is broken in the final 1-DM:
+        dm1 = self.make_rdm1()
+        err = abs(dm1[kidx_uniq] - dm1[kidx_conj].conj()).max()
+        if (err > 1e-8):
+            logger.warn(self, "(k,-k)-symmetry broken in 1-DM! Max error= %.3e", err)
+            self.converged = False
+        return res
 
-    def enable_symmetry(mf):
-        replace_method(mf, 'get_init_guess', get_init_guess_builder)
-        replace_method(mf, 'get_jk', get_jk_builder)
-        replace_method(mf, 'eig', eig_builder)
-
-    def kernel_builder(kernel_orig):
-        def kernel(self, *args, **kwargs):
-            # If preconv is True, first run a regular SCF, which can break (k,-k)-symmetry:
-            if preconv:
-                with lib.temporary_env(self, conv_tol=preconv_tol, conv_tol_grad=preconv_tol_grad):
-                    kernel_orig(*args, **kwargs)
-                # Restore (k,-k)-symmetry of 1-DM and use as starting guess:
-                dm0 = self.make_rdm1()
-                conj_index = kpts_helper.conj_mapping(self.mol, self.kpts)
-                dm0 += dm0[conj_index].conj()
-                dm0 /= 2
-                kwargs['dm0'] = dm0
-            # Enable (k,-k)-symmetry:
-            enable_symmetry(self)
-            # Rerun kernel with symmetry enabled:
-            res = kernel_orig(*args, **kwargs)
-            # Print a warning to the log, if (k,-k)-symmetry is broken in the final 1-DM:
-            dm1 = mf.make_rdm1()
-            err = abs(dm1[kidx_uniq] - dm1[kidx_conj].conj()).max()
-            if (err > 1e-8):
-                logger.warn(mf, "(k,-k)-symmetry broken in 1-DM! Max error= %.3e", err)
-                self.converged = False
-            return res
-        return kernel
-
-    replace_method(mf, 'kernel', kernel_builder)
+    # Dynamically create inheriting class
+    clsname = '%s_KConjSym' % mf.__class__.__name__
+    cls = type(clsname, (type(mf),), {
+        'kernel' : kernel, 'get_jk' : get_jk, 'eig' : eig,})
+    mf_sym = cls.__new__(cls)
+    mf_sym.__dict__.update(mf.__dict__)
 
     # --- Add output of (k,-k)-symmetry error each iteration:
     def callback(kwargs):
@@ -464,12 +421,11 @@ def kconj_symmetry_(mf, preconv=False, preconv_tol=None, preconv_tol_grad=None):
 
     if callable(mf.callback):
         # If mf.callback has already been set, make sure it will not be overwritten and still be executed:
-        callback_orig = mf.callback
-        mf.callback = lambda kwargs : (callback(kwargs), callback_orig(kwargs))
+        mf_sym.callback = lambda kwargs : (callback(kwargs), mf.callback(kwargs))
     else:
-        mf.callback = callback
+        mf_sym.callback = callback
 
-    return mf
+    return mf_sym
 
 def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
