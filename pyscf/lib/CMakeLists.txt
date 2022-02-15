@@ -181,7 +181,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/5.1.7/libxc-5.1.7.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/5.2.0/libxc-5.2.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
@@ -189,6 +189,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
             -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+            -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)

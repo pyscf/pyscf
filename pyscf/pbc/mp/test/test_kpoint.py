@@ -168,6 +168,21 @@ class KnownValues(unittest.TestCase):
         for kdm in dm:
             np.testing.assert_allclose(kdm, kdm.conj().T)
 
+    def test_kmp2_with_cderi(self):
+        nk = (1, 1, 1)
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
+        kmf = pbcscf.KRHF(cell, abs_kpts).density_fit()
+        kmf.conv_tol = 1e-12
+        ekpt = kmf.scf()
+        kmf2 = pbcscf.KRHF(cell, abs_kpts).density_fit()
+        kmf2.conv_tol = 1e-12
+        kmf2.with_df._cderi = kmf.with_df._cderi
+        ekpt2 = kmf2.scf()
+        mp = pyscf.pbc.mp.kmp2.KMP2(kmf2).run()        
+
+        self.assertAlmostEqual(ekpt2, -1.2053666821021261, 9)
+        self.assertAlmostEqual(mp.e_corr, -6.9881475423322723e-06, 9)
+
 
 if __name__ == '__main__':
     print("Full kpoint test")
