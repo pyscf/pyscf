@@ -189,6 +189,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
             -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+            -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)
