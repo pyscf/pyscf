@@ -206,11 +206,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc = mf.cell.tot_electrons(nkpts) // 2
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
-    fermi = mo_energy[nocc-1]
-    mo_occ_kpts = []
-    for mo_e in mo_energy_kpts:
-        mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
-
     if nocc < mo_energy.size:
         logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
                     mo_energy[nocc-1], mo_energy[nocc])
@@ -219,6 +214,13 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                         mo_energy[nocc-1], mo_energy[nocc])
     else:
         logger.info(mf, 'HOMO = %.12g', mo_energy[nocc-1])
+
+    fermi = mo_energy[nocc-1]
+    if (nocc < mo_energy.size) and (fermi == mo_energy[nocc]):
+        raise RuntimeError("HOMO-LUMO gap is exactly zero; cannot apply aufbau-principle.")
+    mo_occ_kpts = []
+    for mo_e in mo_energy_kpts:
+        mo_occ_kpts.append((mo_e <= fermi).astype(np.double) * 2)
 
     if mf.verbose >= logger.DEBUG:
         np.set_printoptions(threshold=len(mo_energy))
@@ -230,6 +232,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                          mo_energy_kpts[k][mo_occ_kpts[k]==0])
         np.set_printoptions(threshold=1000)
 
+    assert abs(np.sum(mo_occ_kpts) - 2*nocc) < 1e-14
     return mo_occ_kpts
 
 
