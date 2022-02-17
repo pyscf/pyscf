@@ -620,7 +620,9 @@ def rcut_by_shells(cell, precision=None, rcut=5., return_pgf_radius=False):
 
 class NeighborPair(ctypes.Structure):
     _fields_ = [("nimgs", ctypes.c_int),
-                ("Ls_list", ctypes.POINTER(ctypes.c_int))]
+                ("Ls_list", ctypes.POINTER(ctypes.c_int)),
+                ("q_cond", ctypes.POINTER(ctypes.c_double)),
+                ("center", ctypes.POINTER(ctypes.c_double))]
 
 class NeighborList(ctypes.Structure):
     _fields_ = [("nish", ctypes.c_int),
@@ -1679,8 +1681,9 @@ class Cell(mole.Mole):
             return self
 
         if self.rcut is None or self._rcut_from_build:
-            self._rcut = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)] + [0])
+            #self._rcut = max([self.bas_rcut(ib, self.precision)
+            #                  for ib in range(self.nbas)] + [0])
+            self._rcut = max(0, rcut_by_shells(self).max())
             self._rcut_from_build = True
 
         _a = self.lattice_vectors()

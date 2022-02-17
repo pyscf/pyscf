@@ -33,6 +33,7 @@ from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
 REL_CUTOFF = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
+GGA_METHOD = getattr(__config__, 'pbc_dft_multigrid_gga_method', 'FFT')
 
 libdft = lib.load_library('libdft')
 
@@ -899,7 +900,6 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
-
     if xctype == 'LDA':
         deriv = 0
     elif xctype == 'GGA':
@@ -947,9 +947,11 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
             wv = vxc[0].reshape(1,ngrids) * weight
             wv_freq.append(tools.fft(wv, mesh))
         elif xctype == 'GGA':
-            #wv = _rks_gga_wv0(rhoR[i], vxc, weight)
-            #wv_freq.append(tools.fft(wv, mesh))
-            wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
+            if GGA_METHOD.upper() == 'FFT':
+                wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
+            else:
+                wv = _rks_gga_wv0(rhoR[i], vxc, weight)
+                wv_freq.append(tools.fft(wv, mesh))
         else:
             raise NotImplementedError
 
@@ -962,6 +964,18 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         wv_freq = wv_freq[0].reshape(nset,-1,*mesh)
     else:
         wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
+
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(xc_code, spin=cell.spin)
+    vk = None
+    if abs(hyb) > 1e-10:
+        if nkpts > 1:
+            raise NotImplementedError
+        from .hfx import sr_hfx
+        vk = sr_hfx(cell, dms, omega, hyb)
+        if nset == 1: 
+            excsum[0] += lib.einsum('ij,ji->', vk, dms[0,0])
+        else:
+            raise KeyError
 
     if nset == 1:
         ecoul = ecoul[0]
@@ -978,8 +992,10 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         if with_j:
             #wv_freq[:,0] += vG.reshape(nset,*mesh)
             wv_freq[:,0] = lib.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
-        #veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
-        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        if GGA_METHOD.upper() == 'FFT':
+            veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        else:
+            veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
@@ -988,6 +1004,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     else:
         vj = None
 
+    if vk is not None:
+        veff += vk
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
@@ -1035,9 +1053,11 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
             wv = vxc[0].reshape(1,ngrids) * weight
             wv_freq.append(tools.fft(wv, mesh))
         elif xctype == 'GGA':
-            #wv = _rks_gga_wv0(rhoR[i], vxc, weight)
-            #wv_freq.append(tools.fft(wv, mesh))
-            wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
+            if GGA_METHOD.upper() == 'FFT':
+                wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
+            else:
+                wv = _rks_gga_wv0(rhoR[i], vxc, weight)
+                wv_freq.append(tools.fft(wv, mesh))
         else:
             raise NotImplementedError
 
@@ -1054,8 +1074,10 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     if xctype == 'LDA':
         vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
     elif xctype == 'GGA':
-        #vj_kpts = _get_gga_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
-        vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
+        if GGA_METHOD.upper() == 'FFT':
+            vj_kpts = _get_j_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
+        else:
+            vj_kpts = _get_gga_pass2_ip1(mydf, wv_freq, kpts_band, hermi=0, deriv=1)
     else:
         raise NotImplementedError
 

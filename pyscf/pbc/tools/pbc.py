@@ -503,9 +503,18 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
         # larger than rcut. The boundary penalty ensures that Ls would be able to
         # cover the basis that sitting out of the cell.
         # See issue https://github.com/pyscf/pyscf/issues/1017
-        scaled_atom_coords = cell.atom_coords().dot(b.T)
-        boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
-                                   abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
+        scaled_atom_coords = lib.dot(cell.atom_coords(), b.T)
+        boundary_penalty = np.zeros((3,), dtype=float)
+        neg = scaled_atom_coords.min(axis=0)
+        neg_arg = neg < 0
+        if neg_arg.any():
+            boundary_penalty[neg_arg] = np.maximum(boundary_penalty[neg_arg], abs(neg[neg_arg]))
+        pos = scaled_atom_coords.max(axis=0) - 1
+        pos_arg = pos > 0
+        if pos_arg.any():
+            boundary_penalty[pos_arg] = np.maximum(boundary_penalty[pos_arg], pos[pos_arg])
+        #boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
+        #                           abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
         nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
     else:
         rcut = max((np.asarray(nimgs))/heights_inv)

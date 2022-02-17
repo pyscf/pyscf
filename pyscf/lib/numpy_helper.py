@@ -1508,12 +1508,12 @@ def copy(a, order='K', subok=False, dtype=None):
     #assert out.size == a.size
 
     if a.dtype == numpy.complex128:
-        fn = getattr(_np_helper, "NPzcopy", None)
+        fn = getattr(_np_helper, "NPzcopy_omp")
     elif a.dtype == numpy.double:
         if dtype == numpy.complex128:
-            fn = getattr(_np_helper, "NPcopy_d2z", None)
+            fn = getattr(_np_helper, "NPcopy_d2z")
         else:
-            fn = getattr(_np_helper, "NPdcopy", None)
+            fn = getattr(_np_helper, "NPdcopy_omp")
     else:
         raise NotImplementedError
 

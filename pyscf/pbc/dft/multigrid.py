@@ -1951,7 +1951,10 @@ class MultiGridFFTDF2(MultiGridFFTDF):
     def __del__(self):
         from .multigrid_pair import free_task_list
         if self.task_list is not None:
-            free_task_list(self.task_list)
+            try:
+                free_task_list(self.task_list)
+            except:
+                pass
 
     def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
         from . import multigrid_pair
