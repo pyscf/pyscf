@@ -210,7 +210,8 @@ void NPdsum(double* out, double* a, int lda, int n)
     size_t ncol = (size_t) lda;
 
     if (ncol > nrow) {
-        for (size_t i = 0; i < nrow; i++) {
+        size_t i;
+        for (i = 0; i < nrow; i++) {
             out[i] = 0;
             double* aa = a + i*ncol;
 #pragma omp parallel

@@ -90,8 +90,8 @@ static void add_rho_submesh(double* rho, double* pqr,
 
     int ix, iy, iz;
     for (ix = 0; ix < nx; ix++) {
-        double* restrict ptr_rho = rho + (ix + x0) * mesh_yz + y0 * mesh[2] + z0;
-        double* restrict ptr_pqr = pqr + (ix + x0_sub) * submesh_yz + y0_sub * submesh[2] + z0_sub;
+        double* __restrict ptr_rho = rho + (ix + x0) * mesh_yz + y0 * mesh[2] + z0;
+        double* __restrict ptr_pqr = pqr + (ix + x0_sub) * submesh_yz + y0_sub * submesh[2] + z0_sub;
         for (iy = 0; iy < ny; iy++) {
             #pragma omp simd
             for (iz = 0; iz < nz; iz++) {
