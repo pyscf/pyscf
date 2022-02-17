@@ -5,9 +5,11 @@
 #include "config.h"
 #include "cint.h"
 #include "pbc/cell.h"
+#include "np_helper/np_helper.h"
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define SQUARE(r) (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define RCUT_EPS 1e-3
 
 double pgf_rcut(int l, double alpha, double coeff, 
@@ -103,6 +105,30 @@ void get_SI(complex double* out, double* coords, double* Gv, int natm, int ngrid
 }
 
 
+void get_SI_real_imag(double* out_real, double* out_imag, double* coords, double* Gv, int natm, int ngrid)
+{
+#pragma omp parallel
+{
+    int i, ia;
+    double RG;
+    double *pcoords, *pGv;
+    double *pout_real, *pout_imag;
+    #pragma omp for schedule(static)
+    for (ia = 0; ia < natm; ia++) {
+        pcoords = coords + ia * 3;
+        pout_real = out_real + ((size_t)ia) * ngrid;
+        pout_imag = out_imag + ((size_t)ia) * ngrid;
+        for (i = 0; i < ngrid; i++) {
+            pGv = Gv + i * 3;
+            RG = pcoords[0] * pGv[0] + pcoords[1] * pGv[1] + pcoords[2] * pGv[2];
+            pout_real[i] = cos(RG);
+            pout_imag[i] = -sin(RG);
+        }
+    }
+}
+}
+
+
 void get_Gv(double* Gv, double* rx, double* ry, double* rz, int* mesh, double* b)
 {
 #pragma omp parallel
@@ -153,4 +179,120 @@ void contract_rhoG_Gv(double complex* out, double complex* rhoG, double* Gv,
         rhoG += ngrids;
         out += 3 * ngrids;
     }
+}
+
+
+void ewald_overlap_nuc_grad(double* out, double* charges, double* coords, int natm, double* Ls, int nL, double ew_eta)
+{
+    double fac = 2. * ew_eta / sqrt(M_PI);
+    double ew_eta2 = ew_eta * ew_eta;
+
+#pragma omp parallel
+{
+    int i, j, iL;
+    double charge_i, charge_j;
+    double tmp, r, r2;
+    double rij[3];
+    double *pout, *ri, *rj, *pLs;
+    #pragma omp for nowait schedule(static)
+    for (i = 0; i < natm; i++) {
+        charge_i = charges[i];
+        pout = out + i*3;
+        ri = coords + i*3;
+        for (j = 0; j < natm; j++) {
+            if (i == j) {
+                continue;
+            }
+            charge_j = charges[j];
+            rj = coords + j*3;
+            rij[0] = ri[0] - rj[0];
+            rij[1] = ri[1] - rj[1];
+            rij[2] = ri[2] - rj[2];
+            r2 = SQUARE(rij);
+            r = sqrt(r2);
+            tmp  = erfc(ew_eta * r) / (r2 * r) + fac * exp(-ew_eta2 * r2) / r2;
+            tmp *= charge_i * charge_j;
+            pout[0] -= tmp * rij[0];
+            pout[1] -= tmp * rij[1];
+            pout[2] -= tmp * rij[2];
+        }
+    }
+
+    #pragma omp for schedule(static)
+    for (i = 0; i < natm; i++) {
+        charge_i = charges[i];
+        pout = out + i*3;
+        ri = coords + i*3;
+        for (j = 0; j < natm; j++) {
+            charge_j = charges[j];
+            rj = coords + j*3;
+            rij[0] = ri[0] - rj[0];
+            rij[1] = ri[1] - rj[1];
+            rij[2] = ri[2] - rj[2];
+
+            for (iL = 0; iL < nL; iL++) {
+                pLs = Ls + iL * 3;
+                rij[0] = ri[0] - rj[0] + pLs[0];
+                rij[1] = ri[1] - rj[1] + pLs[1];
+                rij[2] = ri[2] - rj[2] + pLs[2];
+                r2 = SQUARE(rij);
+                r = sqrt(r2);
+                tmp  = erfc(ew_eta * r) / (r2 * r) + fac * exp(-ew_eta2 * r2) / r2;
+                tmp *= charge_i * charge_j;
+                pout[0] -= tmp * rij[0];
+                pout[1] -= tmp * rij[1];
+                pout[2] -= tmp * rij[2];
+            }
+        }
+    }
+}
+}
+
+
+void ewald_gs_nuc_grad(double* out, double* Gv, double* charges, double* coords, double ew_eta, double weights, int natm, int ngrid)
+{
+    double *SI_real = (double*) malloc(natm*ngrid*sizeof(double));
+    double *SI_imag = (double*) malloc(natm*ngrid*sizeof(double)); 
+    get_SI_real_imag(SI_real, SI_imag, coords, Gv, natm, ngrid);
+
+    double *ZSI_real = calloc(ngrid, sizeof(double));
+    double *ZSI_imag = calloc(ngrid, sizeof(double));
+
+    NPdgemm('N', 'N', ngrid, 1, natm,
+            ngrid, natm, ngrid, 0, 0, 0,
+            SI_real, charges, ZSI_real, 1., 0.);
+    NPdgemm('N', 'N', ngrid, 1, natm,
+            ngrid, natm, ngrid, 0, 0, 0,
+            SI_imag, charges, ZSI_imag, 1., 0.);
+
+#pragma omp parallel
+{
+    int ia, i;
+    double charge_i;
+    double G2, coulG, tmp;
+    double *pout, *pGv;
+    double *pSI_real, *pSI_imag;
+    double fac = 4. * M_PI * weights;
+    double fac1 = 4. * ew_eta * ew_eta;
+
+    #pragma omp for schedule(static)
+    for (ia = 0; ia < natm; ia++) {
+        charge_i = charges[ia];
+        pout = out + ia * 3;
+        pSI_real = SI_real + ia * ngrid;
+        pSI_imag = SI_imag + ia * ngrid;
+        #pragma omp simd
+        for (i = 0; i < ngrid; i++) {
+            pGv = Gv + i*3;
+            G2 = SQUARE(pGv);
+            if (G2 < 1e-12) {continue;}
+            coulG = fac / G2 * exp(-G2 / fac1);
+            tmp  = coulG * charge_i;
+            tmp *= (pSI_imag[i] * ZSI_real[i] - pSI_real[i] * ZSI_imag[i]);
+            pout[0] += tmp * pGv[0];
+            pout[1] += tmp * pGv[1];
+            pout[2] += tmp * pGv[2];
+        }
+    }
+}
 }

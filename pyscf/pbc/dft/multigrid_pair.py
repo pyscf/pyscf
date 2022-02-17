@@ -976,7 +976,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
         if with_j:
-            wv_freq[:,0] += vG.reshape(nset,*mesh)
+            #wv_freq[:,0] += vG.reshape(nset,*mesh)
+            wv_freq[:,0] = lib.add(wv_freq[:,0], vG.reshape(nset,*mesh), out=wv_freq[:,0])
         #veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
@@ -1005,7 +1006,8 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
+    # cache rhoG for core density gradients
+    rhoG = mydf.rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
 
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
@@ -1057,8 +1059,11 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     else:
         raise NotImplementedError
 
-    vj_kpts = np.rollaxis(vj_kpts, -3)
-    vj_kpts = np.asarray([_format_jks(vj, dm_kpts, input_band, kpts) for vj in vj_kpts])
+    if len(vj_kpts) == 1:
+        vj_kpts = vj_kpts[0]
+    else:
+        vj_kpts = np.rollaxis(vj_kpts, -3)
+        vj_kpts = np.asarray([_format_jks(vj, dm_kpts, input_band, kpts) for vj in vj_kpts])
     return vj_kpts
 
 
@@ -1115,6 +1120,7 @@ def vpploc_part1_nuc_grad_generator(mydf, kpts=np.zeros((1,3))):
 
 
 def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision=None):
+    t0 = (logger.process_clock(), logger.perf_counter())
     cell = mydf.cell
     fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
     atm = fakecell._atm
@@ -1135,10 +1141,17 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
     grad = np.zeros((len(atm),comp), order="C", dtype=float)
     drv = getattr(libdft, 'int_gauss_charge_v_rs', None)
 
-    rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
+    if mydf.rhoG is None:
+        rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
+    else:
+        rhoG = mydf.rhoG
     ngrids = np.prod(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = np.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
+    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
+    vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
+    for i, rhoG_i in enumerate(rhoG[:,0]):
+        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+
     v_rs = np.asarray(tools.ifft(vG, mesh).reshape(-1,ngrids).real, order="C")
     try:
         drv(getattr(libdft, eval_fn),
@@ -1155,6 +1168,7 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision
     except Exception as e:
         raise RuntimeError("Failed to computed nuclear gradients of vpploc part1. %s" % e)
     grad *= -1
+    t0 = logger.timer(mydf, 'vpploc_part1_nuc_grad', *t0)
     return grad
 
 

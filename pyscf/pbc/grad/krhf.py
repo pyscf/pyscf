@@ -19,6 +19,7 @@
 '''
 Non-relativistic analytical nuclear gradients for restricted Hartree Fock with kpoints sampling
 '''
+import ctypes
 import numpy as np
 from scipy.special import erfc
 from pyscf import lib
@@ -29,6 +30,7 @@ from pyscf.pbc.dft.numint import eval_ao_kpts
 from pyscf.pbc import gto, tools
 from pyscf.gto import mole
 
+libpbc = lib.load_library('libpbc')
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     '''
@@ -223,7 +225,22 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
+    zero_idx = np.where(abs(Lall).sum(axis=-1) < 1e-9)[0]
+    Lall = np.delete(Lall, zero_idx, axis=0)
 
+    fn = getattr(libpbc, "ewald_overlap_nuc_grad")
+    ewovrl_grad = np.zeros((cell.natm, 3), order="C", dtype=float)
+    chargs = np.asarray(chargs, order="C", dtype=float)
+    coords = np.asarray(coords, order="C", dtype=float)
+    Lall = np.asarray(Lall, order="C", dtype=float)
+    fn(ewovrl_grad.ctypes.data_as(ctypes.c_void_p),
+       chargs.ctypes.data_as(ctypes.c_void_p),
+       coords.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(cell.natm),
+       Lall.ctypes.data_as(ctypes.c_void_p),
+       ctypes.c_int(len(Lall)), ctypes.c_double(ew_eta))
+
+    '''
     rLij = coords[:,None,:] - coords[None,:,:] + Lall[:,None,None,:]
     #r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
     r = np.sqrt(lib.multiply_sum(rLij, rLij, axis=-1))
@@ -235,10 +252,12 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     r = None
     ewovrl_grad = -lib.einsum('i,j,Lij,Lijx->ix', chargs, chargs, tmp, rLij)
     rLij = tmp = None
+    '''
 
-    ewg_grad = np.zeros_like(ewovrl_grad)
+    ewg_grad = np.zeros_like(ewovrl_grad, order="C")
     mesh = gto.cell._cut_mesh_for_ewald(cell, cell.mesh)
-    Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
+    Gv, _, weights = cell.get_Gv_weights(mesh)
+    '''
     #absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2 = lib.multiply_sum(Gv, Gv, axis=1)
     absG2[absG2==0] = 1e200
@@ -257,8 +276,27 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
             tmp = None
     else:
         raise NotImplementedError
+    '''
 
-    ew_grad = ewg_grad + ewovrl_grad
+    fn = getattr(libpbc, "ewald_gs_nuc_grad")
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        ngrids = len(Gv)
+        mem_avail = cell.max_memory - lib.current_memory()[0]
+        blksize = min(ngrids, int(mem_avail*1e6 / ((2+cell.natm*2)*8)))
+        for ig0 in range(0, ngrids, blksize):
+            ig1 = min(ngrids, ig0+blksize)
+            ngrid_sub = ig1 - ig0
+            Gv_sub = np.asarray(Gv[ig0:ig1], order="C")
+            fn(ewg_grad.ctypes.data_as(ctypes.c_void_p),
+               Gv_sub.ctypes.data_as(ctypes.c_void_p),
+               chargs.ctypes.data_as(ctypes.c_void_p),
+               coords.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_double(ew_eta), ctypes.c_double(weights),
+               ctypes.c_int(cell.natm), ctypes.c_int(ngrid_sub))
+    else:
+        raise NotImplementedError
+
+    ew_grad = lib.add(ewg_grad, ewovrl_grad)
     if atmlst is not None:
         ew_grad = ew_grad[atmlst]
 
