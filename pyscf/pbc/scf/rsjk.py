@@ -449,7 +449,7 @@ def _make_extended_mole(cell, Ls, bvkmesh_Ls, omega, precision=None, verbose=Non
 
 def _re_contract_cell(cell, ke_cut_threshold, rcut_threshold=RCUT_THRESHOLD, verbose=None):
     from pyscf.gto import NPRIM_OF, NCTR_OF, PTR_EXP, PTR_COEFF, ATOM_OF
-    from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
+    from pyscf.pbc.dft.multigrid.multigrid import _primitive_gto_cutoff
     log = logger.new_logger(cell, verbose)
 
     # Split shells based on rcut

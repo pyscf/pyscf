@@ -7,7 +7,7 @@ from pyscf.pbc import gto
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 
-from pyscf.pbc.dft.multigrid import eval_mat, eval_rho
+from pyscf.pbc.dft.multigrid.multigrid import eval_mat, eval_rho
 multigrid.EXPDROP, bak_EXPDROP = 1e-14, multigrid.EXPDROP
 multigrid.EXTRA_PREC, bak_EXTRA_PREC = 1e-3, multigrid.EXTRA_PREC
 
