@@ -28,7 +28,7 @@ from pyscf.pbc.df import fft
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
 from pyscf.pbc.dft.multigrid.pp import make_rho_core, get_pp_nuc_grad, vpploc_part1_nuc_grad
 from pyscf.pbc.dft.multigrid.utils import _take_4d, _take_5d, _takebak_4d, _takebak_5d
-from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF 
+from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF
 
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
@@ -1095,22 +1095,6 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
         vj_kpts = np.rollaxis(vj_kpts, -3)
         vj_kpts = np.asarray([_format_jks(vj, dm_kpts, input_band, kpts) for vj in vj_kpts])
     return vj_kpts
-
-
-def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
-    if mydf.pp_with_erf:
-        return 0
-
-    mesh = mydf.mesh
-    vG = mydf.vpplocG_part1
-    vG.reshape(-1,*mesh)
-
-    vpp_kpts = _get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
-    if gamma_point(kpts):
-        vpp_kpts = vpp_kpts.real
-    if len(kpts) == 1:
-        vpp_kpts = vpp_kpts[0]
-    return vpp_kpts
 
 
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,

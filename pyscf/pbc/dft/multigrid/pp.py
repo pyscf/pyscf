@@ -235,7 +235,25 @@ def get_pp(mydf, kpts=None, max_memory=2000):
         return _get_pp_with_erf(mydf, kpts, max_memory)
 
 
+def get_vpploc_part1_ip1(mydf, kpts=numpy.zeros((1,3))):
+    from .multigrid_pair import _get_j_pass2_ip1
+    if mydf.pp_with_erf:
+        return 0
+
+    mesh = mydf.mesh
+    vG = mydf.vpplocG_part1
+    vG.reshape(-1,*mesh)
+
+    vpp_kpts = _get_j_pass2_ip1(mydf, vG, kpts, hermi=0, deriv=1)
+    if gamma_point(kpts):
+        vpp_kpts = vpp_kpts.real
+    if len(kpts) == 1:
+        vpp_kpts = vpp_kpts[0]
+    return vpp_kpts
+
+
 def vpploc_part1_nuc_grad_generator(mydf, kpts=numpy.zeros((1,3))):
+    from .multigrid_pair import _get_j_pass2_ip1
     h1 = -get_vpploc_part1_ip1(mydf, kpts=kpts)
 
     nkpts = len(kpts)
@@ -272,6 +290,7 @@ def vpploc_part1_nuc_grad_generator(mydf, kpts=numpy.zeros((1,3))):
 
 
 def vpploc_part1_nuc_grad(mydf, dm, kpts=numpy.zeros((1,3)), atm_id=None, precision=None):
+    from .multigrid_pair import _eval_rhoG
     t0 = (logger.process_clock(), logger.perf_counter())
     cell = mydf.cell
     fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
