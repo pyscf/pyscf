@@ -282,7 +282,9 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         ngrids = len(Gv)
         mem_avail = cell.max_memory - lib.current_memory()[0]
-        blksize = min(ngrids, int(mem_avail*1e6 / ((2+cell.natm*2)*8)))
+        if mem_avail <= 0:
+            logger.warn(cell, "Not enough memory for computing ewald force.")
+        blksize = min(ngrids, max(mesh[2], int(mem_avail*1e6 / ((2+cell.natm*2)*8))))
         for ig0 in range(0, ngrids, blksize):
             ig1 = min(ngrids, ig0+blksize)
             ngrid_sub = ig1 - ig0
