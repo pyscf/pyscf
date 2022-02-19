@@ -426,7 +426,7 @@ class KnownValues(unittest.TestCase):
             mg_df = multigrid.MultiGridFFTDF(cell_orth)
             n1, exc1, v1 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
             self.assertEqual(len(mg_df.tasks), 3)
-        with lib.temporary_env(multigrid, TASKS_TYPE='ke_cut'):
+        with lib.temporary_env(multigrid.multigrid, TASKS_TYPE='ke_cut'):
             mg_df = multigrid.MultiGridFFTDF(cell_orth)
             n2, exc2, v2 = multigrid.nr_rks(mg_df, xc, dm1, kpts=kpts)
             self.assertEqual(len(mg_df.tasks), 6)
