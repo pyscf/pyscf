@@ -23,17 +23,23 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import moleintor
 from pyscf.pbc import tools
-from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df import fft
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.dft import multigrid
-from pyscf.pbc.dft.multigrid import (EXTRA_PREC, PTR_EXPDROP, EXPDROP, RHOG_HIGH_ORDER, IMAG_TOL,
-                                     make_rho_core, _take_4d, _takebak_4d, _take_5d)
+from pyscf.pbc.dft.multigrid.pp import make_rho_core, get_pp_nuc_grad, vpploc_part1_nuc_grad
+from pyscf.pbc.dft.multigrid.utils import _take_4d, _take_5d, _takebak_4d, _takebak_5d
+from pyscf.pbc.dft.multigrid.multigrid import MultiGridFFTDF 
 
 NGRIDS = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
 KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
 REL_CUTOFF = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
 GGA_METHOD = getattr(__config__, 'pbc_dft_multigrid_gga_method', 'FFT')
+
+EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
+RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
+PTR_EXPDROP = 16
+EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
+IMAG_TOL = 1e-9
 
 libdft = lib.load_library('libdft')
 
@@ -289,6 +295,8 @@ def free_task_list(task_list):
     Note:
         This will also free task_list.contents.gridlevel_info.
     '''
+    if task_list is None:
+        return
     func = getattr(libdft, "del_task_list", None)
     try:
         func(ctypes.byref(task_list))
@@ -972,7 +980,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
             raise NotImplementedError
         from .hfx import sr_hfx
         vk = sr_hfx(cell, dms, omega, hyb)
-        if nset == 1: 
+        if nset == 1:
             excsum[0] += lib.einsum('ij,ji->', vk, dms[0,0])
         else:
             raise KeyError
@@ -1105,95 +1113,6 @@ def get_vpploc_part1_ip1(mydf, kpts=np.zeros((1,3))):
     return vpp_kpts
 
 
-def vpploc_part1_nuc_grad_generator(mydf, kpts=np.zeros((1,3))):
-    h1 = -get_vpploc_part1_ip1(mydf, kpts=kpts)
-
-    nkpts = len(kpts)
-    cell = mydf.cell
-    mesh = mydf.mesh
-    aoslices = cell.aoslice_by_atom()
-    def hcore_deriv(atm_id):
-        weight = cell.vol / np.prod(mesh)
-        rho_core = make_rho_core(cell, atm_id=[atm_id,])
-        rhoG_core = weight * tools.fft(rho_core, mesh)
-        coulG = tools.get_coulG(cell, mesh=mesh)
-        vpplocG_part1 = rhoG_core * coulG
-        # G = 0 contribution
-        symb = cell.atom_symbol(atm_id)
-        rloc = cell._pseudo[symb][1]
-        vpplocG_part1[0] += 2 * np.pi * (rloc * rloc * cell.atom_charge(atm_id))
-        vpplocG_part1.reshape(-1,*mesh)
-        vpp_kpts = _get_j_pass2_ip1(mydf, vpplocG_part1, kpts, hermi=0, deriv=1)
-        if gamma_point(kpts):
-            vpp_kpts = vpp_kpts.real
-        if len(kpts) == 1:
-            vpp_kpts = vpp_kpts[0]
-
-        shl0, shl1, p0, p1 = aoslices[atm_id]
-        if nkpts > 1:
-            for k in range(nkpts):
-                vpp_kpts[k,:,p0:p1] += h1[k,:,p0:p1]
-                vpp_kpts[k] += vpp_kpts[k].transpose(0,2,1)
-        else:
-            vpp_kpts[:,p0:p1] += h1[:,p0:p1]
-            vpp_kpts += vpp_kpts.transpose(0,2,1)
-        return vpp_kpts
-    return hcore_deriv
-
-
-def vpploc_part1_nuc_grad(mydf, dm, kpts=np.zeros((1,3)), atm_id=None, precision=None):
-    t0 = (logger.process_clock(), logger.perf_counter())
-    cell = mydf.cell
-    fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
-    atm = fakecell._atm
-    bas = fakecell._bas
-    env = fakecell._env
-
-    a = np.asarray(cell.lattice_vectors(), order='C', dtype=float)
-    if abs(a - np.diag(a.diagonal())).max() < 1e-12:
-        lattice_type = '_orth'
-    else:
-        lattice_type = '_nonorth'
-        raise NotImplementedError
-    eval_fn = 'eval_mat_lda' + lattice_type + '_ip1'
-
-    b = np.asarray(np.linalg.inv(a.T), order='C', dtype=float)
-    mesh = np.asarray(mydf.mesh, order='C', dtype=np.int32)
-    comp = 3
-    grad = np.zeros((len(atm),comp), order="C", dtype=float)
-    drv = getattr(libdft, 'int_gauss_charge_v_rs', None)
-
-    if mydf.rhoG is None:
-        rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
-    else:
-        rhoG = mydf.rhoG
-    ngrids = np.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh)
-    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
-    vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
-    for i, rhoG_i in enumerate(rhoG[:,0]):
-        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
-
-    v_rs = np.asarray(tools.ifft(vG, mesh).reshape(-1,ngrids).real, order="C")
-    try:
-        drv(getattr(libdft, eval_fn),
-            grad.ctypes.data_as(ctypes.c_void_p),
-            v_rs.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(comp),
-            atm.ctypes.data_as(ctypes.c_void_p),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
-            env.ctypes.data_as(ctypes.c_void_p),
-            mesh.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_int(cell.dimension),
-            a.ctypes.data_as(ctypes.c_void_p),
-            b.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(max_radius))
-    except Exception as e:
-        raise RuntimeError("Failed to computed nuclear gradients of vpploc part1. %s" % e)
-    grad *= -1
-    t0 = logger.timer(mydf, 'vpploc_part1_nuc_grad', *t0)
-    return grad
-
-
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
                kpts_band=None, verbose=None):
     if kpts is None: kpts = mydf.kpts
@@ -1292,3 +1211,34 @@ def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
     if nset == 1:
         vj_kpts = vj_kpts[0]
     return vj_kpts
+
+
+class MultiGridFFTDF2(MultiGridFFTDF):
+    pp_with_erf = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
+    ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
+    ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
+    rel_cutoff = getattr(__config__, 'pbc_dft_multigrid_rel_cutoff', 20.0)
+
+    def __init__(self, cell, kpts=np.zeros((1,3))):
+        fft.FFTDF.__init__(self, cell, kpts)
+        self.task_list = None
+        self.vpplocG_part1 = None
+        self.rhoG = None
+        self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG'])
+
+    def __del__(self):
+        if self.task_list is not None:
+            free_task_list(self.task_list)
+
+    def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
+        if kpts is None:
+            if self.kpts is None:
+                kpts = np.zeros(1,3)
+            else:
+                kpts = self.kpts
+        kpts = kpts.reshape(-1,3)
+        vj = get_veff_ip1(self, dm, xc_code, kpts, kpts_band)
+        return vj
+
+    get_pp_nuc_grad = get_pp_nuc_grad
+    vpploc_part1_nuc_grad = vpploc_part1_nuc_grad

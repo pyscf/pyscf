@@ -65,15 +65,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     hybrid = abs(hyb) > 1e-10 or abs(alpha) > 1e-10
 
-    if abs(alpha) < 1e-10 and isinstance(ks.with_df, multigrid.MultiGridFFTDF2):
-        from pyscf.pbc.dft import multigrid_pair
-        n, exc, vxc = multigrid_pair.nr_rks(ks.with_df, ks.xc, dm, hermi,
-                                            kpt.reshape(1,3), kpts_band,
-                                            with_j=True, return_j=False)
-        logger.info(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
-        return vxc
-    elif not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+    if abs(alpha) < 1e-10 and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
         n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
                                        kpt.reshape(1,3), kpts_band,
                                        with_j=True, return_j=False)

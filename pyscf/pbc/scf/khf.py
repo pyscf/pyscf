@@ -635,10 +635,10 @@ class KSCF(pbchf.SCF):
         cpu0 = (logger.process_clock(), logger.perf_counter())
         if self.rsjk:
             vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                      with_j, with_k, omega, self.exxdiv)
+                                      with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         else:
             vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                         with_j, with_k, omega, self.exxdiv)
+                                         with_j, with_k, omega=omega, exxdiv=self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

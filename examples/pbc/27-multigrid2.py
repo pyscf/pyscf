@@ -1,9 +1,9 @@
 #setup cupy backend for blas
-from os.path import expanduser
-home_dir = expanduser("~")
-f = open(home_dir+'/.pyscf_conf.py', 'a')
-f.write('lib_cupy_blas = True')
-f.close()
+#from os.path import expanduser
+#home_dir = expanduser("~")
+#f = open(home_dir+'/.pyscf_conf.py', 'a')
+#f.write('lib_cupy_blas = True')
+#f.close()
 
 import numpy
 import pyscf
@@ -217,7 +217,8 @@ cell.ke_cutoff=200  # kinetic energy cutoff in a.u.
 cell.max_memory=20000 # 20 Gb
 cell.precision=1e-6 # integral precision
 cell.pseudo='gth-pade'
-cell.verbose=5
+cell.verbose=4
+cell.rcut_by_shell_radius=True #smaller rcut
 cell.build()
 #cell = pbc.tools.super_cell(cell, [1,2,2]) #build super cell by replicating unit cell
 #print('nao=', cell.nao)
