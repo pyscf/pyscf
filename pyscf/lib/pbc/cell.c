@@ -7,8 +7,6 @@
 #include "pbc/cell.h"
 #include "np_helper/np_helper.h"
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define SQUARE(r) (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define RCUT_EPS 1e-3
 
@@ -295,4 +293,8 @@ void ewald_gs_nuc_grad(double* out, double* Gv, double* charges, double* coords,
         }
     }
 }
+    free(SI_real);
+    free(SI_imag);
+    free(ZSI_real);
+    free(ZSI_imag);
 }

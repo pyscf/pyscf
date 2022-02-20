@@ -1145,47 +1145,62 @@ static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
 static size_t _ints_cache_size(int l, int nprim, int nctr, int* mesh, double radius, double* dh, int comp)
 {
     size_t size = 0;
-    //size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
+    size_t nmx = get_max_num_grid_orth(dh, radius);
+    int max_mesh = MAX(MAX(mesh[0], mesh[1]), mesh[2]);
     int l1 = 2 * l + 1;
+    if (comp == 3) {
+        l1 += 1;
+    }
     int l1l1 = l1 * l1;
-    int ncart = _LEN_CART[l];
-    //int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
-    //int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
-    int nmx = get_max_num_grid_orth(dh, radius);
+    int ncart = _LEN_CART[l1]; // use l1 to be safe
 
-    size += comp * nprim * nprim * ncart * ncart;
-    size += comp * ncart * ncart;
-    size += l1 * (mesh[0] + mesh[1] + mesh[2]);
-    size += l1 * nmx + nmx;
-    size += l1l1 * l1;
-    size += 3 * (ncart + l1);
-    size += l1 * mesh[1] * mesh[2];
-    size += l1l1 * mesh[2];
+    size += comp * nprim * nprim * ncart * ncart; // dm_cart
+    size += comp * ncart * ncart; // out
+    size += l1 * (mesh[0] + mesh[1] + mesh[2]); // xs_exp, ys_exp, zs_exp
+
+    size_t size_orth_components = l1 * nmx + nmx; // orth_components
+    size += l1l1 * l1; // dm_xyz
+    size += 3 * (ncart + l1); // _dm_xyz_to_dm
+
+    size_t size_orth_ints = 0;
+    if (nmx < max_mesh) {
+        size_orth_ints = (l1 + l1l1) * nmx;
+    } else {
+        size_orth_ints = l1*mesh[2] + l1l1*mesh[0];
+    }
+    size += MAX(size_orth_components, size_orth_ints);
     size += nctr * ncart * nprim * ncart;
-    size += 1000000;
+    //size += 1000000;
     //printf("Memory allocated per thread for make_mat: %ld MB.\n", size*sizeof(double) / 1000000);
     return size;
 }
 
 
-static size_t _ints_core_cache_size(int* mesh, double radius, double* dh)
+static size_t _ints_core_cache_size(int* mesh, double radius, double* dh, int comp)
 {
     size_t size = 0;
-    //size_t ngrids = ((size_t)mesh[0]) * mesh[1] * mesh[2];
-    int l = 0, l1 = 1;
+    size_t nmx = get_max_num_grid_orth(dh, radius);
+    int max_mesh = MAX(MAX(mesh[0], mesh[1]), mesh[2]);
+    const int l = 0;
+    int l1 = l + 1;
+    if (comp == 3) {
+        l1 += 1;
+    }
     int l1l1 = l1 * l1;
-    int ncart = _LEN_CART[l];
-    //int nimgs = (int) ceil(MAX(MAX(radius/fabs(a[0]), radius/a[4]), radius/a[8])) + 1;
-    //int nmx = MAX(MAX(mesh[0], mesh[1]), mesh[2]) * nimgs;
-    int nmx = get_max_num_grid_orth(dh, radius);
+    int ncart = _LEN_CART[l1];
 
+    size_t size_orth_components = l1 * nmx + nmx;
+    size_t size_orth_ints = 0;
+    if (nmx < max_mesh) {
+        size_orth_ints = (l1 + l1l1) * nmx;
+    } else {
+        size_orth_ints = l1*mesh[2] + l1l1*mesh[0];
+    }
+    size += MAX(size_orth_components, size_orth_ints);
     size += l1 * (mesh[0] + mesh[1] + mesh[2]);
-    size += l1 * nmx + nmx;
     size += l1l1 * l1;
-    size += 3 * (ncart * ncart + ncart + l1);
-    size += l1 * mesh[1] * mesh[2];
-    size += l1l1 * mesh[2];
-    size += 1000000;
+    size += 3 * (ncart + l1);
+    //size += 1000000;
     return size;
 }
 
@@ -1301,7 +1316,9 @@ void grid_integrate_drv(int (*eval_ints)(), double* mat, double* weights, TaskLi
     free(cache0);
 }
 
-    free(task_loc);
+    if (task_loc) {
+        free(task_loc);
+    }
     del_cart2sph_coeff(cart2sph_coeff_i, gto_norm_i, ish0, ish1);
     if (hermi != 1) {
         del_cart2sph_coeff(cart2sph_coeff_j, gto_norm_j, jsh0, jsh1);
@@ -1316,7 +1333,7 @@ void int_gauss_charge_v_rs(int (*eval_ints)(), double* out, double* v_rs, int co
     double dh[9];
     get_grid_spacing(dh, a, mesh);
 
-    size_t cache_size = _ints_core_cache_size(mesh, max_radius, a);
+    size_t cache_size = _ints_core_cache_size(mesh, max_radius, dh, comp);
 
 #pragma omp parallel
 {

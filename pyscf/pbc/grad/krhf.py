@@ -298,7 +298,10 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
     else:
         raise NotImplementedError
 
+    Gv = Gv_sub = chargs = coords = None
+
     ew_grad = lib.add(ewg_grad, ewovrl_grad)
+    ewg_grad = ewovrl_grad = None
     if atmlst is not None:
         ew_grad = ew_grad[atmlst]
 

@@ -34,10 +34,10 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
         de = mf.with_df.vpploc_part1_nuc_grad(dm0, kpts=kpt.reshape(-1,3))
         de = lib.add(de, pp_int.vpploc_part2_nuc_grad(mol, dm0), out=de)
         de = lib.add(de, pp_int.vppnl_nuc_grad(mol, dm0), out=de)
-        h1 = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
+        h1ao = -mol.pbc_intor('int1e_ipkin', kpt=kpt)
         if mf.with_df.vpplocG_part1 is None or mf.with_df.pp_with_erf:
-            h1 += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
-        de = lib.add(de, _contract_vhf_dm(mf_grad, lib.add(h1, vhf), dm0, atmlst=atmlst) * 2)
+            h1ao += -mf.with_df.get_vpploc_part1_ip1(kpts=kpt.reshape(-1,3))
+        de = lib.add(de, _contract_vhf_dm(mf_grad, lib.add(h1ao, vhf), dm0, atmlst=atmlst) * 2)
         de = lib.add(de, _contract_vhf_dm(mf_grad, s1, dme0, atmlst=atmlst) * -2)
         #TODO extra_force need rewrite
     else:
@@ -53,6 +53,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
             de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1].conj(), dme0[p0:p1].conj())
             de[k] += mf_grad.extra_force(ia, locals())
 
+    h1ao = s1 = dm0 = dme0 = None
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
