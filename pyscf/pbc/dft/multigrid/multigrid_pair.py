@@ -429,7 +429,6 @@ def eval_rho(cell, dm, task_list, shls_slice=None, hermi=0, xctype='LDA', kpts=N
 
     gridlevel_info = task_list.contents.gridlevel_info
     rs_rho = init_rs_grid(gridlevel_info, comp)
-
     rho = []
     for i, dm_i in enumerate(dm):
         if dimension == 0 or kpts is None or gamma_point(kpts):
@@ -480,7 +479,6 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
     nx, ny, nz = mydf.mesh
     rhoG = np.zeros((nset*rhodim,nx,ny,nz), dtype=np.complex128)
-
     nlevels = task_list.contents.nlevels
     meshes = task_list.contents.gridlevel_info.contents.mesh
     meshes = np.ctypeslib.as_array(meshes, shape=(nlevels,3))
@@ -497,25 +495,28 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
 
         weight = 1./nkpts * cell.vol/ngrids
         rho_freq = tools.fft(rho.reshape(nset*rhodim, -1), mesh)
+        rho = None
         rho_freq *= weight
         gx = np.fft.fftfreq(mesh[0], 1./mesh[0]).astype(np.int32)
         gy = np.fft.fftfreq(mesh[1], 1./mesh[1]).astype(np.int32)
         gz = np.fft.fftfreq(mesh[2], 1./mesh[2]).astype(np.int32)
         _takebak_4d(rhoG, rho_freq.reshape((-1,) + tuple(mesh)), (None, gx, gy, gz))
+        rho_freq = None
 
     if nset > 1:
         for i in range(nset):
             free_rs_grid(rs_rho[i])
     else:
         free_rs_grid(rs_rho)
+    rs_rho = None
 
     rhoG = rhoG.reshape(nset,rhodim,-1)
-
     if gga_high_order:
         Gv = cell.get_Gv(mydf.mesh)
         #rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
         rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv)
         rhoG = lib.concatenate([rhoG, rhoG1], axis=1)
+        Gv = rhoG1 = None
     return rhoG
 
 
@@ -921,6 +922,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
     for i, rhoG_i in enumerate(rhoG[:,0]):
         vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+    coulG = None
 
     if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
@@ -954,17 +956,20 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         if xctype == 'LDA':
             wv = vxc[0].reshape(1,ngrids) * weight
             wv_freq.append(tools.fft(wv, mesh))
+            wv = None
         elif xctype == 'GGA':
             if GGA_METHOD.upper() == 'FFT':
                 wv_freq.append(_rks_gga_wv0_pw(cell, rhoR[i], vxc, weight, mesh).reshape(1,ngrids))
             else:
                 wv = _rks_gga_wv0(rhoR[i], vxc, weight)
                 wv_freq.append(tools.fft(wv, mesh))
+                wv = None
         else:
             raise NotImplementedError
 
         nelec[i]  += lib.sum(rhoR[i,0]) * weight
         excsum[i] += lib.sum(lib.multiply(rhoR[i,0], exc)) * weight
+        exc = vxc = None
 
     rhoR = rhoG = None
 
@@ -1004,6 +1009,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
             veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
         else:
             veff = _get_gga_pass2(mydf, wv_freq, kpts_band, hermi=hermi, verbose=log)
+    wv_freq = None
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
@@ -1011,6 +1017,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
+    vG = None
 
     if vk is not None:
         veff += vk
@@ -1033,7 +1040,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     elif xctype == 'GGA':
         deriv = 1
     # cache rhoG for core density gradients
-    rhoG = mydf.rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
+    mydf.rhoG = rhoG = _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=kpts_band, deriv=deriv)
 
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
@@ -1211,8 +1218,11 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG'])
 
     def __del__(self):
+        self.vpplocG_part1 = None
+        self.rhoG = None
         if self.task_list is not None:
             free_task_list(self.task_list)
+            self.task_list = None
 
     def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
         if kpts is None:

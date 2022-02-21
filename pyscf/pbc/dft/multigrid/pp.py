@@ -196,6 +196,7 @@ def _get_pp_without_erf(mydf, kpts=None, max_memory=2000):
             vpp[k] = vpp[k].real + vppnl[k].real
         else:
             vpp[k] += vppnl[k]
+    vppnl = None
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
@@ -214,8 +215,10 @@ def _get_vpplocG_part1(mydf):
         weight = cell.vol / numpy.prod(mesh)
         rho_core = make_rho_core(cell)
         rhoG_core = weight * tools.fft(rho_core, mesh)
+        rho_core = None
         coulG = tools.get_coulG(cell, mesh=mesh)
         vpplocG_part1 = rhoG_core * coulG
+        rhoG_core = coulG = None
         # G = 0 contribution
         chargs = cell.atom_charges()
         rloc = []

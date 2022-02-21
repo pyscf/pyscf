@@ -53,7 +53,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
             de[k] -= np.einsum('xij,ij->x', s1[:,p0:p1].conj(), dme0[p0:p1].conj())
             de[k] += mf_grad.extra_force(ia, locals())
 
-    h1ao = s1 = dm0 = dme0 = None
+    h1ao = s1 = vhf = dm0 = dme0 = None
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
