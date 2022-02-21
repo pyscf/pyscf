@@ -119,10 +119,12 @@ void del_neighbor_list(NeighborList** nl)
     int nish = nl0->nish;
     int njsh = nl0->njsh;
     if (nl0->pairs) {
-        for (ish=0; ish<nish; ish++)
+        for (ish=0; ish<nish; ish++) {
             for (jsh=0; jsh<njsh; jsh++) {
                 del_neighbor_pair(nl0->pairs + ish*njsh+jsh);
-            } 
+            }
+        }
+        free(nl0->pairs);
     }
     free(nl0);
     *nl = NULL;
