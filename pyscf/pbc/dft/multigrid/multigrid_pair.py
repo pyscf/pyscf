@@ -224,7 +224,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
     Returns: :class:`ctypes.POINTER`
         The C pointer of the :class:`TaskList` structure.
     '''
-    from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs
+    from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs, free_neighbor_list
     if cell1 is None:
         cell1 = cell
     if Ls is None:
@@ -287,6 +287,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
              ctypes.c_double(precision), ctypes.c_int(hermi))
     except Exception as e:
         raise RuntimeError("Failed to build task list. %s" % e)
+    free_neighbor_list(nl)
     return task_list
 
 
@@ -1217,12 +1218,16 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         self.rhoG = None
         self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG'])
 
-    def __del__(self):
+    def reset(self, cell=None):
         self.vpplocG_part1 = None
         self.rhoG = None
         if self.task_list is not None:
             free_task_list(self.task_list)
             self.task_list = None
+        fft.FFTDF.reset(self, cell=cell)
+
+    def __del__(self):
+        self.reset()
 
     def get_veff_ip1(self, dm, xc_code=None, kpts=None, kpts_band=None):
         if kpts is None:
