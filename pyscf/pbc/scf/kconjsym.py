@@ -7,6 +7,7 @@ import numpy as np
 
 from pyscf.scf.uhf import UHF
 from pyscf.scf.ghf import GHF
+from pyscf.soscf.newton_ah import _CIAH_SOSCF
 from pyscf.lib import logger
 from pyscf.pbc.lib import kpts_helper
 
@@ -40,7 +41,6 @@ def _rdm1_kconj_symmetry_error(cell, kpts, dm1):
     err = abs(dm1[...,kuniq,:,:] - dm1[...,kconj,:,:].conj()).max()
     return err
 
-
 def kscf_with_kconjsym(cls):
     '''Create SCF class with k-point sampling and phi(k) = phi(-k)* symmetry.
 
@@ -52,9 +52,11 @@ def kscf_with_kconjsym(cls):
     '''
 
     is_uhf = issubclass(cls, UHF)
-    is_ghf = issubclass(cls, GHF)
-    if is_ghf:
-        raise NotImplementedError("k-conjugation symmetry not implemented for generalized-spin SCF.")
+    if issubclass(cls, GHF):
+        raise NotImplementedError("(k,-k)-symmetry not implemented for GHF.")
+    if issubclass(cls, _CIAH_SOSCF):
+        raise NotImplementedError("Newton solver with (k,-k)-symmetry not implemented.")
+    # TODO: other classes which should be excluded here?
 
     # --- Replacement methods:
 
@@ -186,8 +188,14 @@ def kscf_with_kconjsym(cls):
             self.converged = False
         return res
 
-    # Dynamically create new class `cls_sym`, inheriting from `cls`, but
-    # overwriting `get_jk`, `eig`, `get_init_guess`, and `kernel`:
-    cls_sym = type('%s_kConjSym' % cls.__name__, (cls,), {'get_jk': get_jk, 'eig': eig,
-        'get_init_guess' : get_init_guess, 'kernel': kernel})
+    def newton(self, *args, **kwargs):
+        raise NotImplementedError("Newton solver with (k,-k)-symmetry not implemented.")
+
+    # Dynamically create new class `cls_sym`, inheriting from `cls`:
+    cls_sym = type('%s_kConjSym' % cls.__name__, (cls,), {
+        'get_jk': get_jk,
+        'eig': eig,
+        'get_init_guess': get_init_guess,
+        'kernel': kernel,
+        'newton': newton})
     return cls_sym

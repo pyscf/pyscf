@@ -118,8 +118,8 @@ del cell, kpts, mf, mf_sym
 
 
 # --- Example 4: 1D Oxygen chain with 2 atoms and 4 k-points, antiferromagnetic order
-# Same as example 3, but using UHF the degeneracy can be lifted and a (k,-k)-symmetric
-# solution with antiferromagnetic order converged:
+# Same as example 2, but with UHF an antiferromagnetic solution with lower energy
+# can be found:
 
 cell = Cell()
 cell.atom = 'O 0 0 0 ; O 2 0 0'
@@ -156,7 +156,7 @@ mf_sym.with_df = mf.with_df
 mf_sym = kconj_symmetry_(mf_sym)
 mf_sym.kernel(dm0=dm0)
 
-print("Example 4: 2 atoms, 3 k-points, AFM order:")
+print("Example 4: 2 atoms, 4 k-points, AFM order:")
 print("  Regular UHF:           E= % 14.8f  converged= %5r  symmetry error= %.1e" % (
     mf.e_tot, mf.converged, get_symmetry_error(mf)))
 print("  (k,-k)-symmetric UHF:  E= % 14.8f  converged= %5r  symmetry error= %.1e" % (
