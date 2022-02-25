@@ -143,6 +143,9 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nocc_a, nocc_b = mf.nelec
     mo_energy = np.sort(np.hstack(mo_energy_kpts[0]))
     fermi_a = mo_energy[nocc_a-1]
+    if (nocc_a < mo_energy.size) and (fermi_a == mo_energy[nocc_a]):
+        raise RuntimeError("Alpha HOMO-LUMO gap is exactly zero; cannot apply aufbau-principle.")
+
     mo_occ_kpts = [[], []]
     for mo_e in mo_energy_kpts[0]:
         mo_occ_kpts[0].append((mo_e <= fermi_a).astype(np.double))
@@ -154,6 +157,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if nocc_b > 0:
         mo_energy = np.sort(np.hstack(mo_energy_kpts[1]))
         fermi_b = mo_energy[nocc_b-1]
+        if (nocc_b < mo_energy.size) and (fermi_b == mo_energy[nocc_b]):
+            raise RuntimeError("Beta HOMO-LUMO gap is exactly zero; cannot apply aufbau-principle.")
         for mo_e in mo_energy_kpts[1]:
             mo_occ_kpts[1].append((mo_e <= fermi_b).astype(np.double))
         if nocc_b < len(mo_energy):
@@ -190,6 +195,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                              k, kpt[0], kpt[1], kpt[2], mo_energy_kpts[1][k])
         np.set_printoptions(threshold=1000)
 
+    assert abs(np.sum(mo_occ_kpts[0]) - nocc_a) < 1e-14
+    assert abs(np.sum(mo_occ_kpts[1]) - nocc_b) < 1e-14
     return mo_occ_kpts
 
 

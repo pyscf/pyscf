@@ -258,6 +258,31 @@ def canonical_occ_(mf, nelec=None):
     return mf
 canonical_occ = canonical_occ_
 
+def kconj_symmetry_(mf):
+    '''Perform SCF calculation with phi(k) = phi(-k)* symmetry of the orbitals.
+
+    If an exact degeneracies of orbital energies exists at the Fermi level, the SCF may still
+    converge to a (k,-k)-symmetry broken solution. A warning is printed in this case and
+    `mf.converged` will evaluate to False.
+
+    This decorator overwrites the `get_init_guess`, `get_jk`, `eig`, and `kernel`
+    methods of the mean-field object.
+
+    Parameters
+    ----------
+    mf: SCF object
+        Initial restricted or unrestricted mean-field object.
+
+    Returns
+    -------
+    mf: SCF object
+        Modified mean-field object, ensuring (k,-k)-symmetric solution.
+    '''
+    from pyscf.pbc.scf.kconjsym import kscf_with_kconjsym
+    cls_sym = kscf_with_kconjsym(type(mf))
+    mf_sym = cls_sym.__new__(cls_sym)
+    mf_sym.__dict__.update(mf.__dict__)
+    return mf_sym
 
 def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
