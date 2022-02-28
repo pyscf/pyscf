@@ -191,6 +191,19 @@ C     F
         ref = mol.intor('int1e_nuc_spinor')
         self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
 
+    def test_ghf(self):
+        # Test whether the result of .X2C() is a solution of .GHF().x2c()
+        mol = gto.M(atom='C', basis='ccpvdz-dk')
+        ref = mol.X2C().run()
+        c = numpy.vstack(mol.sph2spinor_coeff())
+        mo1 = c.dot(ref.mo_coeff)
+        dm = ref.make_rdm1(mo1, ref.mo_occ)
+        mf = mol.GHF().x2c1e()
+        mf.max_cycle = 1
+        mf.kernel(dm0=dm)
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, ref.e_tot, 10)
+
 
 if __name__ == "__main__":
     print("Full Tests for x2c")

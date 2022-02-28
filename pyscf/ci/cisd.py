@@ -270,10 +270,13 @@ def tn_addrs_signs(norb, nelec, n_excite):
     '''Compute the FCI strings (address) for CIS n-excitation amplitudes and
     the signs of the coefficients when transferring the reference from physics
     vacuum to HF vacuum.
+
+    If the excitation level is not compatible with the number of
+    electrons and holes, empty lists are returned for the addresses and signs.
     '''
-    if n_excite > nelec:
-        print("Warning: Not enough occupied orbitals to excite.")
-        return [0], [0]
+    # Not enough electrons or holes for excitation; return empty lists.
+    if n_excite > min(nelec, norb-nelec):
+        return [], []
     nocc = nelec
 
     hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)

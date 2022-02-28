@@ -732,7 +732,7 @@ def _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo):
         dm2[i,ncore:nocc,ncore:nocc,i] = dm2[ncore:nocc,i,i,ncore:nocc] = -casdm1
     return dm1, dm2
 
-# on AO representation
+# In AO representation
 def make_rdm12(casscf, mo_coeff=None, ci=None):
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
@@ -1055,12 +1055,8 @@ def _state_average_mcscf_solver(casscf, fcisolver):
             return self
 
         def nuc_grad_method (self, state=None):
-            from pyscf.mcscf import mc1step
-            if isinstance (self, mc1step.CASSCF):
-                # If no state ever gets passed, the below should default to the
-                # gradient of the state-average energy
-                from pyscf.grad import sacasscf as sacasscf_grad
-                return sacasscf_grad.Gradients (self, state=state)
+            if callable (getattr (self, '_state_average_nuc_grad_method', None)):
+                return self._state_average_nuc_grad_method (state=state)
             else: # Avoid messing up state-average CASCI
                 return self._base_class.nuc_grad_method (self)
 

@@ -67,10 +67,16 @@ def tearDownModule():
     del mol, rhf, mf, myucc, mol_s2, mf_s2, eris
 
 class KnownValues(unittest.TestCase):
-#    def test_with_df(self):
-#        mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
-#        mycc = cc.UCCSD(mf).run()
-#        self.assertAlmostEqual(mycc.e_tot, -76.118403942938741, 7)
+
+    def test_with_df_s0(self):
+        mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
+        mycc = cc.UCCSD(mf).run()
+        self.assertAlmostEqual(mycc.e_tot, -76.118403942938741, 7)
+
+    def test_with_df_s2(self):
+        mf = scf.UHF(mol_s2).density_fit(auxbasis='weigend').run()
+        mycc = cc.UCCSD(mf).run()
+        self.assertAlmostEqual(mycc.e_tot, -75.83360033370676, 7)
 
     def test_ERIS(self):
         ucc1 = cc.UCCSD(mf)

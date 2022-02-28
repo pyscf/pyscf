@@ -1841,6 +1841,11 @@ def atom_mass_list(mol, isotope_avg=False):
 def condense_to_shell(mol, mat, compressor='max'):
     '''The given matrix is first partitioned to blocks, based on AO shell as
     delimiter. Then call compressor function to abstract each block.
+
+    Args:
+        compressor: string or function
+            if compressor is a string, its value can be  sum, max, min, abssum,
+            absmax, absmin, norm
     '''
     ao_loc = mol.ao_loc_nr()
     if callable(compressor):
@@ -2845,8 +2850,6 @@ class Mole(lib.StreamObject):
             mol.atom = atoms_or_coords
 
         if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
-            mol._atom = mol.atom
-
             if isinstance(unit, (str, unicode)):
                 if unit.upper().startswith(('B', 'AU')):
                     unit = 1.
@@ -2854,6 +2857,9 @@ class Mole(lib.StreamObject):
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
+
+            mol._atom = list(zip([x[0] for x in mol._atom],
+                                 (atoms_or_coords * unit).tolist()))
             ptr = mol._atm[:,PTR_COORD]
             mol._env[ptr+0] = unit * atoms_or_coords[:,0]
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
