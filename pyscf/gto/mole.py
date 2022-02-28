@@ -697,7 +697,7 @@ def conc_mol(mol1, mol2):
         if len(mol1._ecpbas) == 0:
             mol3._ecpbas = ecpbas2
         else:
-            mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+            mol3._ecpbas = numpy.vstack((mol1._ecpbas, ecpbas2))
 
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
