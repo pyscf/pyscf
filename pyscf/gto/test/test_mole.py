@@ -868,6 +868,9 @@ O    SP
         mol2 = mol2 + mol2
         mol2.cart = True
         self.assertEqual(mol2.npgto_nr(), 100)
+        mol3 = gto.M(atom='Cu', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        mol4 = mol1 + mol3
+        self.assertEqual(len(mol4._ecpbas), 16)
 
     def test_intor_cross_cart(self):
         mol1 = gto.M(atom='He', basis={'He': [(2,(1.,1))]}, cart=True)
