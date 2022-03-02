@@ -89,7 +89,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
-    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
+    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=float, order='C')
     fov = eris.fock[:, :nocc, nocc:]
 
     mo_e = mo_energy
