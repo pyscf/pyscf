@@ -146,6 +146,15 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a, dm_b))
 
+def make_rdm2(mo_coeff, mo_occ, **kwargs):
+    dm1a, dm1b = make_rdm1(mo_coeff, mo_occ, **kwargs)
+    dm2aa = (numpy.einsum('ij,kl->ijkl', dm1a, dm1a)
+           - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
+    dm2bb = (numpy.einsum('ij,kl->ijkl', dm1b, dm1b)
+           - numpy.einsum('ij,kl->iklj', dm1b, dm1b))
+    dm2ab = numpy.einsum('ij,kl->ijkl', dm1a, dm1b)
+    return dm2aa, dm2ab, dm2bb
+
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     r'''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
     for the given density matrix
@@ -788,11 +797,14 @@ class UHF(hf.SCF):
 
     @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if mo_occ is None:
-            mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if mo_occ is None: mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
+
+    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if mo_occ is None: mo_occ = self.mo_occ
+        return make_rdm2(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
 
