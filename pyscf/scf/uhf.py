@@ -1006,6 +1006,26 @@ class UHF(hf.SCF):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
 
+    def get_sz(self, dm1=None, proj=None, mo_coeff=None):
+        if dm1 is None: dm1 = self.make_rdm1()
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        dma, dmb = dm1
+        ca, cb = mo_coeff
+        ovlp = self.get_ovlp()
+        # MO basis
+        dma = numpy.linalg.multi_dot((ca.T, ovlp, dma, ovlp, ca))
+        dmb = numpy.linalg.multi_dot((cb.T, ovlp, dmb, ovlp, cb))
+        if proj is None:
+            sz = (numpy.einsum('ii->', dma) - numpy.einsum('jj->', dmb))/2
+            return sz
+
+        pa, pb = (proj, proj) if numpy.ndim(proj[0]) == 1 else proj
+        einsum = partial(numpy.einsum, optimize=True)
+        sz = (einsum('ij,ij->', dma, pa)
+            - einsum('ij,ij->', dmb, pb))/2
+
+        return sz
+
     def get_ssz(self, dm1=None, proj1=None, proj2=None, mo_coeff=None):
         if dm1 is None: dm1 = self.make_rdm1()
         if mo_coeff is None: mo_coeff = self.mo_coeff
