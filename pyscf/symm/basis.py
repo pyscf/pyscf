@@ -324,6 +324,8 @@ def so3_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     irrep_names = []
     for l in range(lmax+1):
         bas_idx = mol._bas[:,gto.ANG_OF] == l
+        if sum(bas_idx) == 0: # Skip any unused angular momentum channels
+            continue
         cs = [coeff[:,p0:p1]
               for p0, p1 in zip(ao_loc[:-1][bas_idx], ao_loc[1:][bas_idx])]
         c_groups = numpy.hstack(cs).reshape(nao, -1, l*2+1)
