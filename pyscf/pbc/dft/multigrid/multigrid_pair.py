@@ -918,12 +918,22 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh)
-    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
-    vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
-    for i, rhoG_i in enumerate(rhoG[:,0]):
-        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
-    coulG = None
+
+    # contribution from implicit solvation
+    if mydf.sccs:
+        assert nset == 1
+        weight = cell.vol / ngrids
+        rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+        rhoR = rhoR.reshape(-1,ngrids)
+        vR = mydf.sccs.kernel(rhoR)
+        vG = tools.fft(vR, mesh).reshape(nset, -1)
+    else:
+        coulG = tools.get_coulG(cell, mesh=mesh)
+        #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+        vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
+        for i, rhoG_i in enumerate(rhoG[:,0]):
+            vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+        coulG = None
 
     if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
@@ -1206,6 +1216,22 @@ def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
 
 
 class MultiGridFFTDF2(MultiGridFFTDF):
+    '''
+    Base class for multigrid DFT
+
+    Attributes:
+        task_list : TaskList instance
+            Task list recording which primitive basis function pairs
+            need to be considered.
+        vpplocG_part1 : arrary
+            Short-range part of the local pseudopotential represented
+            in the reciprocal space. It is cached to reduce cost.
+        rhoG : array
+            Electronic density represented in the reciprocal space.
+            It is cached in nuclear gradient calculations to reduce cost.
+        sccs : SCCS instance
+            Whether to use self-consistent continuum solvation model.
+    '''
     pp_with_erf = getattr(__config__, 'pbc_dft_multigrid_pp_with_erf', False)
     ngrids = getattr(__config__, 'pbc_dft_multigrid_ngrids', 4)
     ke_ratio = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 3.0)
@@ -1216,7 +1242,8 @@ class MultiGridFFTDF2(MultiGridFFTDF):
         self.task_list = None
         self.vpplocG_part1 = None
         self.rhoG = None
-        self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG'])
+        self.sccs = None
+        self._keys = self._keys.union(['task_list','vpplocG_part1', 'rhoG', 'sccs'])
 
     def reset(self, cell=None):
         self.vpplocG_part1 = None
