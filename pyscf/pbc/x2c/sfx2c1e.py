@@ -112,7 +112,7 @@ class PBCX2CHelper(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
     # TODO Change default to None
-    approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'atom1e')
+    approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'NONE')
     # By default, uncontracted cell.basis plus additional steep orbital is used to construct the modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)

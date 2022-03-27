@@ -68,8 +68,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_a+dm_b, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
-    # Like Coulomb integral, vxc is diagonal in spin space, i.e. vxc_aa[dm_aa], vxc_bb[dm_bb]
-    # TODO What about vxc_ab?
+    # Only the collinear DFT is implemented
+    # where vxc is diagonal in spin space, i.e. vxc_aa[dm_aa], vxc_bb[dm_bb] and vxc_ab is neglected.
     # vxc = (vxc_aa, vxc_bb)
     n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), 0,
                                     kpt, kpts_band)
@@ -130,6 +130,13 @@ class GKS(rks.KohnShamDFT, pbcghf.GHF):
 
     density_fit = rks._patch_df_beckegrids(pbcghf.GHF.density_fit)
     mix_density_fit = rks._patch_df_beckegrids(pbcghf.GHF.mix_density_fit)
+
+    def x2c1e(self):
+         '''X2C1e with spin-orbit coupling effects in spin-orbital basis'''
+         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+         return x2c1e_gscf(self)
+
+    x2c = x2c1e
 
     stability = None
     def nuc_grad_method(self):
