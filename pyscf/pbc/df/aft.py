@@ -138,9 +138,6 @@ def get_pp_loc_part1(mydf, kpts=None):
     charges = cell.atom_charges()
 
     kpt_allow = numpy.zeros(3)
-    # When mydf.eta == 0: Switch off Ewald tech and use the regular reciprocal space
-    # method (solving Poisson equation of nuclear charges in reciprocal space).
-    # Otherwise, the integral is split into parts in real space and parts in reciprocal space. mydf.eta is determined by kinetic energy cutoff.
     if mydf.eta == 0:
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
@@ -149,18 +146,13 @@ def get_pp_loc_part1(mydf, kpts=None):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
-        # mesh: the FFT mesh = (Gx_max, Gy_max, Gz_max)
-        # Calculate 1. uniform G vector: Gv = (ngrid, 3) based on mesh, 2. weights: kws = 1/Omega
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        # vpplocG = (4pi*Z_A)/|G|^2, (natoms, ngrid). The nuclear potential V_{N}(G) in reciprocal space for each atom in a unit cell.
+
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
-        # cell.get_SI(Gv) calculate the structure factor for each atom at each G vector: SI(natoms, ngrid) = e^{-iG*R_{A})
-        # Sum over atoms: V_{N}(G) = SI(natoms, G) * V_{N}(natoms, G)
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
-        # vpplocG: (ngrid). V_{N}(G) = \sum_{A} (4pi*Z_A)/(Omega*|G|^{2})
+
         vpplocG *= kws
         vG = vpplocG
-        # Only compute nao_pari = nao * (nao + 1) / 2 elements
         vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     else:
@@ -176,29 +168,18 @@ def get_pp_loc_part1(mydf, kpts=None):
                 mesh[:cell.dimension] = mesh_min[:cell.dimension]
             else:
                 mesh = mesh_min
-        # mesh: the FFT mesh = (Gx_max, Gy_max, Gz_max)
-        # Calculate 1. uniform G vector: Gv = (ngrid, 3) based on mesh, 2. weights: kws = 1/Omega
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        # Artifical compensate Gaussian charge distribution used in Ewald techniques.
+
         nuccell = _compensate_nuccell(mydf)
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
-        # What does mydf._int_nuc_vloc do? Only initialization to zero?
-        # Evaluate the short-range part of Ewald separation in real space. V_nuc(nkpts, nao_pair)
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
-        # coulG=?, aoaux=? vG=?
-        # coulG = (1/Omega)* (4pi/|G|^2): (ngrid)
+
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
-        # FT of erf(eta|r - R^{0}_{A}|) at gamma point
-        # aoaux: (basis, natoms)
         aoaux = ft_ao.ft_ao(nuccell, Gv)
-        # charges = (natoms), aoaux = (ngrid, natoms)
-        # vG: (ngrid)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    # aoaoks = (k, ij) = \int_{Omega} g^{k,*}_{i}(r) * e^{iGr} * g^{k}_{j}(r) dr
-    # p0, p1 = G-vector index
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2'):
         for k, aoao in enumerate(aoaoks):
@@ -212,8 +193,6 @@ def get_pp_loc_part1(mydf, kpts=None):
         t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
     log.timer_debug1('contracting Vnuc', *t0)
 
-    # What's the difference between vj_kpts and vj?
-    # From (nkpts, nao_pair) to (nkpts, nao, nao)!?
     vj_kpts = []
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
@@ -232,19 +211,15 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 
     # Use the 3c2e code with steep s gaussians to mimic nuclear density
     fakenuc = _fake_nuc(cell)
-    # fakenuc provides auxiliary basis function.
     fakenuc._atm, fakenuc._bas, fakenuc._env = \
             gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
                          fakenuc._atm, fakenuc._bas, fakenuc._env)
 
     kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
-    # Integrals in real space with lattice summation.
-    # 3-center AO integrals with double lattice sum.
     buf = incore.aux_e2(cell, fakenuc, intor, aosym=aosym, comp=comp,
                         kptij_lst=kptij_lst)
 
     charge = cell.atom_charges()
-    # We have charges from nuclear point charges and compensated Gaussian charge distribution.
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
     nao = cell.nao_nr()
     nchg = len(charge)
@@ -254,16 +229,13 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
         nao_pair = nao*(nao+1)//2
     if comp == 1:
         buf = buf.reshape(nkpts,nao_pair,nchg)
-        # Subtraction between nucelar point charges and compensated Gaussian charge distribution.
         mat = numpy.einsum('kxz,z->kx', buf, charge)
     else:
         buf = buf.reshape(nkpts,comp,nao_pair,nchg)
         mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
     # vbar is the interaction between the background charge
-    # and the compensating function. (which we don't need)
-    # 0D, 1D, 2D do not have vbar.
-    # Relate G=0
+    # and the compensating function.  0D, 1D, 2D do not have vbar.
     if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
                                          'int3c2e_cart'):
         assert (comp == 1)
@@ -629,21 +601,14 @@ def _fake_nuc(cell):
     return fakenuc
 
 def _compensate_nuccell(mydf):
-    '''
-    A cell of the compensated Gaussian charges for nucleus.
-    It has (1) the same atoms, (2) only one s orbital with exponent = mydf.eta for each atom.
-    '''
+    '''A cell of the compensated Gaussian charges for nucleus'''
     cell = mydf.cell
     nuccell = copy.copy(cell)
     half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    # int_0^inf x^2 exp(-eta * x^2) dx
     norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
     chg_env = [mydf.eta, norm]
     ptr_eta = cell._env.size
     ptr_norm = ptr_eta + 1
-    # [atom-id, angular-momentum, num-primitive-GTO, num-contracted-GTO, 0, ptr-of-exps, ptr-of-contract-coeff, 0]
-    # ptr-of-exps, ptr-of-contract-coeff represent pointers in cell._env array
-    # Use s orbital with exponent equals to mydf.eta to mimic Gaussian charges.
     chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
     nuccell._atm = cell._atm
     nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
