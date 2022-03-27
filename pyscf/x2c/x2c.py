@@ -881,12 +881,16 @@ def _invsqrt(a, tol=1e-14):
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _get_hcore_fw(t, v, w, s, x, c):
+    # s1 = s + (1/2c^2)(X^{\dag}*T*X)
     s1 = s + reduce(numpy.dot, (x.T.conj(), t, x)) * (.5/c**2)
+    # tx = T * X
     tx = numpy.dot(t, x)
+    # h1 = (v + T*X + V^{\dag}*T^{\dag} - (X^{\dag} * T * X) + (X^{\dag} * W * X)*(1/4c^2)
     h1 =(v + tx + tx.T.conj() - numpy.dot(x.T.conj(), tx) +
          reduce(numpy.dot, (x.T.conj(), w, x)) * (.25/c**2))
-
+    # R = S^{-1/2} * (S^{-1/2}\tilde{S}S^{-1/2})^{-1/2} * S^{1/2}
     r = _get_r(s, s1)
+    # H1 = R^{\dag} * H1 * R
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
     return h1
 
