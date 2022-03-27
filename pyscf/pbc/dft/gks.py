@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Authors: Chia-Nan Yeh <yehcanon@gmail.com>
 #
 
 '''
-General spin-orbital Kohn-Sham for periodic systems at a single k-point
+General spin-orbital Kohn-Sham for periodic systems at a single k-point (experimental feature)
 
 See Also:
     pyscf.pbc.dft.kgks.py : General spin-orbital Kohn-Sham for periodic

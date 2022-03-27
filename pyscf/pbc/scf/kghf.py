@@ -67,9 +67,6 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
 
     j1, k1 = mf.with_df.get_jk(dms, _hermi, kpts, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
-    # j1 = (j1_aa, j1_bb, j1_ab), k1 = (k1_aa, k1_bb, k1_ab)
-    j1 = j1.reshape(3,n_dm,nband,nao,nao)
-    k1 = k1.reshape(3,n_dm,nband,nao,nao)
 
     vj = vk = None
     if with_j:
