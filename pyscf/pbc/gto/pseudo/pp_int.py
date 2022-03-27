@@ -39,14 +39,8 @@ def get_pp_loc_part1(cell, kpts=None):
 
 def get_gth_vlocG_part1(cell, Gv):
     '''PRB, 58, 3641 Eq (5) first term
-    Returns:
-        vlocG: (natom, ngrid) ndarray
-            V_{loc}(G) potential for each atom in a unit cell.
     '''
     from pyscf.pbc import tools
-    # coulG = 4*pi/|G|^2.
-    # Explicitly set coulG = 0 when |G| = 0 and exxdiv == false.
-    # If exxdiv == 'ewald', coulG[G==0] woulbe be replaced by a finite term apprxoimated by Ewald summation
     coulG = tools.get_coulG(cell, Gv=Gv)
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     G0idx = numpy.where(G2==0)[0]
@@ -124,11 +118,8 @@ def get_pp_loc_part2(cell, kpts=None):
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     for cn in range(1, 5):
-        # fackecell represents each Gaussian term of V_{loc} from (erf (cn=0), C_1 (cn=1), C_2 (cn=2), C_3 (cn=3), C_4 (cn=4)).
-        # The integrals for matrix elements therefore become 3-center integrals.
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
-            # Integrals in real sapce with lattice sum
             v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
                               kptij_lst=kptij_lst)
             buf += numpy.einsum('...i->...', v)
@@ -160,10 +151,7 @@ def get_pp_nl(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    # Auxiliary fake cell with basis = p^{l}_{i}Y_{lm}
-    # hl_blocks = (natom*angular_basis, nao, nao)
     fakecell, hl_blocks = fake_cell_vnl(cell)
-    # Calculate \int dr p^l_i(r)Y_lm(r)
     ppnl_half = _int_vnl(cell, fakecell, hl_blocks, kpts_lst)
     nao = cell.nao_nr()
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
@@ -299,11 +287,8 @@ def fake_cell_vnl(cell):
 
 def _int_vnl(cell, fakecell, hl_blocks, kpts):
     '''Vnuc - Vloc'''
-    # cutoff radius in lattice summation
     rcut = max(cell.rcut, fakecell.rcut)
-    # lattice translational vectors within rcut
     Ls = cell.get_lattice_Ls(rcut=rcut)
-    # Number of unit cell images for a given rcut
     nimgs = len(Ls)
     expkL = numpy.asarray(numpy.exp(1j*numpy.dot(kpts, Ls.T)), order='C')
     nkpts = len(kpts)
@@ -344,7 +329,6 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    # integrals for i = 1, 2, 3
     out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp'),
            int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
            int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))

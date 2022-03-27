@@ -92,7 +92,6 @@ def get_pbc_pvxp(cell, kpts=None):
 
         soc_mat = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvxp1_sph',
                                      aosym='s1', comp=3)
-        # Some corrections are needed.
         soc_mat = numpy.asarray(soc_mat).reshape(nkpts,3,nao**2)
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 

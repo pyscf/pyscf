@@ -251,9 +251,6 @@ def get_pnucp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
     coulG *= kws
-    # When mydf.eta == 0: Switch off Ewald tech and use the regular reciprocal space
-    # method (solving Poisson equation of nuclear charges in reciprocal space).
-    # Otherwise, the integral is split into parts in real space and parts in reciprocal space. mydf.eta is determined by kinetic energy cutoff.
     if mydf.eta == 0:
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
@@ -277,11 +274,7 @@ def get_pnucp(mydf, kpts=None):
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
-        # TODO where does this come from?
         if cell.dimension == 3:
-            # bas_exp: expoenents (ndarray) of the given shell.
-            # Why do we only consider the lowest expoenent? Also nuccell.bas_exp(1)[0] does not belong to atom 1 always.
-            # --> This is because of the special construction of nuccell: only one s orbital with exponent = mydf.eta for each atom.
             nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
             nucbar *= numpy.pi/cell.vol
 
@@ -292,7 +285,6 @@ def get_pnucp(mydf, kpts=None):
                 wj[k] -= nucbar*2 * s
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    # Evaluate integrals in reciprocal space.
     for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2',
                                        intor='GTO_ft_pdotp'):
