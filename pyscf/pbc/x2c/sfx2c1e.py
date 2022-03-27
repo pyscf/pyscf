@@ -111,7 +111,7 @@ sfx2c = sfx2c1e
 class PBCX2CHelper(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
-    # TODO Change default to None
+    # NONE: X2C1e, ATOM1E: X2C1e with one-center approximation
     approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'NONE')
     # By default, uncontracted cell.basis plus additional steep orbital is used to construct the modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
@@ -122,9 +122,6 @@ class PBCX2CHelper(x2c.X2C):
         x2c.X2C.__init__(self, cell)
 
 class SpinFreeX2CHelper(PBCX2CHelper):
-    def get_pnucp(self, mydf, kpts=None):
-        return get_pnucp(mydf, kpts=None)
-
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None:
@@ -156,7 +153,7 @@ class SpinFreeX2CHelper(PBCX2CHelper):
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         elif 'NONE' in self.approx.upper():
-            w = self.get_pnucp(with_df, kpts_lst)
+            w = get_pnucp(with_df, kpts_lst)
         else:
             raise NotImplementedError
 
@@ -255,8 +252,6 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)

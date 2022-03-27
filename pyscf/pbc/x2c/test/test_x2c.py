@@ -24,7 +24,7 @@ from pyscf.pbc import scf
 from pyscf.pbc import df
 from pyscf.pbc import dft
 from pyscf.pbc import tools
-from pyscf.pbc.x2c import sfx2c1e
+from pyscf.pbc.x2c import sfx2c1e, x2c1e
 
 def setUpModule():
     global cell
@@ -45,7 +45,17 @@ class KnownValues(unittest.TestCase):
         with lib.light_speed(2) as c:
             mf = scf.RHF(cell).sfx2c1e()
             mf.with_df = df.AFTDF(cell)
+            mf.with_x2c.approx = 'NONE'
             dm = mf.get_init_guess()
+            h1 = mf.get_hcore()
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.20522508213548604 + 0j, 8)
+            kpts = cell.make_kpts([3, 1, 1])
+            h1 = mf.get_hcore(kpt=kpts[1])
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.004971818990083491 + 0j, 8)
+            e = mf.kernel()
+            self.assertAlmostEqual(e, -1.701698627990108, 8)
+
+            mf.with_x2c.approx = 'ATOM1E'
             h1 = mf.get_hcore()
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.2458227312351979+0j, 8)
             kpts = cell.make_kpts([3,1,1])
@@ -58,10 +68,47 @@ class KnownValues(unittest.TestCase):
             mf.with_df = df.AFTDF(cell)
             mf.kpts = cell.make_kpts([3,1,1])
             dm = mf.get_init_guess()
+            mf.with_x2c.approx = 'NONE'
+            h1 = mf.get_hcore()
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]), -0.25949615001885146 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]), -0.006286599310207025 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]), -0.006286599310170855 + 0j, 8)
+            e = mf.kernel()
+            self.assertAlmostEqual(e, -1.47623306917771, 8)
+
+            mf.with_x2c.approx = 'ATOM1E'
             h1 = mf.get_hcore()
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]), -0.31082970748083477+0j, 8)
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]), -0.05200981271862468+0j, 8)
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]), -0.05200981271862468+0j, 8)
+
+    def test_kghf(self):
+        with lib.light_speed(2) as c:
+            # KGHF.sfx2c1e should reproduce the KRHF.x2c1e() result
+            mf = scf.KGHF(cell).sfx2c1e()
+            mf.with_df = df.AFTDF(cell)
+            mf.with_x2c.approx = 'NONE'
+            mf.kpts = cell.make_kpts([3, 1, 1])
+            dm = mf.get_init_guess()
+            h1 = mf.get_hcore()
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]), -0.2594961500188514 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]), -0.006286599310207025 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]), -0.006286599310170855 + 0j, 8)
+            e = mf.kernel()
+            self.assertAlmostEqual(e, -1.47623306917771, 8)
+
+            mf = scf.KGHF(cell).x2c1e()
+            mf.with_df = df.AFTDF(cell)
+            mf.with_x2c.approx = 'NONE'
+            mf.kpts = cell.make_kpts([3, 1, 1])
+            dm = mf.get_init_guess()
+            h1 = mf.get_hcore()
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]), -0.2594961500188514 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]), -0.006285311085086392 + 0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]), -0.006285311085049715 + 0j, 8)
+
+            e = mf.kernel()
+            self.assertAlmostEqual(e, -1.4762329948110864, 8)
 
     def test_pnucp(self):
         cell1 = gto.Cell()
@@ -99,6 +146,43 @@ class KnownValues(unittest.TestCase):
         dat = sfx2c1e.get_pnucp(mydf)
         self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 7)
 
+    def test_pvxp(self):
+        cell1 = gto.Cell()
+        cell1.atom = '''
+        He   1.3    .2       .3
+        He    .1    .1      1.1 '''
+        cell1.basis = {'He': [[0, [0.8, 1]],
+                              [1, [0.6, 1]]
+                             ]}
+        cell1.mesh = [15]*3
+        cell1.a = numpy.array(([2.0,  .9, 0. ],
+                               [0.1, 1.9, 0.4],
+                               [0.8, 0  , 2.1]))
+        cell1.build()
+
+        # w_soc should not depend on eta and the type of DF class
+        kpts = cell1.make_kpts([3, 1, 1])
+        mydf = df.AFTDF(cell1, kpts=kpts[1])
+        #dat = x2c1e.get_pbc_pvxp_legacy(cell1, kpts[1])
+        dat = x2c1e.get_pbc_pvxp(mydf, kpts[1])
+        self.assertAlmostEqual(dat[0].sum(), 0.0 + -0.11557054307865766j, 7)
+        self.assertAlmostEqual(dat[1].sum(), 0.0 + -0.19650430913542424j, 7)
+        self.assertAlmostEqual(dat[2].sum(), 0.0 + 0.25706456053958415j, 7)
+
+        mydf.eta = 0.0
+        dat = x2c1e.get_pbc_pvxp(mydf, kpts[1])
+        self.assertAlmostEqual(dat[0].sum(), 0.0 + -0.11557054307865766j, 7)
+        self.assertAlmostEqual(dat[1].sum(), 0.0 + -0.19650430913542424j, 7)
+        self.assertAlmostEqual(dat[2].sum(), 0.0 + 0.25706456053958415j, 7)
+
+        # GDF
+        mydf = df.GDF(cell1)
+        mydf.kpts = kpts
+        mydf.build()
+        dat = x2c1e.get_pbc_pvxp(mydf, kpts[1])
+        self.assertAlmostEqual(dat[0].sum(), 0.0 + -0.11557054307865766j, 7)
+        self.assertAlmostEqual(dat[1].sum(), 0.0 + -0.19650430913542424j, 7)
+        self.assertAlmostEqual(dat[2].sum(), 0.0 + 0.25706456053958415j, 7)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.x2c")
