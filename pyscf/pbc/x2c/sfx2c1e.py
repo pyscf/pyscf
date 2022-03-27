@@ -12,6 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Authors: Qiming Sun <osirpt.sun@gmail.com>
+#          Chia-Nan Yeh <yehcanon@gmail.com>
+#
 
 '''
 spin-free X2C correction for extended systems (experimental feature)

@@ -13,12 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
-#          Qiming Sun <osirpt.sun@gmail.com>
+# Authors: Chia-Nan Yeh <yehcanon@gmail.com>
 #
 
 '''
-General spin-orbital Kohn-Sham for periodic systems with k-point sampling
+General spin-orbital Kohn-Sham for periodic systems with k-point sampling (experimental feature)
 
 See Also:
     pyscf.pbc.dft.rks.py : General spin-orbital Kohn-Sham for periodic
