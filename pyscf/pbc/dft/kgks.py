@@ -164,6 +164,7 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
     #get_rho = None
 
     density_fit = rks._patch_df_beckegrids(kghf.KGHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(kghf.KGHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kghf.KGHF.mix_density_fit)
     newton = khf.KSCF.newton
 
