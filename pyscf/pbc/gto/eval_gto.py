@@ -174,8 +174,8 @@ def _estimate_rcut(cell):
         es = cell.bas_exp(ib)
         cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
         r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es + 1.)**.5
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es + 1.)**.5
         rcut.append(r.max())
     return numpy.array(rcut)
 
