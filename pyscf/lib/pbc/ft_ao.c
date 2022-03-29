@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <complex.h>
 #include <math.h>
 #include <assert.h>
@@ -753,46 +754,67 @@ void PBC_ft_fuse_dd_s2(double *outR, double *outI, double *pqG_ddR, double *pqG_
 }
 }
 
-// ~ log(ovlp)
-void PBC_estimate_log_overlap(double *out, int *atm, int natm, int *bas, int nbas, double *env)
+void PBCsupmol_ovlp_mask(int8_t *out, double cutoff, int *sh_loc, int nbas_bvk,
+                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
         double *exps = malloc(sizeof(double) * Nbas * 4);
         double *rx = exps + Nbas;
         double *ry = rx + Nbas;
         double *rz = ry + Nbas;
-        int ptr_coord, nprim, ib;
+        int ptr_coord, nprim, n;
         double log4 = log(4.) * .75;
-        for (ib = 0; ib < nbas; ib++) {
-                ptr_coord = atm(PTR_COORD, bas(ATOM_OF, ib));
-                rx[ib] = env[ptr_coord+0];
-                ry[ib] = env[ptr_coord+1];
-                rz[ib] = env[ptr_coord+2];
-                nprim = bas(NPRIM_OF, ib);
-                exps[ib] = env[bas(PTR_EXP, ib) + nprim - 1];
+        double log_cutoff = log(cutoff) - log4;
+        for (n = 0; n < nbas; n++) {
+                ptr_coord = atm(PTR_COORD, bas(ATOM_OF, n));
+                rx[n] = env[ptr_coord+0];
+                ry[n] = env[ptr_coord+1];
+                rz[n] = env[ptr_coord+2];
+                nprim = bas(NPRIM_OF, n);
+                // the most diffused function
+                exps[n] = env[bas(PTR_EXP, n) + nprim - 1];
         }
 #pragma omp parallel
 {
-        int i, j, li, lj;
-        double dx, dy, dz, aij, a1, rr, rij, dri, drj;
+        int ijb, ib, jb, i0, j0, i1, j1, i, j, li, lj;
+        double dx, dy, dz, ai, aj, aij, a1, log_a1, fi, fj, rr, rij, dri, drj;
 #pragma omp for schedule(static)
-        for (i = 0; i < nbas; i++) {
+        for (ijb = 0; ijb < nbas_bvk*(nbas_bvk+1)/2; ijb++) {
+                ib = (int)(sqrt(2*ijb+.25) - .5 + 1e-7);
+                jb = ijb - ib*(ib+1)/2;
+
+                i0 = sh_loc[ib];
+                i1 = sh_loc[ib+1];
+                li = bas(ANG_OF, i0);
+                ai = exps[i0];
+                j0 = sh_loc[jb];
+                j1 = sh_loc[jb+1];
+                lj = bas(ANG_OF, j0);
+                aj = exps[j0];
+                aij = ai + aj;
+                fi = ai / aij;
+                fj = aj / aij;
+                a1 = ai * aj / aij;
+                log_a1 = .75 * log(a1 / aij);
+                for (i = i0; i < i1; i++) {
 #pragma GCC ivdep
-                for (j = 0; j < nbas; j++) {
-                        li = bas(ANG_OF, i);
-                        lj = bas(ANG_OF, j);
+                for (j = j0; j < j1; j++) {
                         dx = rx[i] - rx[j];
                         dy = ry[i] - ry[j];
                         dz = rz[i] - rz[j];
                         rr = dx * dx + dy * dy + dz * dz;
                         rij = sqrt(rr);
-                        aij = exps[i] + exps[j];
-                        dri = exps[j] / aij * rij + 1.;
-                        drj = exps[i] / aij * rij + 1.;
-                        a1 = exps[i] * exps[j] / aij;
-                        //out[i*Nbas+j] = -aij * rr;
-                        out[i*Nbas+j] = log4 + .75 * log(a1/aij) - a1 * rr
-                                + li * log(dri) + lj * log(drj);
+                        dri = fj * rij + 1.;
+                        drj = fi * rij + 1.;
+                        out[i*Nbas+j] = (log_a1 - a1 * rr
+                                         + li * log(dri) + lj * log(drj)) > log_cutoff;
+                } }
+                if (ib > jb) {
+                        for (i = i0; i < i1; i++) {
+#pragma GCC ivdep
+                        for (j = j0; j < j1; j++) {
+                                out[j*Nbas+i] = out[i*Nbas+j];
+                        } }
                 }
         }
 }

@@ -414,13 +414,15 @@ class _ExtendedMole(ft_ao._ExtendedMole):
         if cutoff is None:
             cutoff = self.precision * ft_ao.LATTICE_SUM_PENALTY
         nbas = self.nbas
-        ovlp = np.empty((nbas, nbas))
-        libpbc.PBC_estimate_log_overlap(
-            ovlp.ctypes.data_as(ctypes.c_void_p),
+        mask = np.empty((nbas, nbas), dtype=np.int8)
+        nbas_bvk = self.sh_loc.size - 1
+        libpbc.PBCsupmol_ovlp_mask(
+            mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
+            self.sh_loc.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas_bvk),
             self._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.natm),
             self._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.nbas),
             self._env.ctypes.data_as(ctypes.c_void_p))
-        return ovlp > np.log(cutoff)
+        return mask
 
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int
@@ -515,7 +517,7 @@ class _IntNucBuilder(_Int3cBuilder):
 
         kpt_allow = np.zeros(3)
         eta, mesh, ke_cutoff = _guess_eta(cell, kpts, mesh)
-        log.debug1('get_nuc/get_pp_loc_part1 mesh = %s', mesh)
+        log.debug1('get_nuc/get_pp_loc_part1 eta = %s mesh = %s', eta, mesh)
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
         modchg_cell = _compensate_nuccell(cell, eta)
@@ -539,22 +541,23 @@ class _IntNucBuilder(_Int3cBuilder):
         Gblksize = min(Gblksize, ngrids, 200000)
         vGR = vG.real
         vGI = vG.imag
+        log.debug1('max_memory = %s  Gblksize = %s  ngrids = %s',
+                   max_memory, Gblksize, ngrids)
 
+        buf = np.empty((2, nkpts, Gblksize, nao_pair))
         for p0, p1 in lib.prange(0, ngrids, Gblksize):
             # shape of Gpq (nkpts, nGv, nao_pair)
-            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts)
+            Gpq = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, kpt_allow, kpts, out=buf)
             for k, (GpqR, GpqI) in enumerate(zip(*Gpq)):
                 # rho_ij(G) nuc(-G) / G^2
                 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
                 vR = np.einsum('k,kx->x', vGR[p0:p1], GpqR)
                 vR+= np.einsum('k,kx->x', vGI[p0:p1], GpqI)
-                if is_zero(kpts[k]):
-                    vj[k] += vR
-                else:
+                vj[k] += vR
+                if not is_zero(kpts[k]):
                     vI = np.einsum('k,kx->x', vGR[p0:p1], GpqI)
                     vI-= np.einsum('k,kx->x', vGI[p0:p1], GpqR)
-                    vj[k] += vR + vI * 1j
-            Gpq = None
+                    vj[k] += vI * 1j
             t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
         log.timer_debug1('contracting Vnuc', *t0)
 

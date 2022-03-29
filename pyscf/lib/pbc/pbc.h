@@ -16,6 +16,8 @@
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdint.h>
+
 #if !defined(HAVE_DEFINED_BVKENV_H)
 #define HAVE_DEFINED_BVKENV_H
 typedef struct {

@@ -99,7 +99,7 @@ static int _assemble3c(double *out, int *cell0_shls, int *bvk_cells, double cuto
         double *cache = bufL + dijkc;
         int shls[3];
         int n, ish, jsh, ksh;
-        char *ovlp_mask = envs_bvk->ovlp_mask;
+        int8_t *ovlp_mask = envs_bvk->ovlp_mask;
         // aux_mask to skip smooth auxiliary basis if needed
         int *aux_mask = envs_bvk->bas_map;
         double *qcond = envs_bvk->q_cond;
@@ -874,7 +874,7 @@ void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
                       int *kpt_ij_idx, int kpt_ij_size, int bvk_ncells, int nimgs,
                       int nkpts, int nbasp, int comp,
                       int *sh_loc, int *cell0_ao_loc, int *shls_slice,
-                      char *ovlp_mask, char *cell0_ovlp_mask, int *bas_map,
+                      int8_t *ovlp_mask, int8_t *cell0_ovlp_mask, int *bas_map,
                       double *q_cond, double cutoff, CINTOpt *cintopt, int cache_size,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {

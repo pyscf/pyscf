@@ -135,13 +135,13 @@ int PBCint3c2e_loop(double *gctr, int *cell0_shls, int *bvk_cells, double cutoff
         int (*intor_loop)(double *, CINTEnvVars *, double *, int *);
         if (envs_cint->opt == NULL) {
                 intor_loop = &CINT3c2e_loop_nopt;
-        } else if (x_ctr[0] == 1 && x_ctr[1] == 1 && x_ctr[2] == 1 && x_ctr[3] == 1) {
-                intor_loop = &CINT3c2e_111_loop;
+//        } else if (x_ctr[0] == 1 && x_ctr[1] == 1 && x_ctr[2] == 1 && x_ctr[3] == 1) {
+//                intor_loop = &CINT3c2e_111_loop;
         } else {
                 intor_loop = &CINT3c2e_loop;
         }
 
-        char *ovlp_mask = envs_bvk->ovlp_mask;
+        int8_t *ovlp_mask = envs_bvk->ovlp_mask;
         // To skip smooth auxiliary basis if needed
         int *aux_mask = envs_bvk->bas_map;
         double *qcond = envs_bvk->q_cond;

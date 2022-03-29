@@ -596,7 +596,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         nkpts = len(kpts)
         nao = cell.nao
-        mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) * 3 + 2
+        mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
         mesh = np.max([mesh_min, [int(mesh)] * 3], axis=0)
         ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
         ke_cutoff = ke_cutoff[:cell.dimension].min()

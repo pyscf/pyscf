@@ -602,7 +602,6 @@ class _ExtendedMole(gto.Mole):
         supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
         supmol_l = supmol._bas[:,gto.ANG_OF]
 
-        #TODO: call PBC_estimate_log_overlap
         # Removing the angular part of each basis and turning basis to s-type
         # functions, ovlp is an estimation of the upper bound of radial part
         # overlap integrals
