@@ -925,7 +925,8 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         weight = cell.vol / ngrids
         rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
         rhoR = rhoR.reshape(-1,ngrids)
-        vR = mydf.sccs.kernel(rhoR)
+        rho_core = make_rho_core(cell)
+        vR = mydf.sccs.kernel(rhoR, rho_core)
         vG = tools.fft(vR, mesh).reshape(nset, -1)
     else:
         coulG = tools.get_coulG(cell, mesh=mesh)

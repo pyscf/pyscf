@@ -18,6 +18,7 @@ libdft = lib.load_library('libdft')
 def make_rho_core(cell, precision=None, atm_id=None):
     fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
     atm = fakecell._atm
+    print(atm)
     bas = fakecell._bas
     env = fakecell._env
 
