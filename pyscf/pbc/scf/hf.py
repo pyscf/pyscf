@@ -513,8 +513,6 @@ class SCF(mol_hf.SCF):
 
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.conv_tol = cell.precision * 10
-
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
     @property

@@ -515,7 +515,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), deriv=0,
     if gga_high_order:
         Gv = cell.get_Gv(mydf.mesh)
         #rhoG1 = np.einsum('np,px->nxp', 1j*rhoG[:,0], Gv)
-        rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv)
+        rhoG1 = tools.gradient_gs(rhoG, Gv)
         rhoG = lib.concatenate([rhoG, rhoG1], axis=1)
         Gv = rhoG1 = None
     return rhoG
@@ -919,22 +919,12 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     mesh = mydf.mesh
     ngrids = np.prod(mesh)
 
-    # contribution from implicit solvation
-    if mydf.sccs:
-        assert nset == 1
-        weight = cell.vol / ngrids
-        rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-        rhoR = rhoR.reshape(-1,ngrids)
-        rho_core = make_rho_core(cell)
-        vR = mydf.sccs.kernel(rhoR, rho_core)
-        vG = tools.fft(vR, mesh).reshape(nset, -1)
-    else:
-        coulG = tools.get_coulG(cell, mesh=mesh)
-        #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
-        vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
-        for i, rhoG_i in enumerate(rhoG[:,0]):
-            vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
-        coulG = None
+    coulG = tools.get_coulG(cell, mesh=mesh)
+    #vG = np.einsum('ng,g->ng', rhoG[:,0], coulG)
+    vG = np.empty_like(rhoG[:,0], dtype=np.result_type(rhoG[:,0], coulG))
+    for i, rhoG_i in enumerate(rhoG[:,0]):
+        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+    coulG = None
 
     if mydf.vpplocG_part1 is not None and not mydf.pp_with_erf:
         for i in range(nset):
@@ -982,6 +972,16 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         nelec[i]  += lib.sum(rhoR[i,0]) * weight
         excsum[i] += lib.sum(lib.multiply(rhoR[i,0], exc)) * weight
         exc = vxc = None
+
+    # potential from implicit solvation
+    if mydf.sccs:
+        assert nset == 1
+        rho_core = make_rho_core(cell)
+        e_pol, phi_sccs = mydf.sccs.kernel(rhoR, rho_core)
+        ecoul[0] += e_pol
+        rho_core = None
+        phi_sccs = lib.multiply(weight, phi_sccs, out=phi_sccs)
+        wv_freq[0][0] += tools.fft(phi_sccs, mesh)
 
     rhoR = rhoG = None
 
@@ -1068,6 +1068,14 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
             vG[i] = lib.add(vG[i], mydf.vpplocG_part1, out=vG[i])
 
     weight = cell.vol / ngrids
+    if mydf.sccs:
+        rho_pol = lib.multiply(weight, mydf.sccs.rho_pol)
+        rho_pol_gs = tools.fft(rho_pol, mesh).reshape(-1,ngrids)
+        phi_pol_gs = lib.multiply(rho_pol_gs, coulG)
+        phi_eps = lib.multiply(weight, mydf.sccs.phi_eps)
+        phi_eps_gs = tools.fft(phi_eps, mesh).reshape(-1,ngrids)
+        vG = vG + phi_pol_gs + phi_eps_gs
+
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)

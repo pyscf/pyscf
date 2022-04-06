@@ -15,6 +15,7 @@
 
 import warnings
 import copy
+import ctypes
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -23,6 +24,7 @@ from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
+libpbc = lib.load_library('libpbc')
 FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
 
 def _fftn_blas(f, mesh):
@@ -702,3 +704,102 @@ def cutoff_to_gs(a, cutoff):
 def gs_to_cutoff(a, gs):
     '''Deprecated.  Replaced by function mesh_to_cutoff.'''
     return mesh_to_cutoff(a, [2*n+1 for n in gs])
+
+def gradient_gs(f_gs, Gv):
+    '''
+    Compute the G-space components of :math:`\nabla f(r)`
+    given :math:`f(G)` and :math:`G`,
+    which is equivalent to einsum('np,px->nxp', f_gs, 1j*Gv)
+    '''
+    ng, dim = Gv.shape
+    if dim != 3:
+        raise NotImplementedError
+    Gv = np.asarray(Gv, order='C', dtype=float)
+    f_gs = np.asarray(f_gs.reshape(-1,ng), order='C', dtype=np.complex128)
+    n = f_gs.shape[0]
+    out = np.empty((n,dim,ng), dtype=np.complex128)
+
+    fn = getattr(libpbc, 'gradient_gs', None)
+    try:
+        fn(out.ctypes.data_as(ctypes.c_void_p),
+           f_gs.ctypes.data_as(ctypes.c_void_p),
+           Gv.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(n), ctypes.c_size_t(ng))
+    except Exception as e:
+        raise RuntimeError("Failed to contract f_gs and iGv. %s" % e)
+    return out
+
+def gradient_by_fft(f, Gv, mesh):
+    '''
+    Compute :math:`\nabla f(r)` by FFT.
+    '''
+    ng, dim = Gv.shape
+    assert ng == np.prod(mesh)
+    f_gs = fft(f.reshape(-1,ng), mesh)
+    f1_gs = gradient_gs(f_gs, Gv)
+    f1 = (ifft(f1_gs.reshape(-1,ng), mesh).real).reshape(-1,dim,ng)
+    if f.ndim == 1:
+        f1 = f1[0]
+    return f1
+
+def laplacian_gs(f_gs, Gv):
+    '''
+    Compute the G-space components of :math:`\Delta f(r)`
+    given :math:`f(G)` and :math:`G`,
+    which is equivalent to einsum('np,p->np', f_gs, -G2)
+    '''
+    ng, dim = Gv.shape
+    absG2 = lib.multiply_sum(Gv, Gv, axis=1)
+    f_gs = f_gs.reshape(-1,ng)
+    out = np.empty_like(f_gs, order='C', dtype=np.complex128)
+    for i, f_gs_i in enumerate(f_gs):
+        out[i] = lib.multiply(f_gs_i, -absG2, out=out[i])
+    return out
+
+def laplacian_by_fft(f, Gv, mesh):
+    '''
+    Compute :math:`\Delta f(r)` by FFT.
+    '''
+    ng, dim = Gv.shape
+    assert ng == np.prod(mesh)
+    f_gs = fft(f.reshape(-1,ng), mesh)
+    f2_gs = laplacian_gs(f_gs, Gv)
+    f2 = (ifft(f2_gs.reshape(-1,ng), mesh).real).reshape(-1,ng)
+    if f.ndim == 1:
+        f2 = f2[0]
+    return f2
+
+def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None, compute_gradient=False):
+    if mesh is None:
+        mesh = cell.mesh
+    if coulG is None:
+        coulG = get_coulG(cell, mesh=mesh)
+
+    ng = np.prod(mesh)
+    rhoG = fft(rho.reshape(-1,ng), mesh)
+    phiG = np.empty_like(rhoG)
+    for i in range(len(phiG)):
+        phiG[i] = lib.multiply(rhoG[i], coulG)
+    phiR = ifft(phiG, mesh).real
+
+    dphiR = None
+    if compute_gradient:
+        if Gv is None:
+            Gv = cell.get_Gv(mesh)
+        _ng, dim = Gv.shape
+        assert _ng == ng
+        if dim != 3:
+            raise NotImplementedError
+
+        drhoG = gradient_gs(rhoG, Gv).reshape(-1,dim,ng)
+        dphiR = np.empty_like(drhoG, dtype=float)
+        for i in range(len(dphiR)):
+            for x in range(dim):
+                dphiG = lib.multiply(drhoG[i,x], coulG)
+                dphiR[i,x] = ifft(dphiG, mesh).real
+
+    if rho.ndim == 1:
+        phiR = phiR[0]
+        if compute_gradient:
+            dphiR = dphiR[0]
+    return phiR, dphiR

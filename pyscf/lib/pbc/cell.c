@@ -153,32 +153,6 @@ void get_Gv(double* Gv, double* rx, double* ry, double* rz, int* mesh, double* b
 }
 }
 
-void contract_rhoG_Gv(double complex* out, double complex* rhoG, double* Gv,
-                      int ndens, size_t ngrids)
-{
-    int i;
-    double complex *outx, *outy, *outz;
-    for (i = 0; i < ndens; i++) {
-        outx = out;
-        outy = outx + ngrids;
-        outz = outy + ngrids;
-#pragma omp parallel
-{
-        size_t igrid;
-        double *pGv;
-        #pragma omp for schedule(static)
-        for (igrid = 0; igrid < ngrids; igrid++) {
-            pGv = Gv + igrid * 3;
-            outx[igrid] = pGv[0] * creal(rhoG[igrid]) * _Complex_I - pGv[0] * cimag(rhoG[igrid]);
-            outy[igrid] = pGv[1] * creal(rhoG[igrid]) * _Complex_I - pGv[1] * cimag(rhoG[igrid]);
-            outz[igrid] = pGv[2] * creal(rhoG[igrid]) * _Complex_I - pGv[2] * cimag(rhoG[igrid]);
-        }
-}
-        rhoG += ngrids;
-        out += 3 * ngrids;
-    }
-}
-
 
 void ewald_overlap_nuc_grad(double* out, double* charges, double* coords, int natm, double* Ls, int nL, double ew_eta)
 {

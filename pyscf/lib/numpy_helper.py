@@ -1496,16 +1496,18 @@ def concatenate(arrays, axis=0, out=None, dtype=None, casting="same_kind"):
 
     return out
 
-def copy(a, order='K', subok=False, dtype=None):
+def copy(a, order='K', subok=False, dtype=None, out=None):
     if (subok or a.dtype not in [float, numpy.double, numpy.complex128]
         or order != 'K' or not (a.flags.c_contiguous or a.flags.f_contiguous)):
         return numpy.copy(numpy.asarray(a, dtype=dtype), order=order, subok=subok)
 
     dtype = numpy.result_type(a.dtype, dtype)
 
-    out = numpy.empty_like(a, dtype=dtype)
-    #assert out.dtype == dtype
-    #assert out.size == a.size
+    if out is not None:
+        assert out.dtype == numpy.result_type(dtype, out.dtype)
+        assert out.size == a.size
+    else:
+        out = numpy.empty_like(a, dtype=dtype)
 
     if a.dtype == numpy.complex128:
         fn = getattr(_np_helper, "NPzcopy_omp")

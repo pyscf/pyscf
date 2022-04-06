@@ -9,47 +9,34 @@ Reference:
 import ctypes
 import numpy
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.tools import write_cube
 
 libpbc = lib.load_library('libpbc')
 
-def _get_eps(rhoR, rho_core, rho_min, rho_max, eps0):
-    if rho_core is not None:
-        rhoR += rho_core
-    print("rhoR.min() = ", rhoR.min())
-    ng = rhoR.size
-    out = numpy.empty_like(rhoR, order='C')
+def _get_eps(rho_elec, rho_aux, rho_min, rho_max, eps0):
+    if rho_aux is not None:
+        rho_elec = rho_elec + rho_aux
+    ng = rho_elec.size
+    eps = numpy.empty_like(rho_elec, order='C', dtype=float)
+    deps_intermediate = numpy.empty_like(rho_elec, order='C', dtype=float)
     fun = getattr(libpbc, 'get_eps')
-    fun(out.ctypes.data_as(ctypes.c_void_p),
-        rhoR.ctypes.data_as(ctypes.c_void_p),
+    fun(eps.ctypes.data_as(ctypes.c_void_p),
+        deps_intermediate.ctypes.data_as(ctypes.c_void_p),
+        rho_elec.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_double(rho_min), ctypes.c_double(rho_max),
         ctypes.c_double(eps0), ctypes.c_size_t(ng))
-    return out
+    return eps, deps_intermediate
 
-def _get_eps1_intermediate(rhoR, rho_core, rho_min, rho_max, eps0):
-    if rho_core is not None:
-        rhoR += rho_core
-    ng = rhoR.size
-    out = numpy.empty_like(rhoR, order='C')
-    fun = getattr(libpbc, 'get_eps1_intermediate')
-    fun(out.ctypes.data_as(ctypes.c_void_p),
-        rhoR.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(rho_min), ctypes.c_double(rho_max),
-        ctypes.c_double(eps0), ctypes.c_size_t(ng))
-    return out
-
-def _get_log_eps1(cell, rhoR, rho_core, Gv, mesh, eps1_inter, rhoR1=None):
-    if rho_core is not None:
-        rhoR += rho_core
-    if rhoR1 is None:
-        rhoG = tools.fft(rhoR, mesh)
-        rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv).reshape(-1, rhoR.size)
-        rhoR1 = numpy.asarray(tools.ifft(rhoG1, mesh).real, order='C')
-        rhoG = rhoG1 = None
-
-    out = numpy.empty_like(rhoR1, order='C')
-    for x in range(3):
-        out[x] = lib.multiply(rhoR1[x], eps1_inter, out=out[x])
+def _get_log_eps_gradient(eps, Gv, mesh, method='FFT'):
+    log_eps = numpy.log(eps)
+    if method.upper() == 'FFT':
+        out = tools.gradient_by_fft(log_eps, Gv, mesh)
+    elif method.upper() == 'FDIFF':
+        raise NotImplementedError
+    else:
+        raise NotImplementedError
     return out
 
 def _get_log_eps1_fdiff(cell, eps, rhoR, rho_core, rho_min, rho_max, mesh):
@@ -71,87 +58,164 @@ def _get_log_eps1_fdiff(cell, eps, rhoR, rho_core, rho_min, rho_max, mesh):
         ctypes.c_double(hx), ctypes.c_double(hy), ctypes.c_double(hz))
     return out.reshape(3,-1)
 
-def _get_deps_drho(eps, eps1_inter):
-    return lib.multiply(eps, eps1_inter)
+def _get_deps_drho(eps, deps_intermediate):
+    return lib.multiply(eps, deps_intermediate)
 
-from pyscf.tools import write_cube
-def kernel(sccs, rhoR, rho_core=None, rho_min=1e-4, rho_max=1.5e-3, conv_tol=1e-5, max_cycle=20):
+def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
+         conv_tol=1e-5, max_cycle=20):
+    cell = sccs.cell
+    if mesh is None:
+        mesh = sccs.mesh
+    if coulG is None:
+        coulG = tools.get_coulG(cell, mesh=mesh)
+    if Gv is None:
+        Gv = cell.get_Gv(mesh=mesh)
+
+    sqrt_eps = numpy.sqrt(eps)
+    q = lib.multiply(sqrt_eps, tools.laplacian_by_fft(sqrt_eps, Gv, mesh))
+    rho_tot = rho_solute / eps
+    phi_tot, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
+    lap_phi_tot = tools.laplacian_by_fft(phi_tot, Gv, mesh)
+    fac = 4 * numpy.pi
+
+    deps = tools.gradient_by_fft(eps, Gv, mesh)
+    tmp = eps*lap_phi_tot
+    for x in range(3):
+        tmp += deps[x]*dphi_tot[x]
+
+    r = -fac * rho_solute - tmp
+    print("r0:", abs(r).max()) 
+    for i in range(max_cycle):
+        fake_rho = r / sqrt_eps
+        v = tools.solve_poisson(cell, fake_rho, coulG=coulG, Gv=Gv, mesh=mesh)[0] / sqrt_eps
+        v = r
+        if i == 0:
+            p = v
+        else:
+            beta = lib.vdot(v, r) / lib.vdot(v_old, r_old)
+            p = v + beta * p_old
+        Ap = -p * q - fac * r
+        alpha = lib.vdot(v, r) / lib.vdot(p, Ap)
+
+        r_old = r.copy()
+        v_old = v.copy()
+        p_old = p.copy()
+        r = r - alpha * Ap
+        phi_tot = alpha * p + phi_tot
+        print("res = ", abs(r).max())
+        if abs(r).max() < conv_tol:
+            break
+
+    return rho_tot
+
+
+def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
+            conv_tol=1e-5, max_cycle=20):
+    cell = sccs.cell
+    mixing_factor = sccs.mixing_factor
+    if mesh is None:
+        mesh = sccs.mesh
+    if coulG is None:
+        coulG = tools.get_coulG(cell, mesh=mesh)
+    if Gv is None:
+        Gv = cell.get_Gv(mesh=mesh)
+
+    log_eps1 = _get_log_eps_gradient(eps, Gv, mesh)
+    fac = 1. / (4. * numpy.pi)
+    log_eps1 = lib.multiply(fac, log_eps1, out=log_eps1)
+
+    rho_solute_over_eps = numpy.divide(rho_solute, eps)
+    rho_iter = numpy.zeros_like(rho_solute)
+    rho_iter_old = lib.copy(rho_iter)
+    for i in range(max_cycle):
+        rho_tot = lib.add(rho_solute_over_eps, rho_iter)
+        _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
+        rho_tot = None
+        for x in range(3):
+            if x == 0:
+                rho_iter = lib.multiply(dphi_tot[x], log_eps1[x], out=rho_iter)
+            else:
+                tmp = lib.multiply(dphi_tot[x], log_eps1[x])
+                rho_iter = lib.add(rho_iter, tmp, out=rho_iter)
+        rho_iter = lib.multiply(mixing_factor, rho_iter, out=rho_iter)
+        rho_iter = lib.add(rho_iter, (1.-mixing_factor)*rho_iter_old, out=rho_iter)
+        res = abs(rho_iter - rho_iter_old).max()
+        logger.info(sccs, 'cycle= %d  res= %4.3g', i+1, res)
+        if res < conv_tol:
+            break
+        rho_iter_old = lib.copy(rho_iter, out=rho_iter_old)
+    if res > conv_tol:
+        logger.warn(sccs, 'SCCS did not converge.')
+
+    rho_tot = lib.add(rho_solute_over_eps, rho_iter)
+    return rho_tot
+
+
+def kernel(sccs, rho_elec, rho_core=None, method="mixing",
+           rho_min=1e-4, rho_max=1.5e-3, conv_tol=1e-5, max_cycle=20):
+    if rho_core is None:
+        rho_core = 0
     cell = sccs.cell
     mesh = sccs.mesh
+    ng = numpy.prod(mesh)
     eps0 = sccs.eps
     Gv = cell.get_Gv(mesh)
     coulG = tools.get_coulG(cell, mesh=mesh)
 
-    rhoR[rhoR<0] = 0
-    rhoR = rhoR.reshape(-1, numpy.prod(mesh))
-    if len(rhoR) == 1:
-        rhoR = rhoR[0]
-        rhoR1 = None
-    elif len(rhoR) == 4:
-        rhoR1 = rhoR[1:4]
-        rhoR = rhoR[0]
+    rho_elec = rho_elec.reshape(-1, ng)
+    if len(rho_elec) == 1:
+        rho_elec = rho_elec[0]
+        drho_elec = None
+    elif len(rho_elec) >= 4:
+        drho_elec = rho_elec[1:4]
+        rho_elec = rho_elec[0]
     else:
+        raise ValueError("Input density has the wrong shape."
+                         "Expect either (1, ngrid) or (4, ngrid).")
+    #rho_elec[rho_elec<0] = 0
+
+    rho_solute = lib.add(rho_elec, rho_core)
+    eps, deps_intermediate = _get_eps(rho_elec, None, rho_min, rho_max, eps0)
+
+    rho_tot = None
+    if method.upper() == "PCG":
+        rho_tot = _pcg(sccs, rho_solute, eps, coulG=coulG, Gv=Gv, mesh=mesh,
+                       conv_tol=conv_tol, max_cycle=max_cycle)
+    elif method.upper() == "MIXING":
+        rho_tot = _mixing(sccs, rho_solute, eps, coulG=coulG, Gv=Gv, mesh=mesh,
+                          conv_tol=conv_tol, max_cycle=max_cycle)
+    else:
+        raise KeyError(f"Unrecognized method: {method}.")
+
+    deps_drho = _get_deps_drho(eps, deps_intermediate)
+    deps_intermediate = None
+
+    if rho_tot is None:
         raise RuntimeError
 
-    rhoR = numpy.asarray(rhoR, order='C', dtype=float)
-    write_cube.write_cube(cell, rhoR.reshape(*mesh), mesh, "rhoR.cube")
-    if rho_core is not None:
-        write_cube.write_cube(cell, rho_core.reshape(*mesh), mesh, "rho_core.cube")
-    if rhoR1 is not None:
-        rhoR1 = numpy.asarray(rhoR1, order='C', dtype=float)
+    rho_pol = sccs.rho_pol = lib.subtract(rho_tot, rho_solute)
+    phi_pol = tools.solve_poisson(cell, rho_pol, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+    weight = cell.vol / ng 
+    e_pol = .5 * lib.sum(lib.multiply(phi_pol, rho_solute)) * weight
+    rho_pol = None
+    logger.info(sccs, 'Polarization energy = %.8g', e_pol)
 
-    rho_solute = rhoR + rho_core
-    write_cube.write_cube(cell, rho_solute.reshape(*mesh), mesh, "rho_tot.cube")
-    eps = _get_eps(rhoR, None, rho_min, rho_max, eps0)
-    write_cube.write_cube(cell, eps.reshape(*mesh), mesh, "eps.cube")
-    eps_inter = _get_eps1_intermediate(rhoR, None, rho_min, rho_max, eps0)
-    #log_eps1 = _get_log_eps1(cell, rhoR, rho_core, Gv, mesh, eps_inter, rhoR1=rhoR1)
-    log_eps1 = _get_log_eps1_fdiff(cell, eps, rhoR, None, rho_min, rho_max, mesh)
-    #print('log_eps1 max:' , abs(log_eps1).max())
-    deps_drho = _get_deps_drho(eps, eps_inter)
-    rho_iter = numpy.zeros_like(rhoR)
-    for i in range(max_cycle):
-        rho_iter_old = lib.copy(rho_iter)
-        rho_tot = lib.add(rho_solute / eps, rho_iter)
-        rho_pol = rho_tot - rhoR
-        write_cube.write_cube(cell, rho_pol.reshape(*mesh), mesh, f"rho_pol_{i}.cube")
-        rhoG = tools.fft(rho_tot, mesh)
-        rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv).reshape(3,-1)
-        for x in range(3):
-            vG1 = lib.multiply(rhoG1[x], coulG)
-            vR1 = tools.ifft(vG1, mesh).real  #Gamma point
-            #write_cube.write_cube(cell, vR1.reshape(*mesh), mesh, f"vR1_{x}.cube")
-            #write_cube.write_cube(cell, log_eps1[x].reshape(*mesh), mesh, f"log_eps1_{x}.cube")
-            print('vR1 max:',  abs(vR1).max())
-            print('log_eps1 max:', abs(log_eps1[x]).max())
-            if x == 0:
-                rho_iter = lib.multiply(vR1, log_eps1[x], out=rho_iter)
-            else:
-                tmp = lib.multiply(vR1, log_eps1[x])
-                rho_iter = lib.add(rho_iter, tmp, out=rho_iter)
-        res = abs(rho_iter - rho_iter_old).max()
-        rho_iter = 0.6 * rho_iter + 0.4 * rho_iter_old
-        print(f'res = {res}')
-        if res < conv_tol:
-            break
-
-    rho_tot = lib.add(rho_solute / eps, rho_iter)
-    rhoG = tools.fft(rho_tot, mesh)
-    rhoG1 = cell.contract_rhoG_Gv(rhoG, Gv).reshape(3,-1)
-    vR1_square = numpy.empty_like(rhoR)
+    _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
+    dphi_tot_square = None
     for x in range(3):
-        vG1 = lib.multiply(rhoG1[x], coulG)
-        vR1 = tools.ifft(vG1, mesh).real
         if x == 0:
-            vR1_square = lib.multiply(vR1, vR1, out=vR1_square)
+            dphi_tot_square = lib.multiply(dphi_tot[x], dphi_tot[x])
         else:
-            tmp = lib.multiply(vR1, vR1)
-            vR1_square = lib.add(vR1_square, tmp, out=vR1_square)
+            tmp = lib.multiply(dphi_tot[x], dphi_tot[x])
+            dphi_tot_square = lib.add(dphi_tot_square, tmp, out=dphi_tot_square)
+    dphi_tot = None
 
-    vG = lib.multiply(rhoG, coulG)
-    vR = tools.ifft(vG, mesh).real
-    vR += lib.multiply(deps_drho, vR1_square) * (-0.125/numpy.pi)
-    return vR
+    fac = -1. / (8.*numpy.pi)
+    deps_drho = lib.multiply(fac, deps_drho, out=deps_drho)
+    sccs.phi_eps = phi_eps = lib.multiply(deps_drho, dphi_tot_square)
+    dphi_tot_square = None
+    phi_sccs = lib.add(phi_pol, phi_eps)
+    return e_pol, phi_sccs
 
 class SCCS(lib.StreamObject):
     def __init__(self, cell, mesh, eps=78.3553, rho_min=1e-4, rho_max=1.5e-3):
@@ -161,12 +225,16 @@ class SCCS(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
         self.eps = eps
+        self.method = 'mixing'
+        self.mixing_factor = 0.6
         self.rho_min = rho_min
         self.rho_max = rho_max
-        self.max_cycle = 5
-        self.conv_tol = 1e-5
+        self.max_cycle = 50
+        self.conv_tol = 1e-6
+        self.rho_pol = None
+        self.phi_eps = None
 
     def kernel(self, rho, rho_core=None):
-        return kernel(self, rho, rho_core=rho_core,
+        return kernel(self, rho, rho_core=rho_core, method=self.method,
                       rho_min=self.rho_min, rho_max=self.rho_max,
                       conv_tol=self.conv_tol, max_cycle=self.max_cycle)

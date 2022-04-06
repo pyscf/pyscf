@@ -918,29 +918,6 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
 
-def contract_rhoG_Gv(cell, rhoG, Gv=None):
-    '''
-    einsum('np,px->nxp', 1j*rhoG, Gv)
-    '''
-    if Gv is None:
-        Gv = cell.get_Gv()
-
-    ngrids, dimension = Gv.shape
-    dimension == 3
-    rhoG = np.asarray(rhoG.reshape(-1,ngrids), order='C')
-    ndens = rhoG.shape[0]
-    out = np.empty((ndens, dimension, ngrids), dtype=np.complex128)
-
-    fn = getattr(libpbc, 'contract_rhoG_Gv', None)
-    try:
-        fn(out.ctypes.data_as(ctypes.c_void_p),
-           rhoG.ctypes.data_as(ctypes.c_void_p),
-           Gv.ctypes.data_as(ctypes.c_void_p),
-           ctypes.c_int(ndens), ctypes.c_size_t(ngrids))
-    except Exception as e:
-        raise RuntimeError("Failed in contract_rhoG_Gv. %s" % e)
-    return out
-
 def _non_uniform_Gv_base(n):
     #rs, ws = radi.delley(n)
     #rs, ws = radi.treutler_ahlrichs(n)
@@ -1943,7 +1920,6 @@ class Cell(mole.Mole):
 
     get_Gv = get_Gv
     get_Gv_weights = get_Gv_weights
-    contract_rhoG_Gv = contract_rhoG_Gv
 
     get_SI = get_SI
 
