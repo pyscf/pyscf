@@ -769,7 +769,8 @@ def laplacian_by_fft(f, Gv, mesh):
         f2 = f2[0]
     return f2
 
-def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None, compute_gradient=False):
+def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None,
+                  compute_potential=True, compute_gradient=False):
     if mesh is None:
         mesh = cell.mesh
     if coulG is None:
@@ -777,10 +778,12 @@ def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None, compute_gradient=Fa
 
     ng = np.prod(mesh)
     rhoG = fft(rho.reshape(-1,ng), mesh)
-    phiG = np.empty_like(rhoG)
-    for i in range(len(phiG)):
-        phiG[i] = lib.multiply(rhoG[i], coulG)
-    phiR = ifft(phiG, mesh).real
+    phiR = None
+    if compute_potential:
+        phiG = np.empty_like(rhoG)
+        for i in range(len(phiG)):
+            phiG[i] = lib.multiply(rhoG[i], coulG)
+        phiR = ifft(phiG, mesh).real
 
     dphiR = None
     if compute_gradient:
@@ -799,7 +802,8 @@ def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None, compute_gradient=Fa
                 dphiR[i,x] = ifft(dphiG, mesh).real
 
     if rho.ndim == 1:
-        phiR = phiR[0]
+        if compute_potential:
+            phiR = phiR[0]
         if compute_gradient:
             dphiR = dphiR[0]
     return phiR, dphiR

@@ -150,7 +150,8 @@ def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
     rho_iter_old = lib.copy(rho_iter)
     for i in range(max_cycle):
         rho_tot = lib.add(rho_solute_over_eps, rho_iter)
-        _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
+        _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh,
+                                          compute_potential=False, compute_gradient=True)
         rho_tot = None
         for x in range(3):
             if x == 0:
@@ -160,7 +161,7 @@ def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
                 rho_iter = lib.add(rho_iter, tmp, out=rho_iter)
         rho_iter = lib.multiply(mixing_factor, rho_iter, out=rho_iter)
         rho_iter = lib.add(rho_iter, (1.-mixing_factor)*rho_iter_old, out=rho_iter)
-        diff = abs(rho_iter - rho_iter_old)
+        diff = lib.subtract(rho_iter, rho_iter_old)
         diff_norm = numpy.linalg.norm(lib.vdot(diff, diff))
         logger.info(sccs, 'cycle= %d  res= %4.3g', i+1, diff_norm)
         if diff_norm < conv_tol:
@@ -222,7 +223,8 @@ def kernel(sccs, rho_elec, rho_core=None, method="mixing",
     rho_pol = None
     logger.info(sccs, 'Polarization energy = %.8g', e_pol)
 
-    _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
+    _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh,
+                                      compute_potential=False, compute_gradient=True)
     dphi_tot_square = None
     for x in range(3):
         if x == 0:
@@ -247,12 +249,12 @@ class SCCS(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
         self.eps = eps
-        self.method = 'pcg'
+        self.method = 'mixing'
         self.mixing_factor = 0.6
         self.rho_min = rho_min
         self.rho_max = rho_max
-        self.max_cycle = 50
-        self.conv_tol = 1e-6
+        self.max_cycle = 100
+        self.conv_tol = 1e-5
         self.rho_pol = None
         self.phi_eps = None
 
