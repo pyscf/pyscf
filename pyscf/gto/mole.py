@@ -348,7 +348,7 @@ def format_atom(atoms, origin=0, axes=None,
                 sys.stderr.write('\nFailed to parse geometry file  %s\n\n' % atoms)
                 raise
 
-        atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
         fmt_atoms = []
         for dat in atoms.split('\n'):
             dat = dat.strip()
@@ -2413,10 +2413,11 @@ class Mole(lib.StreamObject):
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        logger.debug3(self, 'arg.atm = %s', str(self._atm))
-        logger.debug3(self, 'arg.bas = %s', str(self._bas))
-        logger.debug3(self, 'arg.env = %s', str(self._env))
-        logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
+        if self.verbose >= logger.DEBUG3:
+            logger.debug3(self, 'arg.atm = %s', self._atm)
+            logger.debug3(self, 'arg.bas = %s', self._bas)
+            logger.debug3(self, 'arg.env = %s', self._env)
+            logger.debug3(self, 'ecpbas  = %s', self._ecpbas)
 
         self._built = True
         return self
