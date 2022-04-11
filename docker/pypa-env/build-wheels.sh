@@ -17,7 +17,7 @@ fi
 sed -i '/            if basename(fn) not in needed_libs:/s/basename.*libs/1/' /opt/_internal/tools/lib/python3.7/site-packages/auditwheel/wheel_abi.py
 
 # Compile wheels
-for PYVERSION in cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39; do
+for PYVERSION in cp36-cp36m cp37-cp37m cp38-cp38 cp39-cp39 cp310-cp310; do
     PYBIN=/opt/python/$PYVERSION/bin
     "${PYBIN}/pip" wheel -v --no-deps --no-clean -w /root/wheelhouse $src
 
