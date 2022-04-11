@@ -75,39 +75,60 @@ def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
     q = lib.multiply(sqrt_eps, tools.laplacian_by_fft(sqrt_eps, Gv, mesh))
     rho_tot = rho_solute / eps
     phi_tot, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
-    lap_phi_tot = tools.laplacian_by_fft(phi_tot, Gv, mesh)
     fac = 4 * numpy.pi
 
-    deps = tools.gradient_by_fft(eps, Gv, mesh)
-    tmp = eps*lap_phi_tot
+    tmp = None
     for x in range(3):
-        tmp += deps[x]*dphi_tot[x]
+        eps_dphi_x = lib.multiply(eps, dphi_tot[x])
+        if x == 0:
+            tmp = tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x]
+        else:
+            tmp = lib.add(tmp, tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x], out=tmp)
 
-    r = -fac * rho_solute - tmp
-    print("r0:", abs(r).max()) 
+    dphi_tot = None
+    rho_tot = None
+
+    r = lib.multiply(-fac, rho_solute) 
+    r = lib.subtract(r, tmp, out=r)
+    tmp = None
+
+    invs_sqrt_eps = lib.reciprocal(sqrt_eps)
     for i in range(max_cycle):
-        fake_rho = r / sqrt_eps
-        v = tools.solve_poisson(cell, fake_rho, coulG=coulG, Gv=Gv, mesh=mesh)[0] / sqrt_eps
-        v = r
+        r_norm = numpy.linalg.norm(lib.vdot(r, r))
+        logger.info(sccs, 'cycle= %d  res= %4.3g', i, r_norm)
+        if r_norm < conv_tol:
+            break
+
+        fake_rho = lib.multiply(r, invs_sqrt_eps)
+        v = lib.multiply(tools.solve_poisson(cell, fake_rho, coulG=coulG, Gv=Gv, mesh=mesh)[0], invs_sqrt_eps)
+        fake_rho = None
         if i == 0:
+            beta = 0.0
             p = v
         else:
             beta = lib.vdot(v, r) / lib.vdot(v_old, r_old)
-            p = v + beta * p_old
-        Ap = -p * q - fac * r
+            p = lib.add(v, lib.multiply(beta, p, out=p), out=p)
+        vq = lib.multiply(v, q)
+        vq = lib.subtract(lib.multiply(-fac, r), vq, out=vq)
+        if i == 0:
+            Ap = vq
+        else:
+            Ap = lib.add(vq, lib.multiply(beta, Ap, out=Ap), out=Ap)
+        vq = None
         alpha = lib.vdot(v, r) / lib.vdot(p, Ap)
 
-        r_old = r.copy()
-        v_old = v.copy()
-        p_old = p.copy()
-        r = r - alpha * Ap
-        phi_tot = alpha * p + phi_tot
-        print("res = ", abs(r).max())
-        if abs(r).max() < conv_tol:
-            break
+        r_old = lib.copy(r)
+        v_old = v
 
+        r = lib.subtract(r, lib.multiply(alpha, Ap), out=r)
+        phi_tot = lib.add(phi_tot, lib.multiply(alpha, p), out=phi_tot)
+
+    if r_norm > conv_tol:
+        logger.warn(sccs, 'SCCS did not converge.')
+
+    invs_fac = -1. / fac
+    rho_tot = lib.multiply(invs_fac, tools.laplacian_by_fft(phi_tot, Gv, mesh))
     return rho_tot
-
 
 def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
             conv_tol=1e-5, max_cycle=20):
@@ -139,12 +160,13 @@ def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
                 rho_iter = lib.add(rho_iter, tmp, out=rho_iter)
         rho_iter = lib.multiply(mixing_factor, rho_iter, out=rho_iter)
         rho_iter = lib.add(rho_iter, (1.-mixing_factor)*rho_iter_old, out=rho_iter)
-        res = abs(rho_iter - rho_iter_old).max()
-        logger.info(sccs, 'cycle= %d  res= %4.3g', i+1, res)
-        if res < conv_tol:
+        diff = abs(rho_iter - rho_iter_old)
+        diff_norm = numpy.linalg.norm(lib.vdot(diff, diff))
+        logger.info(sccs, 'cycle= %d  res= %4.3g', i+1, diff_norm)
+        if diff_norm < conv_tol:
             break
         rho_iter_old = lib.copy(rho_iter, out=rho_iter_old)
-    if res > conv_tol:
+    if diff_norm > conv_tol:
         logger.warn(sccs, 'SCCS did not converge.')
 
     rho_tot = lib.add(rho_solute_over_eps, rho_iter)
@@ -225,7 +247,7 @@ class SCCS(lib.StreamObject):
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
         self.eps = eps
-        self.method = 'mixing'
+        self.method = 'pcg'
         self.mixing_factor = 0.6
         self.rho_min = rho_min
         self.rho_max = rho_max
