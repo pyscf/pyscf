@@ -2433,19 +2433,18 @@ class Mole(lib.StreamObject):
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
             try:
-                try:
-                    groupname0, axes0 = symm.as_subgroup(self.topgroup, np.eye(3),
-                                                         self.symmetry)
-                    self.groupname, axes = groupname0, axes0
-                except PointGroupSymmetryError:
-                    logger.info(self, 'Unable to to identify input symmetry using original axes.\n'
-                                'Different symmetry axes will be used.')
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                self.groupname, axes = symm.as_subgroup(self.topgroup, np.eye(3),
                                                         self.symmetry)
             except PointGroupSymmetryError:
-                raise PointGroupSymmetryError(
-                    'Unable to identify input symmetry %s. Try symmetry="%s"' %
-                    (self.symmetry, self.topgroup))
+                logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
+                            'Different symmetry axes will be used.')
+                try:
+                    self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                            self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
         else:
             self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                     self.symmetry_subgroup)
