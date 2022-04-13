@@ -754,17 +754,22 @@ void PBC_ft_fuse_dd_s2(double *outR, double *outI, double *pqG_ddR, double *pqG_
 }
 }
 
-void PBCsupmol_ovlp_mask(int8_t *out, double cutoff, int *sh_loc, int nbas_bvk,
+void PBCsupmol_ovlp_mask(int8_t *out, double cutoff,
                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         size_t Nbas = nbas;
-        double *exps = malloc(sizeof(double) * Nbas * 4);
-        double *rx = exps + Nbas;
-        double *ry = rx + Nbas;
-        double *rz = ry + Nbas;
+        size_t Nbas1 = nbas + 1;
+        int *exps_group_loc = malloc(sizeof(int) * Nbas1);
+        double *exps = malloc(sizeof(double) * Nbas1 * 4);
+        double *rx = exps + Nbas1;
+        double *ry = rx + Nbas1;
+        double *rz = ry + Nbas1;
         int ptr_coord, nprim, n;
         double log4 = log(4.) * .75;
         double log_cutoff = log(cutoff) - log4;
+        double exp_min, exp_last;
+        int ngroups = 0;
+        exp_last = 0.;
         for (n = 0; n < nbas; n++) {
                 ptr_coord = atm(PTR_COORD, bas(ATOM_OF, n));
                 rx[n] = env[ptr_coord+0];
@@ -772,43 +777,70 @@ void PBCsupmol_ovlp_mask(int8_t *out, double cutoff, int *sh_loc, int nbas_bvk,
                 rz[n] = env[ptr_coord+2];
                 nprim = bas(NPRIM_OF, n);
                 // the most diffused function
-                exps[n] = env[bas(PTR_EXP, n) + nprim - 1];
+                exp_min = env[bas(PTR_EXP, n) + nprim - 1];
+
+                if (exp_min != exp_last) {
+                        // partition all exponents into groups
+                        exps[ngroups] = exp_min;
+                        exps_group_loc[ngroups] = n;
+                        exp_last = exp_min;
+                        ngroups++;
+                }
         }
+        exps_group_loc[ngroups] = nbas;
+
 #pragma omp parallel
 {
         int ijb, ib, jb, i0, j0, i1, j1, i, j, li, lj;
-        double dx, dy, dz, ai, aj, aij, a1, log_a1, fi, fj, rr, rij, dri, drj;
-#pragma omp for schedule(static)
-        for (ijb = 0; ijb < nbas_bvk*(nbas_bvk+1)/2; ijb++) {
+        double dx, dy, dz, ai, aj, aij, a1, fi, fj, rr, rij, dri, drj;
+        double log_a1, rr_cutoff, li_a1, lj_a1;
+#pragma omp for schedule(dynamic, 1)
+        for (ijb = 0; ijb < ngroups*(ngroups+1)/2; ijb++) {
                 ib = (int)(sqrt(2*ijb+.25) - .5 + 1e-7);
                 jb = ijb - ib*(ib+1)/2;
 
-                i0 = sh_loc[ib];
-                i1 = sh_loc[ib+1];
+                i0 = exps_group_loc[ib];
+                i1 = exps_group_loc[ib+1];
                 li = bas(ANG_OF, i0);
-                ai = exps[i0];
-                j0 = sh_loc[jb];
-                j1 = sh_loc[jb+1];
+                ai = exps[ib];
+                j0 = exps_group_loc[jb];
+                j1 = exps_group_loc[jb+1];
                 lj = bas(ANG_OF, j0);
-                aj = exps[j0];
+                aj = exps[jb];
                 aij = ai + aj;
                 fi = ai / aij;
                 fj = aj / aij;
                 a1 = ai * aj / aij;
                 log_a1 = .75 * log(a1 / aij);
-                for (i = i0; i < i1; i++) {
+                rr_cutoff = (log_a1 - log_cutoff) / a1;
+                if (li > 0 && lj > 0 && a1 < 0.3) {
+                        // the contribution of r^n should be considered for
+                        // overlap of smooth basis funcitons
+                        li_a1 = li / -a1;
+                        lj_a1 = lj / -a1;
+                        for (i = i0; i < i1; i++) {
 #pragma GCC ivdep
-                for (j = j0; j < j1; j++) {
-                        dx = rx[i] - rx[j];
-                        dy = ry[i] - ry[j];
-                        dz = rz[i] - rz[j];
-                        rr = dx * dx + dy * dy + dz * dz;
-                        rij = sqrt(rr);
-                        dri = fj * rij + 1.;
-                        drj = fi * rij + 1.;
-                        out[i*Nbas+j] = (log_a1 - a1 * rr
-                                         + li * log(dri) + lj * log(drj)) > log_cutoff;
-                } }
+                        for (j = j0; j < j1; j++) {
+                                dx = rx[i] - rx[j];
+                                dy = ry[i] - ry[j];
+                                dz = rz[i] - rz[j];
+                                rr = dx * dx + dy * dy + dz * dz;
+                                rij = sqrt(rr);
+                                dri = fj * rij + 1.;
+                                drj = fi * rij + 1.;
+                                out[i*Nbas+j] = rr + li_a1 * log(dri) + lj_a1 * log(drj) < rr_cutoff;
+                        } }
+                } else {
+                        for (i = i0; i < i1; i++) {
+#pragma GCC ivdep
+                        for (j = j0; j < j1; j++) {
+                                dx = rx[i] - rx[j];
+                                dy = ry[i] - ry[j];
+                                dz = rz[i] - rz[j];
+                                rr = dx * dx + dy * dy + dz * dz;
+                                out[i*Nbas+j] = rr < rr_cutoff;
+                        } }
+                }
                 if (ib > jb) {
                         for (i = i0; i < i1; i++) {
 #pragma GCC ivdep
@@ -819,4 +851,5 @@ void PBCsupmol_ovlp_mask(int8_t *out, double cutoff, int *sh_loc, int nbas_bvk,
         }
 }
         free(exps);
+        free(exps_group_loc);
 }

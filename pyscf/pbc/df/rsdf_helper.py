@@ -385,7 +385,8 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
     if keep1ctr:
         bas_lst = get1ctr(bas_lst)
     if dijs_lst is None:
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas
         intor = "int2c2e"
         Qs = np.zeros(nbas)
@@ -399,7 +400,8 @@ def _get_schwartz_data(bas_lst, omega, dijs_lst=None, keep1ctr=True, safe=True):
             return _get_norm(
                         _fintor_sreri(mol, intor, shls_slice, omega, safe)
                     )**0.5
-        mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0; H 0 0 0", basis=bas_lst, spin=None)
         nbas = mol.nbas//2
         n2 = nbas*(nbas+1)//2
         if len(dijs_lst) != n2:
@@ -426,7 +428,8 @@ def _get_schwartz_dcut(bas_lst, omega, precision, r0=None, safe=True):
     Return:
         1d array of length nbas*(nbas+1)//2 with nbas=len(bas_lst).
     """
-    mol = mol_gto.M(atom="H 0 0 0; H 0 0 0", basis=bas_lst)
+    mol = mol_gto.Mole()
+    mol.build(False, False, atom="H 0 0 0; H 0 0 0", basis=bas_lst)
     nbas = len(bas_lst)
     n2 = nbas*(nbas+1)//2
 
@@ -661,13 +664,15 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
         mol = bas_lst_or_mol
     else:
         bas_lst = bas_lst_or_mol
-        mol = mol_gto.M(atom="H 0 0 0", basis=bas_lst, spin=None)
+        mol = mol_gto.Mole()
+        mol.build(False, False, atom="H 0 0 0", basis=bas_lst, spin=None)
 
     if isinstance(auxbas_lst_or_auxmol, mol_gto.mole.Mole):
         auxmol = auxbas_lst_or_auxmol
     else:
         auxbas_lst = auxbas_lst_or_auxmol
-        auxmol = mol_gto.M(atom="H 0 0 0", basis=auxbas_lst, spin=None)
+        auxmol = mol_gto.Mole()
+        auxmol.build(False, False, atom="H 0 0 0", basis=auxbas_lst, spin=None)
 
     nbas = mol.nbas
 

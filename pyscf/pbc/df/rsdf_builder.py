@@ -177,7 +177,7 @@ class _RSGDFBuilder(_Int3cBuilder):
             exp_fac = eij * x_ratio**2 + theta * (1 - exp_c_min/aij*x_ratio)**2
 
             rcut_sr = cell.rcut  # initial guess
-            rcut_sr = ((-np.log(cell.precision * ft_ao.LATTICE_SUM_PENALTY
+            rcut_sr = ((-np.log(cell.precision
                                 * rcut_sr / (2*np.pi*fac)) / exp_fac)**.5
                        + pbcgto.cell._rcut_penalty(cell))
             log.debug1('exp_d_min = %g, exp_c_min = %g, exp_aux_min = %g, rcut_sr = %g',
@@ -209,7 +209,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         cintopt = lib.c_null_ptr()
         nbas = supmol.nbas
         q_cond = np.empty((nbas, nbas))
-        with supmol.with_integral_screen(self.cell.precision**2):
+        with supmol.with_integral_screen(supmol.precision**2):
             ao_loc = gto.moleintor.make_loc(supmol._bas, intor)
             libpbc.CVHFset_int2e_q_cond(
                 getattr(libpbc, intor), cintopt,
@@ -234,7 +234,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         cintopt = lib.c_null_ptr()
         nbas = supmol.nbas
         q_cond_aux = np.empty((auxcell_s.nbas, nbas))
-        with supmol.with_integral_screen(self.cell.precision**2):
+        with supmol.with_integral_screen(supmol.precision**2):
             atm, bas, env = gto.conc_env(supmol._atm, supmol._bas, supmol._env,
                                          auxcell_s._atm, auxcell_s._bas, auxcell_s._env)
             ao_loc = gto.moleintor.make_loc(bas, intor)
@@ -335,7 +335,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         if auxcell_c.nbas > 0:
             rcut_sr = auxcell_c.rcut
             rcut_sr = (-2*np.log(
-                .225*self.cell.precision * omega**4 * rcut_sr**2))**.5 / omega
+                .225*self.supmol.precision * omega**4 * rcut_sr**2))**.5 / omega
             auxcell_c.rcut = rcut_sr
             logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
@@ -1063,10 +1063,7 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
             # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
             upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
                                      np.exp(-exp_fac[:,None,None]*rr))
-            # FIXME: test if needed
-            # cutoff = rs_cell.precision * ft_ao.LATTICE_SUM_PENALTY
-            cutoff = self.precision
-            bas_mask[:,compact_bas_mask] = upper_bounds > cutoff
+            bas_mask[:,compact_bas_mask] = upper_bounds > self.precision
 
             # determine rcut boundary for diffused functions
             exps_d = exps[~compact_bas_mask]
@@ -1088,7 +1085,7 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
                 # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
                 upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
                                          np.exp(-exp_fac[:,None,None]*rr))
-                bas_mask[:,~compact_bas_mask] = upper_bounds > cutoff
+                bas_mask[:,~compact_bas_mask] = upper_bounds > self.precision
 
             bas_mask[0,:,0] = True
 

@@ -38,7 +38,7 @@ RCUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_rcut_threshold', 2.0)
 KECUT_THRESHOLD = getattr(__config__, 'pbc_scf_rsjk_kecut_threshold', 20.0)
 
 # cutoff penalty due to lattice summation
-LATTICE_SUM_PENALTY = 1e-1
+LATTICE_SUM_PENALTY = 1e-2
 
 STEEP_BASIS = 0
 LOCAL_BASIS = 1
@@ -570,7 +570,7 @@ class _ExtendedMole(gto.Mole):
         bas_mask = np.ones((bvk_ncells, cell.nbas, nimgs), dtype=bool)
         supmol.sh_loc = supmol.bas_mask_to_sh_loc(cell, bas_mask, verbose)
         supmol.bas_mask = bas_mask
-        supmol.precision = cell.precision
+        supmol.precision = cell.precision * LATTICE_SUM_PENALTY
 
         _bas_reordered = supmol._bas.reshape(
             nimgs, bvk_ncells, cell.nbas, gto.BAS_SLOTS).transpose(1,2,0,3)
@@ -590,7 +590,7 @@ class _ExtendedMole(gto.Mole):
     def get_ovlp_mask(self, cutoff=None):
         '''integral screening mask for basis product between cell and supmol'''
         if cutoff is None:
-            cutoff = self.precision * LATTICE_SUM_PENALTY
+            cutoff = self.precision
         rs_cell = self.rs_cell
         supmol = self
         # consider only the most diffused component of a basis

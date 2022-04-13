@@ -217,8 +217,7 @@ class _Int3cBuilder(lib.StreamObject):
         nbasp = cell.nbas  # The number of shells in the primitive cell
 
         # integral mask for supmol
-        cutoff = cell.precision * ft_ao.LATTICE_SUM_PENALTY * 1e-2
-        log.debug1('int3c_kernel integral cutoff %g', cutoff)
+        log.debug1('int3c_kernel integral cutoff %g', supmol.precision)
 
         def _conc_locs(cell_loc, auxcell_loc):
             '''auxiliary basis was appended to regular AO basis when calling int3c2e
@@ -246,7 +245,7 @@ class _Int3cBuilder(lib.StreamObject):
             q_cond_aux = self.get_q_cond_aux()
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
 
-        ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(cutoff, cintopt=cintopt)
+        ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(supmol.precision, cintopt=cintopt)
         bas_map = self.get_bas_map()
 
         # Estimate the buffer size required by PBCfill_nr3c functions
@@ -356,7 +355,7 @@ class _Int3cBuilder(lib.StreamObject):
                 ovlp_mask.ctypes.data_as(ctypes.c_void_p),
                 cell0_ovlp_mask.ctypes.data_as(ctypes.c_void_p),
                 bas_map.ctypes.data_as(ctypes.c_void_p),
-                q_cond_aux_ptr, ctypes.c_double(cutoff),
+                q_cond_aux_ptr, ctypes.c_double(supmol.precision),
                 cintopt, ctypes.c_int(cache_size),
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
@@ -411,14 +410,13 @@ class _ExtendedMole(ft_ao._ExtendedMole):
         return self
 
     def get_ovlp_mask(self, cutoff=None):
+        '''integral screening mask for supmols'''
         if cutoff is None:
-            cutoff = self.precision * ft_ao.LATTICE_SUM_PENALTY
+            cutoff = self.precision
         nbas = self.nbas
         mask = np.empty((nbas, nbas), dtype=np.int8)
-        nbas_bvk = self.sh_loc.size - 1
         libpbc.PBCsupmol_ovlp_mask(
             mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
-            self.sh_loc.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas_bvk),
             self._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.natm),
             self._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.nbas),
             self._env.ctypes.data_as(ctypes.c_void_p))
