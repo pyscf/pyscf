@@ -830,6 +830,16 @@ class SCF(mol_hf.SCF):
         return self
 
 
+class KohnShamDFT:
+    '''A mock DFT base class
+
+    The base class is defined in the pbc.dft.rks module. This class can
+    be used to verify if an SCF object is an pbc-Hartree-Fock method or an
+    pbc-DFT method. It should be overwritten by the actual KohnShamDFT class
+    when loading dft module.
+    '''
+
+
 class RHF(SCF, mol_hf.RHF):
 
     stability = mol_hf.RHF.stability

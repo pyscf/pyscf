@@ -34,7 +34,7 @@ def TDHF(mf):
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
         raise NotImplementedError
     from pyscf.pbc import scf
-    if getattr(mf, 'xc', None):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf) # To remove newton decoration
@@ -50,13 +50,13 @@ def TDA(mf):
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return uks.TDA(mf)
         else:
             return uhf.TDA(mf)
     else:
         #mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return rks.TDA(mf)
         else:
             return rhf.TDA(mf)
@@ -68,20 +68,20 @@ def TDDFT(mf):
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return uks.tddft(mf)
         else:
             return uhf.TDHF(mf)
     else:
         #mf = scf.addons.convert_to_rhf(mf)
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return rks.tddft(mf)
         else:
             return rhf.TDHF(mf)
 
 def KTDHF(mf):
     from pyscf.pbc import scf
-    if getattr(mf, 'xc', None):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
         return kuhf.TDHF(mf)
@@ -91,12 +91,12 @@ def KTDHF(mf):
 def KTDA(mf):
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return kuks.TDA(mf)
         else:
             return kuhf.TDA(mf)
     else:
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return krks.TDA(mf)
         else:
             return krhf.TDA(mf)
@@ -104,12 +104,12 @@ def KTDA(mf):
 def KTDDFT(mf):
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return kuks.tddft(mf)
         else:
             return kuhf.TDHF(mf)
     else:
-        if getattr(mf, 'xc', None):
+        if isinstance(mf, scf.hf.KohnShamDFT):
             return krks.tddft(mf)
         else:
             return krhf.TDHF(mf)

@@ -186,6 +186,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids.reset(mol)
         return self
 
+# Update the KohnShamDFT label in pbc.scf.hf module
+pbchf.KohnShamDFT = KohnShamDFT
+
 
 class RKS(KohnShamDFT, pbchf.RHF):
     '''RKS class adapted for PBCs.
