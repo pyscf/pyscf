@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[0, 0]])), 1.4877735860707935, 8)
-            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 4]])), 4.530919637533813+0.10852447737595214j, 8)
+            self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 4]])), 4.530919637533813+0.10852447737595214j, 7)
             self.assertAlmostEqual(lib.fp(load(tmpf.name, kpts[[2, 2]])), 1.4492567814298059, 8)
 
     def test_make_j3c_j_only(self):

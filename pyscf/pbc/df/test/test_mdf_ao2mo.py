@@ -125,7 +125,7 @@ class KnownValues(unittest.TestCase):
             tmp = with_df.ao2mo((mo[ki], mo[kj], mo[kk], mo[kl]), kpts[[ki,kj,kk,kl]])
             ref[ki,kj,kk] = tmp.reshape([nao]*4)
 
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
 if __name__ == '__main__':
     print("Full Tests for mdf ao2mo")

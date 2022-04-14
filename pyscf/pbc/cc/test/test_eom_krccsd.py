@@ -440,6 +440,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-10
         cell.build()
 
         np.random.seed(2)
@@ -470,7 +471,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(hc), (-1.9105694363906784+0.4623840337230889j ), 8)
         hc = eom.matvec(vector, 2, imds)
         self.assertAlmostEqual(lib.fp(hc), (-3.5191624937262938-0.09803982911194647j), 8)
-
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf
@@ -507,6 +507,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-10
         cell.build()
 
         np.random.seed(2)
@@ -537,7 +538,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(hc), (-0.4497554439273588-5.620765390422395j), 8)
         hc = eom.l_matvec(vector, 2, imds)
         self.assertAlmostEqual(lib.fp(hc), (-1.9057184472068758+2.7776122802218817j), 8)
-
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf

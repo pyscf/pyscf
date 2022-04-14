@@ -1063,6 +1063,8 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
             # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
             upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
                                      np.exp(-exp_fac[:,None,None]*rr))
+            # The cutoff here is most critical parameter that impacts the
+            # accuracy of DF integrals
             bas_mask[:,compact_bas_mask] = upper_bounds > self.precision
 
             # determine rcut boundary for diffused functions
