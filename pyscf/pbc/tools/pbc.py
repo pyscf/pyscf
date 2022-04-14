@@ -25,7 +25,7 @@ from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
 libpbc = lib.load_library('libpbc')
-FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
+FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'FFTW')
 
 def _fftn_blas(f, mesh):
     Gx = np.fft.fftfreq(mesh[0])
@@ -62,6 +62,35 @@ def _ifftn_blas(g, mesh):
     return out.reshape(-1, *mesh)
 
 if FFT_ENGINE == 'FFTW':
+    try:
+        libfft = lib.load_library('libfft')
+    except OSError:
+        raise RuntimeError("Failed to load libfft")
+
+    def _complex_fftn_fftw(f, mesh, func):
+        if f.dtype == np.double and f.flags.c_contiguous:
+            f = lib.copy(f, dtype=np.complex128)
+        else:
+            f = np.asarray(f, order='C', dtype=np.complex128)
+        mesh = np.asarray(mesh, order='C', dtype=np.int32)
+        rank = len(mesh)
+        out = np.empty_like(f)
+        fn = getattr(libfft, func)
+        for i, fi in enumerate(f):
+            fn(fi.ctypes.data_as(ctypes.c_void_p),
+               out[i].ctypes.data_as(ctypes.c_void_p),
+               mesh.ctypes.data_as(ctypes.c_void_p),
+               ctypes.c_int(rank))
+        return out
+
+    def _fftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'fft')
+    def _ifftn_wrapper(a):
+        mesh = a.shape[1:]
+        return _complex_fftn_fftw(a, mesh, 'ifft')
+
+elif FFT_ENGINE == 'PYFFTW':
     # pyfftw is slower than np.fft in most cases
     try:
         import pyfftw

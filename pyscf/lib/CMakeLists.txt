@@ -114,26 +114,6 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
-#   Detect and enable FFTW
-#set(CMAKE_MODULE_PATH_SAVED ${CMAKE_MODULE_PATH})
-#set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-#find_package(FFTW)
-#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH_SAVED})
-#if(FFTW_FOUND)
-#    message(STATUS "Found FFTW: ${PATH_FFTW_INCLUDE}")
-#    include_directories(${PATH_FFTW_INCLUDE})
-#    verify_fftw(FFTW_VERIFIED)
-#    if(NOT FFTW_VERIFIED)
-#        message(STATUS "Cannot use this FFTW (compatibility issue detected)")
-#        unset(FFTW_FOUND)
-#        unset(FFTW_LIBRARIES)
-#    endif(NOT FFTW_VERIFIED)
-#endif(FFTW_FOUND)
-#if(NOT FFTW_FOUND)
-#    set(WITHOUT_FFTW TRUE)
-#    message(STATUS "Build without FFTW")
-#endif(NOT FFTW_FOUND)
-
 find_package(OpenMP)
 if(OPENMP_FOUND)
   set(HAVE_OPENMP 1)
@@ -171,6 +151,9 @@ else ()
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
   set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
+
+option(ENABLE_FFTW "Using fftw3" ON)
+option(BUILD_FFTW "Building fftw3" ON)
 
 add_subdirectory(np_helper)
 add_subdirectory(gto)
@@ -292,6 +275,21 @@ if(ENABLE_LIBXSMM AND BUILD_LIBXSMM)
   endif()
 endif()
 endif() # DISABLE_DFT
+
+if(ENABLE_FFTW AND BUILD_FFTW)
+#  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/fftw3.h")
+    ExternalProject_Add(libfftw3
+      URL https://www.fftw.org/fftw-3.3.10.tar.gz
+      PREFIX ${PROJECT_BINARY_DIR}/deps
+      INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+      BUILD_IN_SOURCE True
+      CONFIGURE_COMMAND ./configure --enable-static=no --enable-shared=yes --enable-threads CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} prefix=<INSTALL_DIR>
+      BUILD_COMMAND make -j4 install
+    )
+    add_dependencies(fft libfftw3)
+    add_dependencies(pbc libfftw3)
+#  endif()
+endif()
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
