@@ -568,6 +568,12 @@ class _IntNucBuilder(_Int3cBuilder):
         return np.asarray(vj_kpts)
 
     def get_nuc(self, mesh=None):
+        '''Get the periodic nuc-el AO matrix, with G=0 removed.
+
+        Kwargs:
+            mesh: custom mesh grids. By default mesh is determined by the
+            function _guess_eta from module pbc.df.gdf_builder.
+        '''
         t0 = (logger.process_clock(), logger.perf_counter())
         nuc = self._get_nuc(mesh, with_pseudo=False)
         logger.timer(self, 'get_nuc', *t0)
@@ -609,11 +615,15 @@ class _IntNucBuilder(_Int3cBuilder):
                 vpploc.append(v)
         return vpploc
 
-    def get_pp(self):
+    def get_pp(self, mesh=None):
         '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+
+        Kwargs:
+            mesh: custom mesh grids. By default mesh is determined by the
+            function _guess_eta from module pbc.df.gdf_builder.
         '''
         t0 = (logger.process_clock(), logger.perf_counter())
-        vloc1 = self.get_pp_loc_part1()
+        vloc1 = self.get_pp_loc_part1(mesh)
         t1 = logger.timer_debug1(self, 'get_pp_loc_part1', *t0)
         vloc2 = self.get_pp_loc_part2()
         t1 = logger.timer_debug1(self, 'get_pp_loc_part2', *t1)
