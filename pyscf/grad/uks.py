@@ -215,7 +215,6 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1,
                                   verbose=verbose)[:2]
             wva, wvb = numint._uks_mgga_wv0((rho_a,rho_b), vxc, weight)
-            vtau = vxc[3]
 
             vtmp = numpy.zeros((3,nao,nao))
             rks_grad._gga_grad_sum_(vtmp, mol, ao, wva, mask, ao_loc)
