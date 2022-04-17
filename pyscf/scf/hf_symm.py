@@ -231,8 +231,7 @@ def so2ao_mo_coeff(so, irrep_mo_coeff):
 def check_irrep_nelec(mol, irrep_nelec, nelec):
     for irname in irrep_nelec:
         if irname not in mol.irrep_name:
-            msg =('Molecule does not have irrep %s defined in irrep_nelec.' %
-              (irname))
+            msg = 'Molecule does not have irrep %s defined in irrep_nelec.' % irname
             raise ValueError(msg)
 
     float_irname = []
@@ -405,7 +404,6 @@ class SymAdaptedRHF(hf.RHF):
         if not mol.symmetry:
             return hf.RHF.get_occ(self, mo_energy, mo_coeff)
 
-        check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
@@ -587,7 +585,6 @@ class SymAdaptedROHF(rohf.ROHF):
         if not self.mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
-        check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         if getattr(mo_energy, 'mo_ea', None) is not None:
             mo_ea = mo_energy.mo_ea
             mo_eb = mo_energy.mo_eb
