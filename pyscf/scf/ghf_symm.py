@@ -184,7 +184,6 @@ class GHF(ghf.GHF):
         if not mol.symmetry:
             return ghf.GHF.get_occ(self, mo_energy, mo_coeff)
 
-        hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         rest_idx = numpy.ones(mo_occ.size, dtype=bool)
