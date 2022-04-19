@@ -2432,36 +2432,42 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            if (abs(axes - np.eye(3)).max() > symm.TOLERANCE and
-                symm.check_symm(self.symmetry, self._atom, self._basis)):
-                # Try to use original axes (issue #1209)
-                self.groupname = self.symmetry
-            else:
+            groupname = None
+            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+                if symm.check_symm(self.symmetry, self._atom, self._basis):
+                    # Try to use original axes (issue #1209)
+                    groupname = self.symmetry
+                    axes = np.eye(3)
+                else:
+                    logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
+                                'Different symmetry axes will be used.')
+            if groupname is None:
                 try:
-                    self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                            self.symmetry)
+                    groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                       self.symmetry)
                 except PointGroupSymmetryError as e:
                     raise PointGroupSymmetryError(
                         'Unable to identify input symmetry %s. Try symmetry="%s"' %
                         (self.symmetry, self.topgroup)) from e
         else:
-            self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                    self.symmetry_subgroup)
+            groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                               self.symmetry_subgroup)
         self._symm_orig = orig
         self._symm_axes = axes
 
-        if self.cart and self.groupname in ('Dooh', 'Coov', 'SO3'):
-            if self.groupname == 'Coov':
-                self.groupname, lgroup = 'C2v', self.groupname
+        if self.cart and groupname in ('Dooh', 'Coov', 'SO3'):
+            if groupname == 'Coov':
+                groupname, lgroup = 'C2v', groupname
             else:
-                self.groupname, lgroup = 'D2h', self.groupname
+                groupname, lgroup = 'D2h', groupname
             logger.warn(self, 'This version does not support symmetry %s '
                         'for cartesian GTO basis. Its subgroup %s is used',
-                        lgroup, self.groupname)
+                        lgroup, groupname)
+        self.groupname = groupname
 
         self.symm_orb, self.irrep_id = \
-                symm.symm_adapted_basis(self, self.groupname, orig, axes)
-        self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
+                symm.symm_adapted_basis(self, groupname, orig, axes)
+        self.irrep_name = [symm.irrep_id2name(groupname, ir)
                            for ir in self.irrep_id]
         return self
 
