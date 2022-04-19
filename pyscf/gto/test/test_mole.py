@@ -728,6 +728,13 @@ O    SP
         mol1.symmetry = "C3"
         self.assertRaises(PointGroupSymmetryError, mol1.build)
 
+        mol1 = gto.Mole()
+        mol1.atom = 'H 0 0 0; H 1 0 0'
+        mol1.basis = 'sto-3g'
+        mol1.symmetry = 'Dooh'
+        mol1.build()
+        self.assertAlmostEqual(abs(mol1._symm_axes - numpy.eye(3)[[1,2,0]]).max(), 0, 9)
+
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],
                           [.3,  .1,  .8]])

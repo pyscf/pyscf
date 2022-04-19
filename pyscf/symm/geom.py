@@ -450,7 +450,10 @@ def symm_identical_atoms(gpname, atoms):
     eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
     return eql_atom_ids
 
-def check_given_symm(gpname, atoms, basis=None):
+def check_symm(gpname, atoms, basis=None):
+    '''
+
+    '''
     # more strict than symm_identical_atoms, we required not only the coordinates
     # match, but also the symbols and basis functions
 

@@ -2432,12 +2432,11 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            try:
-                self.groupname, axes = symm.as_subgroup(self.topgroup, np.eye(3),
-                                                        self.symmetry)
-            except PointGroupSymmetryError:
-                logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
-                            'Different symmetry axes will be used.')
+            if (abs(axes - np.eye(3)).max() > symm.TOLERANCE and
+                symm.check_symm(self.symmetry, self._atom, self._basis)):
+                # Try to use original axes (issue #1209)
+                self.groupname = self.symmetry
+            else:
                 try:
                     self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
                                                             self.symmetry)
