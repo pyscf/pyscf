@@ -405,8 +405,8 @@ def symm_ops(gpname, axes=None):
     return opdic
 
 def symm_identical_atoms(gpname, atoms):
-    ''' Requires '''
-    from pyscf import gto
+    '''Symmetry identical atoms'''
+    # from pyscf import gto
     # Dooh Coov for linear molecule
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -452,10 +452,17 @@ def symm_identical_atoms(gpname, atoms):
 
 def check_symm(gpname, atoms, basis=None):
     '''
+    Check whether the declared symmetry (gpname) exists in the system
 
+    If basis is specified, this function checks also the basis functions have
+    the required symmetry.
+
+    Args:
+        gpname: str
+            point group name
+        atoms: list
+            [[symbol, [x, y, z]], [symbol, [x, y, z]], ...]
     '''
-    # more strict than symm_identical_atoms, we required not only the coordinates
-    # match, but also the symbols and basis functions
 
     #FIXME: compare the basis set when basis is given
     if gpname == 'Dooh':
@@ -484,6 +491,8 @@ def check_symm(gpname, atoms, basis=None):
             if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
                 return False
     return True
+
+check_given_symm = check_symm
 
 def shift_atom(atoms, orig, axis):
     c = numpy.array([a[1] for a in atoms])
