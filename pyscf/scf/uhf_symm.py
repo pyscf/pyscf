@@ -375,7 +375,6 @@ class SymAdaptedUHF(uhf.UHF):
         if not mol.symmetry:
             return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
 
-        hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
