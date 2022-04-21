@@ -20,17 +20,23 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.lo import orth
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = '''
-     O    0.   0.       0
-     1    0.   -0.757   0.587
-     1    0.   0.757    0.587'''
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = '''
+         O    0.   0.       0
+         1    0.   -0.757   0.587
+         1    0.   0.757    0.587'''
 
-mol.basis = 'cc-pvdz'
-mol.build()
-mf = scf.RHF(mol)
+    mol.basis = 'cc-pvdz'
+    mol.build()
+    mf = scf.RHF(mol)
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 class KnowValues(unittest.TestCase):
     def test_orth(self):

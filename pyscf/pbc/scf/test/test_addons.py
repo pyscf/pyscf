@@ -21,24 +21,27 @@ import numpy
 from pyscf import lib
 import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.scf as pscf
-cell = pbcgto.Cell()
-cell.atom = '''
-He 0 0 1
-He 1 0 1
-'''
-cell.basis = [[0, [1., 1.]], [0, [0.5, 1]]]
-cell.a = numpy.eye(3) * 3
-cell.mesh = [10] * 3
-cell.verbose = 5
-cell.output = '/dev/null'
-cell.build()
-nao = cell.nao_nr()
 
-kpts = cell.make_kpts([2,1,1])
-kmf_ro = pscf.KROHF(cell, kpts=kpts).run()
-kmf_r = pscf.KRHF(cell, kpts=kpts).convert_from_(kmf_ro)
-kmf_u = pscf.addons.convert_to_uhf(kmf_r)
-kmf_g = pscf.addons.convert_to_ghf(kmf_r)
+def setUpModule():
+    global cell, kmf_ro, kmf_r, kmf_u, kmf_g, nao, kpts
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    He 0 0 1
+    He 1 0 1
+    '''
+    cell.basis = [[0, [1., 1.]], [0, [0.5, 1]]]
+    cell.a = numpy.eye(3) * 3
+    cell.mesh = [10] * 3
+    cell.verbose = 5
+    cell.output = '/dev/null'
+    cell.build()
+    nao = cell.nao_nr()
+
+    kpts = cell.make_kpts([2,1,1])
+    kmf_ro = pscf.KROHF(cell, kpts=kpts).run()
+    kmf_r = pscf.KRHF(cell, kpts=kpts).convert_from_(kmf_ro)
+    kmf_u = pscf.addons.convert_to_uhf(kmf_r)
+    kmf_g = pscf.addons.convert_to_ghf(kmf_r)
 
 
 def tearDownModule():

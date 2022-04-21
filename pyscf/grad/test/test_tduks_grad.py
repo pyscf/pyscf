@@ -23,27 +23,29 @@ from pyscf import gto, dft
 from pyscf import tdscf
 from pyscf.grad import tduks as tduks_grad
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ['H' , (0. , 0. , 1.804)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.unit = 'B'
-mol.charge = 2
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-pmol = mol.copy()
-mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
-mf_lda.kernel()
-mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
-mf_gga.kernel()
+def setUpModule():
+    global mol, pmol, mf_lda, mf_gga
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.unit = 'B'
+    mol.charge = 2
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+    pmol = mol.copy()
+    mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
+    mf_lda.kernel()
+    mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
+    mf_gga.kernel()
 
 def tearDownModule():
-    global mol, pmol
+    global mol, pmol, mf_lda, mf_gga
     mol.stdout.close()
-    del mol, pmol
+    del mol, pmol, mf_lda, mf_gga
 
 class KnownValues(unittest.TestCase):
     def test_tda_lda(self):

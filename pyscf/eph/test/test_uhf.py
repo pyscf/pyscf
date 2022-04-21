@@ -19,15 +19,21 @@ from pyscf.eph import eph_fd, uhf
 import numpy as np
 import unittest
 
-mol = gto.M()
-mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
-            ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
-            ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
+def setUpModule():
+    global mol
+    mol = gto.M()
+    mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
+                ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
+                ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
 
-mol.unit = 'Bohr'
-mol.basis = 'sto3g'
-mol.verbose=4
-mol.build() # this is a pre-computed relaxed geometry
+    mol.unit = 'Bohr'
+    mol.basis = 'sto3g'
+    mol.verbose=4
+    mol.build()
+
+def tearDownModule():
+    global mol
+    del mol
 
 class KnownValues(unittest.TestCase):
     def test_finite_diff_uhf_eph(self):

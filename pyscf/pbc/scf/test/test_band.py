@@ -21,14 +21,16 @@ from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc import dft
 
-L = 2
-cell = gto.Cell()
-cell.unit = 'B'
-cell.a = np.diag([L,L,L])
-cell.mesh = np.array([11]*3)
-cell.atom = [['He', (L/2.,L/2.,L/2.)]]
-cell.basis = { 'He': [[0, (1.0, 1.0)]] }
-cell.build()
+def setUpModule():
+    global cell, kmf, mycc, eris
+    L = 2
+    cell = gto.Cell()
+    cell.unit = 'B'
+    cell.a = np.diag([L,L,L])
+    cell.mesh = np.array([11]*3)
+    cell.atom = [['He', (L/2.,L/2.,L/2.)]]
+    cell.basis = { 'He': [[0, (1.0, 1.0)]] }
+    cell.build()
 
 
 def tearDownModule():

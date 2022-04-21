@@ -20,48 +20,49 @@ from pyscf import dft
 from pyscf import lib
 from pyscf.dft import numint
 
-numint.SWITCH_SIZE = 0
+def setUpModule():
+    numint.SWITCH_SIZE = 0
+    global mol, mf, h4, mf_h4, mol1, h2o, nao
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [('h', (0,0,i*3)) for i in range(12)]
+    mol.basis = 'ccpvtz'
+    mol.build()
+    mf = dft.RKS(mol)
+    mf.grids.atom_grid = {"H": (50, 110)}
+    mf.prune = None
+    mf.grids.build(with_non0tab=False)
+    nao = mol.nao_nr()
+    ao_loc = mol.ao_loc_nr()
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = [('h', (0,0,i*3)) for i in range(12)]
-mol.basis = 'ccpvtz'
-mol.build()
-mf = dft.RKS(mol)
-mf.grids.atom_grid = {"H": (50, 110)}
-mf.prune = None
-mf.grids.build(with_non0tab=False)
-nao = mol.nao_nr()
-ao_loc = mol.ao_loc_nr()
+    h4 = gto.Mole()
+    h4.verbose = 0
+    h4.atom = 'H 0 0 0; H 0 0 9; H 0 9 0; H 0 9 9'
+    h4.basis = 'ccpvtz'
+    h4.build()
+    mf_h4 = dft.RKS(h4)
+    mf_h4.grids.atom_grid = {"H": (50, 110)}
+    mf_h4.grids.build(with_non0tab=True)
 
-h4 = gto.Mole()
-h4.verbose = 0
-h4.atom = 'H 0 0 0; H 0 0 9; H 0 9 0; H 0 9 9'
-h4.basis = 'ccpvtz'
-h4.build()
-mf_h4 = dft.RKS(h4)
-mf_h4.grids.atom_grid = {"H": (50, 110)}
-mf_h4.grids.build(with_non0tab=True)
+    mol1 = gto.Mole()
+    mol1.verbose = 0
+    mol1.atom = [('h', (0,0,i*3)) for i in range(4)]
+    mol1.basis = 'ccpvtz'
+    mol1.build()
 
-mol1 = gto.Mole()
-mol1.verbose = 0
-mol1.atom = [('h', (0,0,i*3)) for i in range(4)]
-mol1.basis = 'ccpvtz'
-mol1.build()
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-
-h2o.basis = {"H": '6-31g', "O": '6-31g',}
-h2o.build()
+    h2o.basis = {"H": '6-31g', "O": '6-31g',}
+    h2o.build()
 
 def tearDownModule():
-    dft.numint.SWITCH_SIZE = 800
+    numint.SWITCH_SIZE = 800
     global mol, mf, h4, mf_h4, mol1, h2o
     h2o.stdout.close()
     del mol, mf, h4, mf_h4, mol1, h2o

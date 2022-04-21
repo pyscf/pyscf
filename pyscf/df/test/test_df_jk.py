@@ -24,25 +24,27 @@ from pyscf import scf
 from pyscf import df
 from pyscf.df import df_jk
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
-symol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-    symmetry = 1,
-)
+def setUpModule():
+    global mol, symol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+    symol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+        symmetry = 1,
+    )
 
 def tearDownModule():
     global mol, symol

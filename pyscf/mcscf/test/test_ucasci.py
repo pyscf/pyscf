@@ -23,37 +23,39 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-basis = '631g',
-spin = 2,
-)
-m = scf.UHF(mol)
-m.conv_tol = 1e-10
-m.scf()
-mc = mcscf.UCASCI(m, 5, (4,2)).run()
+def setUpModule():
+    global mol, m, mc, molsym, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+    basis = '631g',
+    spin = 2,
+    )
+    m = scf.UHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
+    mc = mcscf.UCASCI(m, 5, (4,2)).run()
 
-b = 1.4
-molsym = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-basis = '631g',
-spin = 2,
-symmetry = True,
-)
-msym = scf.UHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    b = 1.4
+    molsym = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+    basis = '631g',
+    spin = 2,
+    symmetry = True,
+    )
+    msym = scf.UHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
 def tearDownModule():
     global mol, m, mc, molsym, msym

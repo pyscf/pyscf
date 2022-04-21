@@ -21,20 +21,22 @@ from pyscf.dft import radi
 from pyscf.grad import uks
 
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.charge = 1
-mol.spin = 1
-mol.build()
-mf = dft.UKS(mol)
-mf.conv_tol = 1e-14
-mf.kernel()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.charge = 1
+    mol.spin = 1
+    mol.build()
+    mf = dft.UKS(mol)
+    mf.conv_tol = 1e-14
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf

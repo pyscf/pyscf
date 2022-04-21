@@ -16,6 +16,9 @@ import unittest
 import numpy
 import numpy as np
 
+from pyscf.pbc import gto as pgto
+from pyscf.pbc.df import fft, aft
+
 
 ##################################################
 #
@@ -539,52 +542,44 @@ def get_nuc(cell, kpt=np.zeros(3)):
     return vne
 
 
+def setUpModule():
+    global cell, cell1, cell2, kpts, kpt0, kpts1, mf0
+    cell = pgto.Cell()
+    cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+    cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                  'C' :'gth-szv',}
+    cell.pseudo = {'C':'gth-pade'}
+    cell.a = np.eye(3) * 2.5
+    cell.mesh = [21] * 3
+    cell.build()
+    np.random.seed(1)
+    kpts = np.random.random((4,3))
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpt0 = np.zeros(3)
 
+    cell1 = pgto.Cell()
+    cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+    cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+    cell1.a = np.eye(3) * 2.5
+    cell1.mesh = [21] * 3
+    cell1.build()
 
+    cell2 = pgto.Cell()
+    cell2.atom = '''
+    He   1.3    .2       .3
+    He    .1    .1      1.1 '''
+    cell2.basis = {'He': [[0, [0.8, 1]],
+                          [1, [0.6, 1]]]}
+    cell2.mesh = [17]*3
+    cell2.a = numpy.array(([2.0,  .9, 0. ],
+                           [0.1, 1.9, 0.4],
+                           [0.8, 0  , 2.1]))
+    cell2.build()
+    kpts1 = np.random.random((4,3))
+    kpts1[3] = kpts1[0]-kpts1[1]+kpts1[2] + cell2.reciprocal_vectors().T.dot(np.ones(3))
 
-
-
-
-from pyscf.pbc import gto as pgto
-import pyscf.pbc.dft as pdft
-from pyscf.pbc.df import fft, aft
-
-cell = pgto.Cell()
-cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
-cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
-              'C' :'gth-szv',}
-cell.pseudo = {'C':'gth-pade'}
-cell.a = np.eye(3) * 2.5
-cell.mesh = [21] * 3
-cell.build()
-np.random.seed(1)
-kpts = np.random.random((4,3))
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpt0 = np.zeros(3)
-
-cell1 = pgto.Cell()
-cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
-cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell1.a = np.eye(3) * 2.5
-cell1.mesh = [21] * 3
-cell1.build()
-
-cell2 = pgto.Cell()
-cell2.atom = '''
-He   1.3    .2       .3
-He    .1    .1      1.1 '''
-cell2.basis = {'He': [[0, [0.8, 1]],
-                      [1, [0.6, 1]]]}
-cell2.mesh = [17]*3
-cell2.a = numpy.array(([2.0,  .9, 0. ],
-                       [0.1, 1.9, 0.4],
-                       [0.8, 0  , 2.1]))
-cell2.build()
-kpts1 = np.random.random((4,3))
-kpts1[3] = kpts1[0]-kpts1[1]+kpts1[2] + cell2.reciprocal_vectors().T.dot(np.ones(3))
-
-mf0 = pbcscf.RHF(cell)
-mf0.exxdiv = None
+    mf0 = pbcscf.RHF(cell)
+    mf0.exxdiv = None
 
 def tearDownModule():
     global cell, cell1, cell2, kpts, kpt0, kpts1, mf0

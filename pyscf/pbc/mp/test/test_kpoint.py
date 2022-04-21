@@ -22,19 +22,26 @@ import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
 
 
-cell = pbcgto.Cell()
-cell.unit = 'B'
-L = 7
-cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
-cell.a = 7 * np.identity(3)
-cell.a[1,0] = 5.0
+def setUpModule():
+    global cell
+    cell = pbcgto.Cell()
+    cell.unit = 'B'
+    L = 7
+    cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
+    cell.a = 7 * np.identity(3)
+    cell.a[1,0] = 5.0
 
-cell.basis = 'gth-szv'
-cell.pseudo = 'gth-pade-q2'
-cell.mesh = [12]*3
-cell.verbose = 5
-cell.output = '/dev/null'
-cell.build()
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade-q2'
+    cell.mesh = [12]*3
+    cell.verbose = 5
+    cell.output = '/dev/null'
+    cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
 
 def build_h_cell():
     # Returns FCC H cell.

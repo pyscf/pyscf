@@ -210,14 +210,16 @@ def make_B(pcmobj, r_vdw, ui, ylm_1sph, cached_pol, L):
     return B
 
 
-mol = gto.Mole()
-mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-               H                 -0.00000000   -0.84695236    0.59109389
-               H                 -0.00000000    0.89830571    0.52404783 '''
-mol.basis = '3-21g'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                   H                 -0.00000000   -0.84695236    0.59109389
+                   H                 -0.00000000    0.89830571    0.52404783 '''
+    mol.basis = '3-21g'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.build()
 
 def tearDownModule():
     global mol

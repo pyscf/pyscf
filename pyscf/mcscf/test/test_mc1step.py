@@ -23,32 +23,34 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-10
-m.scf()
-mc0 = mcscf.CASSCF(m, 4, 4).run()
+def setUpModule():
+    global mol, molsym, m, msym, mc0
+    b = 1.4
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
+    mc0 = mcscf.CASSCF(m, 4, 4).run()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym, mc0

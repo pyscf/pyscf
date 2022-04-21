@@ -14,11 +14,6 @@ from pyscf.pbc.cc import kintermediates, kintermediates_rhf
 from pyscf import lib
 import unittest
 
-cell_n3d = make_test_cell.test_cell_n3_diffuse()
-kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
-kmf.conv_tol = 1e-10
-kmf.scf()
-
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
     Ps = numpy.zeros((nkpts, nkpts, nkpts, nkpts))
@@ -91,9 +86,16 @@ def make_rand_kmf(nkpts=3):
     #kmf.get_hcore = lambda *x: mat_hcore
     return kmf
 
-rand_kmf = make_rand_kmf()
-rand_kmf1 = make_rand_kmf(nkpts=1)
-rand_kmf2 = make_rand_kmf(nkpts=2)
+def setUpModule():
+    global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
+    cell_n3d = make_test_cell.test_cell_n3_diffuse()
+    kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
+    kmf.conv_tol = 1e-10
+    kmf.scf()
+
+    rand_kmf = make_rand_kmf()
+    rand_kmf1 = make_rand_kmf(nkpts=1)
+    rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
     global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2

@@ -3,8 +3,10 @@ from pyscf.pbc import gto, scf, ci
 from pyscf.pbc.ci import KCIS
 import unittest
 
-cell = make_test_cell.test_cell_n3(mesh=[29] * 3)
-cell.build()
+def setUpModule():
+    global cell
+    cell = make_test_cell.test_cell_n3(mesh=[29] * 3)
+    cell.build()
 
 def tearDownModule():
     global cell

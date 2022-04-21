@@ -14,19 +14,21 @@ import pyscf.pbc.cc.kccsd_uhf as kccsd
 import pyscf.pbc.cc.eom_kccsd_uhf as kccsd_uhf
 
 
-cell = pbcgto.Cell()
-cell.atom = '''
-He 0.000000000000   0.000000000000   0.000000000000
-He 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-cell.build()
-KGCCSD_TEST_THRESHOLD = 1e-8
+def setUpModule():
+    global cell, KGCCSD_TEST_THRESHOLD
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.build()
+    KGCCSD_TEST_THRESHOLD = 1e-8
 
 def tearDownModule():
     global cell, KGCCSD_TEST_THRESHOLD

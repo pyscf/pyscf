@@ -23,15 +23,22 @@ from pyscf import scf
 from pyscf import lib
 from pyscf.x2c import x2c
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 
 class KnownValues(unittest.TestCase):

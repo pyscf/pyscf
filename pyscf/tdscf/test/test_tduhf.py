@@ -16,25 +16,28 @@
 
 import unittest
 from pyscf import lib, gto, scf, tdscf
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.basis = '631g'
-mol.build()
-mf = scf.UHF(mol).run()
 
-mol1 = gto.Mole()
-mol1.verbose = 7
-mol1.output = '/dev/null'
-mol1.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol1.basis = '631g'
-mol1.spin = 2
-mol1.build()
-mf1 = scf.UHF(mol1).run()
+def setUpModule():
+    global mol, mol1, mf, mf1
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.UHF(mol).run()
+
+    mol1 = gto.Mole()
+    mol1.verbose = 7
+    mol1.output = '/dev/null'
+    mol1.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol1.basis = '631g'
+    mol1.spin = 2
+    mol1.build()
+    mf1 = scf.UHF(mol1).run()
 
 def tearDownModule():
     global mol, mol1, mf, mf1

@@ -27,34 +27,36 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import ao2mo
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
-mf = scf.GHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
+def setUpModule():
+    global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+    mf = scf.GHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
 
-molsym = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-    symmetry = 'c2v'
-)
-mfsym = scf.GHF(molsym).run()
+    molsym = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+        symmetry = 'c2v'
+    )
+    mfsym = scf.GHF(molsym).run()
 
-mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
-mf_r = scf.RHF(mol1).run()
-mf_u = scf.RHF(mol1).run()
+    mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+    mf_r = scf.RHF(mol1).run()
+    mf_u = scf.RHF(mol1).run()
 
 def tearDownModule():
     global mol, mf, molsym, mfsym, mol1, mf_r, mf_u

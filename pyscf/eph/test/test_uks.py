@@ -19,15 +19,21 @@ from pyscf.eph import eph_fd, uks
 import numpy as np
 import unittest
 
-mol = gto.M()
-mol.atom = '''O 0.000000000000 0.000000002577 0.868557119905
-              H 0.000000000000 -1.456050381698 2.152719488376
-              H 0.000000000000 1.456050379121 2.152719486067'''
+def setUpModule():
+    global mol
+    mol = gto.M()
+    mol.atom = '''O 0.000000000000 0.000000002577 0.868557119905
+                  H 0.000000000000 -1.456050381698 2.152719488376
+                  H 0.000000000000 1.456050379121 2.152719486067'''
 
-mol.unit = 'Bohr'
-mol.basis = 'sto3g'
-mol.verbose=4
-mol.build() # this is a pre-computed relaxed geometry
+    mol.unit = 'Bohr'
+    mol.basis = 'sto3g'
+    mol.verbose=4
+    mol.build()
+
+def tearDownModule():
+    global mol
+    del mol
 
 class KnownValues(unittest.TestCase):
     def test_finite_diff_uks_eph(self):

@@ -11,10 +11,12 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.cc import eom_uccsd
 import unittest
 
-cell_n3d = make_test_cell.test_cell_n3_diffuse()
-kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
-kmf.conv_tol = 1e-10
-kmf.scf()
+def setUpModule():
+    global cell_n3d, kmf
+    cell_n3d = make_test_cell.test_cell_n3_diffuse()
+    kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
+    kmf.conv_tol = 1e-10
+    kmf.scf()
 
 def tearDownModule():
     global cell_n3d, kmf

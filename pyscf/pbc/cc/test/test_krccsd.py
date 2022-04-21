@@ -35,20 +35,29 @@ import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
 from pyscf.pbc.cc import eom_kccsd_rhf
 
 
-cell = pbcgto.Cell()
-cell.atom = '''
-He 0.000000000000   0.000000000000   0.000000000000
-He 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-#cell.verbose = 7
-cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell, rand_kmf
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    #cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+
+    rand_kmf = make_rand_kmf()
+
+def tearDownModule():
+    global cell, rand_kmf
+    cell.stdout.close()
+    del cell, rand_kmf
 
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
@@ -121,8 +130,6 @@ def make_rand_kmf():
     #kmf.get_veff = lambda *x: mat_veff
     #kmf.get_hcore = lambda *x: mat_hcore
     return kmf
-
-rand_kmf = make_rand_kmf()
 
 def _run_ip_matvec(cc, r1, r2, kshift):
     eom = eom_kccsd_rhf.EOMIP(cc)

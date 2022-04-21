@@ -45,10 +45,12 @@ def make_primitive_cell(mesh):
     cell.build()
     return cell
 
-cell = make_primitive_cell([9]*3)
-kpts = cell.make_kpts([3,1,1])
-kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
-kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+def setUpModule():
+    global cell, kmf, kumf, kpts
+    cell = make_primitive_cell([9]*3)
+    kpts = cell.make_kpts([3,1,1])
+    kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+    kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
 
 def tearDownModule():
     global cell, kmf, kumf

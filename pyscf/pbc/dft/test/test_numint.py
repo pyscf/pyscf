@@ -65,7 +65,7 @@ def make_grids(mesh):
     return cell, grids
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_eval_ao(self):
         cell = pbcgto.Cell()
         cell.verbose = 5

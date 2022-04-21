@@ -26,13 +26,19 @@ from pyscf.pbc import dft
 from pyscf.pbc import tools
 from pyscf.pbc.x2c import sfx2c1e
 
-cell = gto.Cell()
-cell.build(unit = 'B',
-           a = numpy.eye(3)*4,
-           mesh = [11]*3,
-           atom = 'H 0 0 0; H 0 0 1.8',
-           verbose = 0,
-           basis='sto3g')
+def setUpModule():
+    global cell
+    cell = gto.Cell()
+    cell.build(unit = 'B',
+               a = numpy.eye(3)*4,
+               mesh = [11]*3,
+               atom = 'H 0 0 0; H 0 0 1.8',
+               verbose = 0,
+               basis='sto3g')
+
+def tearDownModule():
+    global cell
+    del cell
 
 class KnownValues(unittest.TestCase):
     def test_hf(self):
