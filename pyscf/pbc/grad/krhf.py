@@ -294,7 +294,7 @@ def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
                chargs.ctypes.data_as(ctypes.c_void_p),
                coords.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_double(ew_eta), ctypes.c_double(weights),
-               ctypes.c_int(cell.natm), ctypes.c_int(ngrid_sub))
+               ctypes.c_int(cell.natm), ctypes.c_size_t(ngrid_sub))
     else:
         raise NotImplementedError
 

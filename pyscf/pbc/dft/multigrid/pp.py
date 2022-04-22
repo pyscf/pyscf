@@ -15,7 +15,9 @@ MAX_BLKSIZE = 51**3
 
 libdft = lib.load_library('libdft')
 
-def make_rho_core(cell, precision=None, atm_id=None):
+def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
+    if mesh is None:
+        mesh = cell.mesh
     fakecell, max_radius = pp_int.fake_cell_vloc_part1(cell, atm_id=atm_id, precision=precision)
     atm = fakecell._atm
     bas = fakecell._bas
@@ -30,7 +32,7 @@ def make_rho_core(cell, precision=None, atm_id=None):
     eval_fn = 'make_rho_lda' + lattice_type
 
     b = numpy.asarray(numpy.linalg.inv(a.T), order='C', dtype=float)
-    mesh = numpy.asarray(cell.mesh, order='C', dtype=numpy.int32)
+    mesh = numpy.asarray(mesh, order='C', dtype=numpy.int32)
     rho_core = numpy.zeros((numpy.prod(mesh),), order='C', dtype=float)
     drv = getattr(libdft, 'build_core_density', None)
     try:

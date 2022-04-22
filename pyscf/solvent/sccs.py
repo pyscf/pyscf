@@ -11,7 +11,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.tools import write_cube
 
 libpbc = lib.load_library('libpbc')
 
@@ -29,40 +28,21 @@ def _get_eps(rho_elec, rho_aux, rho_min, rho_max, eps0):
         ctypes.c_double(eps0), ctypes.c_size_t(ng))
     return eps, deps_intermediate
 
-def _get_log_eps_gradient(eps, Gv, mesh, method='FFT'):
+def _get_log_eps_gradient(cell, eps, Gv=None, mesh=None, method='FFT'):
     log_eps = numpy.log(eps)
     if method.upper() == 'FFT':
         out = tools.gradient_by_fft(log_eps, Gv, mesh)
     elif method.upper() == 'FDIFF':
-        raise NotImplementedError
+        out = tools.gradient_by_fdiff(cell, log_eps, mesh)
     else:
-        raise NotImplementedError
+        raise KeyError
     return out
-
-def _get_log_eps1_fdiff(cell, eps, rhoR, rho_core, rho_min, rho_max, mesh):
-    if rho_core is not None:
-        rhoR += rho_core
-    a = cell.lattice_vectors()
-    nx, ny, nz = mesh
-    hx = a[0,0] / nx
-    hy = a[1,1] / ny
-    hz = a[2,2] / nz
-    log_eps = numpy.asarray(numpy.log(eps).reshape(*mesh), order='C')
-    out = numpy.empty([3,*mesh], order='C', dtype=float)
-    fun = getattr(libpbc, 'fdiff_gradient')
-    fun(out.ctypes.data_as(ctypes.c_void_p),
-        log_eps.ctypes.data_as(ctypes.c_void_p),
-        rhoR.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(rho_min), ctypes.c_double(rho_max),
-        ctypes.c_size_t(nx), ctypes.c_size_t(ny), ctypes.c_size_t(nz),
-        ctypes.c_double(hx), ctypes.c_double(hy), ctypes.c_double(hz))
-    return out.reshape(3,-1)
 
 def _get_deps_drho(eps, deps_intermediate):
     return lib.multiply(eps, deps_intermediate)
 
 def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
-         conv_tol=1e-5, max_cycle=20):
+         gradient_method=None, conv_tol=1e-5, max_cycle=50):
     cell = sccs.cell
     if mesh is None:
         mesh = sccs.mesh
@@ -70,23 +50,44 @@ def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
         coulG = tools.get_coulG(cell, mesh=mesh)
     if Gv is None:
         Gv = cell.get_Gv(mesh=mesh)
+    if gradient_method is None:
+        gradient_method = sccs.gradient_method
 
     sqrt_eps = numpy.sqrt(eps)
     q = lib.multiply(sqrt_eps, tools.laplacian_by_fft(sqrt_eps, Gv, mesh))
-    rho_tot = rho_solute / eps
-    phi_tot, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh, compute_gradient=True)
-    fac = 4 * numpy.pi
 
+    if sccs.phi_tot is None:
+        phi_tot = tools.solve_poisson(cell, rho_solute, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+    else:
+        phi_tot = sccs.phi_tot
+
+    if gradient_method.upper() == "FFT":
+        dphi_tot = tools.gradient_by_fft(phi_tot, Gv, mesh)
+    elif gradient_method.upper() == "FDIFF":
+        dphi_tot = tools.gradient_by_fdiff(cell, phi_tot, mesh)
+    else:
+        raise NotImplementedError
+        
+    fac = 4 * numpy.pi
     tmp = None
-    for x in range(3):
-        eps_dphi_x = lib.multiply(eps, dphi_tot[x])
-        if x == 0:
-            tmp = tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x]
-        else:
-            tmp = lib.add(tmp, tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x], out=tmp)
+    if gradient_method.upper() == "FFT":
+        for x in range(3):
+            eps_dphi_x = lib.multiply(eps, dphi_tot[x])
+            if x == 0:
+                tmp = tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x]
+            else:
+                tmp = lib.add(tmp, tools.gradient_by_fft(eps_dphi_x, Gv, mesh)[x], out=tmp)
+    elif gradient_method.upper() == "FDIFF":
+        for x in range(3):
+            eps_dphi_x = lib.multiply(eps, dphi_tot[x])
+            if x == 0:
+                tmp = tools.gradient_by_fdiff(cell, eps_dphi_x, mesh)[x]
+            else:
+                tmp = lib.add(tmp, tools.gradient_by_fdiff(cell, eps_dphi_x, mesh)[x], out=tmp)
+    else:
+        raise NotImplementedError
 
     dphi_tot = None
-    rho_tot = None
 
     r = lib.multiply(-fac, rho_solute) 
     r = lib.subtract(r, tmp, out=r)
@@ -126,12 +127,10 @@ def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
     if r_norm > conv_tol:
         logger.warn(sccs, 'SCCS did not converge.')
 
-    invs_fac = -1. / fac
-    rho_tot = lib.multiply(invs_fac, tools.laplacian_by_fft(phi_tot, Gv, mesh))
-    return rho_tot
+    return phi_tot
 
-def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
-            conv_tol=1e-5, max_cycle=20):
+def _mixing(sccs, rho_solute, eps, rho_pol=None, coulG=None, Gv=None, mesh=None,
+            gradient_method=None, conv_tol=1e-5, max_cycle=50):
     cell = sccs.cell
     mixing_factor = sccs.mixing_factor
     if mesh is None:
@@ -140,18 +139,35 @@ def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
         coulG = tools.get_coulG(cell, mesh=mesh)
     if Gv is None:
         Gv = cell.get_Gv(mesh=mesh)
+    if gradient_method is None:
+        gradient_method = sccs.gradient_method
 
-    log_eps1 = _get_log_eps_gradient(eps, Gv, mesh)
+    log_eps1 = _get_log_eps_gradient(cell, eps, Gv, mesh, gradient_method)
     fac = 1. / (4. * numpy.pi)
     log_eps1 = lib.multiply(fac, log_eps1, out=log_eps1)
 
     rho_solute_over_eps = numpy.divide(rho_solute, eps)
-    rho_iter = numpy.zeros_like(rho_solute)
+    if rho_pol is not None:
+        # use the polarization density from previous scf step
+        # as the initial guess
+        tmp = lib.subtract(rho_pol, rho_solute_over_eps)
+        rho_iter = lib.add(tmp, rho_solute)
+    else:
+        #rho_iter = numpy.zeros_like(rho_solute)
+        rho_iter = lib.subtract(rho_solute, rho_solute_over_eps)
     rho_iter_old = lib.copy(rho_iter)
     for i in range(max_cycle):
         rho_tot = lib.add(rho_solute_over_eps, rho_iter)
-        _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh,
-                                          compute_potential=False, compute_gradient=True)
+        if gradient_method.upper() == "FFT":
+            _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh,
+                                              compute_potential=False, compute_gradient=True)
+        elif gradient_method.upper() == "FDIFF":
+            phi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+            dphi_tot = tools.gradient_by_fdiff(cell, phi_tot, mesh)
+            phi_tot = None
+        else:
+            raise NotImplementedError
+
         rho_tot = None
         for x in range(3):
             if x == 0:
@@ -175,7 +191,7 @@ def _mixing(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
 
 
 def kernel(sccs, rho_elec, rho_core=None, method="mixing",
-           rho_min=1e-4, rho_max=1.5e-3, conv_tol=1e-5, max_cycle=20):
+           rho_min=1e-4, rho_max=1.5e-3, conv_tol=1e-5, max_cycle=50):
     if rho_core is None:
         rho_core = 0
     cell = sccs.cell
@@ -201,11 +217,14 @@ def kernel(sccs, rho_elec, rho_core=None, method="mixing",
     eps, deps_intermediate = _get_eps(rho_elec, None, rho_min, rho_max, eps0)
 
     rho_tot = None
+    phi_tot = None
     if method.upper() == "PCG":
-        rho_tot = _pcg(sccs, rho_solute, eps, coulG=coulG, Gv=Gv, mesh=mesh,
+        phi_tot = _pcg(sccs, rho_solute, eps, coulG=coulG, Gv=Gv, mesh=mesh,
                        conv_tol=conv_tol, max_cycle=max_cycle)
+        sccs.phi_tot = phi_tot
     elif method.upper() == "MIXING":
-        rho_tot = _mixing(sccs, rho_solute, eps, coulG=coulG, Gv=Gv, mesh=mesh,
+        rho_tot = _mixing(sccs, rho_solute, eps, rho_pol=sccs.rho_pol,
+                          coulG=coulG, Gv=Gv, mesh=mesh,
                           conv_tol=conv_tol, max_cycle=max_cycle)
     else:
         raise KeyError(f"Unrecognized method: {method}.")
@@ -213,18 +232,57 @@ def kernel(sccs, rho_elec, rho_core=None, method="mixing",
     deps_drho = _get_deps_drho(eps, deps_intermediate)
     deps_intermediate = None
 
-    if rho_tot is None:
-        raise RuntimeError
+    e_pol, phi_sccs = get_veff(sccs, rho_solute, eps, deps_drho, rho_tot, phi_tot,
+                               coulG, Gv, mesh)
+    return e_pol, phi_sccs
 
-    rho_pol = sccs.rho_pol = lib.subtract(rho_tot, rho_solute)
-    phi_pol = tools.solve_poisson(cell, rho_pol, coulG=coulG, Gv=Gv, mesh=mesh)[0]
-    weight = cell.vol / ng 
-    e_pol = .5 * lib.sum(lib.multiply(phi_pol, rho_solute)) * weight
+
+def get_veff(sccs, rho_solute, eps, deps_drho, rho_tot=None, phi_tot=None,
+             coulG=None, Gv=None, mesh=None, gradient_method=None):
+    cell = sccs.cell
+    if mesh is None:
+        mesh = sccs.mesh
+    if Gv is None:
+        Gv = cell.get_Gv(mesh)
+    if coulG is None:
+        coulG = tools.get_coulG(cell, mesh=mesh)
+    if gradient_method is None:
+        gradient_method = sccs.gradient_method
+    if rho_tot is None and phi_tot is None:
+        raise KeyError("Either rho_tot or phi_tot need to be specified.")
+
     rho_pol = None
+    if rho_tot is not None:
+        sccs.rho_pol = rho_pol = lib.subtract(rho_tot, rho_solute)
+        phi_pol = tools.solve_poisson(cell, rho_pol, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+    if phi_tot is None:
+        phi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+
+    if gradient_method.upper() == "FFT":
+        dphi_tot = tools.gradient_by_fft(phi_tot, Gv, mesh)
+    elif gradient_method.upper() == "FDIFF":
+        dphi_tot = tools.gradient_by_fdiff(cell, phi_tot, mesh)
+    else:
+        raise NotImplementedError
+
+    if rho_pol is None:
+        log_eps1 = _get_log_eps_gradient(cell, eps, Gv, mesh, gradient_method)
+        log_eps1 = lib.multiply(.25/numpy.pi, log_eps1, out=log_eps1)
+
+        rho_iter=None
+        for x in range(3):
+            if x == 0:
+                rho_iter = lib.multiply(dphi_tot[x], log_eps1[x], out=rho_iter)
+            else:
+                tmp = lib.multiply(dphi_tot[x], log_eps1[x])
+                rho_iter = lib.add(rho_iter, tmp, out=rho_iter)
+        sccs.rho_pol = rho_pol = rho_iter - rho_solute + rho_solute / eps
+        phi_pol = tools.solve_poisson(cell, rho_pol, coulG=coulG, Gv=Gv, mesh=mesh)[0]
+
+    weight = cell.vol / numpy.prod(mesh)
+    e_pol = .5 * lib.sum(lib.multiply(phi_pol, rho_solute)) * weight
     logger.info(sccs, 'Polarization energy = %.8g', e_pol)
 
-    _, dphi_tot = tools.solve_poisson(cell, rho_tot, coulG=coulG, Gv=Gv, mesh=mesh,
-                                      compute_potential=False, compute_gradient=True)
     dphi_tot_square = None
     for x in range(3):
         if x == 0:
@@ -234,12 +292,12 @@ def kernel(sccs, rho_elec, rho_core=None, method="mixing",
             dphi_tot_square = lib.add(dphi_tot_square, tmp, out=dphi_tot_square)
     dphi_tot = None
 
-    fac = -1. / (8.*numpy.pi)
-    deps_drho = lib.multiply(fac, deps_drho, out=deps_drho)
+    deps_drho = lib.multiply(-0.125/numpy.pi, deps_drho, out=deps_drho)
     sccs.phi_eps = phi_eps = lib.multiply(deps_drho, dphi_tot_square)
     dphi_tot_square = None
     phi_sccs = lib.add(phi_pol, phi_eps)
     return e_pol, phi_sccs
+
 
 class SCCS(lib.StreamObject):
     def __init__(self, cell, mesh, eps=78.3553, rho_min=1e-4, rho_max=1.5e-3):
@@ -257,6 +315,9 @@ class SCCS(lib.StreamObject):
         self.conv_tol = 1e-5
         self.rho_pol = None
         self.phi_eps = None
+        self.phi_tot = None
+        self.rho_core = None
+        self.gradient_method = 'fft'
 
     def kernel(self, rho, rho_core=None):
         return kernel(self, rho, rho_core=rho_core, method=self.method,

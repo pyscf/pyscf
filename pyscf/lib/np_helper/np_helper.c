@@ -87,6 +87,18 @@ void NPcopy_d2z(double complex *out, const double *in, const size_t n)
 }
 }
 
+void NPcopy_z2d(double *out, const double complex *in, const size_t n)
+{
+#pragma omp parallel
+{
+        size_t i;
+        #pragma omp for schedule(static)
+        for (i = 0; i < n; i++) {
+                out[i] = creal(in[i]);
+        }
+}
+}
+
 void NPdreciprocal(double *out, const double *in, const size_t n)
 {
 #pragma omp parallel

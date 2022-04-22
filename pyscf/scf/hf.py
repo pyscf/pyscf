@@ -654,7 +654,7 @@ def level_shift(s, d, f, factor):
     Returns:
         New Fock matrix, 2D ndarray
     '''
-    dm_vir = s - reduce(numpy.dot, (s, d, s))
+    dm_vir = s - reduce(lib.dot, (s, d, s))
     return f + dm_vir * factor
 
 
@@ -1159,7 +1159,8 @@ def eig(h, s1e):
 
     .. math:: HC = SCE
     '''
-    e, c = scipy.linalg.eigh(h, s1e)
+    with lib.threadpool_controller.limit(limits=lib.num_threads(), user_api='blas'):
+        e, c = scipy.linalg.eigh(h, s1e)
     idx = numpy.argmax(abs(c.real), axis=0)
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
     return e, c

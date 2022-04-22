@@ -32,53 +32,43 @@ void get_eps(double* eps, double* deps_intermediate, double* rho,
     }
 }
 
-void fdiff_gradient(double* out, double* field,
-                    double* rho, double rho_min, double rho_max,
-                    size_t nx, size_t ny, size_t nz,
-                    double hx, double hy, double hz)
+void rs_gradient_cd3(double* f, double* df, int* mesh, double* dr)
 {
-    //#pragma omp parallel
+    const size_t nx = mesh[0];
+    const size_t ny = mesh[1];
+    const size_t nz = mesh[2];
+    const size_t nyz = ny * nz;
+    const size_t nxyz = nx * nyz;
+    double h[3] = {dr[0]*2, dr[1]*2, dr[2]*2};
+    double *dfdx = df;
+    double *dfdy = dfdx + nxyz;
+    double *dfdz = dfdy + nxyz;
+    #pragma omp parallel
     {
-        size_t i = 0;
-        size_t x, y, z, offset;
-        size_t nxyz = nx * ny * nz;
-        size_t nyz = ny * nz;
+        size_t x, y, z;
+        size_t xm, xp, ym, yp, zm, zp;
+        size_t xoff, yoff, ioff;
+        size_t xmoff, xpoff, ymoff, ypoff;
+        #pragma omp for schedule(static)
         for (x = 0; x < nx; x++) {
+            xm = (x == 0) ? (nx-1) : (x - 1);
+            xp = (x == nx-1) ? 0 : (x + 1);
+            xoff = x * nyz;
+            xmoff = xm * nyz;
+            xpoff = xp * nyz;
             for (y = 0; y < ny; y++) {
-                for (z = 0; z < nz; z++, i++) {
-                    if (rho[i] > rho_max || rho[i] < rho_min) {
-                        out[i] = 0;
-                        out[i + nxyz] = 0;
-                        out[i + 2*nxyz] = 0;
-                    }
-                    offset = y*nz + z;
-                    if (x == 0) {
-                        out[x*nyz+offset] = (field[(x+1)*nyz+offset] - field[(nx-1)*nyz+offset]) / (2.*hx);
-                    } else if (x == nx-1) {
-                        out[x*nyz+offset] = (field[0*nyz+offset] - field[(x-1)*nyz+offset]) / (2.*hx);
-                    } else {
-                        out[x*nyz+offset] = (field[(x+1)*nyz+offset] - field[(x-1)*nyz+offset]) / (2.*hx);
-                    }
-
-                    offset = x*nyz + z;
-                    if (y == 0) {
-                        out[y*nz+offset+nxyz] = (field[(y+1)*nz+offset] - field[(ny-1)*nz+offset]) / (2.*hy);
-                    } else if (y == ny-1) {
-                        out[y*nz+offset+nxyz] = (field[0*nz+offset] - field[(y-1)*nz+offset]) / (2.*hy);
-                    } else {
-                        out[y*nz+offset+nxyz] = (field[(y+1)*nz+offset] - field[(y-1)*nz+offset]) / (2.*hy);
-                    }
-
-                    offset = x*nyz + y*nz;
-                    if (z == 0) {
-                        out[z+offset+2*nxyz] = (field[z+1+offset] - field[nz-1+offset]) / (2.*hz);
-                    }
-                    else if (z == nz-1) {
-                        out[z+offset+2*nxyz] = (field[0+offset] - field[z-1+offset]) / (2.*hz);
-                    }
-                    else {
-                        out[z+offset+2*nxyz] = (field[z+1+offset] - field[z-1+offset]) / (2.*hz);
-                    }
+                ym = (y == 0) ? (ny-1) : (y - 1);
+                yp = (y == ny-1) ? 0 : (y + 1);
+                yoff = y * nz;
+                ymoff = ym * nz;
+                ypoff = yp * nz;
+                for (z = 0; z < nz; z++) {
+                    zm = (z == 0) ? (nz-1) : (z - 1);
+                    zp = (z == nz-1) ? 0 : (z + 1);
+                    ioff = xoff + yoff + z;
+                    dfdx[ioff] = (f[xpoff+yoff+z] - f[xmoff+yoff+z]) / h[0];
+                    dfdy[ioff] = (f[xoff+ypoff+z] - f[xoff+ymoff+z]) / h[1];
+                    dfdz[ioff] = (f[xoff+yoff+zp] - f[xoff+yoff+zm]) / h[2];
                 }
             }
         }

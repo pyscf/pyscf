@@ -34,3 +34,23 @@ from pyscf.lib.scipy_helper import *
 from pyscf.lib import chkfile
 from pyscf.lib import diis
 from pyscf.lib.misc import StreamObject
+
+# TODO following is temporary
+try:
+    from threadpoolctl import ThreadpoolController
+except ImportError:
+    class _ThreadpoolLimiter():
+        def __init__(self, controller, *, limits=None, user_api=None):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, type, value, traceback):
+            pass
+
+    class ThreadpoolController():
+        def __init__(self):
+            pass
+        def limit(self, *, limits=None, user_api=None):
+            return _ThreadpoolLimiter(self, limits=limits, user_api=user_api)
+
+threadpool_controller = ThreadpoolController()

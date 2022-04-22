@@ -1501,7 +1501,7 @@ def copy(a, order='K', subok=False, dtype=None, out=None):
         or order != 'K' or not (a.flags.c_contiguous or a.flags.f_contiguous)):
         return numpy.copy(numpy.asarray(a, dtype=dtype), order=order, subok=subok)
 
-    dtype = numpy.result_type(a.dtype, dtype)
+    #dtype = numpy.result_type(a.dtype, dtype)
 
     if out is not None:
         assert out.dtype == numpy.result_type(dtype, out.dtype)
@@ -1510,7 +1510,10 @@ def copy(a, order='K', subok=False, dtype=None, out=None):
         out = numpy.empty_like(a, dtype=dtype)
 
     if a.dtype == numpy.complex128:
-        fn = getattr(_np_helper, "NPzcopy_omp")
+        if dtype == numpy.complex128:
+            fn = getattr(_np_helper, "NPzcopy_omp")
+        else:
+            fn = getattr(_np_helper, "NPcopy_z2d")
     elif a.dtype == numpy.double:
         if dtype == numpy.complex128:
             fn = getattr(_np_helper, "NPcopy_d2z")
