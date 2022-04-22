@@ -157,6 +157,7 @@ def _contract(subscripts, *tensors, **kwargs):
     idxBt = list(idxB)
     inner_shape = 1
     insert_B_loc = 0
+    shared_idxAB = sorted(list(shared_idxAB))
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
             err = ('ERROR: In index string %s, the range of index %s is '
