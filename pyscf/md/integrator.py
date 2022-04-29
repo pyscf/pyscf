@@ -15,19 +15,69 @@
 
 from pyscf import gto, scf, grad, data
 import numpy as np
+import os
+
+class Frame:
+    def __init__(self, ekin=None, epot=None, coords=None, time=None):
+        self.ekin = ekin 
+        self.epot = epot 
+        self.coords = coords
+        self.time = time
 
 class Integrator:
-    def __init__(self, scanner, dt=10):
+    def __init__(self, scanner, dt=10, steps=1):
         self.scanner = scanner
         self.mol = scanner.mol.copy()
         self.dt = dt
-        self.veloc = np.array([[0.001,0,0],[-0.002,0.001,0],[0,0.004,0.0003]])
+        self.max_steps = steps
+        self.veloc = np.array([[0.0,0,0],[0.0,0.0,0],[0,0.0,0.0]])
         self.iteration = 0
+        self.frames = None
+        self.epot = None
+        self.ekin = None
+        self.flush = True
+        self.time = 0
+        
+    def kernel(self):
+        while self.iteration < self.max_steps:
+            self.next()
+            
+            if self.flush:
+                self.write_energy()
+                self.write_coord()
+
+    def next(self):
+        raise NotImplementedError("Method Not Implemented")
+    
+    def compute_kinetic_energy(self):
+        energy = 0
+        for v, m in zip(self.veloc, self.mol.atom_mass_list()):
+            energy += 0.5*m*data.nist.MP_ME * np.linalg.norm(v)**2
+
+        return energy
+
+    def write_energy(self):
+        energy_file = "bomd.md.energies"
+        output = ""
+        if not os.path.isfile(energy_file):
+            output += "   time          Epot                 Ekin                 Etot\n"
+        
+        output += f"{self.time:8.2f}  {self.epot:.12E}  {self.ekin:.12E}  {self.ekin+self.epot:.12E}\n"
+        
+        with open(energy_file, 'a') as f:
+            f.write(output)
+
+    def write_coord(self):
+        coord_file = "bomd.md.xyz"
+        output = self.mol.tostring(format="XYZ")
+        with open(coord_file, "a+") as f:
+            f.write(output)
+            f.write('\n')
 
 class VelocityVerlot(Integrator):
 
-    def __init__(self, scanner, dt=10):
-        super().__init__(scanner, dt=dt)
+    def __init__(self, scanner, dt=10, steps=1):
+        super().__init__(scanner, dt=dt, steps=steps)
         self.accel = None
 
     def next(self, mol=None, veloc=None):
@@ -38,33 +88,30 @@ class VelocityVerlot(Integrator):
             veloc = self.veloc
 
         ##########
-        print(f"---------------- Iteration {self.iteration}")
-        print("\nCoords:")
-        print(mol.atom_coords())
-        print("\nVeloc:")
-        print(veloc)
-
-        ##########
         if self.iteration == 0:
-            # print out coord and velocity to file?
-            pass
+            epot, self.accel = self._compute_accel(mol)
+            self.epot = epot
+            self.ekin = self.compute_kinetic_energy()
+            self.write_energy()
 
         if self.accel is None:
-            p_energy, self.accel = self.compute_accel(mol)
+            epot, self.accel = self._compute_accel(mol)
 
-        mol.set_geom_(self.next_geometry(mol, veloc, self.accel), unit="B")
+        mol.set_geom_(self._next_geometry(mol, veloc, self.accel), unit="B")
         mol.build()
-        next_p_energy, next_accel = self.compute_accel(mol)
-        veloc = self.next_velocity(veloc, next_accel, self.accel)
+        next_epot, next_accel = self._compute_accel(mol)
+        veloc = self._next_velocity(veloc, next_accel, self.accel)
 
         self.mol = mol
         self.veloc = veloc
+        self.epot = next_epot
+        self.ekin = self.compute_kinetic_energy()
         self.accel = next_accel
-        # print out coord and velocity to file?
 
         self.iteration += 1
+        self.time += self.dt
 
-    def compute_accel(self, mol):
+    def _compute_accel(self, mol):
         e_tot, grad = self.scanner(mol)
         if not self.scanner.converged:
             raise RuntimeError("SCF did not converge!")
@@ -76,28 +123,27 @@ class VelocityVerlot(Integrator):
 
         return e_tot, np.array(a)
 
-    def next_atom_position(self, r, v, a):
+    def _next_atom_position(self, r, v, a):
         return r + self.dt*v + self.dt*self.dt*a/2.0
 
-    def next_atom_velocity(self, v, a2, a1):
+    def _next_atom_velocity(self, v, a2, a1):
         return v + self.dt * (a2 + a1)/2.0
 
-    def next_geometry(self, mol, veloc, accel):
+    def _next_geometry(self, mol, veloc, accel):
         new_coords = []
         for r, v, a in zip(mol.atom_coords(), veloc, accel):
-            r = self.next_atom_position(r, v, a)
+            r = self._next_atom_position(r, v, a)
             new_coords.append(r)
 
         return np.array(new_coords)
 
-    def next_velocity(self, veloc, next_accel, accel):
+    def _next_velocity(self, veloc, next_accel, accel):
         new_veloc = []
         for v, a2, a1 in zip(veloc, next_accel, accel):
-            new_v = self.next_atom_velocity(v, a2, a1)
+            new_v = self._next_atom_velocity(v, a2, a1)
             new_veloc.append(new_v)
 
         return np.array(new_veloc)
-
 
 
 if __name__ == "__main__":
@@ -114,7 +160,7 @@ if __name__ == "__main__":
     hf_scanner.max_cycle = 500
 
     integrator = VelocityVerlot(hf_scanner)
-    for i in range(500):
+    for i in range(1):
         integrator.next()
         op = integrator.mol.tostring(format="XYZ")
         with open("tmp.xyz", 'a+') as f:
