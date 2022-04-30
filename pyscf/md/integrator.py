@@ -17,11 +17,27 @@ from pyscf import gto, scf, grad, data
 import numpy as np
 
 class Integrator:
-    def __init__(self, scanner, dt=10):
+    def __init__(self, scanner, mol=None, init_veloc = None, dt=10):
         self.scanner = scanner
-        self.mol = scanner.mol.copy()
+        if mol is None:
+            self.mol = scanner.mol.copy()
+        
+        else:
+            self.mol = mol
+       
+
         self.dt = dt
-        self.veloc = np.array([[0.001,0,0],[-0.002,0.001,0],[0,0.004,0.0003]])
+        
+        # initialize the velocity based off of what is passed.
+        # If it is a string, read from file or boltzmann
+        # if it empty (none) initialize from  etc. etc.
+        if init_veloc is None or init_veloc == 0:
+            num_atoms = len(self.mol.atom_coords())
+            self.veloc = np.full((num_atoms,3), 0.0)
+        
+        else:
+            self.veloc = np.array([[0.001,0,0],[-0.002,0.001,0],[0,0.004,0.0003]])
+        
         self.iteration = 0
 
 class VelocityVerlot(Integrator):
