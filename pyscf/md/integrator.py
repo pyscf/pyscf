@@ -25,19 +25,32 @@ class Frame:
         self.time = time
 
 class Integrator:
-    def __init__(self, scanner, dt=10, steps=1):
+    def __init__(self, scanner, veloc=None, dt=10, steps=1):
         self.scanner=scanner
         self.mol=self.scanner.mol
         self.max_steps = steps
         self.dt = dt
-        self.veloc = np.array([[0.0,0,0],[0.0,0.0,0],[0,0.0,0.0]])
+        if veloc is None:
+            self.veloc = np.full((self.mol.n_atoms, 3), 0.0)
+        
+        elif veloc == "Boltzmann":
+            raise NotImplementedError("Boltzmann method not implemented!")
+    
+        elif type(veloc) == str:
+            raise NotImplementedError("Not implemented velocity from string")
+
+        else:
+            self.veloc = veloc
+
         self.iteration = 0
         self.frames = None
         self.epot = None
         self.ekin = None
         self.flush = True
         self.time = 0
-        
+        self.energy_stdout = "bomd.md.energies"
+        self.structure_stdout = "bomd.md.xyz"
+
     def kernel(self):
         while self.iteration < self.max_steps:
             self.next()
@@ -57,20 +70,18 @@ class Integrator:
         return energy
 
     def write_energy(self):
-        energy_file = "bomd.md.energies"
         output = ""
-        if not os.path.isfile(energy_file):
+        if not os.path.isfile(self.energy_stdout):
             output += "   time          Epot                 Ekin                 Etot\n"
         
         output += f"{self.time:8.2f}  {self.epot:.12E}  {self.ekin:.12E}  {self.ekin+self.epot:.12E}\n"
         
-        with open(energy_file, 'a') as f:
+        with open(self.energy_stdout, 'a') as f:
             f.write(output)
 
     def write_coord(self):
-        coord_file = "bomd.md.xyz"
         output = self.mol.tostring(format="XYZ")
-        with open(coord_file, "a+") as f:
+        with open(self.structure_stdout, "a+") as f:
             f.write(output)
             f.write('\n')
 
