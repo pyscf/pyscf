@@ -55,9 +55,18 @@ def kernel(integrator, verbose=logger.NOTE):
     # for example, use the for iteration, frame in integrator
     while integrator.iteration < integrator.max_iterations:
         if log.verbose >= lib.logger.NOTE:
-            log.note('\nBOMD iteration %d', integrator.iteration+1)
+            log.note('\nBOMD Time %d', integrator.time)
 
         integrator.next()
+        log.note("----------- %s final geometry -----------", integrator.__class__.__name__)
+        _write(integrator, integrator.mol, integrator.mol.atom_coords())
+        log.note("----------------------------------------------")
+        log.note("------------ %s final velocity -----------", integrator.__class__.__name__)
+        _write(integrator, integrator.mol, integrator.veloc)
+        log.note("----------------------------------------------")
+        log.note("Ekin = %17.13f", integrator.ekin)
+        log.note("Epot = %17.13f", integrator.epot)
+        log.note("Etot = %17.13f", integrator.ekin+integrator.epot)
 
         if integrator.energy_output is not None:
             integrator.write_energy()
@@ -69,13 +78,15 @@ def kernel(integrator, verbose=logger.NOTE):
             integrator.frames.append(toframe(integrator))
 
         t1 = log.timer('BOMD iteration %d' % integrator.iteration, *t1)
-
+    
+    t0 = log.timer('BOMD', *t0)
+    return integrator
 
 class Integrator:
 
     def __init__(self, scanner, **kwargs):
         self.scanner = scanner
-        self.mol = self.scanner.mol
+        self.mol = self.scanner.mol.copy()
         self.stdout = self.mol.stdout
         self.incore_anyway = self.mol.incore_anyway
         self.veloc = np.full((self.mol.natm, 3), 0.0)
@@ -199,6 +210,7 @@ class VelocityVerlot(Integrator):
             self.mol.build()
             next_epot, next_accel = self._compute_accel()
             self.veloc = self._next_velocity(next_accel)
+            
 
         self.epot = next_epot
         self.ekin = self.compute_kinetic_energy()
