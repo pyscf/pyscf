@@ -31,18 +31,18 @@ class Frame:
 def toframe(integrator):
     return Frame(integrator.ekin, integrator.epot, integrator.mol.atom_coords(), integrator.time)
 
-# COPIEDDDD
-def _write(dev, mol, de, atmlst):
-    '''Format output of nuclear gradients.
+def _write(dev, mol, vec, atmlst=None):
+    '''Format output of molecular vector quantity.
     Args:
         dev : lib.logger.Logger object
+        vec : 2D array with shape (mol.natm, 3)
     '''
     if atmlst is None:
         atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
     for k, ia in enumerate(atmlst):
         dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
-                         (ia, mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2]))
+                         (ia, mol.atom_symbol(ia), vec[k,0], vec[k,1], vec[k,2]))
 
 def kernel(integrator, verbose=logger.NOTE):
     log = logger.new_logger(integrator, verbose)
