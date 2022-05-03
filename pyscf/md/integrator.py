@@ -18,6 +18,7 @@ import numpy as np
 from pyscf import data
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.grad.rhf import GradientsMixin
 
 
 class Frame:
@@ -48,6 +49,8 @@ def kernel(integrator, verbose=logger.NOTE):
     log = logger.new_logger(integrator, verbose)
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start BOMD')
+
+    integrator.mol = integrator.mol.copy()
 
     # Begin the iterations to run molecular dynamics
     t1 = t0
@@ -84,12 +87,21 @@ def kernel(integrator, verbose=logger.NOTE):
 
 class Integrator:
 
-    def __init__(self, scanner, **kwargs):
-        self.scanner = scanner
+    def __init__(self, method, **kwargs):
+
+        if isinstance(method, lib.GradScanner):
+            self.scanner = method
+        elif isinstance(method, GradientsMixin):
+            self.scanner = method.as_scanner()
+        elif getattr(method, 'nuc_grad_method', None):
+            self.scanner = method.nuc_grad_method().as_scanner()
+        else:
+            raise NotImplemented("Nuclear gradients of %s not available" % method)
+
         self.mol = self.scanner.mol.copy()
         self.stdout = self.mol.stdout
         self.incore_anyway = self.mol.incore_anyway
-        self.veloc = np.full((self.mol.natm, 3), 0.0)
+        self.veloc = None
         self.verbose = self.mol.verbose
         self.max_iterations = 1
         self.dt = 10
@@ -109,6 +121,10 @@ class Integrator:
         if trajectory_output is not None: self.trajectory_output = trajectory_output
         if verbose is not None: self.verbose = verbose
         if incore_anyway is not None: self.incore_anyway = incore_anyway
+
+        # Default velocities are 0 if none specified
+        if self.veloc is None:
+            self.veloc = np.full((self.mol.natm, 3), 0.0)
 
         # avoid opening energy_output file twice
         if (self.energy_output is not None and
@@ -177,26 +193,15 @@ class Integrator:
         return energy
 
     def write_energy(self):
-        output = ""
-        if not os.path.isfile(self.energy_stdout):
-            output += "   time          Epot                 Ekin                 Etot\n"
-
-        output += f"{self.time:8.2f}  {self.epot:.12E}  {self.ekin:.12E}  {self.ekin + self.epot:.12E}\n"
-
-        with open(self.energy_stdout, 'a') as f:
-            f.write(output)
+        self.energy_output.write(f"{self.time:8.2f}  {self.epot:.12E}  {self.ekin:.12E}  {self.ekin + self.epot:.12E}\n")
 
     def write_coord(self):
-        output = f"{self.mol.natm}\nMolecular Dynamics Time {self.time}\n" + self.mol.tostring(format="raw")
-        with open(self.structure_stdout, "a+") as f:
-            f.write(output)
-            f.write('\n')
-
+        self.trajectory_output.write(f"{self.mol.natm}\nMD Time {self.time}\n" + self.mol.tostring(format="raw"))
 
 class VelocityVerlot(Integrator):
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, scanner, **kwargs):
+        super().__init__(scanner, **kwargs)
         self.accel = None
 
     def next(self):
