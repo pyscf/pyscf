@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 '''
+Example code for
 k-point spin-restricted periodic MP2 calculation using the staggered mesh method
 Author: Xin Xing (xxing@berkeley.edu)
-Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order Møller–Plesset Perturbation Theory
-           J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
+Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order
+        Møller–Plesset Perturbation Theory, J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
 '''
 
 

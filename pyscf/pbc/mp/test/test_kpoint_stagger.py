@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 '''
+Test code for
 k-point spin-restricted periodic MP2 calculation using the staggered mesh method
 Author: Xin Xing (xxing@berkeley.edu)
-Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order Møller–Plesset Perturbation Theory
-           J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
+Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order
+        Møller–Plesset Perturbation Theory, J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
 '''
 
 import unittest
@@ -141,7 +142,7 @@ class KnownValues(unittest.TestCase):
         #   FFTDF-based calculation
         kmf = pbcscf.KRHF(cell, abs_kpts)
         kmf.conv_tol = 1e-12
-        emf = kmf.scf()
+        kmf.scf()
         emp2_sub = KMP2_stagger(kmf, flag_submesh=True, frozen=[0,1,2]).run()
         emp2_ext = KMP2_stagger(kmf, flag_submesh=False, frozen=[0,1,2]).run()
 
@@ -151,9 +152,9 @@ class KnownValues(unittest.TestCase):
         #   GDF-based calculation
         kmf = pbcscf.KRHF(cell, abs_kpts)
         gdf = df.GDF(cell, abs_kpts).build()
-        kmf.with_df = gdf       
+        kmf.with_df = gdf
         kmf.conv_tol = 1e-12
-        emf = kmf.scf()
+        kmf.scf()
         emp2_sub = KMP2_stagger(kmf, flag_submesh=True, frozen=[0,1,2]).run()
         emp2_ext = KMP2_stagger(kmf, flag_submesh=False, frozen=[0,1,2]).run()
 

@@ -1,8 +1,8 @@
 '''
 k-point spin-restricted periodic MP2 calculation using the staggered mesh method
 Author: Xin Xing (xxing@berkeley.edu)
-Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order Møller–Plesset Perturbation Theory
-           J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
+Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: Second-Order
+        Møller–Plesset Perturbation Theory, J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
 '''
 
 import numpy as np
@@ -20,15 +20,15 @@ import h5py
 from pyscf.pbc.lib.kpts_helper import unique
 
 #   Minimum images of k-points to the first BZ
-def minimum_image(cell, kpts): 
+def minimum_image(cell, kpts):
     """
     Compute the minimum image of k-points in 'kpts' in the first Brillouin zone
-    
-    Arguments: 
+
+    Arguments:
         cell -- a cell instance
-        kpts -- a list of k-points 
-    
-    Returns: 
+        kpts -- a list of k-points
+
+    Returns:
         kpts_bz -- a list of k-point in the first Brillouin zone
     """
     tmp_kpt = cell.get_scaled_kpts(kpts)
@@ -70,18 +70,16 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     if mem_usage > mem_avail:
         raise MemoryError('Insufficient memory! MP2 memory usage %d MB (currently available %d MB)'
                           % (mem_usage, mem_avail))
-    
-    if mp.with_df_ints: 
+
+    if mp.with_df_ints:
         Lov = _init_mp_df_eris_stagger(mp)
-    else: 
+    else:
         with_df = df.FFTDF(mp.cell, mp.kpts)
         fao2mo = with_df.ao2mo
 
-    
-
     #   info of occupied and virtual meshes
     nkpts_ov     = mp.nkpts_ov          #   number of points on the occupied/virtual mesh
-    kpts_idx_vir = mp.kpts_idx_vir 
+    kpts_idx_vir = mp.kpts_idx_vir
     kpts_idx_occ = mp.kpts_idx_occ
 
     eia   = np.zeros((nocc,nvir))
@@ -103,15 +101,20 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
                 ikb = np.where(kpts_idx_vir == kb)[0][0]
 
                 if mp.with_df_ints:
-                    oovv_ij[ika] = (1./nkpts_ov) * lib.einsum("Lia,Ljb->iajb", Lov[iki, ika], Lov[ikj, ikb]).transpose(0,2,1,3)
+                    oovv_ij[ika] = (1./nkpts_ov) * lib.einsum(
+                        "Lia,Ljb->iajb",
+                        Lov[iki, ika], Lov[ikj, ikb]
+                    ).transpose(0,2,1,3)
                 else:
                     orbo_i = mo_coeff[ki][:,:nocc]
                     orbo_j = mo_coeff[kj][:,:nocc]
                     orbv_a = mo_coeff[ka][:,nocc:]
                     orbv_b = mo_coeff[kb][:,nocc:]
-                    oovv_ij[ika] = fao2mo((orbo_i,orbv_a,orbo_j,orbv_b),
-                                    (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
-                                compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts_ov
+                    oovv_ij[ika] = fao2mo(
+                        (orbo_i,orbv_a,orbo_j,orbv_b),
+                        (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]),
+                        compact=False
+                    ).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts_ov
             for ika, ka in enumerate(kpts_idx_vir):
                 kb = kconserv[ki,ka,kj]
                 ikb = np.where(kpts_idx_vir == kb)[0][0]
@@ -140,7 +143,7 @@ def _init_mp_df_eris_stagger(mp):
     """
     Compute 3-center electron repulsion integrals, i.e. (L|ov),
     where `L` denotes DF auxiliary basis functions and `o` and `v` occupied and virtual
-    canonical crystalline orbitals that lie on two staggered uniform meshes. 
+    canonical crystalline orbitals that lie on two staggered uniform meshes.
     Note that `o` and `v` contain kpt indices `ko` and `kv`,
     and the third kpt index `kL` is determined by the conservation of momentum.
 
@@ -165,8 +168,8 @@ def _init_mp_df_eris_stagger(mp):
         raise NotImplementedError
 
     if mp._scf.with_df._cderi is not None and mp.flag_submesh is True:
-        #   When using submeshes for staggered mesh calculation, the 3c DF tensor from mean-field 
-        #   calculation can be used directly. 
+        #   When using submeshes for staggered mesh calculation, the 3c DF tensor from mean-field
+        #   calculation can be used directly.
         with_df = mp._scf.with_df
 
     else:
@@ -177,8 +180,9 @@ def _init_mp_df_eris_stagger(mp):
         kpts = np.asarray(mp.kpts)[uniq_idx]
 
         #   Construct 3-center GDF (L|ia) with ki and ka on two staggered meshes
-        with_df.auxcell = df.make_modrho_basis(with_df.cell, with_df.auxbasis,
-                                         with_df.exp_to_discard)
+        with_df.auxcell = df.make_modrho_basis(
+            with_df.cell, with_df.auxbasis,
+            with_df.exp_to_discard)
         kptij_lst = [(kpti, kpta) for kpti in mp.kpts_occ for kpta in mp.kpts_vir]
         kptij_lst = np.asarray(kptij_lst)
 
@@ -199,7 +203,7 @@ def _init_mp_df_eris_stagger(mp):
 
     #   info of occupied and virtual meshes
     nkpts_ov     = mp.nkpts_ov          #   number of points on the occupied/virtual mesh
-    kpts_idx_vir = mp.kpts_idx_vir 
+    kpts_idx_vir = mp.kpts_idx_vir
     kpts_idx_occ = mp.kpts_idx_occ
     kpts = mp.kpts
 
@@ -220,7 +224,7 @@ def _init_mp_df_eris_stagger(mp):
         ao_loc = None
 
         for iki, ki in enumerate(kpts_idx_occ):
-            for ika, ka in enumerate(kpts_idx_vir): 
+            for ika, ka in enumerate(kpts_idx_vir):
                 kpti = kpts[ki]
                 kpta = kpts[ka]
                 kpti_kpta = np.array( (kpti, kpta) )
@@ -228,7 +232,7 @@ def _init_mp_df_eris_stagger(mp):
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[ka]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
-                
+
                 #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
                 if Lpq_ao[0].size != nao**2:  # aosym = 's2'
                     Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
@@ -249,7 +253,7 @@ class KMP2_stagger(kmp2.KMP2):
         self.stdout = self.cell.stdout
         self.max_memory = self.cell.max_memory
 
-        #   MP2 energy 
+        #   MP2 energy
         self.e_corr = None
 
         #   nocc and nmo variables
@@ -259,14 +263,17 @@ class KMP2_stagger(kmp2.KMP2):
         #   Construction of orbitals and orbital energies on two staggered meshes
         nks = get_monkhorst_pack_size(mf.cell, mf.kpts)  #   mesh size
         self.flag_submesh = flag_submesh
-        if flag_submesh is True: 
+        if flag_submesh is True:
             #   Choice 1: Use two staggered submeshes of mf.kpts of half size along each dimension
-            if np.any( nks % 2) : 
-                print("The k-point mesh in the input mf has odd size in certain dimension. Cannot use its submeshes for staggered mesh calculation!")
+            if np.any( nks % 2) :
+                print(
+                    'The k-point mesh in the input mf has odd size in certain dimension.',
+                    'Cannot use its submeshes for staggered mesh calculation!')
                 log = logger.Logger(self.stdout, self.verbose)
-                log.warn('The k-point mesh in the input mf has odd size in certain dimension. \n'
-                        'Cannot use its submeshes for staggered mesh calculation!\n'
-                        'You may set "flag_submesh" to False')
+                log.warn(
+                    'The k-point mesh in the input mf has odd size in certain dimension. \n'
+                    'Cannot use its submeshes for staggered mesh calculation!\n'
+                    'You may set "flag_submesh" to False')
                 raise RuntimeError
 
             nks_ov = nks // 2
@@ -280,41 +287,41 @@ class KMP2_stagger(kmp2.KMP2):
             self.mo_coeff = mf.mo_coeff
             self.mo_occ = get_occ(mf, mo_energy_kpts=mf.mo_energy)
 
-        else: 
-            #   Choice 2: Apply non-SCF calculation to compute orbitals and orbital energies on a 
-            #             staggered mesh of the same size as mf.kpts. 
+        else:
+            #   Choice 2: Apply non-SCF calculation to compute orbitals and orbital energies on a
+            #             staggered mesh of the same size as mf.kpts.
             if mf.cell.dimension < 3:
-                # The non-SCF calculation of orbitals/orbital energies is currently only valid 
-                # for 3D systems in PySCF. For example, when using get_band with a reference HF 
-                # system of mesh 1*1*k to compute orbitals and orbital energies on a 1*1*2k mesh, 
-                # the obtained mo_energy and  mo_coeff are not in good agreement with those computed 
-                # from an SCF-HF calculation with mesh 1*1*2k.           
+                # The non-SCF calculation of orbitals/orbital energies is currently only valid
+                # for 3D systems in PySCF. For example, when using get_band with a reference HF
+                # system of mesh 1*1*k to compute orbitals and orbital energies on a 1*1*2k mesh,
+                # the obtained mo_energy and  mo_coeff are not in good agreement with those computed
+                # from an SCF-HF calculation with mesh 1*1*2k.
                 raise NotImplementedError
-            
+
             half_shift = mf.cell.get_abs_kpts( [0.5/n for n in nks] )
             kpts_vir = mf.kpts
             kpts_occ = kpts_vir + half_shift
             kpts = np.concatenate( (kpts_occ, kpts_vir), axis=0)
             if isinstance(mf, scf.KRHF):
-                with lib.temporary_env(mf, exxdiv='vcut_sph', with_df=df.FFTDF(mf.cell, mf.kpts)):            
+                with lib.temporary_env(mf, exxdiv='vcut_sph', with_df=df.FFTDF(mf.cell, mf.kpts)):
                     mo_energy, mo_coeff = mf.get_bands( kpts )
                     mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
 
-            elif isinstance(mf, dft.KRKS):   
-                with lib.temporary_env(mf, with_df=df.FFTDF(mf.cell, mf.kpts)):        
+            elif isinstance(mf, dft.KRKS):
+                with lib.temporary_env(mf, with_df=df.FFTDF(mf.cell, mf.kpts)):
                     mo_energy, mo_coeff = mf.get_bands( kpts )
                     mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
-                    
+
             self.kpts = kpts
             self.mo_energy = mo_energy
             self.mo_coeff = mo_coeff
             self.mo_occ = mo_occ
-        
+
         if isinstance(self._scf.with_df, df.GDF):
             self.with_df_ints = True
-        else: 
+        else:
             self.with_df_ints = False
-        
+
         #   Basic info
         self.nkpts = len(self.kpts)
         self.frozen = frozen
@@ -331,19 +338,21 @@ class KMP2_stagger(kmp2.KMP2):
         kpts_vir_bz = minimum_image(self.cell, self.kpts_vir)
 
         #   indices of virtual k-points in self.kpts
-        self.kpts_idx_vir = [ np.asarray(np.sum((kpts_bz - kvir)**2, axis=-1) < 1e-10).nonzero()[0] for kvir in kpts_vir_bz]
+        self.kpts_idx_vir = [ np.asarray(np.sum((kpts_bz - kvir)**2, axis=-1) < 1e-10).nonzero()[0]
+                                for kvir in kpts_vir_bz]
         self.kpts_idx_vir = np.concatenate(self.kpts_idx_vir).astype(int)
 
         #   indices of occupied k-points in self.kpts
-        self.kpts_idx_occ = [ np.asarray(np.sum((kpts_bz - kocc)**2, axis=-1) < 1e-10).nonzero()[0] for kocc in kpts_occ_bz]
+        self.kpts_idx_occ = [ np.asarray(np.sum((kpts_bz - kocc)**2, axis=-1) < 1e-10).nonzero()[0]
+                                for kocc in kpts_occ_bz]
         self.kpts_idx_occ = np.concatenate(self.kpts_idx_occ).astype(int)
 
-        if (
-            len(self.kpts_idx_vir) != self.nkpts_ov or len(np.unique(self.kpts_idx_vir)) != self.nkpts_ov or
-            len(self.kpts_idx_occ) != self.nkpts_ov or len(np.unique(self.kpts_idx_occ)) != self.nkpts_ov
-            ):
+        if (len(self.kpts_idx_vir) != self.nkpts_ov or
+            len(np.unique(self.kpts_idx_vir)) != self.nkpts_ov or
+            len(self.kpts_idx_occ) != self.nkpts_ov or
+            len(np.unique(self.kpts_idx_occ)) != self.nkpts_ov):
             log = logger.Logger(self.stdout, self.verbose)
-            log.warn('Cannot locate the provided occupied/virtual submeshes in the large k-point mesh')            
+            log.warn('Cannot locate the provided occupied/virtual submeshes in the large k-point mesh')
             raise RuntimeError
 
     def dump_flags(self):
@@ -353,14 +362,14 @@ class KMP2_stagger(kmp2.KMP2):
         log.info('method = %s', self.__class__.__name__)
         nocc = self.nocc
         nvir = self.nmo - nocc
-        log.info('Staggerd mesh method for MP2 nocc = %d, nvir = %d', nocc, nvir)    
-        
+        log.info('Staggerd mesh method for MP2 nocc = %d, nvir = %d', nocc, nvir)
+
         nks_ov = get_monkhorst_pack_size(self.cell, self.kpts_vir)  #   mesh size
-        if self.flag_submesh is True: 
+        if self.flag_submesh is True:
             log.info('Two %d*%d*%d-sized submeshes of mf.kpts are used', nks_ov[0], nks_ov[1], nks_ov[2])
-        else: 
+        else:
             log.info('Two %d*%d*%d-sized meshes are used based on non-SCF calculation', nks_ov[0], nks_ov[1], nks_ov[2])
-        
+
         if self.frozen is not None:
             log.info('frozen orbitals = %s', str(self.frozen))
         log.info('KMP2 energy = %.15g' % (self.e_corr))
@@ -375,13 +384,12 @@ class KMP2_stagger(kmp2.KMP2):
         mo_coeff, mo_energy = _add_padding(self, self.mo_coeff, self.mo_energy)
 
         self.e_corr = kernel(self, mo_energy, mo_coeff)
-        self.dump_flags()        
+        self.dump_flags()
         return self.e_corr
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import df, gto, scf, mp
-    
+    from pyscf.pbc import gto, mp
     '''
     Example calculation on hydrogen dimer
     '''
@@ -404,14 +412,14 @@ if __name__ == '__main__':
 
 
     #   HF calculation using FFTDF
-    nks_mf = [2,2,2] 
+    nks_mf = [2,2,2]
     kpts = cell.make_kpts(nks_mf, with_gamma_point=True)
     kmf = scf.KRHF(cell, kpts, exxdiv='ewald')
     ehf = kmf.kernel()
 
     #   staggered mesh KMP2 calculation using two submeshes of size [1,1,1] in kmf.kpts
     kmp = KMP2_stagger(kmf, flag_submesh=True)
-    emp2 = kmp.kernel()    
+    emp2 = kmp.kernel()
     assert((abs(emp2 - -0.0160902544091997))<1e-5)
 
     #   staggered mesh KMP2 calculation using two meshes of size [2,2,2], one of them is kmf.kpts
@@ -426,7 +434,7 @@ if __name__ == '__main__':
 
 
     #   HF calculation using GDF
-    nks_mf = [2,2,2] 
+    nks_mf = [2,2,2]
     kpts = cell.make_kpts(nks_mf, with_gamma_point=True)
     kmf = scf.KRHF(cell, kpts, exxdiv='ewald')
     gdf = df.GDF(cell, kpts).build()
@@ -435,7 +443,7 @@ if __name__ == '__main__':
 
     #   staggered mesh KMP2 calculation using two submeshes of size [1,1,1] in kmf.kpts
     kmp = KMP2_stagger(kmf, flag_submesh=True)
-    emp2 = kmp.kernel()    
+    emp2 = kmp.kernel()
     assert((abs(emp2 - -0.0158364523431071))<1e-5)
 
     #   staggered mesh KMP2 calculation using two meshes of size [2,2,2], one of them is kmf.kpts
