@@ -16,6 +16,7 @@
 import unittest
 from pyscf import gto, scf
 import pyscf.md.integrator as integrator
+import numpy as np
 
 h2o = gto.M(atom=[
     ['O', 0,0,0],
@@ -35,8 +36,16 @@ class KnownValues(unittest.TestCase):
         hf_scanner.max_cycle = 700 
         hf_scanner = hf_scanner.nuc_grad_method().as_scanner()
 
-        driver = integrator.VelocityVerlot(hf_scanner, steps=1000, dt=10)
-        driver.kernel()        
+        driver = integrator.VelocityVerlot(scanner=hf_scanner, max_iterations=10, dt=10)
+        driver.kernel()
+        self.assertAlmostEqual(driver.ekin, 0.0003490353178906977,8)
+        self.assertAlmostEqual(driver.epot, -75.96132726509461, 8)
+
+        final_coord = np.array([[-7.28115148e-19,  1.49705405e-16,  2.05638219e-03],
+                       [-9.60088675e-17, -1.41129779e+00,  1.09281818e+00],
+                       [ 1.07658710e-16,  1.41129779e+00,  1.09281818e+00]])
+
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
 
 
 if __name__=="__main__":
