@@ -81,8 +81,8 @@ def kernel(
         log.info("Particle moments passed by argument.")
 
     if gfccsd.hermi_moments:
-        hole_moments = 0.5 * (hole_moments + hole_moments.T)
-        part_moments = 0.5 * (part_moments + part_moments.T)
+        hole_moments = 0.5 * (hole_moments + hole_moments.swapaxes(1, 2).conj())
+        part_moments = 0.5 * (part_moments + part_moments.swapaxes(1, 2).conj())
 
     if gfccsd.hermi_solver:
         solver = block_lanczos_symm
@@ -102,20 +102,22 @@ def kernel(
     ep, vp = eig(gfccsd, *blocks, orth=orth)
 
     # Check the moments
-    for n in range(2*gfccsd.niter[0]+2):
-        a = lib.einsum("xk,yk,k->xy", vh[0], vh[1].conj(), eh**n)
-        a /= np.max(np.abs(a))
-        b = hole_moments[n] / np.max(np.abs(hole_moments[n]))
-        err = np.max(np.abs(a - b))
-        (logger.debug1 if err > 1e-8 else logger.warn)(
-                gfccsd, "Error in hole moment %d:  %10.6g", n, err)
-    for n in range(2*gfccsd.niter[1]+2):
-        a = lib.einsum("xk,yk,k->xy", vp[0], vp[1].conj(), ep**n)
-        a /= np.max(np.abs(a))
-        b = part_moments[n] / np.max(np.abs(part_moments[n]))
-        err = np.max(np.abs(a - b))
-        (logger.debug1 if err > 1e-8 else logger.warn)(
-                gfccsd, "Error in particle moment %d:  %10.6g", n, err)
+    if gfccsd.niter[0] is not None:
+        for n in range(2*gfccsd.niter[0]+2):
+            a = lib.einsum("xk,yk,k->xy", vh[0], vh[1].conj(), eh**n)
+            a /= np.max(np.abs(a))
+            b = hole_moments[n] / np.max(np.abs(hole_moments[n]))
+            err = np.max(np.abs(a - b))
+            (logger.debug1 if err > 1e-8 else logger.warn)(
+                    gfccsd, "Error in hole moment %d:  %10.6g", n, err)
+    if gfccsd.niter[0] is not None:
+        for n in range(2*gfccsd.niter[1]+2):
+            a = lib.einsum("xk,yk,k->xy", vp[0], vp[1].conj(), ep**n)
+            a /= np.max(np.abs(a))
+            b = part_moments[n] / np.max(np.abs(part_moments[n]))
+            err = np.max(np.abs(a - b))
+            (logger.debug1 if err > 1e-8 else logger.warn)(
+                    gfccsd, "Error in particle moment %d:  %10.6g", n, err)
 
     mask = np.argsort(eh.real)
     eh, vh = eh[mask], (vh[0][:, mask], vh[1][:, mask])
@@ -207,7 +209,7 @@ def eig_block_tridiagonal(gfccsd, a, b, c, orth=None):
 
 
 def eigh_block_tridiagonal(gfccsd, a, b, orth=None):
-    """Diagonal a Hermitian block-tridiagonal Hamiltonian and
+    """Diagonalise a Hermitian block-tridiagonal Hamiltonian and
     transform its eigenvectors appropriately.
     """
 
@@ -219,6 +221,8 @@ def eigh_block_tridiagonal(gfccsd, a, b, orth=None):
         v = np.dot(orth, u[:gfccsd.nmo])
     else:
         v = u[:gfccsd.nmo]
+
+    return e, (v, v)
 
 
 def _matrix_info(x, hermi=False):
@@ -232,6 +236,23 @@ def _matrix_info(x, hermi=False):
 def block_lanczos_symm(gfccsd, moments, verbose=None):
     """Hermitian block Lanczos solver, returns a set of poles that
     best reproduce the inputted moments.
+
+    Args:
+        gfccsd : GFCCSD
+            GF-CCSD object
+        moments : ndarray (2*niter+2, n, n)
+            Array of moments with which the resulting poles should
+            be consistent with.
+
+    Kwargs:
+        verbose : int
+            Level of verbosity.
+
+    Returns:
+        a : ndarray (niter+1, n, n)
+            On-diagonal blocks of the block tridiagonal Hamiltonian.
+        b : ndarray (niter, n, n)
+            Off-diagonal blocks of the block tridiagonal Hamiltonian.
     """
 
     log = logger.new_logger(gfccsd, verbose)
@@ -253,7 +274,7 @@ def block_lanczos_symm(gfccsd, moments, verbose=None):
 
     orth = mat_isqrt(moments[0], hermi=True)
     for i in range(len(moments)):
-        t[i] = np.linalg.muli_dot((bi, moments[i], bi))
+        t[i] = np.linalg.multi_dot((orth, moments[i], orth))
 
     a[0] = t[1]
 
@@ -315,6 +336,27 @@ def block_lanczos_symm(gfccsd, moments, verbose=None):
 def block_lanczos_nosymm(gfccsd, moments, verbose=None):
     """Non-Hermitian block Lanczos solver, returns a set of poles that
     best reproduce the inputted moments.
+
+    Args:
+        gfccsd : GFCCSD
+            GF-CCSD object
+        moments : ndarray (2*niter+2, n, n)
+            Array of moments with which the resulting poles should
+            be consistent with.
+
+    Kwargs:
+        verbose : int
+            Level of verbosity.
+
+    Returns:
+        a : ndarray (niter+1, n, n)
+            On-diagonal blocks of the block tridiagonal Hamiltonian.
+        b : ndarray (niter, n, n)
+            Upper off-diagonal blocks of the block tridiagonal
+            Hamiltonian.
+        c : ndarray (niter, n, n)
+            Lower off-diagonal blocks of the block tridiagonal
+            Hamiltonian.
     """
 
     log = logger.new_logger(gfccsd, verbose)
@@ -362,7 +404,6 @@ def block_lanczos_nosymm(gfccsd, moments, verbose=None):
 
         for j in range(i+2):
             for l in range(i+1):
-                # TODO enable caching? probs no point
                 b2 += np.linalg.multi_dot((w[i, l], t[j+l+1], v[i, j-1]))
                 c2 += np.linalg.multi_dot((w[i, j-1], t[j+l+1], v[i, l]))
 
@@ -530,6 +571,34 @@ def vec_e_part(gfccsd, orb):
 
 class GFCCSD(lib.StreamObject):
     """Green's function coupled cluster singles and doubles.
+
+    Attributes:
+        verbose : int
+            Print level. Default value equals to :class:`Mole.verbose`.
+        niter : tuple of (int, int)
+            Number of block Lanczos iterations for occupied and virtual
+            sectors. If either are `None` then said sector will not be
+            computed.
+        weight_tol : float
+            Threshold for weight in the physical space to consider a
+            pole an ionisation or removal event. Default value is 1e-1.
+        hermi_moments : bool
+            Whether to Hermitise the moments, default value is False.
+        hermi_solver : obol
+            Whether to use the real-valued, symmetric block Lanczos
+            solver, default value is False.
+
+    Results:
+        eh : ndarray
+            Energies of the compressed hole Green's function
+        vh : tuple of ndarray
+            Left- and right-hand transition amplitudes of the compressed
+            hole Green's function
+        ep : ndarray
+            Energies of the compressed particle Green's function
+        vp : tuple of ndarray
+            Left- and right-hand transition amplitudes of the compressed
+            particle Green's function
     """
 
     def __init__(self, mycc, niter=(2, 2)):
@@ -813,7 +882,9 @@ class GFCCSD(lib.StreamObject):
         logger.note(self, "  %s %s %16s %10s", "", "", "Energy", "Weight")
         for n in range(nroots):
             qpwt = np.abs(np.sum(v_ip[:, n] * u_ip[:, n].conj())).real
-            warn = ("(Warning: imag part: %.6g)" % e_ip[n]) if np.abs(e_ip[n].imag) > 1e-8 else ""
+            warn = ""
+            if np.abs(e_ip[n].imag) > 1e-8:
+                warn += "(Warning: imag part: %.6g)" % e_ip[n].imag
             logger.note(self, "  %2s %2d %16.10g %10.6g %s" % ("IP", n, e_ip[n].real, qpwt, warn))
 
         if nroots == 1:
@@ -835,7 +906,9 @@ class GFCCSD(lib.StreamObject):
         logger.note(self, "  %s %s %16s %10s", "", "", "Energy", "Weight")
         for n in range(nroots):
             qpwt = np.abs(np.sum(v_ea[:, n] * u_ea[:, n].conj())).real
-            warn = ("(Warning: imag part: %.6g)" % e_ea[n]) if np.abs(e_ea[n].imag) > 1e-8 else ""
+            warn = ""
+            if np.abs(e_ea[n].imag) > 1e-8:
+                warn += "(Warning: imag part: %.6g)" % e_ea[n].imag
             logger.note(self, "  %2s %2d %16.10g %10.6g %s" % ("EA", n, e_ea[n].real, qpwt, warn))
 
         if nroots == 1:
@@ -856,15 +929,18 @@ if __name__ == "__main__":
     from pyscf import gto, scf, cc
 
     mol = gto.M(
-            atom="O 0 0 0.11779; H 0 0.755453 -0.471161; H 0 -0.755453 -0.471161",
-            basis="6-31g",
+            #atom="O 0 0 0; O 0 0 1",
+            atom="N 0 0 0; N 0 0 1",
+            basis="cc-pvdz",
             verbose=5,
     )
     mf = scf.RHF(mol).run()
     ccsd = cc.CCSD(mf).run()
     ccsd.solve_lambda()
 
-    gfcc = GFCCSD(ccsd, niter=(2, 2))
+    gfcc = GFCCSD(ccsd, niter=(4, 4))
+    gfcc.hermi_moments = True
+    gfcc.hermi_solver = True
     gfcc.kernel()
 
     ip1, vip1 = ccsd.ipccsd(nroots=8)
