@@ -163,7 +163,7 @@ def mat_isqrt(m, tol=1e-16, hermi=False):
         mask = np.abs(w) >= tol
         w, v = w[mask], v[:, mask]
 
-        out = np.dot(v * w[None]**(-0.5+0j), v.T.conj())
+        out = np.dot(v * w[None]**(-0.5+0j), np.linalg.inv(v))
 
     return out
 
@@ -489,6 +489,22 @@ def vec_b_hole(gfccsd, orb):
     return b1, b2
 
 
+def contract_ket_hole(gfccsd, eom, v, orb):
+    # FIXME check dagger in docstirng
+    r"""Contract a vector with \bar{a}_p |\Psi>.
+    """
+
+    nocc = gfccsd.nocc
+
+    if orb < nocc:
+        return v[orb]
+    else:
+        b1 = gfccsd.t1[:, orb-nocc]
+        b2 = gfccsd.t2[:, :, orb-nocc]
+        b = eom.amplitudes_to_vector(b1, b2)
+        return np.dot(v, b)
+
+
 def vec_e_hole(gfccsd, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the hole part of the
@@ -500,13 +516,14 @@ def vec_e_hole(gfccsd, orb):
     if orb < nocc:
         e1 = _kd(nocc, orb)
         e1 -= lib.einsum("ie,e->i", gfccsd.l1, gfccsd.t1[orb])
-        tmp = gfccsd.t2[orb]
-        tmp = 2.0 * tmp - tmp.swapaxes(1, 2)
+        tmp = gfccsd.t2[orb] * 2.0
+        tmp -= gfccsd.t2[orb].swapaxes(1, 2)
         e1 -= lib.einsum("imef,mef->i", gfccsd.l2, tmp)
 
-        e2 = -lib.einsum("ijea,e->ija", gfccsd.l2, gfccsd.t1[orb])
-        e2 -= e2.swapaxes(0, 1)
-        tmp = lib.einsum("ia,j->ija", gfccsd.l1, _kd(nocc, orb))
+        tmp = -lib.einsum("ijea,e->ija", gfccsd.l2, gfccsd.t1[orb])
+        e2 = 2.0 * tmp
+        e2 -= tmp.swapaxes(0, 1)
+        tmp = lib.einsum("ja,i->ija", gfccsd.l1, _kd(nocc, orb))
         e2 += tmp * 2.0
         e2 -= tmp.swapaxes(0, 1)
 
@@ -523,19 +540,39 @@ def vec_b_part(gfccsd, orb):
     transformed vector for a given orbital for the particle part of the
     Green's function.
     """
+    # FIXME does b1 for orb >= nocc need a -1 factor? I swapped the
+    # factors of b1 and b2 for orb < nocc and swapped the fact in
+    # the bra-ket contraction to the moment too, so that the t1 and
+    # t2 amplitudes don't need to be multiplied by a scalar
 
     nocc = gfccsd.nocc
     nvir = gfccsd.nmo - nocc
 
     if orb < nocc:
-        b1 = -gfccsd.t1[orb]
-        b2 = -gfccsd.t2[orb]
+        b1 = gfccsd.t1[orb]
+        b2 = gfccsd.t2[orb]
 
     else:
         b1 = _kd(nvir, orb-nocc)
         b2 = np.zeros((nocc, nvir, nvir))
 
     return b1, b2
+
+
+def contract_ket_part(gfccsd, eom, v, orb):
+    # FIXME check dagger in docstirng
+    r"""Contract a vector with \bar{a}^\dagger_p |\Psi>.
+    """
+
+    nocc = gfccsd.nocc
+
+    if orb < nocc:
+        b1 = gfccsd.t1[orb]
+        b2 = gfccsd.t2[orb]
+        b = eom.amplitudes_to_vector(b1, b2)
+        return np.dot(v, b)
+    else:
+        return v[orb-nocc]
 
 
 def vec_e_part(gfccsd, orb):
@@ -555,13 +592,13 @@ def vec_e_part(gfccsd, orb):
     else:
         e1 = _kd(nvir, orb-nocc)
         e1 -= lib.einsum("mb,m->b", gfccsd.l1, gfccsd.t1[:, orb-nocc])
-        tmp = gfccsd.t2[:, :, :, orb-nocc]
-        tmp = tmp.swapaxes(0, 1) - tmp * 2.0
-        e1 += lib.einsum("kmeb,kme->b", gfccsd.l2, tmp)
+        tmp = gfccsd.t2[:, :, :, orb-nocc] * 2.0
+        tmp -= gfccsd.t2[:, :, orb-nocc]
+        e1 -= lib.einsum("kmeb,kme->b", gfccsd.l2, tmp)
 
-        tmp = lib.einsum("ikab,k->iab", gfccsd.l2, gfccsd.t1[:, orb-nocc])
-        e2 = tmp * -2.0
-        e2 += tmp.swapaxes(1, 2)
+        tmp = -lib.einsum("ikba,k->iab", gfccsd.l2, gfccsd.t1[:, orb-nocc])
+        e2 = tmp * 2.0
+        e2 -= tmp.swapaxes(1, 2)
         tmp = lib.einsum("ib,a->iab", gfccsd.l1, _kd(nvir, orb-nocc))
         e2 += tmp * 2.0
         e2 -= tmp.swapaxes(1, 2)
@@ -736,25 +773,16 @@ class GFCCSD(lib.StreamObject):
             imds = self.make_imds(ea=False)
         diag = eom.get_diag(imds)
 
-        def matvec(v):
-            return -eom.l_matvec(v, imds, diag)
-
-        bras = [None] * self.nmo
-        for p in range(self.nmo):
-            r1, r2 = self.vec_b_hole(p)
-            bras[p] = eom.amplitudes_to_vector(r1, r2)
-
         for p in mpi_helper.nrange(self.nmo):
             r1, r2 = self.vec_e_hole(p)
             ket = eom.amplitudes_to_vector(r1, r2)
 
             for n in range(nmom):
                 for q in range(self.nmo):
-                    bra = bras[q]
-                    moments[n, q, p] += np.dot(bra, ket)
+                    moments[n, q, p] += contract_ket_hole(self, eom, ket, q)
 
                 if (n+1) != nmom:
-                    ket = matvec(ket)
+                    ket = -eom.l_matvec(ket, imds, diag)
 
         mpi_helper.barrier()
         moments = mpi_helper.allreduce(moments)
@@ -778,25 +806,16 @@ class GFCCSD(lib.StreamObject):
             imds = self.make_imds(ip=False)
         diag = eom.get_diag(imds)
 
-        def matvec(v):
-            return eom.l_matvec(v, imds, diag)
-
-        bras = [None] * self.nmo
-        for p in range(self.nmo):
-            r1, r2 = self.vec_b_part(p)
-            bras[p] = eom.amplitudes_to_vector(r1, r2)
-
         for p in mpi_helper.nrange(self.nmo):
             r1, r2 = self.vec_e_part(p)
             ket = eom.amplitudes_to_vector(r1, r2)
 
             for n in range(nmom):
                 for q in range(self.nmo):
-                    bra = bras[q]
-                    moments[n, q, p] += np.dot(bra, ket)
+                    moments[n, q, p] -= contract_ket_part(self, eom, ket, q)
 
                 if (n+1) != nmom:
-                    ket = matvec(ket)
+                    ket = eom.l_matvec(ket, imds, diag)
 
         mpi_helper.barrier()
         moments = mpi_helper.allreduce(moments)
@@ -890,7 +909,7 @@ class GFCCSD(lib.StreamObject):
         if nroots == 1:
             return e_ip[0].real, v_ip[:, 0], u_ip[:, 0]
         else:
-            return e_ip, v_ip, u_ip
+            return e_ip.real, v_ip, u_ip
 
     def eaccsd(self, nroots=5):
         """Print and return electron affinities.
@@ -914,7 +933,7 @@ class GFCCSD(lib.StreamObject):
         if nroots == 1:
             return e_ea[0].real, v_ea[:, 0], u_ea[:, 0]
         else:
-            return e_ea, v_ea, u_ea
+            return e_ea.real, v_ea, u_ea
 
     @property
     def nmo(self):
@@ -932,15 +951,20 @@ if __name__ == "__main__":
             #atom="O 0 0 0; O 0 0 1",
             atom="N 0 0 0; N 0 0 1",
             basis="cc-pvdz",
-            verbose=5,
+            verbose=0,
     )
-    mf = scf.RHF(mol).run()
-    ccsd = cc.CCSD(mf).run()
+    mf = scf.RHF(mol)
+    mf = mf.run()
+    ccsd = cc.CCSD(mf)
+    ccsd = ccsd.run()
     ccsd.solve_lambda()
 
-    gfcc = GFCCSD(ccsd, niter=(4, 4))
-    gfcc.hermi_moments = True
-    gfcc.hermi_solver = True
+    niter = 5
+
+    #from gf_ccsd import GFCCSD
+
+    gfcc = GFCCSD(ccsd, (niter, niter))
+
     gfcc.kernel()
 
     ip1, vip1 = ccsd.ipccsd(nroots=8)
@@ -949,7 +973,8 @@ if __name__ == "__main__":
     ea1, vea1 = ccsd.eaccsd(nroots=8)
     ea2, vea2, uea2 = gfcc.eaccsd(nroots=8)
 
-    print(np.abs(ip1[0]-ip2[0]))
-    print(np.abs(ip1[1]-ip2[1]))
-    print(np.abs(ea1[0]-ea2[0]))
-    print(np.abs(ea1[1]-ea2[1]))
+    print("    %12s %12s %12s" % ("EOM", "GF", "Error"))
+    print("IP1 %12.8f %12.8f %12.8f" % (ip1[0],ip2[0],np.abs(ip1[0]-ip2[0])))
+    print("IP2 %12.8f %12.8f %12.8f" % (ip1[1],ip2[1],np.abs(ip1[1]-ip2[1])))
+    print("EA1 %12.8f %12.8f %12.8f" % (ea1[0],ea2[0],np.abs(ea1[0]-ea2[0])))
+    print("EA2 %12.8f %12.8f %12.8f" % (ea1[1],ea2[1],np.abs(ea1[1]-ea2[1])))
