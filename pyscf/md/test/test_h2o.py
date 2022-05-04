@@ -20,8 +20,8 @@ from pyscf import gto, scf
 import pyscf.md.integrator as integrator
 
 h2o = gto.M(
-    verbose=5,
-    output='/dev/null',
+    verbose=3,
+    #output='/dev/null',
     atom=[
         ['O', 0, 0, 0],
         ['H', 0, -0.757, 0.587],
@@ -43,23 +43,23 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    def test_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
-
-        driver.kernel()
-        self.assertAlmostEqual(driver.ekin, 0.0003490353178906977, 12)
-        self.assertAlmostEqual(driver.epot, -75.96132726509461, 12)
-
-        final_coord = np.array([[-7.28115148e-19, 1.49705405e-16, 2.05638219e-03],
-                                [-9.60088675e-17, -1.41129779e+00, 1.09281818e+00],
-                                [1.07658710e-16, 1.41129779e+00, 1.09281818e+00]])
-
-        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        beginning_energy = driver.ekin + driver.epot
-
-        driver.max_iterations=990
-        driver.kernel()
-        self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 6)
+    # def test_zero_init_veloc(self):
+    #     driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
+    #
+    #     driver.kernel()
+    #     self.assertAlmostEqual(driver.ekin, 0.0003490353178906977, 12)
+    #     self.assertAlmostEqual(driver.epot, -75.96132726509461, 12)
+    #
+    #     final_coord = np.array([[-7.28115148e-19, 1.49705405e-16, 2.05638219e-03],
+    #                             [-9.60088675e-17, -1.41129779e+00, 1.09281818e+00],
+    #                             [1.07658710e-16, 1.41129779e+00, 1.09281818e+00]])
+    #
+    #     self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+    #     beginning_energy = driver.ekin + driver.epot
+    #
+    #     driver.max_iterations=990
+    #     driver.kernel()
+    #     self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 6)
 
     def test_init_veloc(self):
         init_veloc = np.array([
@@ -70,7 +70,7 @@ class KnownValues(unittest.TestCase):
         driver = integrator.VelocityVerlot(hf_scanner,
                                            mol=h2o,
                                            veloc=init_veloc,
-                                           dt=10, max_iterations=1000,
+                                           dt=10, max_iterations=10,
                                            energy_output="BOMD.md.energies",
                                            trajectory_output="BOMD.md.xyz")
 
@@ -91,6 +91,9 @@ class KnownValues(unittest.TestCase):
 
         driver.energy_output.close()
         driver.trajectory_output.close()
+        from pyscf import data
+        print("mass of oxygen in au")
+        print(16*data.nist.MP_ME)
 
 
 if __name__ == "__main__":
