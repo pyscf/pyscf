@@ -132,13 +132,10 @@ def mat_sqrt(m, hermi=False):
         w, v = np.linalg.eigh(m)
         mask = w >= 0
         w, v = w[mask], v[:, mask]
-
         out = np.dot(v * w[None]**0.5, v.T.conj())
 
     else:
         w, v = np.linalg.eig(m)
-        vinv = np.linalg.inv(v)
-
         out = np.dot(v * w[None]**(0.5+0j), np.linalg.inv(v))
 
     return out
@@ -152,15 +149,14 @@ def mat_isqrt(m, tol=1e-16, hermi=False):
         w, v = np.linalg.eigh(m)
         mask = w > tol
         w, v = w[mask], v[:, mask]
-
         out = np.dot(v * w[None]**-0.5, v.T.conj())
 
     else:
         w, v = np.linalg.eig(m)
         mask = np.abs(w) >= tol
         w, v = w[mask], v[:, mask]
-
-        out = np.dot(v * w[None]**(-0.5+0j), np.linalg.inv(v))
+        vinv = np.linalg.inv(v)[mask]
+        out = np.dot(v * w[None]**(-0.5+0j), vinv)
 
     return out
 
@@ -176,7 +172,7 @@ def build_block_tridiagonal(a, b, c=None):
         c = [x.T.conj() for x in b]
 
     h = np.block([[
-        a[i] if i == j   else
+        a[i] if i == j else
         b[j] if j == i-1 else
         c[i] if i == j-1 else z
         for j in range(len(a))]
@@ -466,8 +462,7 @@ def _kd(n, i):
 
 
 def contract_ket_hole(gfccsd, eom, v, orb):
-    # FIXME check dagger in docstirng
-    r"""Contract a vector with \bar{a}_p |\Psi>.
+    r"""Contract a vector with \bar{a}^\dagger_p |\Psi>.
     """
 
     nocc = gfccsd.nocc
@@ -512,8 +507,7 @@ def build_bra_hole(gfccsd, eom, orb):
 
 
 def contract_ket_part(gfccsd, eom, v, orb):
-    # FIXME check dagger in docstirng
-    r"""Contract a vector with \bar{a}^\dagger_p |\Psi>.
+    r"""Contract a vector with \bar{a}_p |\Psi>.
     """
 
     nocc = gfccsd.nocc
@@ -892,7 +886,7 @@ class GFCCSD(lib.StreamObject):
 
 
 if __name__ == "__main__":
-    from pyscf import gto, scf, cc
+    from pyscf import gto, scf
 
     mol = gto.M(
             #atom="O 0 0 0; O 0 0 1",
