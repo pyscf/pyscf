@@ -45,9 +45,6 @@ def kernel(
         imds=None,
         verbose=None,
 ):
-    """Run GF-CCSD.
-    """
-
     if gfccsd.verbose >= logger.WARN:
         gfccsd.check_sanity()
     gfccsd.dump_flags()
@@ -468,27 +465,6 @@ def _kd(n, i):
     return v
 
 
-# NOTE can we exploit the zero b2 for orb < nocc for efficiency?
-def vec_b_hole(gfccsd, orb):
-    """Get the first- and second-order contributions to the right-hand
-    transformed vector for a given orbital for the hole part of the
-    Green's function.
-    """
-
-    nocc = gfccsd.nocc
-    nvir = gfccsd.nmo - gfccsd.nocc
-
-    if orb < nocc:
-        b1 = _kd(nocc, orb)
-        b2 = np.zeros((nocc, nocc, nvir))
-
-    else:
-        b1 = gfccsd.t1[:, orb-nocc]
-        b2 = gfccsd.t2[:, :, orb-nocc]
-
-    return b1, b2
-
-
 def contract_ket_hole(gfccsd, eom, v, orb):
     # FIXME check dagger in docstirng
     r"""Contract a vector with \bar{a}_p |\Psi>.
@@ -505,7 +481,7 @@ def contract_ket_hole(gfccsd, eom, v, orb):
         return np.dot(v, b)
 
 
-def vec_e_hole(gfccsd, orb):
+def build_bra_hole(gfccsd, eom, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the hole part of the
     Green's function.
@@ -532,31 +508,7 @@ def vec_e_hole(gfccsd, orb):
         e2 = gfccsd.l2[:, :, orb-nocc] * 2.0
         e2 -= gfccsd.l2[:, :, :, orb-nocc]
 
-    return e1, e2
-
-
-def vec_b_part(gfccsd, orb):
-    """Get the first- and second-order contributions to the right-hand
-    transformed vector for a given orbital for the particle part of the
-    Green's function.
-    """
-    # FIXME does b1 for orb >= nocc need a -1 factor? I swapped the
-    # factors of b1 and b2 for orb < nocc and swapped the fact in
-    # the bra-ket contraction to the moment too, so that the t1 and
-    # t2 amplitudes don't need to be multiplied by a scalar
-
-    nocc = gfccsd.nocc
-    nvir = gfccsd.nmo - nocc
-
-    if orb < nocc:
-        b1 = gfccsd.t1[orb]
-        b2 = gfccsd.t2[orb]
-
-    else:
-        b1 = _kd(nvir, orb-nocc)
-        b2 = np.zeros((nocc, nvir, nvir))
-
-    return b1, b2
+    return eom.amplitudes_to_vector(e1, e2)
 
 
 def contract_ket_part(gfccsd, eom, v, orb):
@@ -572,10 +524,11 @@ def contract_ket_part(gfccsd, eom, v, orb):
         b = eom.amplitudes_to_vector(b1, b2)
         return np.dot(v, b)
     else:
+        # FIXME does this need a -1 factor? check!!!
         return v[orb-nocc]
 
 
-def vec_e_part(gfccsd, orb):
+def build_bra_part(gfccsd, eom, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the particle part of the
     Green's function.
@@ -603,7 +556,7 @@ def vec_e_part(gfccsd, orb):
         e2 += tmp * 2.0
         e2 -= tmp.swapaxes(1, 2)
 
-    return e1, e2
+    return eom.amplitudes_to_vector(e1, e2)
 
 
 class GFCCSD(lib.StreamObject):
@@ -740,10 +693,10 @@ class GFCCSD(lib.StreamObject):
     def l2(self, l2):
         self._l2 = l2
 
-    vec_e_hole = vec_e_hole
-    vec_e_part = vec_e_part
-    vec_b_hole = vec_b_hole
-    vec_b_part = vec_b_part
+    build_bra_hole = build_bra_hole
+    build_bra_part = build_bra_part
+    contract_ket_hole = contract_ket_hole
+    contract_ket_part = contract_ket_part
 
     def make_imds(self, eris=None, ip=True, ea=True):
         """Build EOM intermediates.
@@ -774,13 +727,10 @@ class GFCCSD(lib.StreamObject):
         diag = eom.get_diag(imds)
 
         for p in mpi_helper.nrange(self.nmo):
-            r1, r2 = self.vec_e_hole(p)
-            ket = eom.amplitudes_to_vector(r1, r2)
-
+            ket = self.build_bra_hole(eom, p)
             for n in range(nmom):
                 for q in range(self.nmo):
-                    moments[n, q, p] += contract_ket_hole(self, eom, ket, q)
-
+                    moments[n, q, p] += self.contract_ket_hole(eom, ket, q)
                 if (n+1) != nmom:
                     ket = -eom.l_matvec(ket, imds, diag)
 
@@ -807,13 +757,10 @@ class GFCCSD(lib.StreamObject):
         diag = eom.get_diag(imds)
 
         for p in mpi_helper.nrange(self.nmo):
-            r1, r2 = self.vec_e_part(p)
-            ket = eom.amplitudes_to_vector(r1, r2)
-
+            ket = self.build_bra_part(eom, p)
             for n in range(nmom):
                 for q in range(self.nmo):
-                    moments[n, q, p] -= contract_ket_part(self, eom, ket, q)
-
+                    moments[n, q, p] -= self.contract_ket_part(eom, ket, q)
                 if (n+1) != nmom:
                     ket = eom.l_matvec(ket, imds, diag)
 
