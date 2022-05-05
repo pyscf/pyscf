@@ -20,6 +20,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad.rhf import GradientsMixin
 
+AMU_TO_AU = data.nist.ATOMIC_MASS/data.nist.E_MASS
 
 class Frame:
     def __init__(self, ekin=None, epot=None, coords=None, time=None):
@@ -187,8 +188,8 @@ class Integrator:
 
     def compute_kinetic_energy(self):
         energy = 0
-        for v, m in zip(self.veloc, self.mol.atom_mass_list()):
-            energy += 0.5 * m * data.nist.MP_ME * np.linalg.norm(v) ** 2
+        for v, m in zip(self.veloc, self.mol.atom_mass_list(isotope_avg=True)):
+            energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
 
         return energy
 
@@ -230,8 +231,8 @@ class VelocityVerlot(Integrator):
             raise RuntimeError("SCF did not converge!")
 
         a = []
-        for m, g in zip(self.mol.atom_mass_list(), grad):
-            a.append(-1 * g / m / data.nist.MP_ME)
+        for m, g in zip(self.mol.atom_mass_list(isotope_avg=True), grad):
+            a.append(-1 * g / m / AMU_TO_AU) 
 
         return e_tot, np.array(a)
 

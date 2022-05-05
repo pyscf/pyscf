@@ -43,23 +43,28 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    # def test_zero_init_veloc(self):
-    #     driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
-    #
-    #     driver.kernel()
-    #     self.assertAlmostEqual(driver.ekin, 0.0003490353178906977, 12)
-    #     self.assertAlmostEqual(driver.epot, -75.96132726509461, 12)
-    #
-    #     final_coord = np.array([[-7.28115148e-19, 1.49705405e-16, 2.05638219e-03],
-    #                             [-9.60088675e-17, -1.41129779e+00, 1.09281818e+00],
-    #                             [1.07658710e-16, 1.41129779e+00, 1.09281818e+00]])
-    #
-    #     self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-    #     beginning_energy = driver.ekin + driver.epot
-    #
-    #     driver.max_iterations=990
-    #     driver.kernel()
-    #     self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 6)
+    def test_zero_init_veloc(self):
+        driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
+    
+        driver.kernel()
+        self.assertAlmostEqual(driver.ekin, 0.0003490772304325728, 12)
+        self.assertAlmostEqual(driver.epot, -75.96132730618872, 12) 
+    
+        final_coord = np.array([
+            [0.0000000000, -0.0000000000, 0.0020715828],
+            [0.0000000000, -1.4113094571, 1.0928291295],
+            [-0.0000000000, 1.4113094571, 1.0928291295]
+            ])
+        final_coord = np.array([[-7.28115148e-19, 1.49705405e-16, 2.05638219e-03],
+                                [-9.60088675e-17, -1.41129779e+00, 1.09281818e+00],
+                                [1.07658710e-16, 1.41129779e+00, 1.09281818e+00]])
+    
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+        beginning_energy = driver.ekin + driver.epot
+    
+        driver.max_iterations=990
+        driver.kernel()
+        self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 6)
 
     def test_init_veloc(self):
         init_veloc = np.array([
@@ -75,25 +80,22 @@ class KnownValues(unittest.TestCase):
                                            trajectory_output="BOMD.md.xyz")
 
         driver.kernel()
-        # self.assertAlmostEqual(driver.ekin, 2.233200713192E-02, 12)
-        # self.assertAlmostEqual(driver.epot, -7.595967859449E+01, 12)
-        #
-        # final_coord = np.array([[0.05509466, 0.00421155, 0.07404655],
-        #                         [-0.05805231, -1.41284605, 1.2617895],
-        #                         [-0.18662225, 1.40144122, 1.11390423]])
-        #
-        # self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        # beginning_energy = driver.ekin + driver.epot
-        #
-        # driver.max_iterations=990
-        # driver.kernel()
-        # self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 3)
+        self.assertAlmostEqual(driver.ekin, 0.022230011628475037, 12)
+        self.assertAlmostEqual(driver.epot, -75.95967831911219, 12)
+        
+        final_coord = np.array([[0.05509466, 0.00421155, 0.07404655],
+                                [-0.05805231, -1.41284605, 1.2617895],
+                                [-0.18662225, 1.40144122, 1.11390423]])
+        
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+        beginning_energy = driver.ekin + driver.epot
+        
+        driver.max_iterations=990
+        driver.kernel()
+        self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 3)
 
         driver.energy_output.close()
         driver.trajectory_output.close()
-        from pyscf import data
-        print("mass of oxygen in au")
-        print(16*data.nist.MP_ME)
 
 
 if __name__ == "__main__":
