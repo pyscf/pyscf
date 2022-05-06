@@ -51,29 +51,28 @@ def kernel(
 
     log = logger.new_logger(gfccsd, verbose)
 
-    if t1 is None:
-        t1 = gfccsd.t1
-    if t2 is None:
-        t2 = gfccsd.t2
-    if l1 is None:
-        l1 = gfccsd.l1
-    if l2 is None:
-        l2 = gfccsd.l2
+    if (l1 is None and gfccsd._cc.l1 is None) or (l2 is None and gfccsd._cc.l2 is None):
+        raise ValueError(
+                "Lambda amplitudes must be set for %s. This "
+                "can be done by calling solve_lambda on the "
+                "CC method or by setting l1, l2 attributes. "
+                % gfccsd.__class__.__name__
+        )
 
-    if hole_moments is None or part_moments is None:
+    if (hole_moments is None or part_moments is None) and imds is None:
         ip = hole_moments is None
         ea = part_moments is None
         imds = gfccsd.make_imds(eris=eris, ip=ip, ea=ea)
 
     if hole_moments is None:
         log.info("Building hole moments:")
-        hole_moments = gfccsd.build_hole_moments(imds=imds)
+        hole_moments = gfccsd.build_hole_moments(t1=t1, t2=t2, l1=l1, l2=l2, imds=imds)
     else:
         log.info("Hole moments passed by argument.")
 
     if part_moments is None:
         log.info("Building particle moments:")
-        part_moments = gfccsd.build_part_moments(imds=imds)
+        part_moments = gfccsd.build_part_moments(t1=t1, t2=t2, l1=l1, l2=l2, imds=imds)
     else:
         log.info("Particle moments passed by argument.")
 
@@ -293,8 +292,8 @@ def block_lanczos_symm(gfccsd, moments, verbose=None):
         if i:
             b2 -= np.dot(b[i-1], b[i-1])
 
-        b[i] = mat_sqrt(b2)
-        binv = mat_isqrt(b2)
+        b[i] = mat_sqrt(b2, hermi=True)
+        binv = mat_isqrt(b2, hermi=True)
 
         for j in range(i+2):
             r = (
@@ -461,60 +460,60 @@ def _kd(n, i):
     return v
 
 
-def contract_ket_hole(gfccsd, eom, v, orb):
+def contract_ket_hole(gfccsd, eom, t1, t2, v, orb):
     r"""Contract a vector with \bar{a}^\dagger_p |\Psi>.
     """
 
-    nocc = gfccsd.nocc
+    nocc, nvir = t1.shape
 
     if orb < nocc:
         return v[orb]
     else:
-        b1 = gfccsd.t1[:, orb-nocc]
-        b2 = gfccsd.t2[:, :, orb-nocc]
+        b1 = t1[:, orb-nocc]
+        b2 = t2[:, :, orb-nocc]
         b = eom.amplitudes_to_vector(b1, b2)
         return np.dot(v, b)
 
 
-def build_bra_hole(gfccsd, eom, orb):
+def build_bra_hole(gfccsd, eom, t1, t2, l1, l2, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the hole part of the
     Green's function.
     """
 
-    nocc = gfccsd.nocc
+    nocc, nvir = t1.shape
 
     if orb < nocc:
         e1 = _kd(nocc, orb)
-        e1 -= lib.einsum("ie,e->i", gfccsd.l1, gfccsd.t1[orb])
-        tmp = gfccsd.t2[orb] * 2.0
-        tmp -= gfccsd.t2[orb].swapaxes(1, 2)
-        e1 -= lib.einsum("imef,mef->i", gfccsd.l2, tmp)
+        e1 -= lib.einsum("ie,e->i", l1, t1[orb])
+        tmp = t2[orb] * 2.0
+        tmp -= t2[orb].swapaxes(1, 2)
+        e1 -= lib.einsum("imef,mef->i", l2, tmp)
 
-        tmp = -lib.einsum("ijea,e->ija", gfccsd.l2, gfccsd.t1[orb])
+        tmp = -lib.einsum("ijea,e->ija", l2, t1[orb])
         e2 = 2.0 * tmp
         e2 -= tmp.swapaxes(0, 1)
-        tmp = lib.einsum("ja,i->ija", gfccsd.l1, _kd(nocc, orb))
+        tmp = lib.einsum("ja,i->ija", l1, _kd(nocc, orb))
         e2 += tmp * 2.0
         e2 -= tmp.swapaxes(0, 1)
 
     else:
-        e1 = gfccsd.l1[:, orb-nocc].copy()
-        e2 = gfccsd.l2[:, :, orb-nocc] * 2.0
-        e2 -= gfccsd.l2[:, :, :, orb-nocc]
+        e1 = l1[:, orb-nocc].copy()
+        e2 = l2[:, :, orb-nocc] * 2.0
+        e2 -= l2[:, :, :, orb-nocc]
 
     return eom.amplitudes_to_vector(e1, e2)
 
 
-def contract_ket_part(gfccsd, eom, v, orb):
+def contract_ket_part(gfccsd, eom, t1, t2, v, orb):
     r"""Contract a vector with \bar{a}_p |\Psi>.
     """
 
-    nocc = gfccsd.nocc
+    nocc, nvir = t1.shape
 
     if orb < nocc:
-        b1 = gfccsd.t1[orb]
-        b2 = gfccsd.t2[orb]
+        b1 = t1[orb]
+        b2 = t2[orb]
         b = eom.amplitudes_to_vector(b1, b2)
         return np.dot(v, b)
     else:
@@ -522,31 +521,30 @@ def contract_ket_part(gfccsd, eom, v, orb):
         return v[orb-nocc]
 
 
-def build_bra_part(gfccsd, eom, orb):
+def build_bra_part(gfccsd, eom, t1, t2, l1, l2, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the particle part of the
     Green's function.
     """
 
-    nocc = gfccsd.nocc
-    nvir = gfccsd.nmo - nocc
+    nocc, nvir = t1.shape
 
     if orb < nocc:
-        e1 = -gfccsd.l1[orb]
-        e2 = -gfccsd.l2[orb] * 2.0
-        e2 += gfccsd.l2[:, orb]
+        e1 = -l1[orb]
+        e2 = -l2[orb] * 2.0
+        e2 += l2[:, orb]
 
     else:
         e1 = _kd(nvir, orb-nocc)
-        e1 -= lib.einsum("mb,m->b", gfccsd.l1, gfccsd.t1[:, orb-nocc])
-        tmp = gfccsd.t2[:, :, :, orb-nocc] * 2.0
-        tmp -= gfccsd.t2[:, :, orb-nocc]
-        e1 -= lib.einsum("kmeb,kme->b", gfccsd.l2, tmp)
+        e1 -= lib.einsum("mb,m->b", l1, t1[:, orb-nocc])
+        tmp = t2[:, :, :, orb-nocc] * 2.0
+        tmp -= t2[:, :, orb-nocc]
+        e1 -= lib.einsum("kmeb,kme->b", l2, tmp)
 
-        tmp = -lib.einsum("ikba,k->iab", gfccsd.l2, gfccsd.t1[:, orb-nocc])
+        tmp = -lib.einsum("ikba,k->iab", l2, t1[:, orb-nocc])
         e2 = tmp * 2.0
         e2 -= tmp.swapaxes(1, 2)
-        tmp = lib.einsum("ib,a->iab", gfccsd.l1, _kd(nvir, orb-nocc))
+        tmp = lib.einsum("ib,a->iab", l1, _kd(nvir, orb-nocc))
         e2 += tmp * 2.0
         e2 -= tmp.swapaxes(1, 2)
 
@@ -637,56 +635,6 @@ class GFCCSD(lib.StreamObject):
     def eomea_method(self):
         return self._cc.eomea_method()
 
-    @property
-    def t1(self):
-        if self._t1 is None:
-            return self._cc.t1
-        return self._t1
-    @t1.setter
-    def t1(self, t1):
-        self._t1 = t1
-
-    @property
-    def t2(self):
-        if self._t2 is None:
-            return self._cc.t2
-        return self._t2
-    @t2.setter
-    def t2(self, t2):
-        self._t2 = t2
-
-    @property
-    def l1(self):
-        if self._l1 is None:
-            if getattr(self._cc, "l1", None) is None:
-                raise ValueError(
-                        "Lambda amplitudes must be set for %s. This "
-                        "can be done by calling solve_lambda on the "
-                        "CC method or by setting l1, l2 attributes. "
-                        % self.__class__.__name__
-                )
-            return self._cc.l1
-        return self._l1
-    @l1.setter
-    def l1(self, l1):
-        self._l1 = l1
-
-    @property
-    def l2(self):
-        if self._l2 is None:
-            if getattr(self._cc, "l1", None) is None:
-                raise ValueError(
-                        "Lambda amplitudes must be set for %s. This "
-                        "can be done by calling solve_lambda on the "
-                        "CC method or by setting l1, l2 attributes. "
-                        % self.__class__.__name__
-                )
-            return self._cc.l2
-        return self._l2
-    @l2.setter
-    def l2(self, l2):
-        self._l2 = l2
-
     build_bra_hole = build_bra_hole
     build_bra_part = build_bra_part
     contract_ket_hole = contract_ket_hole
@@ -705,9 +653,18 @@ class GFCCSD(lib.StreamObject):
 
         return imds
 
-    def build_hole_moments(self, imds=None, niter=None):
+    def build_hole_moments(self, t1=None, t2=None, l1=None, l2=None, imds=None, niter=None):
         """Build moments of the hole (IP-EOM-CCSD) Green's function.
         """
+
+        if t1 is None:
+            t1 = self._cc.t1
+        if t2 is None:
+            t2 = self._cc.t2
+        if l1 is None:
+            l1 = self._cc.l1
+        if l2 is None:
+            l2 = self._cc.l2
 
         if niter is None:
             nmom = 2 * self.niter[0] + 2
@@ -721,10 +678,10 @@ class GFCCSD(lib.StreamObject):
         diag = eom.get_diag(imds)
 
         for p in mpi_helper.nrange(self.nmo):
-            ket = self.build_bra_hole(eom, p)
+            ket = self.build_bra_hole(eom, t1, t2, l1, l2, p)
             for n in range(nmom):
                 for q in range(self.nmo):
-                    moments[n, q, p] += self.contract_ket_hole(eom, ket, q)
+                    moments[n, q, p] += self.contract_ket_hole(eom, t1, t2, ket, q)
                 if (n+1) != nmom:
                     ket = -eom.l_matvec(ket, imds, diag)
 
@@ -735,9 +692,18 @@ class GFCCSD(lib.StreamObject):
 
         return moments
 
-    def build_part_moments(self, imds=None, niter=None):
+    def build_part_moments(self, t1=None, t2=None, l1=None, l2=None, imds=None, niter=None):
         """Build moments of the particle (EA-EOM-CCSD) Green's function.
         """
+
+        if t1 is None:
+            t1 = self._cc.t1
+        if t2 is None:
+            t2 = self._cc.t2
+        if l1 is None:
+            l1 = self._cc.l1
+        if l2 is None:
+            l2 = self._cc.l2
 
         if niter is None:
             nmom = 2 * self.niter[1] + 2
@@ -751,10 +717,10 @@ class GFCCSD(lib.StreamObject):
         diag = eom.get_diag(imds)
 
         for p in mpi_helper.nrange(self.nmo):
-            ket = self.build_bra_part(eom, p)
+            ket = self.build_bra_part(eom, t1, t2, l1, l2, p)
             for n in range(nmom):
                 for q in range(self.nmo):
-                    moments[n, q, p] -= self.contract_ket_part(eom, ket, q)
+                    moments[n, q, p] -= self.contract_ket_part(eom, t1, t2, ket, q)
                 if (n+1) != nmom:
                     ket = eom.l_matvec(ket, imds, diag)
 
