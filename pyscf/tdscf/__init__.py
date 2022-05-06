@@ -32,7 +32,7 @@ except (ImportError, IOError):
 
 
 def TDHF(mf):
-    if getattr(mf, 'xc', None):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf)  # To remove newton decoration

@@ -413,6 +413,14 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
             self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
 
+    def test_conc_cell(self):
+        cl1 = pgto.M(a=np.eye(3)*5, atom='Cu', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl2 = pgto.M(a=np.eye(3)*5, atom='Cs', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl3 = cl1 + cl2
+        self.assertTrue(len(cl3._ecpbas), 20)
+        self.assertTrue(len(cl3._bas), 12)
+        self.assertTrue(len(cl3._atm), 8)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
