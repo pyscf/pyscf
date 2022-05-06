@@ -23,15 +23,16 @@ from pyscf.grad.rhf import GradientsMixin
 AMU_TO_AU = data.nist.ATOMIC_MASS/data.nist.E_MASS
 
 class Frame:
-    def __init__(self, ekin=None, epot=None, coords=None, time=None):
+    def __init__(self, ekin=None, epot=None, coord=None, veloc=None, time=None):
         self.ekin = ekin
         self.epot = epot
         self.etot = self.ekin + self.epot
-        self.coords = coords
+        self.coord = coord
+        self.veloc = veloc
         self.time = time
 
 def toframe(integrator):
-    return Frame(integrator.ekin, integrator.epot, integrator.mol.atom_coords(), integrator.time)
+    return Frame(ekin=integrator.ekin, epot=integrator.epot, coord=integrator.mol.atom_coords(), veloc=integrator.veloc, time=integrator.time)
 
 def _write(dev, mol, vec, atmlst=None):
     '''Format output of molecular vector quantity.
@@ -55,22 +56,16 @@ def kernel(integrator, verbose=logger.NOTE):
 
     # Begin the iterations to run molecular dynamics
     t1 = t0
-    # TODO look at berny_solver.py and others to get an idea of how they do this sort of thing...see if we can adapt
-    # for example, use the for iteration, frame in integrator
-    while integrator.iteration < integrator.max_iterations:
-        if log.verbose >= lib.logger.NOTE:
-            log.note('\nBOMD Time %d', integrator.time)
-
-        integrator.next()
+    for iteration, frame in enumerate(integrator):
         log.note("----------- %s final geometry -----------", integrator.__class__.__name__)
-        _write(integrator, integrator.mol, integrator.mol.atom_coords())
+        _write(integrator, integrator.mol, frame.coord)
         log.note("----------------------------------------------")
         log.note("------------ %s final velocity -----------", integrator.__class__.__name__)
-        _write(integrator, integrator.mol, integrator.veloc)
+        _write(integrator, integrator.mol, frame.veloc)
         log.note("----------------------------------------------")
-        log.note("Ekin = %17.13f", integrator.ekin)
-        log.note("Epot = %17.13f", integrator.epot)
-        log.note("Etot = %17.13f", integrator.ekin+integrator.epot)
+        log.note("Ekin = %17.13f", frame.ekin)
+        log.note("Epot = %17.13f", frame.epot)
+        log.note("Etot = %17.13f", frame.etot)
 
         if integrator.energy_output is not None:
             integrator.write_energy()
@@ -78,10 +73,7 @@ def kernel(integrator, verbose=logger.NOTE):
         if integrator.trajectory_output is not None:
             integrator.write_coord()
 
-        if integrator.incore_anyway:
-            integrator.frames.append(toframe(integrator))
-
-        t1 = log.timer('BOMD iteration %d' % integrator.iteration, *t1)
+        t1 = log.timer('BOMD iteration %d' % iteration, *t1)
     
     t0 = log.timer('BOMD', *t0)
     return integrator
@@ -106,7 +98,6 @@ class Integrator:
         self.verbose = self.mol.verbose
         self.max_iterations = 1
         self.dt = 10
-        self.iteration = 0
         self.frames = None
         self.epot = None
         self.ekin = None
@@ -117,6 +108,7 @@ class Integrator:
         self.__dict__.update(kwargs)
 
     def kernel(self, dump_flags=True, veloc=None, energy_output=None, trajectory_output=None, verbose=None, incore_anyway=None):
+
         if veloc is not None: self.veloc = veloc
         if energy_output is not None: self.energy_output = energy_output
         if trajectory_output is not None: self.trajectory_output = trajectory_output
@@ -128,10 +120,7 @@ class Integrator:
             self.veloc = np.full((self.mol.natm, 3), 0.0)
 
         # avoid opening energy_output file twice
-        if (self.energy_output is not None and
-                # StringIO() does not have attribute 'name'
-                getattr(self.stdout, 'name', None) != self.energy_output):
-
+        if type(self.energy_output) is str:
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.energy_output):
                     print('overwrite energy output file: %s' % self.energy_output)
@@ -144,11 +133,7 @@ class Integrator:
                 self.energy_output = open(self.energy_output, 'w')
 
         # avoid opening trajectory_output file twice
-        if (self.trajectory_output is not None and
-                # StringIO() does not have attribute 'name'
-                getattr(self.stdout, 'name', None) != self.trajectory_output and
-                getattr(self.energy_output, 'name', None) != trajectory_output):
-
+        if type(self.trajectory_output) is str:
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.trajectory_output):
                     print('overwrite energy output file: %s' % self.trajectory_output)
@@ -168,6 +153,8 @@ class Integrator:
 
         kernel(self, verbose=log)
 
+    run = kernel
+
     def dump_input(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
@@ -182,9 +169,6 @@ class Integrator:
     #TODO implement sanity check
     def check_sanity(self):
         pass
-
-    def next(self):
-        raise NotImplementedError("Method Not Implemented")
 
     def compute_kinetic_energy(self):
         energy = 0
@@ -205,25 +189,41 @@ class VelocityVerlot(Integrator):
         super().__init__(scanner, **kwargs)
         self.accel = None
 
-    def next(self):
-        # For the first iteration, just compute the acceleration
-        # and the write out total energies and initial geometry to file
-        if self.iteration == 0:
-            next_epot, next_accel = self._compute_accel()
+    def __iter__(self):
+        self._iteration = 0
+        self._log = logger.new_logger(self, self.verbose)
+        return self
+
+    def __next__(self):
+        if self._iteration < self.max_iterations:
+            if self._log.verbose >= lib.logger.NOTE:
+                self._log.note('\nBOMD Time %d', self.time)
+
+            # If no acceleration, compute that first, and then go onto the next step
+            if self.accel is None:
+                next_epot, next_accel = self._compute_accel()
+
+            else:
+                self.mol.set_geom_(self._next_geometry(), unit="B")
+                self.mol.build()
+                next_epot, next_accel = self._compute_accel()
+                self.veloc = self._next_velocity(next_accel)
+
+            self.epot = next_epot
+            self.ekin = self.compute_kinetic_energy()
+            self.accel = next_accel
+
+            current_frame = toframe(self)
+            if self.incore_anyway:
+                self.frames.append(current_frame)
+
+            self._iteration += 1
+            self.time += self.dt
+
+            return current_frame
 
         else:
-            self.mol.set_geom_(self._next_geometry(), unit="B")
-            self.mol.build()
-            next_epot, next_accel = self._compute_accel()
-            self.veloc = self._next_velocity(next_accel)
-            
-
-        self.epot = next_epot
-        self.ekin = self.compute_kinetic_energy()
-        self.accel = next_accel
-
-        self.iteration += 1
-        self.time += self.dt
+            raise StopIteration
 
     def _compute_accel(self):
         e_tot, grad = self.scanner(self.mol)
