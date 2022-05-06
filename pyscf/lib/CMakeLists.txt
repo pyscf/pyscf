@@ -29,7 +29,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
-set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "-Wall -fsigned-char ${CMAKE_C_FLAGS}")
 
 option(BUILD_MARCH_NATIVE "gcc flag -march=native" off)
 if (BUILD_MARCH_NATIVE)
