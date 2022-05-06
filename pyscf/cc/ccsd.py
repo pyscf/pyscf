@@ -90,9 +90,18 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
-        if abs(eccsd-eold) < tol and normt < tolnormt:
+        #if abs(eccsd-eold) < tol and normt < tolnormt:
+        #    conv = True
+        #    break
+
+        if (abs(eccsd-eold) < tol and normt < tolnormt):
+            mycc.conv_flag = True
+        else:
+            mycc.conv_flag = False
+        if (mycc.conv_flag and not mycc.force_iter) or mycc.force_exit:
             conv = True
             break
+
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
@@ -923,6 +932,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.level_shift = 0
         # For tailored CC
         self.tailor_func = None
+        self.conv_flag = False
+        self.force_iter = False
+        self.force_exit = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
