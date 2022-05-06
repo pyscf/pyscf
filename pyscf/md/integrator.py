@@ -23,6 +23,22 @@ from pyscf.grad.rhf import GradientsMixin
 AMU_TO_AU = data.nist.ATOMIC_MASS/data.nist.E_MASS
 
 class Frame:
+    '''Basic class to hold information at each time step of a MD simulation
+
+    Attributes:
+        ekin : float
+            Kinetic energy
+        epot : float
+            Potential energy (electronic energy)
+        etot : float
+            Total energy, sum of the potential and kinetic energy
+        coord : 2D array with shape (natm, 3)
+            Geometry of the system at the current time step
+        veloc : 2D array with shape (natm, 3)
+            Velocities of the system at the current time step
+        time : float
+            Time for which this frame represents
+    '''
     def __init__(self, ekin=None, epot=None, coord=None, veloc=None, time=None):
         self.ekin = ekin
         self.epot = epot
@@ -31,14 +47,20 @@ class Frame:
         self.veloc = veloc
         self.time = time
 
-def toframe(integrator):
+def _toframe(integrator):
+    '''Convert an Integrator to a Frame given current saved data.
+    Args:
+        integrator : md.integrator.Integrator object
+    '''
     return Frame(ekin=integrator.ekin, epot=integrator.epot, coord=integrator.mol.atom_coords(), veloc=integrator.veloc, time=integrator.time)
 
 def _write(dev, mol, vec, atmlst=None):
     '''Format output of molecular vector quantity.
     Args:
         dev : lib.logger.Logger object
+        mol : gto.mol object
         vec : 2D array with shape (mol.natm, 3)
+        atmlst : array of indices to pull atoms from. Must be smaller than mol.natm.
     '''
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -57,24 +79,18 @@ def kernel(integrator, verbose=logger.NOTE):
     # Begin the iterations to run molecular dynamics
     t1 = t0
     for iteration, frame in enumerate(integrator):
-        log.note("----------- %s final geometry -----------", integrator.__class__.__name__)
+        log.note('----------- %s final geometry -----------', integrator.__class__.__name__)
         _write(integrator, integrator.mol, frame.coord)
-        log.note("----------------------------------------------")
-        log.note("------------ %s final velocity -----------", integrator.__class__.__name__)
+        log.note('----------------------------------------------')
+        log.note('------------ %s final velocity -----------', integrator.__class__.__name__)
         _write(integrator, integrator.mol, frame.veloc)
-        log.note("----------------------------------------------")
-        log.note("Ekin = %17.13f", frame.ekin)
-        log.note("Epot = %17.13f", frame.epot)
-        log.note("Etot = %17.13f", frame.etot)
-
-        if integrator.energy_output is not None:
-            integrator.write_energy()
-
-        if integrator.trajectory_output is not None:
-            integrator.write_coord()
+        log.note('----------------------------------------------')
+        log.note('Ekin = %17.13f', frame.ekin)
+        log.note('Epot = %17.13f', frame.epot)
+        log.note('Etot = %17.13f', frame.etot)
 
         t1 = log.timer('BOMD iteration %d' % iteration, *t1)
-    
+
     t0 = log.timer('BOMD', *t0)
     return integrator
 
@@ -89,9 +105,9 @@ class Integrator:
         elif getattr(method, 'nuc_grad_method', None):
             self.scanner = method.nuc_grad_method().as_scanner()
         else:
-            raise NotImplemented("Nuclear gradients of %s not available" % method)
+            raise NotImplemented('Nuclear gradients of %s not available' % method)
 
-        self.mol = self.scanner.mol.copy()
+        self.mol = self.scanner.mol
         self.stdout = self.mol.stdout
         self.incore_anyway = self.mol.incore_anyway
         self.veloc = None
@@ -107,13 +123,10 @@ class Integrator:
 
         self.__dict__.update(kwargs)
 
-    def kernel(self, dump_flags=True, veloc=None, energy_output=None, trajectory_output=None, verbose=None, incore_anyway=None):
+    def kernel(self, veloc=None, dump_flags=True, verbose=None):
 
         if veloc is not None: self.veloc = veloc
-        if energy_output is not None: self.energy_output = energy_output
-        if trajectory_output is not None: self.trajectory_output = trajectory_output
-        if verbose is not None: self.verbose = verbose
-        if incore_anyway is not None: self.incore_anyway = incore_anyway
+        if verbose is None: verbose = self.verbose
 
         # Default velocities are 0 if none specified
         if self.veloc is None:
@@ -129,8 +142,10 @@ class Integrator:
 
             if self.energy_output == '/dev/null':
                 self.energy_output = open(os.devnull, 'w')
+
             else:
                 self.energy_output = open(self.energy_output, 'w')
+                self.energy_output.write('   time          Epot                 Ekin                 Etot\n')
 
         # avoid opening trajectory_output file twice
         if type(self.trajectory_output) is str:
@@ -153,8 +168,6 @@ class Integrator:
 
         kernel(self, verbose=log)
 
-    run = kernel
-
     def dump_input(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
@@ -166,28 +179,17 @@ class Integrator:
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
             log.info('%d %s    %.8E  %.8E  %.8E', i, e, *v)
 
-    #TODO implement sanity check
+    # TODO implement sanity check
     def check_sanity(self):
         pass
 
     def compute_kinetic_energy(self):
+        '''Compute the kinetic energy of the current frame.'''
         energy = 0
         for v, m in zip(self.veloc, self.mol.atom_mass_list(isotope_avg=True)):
             energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
 
         return energy
-
-    def write_energy(self):
-        self.energy_output.write(f"{self.time:8.2f}  {self.epot:.12E}  {self.ekin:.12E}  {self.ekin + self.epot:.12E}\n")
-
-    def write_coord(self):
-        self.trajectory_output.write(f"{self.mol.natm}\nMD Time {self.time}\n" + self.mol.tostring(format="raw"))
-
-class VelocityVerlot(Integrator):
-
-    def __init__(self, scanner, **kwargs):
-        super().__init__(scanner, **kwargs)
-        self.accel = None
 
     def __iter__(self):
         self._iteration = 0
@@ -199,23 +201,16 @@ class VelocityVerlot(Integrator):
             if self._log.verbose >= lib.logger.NOTE:
                 self._log.note('\nBOMD Time %d', self.time)
 
-            # If no acceleration, compute that first, and then go onto the next step
-            if self.accel is None:
-                next_epot, next_accel = self._compute_accel()
+            current_frame = self._next()
 
-            else:
-                self.mol.set_geom_(self._next_geometry(), unit="B")
-                self.mol.build()
-                next_epot, next_accel = self._compute_accel()
-                self.veloc = self._next_velocity(next_accel)
-
-            self.epot = next_epot
-            self.ekin = self.compute_kinetic_energy()
-            self.accel = next_accel
-
-            current_frame = toframe(self)
             if self.incore_anyway:
                 self.frames.append(current_frame)
+
+            if self.energy_output is not None:
+                self._write_energy()
+
+            if self.trajectory_output is not None:
+                self._write_coord()
 
             self._iteration += 1
             self.time += self.dt
@@ -225,14 +220,59 @@ class VelocityVerlot(Integrator):
         else:
             raise StopIteration
 
+    def _next(self):
+        '''Determines the next step in the molecular dynamics simulation. Integrates to
+        the next time step. Must be implemented in derived classes.
+
+        Returns:
+            'Frame' which contains the new geometry, velocity, time step, and energy.
+        '''
+        raise NotImplementedError('Method Not Implemented')
+
+    def _write_energy(self):
+        '''Writes out the potential, kinetic, and total energy to the self.energy_output stream.'''
+        self.energy_output.write('%8.2f  %.12E  %.12E  %.12E\n' % (
+            self.time, self.epot, self.ekin, self.ekin+self.epot))
+
+    def _write_coord(self):
+        '''Writes out the current geometry to the self.trajectroy_output stream in xyz format.'''
+        self.trajectory_output.write('%s\nMD Time %s\n' % (self.mol.natm, self.time))
+        self.trajectory_output.write(self.mol.tostring(format='raw'))
+
+
+class VelocityVerlot(Integrator):
+
+    def __init__(self, method, **kwargs):
+        super().__init__(method, **kwargs)
+        self.accel = None
+
+    def _next(self):
+        # If no acceleration, compute that first, and then go onto the next step
+        if self.accel is None:
+            next_epot, next_accel = self._compute_accel()
+
+        else:
+            self.mol.set_geom_(self._next_geometry(), unit='B')
+            self.mol.build()
+            next_epot, next_accel = self._compute_accel()
+            self.veloc = self._next_velocity(next_accel)
+
+        self.epot = next_epot
+        self.ekin = self.compute_kinetic_energy()
+        self.accel = next_accel
+
+        return _toframe(self)
+
     def _compute_accel(self):
+        '''Given the current geometry, computes the acceleration for each atom.'''
         e_tot, grad = self.scanner(self.mol)
         if not self.scanner.converged:
-            raise RuntimeError("SCF did not converge!")
+            raise RuntimeError('SCF did not converge!')
+
 
         a = []
         for m, g in zip(self.mol.atom_mass_list(isotope_avg=True), grad):
-            a.append(-1 * g / m / AMU_TO_AU) 
+            a.append(-1 * g / m / AMU_TO_AU)
 
         return e_tot, np.array(a)
 
@@ -243,6 +283,7 @@ class VelocityVerlot(Integrator):
         return v + self.dt * 0.5 * (a2 + a1)
 
     def _next_geometry(self):
+        '''Computes the next geometry using the Velocity Verlet algorithm.'''
         new_coords = []
         for r, v, a in zip(self.mol.atom_coords(), self.veloc, self.accel):
             new_coords.append(self._next_atom_position(r, v, a))
@@ -250,6 +291,7 @@ class VelocityVerlot(Integrator):
         return np.array(new_coords)
 
     def _next_velocity(self, next_accel):
+        '''Compute the next velocity using the Velocity Verlet algorithm'''
         new_veloc = []
         for v, a2, a1 in zip(self.veloc, next_accel, self.accel):
             new_veloc.append(self._next_atom_velocity(v, a2, a1))

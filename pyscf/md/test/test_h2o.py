@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import unittest
-import os
 import numpy as np
 from pyscf import gto, scf
 import pyscf.md.integrator as integrator
@@ -46,6 +45,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_zero_init_veloc(self):
         driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
+        driver.trajectory_output = "BOMD.md.xyz"
 
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.0003490772304325728, 12)
