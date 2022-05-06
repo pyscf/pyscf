@@ -1,6 +1,6 @@
 '''
 Modifications to k-point sampled SCF classes,
-to enforce \phi(k) = \phi(-k)* symmetry
+to enforce phi(k) = phi(-k)* symmetry
 '''
 
 import numpy as np
@@ -48,7 +48,7 @@ def kscf_with_kconjsym(cls):
         cls: SCF class with k-point sampling.
 
     Returns:
-        cls_sym: SCF class with k-point sampling and \phi(k) = \phi(-k)* symmetry.
+        cls_sym: SCF class with k-point sampling and phi(k) = phi(-k)* symmetry.
     '''
 
     is_uhf = issubclass(cls, UHF)

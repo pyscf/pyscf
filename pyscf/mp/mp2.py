@@ -142,7 +142,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, eris=None, with_frozen=True, ao_repr=False):
+def make_rdm1(mp, t2=None, eris=None, with_frozen=True, ao_repr=False, with_mf=True):
     r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
@@ -164,7 +164,7 @@ def make_rdm1(mp, t2=None, eris=None, with_frozen=True, ao_repr=False):
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
     return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
-                               ao_repr=ao_repr)
+                               ao_repr=ao_repr, with_mf=with_mf)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2
