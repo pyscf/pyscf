@@ -400,7 +400,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False, with_mf=True):
     dm1a[nocca:,:nocca] = dm1a[:nocca,nocca:].conj().T
     dm1a[nocca:,nocca:] = dvv + dvv.conj().T
     dm1a *= .5
-    dm1a[numpy.diag_indices(nocca)] += 1
 
     dm1b = numpy.empty((nmob,nmob), dtype=dOO.dtype)
     dm1b[:noccb,:noccb] = dOO + dOO.conj().T
