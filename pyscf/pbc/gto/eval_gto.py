@@ -110,7 +110,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
-                              dtype=numpy.uint8)
+                              dtype=numpy.int8)
 # non0tab stores the number of images to be summed in real space.
 # Initializing it to 255 means all images are summed
         non0tab[:] = 0xff

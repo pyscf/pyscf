@@ -47,7 +47,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
     non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                          dtype=np.uint8)
+                          dtype=np.int8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
