@@ -32,7 +32,7 @@ h2o = gto.M(
 
 hf_scanner = scf.RHF(h2o)
 hf_scanner.build()
-hf_scanner.conv_tol_grad = 1e-6
+hf_scanner.conv_tol_grad = 4.75e-6
 hf_scanner.max_cycle = 700
 
 
@@ -45,7 +45,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_zero_init_veloc(self):
         driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
-        driver.trajectory_output = "BOMD.md.xyz"
+        driver.energy_output = "BOMD.md.energies"
 
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.0003490772304325728, 12)
