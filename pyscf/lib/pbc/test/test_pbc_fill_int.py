@@ -85,7 +85,7 @@ def run3c(fill, kpts, shls_slice=None):
                        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
                        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-                       env.ctypes.data_as(ctypes.c_void_p))
+                       env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
 
 def run2c(intor, fill, kpts, shls_slice=None):
@@ -118,7 +118,7 @@ def run2c(intor, fill, kpts, shls_slice=None):
         ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, pbcopt._this,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
 
 def finger(a):
