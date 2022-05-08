@@ -216,6 +216,8 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         for (i = 0; i < natm; i++) {
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
+                } else {
+                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
                 }
         }
 
@@ -242,7 +244,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (non0table[bas_id] == ALL_IMAGES) {
                         bas_nimgs = nimgs;
                 } else {
-                        bas_nimgs = non0table[bas_id];
+                        bas_nimgs = MIN(non0table[bas_id], nimgs);
                 }
 
                 for (i = 0; i < nkpts2*dimc; i++) {
@@ -334,6 +336,8 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         for (i = 0; i < natm; i++) {
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
+                } else {
+                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
                 }
         }
 
@@ -361,7 +365,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (non0table[bas_id] == ALL_IMAGES) {
                         bas_nimgs = nimgs;
                 } else {
-                        bas_nimgs = non0table[bas_id];
+                        bas_nimgs = MIN(non0table[bas_id], nimgs);
                 }
 
                 NPdset0(aobufk, ((size_t)nkpts2) * dimc);
