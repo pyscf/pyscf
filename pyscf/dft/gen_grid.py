@@ -381,7 +381,7 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
     nbas = shls_slice[1] - shls_slice[0]
 
     non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
-                          dtype=numpy.int8)
+                          dtype=numpy.uint8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),

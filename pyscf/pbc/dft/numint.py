@@ -121,7 +121,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
 
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                              dtype=numpy.int8)
+                              dtype=numpy.uint8)
         non0tab[:] = 0xff
 
     # complex orbitals or density matrix
@@ -190,7 +190,7 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
     if non0tab is None:
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                              dtype=numpy.int8)
+                              dtype=numpy.uint8)
         non0tab[:] = 0xff
 
     # complex orbitals or density matrix
@@ -1024,7 +1024,7 @@ class NumInt(numint.NumInt):
             non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                  dtype=numpy.int8)
+                                  dtype=numpy.uint8)
             non0tab[:] = 0xff
         kpt = numpy.reshape(kpt, 3)
         if kpts_band is None:
@@ -1190,7 +1190,7 @@ class KNumInt(numint.NumInt):
             non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                                  dtype=numpy.int8)
+                                  dtype=numpy.uint8)
             non0tab[:] = 0xff
         if kpts_band is not None:
             kpts_band = numpy.reshape(kpts_band, (-1,3))

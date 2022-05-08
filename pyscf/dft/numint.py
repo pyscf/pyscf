@@ -152,7 +152,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     if not hermi:
         # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
         # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
@@ -239,7 +239,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     pos = mo_occ > OCCDROP
@@ -463,7 +463,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
     transpose_for_uks = False
@@ -1997,7 +1997,7 @@ class NumInt(object):
             non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                                 dtype=numpy.int8)
+                                 dtype=numpy.uint8)
         if buf is None:
             buf = numpy.empty((comp,blksize,nao))
         for ip0 in range(0, ngrids, blksize):

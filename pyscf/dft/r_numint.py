@@ -87,7 +87,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
 
@@ -151,7 +151,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_2c()
     if xctype == 'LDA':
@@ -260,7 +260,7 @@ class RNumInt(numint.NumInt):
             non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                                 dtype=numpy.int8)
+                                 dtype=numpy.uint8)
 
         if buf is None:
             buf = numpy.empty((4,comp,blksize,nao), dtype=numpy.complex128)
