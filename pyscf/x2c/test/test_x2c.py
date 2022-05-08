@@ -183,7 +183,7 @@ C     F
         xmol, c = x2c.X2C(mol).get_xmol(mol)
         self.assertEqual(xmol.nbas, 18)
         self.assertEqual(xmol.nao, 42)
-        self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
+        self.assertAlmostEqual(lib.fp(c), -5.480689638416739, 12)
 
     def test_get_hcore(self):
         myx2c = scf.RHF(mol).sfx2c1e()

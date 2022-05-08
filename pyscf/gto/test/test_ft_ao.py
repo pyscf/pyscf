@@ -23,7 +23,7 @@ from pyscf.gto import ft_ao
 libpbc = lib.load_library('libpbc')
 
 def setUpModule():
-    global mol, Gvbase, Gv, gxyz
+    global mol, b, Gvbase, Gv, gxyz
     mol = gto.Mole()
     mol.atom = '''
     C    1.3    .2       .3

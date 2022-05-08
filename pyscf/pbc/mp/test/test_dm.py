@@ -19,7 +19,7 @@ import numpy as np
 from pyscf.pbc import gto, scf, mp
 
 def setUpModule():
-    global cell, kmf, kpts
+    global cell, kmf, kpts, nkpts
     cell = gto.Cell()
     cell.atom = """
     H  0.0 0.0 0.0

@@ -132,7 +132,7 @@ class KnownValues(unittest.TestCase):
     def test_state_specific_scanner(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', verbose=0)
         mf = scf.RHF(mol).run(conv_tol=1e-14)
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.CASSCF(mf, 4, 4).set(conv_tol=1e-8)
         gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
         e, de = gs(mol)
         self.assertAlmostEqual(e, -108.68788613661442, 7)

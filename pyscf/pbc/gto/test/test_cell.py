@@ -26,7 +26,7 @@ from pyscf.pbc import gto as pgto
 
 
 def setUpModule():
-    global cl, cl1
+    global cl, cl1, L, n
     L = 1.5
     n = 41
     cl = pgto.Cell()

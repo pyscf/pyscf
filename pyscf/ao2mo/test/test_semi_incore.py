@@ -25,7 +25,7 @@ from pyscf import ao2mo
 from pyscf.ao2mo import semi_incore
 
 def setUpModule():
-    global mol, eri
+    global mol, nao, eri
     mol = gto.Mole()
     mol.atom = [
         ['H' , (0. , 0. , .917)],

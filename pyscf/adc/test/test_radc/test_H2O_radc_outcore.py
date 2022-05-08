@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-def tearDownModule():
+def setUpModule():
     global mol, mf, myadc
     mol = gto.Mole()
     r = 0.957492

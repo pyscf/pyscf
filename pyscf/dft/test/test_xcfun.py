@@ -21,7 +21,7 @@ from pyscf import dft
 from pyscf import lib
 
 def setUpModule():
-    global mol, mf, ao, rho
+    global mol, mf, ao, rho, dm
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None

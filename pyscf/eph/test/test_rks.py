@@ -29,20 +29,22 @@ def setUpModule():
     mol.unit = 'Bohr'
     mol.basis = 'sto3g'
     mol.verbose=4
+    mol.output = '/dev/null'
     mol.build()
 
 def tearDownModule():
     global mol
+    mol.stdout.close()
     del mol
 
 class KnownValues(unittest.TestCase):
     def test_finite_diff_rks_eph(self):
         mf = dft.RKS(mol)
-        mf.grids.level=6
+        mf.grids.level=3
         mf.grids.build()
         mf.xc = 'b3lyp'
-        mf.conv_tol = 1e-16
-        mf.conv_tol_grad = 1e-10
+        mf.conv_tol = 1e-14
+        mf.conv_tol_grad = 1e-9
         mf.kernel()
 
         grad = mf.nuc_grad_method().kernel()

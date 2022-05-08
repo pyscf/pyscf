@@ -27,7 +27,7 @@ from pyscf.pbc.df import mdf_jk
 pyscf.pbc.DEBUG = False
 
 def setUpModule():
-    global cell, cell0, mf0
+    global cell, cell0, mf0, n
     L = 5.
     n = 11
     cell = pgto.Cell()

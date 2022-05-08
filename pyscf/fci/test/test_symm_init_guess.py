@@ -21,7 +21,7 @@ from pyscf import scf
 from pyscf import fci
 
 def setUpModule():
-    global mol, m
+    global mol, m, norb, nelec
     mol = gto.M(atom='Be 0 0 0; H -1.1 0 .23; H 1.1 0 .23',
                 symmetry='C2v', verbose=0)
     m = scf.RHF(mol)

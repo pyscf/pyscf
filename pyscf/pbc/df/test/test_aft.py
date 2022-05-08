@@ -304,7 +304,7 @@ def get_ao_eri(cell, kpt=np.zeros(3)):
 
 
 def setUpModule():
-    global cell, cell1, kdf0
+    global cell, cell1, kdf0, kpts, kpt0
     cell = pgto.Cell()
     cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
     cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],

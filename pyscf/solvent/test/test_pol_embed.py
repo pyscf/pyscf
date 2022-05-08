@@ -33,7 +33,7 @@ except ImportError:
 dname = os.path.dirname(__file__)
 
 def setUpModule():
-    global potf, potf2, mol, mol2
+    global potf, potf2, mol, mol2, potfile, potfile2
     potf = tempfile.NamedTemporaryFile()
     potf.write(b'''!
     @COORDINATES
