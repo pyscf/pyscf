@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import sys
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
 
@@ -140,7 +141,10 @@ setup(
     ext_modules=[Extension('pyscf_lib_placeholder', [])],
     cmdclass={'build_ext': CMakeBuildExt},
     install_requires=['numpy>=1.13,!=1.16,!=1.17',
-                      'scipy!=1.5.0,!=1.5.1',
+                      # scipy bugs
+                      # https://github.com/scipy/scipy/issues/12533
+                      # https://github.com/scipy/scipy/issues/15362
+                      'scipy<=1.1.0' if sys.platform == "darwin" else 'scipy!=1.5.0,!=1.5.1',
                       'h5py>=2.7'],
     extras_require=EXTRAS,
 )
