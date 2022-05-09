@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
+from pyscf.cc import addons
 from pyscf.cc import eom_rccsd
 from pyscf.cc import uintermediates
 
@@ -337,6 +338,9 @@ class EOMIP(eom_rccsd.EOMIP):
     def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_ip(r1, r2)
 
+    spatial2spin = staticmethod(spatial2spin_ip)
+    spin2spatial = staticmethod(spin2spatial_ip)
+
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
         nocca, noccb = self.nocc
@@ -393,14 +397,16 @@ def amplitudes_to_vector_ea(r1, r2):
                       r2aba.ravel(), r2bab.ravel(),
                       r2bbb[:,idxb[0],idxb[1]].ravel()))
 
-def spatial2spin_ea(r1, r2, orbspin=None):
-    '''Convert R1/R2 of spatial orbital representation to R1/R2 of
-    spin-orbital representation
-    '''
-    r1a, r1b = r1
-    r2aaa, r2aba, r2bab, r2bbb = r2
-    nocc_a, nvir_a = r2aaa.shape[:2]
-    nocc_b, nvir_b = r2bbb.shape[:2]
+def spatial2spin_ea(rx, orbspin=None):
+    '''Convert EOMEA spatial-orbital R1/R2 to spin-orbital R1/R2'''
+    if len(rx) == 2:  # r1
+        r1a, r1b = r1
+        nvir_a = r1a.shape
+        nvir_b = r1b.shape
+    else:
+        r2aaa, r2aba, r2bab, r2bbb = rx
+        nocc_a, nvir_a = r2aaa.shape[:2]
+        nocc_b, nvir_b = r2bbb.shape[:2]
 
     if orbspin is None:
         orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
@@ -443,7 +449,16 @@ def spatial2spin_ea(r1, r2, orbspin=None):
     r2 = r2.reshape(nocc, nvir, nvir)
     return r1, r2
 
-def spin2spatial_ea(r1, r2, orbspin):
+def spin2spatial_ea(rx, orbspin):
+    '''Convert EOMEE spin-orbital R1/R2 to spatial-orbital R1/R2'''
+    if len(rx) == 2:  # r1
+        r1ab, r1ba = rx
+        nocca, nvirb = r1ab.shape
+        noccb, nvira = r1ba.shape
+    else:
+        r2baaa,r2aaba,r2abbb,r2bbab = rx
+        noccb, nocca, nvira = r2baaa.shape[:3]
+        nvirb = r2aaba.shape[2]
     nocc, nvir = r2.shape[:2]
 
     idxoa = np.where(orbspin[:nocc] == 0)[0]
@@ -856,6 +871,9 @@ class EOMEA(eom_rccsd.EOMEA):
     def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_ea(r1, r2)
 
+    spatial2spin = staticmethod(spatial2spin_ea)
+    spin2spatial = staticmethod(spin2spatial_ea)
+
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
         nocca, noccb = self.nocc
@@ -1049,8 +1067,30 @@ def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     t2bbab = t2bbab.reshape(noccb,noccb,nvira,nvirb)
     return (t1ab,t1ba), (t2baaa, t2aaba, t2abbb, t2bbab)
 
+def spatial2spin_eomee(rx, orbspin):
+    '''Convert spin-reserved EOMEE spatial-orbital R1/R2 to spin-orbital R1/R2'''
+    if len(rx) == 2:  # r1
+        r1ab, r1ba = rx
+        nocca, nvirb = r1ab.shape
+        noccb, nvira = r1ba.shape
+    else:
+        r2baaa,r2aaba,r2abbb,r2bbab = rx
+        noccb, nocca, nvira = r2baaa.shape[:3]
+        nvirb = r2aaba.shape[2]
+    raise NotImplementedError
+
+def spin2spatial_eomee(rx, orbspin):
+    '''Convert EOMEE spin-orbital R1/R2 to spin-reserved EOMEE spatial-orbital R1/R2'''
+    if rx.ndim == 2:
+        r1ab = lib.take_2d(rx, idxoa, idxvb)
+        r1ba = lib.take_2d(rx, idxob, idxva)
+        return r1ab, r1ba
+    else:
+        pass
+    raise NotImplementedError
+
 def spatial2spin_eomsf(rx, orbspin):
-    '''Convert EOM spatial R1,R2 to spin-orbital R1,R2'''
+    '''Convert spin-flip EOMEE spatial-orbital R1/R2 to spin-orbital R1/R2'''
     if len(rx) == 2:  # r1
         r1ab, r1ba = rx
         nocca, nvirb = r1ab.shape
@@ -1098,7 +1138,7 @@ def spatial2spin_eomsf(rx, orbspin):
         return r2.reshape(nocc,nocc,nvir,nvir)
 
 def spin2spatial_eomsf(rx, orbspin):
-    '''Convert EOM spin-orbital R1,R2 to spatial R1,R2'''
+    '''Convert EOMEE spin-orbital R1/R2 to spin-flip EOMEE spatial-orbital R1/R2'''
     if rx.ndim == 2:  # r1
         nocc, nvir = rx.shape
     else:
@@ -1861,6 +1901,9 @@ class EOMEESpinKeep(EOMEE):
     def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_ee(r1, r2)
 
+    spatial2spin = staticmethod(spatial2spin_eomee)
+    spin2spatial = staticmethod(spin2spatial_eomee)
+
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
         nocca, noccb = self.nocc
@@ -1908,6 +1951,9 @@ class EOMEESpinFlip(EOMEE):
 
     def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_eomsf(r1, r2)
+
+    spatial2spin = staticmethod(spatial2spin_eomsf)
+    spin2spatial = staticmethod(spin2spatial_eomsf)
 
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
