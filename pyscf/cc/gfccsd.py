@@ -104,7 +104,7 @@ def kernel(
             a /= np.max(np.abs(a))
             b = hole_moments[n] / np.max(np.abs(hole_moments[n]))
             err = np.max(np.abs(a - b))
-            (logger.debug1 if err > 1e-8 else logger.warn)(
+            (logger.debug1 if err < 1e-8 else logger.warn)(
                     gfccsd, "Error in hole moment %d:  %10.6g", n, err)
     if gfccsd.niter[0] is not None:
         for n in range(2*gfccsd.niter[1]+2):
@@ -112,7 +112,7 @@ def kernel(
             a /= np.max(np.abs(a))
             b = part_moments[n] / np.max(np.abs(part_moments[n]))
             err = np.max(np.abs(a - b))
-            (logger.debug1 if err > 1e-8 else logger.warn)(
+            (logger.debug1 if err < 1e-8 else logger.warn)(
                     gfccsd, "Error in particle moment %d:  %10.6g", n, err)
 
     mask = np.argsort(eh.real)
@@ -261,9 +261,6 @@ def block_lanczos_symm(gfccsd, moments, verbose=None):
     v = defaultdict(lambda: np.zeros((nmo, nmo), dtype=dtype))
     v[0, 0] = np.eye(nmo).astype(dtype)
 
-    eigvals = np.linalg.eigvalsh(moments[0])
-    log.debug1("Minimum eigenvalue of 0th moment:  %.6g", np.min(np.abs(eigvals)))
-
     orth = mat_isqrt(moments[0], hermi=True)
     for i in range(len(moments)):
         t[i] = np.linalg.multi_dot((orth, moments[i], orth))
@@ -367,10 +364,6 @@ def block_lanczos_nosymm(gfccsd, moments, verbose=None):
     w = defaultdict(lambda: np.zeros((nmo, nmo), dtype=dtype))
     v[0, 0] = np.eye(nmo).astype(dtype)
     w[0, 0] = np.eye(nmo).astype(dtype)
-
-    eigvals = np.linalg.eigvals(moments[0])
-    log.debug1("Minimum eigenvalue of 0th moment:  %.6g", np.min(np.abs(eigvals)))
-    log.debug1("Maximum imag eigenvalue of 0th moment:  %.6g", np.max(np.abs(eigvals.imag)))
 
     orth = mat_isqrt(moments[0])
     for i in range(len(moments)):
@@ -517,8 +510,7 @@ def contract_ket_part(gfccsd, eom, t1, t2, v, orb):
         b = eom.amplitudes_to_vector(b1, b2)
         return np.dot(v, b)
     else:
-        # FIXME does this need a -1 factor? check!!!
-        return v[orb-nocc]
+        return -v[orb-nocc]
 
 
 def build_bra_part(gfccsd, eom, t1, t2, l1, l2, orb):
@@ -667,7 +659,8 @@ class GFCCSD(lib.StreamObject):
             l2 = self._cc.l2
 
         if niter is None:
-            nmom = 2 * self.niter[0] + 2
+            niter = self.niter[0]
+        nmom = 2 * niter + 2
         moments = np.zeros((nmom, self.nmo, self.nmo))
 
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -706,7 +699,8 @@ class GFCCSD(lib.StreamObject):
             l2 = self._cc.l2
 
         if niter is None:
-            nmom = 2 * self.niter[1] + 2
+            niter = self.niter[1]
+        nmom = 2 * niter + 2
         moments = np.zeros((nmom, self.nmo, self.nmo))
 
         cput0 = (logger.process_clock(), logger.perf_counter())
@@ -740,7 +734,7 @@ class GFCCSD(lib.StreamObject):
         if imds is None:
             imds = self.make_imds(eris=eris, ea=False)
 
-        dm1 = self.get_ip_moments(imds=imds, nmom=0)[0]
+        dm1 = self.build_hole_moments(imds=imds, niter=0)[0]
         dm1 = dm1 + dm1.T.conj()
 
         if ao_repr:
