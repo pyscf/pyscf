@@ -172,6 +172,24 @@ class KnownValues(unittest.TestCase):
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
         os.remove("tmp.chk")
 
+    def test_density_fitting(self):
+        mf = scf.RHF(self.mol)
+        mf = mf.density_fit()
+        mf.conv_tol_grad = 1e-8
+        mf.kernel()
+
+        mycc = cc.CCSD(mf)
+        mycc.conv_tol = 1e-10
+        mycc.kernel()
+        mycc.solve_lambda()
+
+        niter = 3
+        gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
+        eh, vh, ep, vp = gfcc.kernel()
+        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
+        self._test_moments(ep, vp, 2*niter+1, self.part_moments)
 
 
 
