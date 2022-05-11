@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import tempfile
 import numpy
 from functools import reduce
 
@@ -331,13 +332,14 @@ class KnownValues(unittest.TestCase):
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''', basis='631g')
         mf = scf.RHF(mol).run()
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         ci_scanner = ci.CISD(mf).as_scanner()
         ci_scanner(mol)
         ci_scanner.nmo = mf.mo_energy.size
         ci_scanner.nocc = mol.nelectron // 2
         ci_scanner.dump_chk()
         myci = ci.CISD(mf)
-        myci.__dict__.update(lib.chkfile.load(mf.chkfile, 'cisd'))
+        myci.__dict__.update(lib.chkfile.load(ci_scanner.chkfile, 'cisd'))
         self.assertAlmostEqual(abs(ci_scanner.ci-myci.ci).max(), 0, 9)
 
         ci_scanner.e_corr = -1
@@ -477,4 +479,3 @@ def t4_strs_ref(norb, nelec):
 if __name__ == "__main__":
     print("Full Tests for CISD")
     unittest.main()
-

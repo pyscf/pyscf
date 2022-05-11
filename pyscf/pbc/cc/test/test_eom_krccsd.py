@@ -188,7 +188,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-8
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -216,7 +216,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -233,7 +233,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.KGCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -307,7 +307,7 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
@@ -329,7 +329,7 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
@@ -352,7 +352,7 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
@@ -372,7 +372,7 @@ class KnownValues(unittest.TestCase):
 
         rand_gcc = pbcc.KGCCSD(gkmf)
         eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_gcc.nkpts)]
         gt1 = rand_gcc.spatial2spin(t1)
         gt2 = rand_gcc.spatial2spin(t2)
         rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
@@ -396,7 +396,7 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=1)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
@@ -416,7 +416,7 @@ class KnownValues(unittest.TestCase):
 
         rand_gcc = pbcc.KGCCSD(gkmf, frozen=2)
         eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_gcc.nkpts)]
         gt1 = rand_gcc.spatial2spin(t1)
         gt2 = rand_gcc.spatial2spin(t2)
         rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris

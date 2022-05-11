@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import numpy
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
@@ -151,6 +152,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()

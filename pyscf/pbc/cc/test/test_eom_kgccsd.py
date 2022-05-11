@@ -19,7 +19,7 @@ def setUpModule():
     mycc.conv_tol_normt = 1e-7
     mycc.run()
     eris = mycc.ao2mo()
-    eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc.nkpts)]
+    eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc.nkpts)]
 
 def tearDownModule():
     global cell, kmf, mycc, eris
@@ -116,7 +116,7 @@ class KnownValues(unittest.TestCase):
         mycc_frozen.conv_tol = 1e-7
         mycc_frozen.conv_tol_normt = 1e-7
         eris = mycc_frozen.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc_frozen.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc_frozen.nkpts)]
         ecc2, t1, t2 = mycc_frozen.kernel(eris=eris)
         self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
 

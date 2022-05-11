@@ -17,7 +17,9 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
+import h5py
 from pyscf import gto, scf, agf2, lib
 
 
@@ -70,6 +72,7 @@ class KnownValues(unittest.TestCase):
     def test_ragf2_outcore(self):
         # tests the out-of-core and chkfile support for AGF2 for H2O/cc-pvdz
         gf2 = agf2.RAGF2(self.mf)
+        gf2.chkfile = tempfile.NamedTemporaryFile().name
         gf2.max_memory = 1
         gf2.incore_complete = False
         gf2.conv_tol = 1e-7
@@ -163,6 +166,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_ea,     0.15201672352177295, 6)
         self.assertAlmostEqual(v_ea,     0.988560730917133  , 6)
 
+    def test_dump_chk(self):
+        fname = tempfile.NamedTemporaryFile().name
+        self.agf2.dump_chk(fname)
+        with h5py.File(fname, 'r') as f:
+            self.assertEqual(
+                set(f['agf2'].keys()),
+                {'e_1b', 'e_2b', 'e_init', 'converged', 'mo_energy', 'mo_coeff',
+                 'mo_occ', '_nmo', '_nocc'})
 
 if __name__ == '__main__':
     print('RAGF2 calculations for H2O')

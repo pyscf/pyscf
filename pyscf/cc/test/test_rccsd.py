@@ -114,17 +114,12 @@ class KnownValues(unittest.TestCase):
         cc1 = copy.copy(mycc)
         cc1.nmo = mf.mo_energy.size
         cc1.nocc = mol.nelectron // 2
+        cc1.chkfile = tempfile.NamedTemporaryFile().name
         cc1.dump_chk()
         cc1 = cc.CCSD(mf)
-        cc1.__dict__.update(lib.chkfile.load(cc1._scf.chkfile, 'ccsd'))
+        cc1.__dict__.update(lib.chkfile.load(cc1.chkfile, 'ccsd'))
         e = cc1.energy(cc1.t1, cc1.t2, eris)
         self.assertAlmostEqual(e, -0.13539788638119823, 8)
-
-        cc1.e_corr = -1
-        cc1.chkfile = None
-        cc1.dump_chk(frozen=2)
-        self.assertEqual(lib.chkfile.load(cc1._scf.chkfile, 'ccsd/e_corr'),
-                         mycc.e_corr)
 
     def test_ccsd_t(self):
         e = mycc.ccsd_t()
@@ -189,7 +184,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cc1.t2 - cc2.t2).max(), 0, 9)
 
     def test_iterative_dampling(self):
-        ftmp = tempfile.NamedTemporaryFile()
         cc1 = cc.CCSD(mf)
         cc1.max_cycle = 3
         cc1.iterative_damping = 0.7

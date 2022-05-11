@@ -360,7 +360,7 @@ H  0.  0.  1.3''', basis='ccpvtz')
         fmol = gto.fakemol_for_charges(grids)
         ref = df.r_incore.aux_e2(mol, fmol, intor='int3c2e_spsp1_spinor').transpose(2,0,1)
         j3c = mol.intor('int1e_grids_spvsp_spinor', grids=grids)
-        self.assertAlmostEqual(abs(j3c - ref).max(), 0, 12)
+        self.assertAlmostEqual(abs(j3c - ref).max(), 0, 11)
 
 
 if __name__ == '__main__':

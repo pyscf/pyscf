@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import tempfile
 from pyscf import scf, gto
 from pyscf.eph import eph_fd, uhf
 import numpy as np
@@ -40,6 +41,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_finite_diff_uhf_eph(self):
         mf = scf.UHF(mol)
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.conv_tol = 1e-14
         mf.conv_tol_grad = 1e-9
         mf.kernel()

@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
 
         # Make sure that mc.mo_occ has been set and that the NOONs add to nelectron
         mo_occ = getattr(mc1, "mo_occ", numpy.array([]))
-        self.assertNotEqual(mo_occ, numpy.array([]))
+        self.assertNotEqual(mo_occ.size, 0)
         self.assertAlmostEqual(numpy.sum(mo_occ), mc1.mol.nelectron, 9)
 
     def test_multi_roots(self):

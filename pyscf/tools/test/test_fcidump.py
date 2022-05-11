@@ -36,7 +36,7 @@ def setUpModule():
     mol.verbose = 0
     mol.build(0, 0)
 
-    mf = scf.RHF(mol).run()
+    mf = mol.RHF(chkfile=tempfile.NamedTemporaryFile().name).run()
 
 def tearDownModule():
     global mol, mf
@@ -98,6 +98,3 @@ ORBSYM=1,2,3,4,
 if __name__ == "__main__":
     print("Full Tests for fcidump")
     unittest.main()
-
-
-

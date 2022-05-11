@@ -446,7 +446,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (s1[0] > s1[1])
 
     def test_project_init_guess_gramschmidt (self):
-        gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
+        gram_schmidt_idx = numpy.arange (27, dtype=int)[:,None].tolist ()
         mo1 = mcscf.addons.project_init_guess (mcr_prg, mfr.mo_coeff, priority=gram_schmidt_idx)
         s1 = reduce(numpy.dot, (mo1.T, mfr_prg.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),

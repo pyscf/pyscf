@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 
+import tempfile
 from pyscf import dft, gto
 from pyscf.eph import eph_fd, rks
 import numpy as np
@@ -40,8 +41,8 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_finite_diff_rks_eph(self):
         mf = dft.RKS(mol)
-        mf.grids.level=3
-        mf.grids.build()
+        mf.chkfile = tempfile.NamedTemporaryFile().name
+        mf.grids.level = 3
         mf.xc = 'b3lyp'
         mf.conv_tol = 1e-14
         mf.conv_tol_grad = 1e-9
