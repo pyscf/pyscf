@@ -96,7 +96,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf, -1.0585001200928885, 9)
         self.assertAlmostEqual(emp, -7.9832274354253814e-06, 9)
 
-    def test_h4_fcc_k2_frozen(self):
+    def test_h4_fcc_k2_frozen_high_cost(self):
         '''Metallic hydrogen fcc lattice with frozen lowest lying occupied
         and highest lying virtual orbitals.  Checks versus a corresponding
         supercell calculation.

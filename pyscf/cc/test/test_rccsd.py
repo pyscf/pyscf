@@ -43,6 +43,7 @@ def setUpModule():
     mol.basis = '631g'
     mol.build()
     mf = scf.RHF(mol)
+    mf.chkfile = tempfile.NamedTemporaryFile().name
     mf.conv_tol_grad = 1e-8
     mf.kernel()
 
@@ -114,7 +115,6 @@ class KnownValues(unittest.TestCase):
         cc1 = copy.copy(mycc)
         cc1.nmo = mf.mo_energy.size
         cc1.nocc = mol.nelectron // 2
-        cc1.chkfile = tempfile.NamedTemporaryFile().name
         cc1.dump_chk()
         cc1 = cc.CCSD(mf)
         cc1.__dict__.update(lib.chkfile.load(cc1.chkfile, 'ccsd'))

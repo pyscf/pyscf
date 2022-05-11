@@ -514,7 +514,7 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
                     row[idx] = True
                 except IndexError:
                     raise RuntimeError ("Invalid priority keyword: index array cannot address shape (*,nmo_init)")
-            ridx_counts = ridx.astype (numpy.integer).sum (0)
+            ridx_counts = ridx.astype (int).sum (0)
             if numpy.any (ridx_counts > 1):
                 raise RuntimeError ("Invalid priority keyword: index array has repeated elements")
         incl = numpy.any (ridx, axis=0)

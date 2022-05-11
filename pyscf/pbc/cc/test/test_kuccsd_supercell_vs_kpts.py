@@ -5,19 +5,9 @@ from pyscf.pbc import scf,cc
 from pyscf     import cc as mol_cc
 from pyscf.pbc.tools.pbc import super_cell
 
-#from pyscf import lib
-#from pyscf.pbc import gto
-#from pyscf.pbc import scf,cc
-#from pyscf.pbc.cc import kccsd_uhf
-#from pyscf.pbc.cc import kccsd
-#from pyscf.pbc.cc import eom_kccsd_ghf
-#from pyscf.pbc.cc import eom_kccsd_uhf
-#from pyscf.pbc.lib import kpts_helper
-#from pyscf.pbc.tools.pbc import super_cell
-
 # generating the cell
 
-def test_kuccsd_supercell_vs_kpts():
+def test_kuccsd_supercell_vs_kpts_high_cost():
     cell = gto.M(
         unit = 'B',
         a = [[ 0.,          3.37013733,  3.37013733],

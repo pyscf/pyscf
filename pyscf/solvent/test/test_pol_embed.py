@@ -278,14 +278,15 @@ class TestPolEmbed(unittest.TestCase):
         mf = solvent.PE(mol.RHF(), pe).run(conv_tol=1e-10)
         self.assertAlmostEqual(mf.e_tot, -112.35232445743728, 9)
         self.assertAlmostEqual(mf.with_solvent.e, 0.00020182314249546455, 9)
-    
+
     def test_pe_scf_ecp(self):
         pe = solvent.PE(mol2, {"potfile": potfile2, "ecp": True})
         mf = solvent.PE(mol2.RHF(), pe).run(conv_tol=1e-10)
         self.assertAlmostEqual(mf.e_tot, -168.147494986446, 8)
 
     def test_as_scanner(self):
-        mf_scanner = solvent.PE(scf.RHF(mol), potfile).as_scanner()
+        mf = mol.RHF(chkfile=tempfile.NamedTemporaryFile().name)
+        mf_scanner = solvent.PE(mf, potfile).as_scanner()
         mf_scanner(mol)
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 0.00020182314249546455, 9)
         # Change solute. cppe may not support this

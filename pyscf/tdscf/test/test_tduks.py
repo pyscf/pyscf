@@ -36,8 +36,9 @@ def diagonalize(a, b, nroots=4):
                     [ a_ab.T, a_bb]])
     b = numpy.bmat([[ b_aa  , b_ab],
                     [ b_ab.T, b_bb]])
-    e = numpy.linalg.eig(numpy.bmat([[a        , b       ],
-                                     [-b.conj(),-a.conj()]]))[0]
+    abba = numpy.asarray(numpy.bmat([[a        , b       ],
+                                     [-b.conj(),-a.conj()]]))
+    e = numpy.linalg.eig(abba)[0]
     lowest_e = numpy.sort(e[e.real > 0].real)[:nroots]
     lowest_e = lowest_e[lowest_e > 1e-3]
     return lowest_e

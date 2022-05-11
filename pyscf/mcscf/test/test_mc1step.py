@@ -52,6 +52,7 @@ def setUpModule():
     symmetry = True
     )
     msym = scf.RHF(molsym)
+    msym.chkfile = tempfile.NamedTemporaryFile().name
     msym.conv_tol = 1e-10
     msym.scf()
 
