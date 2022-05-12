@@ -79,7 +79,10 @@ class KnowValues(unittest.TestCase):
 
     def test_pipek(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
-        loc = pipek.PipekMezey(mol, mf.mo_coeff[:,idx])
+        # Initial guess from Boys localization. Otherwise uncertainty between
+        # two solutions found in PM kernel
+        mo = boys.Boys(mol, mf.mo_coeff[:,idx]).kernel()
+        loc = pipek.PipekMezey(mol, mo)
         loc.max_cycle = 100
         mo = loc.kernel()
         pop = pipek.atomic_pops(mol, mo)
