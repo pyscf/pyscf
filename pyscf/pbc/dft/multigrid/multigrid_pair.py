@@ -977,7 +977,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if mydf.sccs:
         assert nset == 1
         rho_core = make_rho_core(cell)
-        e_pol, phi_sccs = mydf.sccs.kernel(rhoR, rho_core)
+        e_pol, phi_sccs = mydf.sccs.kernel(rhoR[0][0], rho_core)
         ecoul[0] += e_pol
         rho_core = None
         phi_sccs = lib.multiply(weight, phi_sccs, out=phi_sccs)

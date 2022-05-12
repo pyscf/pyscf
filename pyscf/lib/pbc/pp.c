@@ -195,10 +195,10 @@ static void contract_vppnl_ipik_dm(double* grad, double* dm, double* eri, int co
 
 
 void vppnl_ip1_fill_gs1(double* grad, double* dm, int comp,
-                               double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
-                               double* ppnl_half_ip2_0, double* ppnl_half_ip2_1, double* ppnl_half_ip2_2,
-                               int* hl_table, double* hl_data, int nhl, int nao, int naux,
-                               int* shls_slice, int* ao_loc, int* bas, double* buf, int ish, int jsh)
+                        double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
+                        double* ppnl_half_ip2_0, double* ppnl_half_ip2_1, double* ppnl_half_ip2_2,
+                        int* hl_table, double* hl_data, int nhl, int nao, int naux,
+                        int* shls_slice, int* ao_loc, int* bas, double* buf, int ish, int jsh)
 {
     const int ish0 = shls_slice[0];
     const int jsh0 = shls_slice[2];

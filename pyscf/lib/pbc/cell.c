@@ -276,3 +276,42 @@ void ewald_gs_nuc_grad(double* out, double* Gv, double* charges, double* coords,
     free(ZSI_real);
     free(ZSI_imag);
 }
+
+
+void get_ewald_direct(double* ewovrl, double* chargs, double* coords, double* Ls,
+                      double beta, double rcut, int natm, int nL)
+{
+    *ewovrl = 0.0;
+
+    #pragma omp parallel
+    {
+        int i, j, l;
+        double *ri, *rj, *rL;
+        double rij[3];
+        double r, qi, qj;
+        double e_loc = 0.0;
+        #pragma omp for schedule(static)
+        for (i = 0; i < natm; i++) {
+            ri = coords + i*3;
+            qi = chargs[i];
+            for (j = 0; j < natm; j++) {
+                rj = coords + j*3;
+                qj = chargs[j];
+                for (l = 0; l < nL; l++) {
+                    rL = Ls + l*3;
+                    rij[0] = rj[0] + rL[0] - ri[0];
+                    rij[1] = rj[1] + rL[1] - ri[1];
+                    rij[2] = rj[2] + rL[2] - ri[2];
+                    r = sqrt(SQUARE(rij));
+                    if (r > 1e-10 && r < rcut) {
+                        e_loc += qi * qj * erfc(beta * r) / r;
+                    }
+                }
+            }
+        }
+        e_loc *= 0.5;
+
+        #pragma omp critical
+        *ewovrl += e_loc;
+    }
+}

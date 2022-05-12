@@ -820,6 +820,25 @@ def laplacian_by_fft(f, Gv, mesh):
         f2 = f2[0]
     return f2
 
+def laplacian_by_fdiff(cell, f, mesh=None):
+    assert f.dtype == float
+    if mesh is None:
+        mesh = cell.mesh
+    mesh = np.asarray(mesh, order='C', dtype=np.int32)
+    assert f.size == np.prod(mesh)
+    a = cell.lattice_vectors()
+    # cube
+    dr = [a[i,i] / mesh[i] for i in range(3)]
+    dr = np.asarray(dr, order='C', dtype=float)
+    f = np.asarray(f, order='C')
+    lf = np.empty_like(f)
+    fun = getattr(libpbc, 'rs_laplacian_cd3')
+    fun(f.ctypes.data_as(ctypes.c_void_p),
+        lf.ctypes.data_as(ctypes.c_void_p),
+        mesh.ctypes.data_as(ctypes.c_void_p),
+        dr.ctypes.data_as(ctypes.c_void_p))
+    return lf.ravel()
+
 def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None,
                   compute_potential=True, compute_gradient=False,
                   real_potential=True):
@@ -863,3 +882,60 @@ def solve_poisson(cell, rho, coulG=None, Gv=None, mesh=None,
         if compute_gradient:
             dphiR = dphiR[0]
     return phiR, dphiR
+
+def restrict_by_fft(f, mesh, submeshes):
+    from pyscf.pbc.dft.multigrid.utils import _take_4d
+    real = False
+    if f.dtype == float:
+        real = True
+
+    ng = np.prod(mesh)
+    f_gs = fft(f.reshape(-1,ng), mesh).reshape(-1,*mesh)
+
+    out = []
+    submeshes = np.asarray(submeshes).reshape(-1,3)
+    for i, submesh in enumerate(submeshes):
+        ng_sub = np.prod(submesh)
+        gx = np.fft.fftfreq(submesh[0], 1./submesh[0]).astype(np.int32)
+        gy = np.fft.fftfreq(submesh[1], 1./submesh[1]).astype(np.int32)
+        gz = np.fft.fftfreq(submesh[2], 1./submesh[2]).astype(np.int32)
+        f_sub_gs = _take_4d(f_gs, (None, gx, gy, gz)).reshape(-1,ng_sub)
+        f_sub_rs = ifft(f_sub_gs, submesh)
+        if real:
+            f_sub_rs = lib.copy(f_sub_rs, dtype=float)
+        fac = ng_sub / ng
+        f_sub_rs = lib.multiply(fac, f_sub_rs, out=f_sub_rs)
+        if f.ndim == 1:
+            f_sub_rs = f_sub_rs[0]
+        out.append(f_sub_rs)
+
+    if len(submeshes) == 1:
+        out = out[0]
+    return out
+
+def prolong_by_fft(f_sub, mesh, submesh):
+    from pyscf.pbc.dft.multigrid.utils import _takebak_4d
+    real = False
+    if f_sub.dtype == float:
+        real = True
+    input_is_vector = f_sub.ndim == 1
+
+    ng = np.prod(mesh)
+    ng_sub = np.prod(submesh)
+    f_sub = f_sub.reshape(-1,ng_sub)
+    nset = f_sub.shape[0]
+    f_sub_gs = fft(f_sub, submesh)
+    gx = np.fft.fftfreq(submesh[0], 1./submesh[0]).astype(np.int32)
+    gy = np.fft.fftfreq(submesh[1], 1./submesh[1]).astype(np.int32)
+    gz = np.fft.fftfreq(submesh[2], 1./submesh[2]).astype(np.int32)
+    f_gs = np.zeros([nset, *mesh], dtype=np.complex128)
+    f_gs = _takebak_4d(f_gs, f_sub_gs.reshape(-1,*submesh), (None, gx, gy, gz)).reshape(-1,ng)
+    f_rs = ifft(f_gs, mesh)
+    if real:
+        f_rs = lib.copy(f_rs, dtype=float)
+    fac = ng / ng_sub
+    f_rs = lib.multiply(fac, f_rs, out=f_rs)
+
+    if input_is_vector:
+        f_rs = f_rs[0]
+    return f_rs

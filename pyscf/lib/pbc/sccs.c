@@ -74,3 +74,44 @@ void rs_gradient_cd3(double* f, double* df, int* mesh, double* dr)
         }
     }
 }
+
+void rs_laplacian_cd3(double* f, double* lf, int* mesh, double* dr)
+{
+    const size_t nx = mesh[0];
+    const size_t ny = mesh[1];
+    const size_t nz = mesh[2];
+    const size_t nyz = ny * nz;
+    double h2[3] = {dr[0]*dr[0], dr[1]*dr[0], dr[2]*dr[0]};
+    #pragma omp parallel
+    {
+        size_t x, y, z;
+        size_t xm, xp, ym, yp, zm, zp;
+        size_t xoff, yoff, ioff;
+        size_t xmoff, xpoff, ymoff, ypoff;
+        double fc;
+        #pragma omp for schedule(static)
+        for (x = 0; x < nx; x++) {
+            xm = (x == 0) ? (nx-1) : (x - 1);
+            xp = (x == nx-1) ? 0 : (x + 1);
+            xoff = x * nyz;
+            xmoff = xm * nyz;
+            xpoff = xp * nyz;
+            for (y = 0; y < ny; y++) {
+                ym = (y == 0) ? (ny-1) : (y - 1);
+                yp = (y == ny-1) ? 0 : (y + 1);
+                yoff = y * nz;
+                ymoff = ym * nz;
+                ypoff = yp * nz;
+                for (z = 0; z < nz; z++) {
+                    zm = (z == 0) ? (nz-1) : (z - 1);
+                    zp = (z == nz-1) ? 0 : (z + 1);
+                    ioff = xoff + yoff + z;
+                    fc = 2. * f[ioff];
+                    lf[ioff]  = (f[xpoff+yoff+z] + f[xmoff+yoff+z] - fc) / h2[0];
+                    lf[ioff] += (f[xoff+ypoff+z] + f[xoff+ymoff+z] - fc) / h2[1];
+                    lf[ioff] += (f[xoff+yoff+zp] + f[xoff+yoff+zm] - fc) / h2[2];
+                }
+            }
+        }
+    }
+}

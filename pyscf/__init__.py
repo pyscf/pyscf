@@ -86,7 +86,7 @@ else:
         sys.stderr.write('pyscf plugins found in \n%s\n'
                          'When PYTHONPATH is set, it is recommended to load '
                          'these plugins through the environment variable '
-                         'PYSCF_EXT_PATH' % '\n'.join(__path__[1:]))
+                         'PYSCF_EXT_PATH\n' % '\n'.join(__path__[1:]))
 
 from distutils.version import LooseVersion
 import numpy
