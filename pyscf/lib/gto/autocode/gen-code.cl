@@ -283,7 +283,7 @@ for (n = 0; n < SIMDD; n++) {
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; _cart
     (format fout "void ~a_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
@@ -292,7 +292,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
 ;;; _sph
     (format fout "void ~a_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
@@ -301,7 +301,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
 ;;; _spinor
     (format fout "void ~a_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)

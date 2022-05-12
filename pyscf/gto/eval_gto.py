@@ -114,7 +114,7 @@ def eval_gto(mol, eval_name, coords,
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
 
     drv = getattr(libcgto, eval_name)
     drv(ctypes.c_int(ngrids),

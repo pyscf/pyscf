@@ -25,7 +25,7 @@
 
 #define MAX_THREADS     256
 
-void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
+void VXCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
