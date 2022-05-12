@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 from pyscf import gto, scf, agf2, lib
 
