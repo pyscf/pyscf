@@ -296,13 +296,13 @@ class UCASCI(casci.CASCI):
             ss_core = self._scf.spin_square(mocore, ovlp_ao)
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = fci.spin_op.spin_square(self.ci, self.ncas, self.nelecas,
-                                             mocas, ovlp_ao)
+                                             mocas, ovlp_ao, self.fcisolver)
                 log.note('UCASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                          self.e_tot, self.e_cas, ss[0]+ss_core[0])
             else:
                 for i, e in enumerate(self.e_cas):
                     ss = fci.spin_op.spin_square(self.ci[i], self.ncas, self.nelecas,
-                                                 mocas, ovlp_ao)
+                                                 mocas, ovlp_ao, self.fcisolver)
                     log.note('UCASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                              i, self.e_tot[i], e, ss[0]+ss_core[0])
         else:
