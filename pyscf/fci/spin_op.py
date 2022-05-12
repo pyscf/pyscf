@@ -112,7 +112,7 @@ def spin_square_general(dm1a, dm1b, dm2aa, dm2ab, dm2bb, mo_coeff, ovlp=1):
 def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1, fcisolver=None):
     if mo_coeff is None:
         mo_coeff = (numpy.eye(norb),) * 2
-    
+
     if fcisolver is None:
         from pyscf.fci import direct_spin1
         (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
