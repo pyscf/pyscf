@@ -22,14 +22,15 @@ CHECK_STABILITY = False
 
 o2 = gto.M(
     verbose=3,
-    #output='/dev/null',
+#    output='o2.log',
     atom='O 0 0 0; O 0 0 1.2',
     basis='ccpvdz',
     spin=2)
 
 hf = o2.RHF().run()
-ncas, nelecas = (6,(5,3))
+ncas, nelecas = (6,8)
 casscf_scanner = hf.CASSCF(ncas, nelecas)
+casscf_scanner.conv_tol = 1e-12
 
 def tearDownModule():
     global o2, hf, casscf_scanner
