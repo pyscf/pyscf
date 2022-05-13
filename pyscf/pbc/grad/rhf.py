@@ -134,10 +134,22 @@ def get_veff(mf_grad, mol, dm, kpt=np.zeros(3)):
     return -mydf.get_veff_ip1(dm, xc_code=xc_code, kpts=kpts)
 
 
+def grad_nuc(cell, atmlst=None, ew_eta=None, ew_cut=None):
+    from pyscf.pbc.gto import ewald_methods
+
+    t0 = (logger.process_clock(), logger.perf_counter())
+
+    grad = ewald_methods.particle_mesh_ewald_nuc_grad(cell, ew_eta, ew_cut)
+    if atmlst is not None:
+        grad = grad[atmlst]
+
+    logger.timer(cell, 'nuclear gradient', *t0)
+    return grad
+
+
 class GradientsMixin(mol_rhf.GradientsMixin):
     '''Base class for Gamma-point nuclear gradient'''
     def grad_nuc(self, mol=None, atmlst=None):
-        from .krhf import grad_nuc
         if mol is None: mol = self.mol
         return grad_nuc(mol, atmlst)
 

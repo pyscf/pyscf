@@ -1046,8 +1046,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         return 0
 
     if cell.dimension == 3:
-        from .ewald_methods import smooth_particle_mesh_ewald
-        return smooth_particle_mesh_ewald(cell, ew_eta, ew_cut)
+        from pyscf.pbc.gto import ewald_methods
+        return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
 
     if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
     if ew_cut is None: ew_cut = cell.get_ewald_params()[1]

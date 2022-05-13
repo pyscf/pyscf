@@ -156,73 +156,6 @@ void get_Gv(double* Gv, double* rx, double* ry, double* rz, int* mesh, double* b
 }
 
 
-void ewald_overlap_nuc_grad(double* out, double* charges, double* coords, int natm, double* Ls, int nL, double ew_eta)
-{
-    double fac = 2. * ew_eta / sqrt(M_PI);
-    double ew_eta2 = ew_eta * ew_eta;
-
-#pragma omp parallel
-{
-    int i, j, iL;
-    double charge_i, charge_j;
-    double tmp, r, r2;
-    double rij[3];
-    double *pout, *ri, *rj, *pLs;
-    #pragma omp for nowait schedule(static)
-    for (i = 0; i < natm; i++) {
-        charge_i = charges[i];
-        pout = out + i*3;
-        ri = coords + i*3;
-        for (j = 0; j < natm; j++) {
-            if (i == j) {
-                continue;
-            }
-            charge_j = charges[j];
-            rj = coords + j*3;
-            rij[0] = ri[0] - rj[0];
-            rij[1] = ri[1] - rj[1];
-            rij[2] = ri[2] - rj[2];
-            r2 = SQUARE(rij);
-            r = sqrt(r2);
-            tmp  = erfc(ew_eta * r) / (r2 * r) + fac * exp(-ew_eta2 * r2) / r2;
-            tmp *= charge_i * charge_j;
-            pout[0] -= tmp * rij[0];
-            pout[1] -= tmp * rij[1];
-            pout[2] -= tmp * rij[2];
-        }
-    }
-
-    #pragma omp for schedule(static)
-    for (i = 0; i < natm; i++) {
-        charge_i = charges[i];
-        pout = out + i*3;
-        ri = coords + i*3;
-        for (j = 0; j < natm; j++) {
-            charge_j = charges[j];
-            rj = coords + j*3;
-            rij[0] = ri[0] - rj[0];
-            rij[1] = ri[1] - rj[1];
-            rij[2] = ri[2] - rj[2];
-
-            for (iL = 0; iL < nL; iL++) {
-                pLs = Ls + iL * 3;
-                rij[0] = ri[0] - rj[0] + pLs[0];
-                rij[1] = ri[1] - rj[1] + pLs[1];
-                rij[2] = ri[2] - rj[2] + pLs[2];
-                r2 = SQUARE(rij);
-                r = sqrt(r2);
-                tmp  = erfc(ew_eta * r) / (r2 * r) + fac * exp(-ew_eta2 * r2) / r2;
-                tmp *= charge_i * charge_j;
-                pout[0] -= tmp * rij[0];
-                pout[1] -= tmp * rij[1];
-                pout[2] -= tmp * rij[2];
-            }
-        }
-    }
-}
-}
-
-
 void ewald_gs_nuc_grad(double* out, double* Gv, double* charges, double* coords,
                        double ew_eta, double weights, int natm, size_t ngrid)
 {
@@ -313,5 +246,45 @@ void get_ewald_direct(double* ewovrl, double* chargs, double* coords, double* Ls
 
         #pragma omp critical
         *ewovrl += e_loc;
+    }
+}
+
+
+void get_ewald_direct_nuc_grad(double* out, double* chargs, double* coords, double* Ls,
+                               double beta, double rcut, int natm, int nL)
+{
+    double fac = 2. * beta / sqrt(M_PI);
+    double beta2 = beta * beta;
+
+    #pragma omp parallel
+    {
+        int i, j, l;
+        double *ri, *rj, *rL, *pout;
+        double rij[3];
+        double r, r2, qi, qj, tmp;
+        #pragma omp for schedule(static)
+        for (i = 0; i < natm; i++) {
+            pout = out + i*3;
+            ri = coords + i*3;
+            qi = chargs[i];
+            for (j = 0; j < natm; j++) {
+                rj = coords + j*3;
+                qj = chargs[j];
+                for (l = 0; l < nL; l++) {
+                    rL = Ls + l*3;
+                    rij[0] = ri[0] - rj[0] + rL[0];
+                    rij[1] = ri[1] - rj[1] + rL[1];
+                    rij[2] = ri[2] - rj[2] + rL[2];
+                    r2 = SQUARE(rij);
+                    r = sqrt(r2);
+                    if (r > 1e-10 && r < rcut) {
+                        tmp  = qi * qj * (erfc(beta * r) / (r2 * r) + fac * exp(-beta2 * r2) / r2);
+                        pout[0] -= tmp * rij[0];
+                        pout[1] -= tmp * rij[1];
+                        pout[2] -= tmp * rij[2];
+                    }
+                }
+            }
+        }
     }
 }
