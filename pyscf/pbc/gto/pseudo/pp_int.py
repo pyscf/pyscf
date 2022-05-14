@@ -482,7 +482,8 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
 
     ppnl_ip1 = []
     nao = cell.nao_nr()
-    naux = fakecell.nao_nr()
+    #naux = fakecell.nao_nr()
+    naux = numpy.zeros([3,], dtype=numpy.int32)
     for k, kpt in enumerate(kpts_lst):
         ptr_ppnl_half0 = lib.c_null_ptr()
         ptr_ppnl_half1 = lib.c_null_ptr()
@@ -506,16 +507,20 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
         if len(ppnl_half_ip2[0]) > 0:
             ppnl_half_ip2_0 = ppnl_half_ip2[0][k].real
             ppnl_half_ip2_0 = numpy.asarray(ppnl_half_ip2_0, order='C', dtype=numpy.double)
+            naux[0] = ppnl_half_ip2_0.shape[1]
             ptr_ppnl_half_ip2_0 = ppnl_half_ip2_0.ctypes.data_as(ctypes.c_void_p)
         if len(ppnl_half_ip2[1]) > 0:
             ppnl_half_ip2_1 = ppnl_half_ip2[1][k].real
             ppnl_half_ip2_1 = numpy.asarray(ppnl_half_ip2_1, order='C', dtype=numpy.double)
+            naux[1] = ppnl_half_ip2_1.shape[1]
             ptr_ppnl_half_ip2_1 = ppnl_half_ip2_1.ctypes.data_as(ctypes.c_void_p)
         if len(ppnl_half_ip2[2]) > 0:
             ppnl_half_ip2_2 = ppnl_half_ip2[2][k].real
             ppnl_half_ip2_2 = numpy.asarray(ppnl_half_ip2_2, order='C', dtype=numpy.double)
+            naux[2] = ppnl_half_ip2_2.shape[1]
             ptr_ppnl_half_ip2_2 = ppnl_half_ip2_2.ctypes.data_as(ctypes.c_void_p)
 
+        naux = numpy.asarray(naux, dtype=numpy.int32)
 
         ppnl_ip1_k = numpy.empty((comp,nao,nao), order='C', dtype=numpy.double)
         fn = getattr(libpbc, "contract_ppnl_ip1", None)
@@ -526,7 +531,7 @@ def _contract_ppnl_ip1_gamma(cell, fakecell, hl_blocks, ppnl_half, ppnl_half_ip2
                hl_table.ctypes.data_as(ctypes.c_void_p),
                hl_data.ctypes.data_as(ctypes.c_void_p),
                ctypes.c_int(len(hl_blocks)),
-               ctypes.c_int(nao), ctypes.c_int(naux),
+               ctypes.c_int(nao), naux.ctypes.data_as(ctypes.c_void_p),
                hl_id.ctypes.data_as(ctypes.c_void_p))
         except Exception as e:
             raise RuntimeError("Failed to contract ppnl_ip1. %s" % e)
