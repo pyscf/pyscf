@@ -50,52 +50,53 @@ void contract_ppnl(double* out,
         out[i] = 0;
     }
 
-#pragma omp parallel
-{
-    size_t ib, i, p;
-    double *pout;
-    double *buf = (double*) malloc(sizeof(double)*54*nao);
-    #pragma omp for schedule(dynamic)
-    for (p = 0; p < nao; p++){
-        pout = out + (size_t)p*nao;
-    for (ib = 0; ib < nhl; ib++) {
-        int *table = hl_table + ib * HL_TABLE_SLOTS;
-        int hl_dim = table[HL_DIM_OF];
-        int ptr = table[HL_DATA_OF];
-        int nd = table[ANG_OF] * 2 + 1;
-        int *offset = table + HL_OFFSET0;
-        double *hl = hl_data + ptr;
-        double *ilp = buf;
-        int lp_dim = nd * nao;
-        //int ilp_dim = hl_dim * lp_dim;
-        int il_dim = hl_dim * nd;
-        for (i=0; i<hl_dim; i++) {
-            int p0 = offset[i];
-            if (i == 0) {
-                dcopy_(&lp_dim, ppnl_half0+p0*nao, &One, ilp+i*lp_dim, &One);
-            }
-            else if (i == 1) {
-                dcopy_(&lp_dim, ppnl_half1+p0*nao, &One, ilp+i*lp_dim, &One);
-            }
-            else if (i == 2) {
-                dcopy_(&lp_dim, ppnl_half2+p0*nao, &One, ilp+i*lp_dim, &One);
+    #pragma omp parallel
+    {
+        size_t ib, i, p;
+        double *pout;
+        double *buf = (double*) malloc(sizeof(double)*54*nao);
+        #pragma omp for schedule(dynamic)
+        for (p = 0; p < nao; p++){
+            pout = out + (size_t)p*nao;
+            for (ib = 0; ib < nhl; ib++) {
+                int *table = hl_table + ib * HL_TABLE_SLOTS;
+                int hl_dim = table[HL_DIM_OF];
+                int ptr = table[HL_DATA_OF];
+                int nd = table[ANG_OF] * 2 + 1;
+                int *offset = table + HL_OFFSET0;
+                double *hl = hl_data + ptr;
+                double *ilp = buf;
+                int lp_dim = nd * nao;
+                //int ilp_dim = hl_dim * lp_dim;
+                int il_dim = hl_dim * nd;
+                for (i=0; i<hl_dim; i++) {
+                    int p0 = offset[i];
+                    if (i == 0) {
+                        dcopy_(&lp_dim, ppnl_half0+p0*nao, &One, ilp+i*lp_dim, &One);
+                    }
+                    else if (i == 1) {
+                        dcopy_(&lp_dim, ppnl_half1+p0*nao, &One, ilp+i*lp_dim, &One);
+                    }
+                    else if (i == 2) {
+                        dcopy_(&lp_dim, ppnl_half2+p0*nao, &One, ilp+i*lp_dim, &One);
+                    }
+                }
+                double *hilp = ilp + hl_dim*lp_dim;
+                dgemm_(&TRANS_N, &TRANS_N, &lp_dim, &hl_dim, &hl_dim, 
+                       &D1, ilp, &lp_dim, hl, &hl_dim, &D0, hilp, &lp_dim);
+                dgemm_(&TRANS_N, &TRANS_T, &nao, &One, &il_dim,
+                       &D1, hilp, &nao, ilp+p, &nao, &D1, pout, &nao);
             }
         }
-        double *hilp = ilp + hl_dim*lp_dim;
-        dgemm_(&TRANS_N, &TRANS_N, &lp_dim, &hl_dim, &hl_dim, 
-               &D1, ilp, &lp_dim, hl, &hl_dim, &D0, hilp, &lp_dim);
-        dgemm_(&TRANS_N, &TRANS_T, &nao, &One, &il_dim,
-               &D1, hilp, &nao, ilp+p, &nao, &D1, pout, &nao);
-    }}
-    free(buf);
-}
+        free(buf);
+    }
 }
 
 
 void contract_ppnl_ip1(double* out, int comp,
                        double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
                        double* ppnl_half_ip2_0, double* ppnl_half_ip2_1, double* ppnl_half_ip2_2,
-                       int* hl_table, double* hl_data, int nhl, int nao, int naux,
+                       int* hl_table, double* hl_data, int nhl, int nao, int* naux,
                        int* aux_id)
 {
     const int One = 1;
@@ -107,7 +108,10 @@ void contract_ppnl_ip1(double* out, int comp,
     size_t nao_pair = (size_t) nao * nao;
     memset(out, 0, nao_pair*comp*sizeof(double));
 
-    size_t n2 = (size_t) nao * naux;
+    size_t n2[3];
+    n2[0] = (size_t) nao * naux[0];
+    n2[1] = (size_t) nao * naux[1];
+    n2[2] = (size_t) nao * naux[2];
     size_t buf_size = 54 * (size_t) nao + 27;
 
 #pragma omp parallel
@@ -139,15 +143,15 @@ void contract_ppnl_ip1(double* out, int comp,
                     int p0 = offset[i];
                     if (i == 0) {
                         dcopy_(&lp_dim, ppnl_half0+p0*nao, &One, ilp+i*lp_dim, &One);
-                        dcopy_(&nd, ppnl_half_ip2_0+p+p0*nao+ic*n2, &nao, ilp_ip2+i*nd, &One);
+                        dcopy_(&nd, ppnl_half_ip2_0+p+p0*nao+ic*n2[0], &nao, ilp_ip2+i*nd, &One);
                     }
                     else if (i == 1) {
                         dcopy_(&lp_dim, ppnl_half1+p0*nao, &One, ilp+i*lp_dim, &One);
-                        dcopy_(&nd, ppnl_half_ip2_1+p+p0*nao+ic*n2, &nao, ilp_ip2+i*nd, &One);
+                        dcopy_(&nd, ppnl_half_ip2_1+p+p0*nao+ic*n2[1], &nao, ilp_ip2+i*nd, &One);
                     }
                     else if (i == 2) {
                         dcopy_(&lp_dim, ppnl_half2+p0*nao, &One, ilp+i*lp_dim, &One);
-                        dcopy_(&nd, ppnl_half_ip2_2+p+p0*nao+ic*n2, &nao, ilp_ip2+i*nd, &One);
+                        dcopy_(&nd, ppnl_half_ip2_2+p+p0*nao+ic*n2[2], &nao, ilp_ip2+i*nd, &One);
                     }
                 }
                 dgemm_(&TRANS_N, &TRANS_N, &lp_dim, &hl_dim, &hl_dim, 
@@ -197,7 +201,7 @@ static void contract_vppnl_ipik_dm(double* grad, double* dm, double* eri, int co
 void vppnl_ip1_fill_gs1(double* grad, double* dm, int comp,
                         double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
                         double* ppnl_half_ip2_0, double* ppnl_half_ip2_1, double* ppnl_half_ip2_2,
-                        int* hl_table, double* hl_data, int nhl, int nao, int naux,
+                        int* hl_table, double* hl_data, int nhl, int nao, int* naux,
                         int* shls_slice, int* ao_loc, int* bas, double* buf, int ish, int jsh)
 {
     const int ish0 = shls_slice[0];
@@ -212,7 +216,10 @@ void vppnl_ip1_fill_gs1(double* grad, double* dm, int comp,
     const int i0 = ao_loc[ish];
     const int j0 = ao_loc[jsh];
 
-    size_t n2 = (size_t) nao * naux;
+    size_t n2[3];
+    n2[0] = (size_t) nao * naux[0];
+    n2[1] = (size_t) nao * naux[1];
+    n2[2] = (size_t) nao * naux[2];
 
     const int One = 1;
     const char TRANS_N = 'N';
@@ -245,15 +252,15 @@ void vppnl_ip1_fill_gs1(double* grad, double* dm, int comp,
             for (i=0; i<hl_dim; i++) {
                 int p0 = offset[i];
                 if (i == 0) {
-                    ptr_ppnl_i = ppnl_half_ip2_0 + i0+p0*nao+ic*n2;
+                    ptr_ppnl_i = ppnl_half_ip2_0 + i0+p0*nao+ic*n2[0];
                     ptr_ppnl_j = ppnl_half0 + p0*nao+j0;
                 }
                 else if (i == 1) {
-                    ptr_ppnl_i = ppnl_half_ip2_1 + i0+p0*nao+ic*n2;
+                    ptr_ppnl_i = ppnl_half_ip2_1 + i0+p0*nao+ic*n2[1];
                     ptr_ppnl_j = ppnl_half1 + p0*nao+j0;
                 }
                 else if (i == 2) {
-                    ptr_ppnl_i = ppnl_half_ip2_2 + i0+p0*nao+ic*n2;
+                    ptr_ppnl_i = ppnl_half_ip2_2 + i0+p0*nao+ic*n2[2];
                     ptr_ppnl_j = ppnl_half2 + p0*nao+j0;
                 }
 
@@ -282,7 +289,7 @@ void vppnl_ip1_fill_gs1(double* grad, double* dm, int comp,
 void contract_ppnl_nuc_grad(void (*fill)(), double* grad, double* dm, int comp,
                             double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
                             double* ppnl_half_ip2_0, double* ppnl_half_ip2_1, double* ppnl_half_ip2_2,
-                            int* hl_table, double* hl_data, int nhl, int nao, int naux,
+                            int* hl_table, double* hl_data, int nhl, int nao, int* naux,
                             int* shls_slice, int* ao_loc, int* bas, int natm)
 {
     const int ish0 = shls_slice[0];
