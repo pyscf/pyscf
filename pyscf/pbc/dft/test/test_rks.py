@@ -201,6 +201,30 @@ class KnownValues(unittest.TestCase):
         mf1.kernel()
         self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
 
+    def test_rsh_0d_ewald(self):
+        L = 4.
+        cell = pbcgto.Cell()
+        cell.verbose = 0
+        cell.a = np.eye(3)*L
+        cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.dimension = 0
+        cell.mesh = [60]*3
+        cell.build()
+        mf = pbcdft.RKS(cell).density_fit()
+        mf.xc = 'camb3lyp'
+        mf.omega = '0.7'
+        mf.exxdiv = 'ewald'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 7)
+
+        mol = cell.to_mol()
+        mf1 = mol.RKS().density_fit()
+        mf1.xc = 'camb3lyp'
+        mf1.omega = '0.7'
+        mf1.kernel()
+        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
+
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.rks")
     unittest.main()
