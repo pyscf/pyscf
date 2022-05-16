@@ -561,7 +561,7 @@ def _rcut_by_shells_c(cell, precision=None, rcut=5., return_pgf_radius=False):
              ctypes.c_int(nbas), ctypes.c_double(rcut),
              ctypes.c_double(precision))
     except Exception as e:
-        raise RuntimeError("Failed to get shell radii. %s" % e)
+        raise RuntimeError(f"Failed to get shell radii.\n{e}")
     if return_pgf_radius:
         return shell_radius, pgf_radius
     return shell_radius
@@ -601,152 +601,11 @@ def rcut_by_shells(cell, precision=None, rcut=5., return_pgf_radius=False):
                                atom_types=atom_types)
 
     out = np.empty([len(cell._bas),])
-    '''
-    ib = 0
-    while ib < len(cell._bas):
-        ia = cell.bas_atom(ib)
-        for symb, atm_idx in atom_types.items():
-            if ia in atm_idx:
-                out[ib:ib+len(rcuts[symb])] = np.asarray(rcuts[symb])
-                ib += len(rcuts[symb])
-                break
-    assert ib == len(cell._bas)
-    '''
     bas_atom_idx = cell._bas[:,0]
     for symb, atm_idx in atom_types.items():
         for ia in atm_idx:
             out[np.where(bas_atom_idx == ia)[0]] = rcuts[symb]
     return out
-
-class NeighborPair(ctypes.Structure):
-    _fields_ = [("nimgs", ctypes.c_int),
-                ("Ls_list", ctypes.POINTER(ctypes.c_int)),
-                ("q_cond", ctypes.POINTER(ctypes.c_double)),
-                ("center", ctypes.POINTER(ctypes.c_double))]
-
-class NeighborList(ctypes.Structure):
-    _fields_ = [("nish", ctypes.c_int),
-                ("njsh", ctypes.c_int),
-                ("nimgs", ctypes.c_int),
-                ("pairs", ctypes.POINTER(ctypes.POINTER(NeighborPair)))]
-
-def build_neighbor_list_for_shlpairs(cell, cell1=None, Ls=None,
-                                     ish_rcut=None, jsh_rcut=None, hermi=0,
-                                     precision=None):
-    '''
-    Build the neighbor list of shell pairs for periodic calculations.
-
-    Arguments:
-        cell : :class:`pbc.gto.cell.Cell`
-            The :class:`Cell` instance for the bra basis functions.
-        cell1 : :class:`pbc.gto.cell.Cell`, optional
-            The :class:`Cell` instance for the ket basis functions.
-            If not given, both bra and ket basis functions come from cell.
-        Ls : (*,3) array, optional
-            The cartesian coordinates of the periodic images.
-            Default is calculated by :func:`cell.get_lattice_Ls`.
-        ish_rcut : (nish,) array, optional
-            The cutoff radii of the shells for bra basis functions.
-        jsh_rcut : (njsh,) array, optional
-            The cutoff radii of the shells for ket basis functions.
-        hermi : int, optional
-            If :math:`hermi=1`, the task list is built only for
-            the upper triangle of the matrix. Default is 0.
-        precision : float, optional
-            The integral precision. Default is :attr:`cell.precision`.
-            If both ``ish_rcut`` and ``jsh_rcut`` are given,
-            ``precision`` will be ignored.
-
-    Returns: :class:`ctypes.POINTER`
-        The C pointer of the :class:`NeighborList` structure.
-    '''
-    if cell1 is None:
-        cell1 = cell
-    if Ls is None:
-        Ls = cell.get_lattice_Ls()
-    Ls = np.asarray(Ls, order='C', dtype=float)
-    nimgs = len(Ls)
-
-    if hermi == 1 and cell1 is not cell:
-        logger.warn(cell,
-                    "Set hermi=0 because cell and cell1 are not the same.")
-        hermi = 0
-
-    ish_atm = np.asarray(cell._atm, order='C', dtype=np.int32)
-    ish_bas = np.asarray(cell._bas, order='C', dtype=np.int32)
-    ish_env = np.asarray(cell._env, order='C', dtype=float)
-    nish = len(ish_bas)
-    if ish_rcut is None:
-        ish_rcut = cell.rcut_by_shells(precision=precision)
-    assert nish == len(ish_rcut)
-
-    if cell1 is cell:
-        jsh_atm = ish_atm
-        jsh_bas = ish_bas
-        jsh_env = ish_env
-        if jsh_rcut is None:
-            jsh_rcut = ish_rcut
-    else:
-        jsh_atm = np.asarray(cell1._atm, order='C', dtype=np.int32)
-        jsh_bas = np.asarray(cell1._bas, order='C', dtype=np.int32)
-        jsh_env = np.asarray(cell1._env, order='C', dtype=float)
-        if jsh_rcut is None:
-            jsh_rcut = cell1.rcut_by_shells(precision=precision)
-    njsh = len(jsh_bas)
-    assert njsh == len(jsh_rcut)
-
-    nl = ctypes.POINTER(NeighborList)()
-    func = getattr(libpbc, "build_neighbor_list", None)
-    try:
-        func(ctypes.byref(nl),
-             ish_atm.ctypes.data_as(ctypes.c_void_p),
-             ish_bas.ctypes.data_as(ctypes.c_void_p),
-             ish_env.ctypes.data_as(ctypes.c_void_p),
-             ish_rcut.ctypes.data_as(ctypes.c_void_p),
-             jsh_atm.ctypes.data_as(ctypes.c_void_p),
-             jsh_bas.ctypes.data_as(ctypes.c_void_p),
-             jsh_env.ctypes.data_as(ctypes.c_void_p),
-             jsh_rcut.ctypes.data_as(ctypes.c_void_p),
-             ctypes.c_int(nish), ctypes.c_int(njsh),
-             Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nimgs),
-             ctypes.c_int(hermi))
-    except Exception as e:
-        raise RuntimeError("Failed to build neighbor list. %s" % e)
-    return nl
-
-def free_neighbor_list(nl):
-    func = getattr(libpbc, "del_neighbor_list", None)
-    try:
-        func(ctypes.byref(nl))
-    except Exception as e:
-        raise RuntimeError("Failed to free neighbor list. %s" % e)
-
-def neighbor_list_to_ndarray(cell, cell1, nl):
-    '''
-    Returns:
-        Ls_list: (nLtot,) ndarray
-            indices of Ls
-        Ls_idx: (2 x nish x njsh,) ndarray
-            starting and ending indices in Ls_list
-    '''
-    nish = cell.nbas
-    njsh = cell1.nbas
-    Ls_list = []
-    Ls_idx = []
-    nLtot = 0
-    for i in range(nish):
-        for j in range(njsh):
-            pair = nl.contents.pairs[i*njsh+j]
-            nL = pair.contents.nimgs
-            nLtot += nL
-            for iL in range(nL):
-                idx = pair.contents.Ls_list[iL]
-                Ls_list.append(idx)
-            if nL > 0:
-                Ls_idx.extend([nLtot-nL, nLtot])
-            else:
-                Ls_idx.extend([-1,-1])
-    return np.asarray(Ls_list), np.asarray(Ls_idx)
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation based on cubic lattice'''

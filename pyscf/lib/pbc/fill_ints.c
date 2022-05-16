@@ -1024,8 +1024,8 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
 }
 
 
-static void sort2c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
-                            int comp, int ish, int jsh)
+void sort2c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
+                     int comp, int ish, int jsh)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -1097,8 +1097,8 @@ static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
 }
 
 
-static void sort2c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
-                            int comp, int ish, int jsh)
+void sort2c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
+                     int comp, int ish, int jsh)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -1127,8 +1127,8 @@ static void sort2c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_lo
 }
 
 
-static void sort2c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
-                       int comp, int ish, int jsh)
+void sort2c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
+                int comp, int ish, int jsh)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];

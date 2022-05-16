@@ -2,10 +2,13 @@
 #include <string.h>
 #include <complex.h>
 #include <math.h>
-#include "vhf/fblas.h"
 #include "config.h"
 #include "cint.h"
+#include "gto/gto.h"
+#include "vhf/fblas.h"
 #include "np_helper/np_helper.h"
+#include "pbc/fill_ints.h"
+#include "pbc/neighbor_list.h"
 
 #define HL_TABLE_SLOTS  7
 //#define ATOM_OF         0
@@ -17,7 +20,7 @@
 #define HF_OFFSET2      6
 #define MAX_THREADS     256
 
-int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
+//int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 
 //#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
@@ -31,12 +34,12 @@ static double maxval(double* a, int n)
     return amax;
 }*/
 
-void contract_ppnl(double* out,
-                   double* ppnl_half0, 
-                   double* ppnl_half1, 
-                   double* ppnl_half2,
-                   int* hl_table, double* hl_data,
-                   int nhl, int nao)
+void contract_ppnl_slow(double* out,
+                        double* ppnl_half0, 
+                        double* ppnl_half1, 
+                        double* ppnl_half2,
+                        int* hl_table, double* hl_data,
+                        int nhl, int nao)
 {
     const int One = 1;
     const char TRANS_N = 'N';
@@ -87,6 +90,138 @@ void contract_ppnl(double* out,
                 dgemm_(&TRANS_N, &TRANS_T, &nao, &One, &il_dim,
                        &D1, hilp, &nao, ilp+p, &nao, &D1, pout, &nao);
             }
+        }
+        free(buf);
+    }
+}
+
+static void _ppnl_fill_g(void (*fsort)(), double* out, double** ints,
+                         int comp, int ish, int jsh, double* buf,
+                         int *shls_slice, int *ao_loc,
+                         int* hl_table, double* hl_data, int nhl,
+                         NeighborListOpt* nlopt)
+{
+    const int ish0 = shls_slice[0];
+    const int ish1 = shls_slice[1];
+    const int jsh0 = shls_slice[2];
+    const int jsh1 = shls_slice[3];
+
+    ish += ish0;
+    jsh += jsh0;
+
+    const int di = ao_loc[ish+1] - ao_loc[ish];
+    const int dj = ao_loc[jsh+1] - ao_loc[jsh];
+    const int dij = di *dj;
+    const int ioff = ao_loc[ish] - ao_loc[ish0];
+    const int joff = ao_loc[jsh] - ao_loc[jsh0];
+    const int naoi = ao_loc[ish1] - ao_loc[ish0];
+    const int naoj = ao_loc[jsh1] - ao_loc[jsh0];
+
+    int i, j, ij, pi, pj, ksh;
+    int hl_dim, nd;
+    int shls_ki[2], shls_kj[2];
+    int *table, *offset;
+    double *hl;
+    for (ij = 0; ij < dij; ij++) {
+        buf[ij] = 0;
+    }
+
+    int (*fprescreen)();
+    if (nlopt != NULL) {
+        fprescreen = nlopt->fprescreen;
+    } else {
+        fprescreen = NLOpt_noscreen;
+    }
+
+    const char TRANS_N = 'N';
+    const char TRANS_T = 'T';
+    const double D1 = 1.;
+    for (ksh = 0; ksh < nhl; ksh++) {
+        shls_ki[0] = ksh;
+        shls_ki[1] = ish;
+        shls_kj[0] = ksh;
+        shls_kj[1] = jsh;
+        if ((*fprescreen)(shls_ki, nlopt) && (*fprescreen)(shls_kj, nlopt)) {
+            table = hl_table + ksh * HL_TABLE_SLOTS;
+            hl_dim = table[HL_DIM_OF];
+            nd = table[ANG_OF] * 2 + 1;
+            offset = table + HL_OFFSET0;
+            hl = hl_data + table[HL_DATA_OF];
+            for (i=0; i<hl_dim; i++) {
+                pi = offset[i];
+                for (j=0; j<hl_dim; j++) {
+                    pj = offset[j];
+                    dgemm_(&TRANS_N, &TRANS_T, &di, &dj, &nd,
+                           hl+j+i*hl_dim, ints[i]+pi*naoi+ioff, &naoi,
+                           ints[j]+pj*naoj+joff, &naoj, &D1, buf, &di);
+                }
+            }
+        }
+    }
+    (*fsort)(out, buf, shls_slice, ao_loc, comp, ish, jsh);
+}
+
+
+void ppnl_fill_gs1(double* out, double** ints,
+                   int comp, int ish, int jsh, double* buf,
+                   int *shls_slice, int *ao_loc,
+                   int* hl_table, double* hl_data, int nhl,
+                   NeighborListOpt* nlopt)
+{
+    _ppnl_fill_g(&sort2c_gs1, out, ints, comp, ish, jsh, buf,
+                 shls_slice, ao_loc, hl_table, hl_data, nhl, nlopt);
+}
+
+
+void ppnl_fill_gs2(double* out, double** ints,
+                   int comp, int ish, int jsh, double* buf,
+                   int *shls_slice, int *ao_loc,
+                   int* hl_table, double* hl_data, int nhl,
+                   NeighborListOpt* nlopt)
+{
+    int ip = ish + shls_slice[0];
+    int jp = jsh + shls_slice[2];
+    if (ip > jp) {
+        _ppnl_fill_g(&sort2c_gs2_igtj, out, ints, comp, ish, jsh, buf,
+                     shls_slice, ao_loc, hl_table, hl_data, nhl, nlopt);
+    } else if (ip == jp) {
+        _ppnl_fill_g(&sort2c_gs2_ieqj, out, ints, comp, ish, jsh, buf,
+                     shls_slice, ao_loc, hl_table, hl_data, nhl, nlopt);
+    }
+}
+
+
+void contract_ppnl(void (*fill)(), double* out,
+                   double* ppnl_half0, double* ppnl_half1, double* ppnl_half2,
+                   int comp, int* shls_slice, int *ao_loc,
+                   int* hl_table, double* hl_data, int nhl,
+                   NeighborListOpt* nlopt)
+{
+    const int ish0 = shls_slice[0];
+    const int ish1 = shls_slice[1];
+    const int jsh0 = shls_slice[2];
+    const int jsh1 = shls_slice[3];
+    const int nish = ish1 - ish0;
+    const int njsh = jsh1 - jsh0;
+    const size_t nijsh = (size_t) nish * njsh;
+
+    double *ints[3] = {ppnl_half0, ppnl_half1, ppnl_half2};
+
+    int di = GTOmax_shell_dim(ao_loc, shls_slice+0, 1);
+    int dj = GTOmax_shell_dim(ao_loc, shls_slice+2, 1);
+    size_t buf_size = di*dj*comp;
+
+    #pragma omp parallel
+    {
+        int ish, jsh;
+        size_t ij;
+        double *buf = (double*) malloc(sizeof(double) * buf_size);
+        #pragma omp for schedule(dynamic)
+        for (ij = 0; ij < nijsh; ij++) {
+            ish = ij / njsh;
+            jsh = ij % njsh;
+            (*fill)(out, ints, comp, ish, jsh, buf,
+                    shls_slice, ao_loc, hl_table, hl_data, nhl, nlopt);
         }
         free(buf);
     }

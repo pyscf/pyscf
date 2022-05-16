@@ -13,4 +13,11 @@ typedef struct NeighborList_struct {
     int nimgs;
     NeighborPair **pairs;
 } NeighborList;
+
+typedef struct NeighborListOpt_struct {
+    NeighborList *nl;
+    int (*fprescreen)(int *shls, struct NeighborListOpt_struct *opt);
+} NeighborListOpt;
+
+int NLOpt_noscreen(int* shls, NeighborListOpt* opt);
 #endif

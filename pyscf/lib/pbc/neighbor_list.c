@@ -129,3 +129,60 @@ void del_neighbor_list(NeighborList** nl)
     free(nl0);
     *nl = NULL;
 }
+
+
+int NLOpt_noscreen(int* shls, NeighborListOpt* opt)
+{
+    return 1;
+}
+
+int NLOpt_screen(int* shls, NeighborListOpt* opt)
+{
+    int ish = shls[0];
+    int jsh = shls[1];
+    NeighborList *nl = opt->nl;
+    int njsh = nl->njsh;
+    NeighborPair *np;
+    np = (nl->pairs)[ish*njsh + jsh];
+    return np->nimgs > 0;
+}
+
+void NLOpt_init(NeighborListOpt **opt)
+{
+    NeighborListOpt *opt0 = malloc(sizeof(NeighborListOpt));
+    opt0->nl = NULL;
+    opt0->fprescreen = &NLOpt_noscreen;
+    *opt = opt0;
+}
+
+void NLOpt_del(NeighborListOpt **opt)
+{
+    NeighborListOpt *opt0 = *opt;
+    if (!opt0) {
+        return;
+    }
+    free(opt0);
+    *opt = NULL;
+}
+
+void NLOpt_set_nl(NeighborListOpt *opt, NeighborList *nl)
+{
+    opt->nl = nl;
+}
+
+void NLOpt_reset(NeighborListOpt *opt)
+{
+    opt->nl = NULL;
+    opt->fprescreen = &NLOpt_screen;
+}
+
+void NLOpt_set_optimizer(NeighborListOpt *opt)
+{
+    opt->fprescreen = &NLOpt_screen;
+}
+
+void NLOpt_del_optimizer(NeighborListOpt *opt)
+{
+    opt->fprescreen = &NLOpt_noscreen;
+}
+
