@@ -131,8 +131,8 @@ class KnownValues(unittest.TestCase):
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
-        self.assertAlmostEqual(ej0, 25.77582611607388 , 7)
-        self.assertAlmostEqual(ek0, 30.814555613338555, 7)
+        self.assertAlmostEqual(ej0, 25.77582611607388 , 6)
+        self.assertAlmostEqual(ek0, 30.814555613338555, 6)
 
     def test_jk_hermi0_high_cost(self):
         numpy.random.seed(12)
@@ -162,10 +162,10 @@ class KnownValues(unittest.TestCase):
         mydf.eta = 0.3
         mydf.auxbasis = 'weigend'
         vj = mdf_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vj[0]), (7.240247126035314-0.0010092876216366933j), 8)
-        self.assertAlmostEqual(lib.fp(vj[1]), (7.248775589325954-0.0015611883008615822j), 8)
-        self.assertAlmostEqual(lib.fp(vj[2]), (7.241230472941957-0.002515541792204466j) , 8)
-        self.assertAlmostEqual(lib.fp(vj[3]), (7.240398079284901+0.0014737107502212023j), 8)
+        self.assertAlmostEqual(lib.fp(vj[0]), (7.240247126035314-0.0010092876216366933j), 7)
+        self.assertAlmostEqual(lib.fp(vj[1]), (7.248775589325954-0.0015611883008615822j), 7)
+        self.assertAlmostEqual(lib.fp(vj[2]), (7.241230472941957-0.002515541792204466j) , 7)
+        self.assertAlmostEqual(lib.fp(vj[3]), (7.240398079284901+0.0014737107502212023j), 7)
 
     def test_j_kpts_high_cost(self):
         numpy.random.seed(1)

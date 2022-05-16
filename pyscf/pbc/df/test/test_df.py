@@ -24,7 +24,7 @@ from pyscf.pbc.df import df, aug_etb, FFTDF
 pyscf.pbc.DEBUG = False
 
 def setUpModule():
-    global cell, kmdf, kpts
+    global cell, kmdf, ccgdf, kpts
     L = 5.
     n = 11
     cell = pgto.Cell()
