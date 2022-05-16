@@ -24,15 +24,17 @@ from pyscf.pbc.df import outcore
 import pyscf.pbc
 #pyscf.pbc.DEBUG = False
 
-cell = pgto.Cell()
-cell.unit = 'B'
-cell.a = numpy.eye(3) * 4.
-cell.mesh = [11]*3
-cell.atom = 'He 0 1 1; He 1 1 0'
-cell.basis = { 'He': [[0, (0.8, 1.0)],
-                      [0, (1.2, 1.0)]] }
-cell.verbose = 0
-cell.build(0, 0)
+def setUpModule():
+    global cell
+    cell = pgto.Cell()
+    cell.unit = 'B'
+    cell.a = numpy.eye(3) * 4.
+    cell.mesh = [11]*3
+    cell.atom = 'He 0 1 1; He 1 1 0'
+    cell.basis = { 'He': [[0, (0.8, 1.0)],
+                          [0, (1.2, 1.0)]] }
+    cell.verbose = 0
+    cell.build(0, 0)
 
 def tearDownModule():
     global cell

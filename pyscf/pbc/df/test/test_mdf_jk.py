@@ -26,30 +26,32 @@ from pyscf.pbc.df import mdf_jk
 #from mpi4pyscf.pbc.df import mdf_jk
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, cell0, mf0, n
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.max_memory = 0
-cell.rcut = 28.3
-cell.build()
+    cell.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.max_memory = 0
+    cell.rcut = 28.3
+    cell.build()
 
-cell0 = pgto.Cell()
-cell0.a = numpy.eye(3) * L
-cell0.atom = '''C    3.    2.       3.
-                C    1.    1.       1.'''
-cell0.basis = 'sto-3g'
-cell0.verbose = 0
-cell0.build()
+    cell0 = pgto.Cell()
+    cell0.a = numpy.eye(3) * L
+    cell0.atom = '''C    3.    2.       3.
+                    C    1.    1.       1.'''
+    cell0.basis = 'sto-3g'
+    cell0.verbose = 0
+    cell0.build()
 
-mf0 = pscf.RHF(cell)
-mf0.exxdiv = None
+    mf0 = pscf.RHF(cell)
+    mf0.exxdiv = None
 
 def tearDownModule():
     global cell, cell0, mf0

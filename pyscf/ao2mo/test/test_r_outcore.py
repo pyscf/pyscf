@@ -19,16 +19,19 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf import ao2mo
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.build()
-eri0 = mol.intor('int2e_spinor')
+
+def setUpModule():
+    global mol, eri0
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.build()
+    eri0 = mol.intor('int2e_spinor')
 
 def tearDownModule():
     global mol, eri0

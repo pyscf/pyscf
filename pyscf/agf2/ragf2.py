@@ -829,6 +829,12 @@ class RAGF2(lib.StreamObject):
     def dump_chk(self, chkfile=None, key='agf2', gf=None, se=None,
                  frozen=None, nmom=None,
                  mo_energy=None, mo_coeff=None, mo_occ=None):
+        if chkfile is None:
+            chkfile = self.chkfile
+
+        if not chkfile:
+            return self
+
         chkutil.dump_agf2(self, chkfile, key,
                           gf, se, frozen, None,
                           mo_energy, mo_coeff, mo_occ)
@@ -859,7 +865,6 @@ class RAGF2(lib.StreamObject):
             myagf2.with_df.auxbasis = auxbasis
 
         return myagf2
-
 
     def get_ip(self, gf, nroots=5):
         gf_occ = gf.get_occupied()

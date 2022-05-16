@@ -32,8 +32,10 @@ except ImportError:
 
 dname = os.path.dirname(__file__)
 
-potf = tempfile.NamedTemporaryFile()
-potf.write(b'''!
+def setUpModule():
+    global potf, potf2, mol, mol2, potfile, potfile2
+    potf = tempfile.NamedTemporaryFile()
+    potf.write(b'''!
 @COORDINATES
 3
 AA
@@ -57,19 +59,19 @@ EXCLISTS
 1   2  3
 2   1  3
 3   1  2''')
-potf.flush()
-potfile = potf.name
+    potf.flush()
+    potfile = potf.name
 
-mol = gto.M(atom='''
-       6        0.000000    0.000000   -0.542500
-       8        0.000000    0.000000    0.677500
-       1        0.000000    0.935307   -1.082500
-       1        0.000000   -0.935307   -1.082500
-            ''', basis='sto3g', verbose=7,
-            output='/dev/null')
+    mol = gto.M(atom='''
+           6        0.000000    0.000000   -0.542500
+           8        0.000000    0.000000    0.677500
+           1        0.000000    0.935307   -1.082500
+           1        0.000000   -0.935307   -1.082500
+                ''', basis='sto3g', verbose=7,
+                output='/dev/null')
 
-potf2 = tempfile.NamedTemporaryFile()
-potf2.write(b'''! water molecule + a large, positive charge to force electron spill-out
+    potf2 = tempfile.NamedTemporaryFile()
+    potf2.write(b'''! water molecule + a large, positive charge to force electron spill-out
 @COORDINATES
 4
 AA
@@ -109,27 +111,28 @@ EXCLISTS
 2       1    3    4
 3       1    2    4
 4       1    2    3''')
-potf2.flush()
-potfile2 = potf2.name
+    potf2.flush()
+    potfile2 = potf2.name
 
-mol2 = gto.M(
-    atom="""
-    O     22.931000    21.390000    23.466000
-    C     22.287000    21.712000    22.485000
-    N     22.832000    22.453000    21.486000
-    H     21.242000    21.408000    22.312000
-    H     23.729000    22.867000    21.735000
-    H     22.234000    23.026000    20.883000
-    """,
-    basis="3-21++G",
-    verbose=7,
-    output='/dev/null'
-)
+    mol2 = gto.M(
+        atom="""
+        O     22.931000    21.390000    23.466000
+        C     22.287000    21.712000    22.485000
+        N     22.832000    22.453000    21.486000
+        H     21.242000    21.408000    22.312000
+        H     23.729000    22.867000    21.735000
+        H     22.234000    23.026000    20.883000
+        """,
+        basis="3-21++G",
+        verbose=7,
+        output='/dev/null'
+    )
 
 
 def tearDownModule():
     global potf, potf2, mol, mol2
     mol.stdout.close()
+    mol2.stdout.close()
     del potf, potf2, mol, mol2
 
 
@@ -275,14 +278,15 @@ class TestPolEmbed(unittest.TestCase):
         mf = solvent.PE(mol.RHF(), pe).run(conv_tol=1e-10)
         self.assertAlmostEqual(mf.e_tot, -112.35232445743728, 9)
         self.assertAlmostEqual(mf.with_solvent.e, 0.00020182314249546455, 9)
-    
+
     def test_pe_scf_ecp(self):
         pe = solvent.PE(mol2, {"potfile": potfile2, "ecp": True})
         mf = solvent.PE(mol2.RHF(), pe).run(conv_tol=1e-10)
         self.assertAlmostEqual(mf.e_tot, -168.147494986446, 8)
 
     def test_as_scanner(self):
-        mf_scanner = solvent.PE(scf.RHF(mol), potfile).as_scanner()
+        mf = mol.RHF(chkfile=tempfile.NamedTemporaryFile().name)
+        mf_scanner = solvent.PE(mf, potfile).as_scanner()
         mf_scanner(mol)
         self.assertAlmostEqual(mf_scanner.with_solvent.e, 0.00020182314249546455, 9)
         # Change solute. cppe may not support this

@@ -24,48 +24,50 @@ from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
 from pyscf.data import nist
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.basis = '631g'
-mol.build()
+def setUpModule():
+    global mol, mf, td_hf, mf_lda3, mf_lda, mf_bp86, mf_b3lyp, mf_b3lyp1#, mf_b3pw91g
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.basis = '631g'
+    mol.build()
 
-mf = scf.RHF(mol).run()
-td_hf = tdscf.TDHF(mf).run()
+    mf = scf.RHF(mol).run()
+    td_hf = tdscf.TDHF(mf).run()
 
-mf_lda3 = dft.RKS(mol)
-mf_lda3.xc = 'lda, vwn_rpa'
-mf_lda3.grids.prune = None
-mf_lda3.scf()
+    mf_lda3 = dft.RKS(mol)
+    mf_lda3.xc = 'lda, vwn_rpa'
+    mf_lda3.grids.prune = None
+    mf_lda3.scf()
 
-mf_lda = dft.RKS(mol)
-mf_lda.xc = 'lda, vwn'
-mf_lda.grids.prune = None
-mf_lda.scf()
+    mf_lda = dft.RKS(mol)
+    mf_lda.xc = 'lda, vwn'
+    mf_lda.grids.prune = None
+    mf_lda.scf()
 
-mf_bp86 = dft.RKS(mol)
-mf_bp86.xc = 'b88,p86'
-mf_bp86.grids.prune = None
-mf_bp86.scf()
+    mf_bp86 = dft.RKS(mol)
+    mf_bp86.xc = 'b88,p86'
+    mf_bp86.grids.prune = None
+    mf_bp86.scf()
 
-mf_b3lyp = dft.RKS(mol)
-mf_b3lyp.xc = 'b3lyp'
-mf_b3lyp.grids.prune = None
-mf_b3lyp.scf()
+    mf_b3lyp = dft.RKS(mol)
+    mf_b3lyp.xc = 'b3lyp'
+    mf_b3lyp.grids.prune = None
+    mf_b3lyp.scf()
 
-mf_b3lyp1 = dft.RKS(mol)
-mf_b3lyp1.xc = 'b3lyp'
-mf_b3lyp1.grids.prune = None
-mf_b3lyp1._numint.libxc = dft.xcfun
-mf_b3lyp1.scf()
+    mf_b3lyp1 = dft.RKS(mol)
+    mf_b3lyp1.xc = 'b3lyp'
+    mf_b3lyp1.grids.prune = None
+    mf_b3lyp1._numint.libxc = dft.xcfun
+    mf_b3lyp1.scf()
 
-#mf_b3pw91g = dft.RKS(mol)
-#mf_b3pw91g.xc = 'b3pw91g'
-#mf_b3pw91g.grids.prune = None
-#mf_b3pw91g.scf()
+    #mf_b3pw91g = dft.RKS(mol)
+    #mf_b3pw91g.xc = 'b3pw91g'
+    #mf_b3pw91g.grids.prune = None
+    #mf_b3pw91g.scf()
 
 def tearDownModule():
     global mol, mf, td_hf, mf_lda3, mf_lda, mf_bp86, mf_b3lyp, mf_b3lyp1#, mf_b3pw91g

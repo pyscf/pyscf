@@ -19,9 +19,11 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
-mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
-mol1 = gto.M(atom='H  0.  0.  1.803; F  0.  0.  0.', verbose=0, unit='B')
-mol2 = gto.M(atom='H  0.  0.  1.805; F  0.  0.  0.', verbose=0, unit='B')
+def setUpModule():
+    global mol0, mol1, mol2
+    mol0 = gto.M(atom='H  0.  0.  1.804; F  0.  0.  0.', verbose=0, unit='B')
+    mol1 = gto.M(atom='H  0.  0.  1.803; F  0.  0.  0.', verbose=0, unit='B')
+    mol2 = gto.M(atom='H  0.  0.  1.805; F  0.  0.  0.', verbose=0, unit='B')
 
 def tearDownModule():
     global mol0, mol1, mol2

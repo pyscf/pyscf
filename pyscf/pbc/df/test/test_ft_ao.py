@@ -21,27 +21,29 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc import tools
 from pyscf import lib
 
-cell = pgto.Cell()
-cell.atom = '''
-He1   1.3    .2       .3
-He2    .1    .1      1.1 '''
-cell.basis = {'He1': 'sto3g', 'He2': 'ccpvdz'}
-cell.mesh = (31,)*3
-cell.a = numpy.diag([2.2, 1.9, 2.])
-cell.build()
+def setUpModule():
+    global cell, cell1
+    cell = pgto.Cell()
+    cell.atom = '''
+    He1   1.3    .2       .3
+    He2    .1    .1      1.1 '''
+    cell.basis = {'He1': 'sto3g', 'He2': 'ccpvdz'}
+    cell.mesh = (31,)*3
+    cell.a = numpy.diag([2.2, 1.9, 2.])
+    cell.build()
 
-cell1 = pgto.Cell()
-cell1.atom = '''
-He   1.3    .2       .3
-He    .1    .1      1.1 '''
-cell1.basis = {'He': [[0, [0.8, 1]],
-                      [1, [0.6, 1]]
-                     ]}
-cell1.mesh = [17]*3
-cell1.a = numpy.array(([2.0,  .9, 0. ],
-                       [0.1, 1.9, 0.4],
-                       [0.8, 0  , 2.1]))
-cell1.build()
+    cell1 = pgto.Cell()
+    cell1.atom = '''
+    He   1.3    .2       .3
+    He    .1    .1      1.1 '''
+    cell1.basis = {'He': [[0, [0.8, 1]],
+                          [1, [0.6, 1]]
+                         ]}
+    cell1.mesh = [17]*3
+    cell1.a = numpy.array(([2.0,  .9, 0. ],
+                           [0.1, 1.9, 0.4],
+                           [0.8, 0  , 2.1]))
+    cell1.build()
 
 def tearDownModule():
     global cell, cell1

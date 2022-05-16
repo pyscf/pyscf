@@ -19,23 +19,24 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import dft
 
-# for cgto
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [[2, (0.,0.,0.)], ]
-mol.basis = {"He": 'cc-pvdz'}
-mol.build()
-method = dft.RKS(mol)
+def setUpModule():
+    global mol, method, mol1
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [[2, (0.,0.,0.)], ]
+    mol.basis = {"He": 'cc-pvdz'}
+    mol.build()
+    method = dft.RKS(mol)
 
-mol1 = gto.Mole()
-mol1.verbose = 0
-mol1.output = None
-mol1.atom = 'He'
-mol1.basis = 'cc-pvdz'
-mol1.charge = 1
-mol1.spin = 1
-mol1.build()
+    mol1 = gto.Mole()
+    mol1.verbose = 0
+    mol1.output = None
+    mol1.atom = 'He'
+    mol1.basis = 'cc-pvdz'
+    mol1.charge = 1
+    mol1.spin = 1
+    mol1.build()
 
 def tearDownModule():
     global mol, method, mol1

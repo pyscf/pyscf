@@ -662,8 +662,9 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
             occupation numbers
 
     Return:
-        A list: the product of single values: float
-            x_a, x_b: 1D ndarrays
+        A list:
+            the product of single values: float
+            (x_a, x_b): 1D ndarrays
             :math:`\mathbf{U} \mathbf{\Lambda}^{-1} \mathbf{V}^\dagger`
             They are used to calculate asymmetric density matrix
     '''
@@ -681,7 +682,7 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
     u_b, s_b, vt_b = numpy.linalg.svd(o_b)
     x_a = reduce(numpy.dot, (u_a*numpy.reciprocal(s_a), vt_a))
     x_b = reduce(numpy.dot, (u_b*numpy.reciprocal(s_b), vt_b))
-    return numpy.prod(s_a)*numpy.prod(s_b), numpy.array((x_a, x_b))
+    return numpy.prod(s_a)*numpy.prod(s_b), (x_a, x_b)
 
 def make_asym_dm(mo1, mo2, occ1, occ2, x):
     r'''One-particle asymmetric density matrix

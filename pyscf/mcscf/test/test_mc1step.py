@@ -15,7 +15,9 @@
 
 import copy
 import unittest
+import tempfile
 import numpy
+import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -23,32 +25,36 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-10
-m.scf()
-mc0 = mcscf.CASSCF(m, 4, 4).run()
+def setUpModule():
+    global mol, molsym, m, msym, mc0
+    b = 1.4
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-10
+    m.chkfile = tempfile.NamedTemporaryFile().name
+    m.scf()
+    mc0 = mcscf.CASSCF(m, 4, 4).run()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.chkfile = tempfile.NamedTemporaryFile().name
+    msym.conv_tol = 1e-10
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym, mc0
@@ -269,7 +275,14 @@ class KnownValues(unittest.TestCase):
 
     def test_dump_chk(self):
         mcdic = lib.chkfile.load(mc0.chkfile, 'mcscf')
+        with h5py.File(mc0.chkfile, 'r+') as f:
+            del f['mcscf']
+
         mcscf.chkfile.dump_mcscf(mc0, **mcdic)
+        with h5py.File(mc0.chkfile, 'r') as f:
+            self.assertEqual(
+                set(f['mcscf'].keys()),
+                {'ncore', 'e_tot', 'mo_energy', 'casdm1', 'mo_occ', 'ncas', 'mo_coeff', 'e_cas'})
 
     def test_state_average1(self):
         mc = mcscf.CASSCF(m, 4, 4)
@@ -316,4 +329,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for mc1step")
     unittest.main()
-

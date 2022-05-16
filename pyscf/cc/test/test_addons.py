@@ -22,19 +22,21 @@ from pyscf import cc
 from pyscf.cc import ccsd
 from pyscf.cc import addons
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.basis = '631g'
-mol.spin = 0
-mol.build()
-mf1 = scf.RHF(mol).run(conv_tol=1e-12)
-gmf = scf.addons.convert_to_ghf(mf1)
-myrcc = ccsd.CCSD(mf1).run()
+def setUpModule():
+    global mol, mf1, gmf, myrcc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.basis = '631g'
+    mol.spin = 0
+    mol.build()
+    mf1 = scf.RHF(mol).run(conv_tol=1e-12)
+    gmf = scf.addons.convert_to_ghf(mf1)
+    myrcc = ccsd.CCSD(mf1).run()
 
 def tearDownModule():
     global mol, mf1, gmf, myrcc
