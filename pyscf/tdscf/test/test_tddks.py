@@ -21,6 +21,10 @@ import numpy
 import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
     global mol, mf_lda
@@ -90,18 +94,21 @@ class KnownValues(unittest.TestCase):
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mf_m06l.TDDFT(), (2.6976631072148023-0.04095530860443805j), (0.28672220700422074-0.43124914810711495j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
         mcol_lda = dft.UDKS(mol).set(xc='lda,', collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_lda.TDDFT(), (5.478444698230763-0.12293843387836961j), (-1.2239985192883394+0.6782311620812582j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.UDKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_b3lyp.TDDFT(), (4.930048478531784-0.11388609814561775j), (-1.3665273329472876+0.6155132905683387j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.UDKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6

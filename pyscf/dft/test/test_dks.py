@@ -18,6 +18,10 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf.dft import dks
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
     global mol, mol1
@@ -87,6 +91,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -74.00093287236554, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_lda(self):
         mf = dks.UDKS(mol)
         mf.xc = 'lda,vwn'
@@ -109,6 +114,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -75.49000045638684, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_gga_high_cost(self):
         mf = dks.UDKS(mol)
         mf.xc = 'pbe'
@@ -137,6 +143,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -75.08263680935453, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_mgga_high_cost(self):
         mf = dks.UDKS(mol)
         mf.xc = 'm06l'

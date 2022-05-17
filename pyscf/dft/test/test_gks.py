@@ -17,6 +17,10 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import lib
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
     global mol, mol1
@@ -91,6 +95,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(mf.mo_energy), -27.542272513714398, 8)
         self.assertAlmostEqual(eks4, -73.77115048625794, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_lda(self):
         mf = mol.GKS()
         mf.xc = 'lda,vwn'
@@ -121,6 +126,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -74.86995486005469, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_gga(self):
         mf = mol.GKS()
         mf.xc = 'pbe'
@@ -143,6 +149,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -75.30536839893855, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_dks_mgga(self):
         mf = mol.GKS()
         mf.xc = 'm06l'
@@ -158,6 +165,7 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -74.09933666072668, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_x2c_uks_lda(self):
         mf = mol.GKS().x2c()
         mf.xc = 'lda,'
