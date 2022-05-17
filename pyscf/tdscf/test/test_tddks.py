@@ -22,18 +22,20 @@ import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = '''
+def setUpModule():
+    global mol, mf_lda
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = '''
 H     0.   0.    0.
 H     0.  -0.7   0.7
 H     0.   0.7   0.7'''
-mol.basis = 'uncsto3g'
-mol.spin = 1
-mol.build()
+    mol.basis = 'uncsto3g'
+    mol.spin = 1
+    mol.build()
 
-mf_lda = dft.DKS(mol).set(xc='lda,').newton().run()
+    mf_lda = dft.DKS(mol).set(xc='lda,').newton().run()
 
 def tearDownModule():
     global mol, mf_lda
