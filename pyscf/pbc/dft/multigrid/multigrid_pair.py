@@ -224,7 +224,7 @@ def build_task_list(cell, gridlevel_info, cell1=None, Ls=None, hermi=0, precisio
     Returns: :class:`ctypes.POINTER`
         The C pointer of the :class:`TaskList` structure.
     '''
-    from pyscf.pbc.gto.cell import build_neighbor_list_for_shlpairs, free_neighbor_list
+    from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
     if cell1 is None:
         cell1 = cell
     if Ls is None:
