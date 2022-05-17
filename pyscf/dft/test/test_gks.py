@@ -18,26 +18,28 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 
-mol = gto.Mole()
-mol.atom = '''
+def setUpModule():
+    global mol, mol1
+    mol = gto.Mole()
+    mol.atom = '''
 O    0    0    0
 H    0.   -0.757   0.587
 H    0.   0.757    0.587'''
-mol.spin = None
-mol.basis = 'sto3g'
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.build()
+    mol.spin = None
+    mol.basis = 'sto3g'
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.build()
 
-mol1 = gto.M(
-    verbose = 0,
-    atom = '''
+    mol1 = gto.M(
+        verbose = 0,
+        atom = '''
 O    0    0    0
 H    0.   -0.757   0.587
 H    0.   0.757    0.587''',
-    charge = 1,
-    spin = 1,
-    basis = 'sto3g')
+        charge = 1,
+        spin = 1,
+        basis = 'sto3g')
 
 def tearDownModule():
     global mol, mol1

@@ -22,31 +22,33 @@ import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 
-molsym = gto.M(
-    atom='''
+def setUpModule():
+    global mol, molsym, mf_bp86, mf_lda
+    molsym = gto.M(
+        atom='''
 O     0.   0.       0.
 H     0.   -0.757   0.587
 H     0.   0.757    0.587''',
-    spin=2,
-    basis='631g',
-    symmetry=True)
+        spin=2,
+        basis='631g',
+        symmetry=True)
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = '''
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = '''
 H     0.   0.    0.
 H     0.  -0.7   0.7
 H     0.   0.7   0.7'''
-mol.basis = '631g'
-mol.spin = 1
-mol.build()
+    mol.basis = '631g'
+    mol.spin = 1
+    mol.build()
 
-mf_lda = dft.GKS(mol).set(xc='lda,').newton().run()
-mcol_lda = dft.GKS(mol).set(xc='lda,', collinear='mcol')
-mcol_lda._numint.spin_samples = 6
-mcol_lda = mcol_lda.run()
-mf_bp86 = dft.GKS(molsym).set(xc='bp86').run()
+    mf_lda = dft.GKS(mol).set(xc='lda,').newton().run()
+    mcol_lda = dft.GKS(mol).set(xc='lda,', collinear='mcol')
+    mcol_lda._numint.spin_samples = 6
+    mcol_lda = mcol_lda.run()
+    mf_bp86 = dft.GKS(molsym).set(xc='bp86').run()
 
 def tearDownModule():
     global mol, molsym, mf_bp86, mf_lda
