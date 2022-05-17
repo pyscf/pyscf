@@ -187,13 +187,14 @@ class Integrator:
         '''Compute the kinetic energy of the current frame.'''
         energy = 0
         for v, m in zip(self.veloc, self.mol.atom_mass_list(isotope_avg=True)):
-            #m = round(m * AMU_TO_AU)
-            #if int(m/10000):
-            #    m /= 10
-            #    m = round(m)
-            #    m *= 10
-            #energy += 0.5 * m * np.linalg.norm(v) ** 2
-            energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
+            m = round(m * AMU_TO_AU)
+            if int(m/10000):
+                m /= 10
+                m = round(m)
+                m *= 10
+            print(m)
+            energy += 0.5 * m * np.linalg.norm(v) ** 2
+            #energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
 
         return energy
 
@@ -278,13 +279,13 @@ class VelocityVerlot(Integrator):
 
         a = []
         for m, g in zip(self.mol.atom_mass_list(isotope_avg=True), grad):
-            #m = round(m * AMU_TO_AU)
-            #if int(m/10000):
-            #    m /= 10
-            #    m = round(m)
-            #    m *= 10
-            #a.append(-1 * g / m )
-            a.append(-1 * g / m / AMU_TO_AU)
+            m = round(m * AMU_TO_AU)
+            if int(m/10000):
+                m /= 10
+                m = round(m)
+                m *= 10
+            a.append(-1 * g / m )
+            #a.append(-1 * g / m / AMU_TO_AU)
 
         return e_tot, np.array(a)
 
