@@ -667,7 +667,8 @@ def _contract_ppnl_nuc_grad(cell, fakecell, dms, hl_blocks, ppnl_half, ppnl_half
     if nkpts == 1:
         grad_tot = grad[0]
     else:
-        grad_tot += grad[k]
+        for k in range(nkpts):
+            grad_tot += grad[k]
         grad_tot = grad_tot.real
     return grad_tot
 
