@@ -25,8 +25,7 @@ from pyscf import tdscf
 from pyscf.data import nist
 
 def setUpModule():
-    global mol, mf, td_hf, mf_lda3, mf_lda, mf_bp86, mf_b3lyp, mf_b3lyp1,
-    mf_m06l
+    global mol, mf, td_hf, mf_lda3, mf_lda, mf_bp86, mf_b3lyp, mf_b3lyp1, mf_m06l
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = '/dev/null'

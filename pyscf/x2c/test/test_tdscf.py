@@ -21,19 +21,25 @@ import numpy
 import copy
 from pyscf import lib, gto, scf
 from pyscf.x2c import x2c, dft, tdscf
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = '''
-H     0.   0.    0.
-H     0.  -0.7   0.7
-H     0.   0.7   0.7'''
-mol.basis = '6-31g'
-mol.spin = 1
-mol.build()
+def setUpModule():
+    global mol, mf_lda
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = '''
+    H     0.   0.    0.
+    H     0.  -0.7   0.7
+    H     0.   0.7   0.7'''
+    mol.basis = '6-31g'
+    mol.spin = 1
+    mol.build()
 
-mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12).newton().run()
+    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12).newton().run()
 
 def tearDownModule():
     global mol, mf_lda
@@ -89,18 +95,21 @@ class KnownValues(unittest.TestCase):
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mf_m06l.TDDFT(), (-0.5127304060989012+0.11191635516399276j), (0.09118100353881411+0.01666546044266178j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
         mcol_lda = dft.UKS(mol).set(xc='lda,', collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_lda.TDDFT(), (0.26944471333836534+0.1852591223703071j), (-0.4932669905686775-0.14572031998519752j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.UKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_b3lyp.TDDFT(), (0.1299725651164541+0.12866529969140705j), (-0.47029779515314357-0.10533065235953173j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.UKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
@@ -130,6 +139,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ab1 - abxy_ref[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(ab2 - abxy_ref[1]).max(), 0, 12)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_vs_gks(self):
         with lib.temporary_env(lib.param, LIGHT_SPEED=20):
             mol = gto.M(atom='C', basis='6-31g')

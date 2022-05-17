@@ -21,9 +21,13 @@ import numpy
 import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
+try:
+    import mcfun
+except ImportError:
+    mcfun = None
 
 def setUpModule():
-    global mol, molsym, mf_bp86, mf_lda
+    global mol, molsym, mf_bp86, mf_lda, mcol_lda
     molsym = gto.M(
         atom='''
 O     0.   0.       0.
@@ -45,15 +49,17 @@ H     0.   0.7   0.7'''
     mol.build()
 
     mf_lda = dft.GKS(mol).set(xc='lda,').newton().run()
-    mcol_lda = dft.GKS(mol).set(xc='lda,', collinear='mcol')
-    mcol_lda._numint.spin_samples = 6
-    mcol_lda = mcol_lda.run()
+    mcol_lda = None
+    if mcfun is not None:
+        mcol_lda = dft.GKS(mol).set(xc='lda,', collinear='mcol')
+        mcol_lda._numint.spin_samples = 6
+        mcol_lda = mcol_lda.run()
     mf_bp86 = dft.GKS(molsym).set(xc='bp86').run()
 
 def tearDownModule():
-    global mol, molsym, mf_bp86, mf_lda
+    global mol, molsym, mf_bp86, mf_lda, mcol_lda
     mol.stdout.close()
-    del mol, molsym, mf_bp86, mf_lda
+    del mol, molsym, mf_bp86, mf_lda, mcol_lda
 
 def diagonalize(a, b, nroots=4):
     nocc, nvir = a.shape[:2]
@@ -103,15 +109,18 @@ class KnownValues(unittest.TestCase):
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks_real(tdscf.gks.TDDFT(mf_m06l), -0.19581757687144707, 0.3674283579582636)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
         self._check_against_ab_ks_complex(mcol_lda.TDDFT(), (-1.0869078807096237+0j), (0.3873525612834711+0j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.GKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks_complex(mcol_b3lyp.TDDFT(), (-0.4031178158856909+0j), (0.962818119721807+0j))
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.GKS(mol).set(xc='m06,', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
