@@ -18,7 +18,7 @@ import numpy as np
 from pyscf import gto, scf
 import pyscf.md.integrator as integrator
 
-CHECK_STABILITY = False
+CHECK_STABILITY = True #False
 
 h2o = gto.M(
     verbose=3,
@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
             [0.0000000000, 1.4113094571, 1.0928291295]])
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        if CHECK_STABILITY:
+        if CHECK_STABILITY and False:
             beginning_energy = driver.ekin + driver.epot
             driver.max_iterations=990
             driver.kernel()
@@ -64,9 +64,10 @@ class KnownValues(unittest.TestCase):
 
     def test_init_veloc(self):
         init_veloc = np.array([
-            [0.000613, 0.000080, 0.000792],
-            [-0.000664, -0.000326, 0.002152],
-            [-0.002068, -0.000332, 0.000086]])
+            [ 0.000336,   0.000044,   0.000434],
+            [-0.000364,  -0.000179,   0.001179],
+            [-0.001133,  -0.000182,   0.000047]])
+
 
         driver = integrator.VelocityVerlot(hf_scanner,
                                            mol=h2o,
@@ -74,9 +75,10 @@ class KnownValues(unittest.TestCase):
                                            dt=10, max_iterations=10)
 
         driver.energy_output = "BOMD.md.energies"
+        driver.trajectory_output = 'BOMD.md.xyz'
         driver.kernel()
-        #self.assertAlmostEqual(driver.ekin, 0.022230011628475037, 12)
-        #self.assertAlmostEqual(driver.epot, -75.95967831911219, 12)
+        self.assertAlmostEqual(driver.ekin, 0.0069053176639740895, 12)
+        self.assertAlmostEqual(driver.epot, -75.95967831911219, 12)
 
         final_coord = np.array([
             [ 0.0550940980,  0.0041895910, 0.0740669602],
