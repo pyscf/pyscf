@@ -18,8 +18,6 @@ import numpy as np
 from pyscf import gto, scf
 import pyscf.md.integrator as integrator
 
-CHECK_STABILITY = False
-
 ethylene = gto.M(
     verbose=3,
     atom=''' C -0.0110224 -0.01183 -0.0271398
@@ -46,24 +44,46 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_ss_s0_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, max_iterations=100)
-        driver.energy_output = "BOMD.md.energies"
-
+        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, max_iterations=10)
+        return
         driver.kernel()
-        #self.assertAlmostEqual(driver.ekin, 0.0003490772304325728, 12)
-        #self.assertAlmostEqual(driver.epot, -75.96132730618872, 12)
+        self.assertAlmostEqual(driver.ekin, 0.0034505950754127246, 12)
+        self.assertAlmostEqual(driver.epot, -78.05265768927464, 12)
 
-        #final_coord = np.array([
-        #    [-0.0000000000, 0.0000000000, 0.0020715828],
-        #    [-0.0000000000, -1.4113094571, 1.0928291295],
-        #    [0.0000000000, 1.4113094571, 1.0928291295]])
+        final_coord = np.array([
+            [-0.0189651263, -0.0220674578, -0.0495315336],
+            [-0.0015076774,  0.0643680776,  2.5462148239],
+            [ 2.0038909173,  0.0058581090, -0.8642163262],
+            [ 1.8274638862, -0.2576472221,  3.6361858368],
+            [-1.7389508212, -0.2715870959,  3.7350500325],
+            [-1.8486454478,  0.0197089966, -1.0218233020]])
 
-        #self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        #if CHECK_STABILITY:
-        #    beginning_energy = driver.ekin + driver.epot
-        #    driver.max_iterations=990
-        #    driver.kernel()
-        #    self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 4)
+
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+
+
+    def test_sa_s1_init_veloc(self):
+        init_veloc = np.array([
+            [ 0.00000952, -0.00028562, -0.00004197],
+            [-0.00004845,  0.00022793,  0.00023270],
+            [-0.00054174,  0.00086082, -0.00110483],
+            [-0.00109802, -0.00061562,  0.00028189],
+            [ 0.00166588, -0.00063874, -0.00173299],
+            [ 0.00043740,  0.00108051,  0.00028496]])
+
+        n_states = 3
+        sa_scanner = casscf_scanner.set(natorb=True).state_average_([1.0/float(n_states),]*n_states)
+        sa_scanner.spin = 0
+        sa_scanner.fix_spin_(ss=0)
+
+        sa_scanner.conv_tol = sa_scanner.conv_tol_diabatize = 1e-12
+        sa_scanner.conv_tol_grad = 1e-6
+        sa_scanner = sa_scanner.nuc_grad_method().as_scanner(state=1)
+        driver = integrator.VelocityVerlot(sa_scanner, dt=5, max_iterations=100, veloc=init_veloc)
+        
+        driver.energy_output='BOMD.md.energies'
+        driver.trajectory_output='BOMD.md.xyz'
+        driver.kernel()
 
 if __name__ == "__main__":
     print("Full Tests for ethylene")

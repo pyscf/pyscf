@@ -186,15 +186,9 @@ class Integrator:
     def compute_kinetic_energy(self):
         '''Compute the kinetic energy of the current frame.'''
         energy = 0
-        for v, m in zip(self.veloc, self.mol.atom_mass_list(isotope_avg=True)):
-            m = round(m * AMU_TO_AU)
-            if int(m/10000):
-                m /= 10
-                m = round(m)
-                m *= 10
-            print(m)
-            energy += 0.5 * m * np.linalg.norm(v) ** 2
-            #energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
+        for v, m in zip(self.veloc, self.mol.atom_charges()):
+            m = data.elements.COMMON_ISOTOPE_MASSES[m]
+            energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
 
         return energy
 
@@ -244,7 +238,7 @@ class Integrator:
     def _write_coord(self):
         '''Writes out the current geometry to the self.trajectroy_output stream in xyz format.'''
         self.trajectory_output.write('%s\nMD Time %s\n' % (self.mol.natm, self.time))
-        self.trajectory_output.write(self.mol.tostring(format='raw'))
+        self.trajectory_output.write(self.mol.tostring(format='raw') + '\n')
 
 
 class VelocityVerlot(Integrator):
@@ -273,19 +267,14 @@ class VelocityVerlot(Integrator):
     def _compute_accel(self):
         '''Given the current geometry, computes the acceleration for each atom.'''
         e_tot, grad = self.scanner(self.mol)
-        if not self.scanner.converged:
-            raise RuntimeError('SCF did not converge!')
+        #if not self.scanner.converged:
+        #    raise RuntimeError('Gradients did not converge!')
 
 
         a = []
-        for m, g in zip(self.mol.atom_mass_list(isotope_avg=True), grad):
-            m = round(m * AMU_TO_AU)
-            if int(m/10000):
-                m /= 10
-                m = round(m)
-                m *= 10
-            a.append(-1 * g / m )
-            #a.append(-1 * g / m / AMU_TO_AU)
+        for m, g in zip(self.mol.atom_charges(), grad):
+            m = data.elements.COMMON_ISOTOPE_MASSES[m]
+            a.append(-1 * g / m / AMU_TO_AU)
 
         return e_tot, np.array(a)
 
