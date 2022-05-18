@@ -124,7 +124,7 @@ build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
 # https://github.com/scipy/scipy/issues/12533
 _scipy_version = 'scipy!=1.5.0,!=1.5.1'
 import sys
-if sys.platforms == 'darwin':
+if sys.platform == 'darwin':
     # https://github.com/scipy/scipy/issues/15362
     if sys.version_info < (3, 8):
         _scipy_version = 'scipy<=1.1.0'
