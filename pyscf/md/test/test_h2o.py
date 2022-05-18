@@ -32,7 +32,6 @@ h2o = gto.M(
 
 hf_scanner = scf.RHF(h2o)
 hf_scanner.build()
-hf_scanner.conv_tol = 1e-12
 hf_scanner.conv_tol_grad = 1e-6
 hf_scanner.max_cycle = 700
 

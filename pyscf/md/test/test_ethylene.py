@@ -46,8 +46,6 @@ class KnownValues(unittest.TestCase):
     def test_ss_s0_zero_init_veloc(self):
         driver = integrator.VelocityVerlot(casscf_scanner, dt=5, max_iterations=100)
 
-        driver.trajectory_output='BOMD.md.xyz'
-
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.0034505950754127246, 12)
         self.assertAlmostEqual(driver.epot, -78.05265768927464, 12)
