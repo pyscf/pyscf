@@ -18,8 +18,6 @@ import numpy as np
 from pyscf import gto, scf
 import pyscf.md.integrator as integrator
 
-CHECK_STABILITY = False
-
 ethylene = gto.M(
     verbose=3,
     atom=''' C -0.0110224 -0.01183 -0.0271398
@@ -46,24 +44,22 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_ss_s0_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, max_iterations=100)
-        driver.energy_output = "BOMD.md.energies"
+        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, max_iterations=10)
 
         driver.kernel()
-        #self.assertAlmostEqual(driver.ekin, 0.0003490772304325728, 12)
-        #self.assertAlmostEqual(driver.epot, -75.96132730618872, 12)
+        self.assertAlmostEqual(driver.ekin, 0.0034505950754127246, 12)
+        self.assertAlmostEqual(driver.epot, -78.05265768927464, 12)
 
-        #final_coord = np.array([
-        #    [-0.0000000000, 0.0000000000, 0.0020715828],
-        #    [-0.0000000000, -1.4113094571, 1.0928291295],
-        #    [0.0000000000, 1.4113094571, 1.0928291295]])
+        final_coord = np.array([
+            [-0.0189651263, -0.0220674578, -0.0495315336],
+            [-0.0015076774,  0.0643680776,  2.5462148239],
+            [ 2.0038909173,  0.0058581090, -0.8642163262],
+            [ 1.8274638862, -0.2576472221,  3.6361858368],
+            [-1.7389508212, -0.2715870959,  3.7350500325],
+            [-1.8486454478,  0.0197089966, -1.0218233020]])
 
-        #self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        #if CHECK_STABILITY:
-        #    beginning_energy = driver.ekin + driver.epot
-        #    driver.max_iterations=990
-        #    driver.kernel()
-        #    self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 4)
+
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
 
 if __name__ == "__main__":
     print("Full Tests for ethylene")
