@@ -55,7 +55,7 @@ class KnownValues(unittest.TestCase):
             [0.0000000000,  1.4113069887, 1.0928269088]])
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        if CHECK_STABILITY:
+        if CHECK_STABILITY or True:
             beginning_energy = driver.ekin + driver.epot
             driver.max_iterations=990
             driver.kernel()
