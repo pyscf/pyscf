@@ -93,6 +93,59 @@ def kernel(integrator, verbose=logger.NOTE):
     return integrator
 
 class Integrator:
+    '''Integrator base class
+
+    Args:
+        method : lib.GradScanner or rhf.GradientsMixin instance, or has nuc_grad_method method.
+            Method by which to compute the energy gradients and energies
+            in order to propogate the equations of motion. Realistically,
+            it can be any callable object such that it returns the energy
+            and potential energy gradient when given a mol.
+
+    Attributes:
+        incore_anyway : bool
+            If true, then it will save every frame in memory.
+            False, no frames are saved.
+
+        veloc : ndarray
+            Initial velocity for the simulation. Values should be given
+            in atomic units (Bohr/a.u.). Dimensions should be (natm, 3) such as
+            [[x1, y1, z1],
+             [x2, y2, z2],
+             [x3, y3, z3]]
+
+        verbose : int
+            Print level
+
+        steps : int
+            Number of steps to take when the kernel or run function is called.
+
+        dt : float
+            Time between steps. Given in atomic units.
+
+        stdout : file object
+            Default is self.scanner.mol.stdout.
+
+        energy_output : file object
+            Stream to write energy to during the course of the simulation.
+
+        trajectory_output : file object
+            Stream to write the trajectory to during the course of the
+            simulation. Written in xyz format.
+
+        frames : ndarray of Frames or None
+            If incore_anyway is true, then this will hold a list of frames
+            corresponding to the simulation trajectory.
+
+        epot : float
+            Potential energy of the last time step during the simulation.
+
+        ekin : float
+            Kinetic energy of the last time step during the simulation
+
+        time : float
+            Time of the last step during the simulation.
+    '''
 
     def __init__(self, method, **kwargs):
 
@@ -165,7 +218,7 @@ class Integrator:
         if dump_flags and self.verbose > logger.NOTE:
             self.dump_input()
 
-        kernel(self, verbose=log)
+        return kernel(self, verbose=log)
 
     def dump_input(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -297,5 +350,6 @@ class VelocityVerlot(Integrator):
             new_veloc.append(self._next_atom_velocity(v, a2, a1))
 
         return np.array(new_veloc)
+
 
 NVE = VelocityVerlot
