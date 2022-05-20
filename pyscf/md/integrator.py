@@ -265,9 +265,8 @@ class VelocityVerlot(Integrator):
     def _compute_accel(self):
         '''Given the current geometry, computes the acceleration for each atom.'''
         e_tot, grad = self.scanner(self.mol)
-        #if not self.scanner.converged:
-        #    raise RuntimeError('Gradients did not converge!')
-
+        if not self.scanner.converged:
+            raise RuntimeError('Gradients did not converge!')
 
         a = []
         for m, g in zip(self.mol.atom_charges(), grad):
