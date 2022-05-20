@@ -110,7 +110,7 @@ class Integrator:
         self.incore_anyway = self.mol.incore_anyway
         self.veloc = None
         self.verbose = self.mol.verbose
-        self.max_iterations = 1
+        self.steps = 1
         self.dt = 10
         self.frames = None
         self.epot = None
@@ -121,9 +121,10 @@ class Integrator:
 
         self.__dict__.update(kwargs)
 
-    def kernel(self, veloc=None, dump_flags=True, verbose=None):
+    def kernel(self, veloc=None, steps=None, dump_flags=True, verbose=None):
 
         if veloc is not None: self.veloc = veloc
+        if steps is not None: self.steps = steps
         if verbose is None: verbose = self.verbose
 
         # Default velocities are 0 if none specified
@@ -171,7 +172,7 @@ class Integrator:
         log.info('')
         log.info('******** BOMD flags ********')
         log.info('dt = %f', self.dt)
-        log.info('Iterations = %d', self.max_iterations)
+        log.info('Iterations = %d', self.steps)
         log.info('                   Initial Velocity                  ')
         log.info('             vx              vy              vz')
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
@@ -191,12 +192,12 @@ class Integrator:
         return energy
 
     def __iter__(self):
-        self._iteration = 0
+        self._step = 0
         self._log = logger.new_logger(self, self.verbose)
         return self
 
     def __next__(self):
-        if self._iteration < self.max_iterations:
+        if self._step < self.steps:
             if self._log.verbose >= lib.logger.NOTE:
                 self._log.note('\nBOMD Time %d', self.time)
 
@@ -211,7 +212,7 @@ class Integrator:
             if self.trajectory_output is not None:
                 self._write_coord()
 
-            self._iteration += 1
+            self._step += 1
             self.time += self.dt
 
             return current_frame
@@ -296,3 +297,5 @@ class VelocityVerlot(Integrator):
             new_veloc.append(self._next_atom_velocity(v, a2, a1))
 
         return np.array(new_veloc)
+
+NVE = VelocityVerlot

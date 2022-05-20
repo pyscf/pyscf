@@ -22,7 +22,7 @@ CHECK_STABILITY = False
 
 h2o = gto.M(
     verbose=3,
-    #output='/dev/null',
+    # output='/dev/null',
     atom=[
         ['O', 0, 0, 0],
         ['H', 0, -0.757, 0.587],
@@ -35,16 +35,36 @@ hf_scanner.build()
 hf_scanner.conv_tol_grad = 1e-6
 hf_scanner.max_cycle = 700
 
+
+ethylene = gto.M(
+    verbose=3,
+    atom=''' C -0.0110224 -0.01183 -0.0271398
+    C -0.000902273 0.0348566 1.34708
+    H 1.07646 0.0030022 -0.456854
+    H 0.976273 -0.140089 1.93039
+    H -0.926855 -0.147441 1.98255
+    H -0.983897 0.0103535 -0.538589
+    ''',
+    unit='ANG',
+    basis='ccpvdz',
+    spin=0)
+
+hf = ethylene.RHF().run()
+ncas, nelecas = (2,2)
+casscf_scanner = hf.CASSCF(ncas, nelecas)
+casscf_scanner.conv_tol = 1e-12
+casscf_scanner.conv_tol_grad = 1e-6
+
 def tearDownModule():
-    global h2o, hf_scanner
+    global h2o, hf_scanner, ethylene, hf, casscf_scanner
     h2o.stdout.close()
     hf_scanner.stdout.close()
-    del h2o, hf_scanner
+    del h2o, hf_scanner, ethylene, hf, casscf_scanner
 
 class KnownValues(unittest.TestCase):
-    def test_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(hf_scanner, dt=10, max_iterations=10)
-        
+    def test_hf_water_zero_init_veloc(self):
+        driver = integrator.VelocityVerlot(hf_scanner, dt=10, steps=10)
+
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.000349066856492198, 12)
         self.assertAlmostEqual(driver.epot, -75.96132729628864, 12)
@@ -55,13 +75,13 @@ class KnownValues(unittest.TestCase):
             [0.0000000000,  1.4113069887, 1.0928269088]])
 
         self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
-        if CHECK_STABILITY or True:
+        if CHECK_STABILITY:
             beginning_energy = driver.ekin + driver.epot
-            driver.max_iterations=990
+            driver.steps=990
             driver.kernel()
             self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 4)
 
-    def test_init_veloc(self):
+    def test_hf_water_init_veloc(self):
         init_veloc = np.array([
             [ 0.000336,   0.000044,   0.000434],
             [-0.000364,  -0.000179,   0.001179],
@@ -71,7 +91,7 @@ class KnownValues(unittest.TestCase):
         driver = integrator.VelocityVerlot(hf_scanner,
                                            mol=h2o,
                                            veloc=init_veloc,
-                                           dt=5, max_iterations=10)
+                                           dt=5, steps=10)
 
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.0068732364518669445, 12)
@@ -86,11 +106,29 @@ class KnownValues(unittest.TestCase):
         if CHECK_STABILITY:
             beginning_energy = driver.ekin + driver.epot
 
-            driver.max_iterations=990
+            driver.steps=990
             driver.kernel()
             self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 4)
 
+    def test_ss_s0_ethylene_zero_init_veloc(self):
+        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, steps=10)
+
+        driver.kernel()
+
+        self.assertAlmostEqual(driver.ekin, 0.003450595146607895, 12)
+        self.assertAlmostEqual(driver.epot, -78.05265768928882, 12)
+
+        final_coord = np.array([
+            [-0.0189651264, -0.0220674580, -0.0495315337],
+            [-0.0015076774,  0.0643680776,  2.5462148239],
+            [ 2.0038909173,  0.0058581097, -0.8642163260],
+            [ 1.8274638861, -0.2576472219,  3.6361858366],
+            [-1.7389508213, -0.2715870956,  3.7350500327],
+            [-1.8486454469,  0.0197089974, -1.0218233017]])
+
+        self.assertTrue(np.allclose(driver.mol.atom_coords(), final_coord))
+
 
 if __name__ == "__main__":
-    print("Full Tests for H2O")
+    print("Full Tests for NVE Velocity Verlet")
     unittest.main()
