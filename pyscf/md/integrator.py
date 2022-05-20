@@ -20,8 +20,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad.rhf import GradientsMixin
 
-AMU_TO_AU = data.nist.ATOMIC_MASS/data.nist.E_MASS
-
 class Frame:
     '''Basic class to hold information at each time step of a MD simulation
 
@@ -188,7 +186,7 @@ class Integrator:
         energy = 0
         for v, m in zip(self.veloc, self.mol.atom_charges()):
             m = data.elements.COMMON_ISOTOPE_MASSES[m]
-            energy += 0.5 * m * AMU_TO_AU * np.linalg.norm(v) ** 2
+            energy += 0.5 * m * data.nist.AMU2AU * np.linalg.norm(v) ** 2
 
         return energy
 
@@ -274,7 +272,7 @@ class VelocityVerlot(Integrator):
         a = []
         for m, g in zip(self.mol.atom_charges(), grad):
             m = data.elements.COMMON_ISOTOPE_MASSES[m]
-            a.append(-1 * g / m / AMU_TO_AU)
+            a.append(-1 * g / m / data.nist.AMU2AU)
 
         return e_tot, np.array(a)
 
