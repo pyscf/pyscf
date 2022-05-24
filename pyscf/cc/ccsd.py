@@ -42,7 +42,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 # t1: ia
 # t2: ijab
 def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
-           tolnormt=1e-6, verbose=None):
+           tolnormt=1e-6, verbose=None, callback=None):
     log = logger.new_logger(mycc, verbose)
     if eris is None:
         eris = mycc.ao2mo(mycc.mo_coeff)
@@ -50,10 +50,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
-
-    # For tailored CC
-    if mycc.tailor_func is not None:
-        t1, t2 = mycc.tailor_func(t1, t2)
 
     cput1 = cput0 = (logger.process_clock(), logger.perf_counter())
     eold = 0
@@ -71,9 +67,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        # For tailored CC
-        if mycc.tailor_func is not None:
-            t1new, t2new = mycc.tailor_func(t1new, t2new)
+        if callback is not None:
+            callback(locals())
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
         tmpvec -= mycc.amplitudes_to_vector(t1, t2)
         normt = numpy.linalg.norm(tmpvec)
@@ -93,7 +88,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         #if abs(eccsd-eold) < tol and normt < tolnormt:
         #    conv = True
         #    break
-
         if (abs(eccsd-eold) < tol and normt < tolnormt):
             mycc.conv_flag = True
         else:
@@ -101,7 +95,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         if (mycc.conv_flag and not mycc.force_iter) or mycc.force_exit:
             conv = True
             break
-
     log.timer('CCSD', *cput0)
     return conv, eccsd, t1, t2
 
@@ -933,8 +926,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
         self.level_shift = 0
-        # For tailored CC
-        self.tailor_func = None
         self.conv_flag = False
         self.force_iter = False
         self.force_exit = False
@@ -955,6 +946,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._nocc = None
         self._nmo = None
         self.chkfile = mf.chkfile
+        self.callback = None
 
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
                     'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
@@ -1075,7 +1067,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                       verbose=self.verbose)
+                       verbose=self.verbose, callback=self.callback)
         self._finalize()
         return self.e_corr, self.t1, self.t2
 
