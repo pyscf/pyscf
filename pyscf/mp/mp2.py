@@ -140,7 +140,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, eris=None, with_frozen=True, ao_repr=False, with_mf=True):
+def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True, with_mf=True):
     r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 

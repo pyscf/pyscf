@@ -342,7 +342,7 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
     d2 = _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv)
     return d2
 
-def make_rdm1(mycc, t1, t2, l1, l2, with_frozen=True, ao_repr=False, with_mf=True):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_mf=True):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -357,7 +357,7 @@ def make_rdm1(mycc, t1, t2, l1, l2, with_frozen=True, ao_repr=False, with_mf=Tru
     return _make_rdm1(mycc, d1, with_frozen=with_frozen, ao_repr=ao_repr, with_mf=with_mf)
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2, with_frozen=True, ao_repr=False, with_dm1=True):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_dm1=True):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
