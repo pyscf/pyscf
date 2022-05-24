@@ -1818,17 +1818,6 @@ class SCF(lib.StreamObject):
         '''Hook to create object for analytical nuclear gradients.'''
         pass
 
-    def get_sz(self, *args, **kwargs):
-        return 0.0
-
-    def get_ssz(self, dm1=None, proj1=None, proj2=None, mo_coeff=None):
-        from pyscf.scf.uhf import UHF
-        if dm1 is None: dm1 = self.make_rdm1()
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        dm1 = (dm1/2, dm1/2)
-        mo_coeff = (mo_coeff, mo_coeff)
-        return UHF.get_ssz(self, dm1=dm1, proj1=proj1, proj2=proj2, mo_coeff=mo_coeff)
-
     def update_(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
         current object.  It's an alias of function update_from_chk_.

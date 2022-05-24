@@ -146,8 +146,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a, dm_b))
 
-def make_rdm2(mo_coeff, mo_occ, **kwargs):
-    dm1a, dm1b = make_rdm1(mo_coeff, mo_occ, **kwargs)
+def make_rdm2(mo_coeff, mo_occ):
+    dm1a, dm1b = make_rdm1(mo_coeff, mo_occ)
     dm2aa = (numpy.einsum('ij,kl->ijkl', dm1a, dm1a)
            - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
     dm2bb = (numpy.einsum('ij,kl->ijkl', dm1b, dm1b)
@@ -1008,60 +1008,6 @@ class UHF(hf.SCF):
     def nuc_grad_method(self):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
-
-    def get_sz(self, dm1=None, proj=None, mo_coeff=None):
-        if dm1 is None: dm1 = self.make_rdm1()
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        dma, dmb = dm1
-        ca, cb = mo_coeff
-        ovlp = self.get_ovlp()
-        # MO basis
-        dma = numpy.linalg.multi_dot((ca.T, ovlp, dma, ovlp, ca))
-        dmb = numpy.linalg.multi_dot((cb.T, ovlp, dmb, ovlp, cb))
-        if proj is None:
-            sz = (numpy.einsum('ii->', dma) - numpy.einsum('jj->', dmb))/2
-            return sz
-
-        pa, pb = (proj, proj) if numpy.ndim(proj[0]) == 1 else proj
-        einsum = partial(numpy.einsum, optimize=True)
-        sz = (einsum('ij,ij->', dma, pa)
-            - einsum('ij,ij->', dmb, pb))/2
-
-        return sz
-
-    def get_ssz(self, dm1=None, proj1=None, proj2=None, mo_coeff=None):
-        if dm1 is None: dm1 = self.make_rdm1()
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        dma, dmb = dm1
-        ca, cb = mo_coeff
-        ovlp = self.get_ovlp()
-        # MO basis
-        dma = numpy.linalg.multi_dot((ca.T, ovlp, dma, ovlp, ca))
-        dmb = numpy.linalg.multi_dot((cb.T, ovlp, dmb, ovlp, cb))
-        if proj2 is None: proj2 = proj1
-        if proj1 is None:
-            ssz = (numpy.einsum('ii,jj->', dma, dma)/4
-                -  numpy.einsum('ij,ij->', dma, dma)/4
-                +  numpy.einsum('ii,jj->', dmb, dmb)/4
-                -  numpy.einsum('ij,ij->', dmb, dmb)/4
-                -  numpy.einsum('ii,jj->', dma, dmb)/2)
-            ssz += (numpy.einsum('ii->', dma) + numpy.einsum('jj->', dmb))/4
-            return ssz
-
-        p1a, p1b = (proj1, proj1) if numpy.ndim(proj1[0]) == 1 else proj1
-        p2a, p2b = (proj2, proj2) if numpy.ndim(proj2[0]) == 1 else proj2
-
-        einsum = partial(numpy.einsum, optimize=True)
-        ssz = (einsum('ij,kl,ij,kl->', dma, dma, p1a, p2a)
-             - einsum('il,jk,ij,kl->', dma, dma, p1a, p2a)
-             + einsum('ij,kl,ij,kl->', dmb, dmb, p1b, p2b)
-             - einsum('il,jk,ij,kl->', dmb, dmb, p1b, p2b)
-             - einsum('ij,kl,ij,kl->', dma, dmb, p1a, p2b)
-             - einsum('ij,kl,ij,kl->', dmb, dma, p1b, p2a))/4
-        ssz += (einsum('ij,ik,jk->', dma, p1a, p2a)
-              + einsum('ij,ik,jk->', dmb, p1b, p2b))/4
-
-        return ssz
 
 
 class HF1e(UHF):
