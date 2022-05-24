@@ -17,30 +17,36 @@ import unittest
 from pyscf import lib
 from pyscf.pbc import scf, gto, grad
 
-def finger(mat):
-    return abs(mat).sum()
+def setUpModule():
+    global cell, kpts, disp
+    cell = gto.Cell()
+    cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391]]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.basis = [[0, [1.3, 1]], [1, [0.8, 1]]]
+    cell.verbose = 5
+    cell.pseudo = 'gth-pade'
+    cell.unit = 'bohr'
+    cell.mesh = [13] * 3
+    cell.output = '/dev/null'
+    cell.build()
 
-cell = gto.Cell()
-cell.atom= [['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391]]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.basis = 'gth-szv'
-cell.verbose= 4
-cell.pseudo = 'gth-pade'
-cell.unit = 'bohr'
-cell.build()
+    kpts = cell.make_kpts([1,1,2])
+    disp = 1e-5
 
-kpts = cell.make_kpts([1,1,2])
-disp = 1e-5
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
 
 
 class KnownValues(unittest.TestCase):
     def test_kuhf_grad(self):
-        g_scan = scf.KUHF(cell, kpts, exxdiv=None).nuc_grad_method().as_scanner()
+        g_scan = scf.KUHF(cell, kpts, exxdiv=None).set(conv_tol=1e-10, conv_tol_grad=1e-6).nuc_grad_method().as_scanner()
         g = g_scan(cell)[1]
-        self.assertAlmostEqual(finger(g), 0.11476575559553441, 6)
+        self.assertAlmostEqual(lib.fp(g), -0.9017171774435333, 6)
 
         mfs = g_scan.base.as_scanner()
         e1 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391+disp/2.0]]])

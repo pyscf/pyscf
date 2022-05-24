@@ -20,21 +20,22 @@ from pyscf import gto, scf
 from pyscf import dft
 from pyscf import lib
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
-mol.basis = 'aug-ccpvdz'
-mol.build()
-#dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
-dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-mf = dft.RKS(mol)
-mf.grids.atom_grid = {"H": (50, 110)}
-mf.prune = None
-mf.grids.build(with_non0tab=False)
-nao = mol.nao_nr()
-ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
+def setUpModule():
+    global mol, mf, ao, rho, dm
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
+    mol.basis = 'aug-ccpvdz'
+    mol.build()
+    #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
+    dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
+    mf = dft.RKS(mol)
+    mf.grids.atom_grid = {"H": (50, 110)}
+    mf.prune = None
+    mf.grids.build(with_non0tab=False)
+    ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+    rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
 def tearDownModule():
     global mol, mf, ao, rho

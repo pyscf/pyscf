@@ -24,27 +24,29 @@ from pyscf import lib
 import pyscf.lib.parameters as param
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 
-mol0 = gto.Mole()
-mol0.atom = [
-    [1  , (0.,1.,1.)],
-    ["O1", (0.,0.,0.)],
-    [1  , (1.,1.,0.)], ]
-mol0.nucmod = { "O":'gaussian', 3:'g' }
-mol0.unit = 'ang'
-mol0.basis = {
-    "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
-                                         (1, 3, 2, 1.8),
-                                         (2, 2, 1, 1.8),)),
-    "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
-          (1, -2, (1, 1)), ]}
-mol0.symmetry = 1
-mol0.charge = 1
-mol0.spin = 1
-mol0.verbose = 7
-mol0.ecp = {'O1': 'lanl2dz'}
-ftmp = tempfile.NamedTemporaryFile()
-mol0.output = ftmp.name
-mol0.build()
+def setUpModule():
+    global mol0, ftmp
+    mol0 = gto.Mole()
+    mol0.atom = [
+        [1  , (0.,1.,1.)],
+        ["O1", (0.,0.,0.)],
+        [1  , (1.,1.,0.)], ]
+    mol0.nucmod = { "O":'gaussian', 3:'g' }
+    mol0.unit = 'ang'
+    mol0.basis = {
+        "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
+                                             (1, 3, 2, 1.8),
+                                             (2, 2, 1, 1.8),)),
+        "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
+              (1, -2, (1, 1)), ]}
+    mol0.symmetry = 1
+    mol0.charge = 1
+    mol0.spin = 1
+    mol0.verbose = 7
+    mol0.ecp = {'O1': 'lanl2dz'}
+    ftmp = tempfile.NamedTemporaryFile()
+    mol0.output = ftmp.name
+    mol0.build()
 
 def tearDownModule():
     global mol0, ftmp

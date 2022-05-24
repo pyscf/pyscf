@@ -22,23 +22,25 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-mol = gto.Mole()
-mol.atom = [
-    ['P', ( 0., 0.    , 0.)],]
-mol.basis = {'P':'aug-cc-pvqz'}
-mol.verbose = 0
-mol.spin = 3
-mol.build()
+def setUpModule():
+    global mol, mf, myadc
+    mol = gto.Mole()
+    mol.atom = [
+        ['P', ( 0., 0.    , 0.)],]
+    mol.basis = {'P':'aug-cc-pvqz'}
+    mol.verbose = 0
+    mol.spin = 3
+    mol.build()
 
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-12
-mf.irrep_nelec = {'A1g':(3,3),'E1ux':(2,1),'E1uy':(2,1),'A1u':(2,1)}
-mf.kernel()
-myadc = adc.ADC(mf)
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-12
+    mf.irrep_nelec = {'A1g':(3,3),'E1ux':(2,1),'E1uy':(2,1),'A1u':(2,1)}
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 
@@ -57,7 +59,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9443611827330618, 6)
         self.assertAlmostEqual(p[2], 0.9443611827330606, 6)
 
-    def test_ea_adc2x(self):
+    def test_ea_adc2x_high_cost(self):
         myadc.method = "adc(2)-x"
         myadc.kernel_gs()
         myadcea = adc.uadc.UADCEA(myadc) 
@@ -71,7 +73,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.8654797798217235, 6)
         self.assertAlmostEqual(p[2], 0.8654797798217245, 6)
 
-    def test_ea_adc3(self):
+    def test_ea_adc3_high_cost(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295977562, 6)

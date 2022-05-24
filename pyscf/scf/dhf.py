@@ -782,8 +782,12 @@ def _call_veff_ssss(mol, dm, hermi=1, mf_opt=None):
 
 def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
     if with_breit:
+        # integral function int2e_breit_ssp1ssp2_spinor evaluates
+        # -1/2[alpha1*alpha2/r12 + (alpha1*r12)(alpha2*r12)/r12^3]
         intor_prefix = 'int2e_breit_'
     else:
+        # integral function int2e_ssp1ssp2_spinor evaluates only
+        # alpha1*alpha2/r12. Minus sign was not included.
         intor_prefix = 'int2e_'
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1

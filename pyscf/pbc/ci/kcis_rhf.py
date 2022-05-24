@@ -551,7 +551,7 @@ class _CIS_ERIS:
                         (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]),
                         compact=False,
                     )
-                    if dtype == np.float:
+                    if dtype == np.double:
                         eri_kpt = eri_kpt.real
                     eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                     for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
@@ -590,7 +590,7 @@ class _CIS_ERIS:
                                 (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                                 compact=False,
                             )
-                            if mo_coeff[0].dtype == np.float:
+                            if mo_coeff[0].dtype == np.double:
                                 buf_kpt = buf_kpt.real
                             buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(
                                 0, 2, 1, 3

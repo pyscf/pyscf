@@ -23,20 +23,22 @@ import pyscf.pbc.mp.kmp2
 from pyscf.scf.addons import remove_linear_dep_
 
 
-a0 = 1.78339987 * 0.96  # squeezed
-atom = "C 0 0 0; C %.10f %.10f %.10f" % (a0*0.5, a0*0.5, a0*0.5)
-a = np.asarray(
-    [[0., a0, a0],
-    [a0, 0., a0],
-    [a0, a0, 0.]])
-basis = "gth-dzvp"
-pseudo = "gth-pade"
-ke_cutoff = 100
-cell = pbcgto.Cell(atom=atom, a=a, basis=basis, pseudo=pseudo,
-                   ke_cutoff=ke_cutoff)
-cell.verbose = 4
-cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell
+    a0 = 1.78339987 * 0.96  # squeezed
+    atom = "C 0 0 0; C %.10f %.10f %.10f" % (a0*0.5, a0*0.5, a0*0.5)
+    a = np.asarray(
+        [[0., a0, a0],
+        [a0, 0., a0],
+        [a0, a0, 0.]])
+    basis = "gth-dzvp"
+    pseudo = "gth-pade"
+    ke_cutoff = 100
+    cell = pbcgto.Cell(atom=atom, a=a, basis=basis, pseudo=pseudo,
+                       ke_cutoff=ke_cutoff)
+    cell.verbose = 4
+    cell.output = '/dev/null'
+    cell.build()
 
 def tearDownModule():
     global cell

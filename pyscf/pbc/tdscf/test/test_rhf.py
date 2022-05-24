@@ -22,22 +22,24 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc import tdscf
 
-cell = Cell()
-cell.atom = '''
-C 0.000000000000   0.000000000000   0.000000000000
-C 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = {'C': [[0, (0.8, 1.0)],
-                    [1, (1.0, 1.0)]]}
-# cell.basis = 'gth-dzvp'
-cell.pseudo = 'gth-pade'
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-cell.verbose = 0
-cell.build()
+def setUpModule():
+    global cell
+    cell = Cell()
+    cell.atom = '''
+    C 0.000000000000   0.000000000000   0.000000000000
+    C 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = {'C': [[0, (0.8, 1.0)],
+                        [1, (1.0, 1.0)]]}
+    # cell.basis = 'gth-dzvp'
+    cell.pseudo = 'gth-pade'
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.verbose = 0
+    cell.build()
 
 def tearDownModule():
     global cell

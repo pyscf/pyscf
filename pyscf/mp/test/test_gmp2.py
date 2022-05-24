@@ -22,25 +22,28 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import mp
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.spin = 2
-mol.build()
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-14
-mf.scf()
-gmf = scf.GHF(mol)
-gmf.conv_tol = 1e-14
-gmf.scf()
+def setUpModule():
+    global mol, mf, gmf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-14
+    mf.scf()
+    gmf = scf.GHF(mol)
+    gmf.conv_tol = 1e-14
+    gmf.scf()
 
 def tearDownModule():
     global mol, mf, gmf
+    mol.stdout.close()
     del mol, mf, gmf
 
 

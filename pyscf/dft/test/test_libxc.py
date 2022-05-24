@@ -14,27 +14,30 @@
 # limitations under the License.
 
 import os
+import ctypes
 import unittest
 import numpy
 from pyscf import gto, scf
 from pyscf import dft
 from pyscf import lib
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
-mol.basis = 'aug-ccpvdz'
-mol.build()
-#dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
-dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-mf = dft.RKS(mol)
-mf.grids.atom_grid = {"H": (50, 110)}
-mf.prune = None
-mf.grids.build(with_non0tab=False)
-nao = mol.nao_nr()
-ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
+def setUpModule():
+    global mol, mf, ao, rho
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
+    mol.basis = 'aug-ccpvdz'
+    mol.build()
+    #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
+    dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
+    mf = dft.RKS(mol)
+    mf.grids.atom_grid = {"H": (50, 110)}
+    mf.prune = None
+    mf.grids.build(with_non0tab=False)
+    nao = mol.nao_nr()
+    ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+    rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
 def tearDownModule():
     global mol, mf, ao, rho
@@ -139,10 +142,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
 
-    def test_libxc_cam_beta_bug(self):
-        '''As a detector for libxc-3.0.0. libxc-3.0.1 fixed this bug
-        '''
-        import ctypes
+    def test_libxc_cam_beta(self):
         rsh_tmp = (ctypes.c_double*3)()
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
         beta = rsh_tmp[2]
@@ -151,7 +151,7 @@ class KnownValues(unittest.TestCase):
         dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
         beta = rsh_tmp[2]
-        self.assertEqual(beta, 0) # libxc-3.0.0 produces -0.46
+        self.assertEqual(beta, 0)
 
         dft.libxc._itrf.LIBXC_is_hybrid(1)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)

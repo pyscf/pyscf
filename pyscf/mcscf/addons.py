@@ -500,7 +500,7 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
         # Interpret priority keyword
         nocc = ncore + ncas
         if isinstance (priority, str):
-            ridx = numpy.zeros ((2, nmo_init), dtype=numpy.bool)
+            ridx = numpy.zeros ((2, nmo_init), dtype=bool)
             ridx[0,:ncore] = ridx[1,ncore:nocc] = True
             if priority.lower () == 'active': ridx = ridx[::-1,:]
             elif not priority.lower () == 'core':
@@ -508,13 +508,13 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             # Edge case: ncore == 0 or ncas == 0 -> remove zero rows from ridx
             ridx = ridx[ridx.sum (1).astype (bool)]
         else:
-            ridx = numpy.zeros ((len (priority), nmo), dtype=numpy.bool_)
+            ridx = numpy.zeros ((len (priority), nmo), dtype=bool)
             for row, idx in zip (ridx, priority):
                 try:
                     row[idx] = True
                 except IndexError:
                     raise RuntimeError ("Invalid priority keyword: index array cannot address shape (*,nmo_init)")
-            ridx_counts = ridx.astype (numpy.integer).sum (0)
+            ridx_counts = ridx.astype (int).sum (0)
             if numpy.any (ridx_counts > 1):
                 raise RuntimeError ("Invalid priority keyword: index array has repeated elements")
         incl = numpy.any (ridx, axis=0)

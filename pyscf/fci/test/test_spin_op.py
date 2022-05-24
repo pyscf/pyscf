@@ -24,18 +24,20 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf import lib
 
-hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
-with h5py.File(hfile, 'r') as f:
-    h1 = lib.unpack_tril(f['h1'][:])
-    h2 = f['h2'][:]
+def setUpModule():
+    global h1, h2, c0, ci0, norb, nelec, e0
+    hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
+    with h5py.File(hfile, 'r') as f:
+        h1 = lib.unpack_tril(f['h1'][:])
+        h2 = f['h2'][:]
 
-norb = 10
-nelec = (5,5)
-na = fci.cistring.num_strings(norb, nelec[0])
-c0 = numpy.zeros((na,na))
-c0[0,0] = 1
-c0[-1,-1] = 1e-4
-e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
+    norb = 10
+    nelec = (5,5)
+    na = fci.cistring.num_strings(norb, nelec[0])
+    c0 = numpy.zeros((na,na))
+    c0[0,0] = 1
+    c0[-1,-1] = 1e-4
+    e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
 def tearDownModule():

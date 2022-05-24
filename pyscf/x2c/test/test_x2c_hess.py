@@ -472,29 +472,35 @@ def get_r2(mol, ia, ja, ipos, jpos):
     R2 += reduce(numpy.dot, (s0_invsqrt, R0_mid, s2_sqrt))
     return R2
 
-mol1 = gto.M(
-    verbose = 0,
-    atom = [["He" , (0. , 0.     , 0.0001)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-    basis = '3-21g',
-)
+def setUpModule():
+    global mol, mol1, mol2
+    mol1 = gto.M(
+        verbose = 0,
+        atom = [["He" , (0. , 0.     , 0.0001)],
+                [1   , (0. , -0.757 , 0.587)],
+                [1   , (0. , 0.757  , 0.587)]],
+        basis = '3-21g',
+    )
 
-mol2 = gto.M(
-    verbose = 0,
-    atom = [["He" , (0. , 0.     ,-0.0001)],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-    basis = '3-21g',
-)
+    mol2 = gto.M(
+        verbose = 0,
+        atom = [["He" , (0. , 0.     ,-0.0001)],
+                [1   , (0. , -0.757 , 0.587)],
+                [1   , (0. , 0.757  , 0.587)]],
+        basis = '3-21g',
+    )
 
-mol = gto.M(
-    verbose = 0,
-    atom = [["He" , (0. , 0.     , 0.   )],
-            [1   , (0. , -0.757 , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-    basis = '3-21g',
-)
+    mol = gto.M(
+        verbose = 0,
+        atom = [["He" , (0. , 0.     , 0.   )],
+                [1   , (0. , -0.757 , 0.587)],
+                [1   , (0. , 0.757  , 0.587)]],
+        basis = '3-21g',
+    )
+
+def tearDownModule():
+    global mol, mol1, mol2
+    del mol, mol1, mol2
 
 class KnownValues(unittest.TestCase):
     def test_sqrt_second_order(self):

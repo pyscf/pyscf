@@ -23,25 +23,27 @@ from pyscf import gto, dft
 from pyscf import tdscf
 from pyscf.grad import tdrks as tdrks_grad
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = [
-    ['H' , (0. , 0. , 1.804)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.unit = 'B'
-mol.basis = '631g'
-mol.build()
-mf_lda = dft.RKS(mol).set(xc='LDA,')
-mf_lda.grids.prune = False
-mf_lda.kernel()
-mf_gga = dft.RKS(mol).set(xc='b88,')
-mf_gga.grids.prune = False
-mf_gga.kernel()
+def setUpModule():
+    global mol, mf_lda, mf_gga
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.unit = 'B'
+    mol.basis = '631g'
+    mol.build()
+    mf_lda = dft.RKS(mol).set(xc='LDA,')
+    mf_lda.grids.prune = False
+    mf_lda.kernel()
+    mf_gga = dft.RKS(mol).set(xc='b88,')
+    mf_gga.grids.prune = False
+    mf_gga.kernel()
 
 def tearDownModule():
-    global mol, mf_lda
-    del mol, mf_lda
+    global mol, mf_lda, mf_gga
+    del mol, mf_lda, mf_gga
 
 class KnownValues(unittest.TestCase):
     def test_tda_singlet_lda(self):

@@ -17,37 +17,43 @@ import unittest
 import numpy
 from pyscf import ao2mo
 
-n = 10
-np = n*(n+1)//2
-a8 = numpy.random.random((np*(np+1)//2))
-a4 = numpy.empty((np,np))
-a1 = numpy.empty((n,n,n,n))
+def setUpModule():
+    global n, a1, a4, a8, a2ij, a2kl, b1, b4, b2ij, b2kl, c1, c2ij, d1, d2kl
+    n = 10
+    np = n*(n+1)//2
+    a8 = numpy.random.random((np*(np+1)//2))
+    a4 = numpy.empty((np,np))
+    a1 = numpy.empty((n,n,n,n))
 
-idx, idy = numpy.tril_indices(n)
-idxy = numpy.empty((n,n), dtype=int)
-idxy[idx,idy] = idxy[idy,idx] = numpy.arange(n*(n+1)//2)
+    idx, idy = numpy.tril_indices(n)
+    idxy = numpy.empty((n,n), dtype=int)
+    idxy[idx,idy] = idxy[idy,idx] = numpy.arange(n*(n+1)//2)
 
-xx, yy = numpy.tril_indices(np)
-a4[xx,yy] = a4[yy,xx] = a8
+    xx, yy = numpy.tril_indices(np)
+    a4[xx,yy] = a4[yy,xx] = a8
 
-idx, idy = numpy.tril_indices(n)
-idxy = numpy.empty((n,n), dtype=int)
-idxy[idx,idy] = idxy[idy,idx] = numpy.arange(n*(n+1)//2)
-a2ij = a4[:,idxy]
-a2kl = a4[idxy]
-a1 = a2ij[idxy]
+    idx, idy = numpy.tril_indices(n)
+    idxy = numpy.empty((n,n), dtype=int)
+    idxy[idx,idy] = idxy[idy,idx] = numpy.arange(n*(n+1)//2)
+    a2ij = a4[:,idxy]
+    a2kl = a4[idxy]
+    a1 = a2ij[idxy]
 
-b4 = numpy.random.random((np,np))
-b1 = b4[:,idxy][idxy]
-b2ij = b4[:,idxy]
-b2kl = b4[idxy]
-b1 = b2ij[idxy]
+    b4 = numpy.random.random((np,np))
+    b1 = b4[:,idxy][idxy]
+    b2ij = b4[:,idxy]
+    b2kl = b4[idxy]
+    b1 = b2ij[idxy]
 
-c2ij = numpy.random.random((np,n,n))
-c1 = c2ij[idxy]
+    c2ij = numpy.random.random((np,n,n))
+    c1 = c2ij[idxy]
 
-d2kl = numpy.random.random((n,n,np))
-d1 = d2kl[:,:,idxy]
+    d2kl = numpy.random.random((n,n,np))
+    d1 = d2kl[:,:,idxy]
+
+def tearDownModule():
+    global n, a1, a4, a8, a2ij, a2kl, b1, b4, b2ij, b2kl, c1, c2ij, d1, d2kl
+    del n, a1, a4, a8, a2ij, a2kl, b1, b4, b2ij, b2kl, c1, c2ij, d1, d2kl
 
 class KnownValues(unittest.TestCase):
     def test_restore8(self):

@@ -150,18 +150,20 @@ def grids_response(grids):
         w0[p0:p1] = vol * pbecke[ia] / z
     return coords_all, w0, w1
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.build()
-mf = dft.RKS(mol)
-mf.conv_tol = 1e-14
-mf.kernel()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.build()
+    mf = dft.RKS(mol)
+    mf.conv_tol = 1e-14
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf

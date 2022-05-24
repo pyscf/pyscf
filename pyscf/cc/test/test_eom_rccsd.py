@@ -25,18 +25,6 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf.cc import ccsd, rccsd, eom_rccsd, rintermediates, gintermediates
 
-mol = gto.Mole()
-mol.atom = [
-[8 , (0. , 0.     , 0.)],
-[1 , (0. , -0.757 , 0.587)],
-[1 , (0. , 0.757  , 0.587)]]
-mol.basis = 'cc-pvdz'
-mol.verbose = 0
-mol.spin = 0
-mol.build()
-mf = scf.RHF(mol).run()
-mycc = rccsd.RCCSD(mf).run()
-
 def make_mycc1():
     mf1 = copy.copy(mf)
     no = mol.nelectron // 2
@@ -62,35 +50,49 @@ def make_mycc1():
     mycc1.t2 = r2*1e-5
     return mf1, mycc1, eris1
 
-mf1, mycc1, eris1 = make_mycc1()
-no, nv = mycc1.t1.shape
+def setUpModule():
+    global mol, mf, mycc, mf1, eris1, mycc1, mycci, erisi, mycc2, mycc21, eris21, mycc3, mycc31, eris31, no, nv
+    mol = gto.Mole()
+    mol.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'cc-pvdz'
+    mol.verbose = 0
+    mol.spin = 0
+    mol.build()
+    mf = scf.RHF(mol).run()
+    mycc = rccsd.RCCSD(mf).run()
 
-mycci = copy.copy(mycc1)
-erisi = copy.copy(eris1)
-erisi.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
-erisi.oooo = erisi.oooo + erisi.oooo.conj().transpose(1,0,3,2)
-erisi.ovoo = eris1.ovoo + numpy.sin(eris1.ovoo)*1j
-erisi.ovvo = eris1.ovvo + numpy.sin(eris1.ovvo)*1j
-erisi.oovv = eris1.oovv + numpy.sin(eris1.oovv)*1j
-erisi.oovv = erisi.oovv + erisi.oovv.conj().transpose(1,0,3,2)
-erisi.ovov = eris1.ovov + numpy.sin(eris1.ovov)*1j
-erisi.ovvv = eris1.ovvv + numpy.sin(eris1.ovvv)*1j
-erisi.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
-erisi.vvvv = erisi.vvvv + erisi.vvvv.conj().transpose(1,0,3,2)
+    mf1, mycc1, eris1 = make_mycc1()
+    no, nv = mycc1.t1.shape
 
-mycc2 = ccsd.CCSD(mf)
-mycc21 = ccsd.CCSD(mf1)
-mycc2.__dict__.update(mycc.__dict__)
-mycc21.__dict__.update(mycc1.__dict__)
-eris21 = mycc21.ao2mo()
+    mycci = copy.copy(mycc1)
+    erisi = copy.copy(eris1)
+    erisi.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
+    erisi.oooo = erisi.oooo + erisi.oooo.conj().transpose(1,0,3,2)
+    erisi.ovoo = eris1.ovoo + numpy.sin(eris1.ovoo)*1j
+    erisi.ovvo = eris1.ovvo + numpy.sin(eris1.ovvo)*1j
+    erisi.oovv = eris1.oovv + numpy.sin(eris1.oovv)*1j
+    erisi.oovv = erisi.oovv + erisi.oovv.conj().transpose(1,0,3,2)
+    erisi.ovov = eris1.ovov + numpy.sin(eris1.ovov)*1j
+    erisi.ovvv = eris1.ovvv + numpy.sin(eris1.ovvv)*1j
+    erisi.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
+    erisi.vvvv = erisi.vvvv + erisi.vvvv.conj().transpose(1,0,3,2)
 
-mycc3 = ccsd.CCSD(mf)
-mycc31 = ccsd.CCSD(mf1)
-mycc3.__dict__.update(mycc.__dict__)
-mycc31.__dict__.update(mycc1.__dict__)
-mycc3 = mycc3.set(max_memory=0, direct=True)
-mycc31 = mycc31.set(max_memory=0, direct=True)
-eris31 = mycc31.ao2mo()
+    mycc2 = ccsd.CCSD(mf)
+    mycc21 = ccsd.CCSD(mf1)
+    mycc2.__dict__.update(mycc.__dict__)
+    mycc21.__dict__.update(mycc1.__dict__)
+    eris21 = mycc21.ao2mo()
+
+    mycc3 = ccsd.CCSD(mf)
+    mycc31 = ccsd.CCSD(mf1)
+    mycc3.__dict__.update(mycc.__dict__)
+    mycc31.__dict__.update(mycc1.__dict__)
+    mycc3 = mycc3.set(max_memory=0, direct=True)
+    mycc31 = mycc31.set(max_memory=0, direct=True)
+    eris31 = mycc31.ao2mo()
 
 
 def tearDownModule():

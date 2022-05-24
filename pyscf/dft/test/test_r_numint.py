@@ -7,14 +7,16 @@ from pyscf import dft
 from pyscf import lib
 from pyscf.dft import r_numint
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-mol.basis = '6-31g'
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    mol.basis = '6-31g'
+    mol.build()
 
 def tearDownModule():
     global mol

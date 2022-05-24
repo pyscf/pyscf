@@ -22,22 +22,27 @@ from pyscf.pbc import dft as pdft
 from pyscf.pbc import tools as ptools
 
 
-cell = pbcgto.Cell()
-cell.atom = '''
-C 0              0              0
-C 1.685068785275 1.685068785275 1.685068785275'''
-cell.a = '''
-0.000000000, 3.370137571, 3.370137571
-3.370137571, 0.000000000, 3.370137571
-3.370137571, 3.370137571, 0.000000000
-'''
-cell.basis = 'gth-szv'
-cell.unit = 'B'
-cell.pseudo = 'gth-pade'
-cell.mesh = [25]*3
-cell.verbose = 0
-cell.build()
+def setUpModule():
+    global cell
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    C 0              0              0
+    C 1.685068785275 1.685068785275 1.685068785275'''
+    cell.a = '''
+    0.000000000, 3.370137571, 3.370137571
+    3.370137571, 0.000000000, 3.370137571
+    3.370137571, 3.370137571, 0.000000000
+    '''
+    cell.basis = 'gth-szv'
+    cell.unit = 'B'
+    cell.pseudo = 'gth-pade'
+    cell.mesh = [25]*3
+    cell.verbose = 0
+    cell.build()
 
+def tearDownModule():
+    global cell
+    del cell
 
 class KnowValues(unittest.TestCase):
     def test_gamma_vs_ks_high_cost(self):

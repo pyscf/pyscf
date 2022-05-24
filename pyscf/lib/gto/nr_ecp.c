@@ -5434,7 +5434,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int d2 = lilc1 * ljlc1;
         int d3 = lilj1 * d2;
         MALLOC_INSTACK(plast, d2);
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, nci*ncj*lilj1);
 
         for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
@@ -5472,7 +5472,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         int level, nrs0, start, step, ijl;
         double wtscale;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < nci*ncj*lilj1; i++) { converged[i] = 0; }
@@ -5627,7 +5627,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         ljlc1 = lj + ECP_LMAX + 1;
         d2 = lilc1 * ljlc1;
         MALLOC_INSTACK(plast, d2);
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, nci*ncj*lilj1);
 
         double rca[3];
@@ -5689,7 +5689,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int level, nrs0, start, step, ijl;
         double wtscale;
         double *prad;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < nci*ncj*lilj1; i++) { converged[i] = 0; }
@@ -5913,7 +5913,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double fac;
         double *rc, *pifac, *pjfac, *pout;
         int has_value = 0;
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, npi*npj);
 
         for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
@@ -5944,7 +5944,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int level, nrs0, start, step;
         double wtscale;
         double *prad;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < npi*npj; i++) { converged[i] = 0; }

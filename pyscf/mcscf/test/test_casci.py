@@ -23,31 +23,33 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-10
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
 
-molsym = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': '631g', },
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    molsym = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': '631g', },
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym
@@ -98,7 +100,7 @@ class KnownValues(unittest.TestCase):
 
         # Make sure that mc.mo_occ has been set and that the NOONs add to nelectron
         mo_occ = getattr(mc1, "mo_occ", numpy.array([]))
-        self.assertNotEqual(mo_occ, numpy.array([]))
+        self.assertNotEqual(mo_occ.size, 0)
         self.assertAlmostEqual(numpy.sum(mo_occ), mc1.mol.nelectron, 9)
 
     def test_multi_roots(self):
@@ -215,12 +217,12 @@ class KnownValues(unittest.TestCase):
         mo_coeff, civec, mo_occ = mc.cas_natorb(sort=True)
 
         mc.kernel(mo_coeff=mo_coeff)
-        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 9)
-        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 9)
+        self.assertAlmostEqual(mc.e_states[0], -108.72522194135607, 8)
+        self.assertAlmostEqual(mc.e_states[1], -108.67148843338228, 8)
         #FIXME: with the initial guess from mc, FCI solver may converge to
         # another state
-        #self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 9)
-        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 9)
+        self.assertAlmostEqual(mc.e_states[2], -108.67148843338228, 8)
+        self.assertAlmostEqual(mc.e_states[3], -108.83741684447352, 8)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 8)
         self.assertAlmostEqual(abs((civec[3]*mc.ci[3]).sum()), 1, 8)
 

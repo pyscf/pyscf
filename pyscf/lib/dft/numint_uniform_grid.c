@@ -2075,7 +2075,7 @@ static void _nonorth_rho_z_1img(double *rho, double *rhoz, int offset, int meshz
         }
 }
 
-static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
+static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, int8_t *skip,
                                      int offset, int submeshz, int meshz,
                                      int nz0, int nz1, int grid_close_to_zij,
                                      double e_z0z0, double e_z0dz, double e_dzdz,
@@ -2123,7 +2123,7 @@ static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
         }
 }
 
-static int _make_grid_mask(char *skip, int nx0, int nx1, int mesh,
+static int _make_grid_mask(int8_t *skip, int nx0, int nx1, int mesh,
                            int offset, int submesh)
 {
         if (offset == 0 && submesh == mesh) { // allows nimg > 1
@@ -2237,9 +2237,9 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
         double *prho;
         int l;
 
-        char x_skip[ngridx];
-        char y_skip[ngridy];
-        char z_skip[ngridz];
+        int8_t x_skip[ngridx];
+        int8_t y_skip[ngridy];
+        int8_t z_skip[ngridz];
         int with_x_mask = _make_grid_mask(x_skip, nx0, nx1, mesh[0], offset[0], submesh[0]);
         int with_y_mask = _make_grid_mask(y_skip, ny0, ny1, mesh[1], offset[1], submesh[1]);
         int with_z_mask = _make_grid_mask(z_skip, nz0, nz1, mesh[2], offset[2], submesh[2]);
