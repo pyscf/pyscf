@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -73.99108654676293, 8)
+        self.assertAlmostEqual(eks4, -74.00137998066057, 8)
 
     def test_collinear_dks_gga(self):
         mf = dks.UDKS(mol)
@@ -128,7 +128,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -75.07336600895546, 8)
+        self.assertAlmostEqual(eks4, -75.08323754335314, 8)
 
     def test_collinear_dks_mgga(self):
         mf = dks.UDKS(mol)

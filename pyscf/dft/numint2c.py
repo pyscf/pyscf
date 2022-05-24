@@ -254,13 +254,19 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
 
 def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
                  verbose=None):
-    r'''Returns the derivative tensor against the total density and spin density
-    parameters
-    [[density_t, (nabla_x)_t, (nabla_y)_t, (nabla_z)_t, tau_t],
-     [density_s, (nabla_x)_s, (nabla_y)_s, (nabla_z)_s, tau_s]].
+    r'''Returns the derivative tensor against the density parameters
 
-    rather than the XC functional derivatives to sigma (|\nabla \rho|^2)
-    returned by eval_xc function
+    [[density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a],
+     [density_b, (nabla_x)_b, (nabla_y)_b, (nabla_z)_b, tau_b]].
+
+    It differs from the eval_xc method in the derivatives of non-local part.
+    The eval_xc method returns the XC functional derivatives to sigma
+    (|\nabla \rho|^2)
+
+    Args:
+        rho: 2-dimensional or 3-dimensional array
+            Total density and spin density (and their derivatives if GGA or MGGA
+            functionals) on grids
     '''
     if omega is None: omega = ni.omega
     if xctype is None: xctype = ni._xc_type(xc_code)
@@ -301,7 +307,8 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
         vxc = xc_deriv.transform_vxc(rhop, vxc, xctype, spin)
     return exc, vxc, fxc, kxc
 
-# To make it callable by multiprocessing
+# * Mcfun requires functional derivaties to total-density and spin-density.
+# * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
     exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)
     if deriv > 0:

@@ -71,7 +71,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         return a, b
 
     if isinstance(mf, dft.KohnShamDFT):
-        from pyscf.dft import xc_deriv, mcfun
+        from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -83,10 +83,6 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
         a, b = add_hf_(a, b, hyb)
-
-        if ni.collinear[0] == 'm':  # mcol
-            fn_eval_xc = ni.mcfun_eval_xc_wrapper(mf.xc)
-            nproc = lib.num_threads()
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -117,9 +113,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=False):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    fxc = mcfun.eval_xc_eff(fn_eval_xc, rho, deriv=2,
-                                            spin_samples=ni.spin_samples,
-                                            workers=nproc)[2]
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc.reshape(4,4,-1)
                     mo_oa, mo_va, mo_ob, mo_vb = get_mo_value(ao)
                     rho_ov_aa = numpy.einsum('ri,ra->ria', mo_oa.conj(), mo_va)
@@ -157,9 +152,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=False):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    fxc = mcfun.eval_xc_eff(fn_eval_xc, rho, deriv=2,
-                                            spin_samples=ni.spin_samples,
-                                            workers=nproc)[2]
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     mo_oa, mo_va, mo_ob, mo_vb = get_mo_value(ao)
                     rho_ov_aa = numpy.einsum('ri,xra->xria', mo_oa[0].conj(), mo_va)
@@ -209,9 +203,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
                                      with_s=False):
                 if ni.collinear[0] == 'm':
                     rho = ni.eval_rho(mol, ao, dm0, mask, xctype, hermi=1, with_lapl=False)
-                    fxc = mcfun.eval_xc_eff(fn_eval_xc, rho, deriv=2,
-                                            spin_samples=ni.spin_samples,
-                                            workers=nproc)[2]
+                    eval_xc = ni.mcfun_eval_xc_adapter(mf.xc)
+                    fxc = eval_xc(mf.xc, rho, deriv=2, xctype=xctype)[2]
                     wfxc = weight * fxc
                     mo_oa, mo_va, mo_ob, mo_vb = get_mo_value(ao)
                     rho_ov_aa = numpy.einsum('ri,xra->xria', mo_oa[0].conj(), mo_va)

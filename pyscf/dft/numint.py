@@ -2574,11 +2574,22 @@ class _NumIntMixin(lib.StreamObject):
     def eval_xc_eff(self, xc_code, rho, deriv=1, omega=None, xctype=None,
                     verbose=None):
         r'''Returns the derivative tensor against the density parameters
+
+        [density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a]
+
+        or spin-polarized density parameters
+
         [[density_a, (nabla_x)_a, (nabla_y)_a, (nabla_z)_a, tau_a],
          [density_b, (nabla_x)_b, (nabla_y)_b, (nabla_z)_b, tau_b]].
 
-        rather than the XC functional derivatives to sigma (|\nabla \rho|^2)
-        returned by eval_xc function
+        It differs from the eval_xc method in the derivatives of non-local part.
+        The eval_xc method returns the XC functional derivatives to sigma
+        (|\nabla \rho|^2)
+
+        Args:
+            rho: 2-dimensional or 3-dimensional array
+                Total density or (spin-up, spin-down) densities (and their
+                derivatives if GGA or MGGA functionals) on grids
         '''
         if omega is None: omega = self.omega
         if xctype is None: xctype = self._xc_type(xc_code)

@@ -111,21 +111,21 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
-        self._check_against_ab_ks_complex(mcol_lda.TDDFT(), (-1.0869078807096237+0j), (0.3873525612834711+0j))
+        self._check_against_ab_ks_complex(mcol_lda.TDDFT(), (-0.6989091583407191+0j), (-0.17040664778153192+0j))
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.GKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks_complex(mcol_b3lyp.TDDFT(), (-0.4031178158856909+0j), (0.962818119721807+0j))
+        self._check_against_ab_ks_complex(mcol_b3lyp.TDDFT(), (-0.4173164894186178+0j), (0.43724693700975426+0j))
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.GKS(mol).set(xc='m06,', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks_complex(mcol_m06l.TDDFT(), (6.920061239623173+0j), (8.756118135792633+0j))
+        self._check_against_ab_ks_complex(mcol_m06l.TDDFT(), (-1.1523917789515383+0j), (-0.1485723653912059+0j))
 
     def _check_against_ab_ks_real(self, td, refa, refb):
         mf = td._scf
