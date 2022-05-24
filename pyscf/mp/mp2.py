@@ -20,7 +20,6 @@ RMP2
 
 
 import copy
-import functools
 import numpy
 from pyscf import gto
 from pyscf import lib
@@ -31,7 +30,6 @@ from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 
-einsum = functools.partial(numpy.einsum, optimize=True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbose=None):
     if mo_energy is not None or mo_coeff is not None:
@@ -65,8 +63,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += einsum('jab,jab', t2i, gi) * 2
-        emp2 -= einsum('jab,jba', t2i, gi)
+        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
+        emp2 -= numpy.einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
@@ -115,8 +113,8 @@ def energy(mp, t2, eris):
     '''MP2 energy'''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = einsum('ijab,iajb', t2, eris_ovov) * 2
-    emp2 -= einsum('ijab,ibja', t2, eris_ovov)
+    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
+    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov)
     return emp2.real
 
 def update_amps(mp, t2, eris):
@@ -242,7 +240,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     return numpy.arange(nocc+nvir_act,nmo), no_coeff
 
 
-def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
+def make_rdm2(mp, t2=None, eris=None, ao_repr=False, with_dm1=True):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -301,16 +299,17 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
     #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
     # When adding dm1 contribution, dm1 subscripts need to be flipped
-    for i in range(nocc0):
-        dm2[i,i,:,:] += dm1.T * 2
-        dm2[:,:,i,i] += dm1.T * 2
-        dm2[:,i,i,:] -= dm1.T
-        dm2[i,:,:,i] -= dm1
+    if with_dm1:
+        for i in range(nocc0):
+            dm2[i,i,:,:] += dm1.T * 2
+            dm2[:,:,i,i] += dm1.T * 2
+            dm2[:,i,i,:] -= dm1.T
+            dm2[i,:,:,i] -= dm1
 
-    for i in range(nocc0):
-        for j in range(nocc0):
-            dm2[i,i,j,j] += 4
-            dm2[i,j,j,i] -= 2
+        for i in range(nocc0):
+            for j in range(nocc0):
+                dm2[i,i,j,j] += 4
+                dm2[i,j,j,i] -= 2
 
     if ao_repr:
         from pyscf.cc import ccsd_rdm
@@ -366,7 +365,7 @@ def get_frozen_mask(mp):
     elif len(mp.frozen) > 0:
         moidx[list(mp.frozen)] = False
     else:
-        raise NotImplementedError()
+        raise NotImplementedError
     return moidx
 
 
