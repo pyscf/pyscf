@@ -74,6 +74,7 @@ for d in np.arange(0.8, 2.9, 0.2):
     mol = pyscf.gto.Mole()
     mol.atom = 'N 0 0 0; N 0 0 %f' % d
     mol.basis = 'cc-pVDZ'
+    mol.verbose = 4
     mol.build()
 
     mf = pyscf.scf.RHF(mol)
