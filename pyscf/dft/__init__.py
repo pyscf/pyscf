@@ -107,3 +107,12 @@ def DKS(mol, xc='LDA,VWN'):
 
 UDKS = dks.UDKS
 RDKS = dks.RDKS
+
+def X2C(mol, *args):
+    '''X2C Kohn-Sham'''
+    from pyscf.scf import dhf
+    from pyscf.x2c import dft
+    if dhf.zquatev and mol.spin == 0:
+        return dft.RKS(mol, *args)
+    else:
+        return dft.UKS(mol, *args)

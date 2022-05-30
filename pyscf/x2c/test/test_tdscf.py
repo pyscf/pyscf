@@ -40,7 +40,8 @@ def setUpModule():
     mol.spin = 1
     mol.build()
 
-    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12, chkfile=tempfile.NamedTemporaryFile().name).newton().run()
+    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12,
+                              chkfile=tempfile.NamedTemporaryFile().name).newton().run()
 
 def tearDownModule():
     global mol, mf_lda
@@ -80,48 +81,48 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.1825211067032253, 5)
 
     def test_ab_hf(self):
-        mf = x2c.UHF(mol).run()
-        self._check_against_ab_ks(mf.TDHF(), (0.13932039560306128+0.119371604640477j), (0.033019297329323655-0.0017018201865318923j))
+        mf = x2c.UHF(mol).run(conv_tol=1e-14)
+        self._check_against_ab_ks(mf.TDHF(), -0.2404548371794495, 0.6508765417771681)
 
     def test_col_lda_ab_ks(self):
-        self._check_against_ab_ks(mf_lda.TDDFT(), (-0.39677140591062415+0.1356920809084268j), (0.09466739417688264+0.048451576584063905j))
+        self._check_against_ab_ks(mf_lda.TDDFT(), -0.5231134770778959, 0.07879428138412828)
 
     def test_col_gga_ab_ks(self):
         mf_b3lyp = dft.UKS(mol).set(xc='b3lyp')
         mf_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_b3lyp.TDDFT(), (-0.40124196110395216+0.11934834608531965j), (0.030702473554987633+0.03349770467202763j))
+        self._check_against_ab_ks(mf_b3lyp.TDDFT(), -0.4758219953792988, 0.17715631269859033)
 
     def test_col_mgga_ab_ks(self):
-        mf_m06l = dft.UKS(mol).run(xc='m06l')
+        mf_m06l = dft.UKS(mol).run(xc='m06l', conv_tol=1e-12)
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_m06l.TDDFT(), (-0.513189889464075+0.12068301335419819j), (0.0919739060229284+0.0163910808229826j))
+        self._check_against_ab_ks(mf_m06l.TDDFT(), -0.4919270127924622, 0.14597029880651433)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
         mcol_lda = dft.UKS(mol).set(xc='lda,', collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_lda.TDDFT(), (-0.24278652002607692+0.1251558869560527j), (-0.07786823996855179-0.011673310810849196j))
+        self._check_against_ab_ks(mcol_lda.TDDFT(), -0.6154532929747091, 0.49991930461632084)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.UKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_b3lyp.TDDFT(), (-0.27469764146519055+0.11182093446805763j), (-0.10669359419353991-0.01224979452512951j))
+        self._check_against_ab_ks(mcol_b3lyp.TDDFT(), -0.4954910129906521, 0.4808365159189027)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.UKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_m06l.TDDFT(), (-2.070227310403365+0.14885198832332108j), (0.12901797001282553+0.03517576115047949j))
+        self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794)
 
     def _check_against_ab_ks(self, td, refa, refb):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(a), refa, 12)
-        self.assertAlmostEqual(lib.fp(b), refb, 12)
+        self.assertAlmostEqual(lib.fp(abs(a)), refa, 6)
+        self.assertAlmostEqual(lib.fp(abs(b)), refb, 6)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 1)

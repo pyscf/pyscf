@@ -84,6 +84,9 @@ class TDA(rhf.TDA):
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
 
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
 
