@@ -46,6 +46,9 @@ OCCDROP = getattr(__config__, 'dft_numint_OCCDROP', 1e-12)
 # treated as dense quantities and contracted by dgemm directly.
 SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
 
+# Whether to compute density laplacian for meta-GGA functionals
+MGGA_DENSITY_LAPL = False
+
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Evaluate AO function value on the given grids.
@@ -107,8 +110,8 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         feval = 'GTOval_sph_deriv%d' % deriv
     return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
 
-def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
-             verbose=None):
+def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
+             with_lapl=True, verbose=None):
     r'''Calculate the electron density for LDA functional, and the density
     derivatives for GGA and MGGA functionals.
 
@@ -216,11 +219,11 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
                 if hermi:
                     rho[4] *= 2
                 else:
-                    # raise NotImplementedError
-                    pass
-            else:
-                #raise ValueError('Not enough derivatives in ao')
-                pass
+                    c2 = _dot_ao_dm(mol, ao2, dm, non0tab, shls_slice, ao_loc)
+                    rho[4] += _contract_rho(ao[0], c2)
+                    rho[4] += rho[5]
+            elif MGGA_DENSITY_LAPL:
+                raise ValueError('Not enough derivatives in ao')
         # tau = 1/2 (\nabla f)^2
         rho[tau_idx] *= .5
     return rho
@@ -529,15 +532,13 @@ def eval_mat(mol, ao, weight, rho, vxc,
         #aow += numpy.einsum('pi,p->pi', ao[3], rho[3]*wv)
         #aow += numpy.einsum('pi,p->pi', ao[0], .5*weight*vrho)
         vrho, vsigma = vxc[:2]
-        wv = _rks_gga_wv0(rho, vxc, weight)
         if spin == 0:
-            wv = numpy.empty((4,ngrids))
             assert(vsigma is not None and rho.ndim==2)
-            wv[0]  = weight * vrho * .5
-            wv[1:4] = rho[1:4] * (weight * vsigma * 2)
+            wv = _rks_gga_wv0(rho, vxc, weight)
         else:
             rho_a, rho_b = rho
-            wv[0]  = weight * vrho * .5
+            wv = numpy.empty((4,ngrids))
+            wv[0] = weight * vrho * .5
             try:
                 wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
                 wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
@@ -559,7 +560,14 @@ def eval_mat(mol, ao, weight, rho, vxc,
     if xctype == 'MGGA':
         vlapl, vtau = vxc[2:]
 
-        if vlapl is not None:
+        if vlapl is None:
+            if spin != 0:
+                if transpose_for_uks:
+                    vtau = vtau.T
+                vtau = vtau[0]
+            wv = weight * .25 * vtau
+            mat += _tau_dot(mol, ao, ao, wv, non0tab, shls_slice, ao_loc)
+        else:
             if spin != 0:
                 if transpose_for_uks:
                     vlapl = vlapl.T
@@ -572,13 +580,6 @@ def eval_mat(mol, ao, weight, rho, vxc,
                 mat += _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
             else:
                 raise ValueError('Not enough derivatives in ao')
-        else:
-            if spin != 0:
-                if transpose_for_uks:
-                    vtau = vtau.T
-                vtau = vtau[0]
-            wv = weight * vtau * .25
-            mat += _tau_dot(mol, ao, ao, wv, non0tab, shls_slice, ao_loc)
 
     return mat + mat.T.conj()
 
@@ -965,7 +966,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
-        ao_deriv = 1
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         for i, rho, ao, mask, weight, vxc in block_loop(ao_deriv):
             wv = _rks_mgga_wv0(rho, vxc, weight)
             #:aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
@@ -1095,7 +1096,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     elif xctype == 'MGGA':
         if (any(x in xc_code.upper() for x in ('CC06', 'CS', 'BR89', 'MK00'))):
             raise NotImplementedError('laplacian in meta-GGA method')
-        ao_deriv = 1
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         for i, rho, ao, mask, weight, vxc in block_loop(ao_deriv):
             wva, wvb = _uks_mgga_wv0(rho, vxc, weight)
             #:aow = numpy.einsum('npi,np->pi', ao[:4], wva, out=aow)
@@ -1223,7 +1224,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         vmat = numpy.zeros((nset,nao,nao), dtype=dms.dtype)
     else:
         vmat = numpy.zeros((nset,nao,nao), dtype=numpy.result_type(*dms))
-    assert vmat.dtype == numpy.double
+    if hermi == 1:
+        assert vmat.dtype == numpy.double
 
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1252,7 +1254,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
-        ao_deriv = 1
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         aow = None
         for i, _rho0, rho1, ao, mask, weight, _vxc, _fxc in block_loop(ao_deriv):
             wv = _rks_mgga_wv1(_rho0, rho1, _vxc, _fxc, weight)
@@ -1382,7 +1384,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
-        ao_deriv = 1
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
@@ -1672,7 +1674,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((2,nset,nao,nao), dtype=numpy.result_type(dma, dmb))
-    assert vmat.dtype == numpy.double
+    if hermi == 1:
+        assert vmat.dtype == numpy.double
     aow = None
     if xctype == 'LDA':
         ao_deriv = 0
@@ -1711,7 +1714,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
-        ao_deriv = 1
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         aow = None
         for i, _rho0, rho1, ao, mask, weight, _vxc, _fxc in block_loop(ao_deriv):
             wva, wvb = _uks_mgga_wv1(_rho0, rho1, _vxc, _fxc, weight)
@@ -2445,8 +2448,10 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
     DFT hessian module etc.
     '''
     xctype = ni._xc_type(xc_code)
-    if xctype in ('GGA', 'MGGA'):
+    if xctype == 'GGA':
         ao_deriv = 1
+    elif xctype == 'MGGA':
+        ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
     else:
@@ -2540,10 +2545,10 @@ class _NumIntMixin(lib.StreamObject):
         else:
             if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
                 dms = dms[numpy.newaxis]
-            if not hermi and dms[0].dtype == numpy.double:
+            if hermi != 1 and dms[0].dtype == numpy.double:
                 # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
-                # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
-                dms = [(dm+dm.conj().T)*.5 for dm in dms]
+                # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency when dm is real
+                dms = [(dm+dm.T)*.5 for dm in dms]
                 hermi = 1
             nao = dms[0].shape[0]
             ndms = len(dms)
@@ -2590,17 +2595,24 @@ class _NumIntMixin(lib.StreamObject):
             rho: 2-dimensional or 3-dimensional array
                 Total density or (spin-up, spin-down) densities (and their
                 derivatives if GGA or MGGA functionals) on grids
+
+        Kwargs:
+            deriv: int
+                derivative orders
+            omega: float
+                define the exponent in the attenuated Coulomb for RSH functional
         '''
         if omega is None: omega = self.omega
         if xctype is None: xctype = self._xc_type(xc_code)
         rhop = numpy.asarray(rho)
 
         if xctype == 'LDA':
-            spin_polarized = rhop.ndim == 2
+            spin_polarized = rhop.ndim >= 2
         else:
             spin_polarized = rhop.ndim == 3
 
         if spin_polarized:
+            assert rhop.shape[0] == 2
             spin = 1
             if rhop.shape[1] == 5:  # MGGA
                 ngrids = rhop.shape[2]

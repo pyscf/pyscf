@@ -32,12 +32,12 @@ def diagonalize(a, b, nroots=4):
     b_aa = b_aa.reshape((nocc_a*nvir_a,nocc_a*nvir_a))
     b_ab = b_ab.reshape((nocc_a*nvir_a,nocc_b*nvir_b))
     b_bb = b_bb.reshape((nocc_b*nvir_b,nocc_b*nvir_b))
-    a = numpy.bmat([[ a_aa  , a_ab],
-                    [ a_ab.T, a_bb]])
-    b = numpy.bmat([[ b_aa  , b_ab],
-                    [ b_ab.T, b_bb]])
-    abba = numpy.asarray(numpy.bmat([[a        , b       ],
-                                     [-b.conj(),-a.conj()]]))
+    a = numpy.block([[ a_aa  , a_ab],
+                     [ a_ab.T, a_bb]])
+    b = numpy.block([[ b_aa  , b_ab],
+                     [ b_ab.T, b_bb]])
+    abba = numpy.asarray(numpy.block([[a        , b       ],
+                                      [-b.conj(),-a.conj()]]))
     e = numpy.linalg.eig(abba)[0]
     lowest_e = numpy.sort(e[e.real > 0].real)[:nroots]
     lowest_e = lowest_e[lowest_e > 1e-3]
@@ -153,9 +153,10 @@ class KnownValues(unittest.TestCase):
     def test_tda_m06l(self):
         td = mf_m06l.TDA()
         es = td.kernel(nstates=5)[0] * 27.2114
-        self.assertAlmostEqual(lib.fp(es), -8.943196581335487, 6)
-        ref = [8.18683464, 8.77581263, 10.20108589, 10.55440239, 10.98105145]
-        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
+        self.assertAlmostEqual(lib.fp(es), -20.70191947889884, 6)
+        ref = [2.74346804, 3.10082138, 6.87321246, 12.8332282, 14.30085068, 14.61913328]
+        self.assertAlmostEqual(abs(es[:4] - ref[:4]).max(), 0, 6)
+        self.assertAlmostEqual(abs(es[4] - ref[5]), 0, 6)
 
     def test_ab_hf(self):
         mf = mf_uhf
@@ -381,7 +382,7 @@ class KnownValues(unittest.TestCase):
                (2, 2.2806597448158272, 543.6330334905534, 0.0016221163442707552),
                (3, 6.372445278065303, 194.56298506033463, 0)]
         self.assertAlmostEqual(abs(numpy.hstack(ref) -
-                                   numpy.hstack(note_args)).max(), 0, 6)
+                                   numpy.hstack(note_args)).max(), 0, 4)
 
     def test_init(self):
         hf = scf.UHF(mol)
@@ -400,11 +401,11 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(tdscf.TDDFT(ks), tdscf.uks.TDDFTNoHybrid))
         self.assertTrue(isinstance(tdscf.TDDFT(kshf), tdscf.uks.TDDFT))
 
-        self.assertRaises(RuntimeError, tdscf.dRPA, hf)
+        self.assertRaises(RuntimeError, tdscf.uks.dRPA, hf)
         self.assertTrue(isinstance(tdscf.dRPA(kshf), tdscf.uks.dRPA))
         self.assertTrue(isinstance(tdscf.dRPA(ks), tdscf.uks.dRPA))
 
-        self.assertRaises(RuntimeError, tdscf.dTDA, hf)
+        self.assertRaises(RuntimeError, tdscf.uks.dTDA, hf)
         self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.uks.dTDA))
         self.assertTrue(isinstance(tdscf.dTDA(ks), tdscf.uks.dTDA))
 

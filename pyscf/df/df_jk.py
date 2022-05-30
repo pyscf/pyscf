@@ -26,6 +26,8 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+DEBUG = False
+
 libri = lib.load_library('libri')
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
@@ -413,6 +415,11 @@ def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     tao = mol.tmap()
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]
+
+    if hermi == 0 and DEBUG:
+        # J matrix is symmetrized in this function which is only true for
+        # density matrix with time reversal symmetry
+        scf.dhf._ensure_time_reversal_symmetry(mol, dms)
 
     def fjk(dm):
         dm = numpy.asarray(dm, dtype=numpy.complex128)

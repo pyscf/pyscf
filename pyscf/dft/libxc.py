@@ -1563,7 +1563,7 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                         (ctypes.c_double*n)(*facs),
                         (ctypes.c_double*n)(*omega),
                         ctypes.c_int(nspin),
-                        ctypes.c_int(deriv), ctypes.c_int(rho_u.shape[1]),
+                        ctypes.c_int(deriv), ctypes.c_int(ngrids),
                         rho_u.ctypes.data_as(ctypes.c_void_p),
                         rho_d.ctypes.data_as(ctypes.c_void_p),
                         outbuf.ctypes.data_as(ctypes.c_void_p),

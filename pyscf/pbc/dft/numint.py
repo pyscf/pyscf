@@ -25,7 +25,7 @@ from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm, _tau_dot
 from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
-from pyscf.pbc.lib.kpts_helper import member
+from pyscf.pbc.lib.kpts_helper import member, is_zero
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
@@ -129,23 +129,25 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
         ao_loc = cell.ao_loc_nr()
         dm = dm.astype(numpy.complex128)
 
-        if hermi:
+        if hermi == 1:
             dot_bra = _contract_rho
+            dtype = numpy.float64
         else:
             def dot_bra(bra, aodm):
                 return numpy.einsum('pi,pi->p', bra.conj(), aodm)
+            dtype = numpy.complex128
 
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(cell, ao, dm, non0tab, shls_slice, ao_loc)
             rho = dot_bra(ao, c0)
 
         elif xctype == 'GGA':
-            rho = numpy.empty((4,ngrids))
+            rho = numpy.empty((4,ngrids), dtype=dtype)
             c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
             rho[0] = dot_bra(ao[0], c0)
             for i in range(1, 4):
                 rho[i] = dot_bra(ao[i], c0)
-            if hermi:
+            if hermi == 1:
                 rho[1:4] *= 2
             else:
                 for i in range(1, 4):
@@ -155,12 +157,11 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
         else:
             if with_lapl:
                 # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
-                rho = numpy.empty((6,ngrids))
+                rho = numpy.empty((6,ngrids), dtype=dtype)
                 tau_idx = 5
             else:
-                rho = numpy.empty((5,ngrids))
+                rho = numpy.empty((5,ngrids), dtype=dtype)
                 tau_idx = 4
-            rho = numpy.empty((6,ngrids))
             c0 = _dot_ao_dm(cell, ao[0], dm, non0tab, shls_slice, ao_loc)
             rho[0] = dot_bra(ao[0], c0)
             rho[tau_idx] = 0
@@ -168,7 +169,7 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
                 c1 = _dot_ao_dm(cell, ao[i], dm, non0tab, shls_slice, ao_loc)
                 rho[tau_idx] += dot_bra(ao[i], c1)
                 rho[i] = dot_bra(ao[i], c0)
-                if hermi:
+                if hermi == 1:
                     rho[i] *= 2
                 else:
                     rho[i] += dot_bra(ao[0], c1)
@@ -178,10 +179,12 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
                     ao2 = ao[XX] + ao[YY] + ao[ZZ]
                     rho[4] = dot_bra(ao2, c0)
                     rho[4] += rho[5]
-                    if hermi:
+                    if hermi == 1:
                         rho[4] *= 2
                     else:
-                        raise NotImplementedError
+                        c2 = _dot_ao_dm(cell, ao2, dm, non0tab, shls_slice, ao_loc)
+                        rho[4] += dot_bra(ao[0], c2)
+                        rho[4] += rho[5]
                 else:
                     raise ValueError('Not enough derivatives in ao')
             rho[tau_idx] *= .5
@@ -317,7 +320,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         relativity : int
             No effects.
         hermi : int
-            No effects
+            Whether the input density matrix is hermitian
         max_memory : int or float
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
@@ -333,6 +336,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
+    assert hermi == 1
     if kpts is None:
         kpts = numpy.zeros((1,3))
 
@@ -361,6 +365,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         ao_loc = cell.ao_loc_2c()
         deriv = 1
         vmat = [0]*nset
+        v_hermi = 1  # the output matrix must be hermitian
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
             for i in range(nset):
@@ -374,14 +379,13 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                 excsum[i] += den.dot(exc)
                 wv = weight * vxc
                 vmat[i] += ni._vxc_mat(cell, ao_k1, wv, mask, xctype,
-                                       shls_slice, ao_loc, hermi)
+                                       shls_slice, ao_loc, v_hermi)
 
         vmat = numpy.stack(vmat)
-        if hermi:
-            # call swapaxes method to swap last two indices because vmat may be a 3D
-            # array (nset,nao,nao) in single k-point mode or a 4D array
-            # (nset,nkpts,nao,nao) in k-points mode
-            vmat = vmat + vmat.conj().swapaxes(-2,-1)
+        # call swapaxes method to swap last two indices because vmat may be a 3D
+        # array (nset,nao,nao) in single k-point mode or a 4D array
+        # (nset,nkpts,nao,nao) in k-points mode
+        vmat = vmat + vmat.conj().swapaxes(-2,-1)
         if nset == 1:
             nelec = nelec[0]
             excsum = excsum[0]
@@ -416,7 +420,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
         relativity : int
             No effects.
         hermi : int
-            Input density matrices symmetric or not
+            Whether the input density matrix is hermitian
         max_memory : int or float
             The maximum size of cache to use (in MB).
         verbose : int or object of :class:`Logger`
@@ -432,6 +436,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
         excsum is the XC functional value.  vmat is the XC potential matrix in
         2D array of shape (nao,nao) where nao is the number of AO functions.
     '''
+    assert hermi == 1
     if kpts is None:
         kpts = numpy.zeros((1,3))
 
@@ -464,6 +469,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
         deriv = 1
         vmata = [0]*nset
         vmatb = [0]*nset
+        v_hermi = 1  # the output matrix must be hermitian
         for ao_k1, ao_k2, mask, weight, coords \
                 in ni.block_loop(cell, grids, nao, ao_deriv, kpts, kpts_band, max_memory):
             for i in range(nset):
@@ -482,18 +488,16 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
                 excsum[i] += dena.dot(exc)
                 excsum[i] += denb.dot(exc)
                 wv = weight * vxc
-
                 vmata[i] += ni._vxc_mat(cell, ao_k1, wv[0], mask, xctype,
-                                        shls_slice, ao_loc, hermi)
+                                        shls_slice, ao_loc, v_hermi)
                 vmatb[i] += ni._vxc_mat(cell, ao_k1, wv[1], mask, xctype,
                                         shls_slice, ao_loc, hermi)
 
         vmat = numpy.stack([vmata, vmatb])
-        if hermi:
-            # call swapaxes method to swap last two indices because vmat may be a 3D
-            # array (nset,nao,nao) in single k-point mode or a 4D array
-            # (nset,nkpts,nao,nao) in k-points mode
-            vmat = vmat + vmat.conj().swapaxes(-2,-1)
+        # call swapaxes method to swap last two indices because vmat may be a 3D
+        # array (nset,nao,nao) in single k-point mode or a 4D array
+        # (nset,nkpts,nao,nao) in k-points mode
+        vmat = vmat + vmat.conj().swapaxes(-2,-1)
         if nset == 1:
             nelec = nelec[:,0]
             excsum = excsum[0]
@@ -542,7 +546,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     Kwargs:
         hermi : int
-            Input density matrices symmetric or not
+            Whether the input density matrix is hermitian
         max_memory : int or float
             The maximum size of cache to use (in MB).
         rho0 : float array
@@ -574,6 +578,12 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     else:
         raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
+    if is_zero(kpts):
+        if isinstance(dms, numpy.ndarray) and dms.dtype == numpy.double:
+            # for real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}
+            # The output matrix v = K*x_{ia} is symmetric
+            hermi = 1
+
     if xctype in ('LDA', 'GGA', 'MGGA'):
         make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
         if ((xctype == 'LDA' and fxc is None) or
@@ -591,7 +601,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 _fxc = ni.eval_xc_eff(xc_code, _rho, deriv, xctype=xctype)[2]
             else:
                 p0, p1 = p1, p1 + weight.size
-                _fxc = fxc[:,:,:,:,p0:p1]
+                _fxc = fxc[:,:,p0:p1]
 
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
@@ -604,7 +614,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                                        shls_slice, ao_loc, hermi)
 
         vmat = numpy.stack(vmat)
-        if hermi:
+        if hermi == 1:
             # call swapaxes method to swap last two indices because vmat may be a 3D
             # array (nset,nao,nao) in single k-point mode or a 4D array
             # (nset,nkpts,nao,nao) in k-points mode
@@ -643,15 +653,21 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
     else:
         raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
+    if is_zero(kpts) and numpy.result_type(*dms_alpha) == numpy.double:
+        # for real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}
+        # The output matrix v = K*x_{ia} is symmetric
+        hermi = 1
+    else:
+        hermi = 0
+
     if xctype in ('LDA', 'GGA', 'MGGA'):
-        make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms_alpha)
+        make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms_alpha, hermi)
         if ((xctype == 'LDA' and fxc is None) or
             (xctype == 'GGA' and rho0 is None)):
             make_rho0 = ni._gen_rho_evaluator(cell, dm0, 1)[0]
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
         deriv = 2
-        hermi = 0
         vmat = [0] * nset
         p1 = 0
         for ao_k1, ao_k2, mask, weight, coords \
@@ -678,6 +694,10 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 vmat[i] += ni._vxc_mat(cell, ao_k1, wv, mask, xctype,
                                        shls_slice, ao_loc, hermi)
 
+        # For only real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies
+        # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
+        if hermi == 1:
+            vmat = vmat + vmat.conj().swapaxes(-2,-1)
         vmat = numpy.stack(vmat)
         if nset == 1:
             vmat = vmat.reshape(dms_alpha.shape)
@@ -744,6 +764,11 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError(f'r_vxc for functional {xc_code}')
 
     dma, dmb = _format_uks_dm(dms)
+    if is_zero(kpts) and dma.dtype == numpy.double:
+        # for real orbitals and real matrix, K_{ia,bj} = K_{ia,jb}
+        # The output matrix v = K*x_{ia} is symmetric
+        hermi = 1
+
     nao = dma.shape[-1]
     make_rhoa, nset = ni._gen_rho_evaluator(cell, dma, hermi)[:2]
     make_rhob       = ni._gen_rho_evaluator(cell, dmb, hermi)[0]
@@ -787,7 +812,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                                         shls_slice, ao_loc, hermi)
 
         vmat = numpy.stack([vmata, vmatb])
-        if hermi:
+        if hermi == 1:
             vmat = vmat + vmat.conj().swapaxes(-2,-1)
         if nset == 1:
             vmat = vmat.reshape((2,) + dma.shape)
@@ -798,8 +823,6 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 def _vxc_mat(cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi):
     # NOTE ao might be complex. wv should be real for vxc_mat. wv can be complex
     # for fxc_mat
-    if hermi:
-        wv[0] *= .5
     if xctype == 'LDA':
         #:aow = numpy.einsum('pi,p->pi', ao, wv)
         aow = _scale_ao(ao, wv[0])
@@ -808,18 +831,17 @@ def _vxc_mat(cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi):
         #:aow = numpy.einsum('npi,np->pi', ao, wv)
         aow = _scale_ao(ao, wv[:4])
         mat = _dot_ao_ao(cell, ao[0], aow, mask, shls_slice, ao_loc)
-        if not hermi:
+        if hermi != 1:
             aow = _scale_ao(ao[1:4], wv[1:4].conj())
-            mat = _dot_ao_ao(cell, aow, ao[0], mask, shls_slice, ao_loc)
+            mat += _dot_ao_ao(cell, aow, ao[0], mask, shls_slice, ao_loc)
     elif xctype == 'MGGA':
         tau_idx = 4
-        wv[tau_idx] *= .5
         aow = _scale_ao(ao, wv[:4])
         mat = _dot_ao_ao(cell, ao[0], aow, mask, shls_slice, ao_loc)
         mat+= _tau_dot(cell, ao, ao, wv[tau_idx], mask, shls_slice, ao_loc)
-        if not hermi:
+        if hermi != 1:
             aow = _scale_ao(ao[1:4], wv[1:4].conj())
-            mat = _dot_ao_ao(cell, aow, ao[0], mask, shls_slice, ao_loc)
+            mat += _dot_ao_ao(cell, aow, ao[0], mask, shls_slice, ao_loc)
     return mat
 
 def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
@@ -830,11 +852,14 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     if kpts is None:
         kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
-    ao_deriv = 0
     if xctype == 'GGA':
         ao_deriv = 1
     elif xctype == 'MGGA':
-        raise NotImplementedError('meta-GGA')
+        ao_deriv = 2 if numint.MGGA_DENSITY_LAPL else 1
+    elif xctype == 'NLC':
+        raise NotImplementedError('NLC')
+    else:
+        ao_deriv = 0
 
     nao = cell.nao_nr()
     if spin == 0:
@@ -858,7 +883,7 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
 def get_rho(ni, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
     '''Density in real space
     '''
-    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm, hermi=1)
     assert nset == 1
     rho = numpy.empty(grids.weights.size)
     p1 = 0
@@ -935,6 +960,12 @@ class NumInt(numint.NumInt):
                       1, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     def _vxc_mat(self, cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi):
+        if hermi == 1:
+            # *.5 because mat + mat.T in the caller when hermi=1
+            wv[0] *= .5
+            if xctype == 'MGGA':
+                tau_idx = 4
+                wv[tau_idx] *= .5
         return _vxc_mat(cell, ao, wv, mask, xctype, shls_slice, ao_loc, hermi)
 
     @lib.with_doc(nr_rks_fxc.__doc__)
@@ -1036,12 +1067,15 @@ class KNumInt(numint.NumInt):
            rhoR : (ngrids,) ndarray
         '''
         nkpts = len(ao_kpts)
-        rhoR = 0
+        rho_ks = [eval_rho(cell, ao_kpts[k], dm_kpts[k], non0tab, xctype,
+                           hermi, with_lapl, verbose)
+                  for k in range(nkpts)]
+        dtype = numpy.result_type(*rho_ks)
+        rho = numpy.zeros(rho_ks[0].shape, dtype=dtype)
         for k in range(nkpts):
-            rhoR += eval_rho(cell, ao_kpts[k], dm_kpts[k], non0tab, xctype,
-                             hermi, with_lapl, verbose)
-        rhoR *= 1./nkpts
-        return rhoR
+            rho += rho_ks[k]
+        rho *= 1./nkpts
+        return rho
 
     def eval_rho2(self, cell, ao_kpts, mo_coeff_kpts, mo_occ_kpts,
                   non0tab=None, xctype='LDA', with_lapl=True, verbose=None):
@@ -1097,10 +1131,18 @@ class KNumInt(numint.NumInt):
                       hermi, kpts, kpts_band, max_memory, verbose)
 
     def _vxc_mat(self, cell, ao_kpts, wv, mask, xctype, shls_slice, ao_loc, hermi):
+        r'''Numerical integration \sum_{kpt,i} wv_i * ao_{kpt,i}.conj() * ao_{kpt,i}'''
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
         dtype = numpy.result_type(wv, *ao_kpts)
         mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
+        if hermi == 1:
+            # *.5 because mat + mat.T in the caller when hermi=1
+            wv[0] *= .5
+            if xctype == 'MGGA':
+                tau_idx = 4
+                wv[tau_idx] *= .5
+
         for k in range(nkpts):
             mat[k] = _vxc_mat(cell, ao_kpts[k], wv, mask, xctype, shls_slice,
                               ao_loc, hermi)

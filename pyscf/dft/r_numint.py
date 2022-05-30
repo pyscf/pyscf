@@ -17,7 +17,8 @@
 #
 
 '''
-Numerical integration functions for (4-component) DKS with j-adapted AO basis
+Numerical integration functions for 4-component or 2-component relativistic
+methods with j-adapted AO basis
 '''
 
 import numpy
@@ -166,7 +167,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=False,
     r'''Calculate the electron density and magnetization spin density with
     j-adapted spinor basis.
     ''' + numint.eval_rho.__doc__
-    with_s = ao.shape[0] == 4  # aoLa, aoLb, aoSa, aoSb
+    with_s = len(ao) == 4  # aoLa, aoLb, aoSa, aoSb
     if with_s:
         n2c = dm.shape[1] // 2
         dmLL = dm[:n2c,:n2c].copy()
@@ -273,7 +274,7 @@ def _col_gga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc,
     mat = _dot_ao_ao(mol, aoa[0], aow, mask, shls_slice, ao_loc)
     aow = _scale_ao(aob[:4], wvb[:4], out=aow)
     mat+= _dot_ao_ao(mol, aob[0], aow, mask, shls_slice, ao_loc)
-    if not hermi:
+    if hermi != 1:
         aow = _scale_ao(aoa[1:4], wva[1:4].conj(), out=aow)
         mat+= _dot_ao_ao(mol, aow, aoa[0], mask, shls_slice, ao_loc)
         aow = _scale_ao(aob[1:4], wvb[1:4].conj(), out=aow)
@@ -300,7 +301,7 @@ def _col_mgga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc,
     mat = _dot_ao_ao(mol, aoa[0], aow, mask, shls_slice, ao_loc)
     aow = _scale_ao(aob[:4], wvb[:4], out=aow)
     mat+= _dot_ao_ao(mol, aob[0], aow, mask, shls_slice, ao_loc)
-    if not hermi:
+    if hermi != 1:
         aow = _scale_ao(aoa[1:4], wva[1:4].conj(), out=aow)
         mat += _dot_ao_ao(mol, aow, aoa[0], mask, shls_slice, ao_loc)
         aow = _scale_ao(aob[1:4], wvb[1:4].conj(), out=aow)
@@ -755,10 +756,9 @@ class RNumInt(numint._NumIntMixin):
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False):
         dms = numpy.asarray(dms)
-        nao = dms.shape[-1]
         if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-            dms = dms.reshape(1,nao,nao)
-        ndms = len(dms)
+            dms = dms[numpy.newaxis]
+        ndms, nao = dms.shape[:2]
         def make_rho(idm, ao, non0tab, xctype):
             return self.eval_rho(mol, ao, dms[idm], non0tab, xctype, hermi, with_lapl)
         return make_rho, ndms, nao
