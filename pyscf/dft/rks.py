@@ -509,7 +509,9 @@ hf.KohnShamDFT = KohnShamDFT
 def _update_keys_(mf, src):
     src_keys = src.__dict__
     res_keys = {key: src_keys[key] for key in mf._keys if key in src_keys}
-    res_keys.pop('_keys')
+    # Avoid to overwrite the target's attribute "_keys". It may not be defined
+    # if the .build() method of src not called
+    res_keys.pop('_keys', None)
     mf.__dict__.update(res_keys)
     return mf
 

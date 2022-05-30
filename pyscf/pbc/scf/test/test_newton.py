@@ -198,4 +198,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for PBC Newton solver")
     unittest.main()
-

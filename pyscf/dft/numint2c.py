@@ -195,7 +195,7 @@ def _gks_mcol_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 elif make_rho0 is not None:
                     _rho0 = make_rho0(0, ao, mask, xctype)
 
-                _fxc = eval_xc(xc_code, _rho0, deriv, xctype=xctype)[2]
+                _fxc = eval_xc(xc_code, _rho0, deriv=deriv, xctype=xctype)[2]
             else:
                 _fxc = fxc[:,:,:,:,p0:p1]
 
@@ -267,6 +267,12 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
         rho: 2-dimensional or 3-dimensional array
             Total density and spin density (and their derivatives if GGA or MGGA
             functionals) on grids
+
+    Kwargs:
+        deriv: int
+            derivative orders
+        omega: float
+            define the exponent in the attenuated Coulomb for RSH functional
     '''
     if omega is None: omega = ni.omega
     if xctype is None: xctype = ni._xc_type(xc_code)
@@ -310,7 +316,7 @@ def _eval_xc_eff(ni, xc_code, rho, deriv=1, omega=None, xctype=None,
 # * Mcfun requires functional derivaties to total-density and spin-density.
 # * Make it a global function than a closure so as to be callable by multiprocessing
 def __mcfun_fn_eval_xc(ni, xc_code, xctype, rho, deriv):
-    exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv, xctype=xctype)
+    exc, vxc, fxc, kxc = ni.eval_xc_eff(xc_code, rho, deriv=deriv, xctype=xctype)
     if deriv > 0:
         vxc = xc_deriv.ud2ts(vxc)
     if deriv > 1:
@@ -695,10 +701,10 @@ class NumInt2C(numint._NumIntMixin):
         else:
             if isinstance(dms, np.ndarray) and dms.ndim == 2:
                 dms = [dms]
-            if not hermi and dms[0].dtype == np.double:
+            if hermi != 1 and dms[0].dtype == np.double:
                 # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
-                # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency
-                dms = [(dm+dm.conj().T)*.5 for dm in dms]
+                # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency when dm is real
+                dms = [(dm+dm.T)*.5 for dm in dms]
                 hermi = 1
             nao = dms[0].shape[0]
             ndms = len(dms)

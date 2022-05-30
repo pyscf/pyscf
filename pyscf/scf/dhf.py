@@ -41,6 +41,8 @@ if getattr(__config__, 'scf_dhf_SCF_zquatev', True):
     except ImportError:
         pass
 
+DEBUG = False
+
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True):
@@ -137,6 +139,12 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
                    opt_llll=None, opt_ssll=None, opt_ssss=None,
                    omega=None, verbose=None):
     log = logger.new_logger(mol, verbose)
+
+    if hermi == 0 and DEBUG:
+        # J matrix is symmetrized in this function which is only true for
+        # density matrix with time reversal symmetry
+        _ensure_time_reversal_symmetry(mol, dm)
+
     with mol.with_range_coulomb(omega):
         if coulomb_allow.upper() == 'LLLL':
             log.debug('Coulomb integral: (LL|LL)')
@@ -303,7 +311,7 @@ def time_reversal_matrix(mol, mat):
     tmat = mat[idx[:,None], idx]
     tmat[sign_mask,:] *= -1
     tmat[:,sign_mask] *= -1
-    return tmat.T
+    return tmat.conj()
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
     from pyscf.tools import dump_mat
@@ -779,16 +787,23 @@ class RDHF(DHF):
 RHF = RDHF
 
 
+def _ensure_time_reversal_symmetry(mol, mat):
+    if mat.ndim == 2:
+        mat = [mat]
+    for m in mat:
+        if abs(m - time_reversal_matrix(mol, m)).max() > 1e-9:
+            raise RuntimeError('Matrix does have time reversal symmetry')
+
 def _time_reversal_triu_(mol, vj):
     n2c = vj.shape[1]
     idx, idy = numpy.triu_indices(n2c, 1)
     if vj.ndim == 2:
         Tvj = time_reversal_matrix(mol, vj)
-        vj[idx,idy] = Tvj[idx,idy]
+        vj[idx,idy] = Tvj[idy,idx].conj()
     else:
         for i in range(vj.shape[0]):
             Tvj = time_reversal_matrix(mol, vj[i])
-            vj[i,idx,idy] = Tvj[idx,idy]
+            vj[i,idx,idy] = Tvj[idy,idx].conj()
     return vj
 
 def _mat_hermi_(vk, hermi):
@@ -883,6 +898,10 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
         # integral function int2e_ssp1ssp2_spinor evaluates only
         # alpha1*alpha2/r12. Minus sign was not included.
         intor_prefix = 'int2e_'
+
+    if hermi == 0 and DEBUG:
+        _ensure_time_reversal_symmetry(mol, dm)
+
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         n_dm = 1
         n2c = dm.shape[0] // 2
