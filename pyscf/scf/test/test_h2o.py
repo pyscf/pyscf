@@ -25,20 +25,22 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dhf
 
-mol = gto.Mole()
-mol.build(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = {"H": '6-31g',
-             "O": '6-31g',}
-)
-molsym = mol.copy()
-molsym.symmetry = True
-molsym.build(0, 0)
+def setUpModule():
+    global mol, molsym
+    mol = gto.Mole()
+    mol.build(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    )
+    molsym = mol.copy()
+    molsym.symmetry = True
+    molsym.build(0, 0)
 
 def tearDownModule():
     global mol, molsym

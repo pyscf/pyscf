@@ -763,6 +763,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def rs_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.pbc.df import rsdf_jk
+        return rsdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
@@ -824,6 +828,16 @@ class SCF(mol_hf.SCF):
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
+
+
+class KohnShamDFT:
+    '''A mock DFT base class
+
+    The base class is defined in the pbc.dft.rks module. This class can
+    be used to verify if an SCF object is an pbc-Hartree-Fock method or an
+    pbc-DFT method. It should be overwritten by the actual KohnShamDFT class
+    when loading dft module.
+    '''
 
 
 class RHF(SCF, mol_hf.RHF):

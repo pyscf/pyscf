@@ -48,7 +48,7 @@ kpts = cell.make_kpts([Nkx,Nky,1])
 ### generate TB Hamiltonian at a specific k point.
 
 def gen_H_tb(t,Nx,Ny,kvec):
-    H = np.zeros((Nx,Ny,Nx,Ny),dtype=np.complex)
+    H = np.zeros((Nx,Ny,Nx,Ny),dtype=np.complex128)
     for i in range(Nx):
         for j in range(Ny):
             if i == Nx-1:

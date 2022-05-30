@@ -474,7 +474,7 @@ class EOMIP(eom_kgccsd.EOMIP):
         nocca, noccb = self.nocc
         guess = []
         if koopmans:
-            idx = np.zeros(nroots, dtype=np.int)
+            idx = np.zeros(nroots, dtype=int)
             tmp_oalpha, tmp_obeta = self.nonzero_opadding[kshift]
             tmp_oalpha = list(tmp_oalpha)
             tmp_obeta = list(tmp_obeta)
@@ -977,7 +977,7 @@ class EOMEA(eom_kgccsd.EOMEA):
         nvira = nmoa-nocca
         guess = []
         if koopmans:
-            idx = np.zeros(nroots, dtype=np.int)
+            idx = np.zeros(nroots, dtype=int)
             tmp_valpha, tmp_vbeta = self.nonzero_vpadding[kshift]
             tmp_valpha = list(tmp_valpha)
             tmp_vbeta = list(tmp_vbeta)

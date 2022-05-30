@@ -22,39 +22,6 @@ import copy
 from pyscf import lib, gto, scf, dft
 from pyscf import tdscf
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = '''
-O     0.   0.       0.
-H     0.   -0.757   0.587
-H     0.   0.757    0.587'''
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-
-mol1 = gto.Mole()
-mol1.verbose = 0
-mol1.atom = '''
-O     0.   0.       0.
-H     0.   -0.757   0.587
-H     0.   0.757    0.587'''
-mol1.basis = '631g'
-mol1.build()
-
-mf_uhf = scf.UHF(mol).run()
-td_hf = tdscf.TDHF(mf_uhf).run(conv_tol=1e-12)
-
-mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
-mf_lda.grids.prune = None
-mf_lda = mf_lda.newton().run()
-mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
-mf_bp86.grids.prune = None
-mf_bp86 = mf_bp86.newton().run()
-mf_b3lyp = dft.UKS(mol).set(xc='b3lyp', conv_tol=1e-12)
-mf_b3lyp.grids.prune = None
-mf_b3lyp = mf_b3lyp.newton().run()
-
 def diagonalize(a, b, nroots=4):
     a_aa, a_ab, a_bb = a
     b_aa, b_ab, b_bb = b
@@ -69,11 +36,47 @@ def diagonalize(a, b, nroots=4):
                     [ a_ab.T, a_bb]])
     b = numpy.bmat([[ b_aa  , b_ab],
                     [ b_ab.T, b_bb]])
-    e = numpy.linalg.eig(numpy.bmat([[a        , b       ],
-                                     [-b.conj(),-a.conj()]]))[0]
+    abba = numpy.asarray(numpy.bmat([[a        , b       ],
+                                     [-b.conj(),-a.conj()]]))
+    e = numpy.linalg.eig(abba)[0]
     lowest_e = numpy.sort(e[e.real > 0].real)[:nroots]
     lowest_e = lowest_e[lowest_e > 1e-3]
     return lowest_e
+
+def setUpModule():
+    global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = '''
+    O     0.   0.       0.
+    H     0.   -0.757   0.587
+    H     0.   0.757    0.587'''
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+
+    mol1 = gto.Mole()
+    mol1.verbose = 0
+    mol1.atom = '''
+    O     0.   0.       0.
+    H     0.   -0.757   0.587
+    H     0.   0.757    0.587'''
+    mol1.basis = '631g'
+    mol1.build()
+
+    mf_uhf = scf.UHF(mol).run()
+    td_hf = tdscf.TDHF(mf_uhf).run(conv_tol=1e-12)
+
+    mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
+    mf_lda.grids.prune = None
+    mf_lda = mf_lda.newton().run()
+    mf_bp86 = dft.UKS(mol).set(xc='b88,p86', conv_tol=1e-12)
+    mf_bp86.grids.prune = None
+    mf_bp86 = mf_bp86.newton().run()
+    mf_b3lyp = dft.UKS(mol).set(xc='b3lyp', conv_tol=1e-12)
+    mf_b3lyp.grids.prune = None
+    mf_b3lyp = mf_b3lyp.newton().run()
 
 def tearDownModule():
     global mol, mol1, mf_uhf, td_hf, mf_lda, mf_bp86, mf_b3lyp
@@ -144,6 +147,17 @@ class KnownValues(unittest.TestCase):
         es = td.kernel()[0] * 27.2114
         ref = [6.88046608, 7.58244885, 8.49961771, 9.30209259, 9.79775972]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
+
+    def test_tda_m06l(self):
+        mf = dft.UKS(mol1)
+        mf.xc = 'm06l'
+        mf.grids.prune = None
+        mf.scf()
+        td = mf.TDA()
+        es = td.kernel(nstates=5)[0] * 27.2114
+        self.assertAlmostEqual(lib.fp(es), -8.943196581335487, 6)
+        ref = [8.18683464, 8.77581263, 10.20108589, 10.55440239, 10.98105145]
+        self.assertAlmostEqual(abs(es - ref).max(), 0, 6)
 
     def test_ab_hf(self):
         mf = mf_uhf

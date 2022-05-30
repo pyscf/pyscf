@@ -26,50 +26,53 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 multigrid.R_RATIO_SUBLOOP = 0.6
 
-numpy.random.seed(2)
-cell_orth = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    a = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.    
-              C     1.8     1.8     1.8   ''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    precision = 1e-9,
-    mesh = [48] * 3,
-)
-cell_nonorth = gto.M(
-    a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
-    atom = '''C     0.      0.      0.    
-              C     0.8917  0.8917  0.8917''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    precision = 1e-9,
-    mesh = [44,43,42],
-)
+def setUpModule():
+    global cell_orth, cell_nonorth, cell_he, mydf
+    global kpts, nao, dm, dm1, vj_uks_orth, he_nao, dm_he
+    numpy.random.seed(2)
+    cell_orth = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        a = numpy.eye(3)*3.5668,
+        atom = '''C     0.      0.      0.
+                  C     1.8     1.8     1.8   ''',
+        basis = 'gth-dzv',
+        pseudo = 'gth-pade',
+        precision = 1e-9,
+        mesh = [48] * 3,
+    )
+    cell_nonorth = gto.M(
+        a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
+        atom = '''C     0.      0.      0.
+                  C     0.8917  0.8917  0.8917''',
+        basis = 'gth-dzv',
+        pseudo = 'gth-pade',
+        precision = 1e-9,
+        mesh = [44,43,42],
+    )
 
-cell_he = gto.M(atom='He 0 0 0',
-                basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
-                       [1, (.8, 1)]],
-                unit='B',
-                precision = 1e-9,
-                mesh=[18]*3,
-                a=numpy.eye(3)*5)
+    cell_he = gto.M(atom='He 0 0 0',
+                    basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
+                           [1, (.8, 1)]],
+                    unit='B',
+                    precision = 1e-9,
+                    mesh=[18]*3,
+                    a=numpy.eye(3)*5)
 
-kptsa = numpy.random.random((2,3))
-kpts = kptsa.copy()
-kpts[1] = -kpts[0]
-nao = cell_orth.nao_nr()
-dm = numpy.random.random((len(kpts),nao,nao)) * .2
-dm1 = dm + numpy.eye(nao)
-dm = dm1 + dm1.transpose(0,2,1)
-mydf = df.FFTDF(cell_orth)
-vj_uks_orth = mydf.get_jk(dm1, with_k=False)[0]
+    kptsa = numpy.random.random((2,3))
+    kpts = kptsa.copy()
+    kpts[1] = -kpts[0]
+    nao = cell_orth.nao_nr()
+    dm = numpy.random.random((len(kpts),nao,nao)) * .2
+    dm1 = dm + numpy.eye(nao)
+    dm = dm1 + dm1.transpose(0,2,1)
+    mydf = df.FFTDF(cell_orth)
+    vj_uks_orth = mydf.get_jk(dm1, with_k=False)[0]
 
-he_nao = cell_he.nao
-dm_he = numpy.random.random((len(kpts), he_nao, he_nao))
-dm_he = dm_he + dm_he.transpose(0,2,1)
-dm_he = dm_he * .2 + numpy.eye(he_nao)
+    he_nao = cell_he.nao
+    dm_he = numpy.random.random((len(kpts), he_nao, he_nao))
+    dm_he = dm_he + dm_he.transpose(0,2,1)
+    dm_he = dm_he * .2 + numpy.eye(he_nao)
 
 def tearDownModule():
     global cell_orth, cell_nonorth, cell_he, mydf

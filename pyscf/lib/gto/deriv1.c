@@ -546,7 +546,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
 }
 
 void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
-                 double *ao, double *coord, char *non0table,
+                 double *ao, double *coord, uint8_t *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -555,7 +555,7 @@ void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
-                double *ao, double *coord, char *non0table,
+                double *ao, double *coord, uint8_t *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -564,7 +564,7 @@ void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
-                   double complex *ao, double *coord, char *non0table,
+                   double complex *ao, double *coord, uint8_t *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -575,7 +575,7 @@ void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
 }
 
 void GTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
-                    double *ao, double *coord, char *non0table,
+                    double *ao, double *coord, uint8_t *non0table,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
@@ -584,7 +584,7 @@ void GTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
-                   double *ao, double *coord, char *non0table,
+                   double *ao, double *coord, uint8_t *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
@@ -593,7 +593,7 @@ void GTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_ip_spinor(int ngrids, int *shls_slice, int *ao_loc,
-                      double complex *ao, double *coord, char *non0table,
+                      double complex *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};

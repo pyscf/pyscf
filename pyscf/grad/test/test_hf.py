@@ -21,15 +21,17 @@ from pyscf import grad
 from pyscf import cc
 from pyscf.grad import rks, uks, roks
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [1   , (0. , 0.1, .817)],
-    ["F" , (0. , 0. , 0.)], ]
-mol.basis = {"H": '6-31g',
-             "F": '6-31g',}
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [1   , (0. , 0.1, .817)],
+        ["F" , (0. , 0. , 0.)], ]
+    mol.basis = {"H": '6-31g',
+                 "F": '6-31g',}
+    mol.build()
 
 def tearDownModule():
     global mol

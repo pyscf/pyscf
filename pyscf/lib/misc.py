@@ -271,7 +271,7 @@ def map_with_prefetch(func, *iterables):
         import imp
         global_import_lock = imp.lock_held()
 
-    if global_import_lock:
+    if not ASYNC_IO or global_import_lock:
         for task in zip(*iterables):
             yield func(*task)
 
@@ -566,6 +566,13 @@ class StreamObject(object):
         obj = cls.__new__(cls)
         obj.__dict__.update(self.__dict__)
         return obj
+
+    def add_keys(self, **kwargs):
+        '''Add or update attributes of the object and register these attributes in ._keys'''
+        if kwargs:
+            self.__dict__.update(**kwargs)
+            self._keys = self._keys.union(kwargs.keys())
+        return self
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):

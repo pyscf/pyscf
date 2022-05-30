@@ -270,10 +270,13 @@ def tn_addrs_signs(norb, nelec, n_excite):
     '''Compute the FCI strings (address) for CIS n-excitation amplitudes and
     the signs of the coefficients when transferring the reference from physics
     vacuum to HF vacuum.
+
+    If the excitation level is not compatible with the number of
+    electrons and holes, empty lists are returned for the addresses and signs.
     '''
-    if n_excite > nelec:
-        print("Warning: Not enough occupied orbitals to excite.")
-        return [0], [0]
+    # Not enough electrons or holes for excitation; return empty lists.
+    if n_excite > min(nelec, norb-nelec):
+        return [], []
     nocc = nelec
 
     hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)
@@ -852,12 +855,15 @@ class CISD(lib.StreamObject):
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        if 'dft' in str(mf.__module__):
+        from pyscf.scf import hf
+        if isinstance(mf, hf.KohnShamDFT):
             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
                                'CISD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
                                'the code below:\n'
                                '    mf_hf = scf.RHF(mol)\n'
+                               '    if getattr(mf_dft, "with_x2c", False):\n'
+                               '        mf_hf = mf_hf.x2c()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff

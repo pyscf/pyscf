@@ -157,6 +157,7 @@ def _contract(subscripts, *tensors, **kwargs):
     idxBt = list(idxB)
     inner_shape = 1
     insert_B_loc = 0
+    shared_idxAB = sorted(list(shared_idxAB))
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
             err = ('ERROR: In index string %s, the range of index %s is '
@@ -378,7 +379,7 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         elif filltriu == SYMMETRIC:
             #:for ij,(i,j) in enumerate(zip(*idx)):
             #:    out[i,j] = out[j,i] = tril[ij]
-            idxy = numpy.empty((nd,nd), dtype=numpy.int)
+            idxy = numpy.empty((nd,nd), dtype=int)
             idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
             numpy.take(tril, idxy, axis=0, out=out)
         else:
@@ -1028,10 +1029,14 @@ def condense(opname, a, loc_x, loc_y=None):
             for j,j0 in enumerate(loc_y):
                 j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1,j0:j1])
+
+    opname can be  sum, max, min, abssum, absmax, absmin, norm
     '''
-    assert(a.dtype == numpy.double)
+    assert a.dtype == numpy.double
     if not opname.startswith('NP_'):
         opname = 'NP_' + opname
+    assert opname[3:] in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')
+
     op = getattr(_np_helper, opname)
     if loc_y is None:
         loc_y = loc_x
@@ -1040,10 +1045,9 @@ def condense(opname, a, loc_x, loc_y=None):
     nloc_x = loc_x.size - 1
     nloc_y = loc_y.size - 1
     if a.flags.f_contiguous:
-        out = numpy.zeros((nloc_x, nloc_y), order='F')
-    else:
-        a = numpy.asarray(a, order='C')
-        out = numpy.zeros((nloc_x, nloc_y))
+        a = transpose(a.T)
+    a = numpy.asarray(a, order='C')
+    out = numpy.zeros((nloc_x, nloc_y))
     _np_helper.NPcondense(op, out.ctypes.data_as(ctypes.c_void_p),
                           a.ctypes.data_as(ctypes.c_void_p),
                           loc_x.ctypes.data_as(ctypes.c_void_p),

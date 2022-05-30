@@ -74,11 +74,11 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
         seig is the eigenvalue vector of the metric s.
     '''
     seig, t = scipy.linalg.eigh(s)
-    try:
+    mask = seig >= lindep
+    if numpy.all(mask):
         w, v = scipy.linalg.eigh(h, s)
-    except numpy.linalg.LinAlgError:
-        idx = seig >= lindep
-        t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
+    else:
+        t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
         if t.size > 0:
             heff = reduce(numpy.dot, (t.T.conj(), h, t))
             w, v = scipy.linalg.eigh(heff)
@@ -104,8 +104,7 @@ def eigh_by_blocks(h, s=None, labels=None):
         labels : list
 
     Returns:
-        w, v.  w is the eigenvalue vector; v is the eigenfunction array;
-        seig is the eigenvalue vector of the metric s.
+        w, v.  w is the eigenvalue vector; v is the eigenfunction array.
 
     Examples:
 
@@ -509,7 +508,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots*1):
+              max_dx_norm/max_dx_last > 3 and space > nroots+2):
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
@@ -894,7 +893,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots*3):
+              max_dx_norm/max_dx_last > 3 and space > nroots+4):
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
@@ -1471,7 +1470,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
 
 
 def cho_solve(a, b, strict_sym_pos=True):
-    '''Solve ax = b, where a is a postive definite hermitian matrix
+    '''Solve ax = b, where a is a positive definite hermitian matrix
 
     Kwargs:
         strict_sym_pos (bool) : Whether to impose the strict positive definition

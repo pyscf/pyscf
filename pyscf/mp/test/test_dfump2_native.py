@@ -23,21 +23,27 @@ from pyscf import lib
 from pyscf.mp.dfump2_native import DFUMP2, SCSUMP2
 
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = '''
-O    0.000   0.000  -1.141
-O    0.000   0.000   1.141
-'''
-mol.unit = 'Bohr'
-mol.basis = 'def2-SVP'
-mol.spin = 2
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = '''
+    O    0.000   0.000  -1.141
+    O    0.000   0.000   1.141
+    '''
+    mol.unit = 'Bohr'
+    mol.basis = 'def2-SVP'
+    mol.spin = 2
+    mol.build()
 
-mf = scf.UHF(mol)
-mf.conv_tol = 1.0e-12
-mf.kernel()
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1.0e-12
+    mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 def check_orth(obj, mol, mo_coeff, thresh=1.0e-12):

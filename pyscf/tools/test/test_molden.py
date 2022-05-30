@@ -19,16 +19,18 @@ import tempfile
 from pyscf import lib, gto, scf
 from pyscf.tools import molden
 
-mol = gto.Mole()
-mol.atom = '''
-H  0.0000000000   0.0000000000   0.0000000000
-F  0.0000000000   0.0000000000   0.9000000000
-           '''
-mol.basis = 'ccpvdz'
-mol.symmetry = True
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol).run()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.atom = '''
+    H  0.0000000000   0.0000000000   0.0000000000
+    F  0.0000000000   0.0000000000   0.9000000000
+               '''
+    mol.basis = 'ccpvdz'
+    mol.symmetry = True
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol).run()
 
 def tearDownModule():
     global mol, mf

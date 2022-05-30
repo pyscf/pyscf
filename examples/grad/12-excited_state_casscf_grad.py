@@ -4,14 +4,13 @@
 #
 
 '''
-Analytical nuclear gradients of CASCI excited state.
+Analytical nuclear gradients of CASSCF excited state.
 '''
 
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import lib
-import inspect
 
 mol = gto.M(
     atom = [

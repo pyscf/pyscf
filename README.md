@@ -16,6 +16,18 @@ Python-based Simulations of Chemistry Framework
 * [Features](../master/FEATURES)
 
 
+## Announcement
+
+### PySCF annual developer's meeting
+
+Dear PySCF developer community,
+
+Thank you for your interest in PySCF and all your contributions to this software tool. The community has grown tremendously in the last few years to the point that many of us have never met! **To this end, we will be hosting the 1st annual PySCF developer conference July 28-29 2022 in Pasadena, California.** At the current time we are in the early planning stages. If you are interested in attending, please use the following [Google Form](https://forms.gle/nUyMuHs3sMTkBLK48), and more information will be available soon.
+
+best wishes,
+
+The PySCF board
+
 Installation
 ------------
 

@@ -23,15 +23,22 @@ from pyscf import scf
 from pyscf import lib
 from pyscf.x2c import x2c
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 
 class KnownValues(unittest.TestCase):
@@ -176,7 +183,7 @@ C     F
         xmol, c = x2c.X2C(mol).get_xmol(mol)
         self.assertEqual(xmol.nbas, 18)
         self.assertEqual(xmol.nao, 42)
-        self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
+        self.assertAlmostEqual(lib.fp(c), -5.480689638416739, 12)
 
     def test_get_hcore(self):
         myx2c = scf.RHF(mol).sfx2c1e()
@@ -190,6 +197,19 @@ C     F
         h1 = with_x2c.get_hcore()
         ref = mol.intor('int1e_nuc_spinor')
         self.assertAlmostEqual(abs(h1 - ref).max(), 0, 12)
+
+    def test_ghf(self):
+        # Test whether the result of .X2C() is a solution of .GHF().x2c()
+        mol = gto.M(atom='C', basis='ccpvdz-dk')
+        ref = mol.X2C().run()
+        c = numpy.vstack(mol.sph2spinor_coeff())
+        mo1 = c.dot(ref.mo_coeff)
+        dm = ref.make_rdm1(mo1, ref.mo_occ)
+        mf = mol.GHF().x2c1e()
+        mf.max_cycle = 1
+        mf.kernel(dm0=dm)
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, ref.e_tot, 10)
 
 
 if __name__ == "__main__":

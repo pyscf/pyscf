@@ -20,17 +20,32 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build:
+  linux-build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-18.04]
-        python-version: [3.6, 3.7, 3.8, 3.9]
-        exclude:
-          - os: macos-latest
-            python-version: 3.8
-          - os: macos-latest
-            python-version: 3.9
+        os: [ubuntu-20.04]
+        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install and Test
+        run: ./.github/workflows/run_ci.sh
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v1.0.13
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+
+  macos-build:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}

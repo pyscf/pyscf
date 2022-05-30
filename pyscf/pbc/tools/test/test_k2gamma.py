@@ -18,28 +18,31 @@ from pyscf import lib
 from pyscf.pbc import gto, scf
 from pyscf.pbc.tools import k2gamma
 
-cell = gto.Cell()
-cell.a = '''
-     1.755000    1.755000    -1.755000
-     1.755000    -1.755000    1.755000
-     -1.755000    1.755000    1.755000'''
-cell.atom = '''Li      0.00000      0.00000      0.00000'''
-#same type of basis for different elements
-cell.basis = 'gth-szv'
-cell.pseudo = {'Li': 'GTH-PBE-q3'}
-cell.mesh = [20]*3
-cell.verbose = 6
-cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell, mf, kpts
+    cell = gto.Cell()
+    cell.a = '''
+         1.755000    1.755000    -1.755000
+         1.755000    -1.755000    1.755000
+         -1.755000    1.755000    1.755000'''
+    cell.atom = '''Li      0.00000      0.00000      0.00000'''
+    #same type of basis for different elements
+    cell.basis = 'gth-szv'
+    cell.pseudo = {'Li': 'GTH-PBE-q3'}
+    cell.mesh = [20]*3
+    cell.verbose = 6
+    cell.output = '/dev/null'
+    cell.build()
 
-kpts = cell.make_kpts([2,2,2])
+    kpts = cell.make_kpts([2,2,2])
 
-mf = scf.KUKS(cell, kpts)
-mf.xc = 'lda,vwn'
-mf.kernel()
+    mf = scf.KUKS(cell, kpts)
+    mf.xc = 'lda,vwn'
+    mf.kernel()
 
 def tearDownModule():
     global cell, mf
+    cell.stdout.close()
     del cell, mf
 
 

@@ -231,7 +231,8 @@ def so2ao_mo_coeff(so, irrep_mo_coeff):
 def check_irrep_nelec(mol, irrep_nelec, nelec):
     for irname in irrep_nelec:
         if irname not in mol.irrep_name:
-            logger.warn(mol, 'Molecule does not have irrep %s', irname)
+            msg = 'Molecule does not have irrep %s defined in irrep_nelec.' % irname
+            raise ValueError(msg)
 
     float_irname = []
     fix_na = 0
@@ -244,6 +245,9 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                 neleca = irrep_nelec[irname] - nelecb
             else:
                 neleca, nelecb = irrep_nelec[irname]
+            if not (isinstance(neleca, (int, numpy.integer)) and
+                    isinstance(nelecb, (int, numpy.integer))):
+                raise ValueError('irrep_nelec value must be integer')
             norb = mol.symm_orb[i].shape[1]
             if neleca > norb or nelecb > norb:
                 msg =('More electrons than orbitals for irrep %s '
@@ -265,12 +269,11 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     float_neleca = neleca - fix_na
     float_nelecb = nelecb - fix_nb
     free_norb = sum(free_irrep_norbs)
-    if ((fix_na > neleca) or (fix_nb > nelecb) or
-        (fix_na+nelecb > mol.nelectron) or
-        (fix_nb+neleca > mol.nelectron)):
-        msg =('More electrons defined by irrep_nelec than total num electrons. '
-              'mol.nelectron = %d  irrep_nelec = %s' %
-              (mol.nelectron, irrep_nelec))
+    if fix_na > neleca or fix_nb > nelecb:
+        msg =('More electrons defined by irrep_nelec than total num electrons.\n'
+              f'total num electrons = ({neleca}, {nelecb})\n'
+              f'num electrons defined by irrep_nelec = ({fix_na}, {fix_nb})\n'
+              f'irrep_nelec = {irrep_nelec}')
         raise ValueError(msg)
     else:
         logger.info(mol, 'Freeze %d electrons in irreps %s',
@@ -375,11 +378,8 @@ class SymAdaptedRHF(hf.RHF):
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
-        for irname in self.irrep_nelec:
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, 'No irrep %s', irname)
         if mol.symmetry:
-            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
+            check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
     eig = eig
@@ -398,6 +398,7 @@ class SymAdaptedRHF(hf.RHF):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
+
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if not mol.symmetry:
@@ -537,10 +538,6 @@ class SymAdaptedROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in self.mol.irrep_name:
-                    logger.warn(self, 'No irrep %s', irname)
-
             fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
             alpha_open = beta_open = False
             for ne in self.irrep_nelec.values():
