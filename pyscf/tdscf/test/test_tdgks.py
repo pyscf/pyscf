@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import numpy
 import copy
 from pyscf import lib, gto, scf, dft
@@ -48,13 +49,13 @@ H     0.   0.7   0.7'''
     mol.spin = 1
     mol.build()
 
-    mf_lda = dft.GKS(mol).set(xc='lda,').newton().run()
+    mf_lda = mol.GKS().set(xc='lda,', chkfile=tempfile.NamedTemporaryFile().name).newton().run()
     mcol_lda = None
     if mcfun is not None:
-        mcol_lda = dft.GKS(mol).set(xc='lda,', collinear='mcol')
+        mcol_lda = mol.GKS().set(xc='lda,', collinear='mcol', chkfile=tempfile.NamedTemporaryFile().name)
         mcol_lda._numint.spin_samples = 6
         mcol_lda = mcol_lda.run()
-    mf_bp86 = dft.GKS(molsym).set(xc='bp86').run()
+    mf_bp86 = molsym.GKS().set(xc='bp86', chkfile=tempfile.NamedTemporaryFile().name).run()
 
 def tearDownModule():
     global mol, molsym, mf_bp86, mf_lda, mcol_lda
