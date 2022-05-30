@@ -638,6 +638,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej1, 2.4673139106639925*(6/6.82991739766009)**2, 9)
         self.assertAlmostEqual(ek1, 3.6886674521354221*(6/6.82991739766009)**2, 9)
 
+        # issue #1114
+        dm = numpy.eye(cell.nao, dtype=int)
+        vj, vk = df.get_jk(dm, exxdiv=None)
+        self.assertAlmostEqual(lib.fp(vj), 3.7955873127283377, 9)
+        self.assertAlmostEqual(lib.fp(vk), 4.290076429522121, 9)
+
     def test_get_jk_kpts(self):
         df = fft.FFTDF(cell)
         dm = mf0.get_init_guess()
