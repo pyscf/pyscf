@@ -40,7 +40,8 @@ H     0.   0.7   0.7'''
     mol.spin = 1
     mol.build()
 
-    mf_lda = mol.DKS().set(xc='lda,', chkfile=tempfile.NamedTemporaryFile().name).newton().run()
+    mf_lda = mol.DKS().set(xc='lda,', conv_tol=1e-12,
+                           chkfile=tempfile.NamedTemporaryFile().name).newton().run()
 
 def tearDownModule():
     global mol, mf_lda
@@ -66,7 +67,7 @@ class KnownValues(unittest.TestCase):
         a,b = td.get_ab()
         e_ref = diagonalize(a, b, 8)
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 5)
-        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.1575462581293805, 5)
+        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.157449136045103, 5)
 
     def test_tda_lda(self):
         td = mf_lda.TDA()
@@ -76,51 +77,51 @@ class KnownValues(unittest.TestCase):
         nov = nocc * nvir
         e_ref = numpy.linalg.eigh(a.reshape(nov,nov))[0]
         self.assertAlmostEqual(abs(es[:3]-e_ref[:3]).max(), 0, 5)
-        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.2205653340063196, 5)
+        self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.220469947746697, 5)
 
     def test_ab_hf(self):
         mf = scf.DHF(mol).run()
-        self._check_against_ab_ks(mf.TDHF(), (2.1430275289222482-0.00027628061350876897j), (-0.0006874174050882295-4.355631984367909e-06j))
+        self._check_against_ab_ks(mf.TDHF(), 3.162381949829394, 0.11755137875158098)
 
     def test_col_lda_ab_ks(self):
-        self._check_against_ab_ks(mf_lda.TDDFT(), (2.99692360374955-0.025293453913627112j), (0.5746888080660543+0.24787235494770046j))
+        self._check_against_ab_ks(mf_lda.TDDFT(), 2.6168030250127075, 0.10466808380307921)
 
     def test_col_gga_ab_ks(self):
         mf_b3lyp = dft.DKS(mol).set(xc='b3lyp')
         mf_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_b3lyp.TDDFT(), (3.1350282966842746-0.025441646359320697j), (0.39338878441378156+0.20462232291277646j))
+        self._check_against_ab_ks(mf_b3lyp.TDDFT(), 2.568259113326634, 0.1531691970098629)
 
     def test_col_mgga_ab_ks(self):
         mf_m06l = dft.DKS(mol).set(xc='m06l')
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_m06l.TDDFT(), (2.6976631072148023-0.04095530860443805j), (0.28672220700422074-0.43124914810711495j))
+        self._check_against_ab_ks(mf_m06l.TDDFT(), 3.382341929143924, 0.6409502830461241)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):
         mcol_lda = dft.UDKS(mol).set(xc='lda,', collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_lda.TDDFT(), (3.173080765225925-0.051312463609557005j), (-0.28743554820475586+0.09563146009875434j))
+        self._check_against_ab_ks(mcol_lda.TDDFT(), 2.880950836922392, 0.45543578075726204)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):
         mcol_b3lyp = dft.UDKS(mol).set(xc='b3lyp', collinear='mcol')
         mcol_b3lyp._numint.spin_samples = 6
         mcol_b3lyp.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_b3lyp.TDDFT(), (3.2144226766084416-0.0503271451840335j), (-0.38551130235451053+0.09688368021191567j))
+        self._check_against_ab_ks(mcol_b3lyp.TDDFT(), 2.753430274014454, 0.607433969753113)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_mgga_ab_ks(self):
         mcol_m06l = dft.UDKS(mol).set(xc='m06l', collinear='mcol')
         mcol_m06l._numint.spin_samples = 6
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_m06l.TDDFT(), (2.2861271247617276-0.09856986974496634j), (-4.553072077158097-7.000301495342172j))
+        self._check_against_ab_ks(mcol_m06l.TDDFT(), 14.93489483796353, 9.539340104227188)
 
     def _check_against_ab_ks(self, td, refa, refb):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(a), refa, 12)
-        self.assertAlmostEqual(lib.fp(b), refb, 12)
+        self.assertAlmostEqual(lib.fp(abs(a)), refa, 6)
+        self.assertAlmostEqual(lib.fp(abs(b)), refb, 6)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         n2c = mf.mo_occ.size // 2

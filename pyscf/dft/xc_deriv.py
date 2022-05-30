@@ -445,8 +445,9 @@ def _stack_fggg(fggg, axis=0, rho=None):
                     [[1, 3, 4], [3, 6, 7], [4, 7, 8]],
                     [[2, 4, 5], [4, 7, 8], [5, 8, 9]]]
     fggg = fggg[tuple(slices)]
-    return _stack_fg(_stack_fg(_stack_fg(
-        fggg, axis=axis+2, rho=rho), axis=axis+1, rho=rho), axis=axis, rho=rho)
+    fggg = _stack_fg(fggg, axis=axis+2, rho=rho)
+    fggg = _stack_fg(fggg, axis=axis+1, rho=rho)
+    return _stack_fg(fggg, axis=axis, rho=rho)
 
 def compress(vp, spin=0):
     if spin != 0:  # spin polarized

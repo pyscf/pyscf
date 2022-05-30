@@ -96,6 +96,9 @@ class TDA(uhf.TDA):
 
         return vind, hdiag
 
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
 
