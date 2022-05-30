@@ -365,6 +365,8 @@ def _format_dms(dm_kpts, kpts):
     nkpts = len(kpts)
     nao = dm_kpts.shape[-1]
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
+    if dms.dtype not in (numpy.double, numpy.complex128):
+        dms = numpy.asarray(dms, dtype=numpy.double)
     return dms
 
 def _format_kpts_band(kpts_band, kpts):
