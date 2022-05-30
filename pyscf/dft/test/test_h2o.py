@@ -232,7 +232,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'pw91, pw91'
         # Small change from libxc3 to libxc4
         self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-        
+
     def test_nr_symm_b88vwn(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune

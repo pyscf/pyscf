@@ -156,6 +156,8 @@ def grad_elec(td_grad, x_y, singlet=True, atmlst=None,
         de[k] += numpy.einsum('xji,ij->x', vhf1[2,:,p0:p1], dmxpy[:,p0:p1]) * 2
         de[k] -= numpy.einsum('xji,ij->x', vhf1[3,:,p0:p1], dmxmy[:,p0:p1]) * 2
 
+        de[k] += td_grad.extra_force(ia, locals())
+
     log.timer('TDHF nuclear gradients', *time0)
     return de
 
