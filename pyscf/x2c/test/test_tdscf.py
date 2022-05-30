@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import numpy
 import copy
 from pyscf import lib, gto, scf
@@ -39,7 +40,7 @@ def setUpModule():
     mol.spin = 1
     mol.build()
 
-    mf_lda = dft.UKS(mol).set(xc='lda,', conv_tol=1e-12).newton().run()
+    mf_lda = mol.UKS().set(xc='lda,', conv_tol=1e-12, chkfile=tempfile.NamedTemporaryFile().name).newton().run()
 
 def tearDownModule():
     global mol, mf_lda
