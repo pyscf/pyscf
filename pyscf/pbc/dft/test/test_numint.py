@@ -254,7 +254,7 @@ class KnownValues(unittest.TestCase):
         mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[2]*wv, ao[2]) + numpy.einsum('pi,p,pj->ij', ao[2].conj(), rho[2]*wv, ao[0])
         mat0 += numpy.einsum('pi,p,pj->ij', ao[0].conj(), rho[3]*wv, ao[3]) + numpy.einsum('pi,p,pj->ij', ao[3].conj(), rho[3]*wv, ao[0])
         mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='GGA')
-        self.assertAlmostEqual(abs(mat0 - mat1).max(), 0, 12)
+        self.assertAlmostEqual(abs(mat0 - mat1).max(), 0, 11)
 
         mat1 = numint.eval_mat(cell, ao, weight, rho, vxc, xctype='MGGA')
         self.assertAlmostEqual(lib.fp(mat1), -160.191390949408+21.478570186344374j, 7)
