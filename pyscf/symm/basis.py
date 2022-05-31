@@ -309,6 +309,8 @@ def so3_irrep_symb2id(symb):
         n = int(''.join([i for i in symb if not i.isalpha()]))
         e2 = abs(n) // 2
         l = _ANGULAR.index(s)
+        if abs(n) > l:
+            raise KeyError(symb)
         gu = 'u' if l % 2 else 'g'
         xy = 'y' if n < 0 else 'x'
         parity = '_odd' if n % 2 else '_even'
@@ -322,8 +324,12 @@ def so3_irrep_id2symb(irrep_id):
         e2, n = divmod(e2, 10)
         if n in (0, 1, 5, 4):
             rn = e2 * 2
-        else:
+        elif n in (2, 3, 6, 7):
             rn = e2 * 2 + 1
+        else:
+            raise KeyError(f'Unknown Irrep ID {irrep_id} for SO3 group')
+        if l <= 1 or rn > l:
+            raise KeyError(f'Unknown Irrep ID {irrep_id} for SO3 group')
         if n in (6, 4, 3, 1):
             rn = -rn
         return f'{_ANGULAR[l]}{rn:+d}'
@@ -421,10 +427,10 @@ COOV_IRREP_ID_TABLE = {
     '_oddy': 3,
 }
 
-def linearmole_symm_descent(gpname, irrepid):
+def linearmole_symm_descent(gpname, irrep_id):
     '''Map irreps to D2h or C2v'''
     if gpname in ('Dooh', 'Coov'):
-        return irrepid % 10
+        return irrep_id % 10
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
