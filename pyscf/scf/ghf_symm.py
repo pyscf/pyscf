@@ -26,6 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
+from pyscf.scf import hf
 from pyscf.scf import hf_symm
 from pyscf.scf import ghf
 from pyscf.scf import chkfile
@@ -276,6 +277,11 @@ class GHF(ghf.GHF):
             s = self.get_ovlp()
         return numpy.asarray(get_orbsym(self.mol, mo_coeff, s))
     orbsym = property(get_orbsym)
+
+
+class HF1e(GHF):
+    scf = hf._hf1e_scf
+
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
     if mo_coeff is None:

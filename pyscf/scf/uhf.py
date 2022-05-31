@@ -216,7 +216,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    f = h1e + vhf
+    f = numpy.asarray(h1e) + vhf
     if f.ndim == 2:
         f = (f, f)
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
@@ -317,12 +317,14 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None:
         h1e = mf.get_hcore()
+    if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
+        h1e = (h1e, h1e)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji->', h1e, dm[0])
-    e1+= numpy.einsum('ij,ji->', h1e, dm[1])
+    e1 = numpy.einsum('ij,ji->', h1e[0], dm[0])
+    e1+= numpy.einsum('ij,ji->', h1e[1], dm[1])
     e_coul =(numpy.einsum('ij,ji->', vhf[0], dm[0]) +
              numpy.einsum('ij,ji->', vhf[1], dm[1])) * .5
     e_elec = (e1 + e_coul).real
@@ -837,8 +839,10 @@ class UHF(hf.SCF):
             breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
+        if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
+            h1e = (h1e, h1e)
         s1e = self.get_ovlp(mol)
-        mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
+        mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
         if breaksym:
@@ -995,19 +999,23 @@ class UHF(hf.SCF):
         from pyscf.grad import uhf
         return uhf.Gradients(self)
 
+def _hf1e_scf(mf, *args):
+    logger.info(mf, '\n')
+    logger.info(mf, '******** 1 electron system ********')
+    mf.converged = True
+    h1e = mf.get_hcore(mf.mol)
+    if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
+        h1e = (h1e, h1e)
+    s1e = mf.get_ovlp(mf.mol)
+    mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
+    mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
+    print(mf.mo_energy[mf.mo_occ>0][0].real, mf.mol.energy_nuc())
+    mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
+    mf._finalize()
+    return mf.e_tot
 
 class HF1e(UHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig([h1e]*2, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = _hf1e_scf
 
     def spin_square(self, mo_coeff=None, s=None):
         return .75, 2
