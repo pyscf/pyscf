@@ -178,12 +178,15 @@ class KnowValues(unittest.TestCase):
         with lib.temporary_env(symm.basis, _SO3_SYMB2ID={}):
             for s in ['p+1', 'd+0', 'f-2', 'g+4', 'f+0']:
                 self.assertEqual(ref[s], symm.basis.so3_irrep_symb2id(s))
+        self.assertRaises(KeyError, symm.basis.so3_irrep_symb2id, 'k-8')
 
     def test_so3_id2symb(self):
         ref = symm.basis._SO3_ID2SYMB
         with lib.temporary_env(symm.basis, _SO3_ID2SYMB={}):
-            for s in [105, 200, 202, 314, 317, 421, 420]:
+            for s in [200, 202, 314, 317, 421, 420]:
                 self.assertEqual(ref[s], symm.basis.so3_irrep_id2symb(s))
+        self.assertRaises(KeyError, symm.basis.so3_irrep_id2symb, 746)
+        self.assertRaises(KeyError, symm.basis.so3_irrep_id2symb, 729)
 
 
 if __name__ == "__main__":
