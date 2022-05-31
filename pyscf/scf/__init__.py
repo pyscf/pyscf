@@ -130,25 +130,22 @@ A wrap function to create SCF class (RHF or UHF).\n
 ''' + hf.SCF.__doc__
 
 def RHF(mol, *args):
-    if mol.nelectron == 1:
-        if mol.symmetry:
-            return rhf_symm.HF1e(mol)
-        else:
-            return rohf.HF1e(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
-        if mol.spin > 0:
-            return rohf.ROHF(mol, *args)
-        else:
+    if mol.spin == 0:
+        if not mol.symmetry or mol.groupname == 'C1':
             return rhf.RHF(mol, *args)
-    else:
-        if mol.spin > 0:
-            return rhf_symm.ROHF(mol, *args)
         else:
             return rhf_symm.RHF(mol, *args)
+    else:
+        return ROHF(mol, *args)
 RHF.__doc__ = hf.RHF.__doc__
 
 def ROHF(mol, *args):
-    if not mol.symmetry or mol.groupname == 'C1':
+    if mol.nelectron == 1:
+        if not mol.symmetry or mol.groupname == 'C1':
+            return rohf.HF1e(mol)
+        else:
+            return hf_symm.HF1e(mol, *args)
+    elif not mol.symmetry or mol.groupname == 'C1':
         return rohf.ROHF(mol, *args)
     else:
         return hf_symm.ROHF(mol, *args)
@@ -167,7 +164,12 @@ def UHF(mol, *args):
 UHF.__doc__ = uhf.UHF.__doc__
 
 def GHF(mol, *args):
-    if not mol.symmetry or mol.groupname == 'C1':
+    if mol.nelectron == 1:
+        if not mol.symmetry or mol.groupname == 'C1':
+            return ghf.HF1e(mol)
+        else:
+            return ghf_symm.HF1e(mol, *args)
+    elif not mol.symmetry or mol.groupname == 'C1':
         return ghf.GHF(mol, *args)
     else:
         return ghf_symm.GHF(mol, *args)
