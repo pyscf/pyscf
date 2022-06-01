@@ -22,19 +22,25 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.symm import addons
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = 'cc-pvdz',
-    symmetry = 1,
-)
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = 'cc-pvdz',
+        symmetry = 1,
+    )
 
-mf = scf.RHF(mol)
-mf.scf()
+    mf = scf.RHF(mol)
+    mf.scf()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnowValues(unittest.TestCase):

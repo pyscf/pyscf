@@ -17,9 +17,6 @@ add_library(agf2 SHARED
 add_dependencies(agf2 cvhf)
 
 set_target_properties(agf2 PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(agf2 cvhf ${BLAS_LIBRARIES})
-
+target_link_libraries(agf2 cvhf ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})

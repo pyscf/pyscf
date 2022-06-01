@@ -300,12 +300,14 @@ def casci_grad_with_ccsd_solver(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad
     de += rhf_grad.grad_nuc(mol)
     return de
 
-mol = gto.Mole()
-mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-14)
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol).run(conv_tol=1e-14)
 
 def tearDownModule():
     global mol, mf

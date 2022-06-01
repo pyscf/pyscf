@@ -23,23 +23,25 @@ from pyscf import cc
 from pyscf.cc import uccsd_t
 from pyscf.cc import gccsd_t
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -.757 , .587)],
-    [1 , (0. ,  .757 , .587)]]
-mol.spin = 2
-mol.basis = '3-21g'
-mol.symmetry = 'C2v'
-mol.build()
-mol1 = copy.copy(mol)
-mol1.symmetry = False
+def setUpModule():
+    global mol, mol1, mf, myucc, mygcc
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -.757 , .587)],
+        [1 , (0. ,  .757 , .587)]]
+    mol.spin = 2
+    mol.basis = '3-21g'
+    mol.symmetry = 'C2v'
+    mol.build()
+    mol1 = copy.copy(mol)
+    mol1.symmetry = False
 
-mf = scf.UHF(mol1).run(conv_tol=1e-14)
-myucc = cc.UCCSD(mf).run()
-mygcc = cc.GCCSD(mf).run()
+    mf = scf.UHF(mol1).run(conv_tol=1e-14)
+    myucc = cc.UCCSD(mf).run()
+    mygcc = cc.GCCSD(mf).run()
 
 def tearDownModule():
     global mol, mol1, mf, myucc, mygcc

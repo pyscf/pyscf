@@ -19,39 +19,41 @@ from pyscf import gto, scf, dft, lib
 from pyscf import grad
 from pyscf.grad import rks, uks, roks
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-h2o.basis = '6-31g'
-h2o.build()
+def setUpModule():
+    global h2o, h2o_n, h2o_p
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    h2o.basis = '6-31g'
+    h2o.build()
 
-h2o_n = gto.Mole()
-h2o_n.verbose = 5
-h2o_n.output = '/dev/null'
-h2o_n.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-h2o_n.charge = -1
-h2o_n.spin = 1
-h2o_n.basis = '6-31g'
-h2o_n.build()
+    h2o_n = gto.Mole()
+    h2o_n.verbose = 5
+    h2o_n.output = '/dev/null'
+    h2o_n.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    h2o_n.charge = -1
+    h2o_n.spin = 1
+    h2o_n.basis = '6-31g'
+    h2o_n.build()
 
-h2o_p = gto.Mole()
-h2o_p.verbose = 5
-h2o_p.output = '/dev/null'
-h2o_p.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-h2o_p.charge = 1
-h2o_p.spin = 1
-h2o_p.basis = '6-31g'
-h2o_p.build()
+    h2o_p = gto.Mole()
+    h2o_p.verbose = 5
+    h2o_p.output = '/dev/null'
+    h2o_p.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    h2o_p.charge = 1
+    h2o_p.spin = 1
+    h2o_p.basis = '6-31g'
+    h2o_p.build()
 
 def tearDownModule():
     global h2o, h2o_n, h2o_p

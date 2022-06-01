@@ -14,26 +14,36 @@
 # limitations under the License.
 #
 
+import tempfile
 from pyscf import scf, gto
 from pyscf.eph import eph_fd, uhf
 import numpy as np
 import unittest
 
-mol = gto.M()
-mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
-            ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
-            ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
+def setUpModule():
+    global mol
+    mol = gto.M()
+    mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
+                ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
+                ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
 
-mol.unit = 'Bohr'
-mol.basis = 'sto3g'
-mol.verbose=4
-mol.build() # this is a pre-computed relaxed geometry
+    mol.unit = 'Bohr'
+    mol.basis = 'sto3g'
+    mol.verbose=4
+    mol.output = '/dev/null'
+    mol.build()
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 class KnownValues(unittest.TestCase):
     def test_finite_diff_uhf_eph(self):
         mf = scf.UHF(mol)
-        mf.conv_tol = 1e-16
-        mf.conv_tol_grad = 1e-10
+        mf.chkfile = tempfile.NamedTemporaryFile().name
+        mf.conv_tol = 1e-14
+        mf.conv_tol_grad = 1e-9
         mf.kernel()
 
         grad = mf.nuc_grad_method().kernel()

@@ -215,7 +215,7 @@ class _CVHFOpt(ctypes.Structure):
 def incore(eri, dms, hermi=0, with_j=True, with_k=True):
     assert(eri.dtype == numpy.double)
     eri = numpy.asarray(eri, order='C')
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
 
@@ -307,7 +307,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
     dms = dms.reshape(-1,nao,nao)
@@ -395,7 +395,7 @@ def direct_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -479,7 +479,7 @@ def direct_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:

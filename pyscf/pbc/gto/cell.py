@@ -293,7 +293,7 @@ def conc_cell(cell1, cell2):
         if len(cell1._ecpbas) == 0:
             cell3._ecpbas = ecpbas2
         else:
-            cell3._ecpbas = np.hstack((cell1._ecpbas, ecpbas2))
+            cell3._ecpbas = np.vstack((cell1._ecpbas, ecpbas2))
 
     cell3.verbose = cell1.verbose
     cell3.output = cell1.output

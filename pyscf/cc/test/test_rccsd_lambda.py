@@ -29,17 +29,19 @@ from pyscf.cc import rccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import gccsd, gccsd_lambda
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
-mf = scf.RHF(mol).run()
-mycc = rccsd.RCCSD(mf)
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol).run()
+    mycc = rccsd.RCCSD(mf)
 
 def tearDownModule():
     global mol, mf, mycc

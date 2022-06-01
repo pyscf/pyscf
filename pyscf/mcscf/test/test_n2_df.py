@@ -22,33 +22,35 @@ from pyscf import df
 from pyscf import ao2mo
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-max_memory = 1,
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-9
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    max_memory = 1,
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-9
+    m.scf()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-max_memory = 1,
-symmetry = True,
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-9
-msym.scf()
+    molsym = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+            ['N',(  0.000000,  0.000000, -b/2)],
+            ['N',(  0.000000,  0.000000,  b/2)], ],
+        basis = {'N': 'ccpvdz', },
+        max_memory = 1,
+        symmetry = True,
+        )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-9
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym

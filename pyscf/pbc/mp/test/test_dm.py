@@ -18,25 +18,28 @@ from functools import reduce
 import numpy as np
 from pyscf.pbc import gto, scf, mp
 
-cell = gto.Cell()
-cell.atom = """
-H  0.0 0.0 0.0
-F  0.9 0.0 0.0
-"""
-cell.basis = 'sto-3g'
-cell.a = [[2.82, 0, 0], [0, 2.82, 0], [0, 0, 2.82]]
-cell.dimension = 1
-cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell, kmf, kpts, nkpts
+    cell = gto.Cell()
+    cell.atom = """
+    H  0.0 0.0 0.0
+    F  0.9 0.0 0.0
+    """
+    cell.basis = 'sto-3g'
+    cell.a = [[2.82, 0, 0], [0, 2.82, 0], [0, 0, 2.82]]
+    cell.dimension = 1
+    cell.output = '/dev/null'
+    cell.build()
 
-nk = [2,1,1]
-kpts = cell.make_kpts(nk)
-nkpts = len(kpts)
-kmf = scf.KRHF(cell, kpts = kpts, exxdiv=None).density_fit()
-kmf.kernel()
+    nk = [2,1,1]
+    kpts = cell.make_kpts(nk)
+    nkpts = len(kpts)
+    kmf = scf.KRHF(cell, kpts = kpts, exxdiv=None).density_fit()
+    kmf.kernel()
 
 def tearDownModule():
     global cell, kmf
+    cell.stdout.close()
     del cell, kmf
 
 class KnownValues(unittest.TestCase):

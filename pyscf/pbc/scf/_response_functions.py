@@ -27,13 +27,13 @@ from pyscf.pbc.scf import khf, kuhf, krohf, kghf
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
     from pyscf.pbc.dft import numint, multigrid
-    assert(isinstance(mf, khf.KRHF))
+    assert isinstance(mf, khf.KRHF)
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if isinstance(mf, khf.pbchf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
@@ -128,13 +128,13 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
     from pyscf.pbc.dft import multigrid
-    assert(isinstance(mf, (kuhf.KUHF, krohf.KROHF)))
+    assert isinstance(mf, (kuhf.KUHF, krohf.KROHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     cell = mf.cell
     kpts = mf.kpts
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if isinstance(mf, khf.pbchf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 

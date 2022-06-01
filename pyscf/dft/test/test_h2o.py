@@ -19,51 +19,53 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import dft
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
+def setUpModule():
+    global h2o, h2osym, h2o_cation, h2osym_cation
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2o.basis = {"H": '6-31g', "O": '6-31g',}
-h2o.build()
+    h2o.basis = {"H": '6-31g', "O": '6-31g',}
+    h2o.build()
 
-h2osym = gto.Mole()
-h2osym.verbose = 5
-h2osym.output = '/dev/null'
-h2osym.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
+    h2osym = gto.Mole()
+    h2osym.verbose = 5
+    h2osym.output = '/dev/null'
+    h2osym.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2osym.basis = {"H": '6-31g', "O": '6-31g',}
-h2osym.symmetry = 1
-h2osym.build()
+    h2osym.basis = {"H": '6-31g', "O": '6-31g',}
+    h2osym.symmetry = 1
+    h2osym.build()
 
-h2o_cation = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-    charge = 1,
-    spin = 1,
-    basis = '631g')
+    h2o_cation = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+        charge = 1,
+        spin = 1,
+        basis = '631g')
 
-h2osym_cation = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-    symmetry = True,
-    charge = 1,
-    spin = 1,
-    basis = '631g')
+    h2osym_cation = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+        symmetry = True,
+        charge = 1,
+        spin = 1,
+        basis = '631g')
 
 def tearDownModule():
     global h2o, h2osym, h2o_cation, h2osym_cation
@@ -230,7 +232,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'pw91, pw91'
         # Small change from libxc3 to libxc4
         self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-        
+
     def test_nr_symm_b88vwn(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune

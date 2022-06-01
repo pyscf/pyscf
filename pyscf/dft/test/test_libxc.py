@@ -14,27 +14,30 @@
 # limitations under the License.
 
 import os
+import ctypes
 import unittest
 import numpy
 from pyscf import gto, scf
 from pyscf import dft
 from pyscf import lib
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
-mol.basis = 'aug-ccpvdz'
-mol.build()
-#dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
-dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
-mf = dft.RKS(mol)
-mf.grids.atom_grid = {"H": (50, 110)}
-mf.prune = None
-mf.grids.build(with_non0tab=False)
-nao = mol.nao_nr()
-ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
-rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
+def setUpModule():
+    global mol, mf, ao, rho
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
+    mol.basis = 'aug-ccpvdz'
+    mol.build()
+    #dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
+    dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
+    mf = dft.RKS(mol)
+    mf.grids.atom_grid = {"H": (50, 110)}
+    mf.prune = None
+    mf.grids.build(with_non0tab=False)
+    nao = mol.nao_nr()
+    ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
+    rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
 def tearDownModule():
     global mol, mf, ao, rho
@@ -139,10 +142,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
 
-    def test_libxc_cam_beta_bug(self):
-        '''As a detector for libxc-3.0.0. libxc-3.0.1 fixed this bug
-        '''
-        import ctypes
+    def test_libxc_cam_beta(self):
         rsh_tmp = (ctypes.c_double*3)()
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
         beta = rsh_tmp[2]
@@ -151,7 +151,7 @@ class KnownValues(unittest.TestCase):
         dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
         beta = rsh_tmp[2]
-        self.assertEqual(beta, 0) # libxc-3.0.0 produces -0.46
+        self.assertEqual(beta, 0)
 
         dft.libxc._itrf.LIBXC_is_hybrid(1)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
@@ -291,6 +291,47 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.xc_type('lda+b3lyp'), 'GGA')
         self.assertEqual(dft.libxc.xc_type('wb97m_v'), 'MGGA')
         self.assertEqual(dft.libxc.xc_type('bp86'), 'GGA')
+
+    def test_m06(self):
+        rho = numpy.array([0.11939647, -0.18865577, -0.11633254, 0.01779666, -0.55475521, 0.07092032,
+                           0.11850155, -0.19297934, -0.11581427, 0.01373251, -0.57534216, 0.06596468,])
+        rho = rho.reshape(2,6,1)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc(',m06', rho[0], 0, deriv=3)
+        exc_ref = numpy.array([-0.02809518])
+        vxc_ref = numpy.array([-0.0447466, -0.002186, 0.0154814])
+        fxc_ref = numpy.array([-0.66060719, 0.35848677, -1.37754938,
+                               -1.63288299, 0.21999345, 1.20222259])
+        kxc_ref = numpy.array([-8.91475141e+00, 2.57071018e+01, -4.37413046e+01, 9.92064877e+01,
+                               -1.47859948e+01, 1.51506522e+01, -4.83492461e+00, -1.75713898e+01,
+                               -2.82029718e+01, 6.66847006e+01])
+        self.assertAlmostEqual(exc[0] - exc_ref[0], 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([vxc[i] for i in [0,1,3]])-vxc_ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([fxc[i] for i in [0,1,2,4,6,9]])-fxc_ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([kxc[i] for i in [0,1,2,3,5,7,10,12,15,19]])-kxc_ref).max(), 0, 7)
+
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc(',m06', rho, 1, deriv=3)
+        exc_ref = numpy.array([-0.03730162])
+        vxc_ref = numpy.array([-0.06168318,-0.0610502,-0.00957516,0,-0.01988745, 0.03161512, 0.04391615])
+        fxc_ref = numpy.array([ 0.62207817,-1.02032218, 0.59318092,
+                               -0.00267104, 0, 0.2768053, 0.26785479, 0, 0.02509479,
+                               -1.34211352, 0,-0.0399852, 0, 0,-1.28860549,
+                               -1.69697623,-0.03422618,-2.1835459,
+                               -0.22523468, 0.26116507, 0.26545614,-0.23488143,
+                               1.52817397,-0.13694284, 0, 0,-0.13797703, 1.73484678])
+        kxc_ref = numpy.array([ 1.49056834e+01, 4.93235407e+00, 5.13177936e+00, 6.83179846e+00,
+                               -1.97455841e+01, 0,-8.12321586e-01,-1.51226035e+00, 0,-1.66826458e+00,-8.99591711e-01, 0, -9.19638526e+00,
+                               1.90010442e+01, 0, 1.34796896e-01, 0, 0,-7.73620959e-01,-6.10018848e-01, 0, 2.77414513e-01, 0, 0, 6.16594005e+00,
+                               2.67162133e+01, 0,-9.09592410e-01, 0, 0,-9.28025786e-01, 0, 0, 0, 3.76462242e+01,
+                               2.74381367e-01,-2.08192677e+00, 5.25100873e-01, 6.10851890e-01,-2.02662181e+00,-3.07707014e+00,
+                               -4.45125589e-01, 6.81329714e-01, 0, 0,-4.69145558e-01, -2.42540301e+00,-2.45259140e+00,-5.57504449e-01, 0, 0, 6.02633158e-01, 2.58871134e+00,
+                               2.87554064e+00, 2.85563442e-01,-1.94628304e-01, -1.88482952e-01, 2.90513272e-01, 3.07132889e+00,
+                               -1.08483575e+00, 1.57821239e+00, 0, 0, 1.59013101e+00, 1.61019571e+00, 0, 0, 0, 0, 1.62235586e+00,-3.60275312e+00,
+                               -3.90972925e+01,-1.10619931e-02,-1.12015763e-02, 0, 0, 0,-1.11455329e-02,-1.12861703e-02, -4.81639494e+01,
+                               7.24911656e+01, 4.35367189e-02, 4.40860771e-02, 1.00010975e+02])
+        self.assertAlmostEqual(exc[0] - exc_ref[0], 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([vxc[i] for i in [0,1,3]])-vxc_ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([fxc[i] for i in [0,1,2,4,6,9]])-fxc_ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(numpy.hstack([kxc[i] for i in [0,1,2,3,5,7,10,12,15,19]])-kxc_ref).max(), 0, 6)
 
 
 if __name__ == "__main__":

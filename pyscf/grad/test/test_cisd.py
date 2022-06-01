@@ -20,19 +20,21 @@ from pyscf import ci
 from pyscf import grad
 from pyscf.grad import cisd as cisd_grad
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf

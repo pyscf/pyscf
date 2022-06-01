@@ -19,18 +19,24 @@ from pyscf.pbc.df import aft
 import pyscf.pbc.gto as pgto
 from pyscf.pbc.lib import kpts_helper
 
-L = 5.
-n = 3
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, nao
+    L = 5.
+    n = 3
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''He    3.    2.       3.
-               He    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.build(0,0)
-nao = cell.nao_nr()
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.build(0,0)
+    nao = cell.nao_nr()
+
+def tearDownModule():
+    global cell
+    del cell
 
 
 class KnownValues(unittest.TestCase):

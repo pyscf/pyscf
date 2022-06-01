@@ -23,30 +23,32 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import lib
 
-mol = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = '631g',
-)
+def setUpModule():
+    global mol, mf, h4
+    mol = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = '631g',
+    )
 
-mf = scf.dhf.UHF(mol)
-mf.conv_tol_grad = 1e-5
-mf.kernel()
+    mf = scf.dhf.UHF(mol)
+    mf.conv_tol_grad = 1e-5
+    mf.kernel()
 
-h4 = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-        H     0    0        1
-        H     1    1        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = ('sto3g', [[1,[0.3,1]]]),
-)
+    h4 = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            H     0    0        1
+            H     1    1        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = ('sto3g', [[1,[0.3,1]]]),
+    )
 
 def tearDownModule():
     global mol, mf, h4

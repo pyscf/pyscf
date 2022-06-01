@@ -24,51 +24,53 @@ from pyscf.pbc import df
 #from mpi4pyscf.pbc.df import mdf
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, cell1, mf0, kmdf, kmdf1, kpts
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.rcut = 17
-cell.build(0,0)
+    cell.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.rcut = 17
+    cell.build(0,0)
 
-mf0 = pscf.RHF(cell)
-mf0.exxdiv = 'vcut_sph'
+    mf0 = pscf.RHF(cell)
+    mf0.exxdiv = 'vcut_sph'
 
 
-numpy.random.seed(1)
-kpts = numpy.random.random((5,3))
-kpts[0] = 0
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpts[4] *= 1e-5
+    numpy.random.seed(1)
+    kpts = numpy.random.random((5,3))
+    kpts[0] = 0
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpts[4] *= 1e-5
 
-kmdf = mdf.MDF(cell)
-kmdf.linear_dep_threshold = 1e-7
-kmdf.auxbasis = 'weigend'
-kmdf.kpts = kpts
-kmdf.mesh = (11,)*3
-kmdf.eta = 0.154728892598
+    kmdf = mdf.MDF(cell)
+    kmdf.linear_dep_threshold = 1e-7
+    kmdf.auxbasis = 'weigend'
+    kmdf.kpts = kpts
+    kmdf.mesh = (11,)*3
+    kmdf.eta = 0.154728892598
 
-cell1 = pgto.Cell()
-cell1.a = numpy.eye(3) * 3.
-cell1.mesh = [10]*3
-cell1.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell1.basis = [[0, (3.5, 1)], [0, (1.0, 1)], [1, (0.6, 1)]]
-cell1.rcut = 9.5
-cell1.build(0,0)
+    cell1 = pgto.Cell()
+    cell1.a = numpy.eye(3) * 3.
+    cell1.mesh = [10]*3
+    cell1.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell1.basis = [[0, (3.5, 1)], [0, (1.0, 1)], [1, (0.6, 1)]]
+    cell1.rcut = 9.5
+    cell1.build(0,0)
 
-kmdf1 = mdf.MDF(cell1)
-kmdf1.linear_dep_threshold = 1e-7
-kmdf1.auxbasis = df.aug_etb(cell1, 1.8)
-kmdf1.kpts = kpts
-kmdf1.mesh = [6]*3
-kmdf1.eta = 0.1
+    kmdf1 = mdf.MDF(cell1)
+    kmdf1.linear_dep_threshold = 1e-7
+    kmdf1.auxbasis = df.aug_etb(cell1, 1.8)
+    kmdf1.kpts = kpts
+    kmdf1.mesh = [6]*3
+    kmdf1.eta = 0.1
 
 def tearDownModule():
     global cell, cell1, mf0, kmdf, kmdf1
