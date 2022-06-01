@@ -321,7 +321,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    if isinstance(h1e, numpy.ndarray) and h1e.ndim < dm.ndim:
+    if h1e[0].ndim < dm[0].ndim:  # get [0] because h1e and dm may not be ndarrays
         h1e = (h1e, h1e)
     e1 = numpy.einsum('ij,ji->', h1e[0], dm[0])
     e1+= numpy.einsum('ij,ji->', h1e[1], dm[1])
