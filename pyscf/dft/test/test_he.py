@@ -108,11 +108,11 @@ class KnownValues(unittest.TestCase):
 
     def test_1e(self):
         mf = dft.KS(gto.M(atom='H', spin=1)).run()
-        self.assertAlmostEqual(mf, dft.roks.ROKS)
+        self.assertTrue(isinstance(mf, dft.roks.ROKS))
         self.assertAlmostEqual(mf.e_tot, -0.43567023283650547)
 
         mf = dft.KS(gto.M(atom='H', spin=1, symmetry=1)).run()
-        self.assertAlmostEqual(mf, dft.rks_symm.ROKS)
+        self.assertTrue(isinstance(mf, dft.rks_symm.ROKS))
         self.assertAlmostEqual(mf.e_tot, -0.43567023283650547)
 
 if __name__ == "__main__":

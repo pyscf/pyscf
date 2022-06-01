@@ -124,7 +124,7 @@ def _break_dm_spin_symm(mol, dm):
         #remove off-diagonal part of beta DM
         dmb = numpy.zeros_like(dma)
         for b0, b1, p0, p1 in mol.aoslice_by_atom():
-            dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
+            dmb[...,p0:p1,p0:p1] = dma[...,p0:p1,p0:p1]
     return dma, dmb
 
 def get_init_guess(mol, key='minao'):
@@ -317,12 +317,12 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None:
         h1e = mf.get_hcore()
-    if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
-        h1e = (h1e, h1e)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
+    if isinstance(h1e, numpy.ndarray) and h1e.ndim < dm.ndim:
+        h1e = (h1e, h1e)
     e1 = numpy.einsum('ij,ji->', h1e[0], dm[0])
     e1+= numpy.einsum('ij,ji->', h1e[1], dm[1])
     e_coul =(numpy.einsum('ij,ji->', vhf[0], dm[0]) +
@@ -839,9 +839,9 @@ class UHF(hf.SCF):
             breaksym = user_set_breaksym
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
-        if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
-            h1e = (h1e, h1e)
         s1e = self.get_ovlp(mol)
+        if isinstance(h1e, numpy.ndarray) and h1e.ndim == s1e.ndim:
+            h1e = (h1e, h1e)
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
@@ -1004,12 +1004,11 @@ def _hf1e_scf(mf, *args):
     logger.info(mf, '******** 1 electron system ********')
     mf.converged = True
     h1e = mf.get_hcore(mf.mol)
-    if isinstance(h1e, numpy.ndarray) and h1e.ndim == 2:
-        h1e = (h1e, h1e)
     s1e = mf.get_ovlp(mf.mol)
+    if isinstance(h1e, numpy.ndarray) and h1e.ndim == s1e.ndim:
+        h1e = (h1e, h1e)
     mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
     mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
-    print(mf.mo_energy[mf.mo_occ>0][0].real, mf.mol.energy_nuc())
     mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
     mf._finalize()
     return mf.e_tot
