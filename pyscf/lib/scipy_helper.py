@@ -86,7 +86,7 @@ def pivoted_cholesky_python(A, tol=-1.0, lower=False):
 
     D = numpy.diag(A).copy()
     if tol < 0:
-        machine_epsilon = numpy.finfo(numpy.float).eps
+        machine_epsilon = numpy.finfo(numpy.double).eps
         tol = N * machine_epsilon * numpy.amax(numpy.diag(A))
 
     L = numpy.zeros((N, N))

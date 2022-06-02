@@ -24,27 +24,22 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import ao2mo
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None#'out_h2o'
-mol.atom.extend([
-    ['O' , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
+def setUpModule():
+    global mol, mo, nao
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None#'out_h2o'
+    mol.atom.extend([
+        ['O' , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
 
-mol.basis = 'cc-pvdz'
-mol.build()
-nao = mol.nao_nr()
-naopair = nao*(nao+1)/2
-numpy.random.seed(15)
-mo = numpy.random.random((nao,nao))
-mo = mo.copy(order='F')
-
-c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-c_env = numpy.array(mol._env)
-natm = ctypes.c_int(c_atm.shape[0])
-nbas = ctypes.c_int(c_bas.shape[0])
+    mol.basis = 'cc-pvdz'
+    mol.build()
+    nao = mol.nao_nr()
+    numpy.random.seed(15)
+    mo = numpy.random.random((nao,nao))
+    mo = mo.copy(order='F')
 
 def tearDownModule():
     global mol, mo

@@ -193,7 +193,7 @@ def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
 
 
 def _angular_momentum_for_each_ao(mol):
-    ao_ang = numpy.zeros(mol.nao, dtype=numpy.int)
+    ao_ang = numpy.zeros(mol.nao, dtype=int)
     ao_loc = mol.ao_loc_nr()
     for i in range(mol.nbas):
         p0, p1 = ao_loc[i], ao_loc[i+1]

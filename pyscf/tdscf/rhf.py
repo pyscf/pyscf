@@ -26,6 +26,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import gto
+from pyscf import scf
 from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
@@ -142,7 +143,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b += numpy.einsum('iajb->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * 2
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
-    if getattr(mf, 'xc', None) and getattr(mf, '_numint', None):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -1019,7 +1020,6 @@ class TDHF(TDA):
 
 RPA = TDRHF = TDHF
 
-from pyscf import scf
 scf.hf.RHF.TDA = lib.class_as_method(TDA)
 scf.hf.RHF.TDHF = lib.class_as_method(TDHF)
 scf.rohf.ROHF.TDA = None

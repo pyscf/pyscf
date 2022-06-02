@@ -25,25 +25,31 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 
 
-L = 1.5
-n = 41
-cl = pgto.Cell()
-cl.build(
-    a = [[L,0,0], [0,L,0], [0,0,L]],
-    mesh = [n,n,n],
-    atom = 'He %f %f %f' % ((L/2.,)*3),
-    basis = 'ccpvdz')
+def setUpModule():
+    global cl, cl1, L, n
+    L = 1.5
+    n = 41
+    cl = pgto.Cell()
+    cl.build(
+        a = [[L,0,0], [0,L,0], [0,0,L]],
+        mesh = [n,n,n],
+        atom = 'He %f %f %f' % ((L/2.,)*3),
+        basis = 'ccpvdz')
 
-numpy.random.seed(1)
-cl1 = pgto.Cell()
-cl1.build(a = numpy.random.random((3,3)).T,
-          precision = 1e-9,
-          mesh = [n,n,n],
-          atom ='''He .1 .0 .0
-                   He .5 .1 .0
-                   He .0 .5 .0
-                   He .1 .3 .2''',
-          basis = 'ccpvdz')
+    numpy.random.seed(1)
+    cl1 = pgto.Cell()
+    cl1.build(a = numpy.random.random((3,3)).T,
+              precision = 1e-9,
+              mesh = [n,n,n],
+              atom ='''He .1 .0 .0
+                       He .5 .1 .0
+                       He .0 .5 .0
+                       He .1 .3 .2''',
+              basis = 'ccpvdz')
+
+def tearDownModule():
+    global cl, cl1
+    del cl, cl1
 
 class KnownValues(unittest.TestCase):
     def test_nimgs(self):

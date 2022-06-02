@@ -82,10 +82,10 @@ def run3c(fill, kpts, shls_slice=None):
                        expkL.ctypes.data_as(ctypes.c_void_p),
                        kptij_idx.ctypes.data_as(ctypes.c_void_p),
                        (ctypes.c_int*6)(*shls_slice),
-                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
+                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, lib.c_null_ptr(),
                        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-                       env.ctypes.data_as(ctypes.c_void_p))
+                       env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
 
 def run2c(intor, fill, kpts, shls_slice=None):
@@ -118,27 +118,24 @@ def run2c(intor, fill, kpts, shls_slice=None):
         ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, pbcopt._this,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
     return out
-
-def finger(a):
-    return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
 class KnowValues(unittest.TestCase):
     def test_fill_kk(self):
         fill = 'PBCnr3c_fill_kks1'
         out = out0 = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), 1.0182971799139509+2.3791697509775567j, 9)
+        self.assertAlmostEqual(lib.fp(out), 1.0182971799139509+2.3791697509775567j, 9)
 
         fill = 'PBCnr3c_fill_kks2'
         out = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), 1.0182971799138514+2.3791697509775656j, 9)
+        self.assertAlmostEqual(lib.fp(out), 1.0182971799138514+2.3791697509775656j, 9)
         self.assertTrue(numpy.allclose(out, out0))
 
     def test_fill_k(self):
         fill = 'PBCnr3c_fill_ks2'
         out = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), 6.6227481557912071-0.80306690266835279j, 9)
+        self.assertAlmostEqual(lib.fp(out), 6.6227481557912071-0.80306690266835279j, 9)
 
         out0 = run3c('PBCnr3c_fill_kks2', kband)
         idx = numpy.tril_indices(cell.nao_nr())
@@ -147,22 +144,22 @@ class KnowValues(unittest.TestCase):
 
         fill = 'PBCnr3c_fill_ks1'
         out = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), -14.883220617173009-3.9101277614911112j, 9)
+        self.assertAlmostEqual(lib.fp(out), -14.883220617173009-3.9101277614911112j, 9)
         self.assertTrue(numpy.allclose(out0[0], out[0]))
         self.assertTrue(numpy.allclose(out0[2], out[1]))
 
         fill = 'PBCnr3c_fill_ks2'
         out = run3c(fill, numpy.zeros((1,3)))
-        self.assertAlmostEqual(finger(out), -1.3258082818877739, 9)
+        self.assertAlmostEqual(lib.fp(out), -1.3258082818877739, 9)
 
     def test_fill_g(self):
         fill = 'PBCnr3c_fill_gs2'
         out = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), -1.3258082818877739, 9)
+        self.assertAlmostEqual(lib.fp(out), -1.3258082818877739, 9)
 
         fill = 'PBCnr3c_fill_gs1'
         out = run3c(fill, kband)
-        self.assertAlmostEqual(finger(out), -14.162823165066602, 9)
+        self.assertAlmostEqual(lib.fp(out), -14.162823165066602, 9)
 
         mat1 = run3c(fill, kband,
                      shls_slice=(1,4,cell.nbas+2,cell.nbas+4,cell.nbas*2+2,cell.nbas*2+3))
@@ -171,10 +168,10 @@ class KnowValues(unittest.TestCase):
 
     def test_fill_2c(self):
         mat = cell.pbc_intor('int1e_ovlp_sph')
-        self.assertAlmostEqual(finger(mat), 2.2144557629971247, 9)
+        self.assertAlmostEqual(lib.fp(mat), 2.2144557629971247, 9)
 
         mat = run2c('int1e_ovlp_sph', 'PBCnr2c_fill_ks1', kpts=numpy.zeros((1,3)))
-        self.assertAlmostEqual(finger(mat), -0.27252856478433407, 9)
+        self.assertAlmostEqual(lib.fp(mat), -0.27252856478433407, 9)
 
         mat1 = run2c('int1e_ovlp_sph', 'PBCnr2c_fill_ks1',
                      kpts=numpy.zeros((1,3)),
@@ -182,8 +179,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mat[0,0,1:10,4:10],mat1[0,0]))
 
         mat = cell.pbc_intor('int1e_ovlp_sph', kpts=kband)
-        self.assertAlmostEqual(finger(mat[0]), 2.2137492396285916-0.004739404845627319j, 9)
-        self.assertAlmostEqual(finger(mat[1]), 2.2132325548987253+0.0056984781658280699j, 9)
+        self.assertAlmostEqual(lib.fp(mat[0]), 2.2137492396285916-0.004739404845627319j, 9)
+        self.assertAlmostEqual(lib.fp(mat[1]), 2.2132325548987253+0.0056984781658280699j, 9)
 
 
 if __name__ == '__main__':

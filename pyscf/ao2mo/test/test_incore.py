@@ -23,16 +23,18 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import ao2mo
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = '''
-      o     0    0.       0
-      h     0    -0.757   0.587
-      h     0    0.757    0.587'''
-mol.basis = 'cc-pvdz'
-mol.build()
-nao = mol.nao_nr()
-eri = mol.intor('int2e_sph', aosym='s8')
+def setUpModule():
+    global mol, nao, eri
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = '''
+          o     0    0.       0
+          h     0    -0.757   0.587
+          h     0    0.757    0.587'''
+    mol.basis = 'cc-pvdz'
+    mol.build()
+    nao = mol.nao_nr()
+    eri = mol.intor('int2e_sph', aosym='s8')
 
 def tearDownModule():
     global mol, eri

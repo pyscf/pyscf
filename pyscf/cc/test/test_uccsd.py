@@ -30,35 +30,37 @@ from pyscf.cc import addons
 from pyscf.cc import uccsd_rdm
 from pyscf.fci import direct_uhf
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, rhf, mf, myucc, mol_s2, mf_s2, eris
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-rhf = scf.RHF(mol)
-rhf.conv_tol_grad = 1e-8
-rhf.kernel()
-mf = scf.addons.convert_to_uhf(rhf)
+    mol.basis = '631g'
+    mol.build()
+    rhf = scf.RHF(mol)
+    rhf.conv_tol_grad = 1e-8
+    rhf.kernel()
+    mf = scf.addons.convert_to_uhf(rhf)
 
-myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
+    myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
-mol_s2 = gto.Mole()
-mol_s2.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol_s2.basis = '631g'
-mol_s2.spin = 2
-mol_s2.verbose = 5
-mol_s2.output = '/dev/null'
-mol_s2.build()
-mf_s2 = scf.UHF(mol_s2).run()
-eris = uccsd.UCCSD(mf_s2).ao2mo()
+    mol_s2 = gto.Mole()
+    mol_s2.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol_s2.basis = '631g'
+    mol_s2.spin = 2
+    mol_s2.verbose = 5
+    mol_s2.output = '/dev/null'
+    mol_s2.build()
+    mf_s2 = scf.UHF(mol_s2).run()
+    eris = uccsd.UCCSD(mf_s2).ao2mo()
 
 def tearDownModule():
     global mol, rhf, mf, myucc, mol_s2, mf_s2, eris

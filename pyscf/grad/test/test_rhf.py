@@ -18,15 +18,17 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.build()
 
 def tearDownModule():
     global mol
@@ -106,6 +108,13 @@ class KnownValues(unittest.TestCase):
         e1 = mfs(mol.set_geom_('Cu 0 0 -0.001; H 0 0 1.5'))
         e2 = mfs(mol.set_geom_('Cu 0 0  0.001; H 0 0 1.5'))
         self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 6)
+
+    def test_grad_with_symmetry(self):
+        mol = gto.M (atom = 'H 0 0 0; H 0 0 1', basis='sto-3g', symmetry=True, verbose=0)
+        ref = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
+        mol = gto.M (atom = 'H 0 0 0; H 1 0 0', basis='sto-3g', symmetry=True, verbose=0)
+        g_x = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
+        self.assertAlmostEqual(abs(ref[:,2] - g_x[:,0]).max(), 0, 9)
 
 
 if __name__ == "__main__":

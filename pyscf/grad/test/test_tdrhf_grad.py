@@ -113,17 +113,19 @@ def tda_kernel(tdgrad, z):
     return de
 
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ['H' , (0. , 0. , 1.804)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.unit = 'B'
-mol.basis = '631g'
-mol.build()
-pmol = mol.copy()
-mf = scf.RHF(mol).set(conv_tol=1e-12).run()
+def setUpModule():
+    global mol, pmol, mf
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.unit = 'B'
+    mol.basis = '631g'
+    mol.build()
+    pmol = mol.copy()
+    mf = scf.RHF(mol).set(conv_tol=1e-12).run()
 
 def tearDownModule():
     global mol, pmol, mf

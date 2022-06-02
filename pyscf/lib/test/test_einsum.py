@@ -3,9 +3,12 @@ import numpy
 from pyscf import lib
 einsum = lib.einsum
 
-lib.numpy_helper.EINSUM_MAX_SIZE, bak = 0, lib.numpy_helper.EINSUM_MAX_SIZE
+def setUpModule():
+    global bak
+    lib.numpy_helper.EINSUM_MAX_SIZE, bak = 0, lib.numpy_helper.EINSUM_MAX_SIZE
 
 def tearDownModule():
+    global bak
     lib.numpy_helper.EINSUM_MAX_SIZE = bak
 
 class KnownValues(unittest.TestCase):

@@ -303,31 +303,31 @@ def get_ao_eri(cell, kpt=np.zeros(3)):
 ##################################################
 
 
+def setUpModule():
+    global cell, cell1, kdf0, kpts, kpt0
+    cell = pgto.Cell()
+    cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
+    cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
+                  'C' :'gth-szv',}
+    cell.pseudo = {'C':'gth-pade'}
+    cell.a = np.eye(3) * 2.5
+    cell.mesh = [21] * 3
+    cell.build()
+    np.random.seed(1)
+    kpts = np.random.random((4,3))
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpt0 = np.zeros(3)
 
-
-cell = pgto.Cell()
-cell.atom = 'He 1. .5 .5; C .1 1.3 2.1'
-cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
-              'C' :'gth-szv',}
-cell.pseudo = {'C':'gth-pade'}
-cell.a = np.eye(3) * 2.5
-cell.mesh = [21] * 3
-cell.build()
-np.random.seed(1)
-kpts = np.random.random((4,3))
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpt0 = np.zeros(3)
-
-cell1 = pgto.Cell()
-cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
-cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell1.a = np.eye(3) * 2.5
-cell1.mesh = [21] * 3
-cell1.build()
-kdf0 = mdf.MDF(cell1)
-kdf0.auxbasis = 'weigend'
-kdf0.mesh = [21] * 3
-kdf0.kpts = kpts
+    cell1 = pgto.Cell()
+    cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+    cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+    cell1.a = np.eye(3) * 2.5
+    cell1.mesh = [21] * 3
+    cell1.build()
+    kdf0 = mdf.MDF(cell1)
+    kdf0.auxbasis = 'weigend'
+    kdf0.mesh = [21] * 3
+    kdf0.kpts = kpts
 
 def tearDownModule():
     global cell, cell1, kdf0

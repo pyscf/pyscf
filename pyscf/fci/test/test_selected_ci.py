@@ -32,20 +32,23 @@ from pyscf.fci import selected_ci_spin0
 from pyscf.fci import selected_ci_spin0_symm
 from pyscf.fci import selected_ci_slow
 
-norb = 6
-nelec = 6
-na = cistring.num_strings(norb, nelec//2)
-ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b1101]]
-numpy.random.seed(12)
-ci_coeff = (numpy.random.random((len(ci_strs[0]),len(ci_strs[1])))-.2)**3
-civec_strs = selected_ci._as_SCIvector(ci_coeff, ci_strs)
-nn = norb*(norb+1)//2
-eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
-h1 = numpy.random.random((norb,norb))
-h1 = h1 + h1.T
+def setUpModule():
+    global ci_strs, ci_coeff, civec_strs, eri, h1, spin0_ci_strs, spin0_ci_coeff
+    global norb, nelec
+    norb = 6
+    nelec = 6
+    na = cistring.num_strings(norb, nelec//2)
+    ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b1101]]
+    numpy.random.seed(12)
+    ci_coeff = (numpy.random.random((len(ci_strs[0]),len(ci_strs[1])))-.2)**3
+    civec_strs = selected_ci._as_SCIvector(ci_coeff, ci_strs)
+    nn = norb*(norb+1)//2
+    eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
+    h1 = numpy.random.random((norb,norb))
+    h1 = h1 + h1.T
 
-spin0_ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b10101]]
-spin0_ci_coeff = ci_coeff + ci_coeff.T
+    spin0_ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b10101]]
+    spin0_ci_coeff = ci_coeff + ci_coeff.T
 
 def tearDownModule():
     global ci_strs, ci_coeff, civec_strs, eri, h1, spin0_ci_strs, spin0_ci_coeff

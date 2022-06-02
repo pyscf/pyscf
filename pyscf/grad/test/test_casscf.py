@@ -79,13 +79,15 @@ def grad_elec(mc, mf_grad):
 
     return de
 
-mol = gto.Mole()
-mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.symmetry = False
-mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-12)
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.symmetry = False
+    mol.build()
+    mf = scf.RHF(mol).run(conv_tol=1e-12)
 
 def tearDownModule():
     global mol, mf
@@ -130,11 +132,11 @@ class KnownValues(unittest.TestCase):
     def test_state_specific_scanner(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', verbose=0)
         mf = scf.RHF(mol).run(conv_tol=1e-14)
-        mc = mcscf.CASSCF(mf, 4, 4)
+        mc = mcscf.CASSCF(mf, 4, 4).set(conv_tol=1e-8)
         gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
         e, de = gs(mol)
         self.assertAlmostEqual(e, -108.68788613661442, 7)
-        self.assertAlmostEqual(lib.fp(de), -0.10695162143777398, 5)
+        self.assertAlmostEqual(lib.fp(de), -0.10695162143777398, 4)
 
         mcs = gs.base
         pmol = mol.copy()

@@ -17,10 +17,12 @@ import numpy
 from pyscf import lib
 from pyscf.pbc import gto, scf, df
 
-cell = gto.M(atom='H 1 2 1; H 1 1 1', basis=[[0, (.8, 1)], [1, (0.5, 1)]],
-             a=numpy.eye(3)*2.5, verbose=0, mesh=[11]*3)
-numpy.random.seed(1)
-kband = numpy.random.random((2,3))
+def setUpModule():
+    global cell, kband
+    cell = gto.M(atom='H 1 2 1; H 1 1 1', basis=[[0, (.8, 1)], [1, (0.5, 1)]],
+                 a=numpy.eye(3)*2.5, verbose=0, mesh=[11]*3)
+    numpy.random.seed(1)
+    kband = numpy.random.random((2,3))
 
 def tearDownModule():
     global cell

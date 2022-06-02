@@ -20,22 +20,24 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import stability
 
-L = 4
-n = 15
-cell = pgto.Cell()
-cell.build(unit = 'B',
-           verbose = 5,
-           output = '/dev/null',
-           a = ((L,0,0),(0,L,0),(0,0,L)),
-           mesh = [n,n,n],
-           atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
-                   ['He', (L/2.   ,L/2.,L/2.+.5)]],
-           basis = { 'He': [[0, (0.8, 1.0)],
-                            [0, (1.0, 1.0)],
-                            [0, (1.2, 1.0)]]})
+def setUpModule():
+    global cell, kpts
+    L = 4
+    n = 15
+    cell = pgto.Cell()
+    cell.build(unit = 'B',
+               verbose = 5,
+               output = '/dev/null',
+               a = ((L,0,0),(0,L,0),(0,0,L)),
+               mesh = [n,n,n],
+               atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
+                       ['He', (L/2.   ,L/2.,L/2.+.5)]],
+               basis = { 'He': [[0, (0.8, 1.0)],
+                                [0, (1.0, 1.0)],
+                                [0, (1.2, 1.0)]]})
 
-numpy.random.seed(4)
-kpts = numpy.random.random((1,3))
+    numpy.random.seed(4)
+    kpts = numpy.random.random((1,3))
 
 def tearDownModule():
     global cell

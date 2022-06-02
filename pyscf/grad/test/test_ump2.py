@@ -20,24 +20,26 @@ from pyscf import mp
 from pyscf import grad
 from pyscf.grad import ump2 as ump2_grad
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-mf = scf.UHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
 def tearDownModule():
-    global mol
+    global mol, mf
     mol.stdout.close()
-    del mol
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):

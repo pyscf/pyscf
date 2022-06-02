@@ -40,7 +40,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if _is_dft_object(mf):
+    if isinstance(mf, hf.KohnShamDFT):
         from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
@@ -153,7 +153,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if _is_dft_object(mf):
+    if isinstance(mf, hf.KohnShamDFT):
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -226,7 +226,7 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if _is_dft_object(mf):
+    if isinstance(mf, hf.KohnShamDFT):
         raise NotImplementedError
 
     elif with_j:
@@ -249,7 +249,7 @@ def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
-    if _is_dft_object(mf):
+    if isinstance(mf, hf.KohnShamDFT):
         raise NotImplementedError
 
     elif with_j:
@@ -262,10 +262,6 @@ def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None,
             return -mf.get_k(mol, dm1, hermi=hermi)
 
     return vind
-
-
-def _is_dft_object(mf):
-    return getattr(mf, 'xc', None) is not None and hasattr(mf, '_numint')
 
 
 hf.RHF.gen_response = _gen_rhf_response
