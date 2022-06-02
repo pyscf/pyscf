@@ -175,6 +175,28 @@ class Integrator:
         self.__dict__.update(kwargs)
 
     def kernel(self, veloc=None, steps=None, dump_flags=True, verbose=None):
+        '''Runs the molecular dynamics simulation.
+
+        Args:
+            veloc : ndarray
+                Initial velocity for the simulation. Values should be given
+                in atomic units (Bohr/a.u.). Dimensions should be (natm, 3) such as
+                [[x1, y1, z1],
+                 [x2, y2, z2],
+                 [x3, y3, z3]]
+
+            steps : int
+                Number of steps to take when the kernel or run function is called.
+
+            dump_flags : bool
+                Print flags to output.
+
+            verbose : int
+                Print level
+
+        Returns:
+            Integrator with final epot, ekin, mol, and veloc of the simulation.
+        '''
 
         if veloc is not None: self.veloc = veloc
         if steps is not None: self.steps = steps
@@ -231,9 +253,15 @@ class Integrator:
         for i, (e, v) in enumerate(zip(self.mol.elements, self.veloc)):
             log.info('%d %s    %.8E  %.8E  %.8E', i, e, *v)
 
-    # TODO implement sanity check
     def check_sanity(self):
-        pass
+        assert self.time >= 0
+        assert self.dt > 0
+        assert self.steps > 0
+        assert self.veloc is not None
+        assert self.veloc.shape == (self.mol.natm, 3)
+        assert self.method is not None
+
+        return self
 
     def compute_kinetic_energy(self):
         '''Compute the kinetic energy of the current frame.'''
@@ -293,13 +321,37 @@ class Integrator:
         self.trajectory_output.write(self.mol.tostring(format='raw') + '\n')
 
 
-class VelocityVerlot(Integrator):
+class VelocityVerlet(Integrator):
+    '''Velocity Verlet algorithm
 
+    Args:
+        method : lib.GradScanner or rhf.GradientsMixin instance, or has nuc_grad_method method.
+            Method by which to compute the energy gradients and energies
+            in order to propogate the equations of motion. Realistically,
+            it can be any callable object such that it returns the energy
+            and potential energy gradient when given a mol.
+
+    Attributes:
+        accel : ndarray
+            Current acceleration for the simulation. Values are given
+            in atomic units (Bohr/a.u.^2). Dimensions is (natm, 3) such as
+            [[x1, y1, z1],
+             [x2, y2, z2],
+             [x3, y3, z3]]
+    '''
     def __init__(self, method, **kwargs):
         super().__init__(method, **kwargs)
         self.accel = None
 
     def _next(self):
+        '''Computes the next frame of the simulation and sets all internal variables to
+        this new frame. First computes the new geometry, then the next acceleration, and
+        finally the velocity, all according to the Velocity Verlet algorithm.
+
+        Returns:
+            The next frame of the simulation.
+        '''
+
         # If no acceleration, compute that first, and then go onto the next step
         if self.accel is None:
             next_epot, next_accel = self._compute_accel()
@@ -325,6 +377,7 @@ class VelocityVerlot(Integrator):
         a = []
         for m, g in zip(self.mol.atom_charges(), grad):
             m = data.elements.COMMON_ISOTOPE_MASSES[m]
+            # a = - \nabla U / m
             a.append(-1 * g / m / data.nist.AMU2AU)
 
         return e_tot, np.array(a)
@@ -336,7 +389,10 @@ class VelocityVerlot(Integrator):
         return v + self.dt * 0.5 * (a2 + a1)
 
     def _next_geometry(self):
-        '''Computes the next geometry using the Velocity Verlet algorithm.'''
+        '''Computes the next geometry using the Velocity Verlet algorithm. The
+        necessary equations of motion for the position is
+            r(t_i+1) = r(t_i) + \delta t * v(t_i) + 0.5(\delta t)^2 a(t_i)
+        '''
         new_coords = []
         for r, v, a in zip(self.mol.atom_coords(), self.veloc, self.accel):
             new_coords.append(self._next_atom_position(r, v, a))
@@ -344,12 +400,12 @@ class VelocityVerlot(Integrator):
         return np.array(new_coords)
 
     def _next_velocity(self, next_accel):
-        '''Compute the next velocity using the Velocity Verlet algorithm'''
+        '''Compute the next velocity using the Velocity Verlet algorithm. The
+        necessary equations of motion for the velocity is
+            v(t_i+1) = v(t_i) + 0.5(a(t_i+1) + a(t_i))'''
         new_veloc = []
         for v, a2, a1 in zip(self.veloc, next_accel, self.accel):
             new_veloc.append(self._next_atom_velocity(v, a2, a1))
 
         return np.array(new_veloc)
 
-
-NVE = VelocityVerlot

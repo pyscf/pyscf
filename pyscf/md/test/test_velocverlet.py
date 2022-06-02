@@ -16,13 +16,13 @@
 import unittest
 import numpy as np
 from pyscf import gto, scf
-import pyscf.md.integrator as integrator
+import pyscf.md as md
 
 CHECK_STABILITY = False
 
 h2o = gto.M(
     verbose=3,
-    # output='/dev/null',
+    output='/dev/null',
     atom=[
         ['O', 0, 0, 0],
         ['H', 0, -0.757, 0.587],
@@ -38,6 +38,7 @@ hf_scanner.max_cycle = 700
 
 ethylene = gto.M(
     verbose=3,
+    output='/dev/null',
     atom=''' C -0.0110224 -0.01183 -0.0271398
     C -0.000902273 0.0348566 1.34708
     H 1.07646 0.0030022 -0.456854
@@ -58,12 +59,14 @@ casscf_scanner.conv_tol_grad = 1e-6
 def tearDownModule():
     global h2o, hf_scanner, ethylene, hf, casscf_scanner
     h2o.stdout.close()
+    ethylene.stdout.close()
     hf_scanner.stdout.close()
+    casscf_scanner.stdout.close()
     del h2o, hf_scanner, ethylene, hf, casscf_scanner
 
 class KnownValues(unittest.TestCase):
     def test_hf_water_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(hf_scanner, dt=10, steps=10)
+        driver = md.NVE(hf_scanner, dt=10, steps=10)
 
         driver.kernel()
         self.assertAlmostEqual(driver.ekin, 0.000349066856492198, 12)
@@ -88,7 +91,7 @@ class KnownValues(unittest.TestCase):
             [-0.001133,  -0.000182,   0.000047]])
 
 
-        driver = integrator.VelocityVerlot(hf_scanner,
+        driver = md.NVE(hf_scanner,
                                            mol=h2o,
                                            veloc=init_veloc,
                                            dt=5, steps=10)
@@ -111,7 +114,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(driver.ekin+driver.epot, beginning_energy, 4)
 
     def test_ss_s0_ethylene_zero_init_veloc(self):
-        driver = integrator.VelocityVerlot(casscf_scanner, dt=5, steps=10)
+        driver = md.NVE(casscf_scanner, dt=5, steps=10)
 
         driver.kernel()
 
