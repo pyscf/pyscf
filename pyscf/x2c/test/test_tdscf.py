@@ -81,8 +81,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.1825211067032253, 5)
 
     def test_ab_hf(self):
-        mf = x2c.UHF(mol).run(conv_tol=1e-14)
-        self._check_against_ab_ks(mf.TDHF(), -0.2404548371794495, 0.6508765417771681)
+        mf = x2c.UHF(mol).run(conv_tol=1e-12)
+        self._check_against_ab_ks(mf.TDHF(), -0.2404548371794495, 0.6508765417771681, 4)
 
     def test_col_lda_ab_ks(self):
         self._check_against_ab_ks(mf_lda.TDDFT(), -0.5231134770778959, 0.07879428138412828)
@@ -118,11 +118,11 @@ class KnownValues(unittest.TestCase):
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks(mcol_m06l.TDDFT(), -0.6984240332038076, 2.0192987108288794)
 
-    def _check_against_ab_ks(self, td, refa, refb):
+    def _check_against_ab_ks(self, td, refa, refb, places=6):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(abs(a)), refa, 6)
-        self.assertAlmostEqual(lib.fp(abs(b)), refb, 6)
+        self.assertAlmostEqual(lib.fp(abs(a)), refa, places)
+        self.assertAlmostEqual(lib.fp(abs(b)), refb, places)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 1)

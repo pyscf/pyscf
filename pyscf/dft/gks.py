@@ -158,6 +158,13 @@ class GKS(rks.KohnShamDFT, ghf.GHF):
     def collinear(self, val):
         self._numint.collinear = val
 
+    @property
+    def spin_samples(self):
+        return self._numint.spin_samples
+    @spin_samples.setter
+    def spin_samples(self, val):
+        self._numint.spin_samples = val
+
     def nuc_grad_method(self):
         raise NotImplementedError
 

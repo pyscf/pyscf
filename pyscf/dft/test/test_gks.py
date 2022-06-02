@@ -17,6 +17,7 @@ import unittest
 import numpy
 from pyscf import gto
 from pyscf import lib
+from pyscf.dft import numint, numint2c, libxc
 try:
     import mcfun
 except ImportError:
@@ -140,7 +141,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -74.87068739413125, 8)
+        self.assertAlmostEqual(eks4, -74.87069542226276, 8)
 
     def test_collinear_gks_mgga(self):
         mf = mol.GKS()
@@ -151,12 +152,12 @@ class KnownValues(unittest.TestCase):
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gks_mgga(self):
-        mf = mol.GKS()
+        mf = mol1.GKS()
         mf.xc = 'm06l'
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(eks4, -75.30536839893855, 8)
+        self.assertAlmostEqual(eks4, -74.94902210438143, 8)
 
     def test_ncol_x2c_uks_lda(self):
         mf = mol.GKS().x2c()
@@ -181,6 +182,88 @@ class KnownValues(unittest.TestCase):
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -75.26499704046972, 8)
 
+    @unittest.skipIf(mcfun is None, "mcfun library not found.")
+    def test_mcol_lda_vxc_mat(self):
+        nao = mol.nao
+        n2c = nao * 2
+        ao_loc = mol.ao_loc
+        numpy.random.seed(12)
+        dm = numpy.random.rand(n2c, n2c) * .001
+        dm += numpy.eye(n2c)
+        dm = dm + dm.T
+        ngrids = 8
+        coords = numpy.random.rand(ngrids,3)
+        weight = numpy.random.rand(ngrids)
+
+        ao = numint.eval_ao(mol, coords, deriv=0)
+        rho = numint2c.eval_rho(mol, ao, dm, xctype='LDA', hermi=1)
+        ni = numint2c.NumInt2C()
+        vxc = ni.eval_xc_eff('lda,', rho, deriv=1)[1]
+        mask = numpy.ones((100, mol.nbas), dtype=numpy.uint8)
+        shls_slice = (0, mol.nbas)
+        v0 = numint2c._ncol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
+        v1 = numint2c._ncol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
+        v1 = v1 + v1.conj().T
+        ref = v0
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(lib.fp(v0), 0.19683067215390423, 12)
+
+        ni.collinear = 'mcol'
+        eval_xc = ni.mcfun_eval_xc_adapter('lda,')
+        vxc = eval_xc('lda,', rho, deriv=1)[1]
+        mask = numpy.ones((100, mol.nbas), dtype=numpy.uint8)
+        shls_slice = (0, mol.nbas)
+        v0 = numint2c._mcol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
+        v1 = numint2c._mcol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
+        v1 = v1 + v1.conj().T
+        self.assertAlmostEqual(abs(v0 - ref).max(), 0, 3)
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+
+    def test_mcol_gga_vxc_mat(self):
+        nao = mol.nao
+        n2c = nao * 2
+        ao_loc = mol.ao_loc
+        numpy.random.seed(12)
+        dm = numpy.random.rand(n2c, n2c) * .01
+        dm += numpy.eye(n2c)
+        dm = dm + dm.T
+        ngrids = 8
+        coords = numpy.random.rand(ngrids,3)
+        weight = numpy.random.rand(ngrids)
+
+        ao = numint.eval_ao(mol, coords, deriv=1)
+        rho = numint2c.eval_rho(mol, ao, dm, xctype='GGA', hermi=1)
+        vxc = numpy.random.rand(4, 4, ngrids)
+        mask = numpy.ones((100, mol.nbas), dtype=numpy.uint8)
+        shls_slice = (0, mol.nbas)
+        v0 = numint2c._mcol_gga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
+        v1 = numint2c._mcol_gga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
+        v1 = v1 + v1.conj().T
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(lib.fp(v0), -0.889763561992794-0.013552640219244905j, 12)
+
+    def test_mcol_mgga_vxc_mat(self):
+        nao = mol.nao
+        n2c = nao * 2
+        ao_loc = mol.ao_loc
+        numpy.random.seed(12)
+        dm = numpy.random.rand(n2c, n2c) * .01
+        dm += numpy.eye(n2c)
+        dm = dm + dm.T
+        ngrids = 8
+        coords = numpy.random.rand(ngrids,3)
+        weight = numpy.random.rand(ngrids)
+
+        ao = numint.eval_ao(mol, coords, deriv=1)
+        rho = numint2c.eval_rho(mol, ao, dm, xctype='MGGA', hermi=1, with_lapl=False)
+        vxc = numpy.random.rand(4, 5, ngrids)
+        mask = numpy.ones((100, mol.nbas), dtype=numpy.uint8)
+        shls_slice = (0, mol.nbas)
+        v0 = numint2c._mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
+        v1 = numint2c._mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
+        v1 = v1 + v1.conj().T
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(lib.fp(v0), 0.45641500123185696-0.11533144122332428j, 12)
 
 if __name__ == "__main__":
     print("Test GKS")
