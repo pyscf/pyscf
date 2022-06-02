@@ -20,6 +20,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad.rhf import GradientsMixin
 
+
 class Frame:
     '''Basic class to hold information at each time step of a MD simulation
 
@@ -37,7 +38,13 @@ class Frame:
         time : float
             Time for which this frame represents
     '''
-    def __init__(self, ekin=None, epot=None, coord=None, veloc=None, time=None):
+
+    def __init__(self,
+                 ekin=None,
+                 epot=None,
+                 coord=None,
+                 veloc=None,
+                 time=None):
         self.ekin = ekin
         self.epot = epot
         self.etot = self.ekin + self.epot
@@ -45,12 +52,18 @@ class Frame:
         self.veloc = veloc
         self.time = time
 
+
 def _toframe(integrator):
     '''Convert an Integrator to a Frame given current saved data.
     Args:
         integrator : md.integrator.Integrator object
     '''
-    return Frame(ekin=integrator.ekin, epot=integrator.epot, coord=integrator.mol.atom_coords(), veloc=integrator.veloc, time=integrator.time)
+    return Frame(ekin=integrator.ekin,
+                 epot=integrator.epot,
+                 coord=integrator.mol.atom_coords(),
+                 veloc=integrator.veloc,
+                 time=integrator.time)
+
 
 def _write(dev, mol, vec, atmlst=None):
     '''Format output of molecular vector quantity.
@@ -58,14 +71,17 @@ def _write(dev, mol, vec, atmlst=None):
         dev : lib.logger.Logger object
         mol : gto.mol object
         vec : 2D array with shape (mol.natm, 3)
-        atmlst : array of indices to pull atoms from. Must be smaller than mol.natm.
+        atmlst : array of indices to pull atoms from.
+            Must be smaller than mol.natm.
     '''
     if atmlst is None:
         atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
     for k, ia in enumerate(atmlst):
-        dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
-                         (ia, mol.atom_symbol(ia), vec[k,0], vec[k,1], vec[k,2]))
+        dev.stdout.write(
+            '%d %s  %15.10f  %15.10f  %15.10f\n' %
+            (ia, mol.atom_symbol(ia), vec[k, 0], vec[k, 1], vec[k, 2]))
+
 
 def kernel(integrator, verbose=logger.NOTE):
     log = logger.new_logger(integrator, verbose)
@@ -77,10 +93,12 @@ def kernel(integrator, verbose=logger.NOTE):
     # Begin the iterations to run molecular dynamics
     t1 = t0
     for iteration, frame in enumerate(integrator):
-        log.note('----------- %s final geometry -----------', integrator.__class__.__name__)
+        log.note('----------- %s final geometry -----------',
+                 integrator.__class__.__name__)
         _write(integrator, integrator.mol, frame.coord)
         log.note('----------------------------------------------')
-        log.note('------------ %s final velocity -----------', integrator.__class__.__name__)
+        log.note('------------ %s final velocity -----------',
+                 integrator.__class__.__name__)
         _write(integrator, integrator.mol, frame.veloc)
         log.note('----------------------------------------------')
         log.note('Ekin = %17.13f', frame.ekin)
@@ -92,11 +110,13 @@ def kernel(integrator, verbose=logger.NOTE):
     t0 = log.timer('BOMD', *t0)
     return integrator
 
+
 class Integrator:
     '''Integrator base class
 
     Args:
-        method : lib.GradScanner or rhf.GradientsMixin instance, or has nuc_grad_method method.
+        method : lib.GradScanner, rhf.GradientsMixin instance, or
+        has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
             in order to propogate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
@@ -156,7 +176,8 @@ class Integrator:
         elif getattr(method, 'nuc_grad_method', None):
             self.scanner = method.nuc_grad_method().as_scanner()
         else:
-            raise NotImplemented('Nuclear gradients of %s not available' % method)
+            raise NotImplementedError('Nuclear gradients of %s not available' %
+                                      method)
 
         self.mol = self.scanner.mol
         self.stdout = self.mol.stdout
@@ -180,13 +201,15 @@ class Integrator:
         Args:
             veloc : ndarray
                 Initial velocity for the simulation. Values should be given
-                in atomic units (Bohr/a.u.). Dimensions should be (natm, 3) such as
+                in atomic units (Bohr/a.u.). Dimensions should be (natm, 3)
+                such as
                 [[x1, y1, z1],
                  [x2, y2, z2],
                  [x3, y3, z3]]
 
             steps : int
-                Number of steps to take when the kernel or run function is called.
+                Number of steps to take when the kernel or run function
+                is called.
 
             dump_flags : bool
                 Print flags to output.
@@ -198,9 +221,14 @@ class Integrator:
             Integrator with final epot, ekin, mol, and veloc of the simulation.
         '''
 
-        if veloc is not None: self.veloc = veloc
-        if steps is not None: self.steps = steps
-        if verbose is None: verbose = self.verbose
+        if veloc is not None:
+            self.veloc = veloc
+
+        if steps is not None:
+            self.steps = steps
+
+        if verbose is None:
+            verbose = self.verbose
 
         # Default velocities are 0 if none specified
         if self.veloc is None:
@@ -210,7 +238,8 @@ class Integrator:
         if type(self.energy_output) is str:
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.energy_output):
-                    print('overwrite energy output file: %s' % self.energy_output)
+                    print('overwrite energy output file: %s' %
+                          self.energy_output)
                 else:
                     print('energy output file: %s' % self.energy_output)
 
@@ -219,15 +248,20 @@ class Integrator:
 
             else:
                 self.energy_output = open(self.energy_output, 'w')
-                self.energy_output.write('   time          Epot                 Ekin                 Etot\n')
+                self.energy_output.write(
+                    'time          Epot                 Ekin                 '
+                    'Etot\n '
+                )
 
         # avoid opening trajectory_output file twice
         if type(self.trajectory_output) is str:
             if self.verbose > logger.QUIET:
                 if os.path.isfile(self.trajectory_output):
-                    print('overwrite energy output file: %s' % self.trajectory_output)
+                    print('overwrite energy output file: %s' %
+                          self.trajectory_output)
                 else:
-                    print('trajectory output file: %s' % self.trajectory_output)
+                    print('trajectory output file: %s' %
+                          self.trajectory_output)
 
             if self.trajectory_output == '/dev/null':
                 self.trajectory_output = open(os.devnull, 'w')
@@ -268,7 +302,7 @@ class Integrator:
         energy = 0
         for v, m in zip(self.veloc, self.mol.atom_charges()):
             m = data.elements.COMMON_ISOTOPE_MASSES[m]
-            energy += 0.5 * m * data.nist.AMU2AU * np.linalg.norm(v) ** 2
+            energy += 0.5 * m * data.nist.AMU2AU * np.linalg.norm(v)**2
 
         return energy
 
@@ -302,22 +336,27 @@ class Integrator:
             raise StopIteration
 
     def _next(self):
-        '''Determines the next step in the molecular dynamics simulation. Integrates to
-        the next time step. Must be implemented in derived classes.
+        '''Determines the next step in the molecular dynamics simulation.
+        Integrates to the next time step. Must be implemented in derived
+        classes.
 
-        Returns:
-            'Frame' which contains the new geometry, velocity, time step, and energy.
+        Returns: 'Frame' which contains the new geometry, velocity,
+        time step, and energy.
         '''
         raise NotImplementedError('Method Not Implemented')
 
     def _write_energy(self):
-        '''Writes out the potential, kinetic, and total energy to the self.energy_output stream.'''
-        self.energy_output.write('%8.2f  %.12E  %.12E  %.12E\n' % (
-            self.time, self.epot, self.ekin, self.ekin+self.epot))
+        '''Writes out the potential, kinetic, and total energy to the
+        self.energy_output stream. '''
+        self.energy_output.write(
+            '%8.2f  %.12E  %.12E  %.12E\n' %
+            (self.time, self.epot, self.ekin, self.ekin + self.epot))
 
     def _write_coord(self):
-        '''Writes out the current geometry to the self.trajectroy_output stream in xyz format.'''
-        self.trajectory_output.write('%s\nMD Time %s\n' % (self.mol.natm, self.time))
+        '''Writes out the current geometry to the self.trajectroy_output
+        stream in xyz format. '''
+        self.trajectory_output.write('%s\nMD Time %s\n' %
+                                     (self.mol.natm, self.time))
         self.trajectory_output.write(self.mol.tostring(format='raw') + '\n')
 
 
@@ -325,7 +364,8 @@ class VelocityVerlet(Integrator):
     '''Velocity Verlet algorithm
 
     Args:
-        method : lib.GradScanner or rhf.GradientsMixin instance, or has nuc_grad_method method.
+        method : lib.GradScanner or rhf.GradientsMixin instance, or
+        has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
             in order to propogate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
@@ -339,20 +379,23 @@ class VelocityVerlet(Integrator):
              [x2, y2, z2],
              [x3, y3, z3]]
     '''
+
     def __init__(self, method, **kwargs):
         super().__init__(method, **kwargs)
         self.accel = None
 
     def _next(self):
-        '''Computes the next frame of the simulation and sets all internal variables to
-        this new frame. First computes the new geometry, then the next acceleration, and
-        finally the velocity, all according to the Velocity Verlet algorithm.
+        '''Computes the next frame of the simulation and sets all internal
+         variables to this new frame. First computes the new geometry,
+         then the next acceleration, and finally the velocity, all according
+         to the Velocity Verlet algorithm.
 
         Returns:
             The next frame of the simulation.
         '''
 
-        # If no acceleration, compute that first, and then go onto the next step
+        # If no acceleration, compute that first, and then go
+        # onto the next step
         if self.accel is None:
             next_epot, next_accel = self._compute_accel()
 
@@ -369,7 +412,8 @@ class VelocityVerlet(Integrator):
         return _toframe(self)
 
     def _compute_accel(self):
-        '''Given the current geometry, computes the acceleration for each atom.'''
+        '''Given the current geometry, computes the acceleration
+        for each atom.'''
         e_tot, grad = self.scanner(self.mol)
         if not self.scanner.converged:
             raise RuntimeError('Gradients did not converge!')
@@ -383,7 +427,7 @@ class VelocityVerlet(Integrator):
         return e_tot, np.array(a)
 
     def _next_atom_position(self, r, v, a):
-        return r + self.dt * v + 0.5 * (self.dt ** 2) * a
+        return r + self.dt * v + 0.5 * (self.dt**2) * a
 
     def _next_atom_velocity(self, v, a2, a1):
         return v + self.dt * 0.5 * (a2 + a1)
@@ -391,7 +435,7 @@ class VelocityVerlet(Integrator):
     def _next_geometry(self):
         '''Computes the next geometry using the Velocity Verlet algorithm. The
         necessary equations of motion for the position is
-            r(t_i+1) = r(t_i) + \delta t * v(t_i) + 0.5(\delta t)^2 a(t_i)
+            r(t_i+1) = r(t_i) + /delta t * v(t_i) + 0.5(/delta t)^2 a(t_i)
         '''
         new_coords = []
         for r, v, a in zip(self.mol.atom_coords(), self.veloc, self.accel):
@@ -408,4 +452,3 @@ class VelocityVerlet(Integrator):
             new_veloc.append(self._next_atom_velocity(v, a2, a1))
 
         return np.array(new_veloc)
-
