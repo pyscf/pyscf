@@ -238,8 +238,8 @@ def _ncol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
         # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = tmpx + tmpy * 1j
-        matab = matba.conj().T
+        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
         matba = tmpx + tmpy * 1j
@@ -362,8 +362,8 @@ def _mcol_lda_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     tmpy = _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     if hermi:
         # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = tmpx + tmpy * 1j
-        matab = matba.conj().T
+        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
         matba = tmpx + tmpy * 1j
@@ -395,8 +395,8 @@ def _mcol_gga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, hermi
     if hermi:
         assert vxc.dtype == np.double
         # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = tmpx + tmpy * 1j
-        matab = matba.conj().T
+        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
         aow = _scale_ao(ao[1:4], wmx[1:4].conj(), out=aow)  # Mx
@@ -440,8 +440,8 @@ def _mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc, mask, shls_slice, ao_loc, herm
     if hermi:
         assert vxc.dtype == np.double
         # conj(mx+my*1j) == mx-my*1j, tmpx and tmpy should be real
-        matba = tmpx + tmpy * 1j
-        matab = matba.conj().T
+        matba = (tmpx + tmpx.T) + (tmpy + tmpy.T) * 1j
+        matab = np.zeros_like(matba)
     else:
         # conj(mx+my*1j) != mx-my*1j, tmpx and tmpy should be complex
         aow = _scale_ao(ao[1:4], wmx[1:4].conj(), out=aow)  # Mx
