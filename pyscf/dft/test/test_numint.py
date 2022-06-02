@@ -76,22 +76,6 @@ def tearDownModule():
     h2o.stdout.close()
     del mol, mf, h4, mf_h4, mol1, h2o
 
-def get_test_rho(ngrids, ao, dm):
-    rho0 = numpy.zeros((6,ngrids))
-    rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())
-    rho0[1] = numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[1].conj())
-    rho0[2] = numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[2].conj())
-    rho0[3] = numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[3].conj())
-    rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[4].conj()) + numpy.einsum('pi,ij,pj->p', ao[4], dm, ao[0].conj())
-    rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[7].conj()) + numpy.einsum('pi,ij,pj->p', ao[7], dm, ao[0].conj())
-    rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[9].conj()) + numpy.einsum('pi,ij,pj->p', ao[9], dm, ao[0].conj())
-    rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[1].conj())
-    rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[2].conj())
-    rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[3].conj())
-    rho0[4]+= rho0[5]*2
-    rho0[5] *= .5
-    return rho0
-
 class KnownValues(unittest.TestCase):
     def test_make_mask(self):
         non0 = dft.numint.make_mask(mol, mf.grids.coords)
@@ -105,6 +89,13 @@ class KnownValues(unittest.TestCase):
         nao = ao.shape[1]
         v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
         v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+        dm = mf_he2.get_init_guess(key='minao')
+        ao_loc = he2.ao_loc_nr()
+        ao = mf_he2._numint.eval_ao(he2, mf_he2.grids.coords).copy()
+        v1 = dft.numint._dot_ao_dm(he2, ao, dm, mf_he2.grids.non0tab, (0,he2.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(he2, ao, dm, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_dot_ao_dm_high_cost(self):
@@ -159,33 +150,27 @@ class KnownValues(unittest.TestCase):
         mo_occ = numpy.ones(nao)
         mo_occ[-2:] = -1
         dm = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
-        rho0 = get_test_rho(ngrids, ao, dm)
+        
+        rho0 = numpy.zeros((6,ngrids))
+        rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())
+        rho0[1] = numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[1].conj())
+        rho0[2] = numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[2].conj())
+        rho0[3] = numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[3].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[4].conj()) + numpy.einsum('pi,ij,pj->p', ao[4], dm, ao[0].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[7].conj()) + numpy.einsum('pi,ij,pj->p', ao[7], dm, ao[0].conj())
+        rho0[4]+= numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[9].conj()) + numpy.einsum('pi,ij,pj->p', ao[9], dm, ao[0].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[1].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[2], dm, ao[2].conj())
+        rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[3].conj())
+        rho0[4]+= rho0[5]*2
+        rho0[5] *= .5
+        return rho0
 
         ni = dft.numint.NumInt()
         rho1 = ni.eval_rho (mol, ao, dm, xctype='MGGA')
         rho2 = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, xctype='MGGA')
         self.assertTrue(numpy.allclose(rho0, rho1))
         self.assertTrue(numpy.allclose(rho0, rho2))
-
-        ngrids = mf_he2.grids.weights.size
-        coords = mf_he2.grids.coords
-        nao_he2 = he2.nao_nr()
-        dm = numpy.random.random((nao_he2,nao_he2))
-        dm = dm + dm.T
-        ao = dft.numint.eval_ao(he2, coords, deriv=2)
-
-        e, mo_coeff = numpy.linalg.eigh(dm)
-        mo_occ = numpy.ones(nao_he2)
-        mo_occ[-2:] = -1
-        dm = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
-        rho0 = get_test_rho(ngrids, ao, dm)
-
-        ni = dft.numint.NumInt()
-        rho1 = ni.eval_rho (he2, ao, dm, xctype='MGGA')
-        rho2 = ni.eval_rho2(he2, ao, mo_coeff, mo_occ, xctype='MGGA')
-        self.assertTrue(numpy.allclose(rho0, rho1))
-        self.assertTrue(numpy.allclose(rho0, rho2))
-        
 
     def test_eval_mat(self):
         numpy.random.seed(10)
