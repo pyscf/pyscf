@@ -112,9 +112,11 @@ def gen_hop_uhf_external(mf):
         return h2.dot(x)
     return hop1, hop2
 
-mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
-            spin=2, verbose=5, output='/dev/null')
-mf = scf.ROHF(mol).run(conv_tol=1e-12)
+def setUpModule():
+    global mol, mf
+    mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
+                spin=2, verbose=5, output='/dev/null')
+    mf = scf.ROHF(mol).run(conv_tol=1e-12)
 
 def tearDownModule():
     global mol, mf

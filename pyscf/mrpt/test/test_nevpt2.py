@@ -23,36 +23,6 @@ from pyscf import mcscf
 from pyscf import fci
 from pyscf.mrpt import nevpt2
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null' #None
-mol.atom = [
-    ['H', ( 0., 0.    , 0.    )],
-    ['H', ( 0., 0.    , 0.8   )],
-    ['H', ( 0., 0.    , 2.    )],
-    ['H', ( 0., 0.    , 2.8   )],
-    ['H', ( 0., 0.    , 4.    )],
-    ['H', ( 0., 0.    , 4.8   )],
-    ['H', ( 0., 0.    , 6.    )],
-    ['H', ( 0., 0.    , 6.8   )],
-    ['H', ( 0., 0.    , 8.    )],
-    ['H', ( 0., 0.    , 8.8   )],
-    ['H', ( 0., 0.    , 10.    )],
-    ['H', ( 0., 0.    , 10.8   )],
-    ['H', ( 0., 0.    , 12     )],
-    ['H', ( 0., 0.    , 12.8   )],
-]
-mol.basis = 'sto3g'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-16
-mf.kernel()
-norb = 6
-nelec = 8
-mc = mcscf.CASCI(mf, norb, nelec)
-mc.fcisolver.conv_tol = 1e-15
-mc.kernel()
-mc.canonicalize_()
 
 def nevpt2_dms(mc):
     mo_cas = mf.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
@@ -67,7 +37,40 @@ def nevpt2_dms(mc):
     eris = nevpt2._ERIS(mc, mc.mo_coeff, method='outcore')
     dms = {'1': dm1, '2': dm2, '3': dm3, '4': dm4}
     return eris, dms
-eris, dms = nevpt2_dms(mc)
+
+def setUpModule():
+    global mol, mf, mc, eris, dms, norb, nelec
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null' #None
+    mol.atom = [
+        ['H', ( 0., 0.    , 0.    )],
+        ['H', ( 0., 0.    , 0.8   )],
+        ['H', ( 0., 0.    , 2.    )],
+        ['H', ( 0., 0.    , 2.8   )],
+        ['H', ( 0., 0.    , 4.    )],
+        ['H', ( 0., 0.    , 4.8   )],
+        ['H', ( 0., 0.    , 6.    )],
+        ['H', ( 0., 0.    , 6.8   )],
+        ['H', ( 0., 0.    , 8.    )],
+        ['H', ( 0., 0.    , 8.8   )],
+        ['H', ( 0., 0.    , 10.    )],
+        ['H', ( 0., 0.    , 10.8   )],
+        ['H', ( 0., 0.    , 12     )],
+        ['H', ( 0., 0.    , 12.8   )],
+    ]
+    mol.basis = 'sto3g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-16
+    mf.kernel()
+    norb = 6
+    nelec = 8
+    mc = mcscf.CASCI(mf, norb, nelec)
+    mc.fcisolver.conv_tol = 1e-15
+    mc.kernel()
+    mc.canonicalize_()
+    eris, dms = nevpt2_dms(mc)
 
 def tearDownModule():
     global mol, mf, mc, eris, dms

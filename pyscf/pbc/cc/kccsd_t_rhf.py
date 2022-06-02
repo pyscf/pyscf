@@ -89,7 +89,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
-    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
+    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)],
+                           dtype=np.double, order='C')
     fov = eris.fock[:, :nocc, nocc:]
 
     mo_e = mo_energy
@@ -469,7 +470,7 @@ def _convert_to_int(kpt_indices):
     '''Convert all kpoint indices for 3-particle operator to integers.'''
     out_indices = [0]*6
     for ix, x in enumerate(kpt_indices):
-        assert isinstance(x, (int, np.int, np.ndarray, list))
+        assert isinstance(x, (int, np.integer, np.ndarray, list))
         if isinstance(x, (np.ndarray)) and (x.ndim == 0):
             out_indices[ix] = int(x)
         else:
@@ -490,7 +491,7 @@ def _tile_list(kpt_indices):
         return kpt_indices
     else:
         for ix, x in enumerate(kpt_indices):
-            if isinstance(x, (int, np.int)):
+            if isinstance(x, (int, np.integer)):
                 out_indices[ix] = [x] * max_length
             else:
                 out_indices[ix] = x
@@ -508,8 +509,8 @@ def zip_kpoints(kpt_indices):
 
 def get_data_slices(kpt_indices, orb_indices, kconserv):
     kpt_indices = zip_kpoints(kpt_indices)
-    if isinstance(kpt_indices[0], (int, np.int)):  # Ensure we are working
-        kpt_indices = [kpt_indices]                # with a list of lists
+    if isinstance(kpt_indices[0], (int, np.integer)):  # Ensure we are working
+        kpt_indices = [kpt_indices]                    # with a list of lists
 
     a0,a1,b0,b1,c0,c1 = orb_indices
     length = len(kpt_indices)*6

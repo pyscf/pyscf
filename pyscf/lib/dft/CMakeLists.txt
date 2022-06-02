@@ -19,28 +19,22 @@ add_library(dft SHARED
 add_dependencies(dft cgto cvhf np_helper)
 
 set_target_properties(dft PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(dft cvhf cgto cint np_helper ${BLAS_LIBRARIES})
+target_link_libraries(dft cvhf cgto cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 
 
 if(ENABLE_LIBXC)
 add_library(xc_itrf SHARED libxc_itrf.c)
 set_target_properties(xc_itrf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
-target_link_libraries(xc_itrf xc)
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+target_link_libraries(xc_itrf xc ${OPENMP_C_PROPERTIES})
 endif()
 
 if(ENABLE_XCFUN)
 add_library(xcfun_itrf SHARED xcfun_itrf.c)
 set_target_properties(xcfun_itrf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
-target_link_libraries(xcfun_itrf xcfun)
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+target_link_libraries(xcfun_itrf xcfun ${OPENMP_C_PROPERTIES})
 endif()
 

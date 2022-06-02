@@ -27,24 +27,26 @@ from pyscf import cc
 from pyscf.cc import ccsd_lambda
 
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
-mycc = cc.ccsd.RCCSD(mf)
-mycc.conv_tol = 1e-10
-eris = mycc.ao2mo()
-mycc.kernel(eris=eris)
+    mycc = cc.ccsd.RCCSD(mf)
+    mycc.conv_tol = 1e-10
+    eris = mycc.ao2mo()
+    mycc.kernel(eris=eris)
 
 def tearDownModule():
     global mol, mf, mycc

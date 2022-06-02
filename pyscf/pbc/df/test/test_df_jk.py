@@ -24,27 +24,29 @@ from pyscf.pbc.df import df_jk
 #from mpi4pyscf.pbc.df import df_jk
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n, n, n])
+def setUpModule():
+    global cell, cell0, n
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n, n, n])
 
-cell.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.max_memory = 0
-cell.rcut = 28.3458918685
-cell.build()
+    cell.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.max_memory = 0
+    cell.rcut = 28.3458918685
+    cell.build()
 
-cell0 = pgto.Cell()
-cell0.a = numpy.eye(3) * L
-cell0.atom = '''C    3.    2.       3.
-                C    1.    1.       1.'''
-cell0.basis = 'sto-3g'
-cell0.verbose = 0
-cell0.build()
+    cell0 = pgto.Cell()
+    cell0.a = numpy.eye(3) * L
+    cell0.atom = '''C    3.    2.       3.
+                    C    1.    1.       1.'''
+    cell0.basis = 'sto-3g'
+    cell0.verbose = 0
+    cell0.build()
 
 def tearDownModule():
     global cell, cell0
@@ -156,7 +158,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ej0, 242.04151204237999, 8)
         self.assertAlmostEqual(ek0, 280.58443171612089, 8)
 
-    def test_j_kpts(self):
+    def test_j_kpts_high_cost(self):
         numpy.random.seed(1)
         nao = cell0.nao_nr()
         dm = numpy.random.random((4,nao,nao))
@@ -173,25 +175,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vj[2]), (7.241193241602369-0.002518439407055759j) , 9)
         self.assertAlmostEqual(lib.fp(vj[3]), (7.2403591406956185+0.001475803952777666j), 9)
 
-    def test_j_kpts_high_cost(self):
-        numpy.random.seed(1)
-        nao = cell.nao_nr()
-        dm = numpy.random.random((4,nao,nao))
-        dm = dm + dm.transpose(0,2,1)
-        mydf = df.DF(cell).set(auxbasis='weigend')
-        mydf.linear_dep_threshold = 1e-7
-        mydf.kpts = numpy.random.random((4,3))
-        mydf.mesh = [n, n, n]
-        mydf.auxbasis = 'weigend'
-        mydf.eta = 0.3
-        mydf.exp_to_discard = mydf.eta
-        vj = df_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vj[0]), (0.49176180692009197-0.11891083594538684j ), 9)
-        self.assertAlmostEqual(lib.fp(vj[1]), (0.54900852073326378-0.04600354345316908j ), 9)
-        self.assertAlmostEqual(lib.fp(vj[2]), (0.53648110926681891-0.083507522327029265j), 9)
-        self.assertAlmostEqual(lib.fp(vj[3]), (0.5489650266265671 +0.007695733246577244j), 9)
-
-    def test_k_kpts(self):
+    def test_k_kpts_high_cost(self):
         numpy.random.seed(1)
         nao = cell0.nao_nr()
         dm = numpy.random.random((4,nao,nao))
@@ -208,25 +192,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(vk[1]), (4.783208264204395-0.00585421470169705j) , 9)
         self.assertAlmostEqual(lib.fp(vk[2]), (4.823839360632854+0.002511545727704362j), 9)
         self.assertAlmostEqual(lib.fp(vk[3]), (4.833891390413435+0.0208696082684768j)  , 9)
-
-    def test_k_kpts_high_cost(self):
-        numpy.random.seed(1)
-        nao = cell.nao_nr()
-        dm = numpy.random.random((4,nao,nao))
-        dm = dm + dm.transpose(0,2,1)
-        mydf = df.DF(cell).set(auxbasis='weigend')
-        mydf.linear_dep_threshold = 1e-7
-        mydf.kpts = numpy.random.random((4,3))
-        mydf.mesh = [n, n, n]
-        mydf.exxdiv = None
-        mydf.eta = 0.3
-        mydf.exp_to_discard = mydf.eta
-        mydf.auxbasis = 'weigend'
-        vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk[0]), (-2.8332400193836929 -1.0578696472684668j  ), 9)
-        self.assertAlmostEqual(lib.fp(vk[1]), (-7.440432864374058  +0.10233777556396761j ), 9)
-        self.assertAlmostEqual(lib.fp(vk[2]), (-2.5718862399533897 -1.4487403259747005j  ), 9)
-        self.assertAlmostEqual(lib.fp(vk[3]), (-0.79223093737594863+0.011694427945090839j), 9)
 
     def test_k_kpts_1(self):
         cell = pgto.Cell()

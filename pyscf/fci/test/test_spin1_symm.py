@@ -23,29 +23,32 @@ from pyscf import fci
 import pyscf.symm
 from pyscf import mcscf
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = '''
-    O    0.  0.      0.
-    H    0.  -0.757  0.587
-    H    0.  0.757   0.587'''
-mol.basis = 'sto-3g'
-mol.symmetry = 1
-mol.build()
-m = scf.RHF(mol)
-m.conv_tol = 1e-15
-ehf = m.scf()
-norb = m.mo_coeff.shape[1]
-nelec = mol.nelectron
-h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
-g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
-orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
-cis = fci.direct_spin1_symm.FCISolver(mol)
-cis.orbsym = orbsym
+def setUpModule():
+    global mol, m, h1e, g2e, ci0, cis
+    global norb, nelec, orbsym
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = '''
+        O    0.  0.      0.
+        H    0.  -0.757  0.587
+        H    0.  0.757   0.587'''
+    mol.basis = 'sto-3g'
+    mol.symmetry = 1
+    mol.build()
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-15
+    ehf = m.scf()
+    norb = m.mo_coeff.shape[1]
+    nelec = mol.nelectron
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
+    g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    cis = fci.direct_spin1_symm.FCISolver(mol)
+    cis.orbsym = orbsym
 
-numpy.random.seed(15)
-na = fci.cistring.num_strings(norb, nelec//2)
-ci0 = numpy.random.random((na,na))
+    numpy.random.seed(15)
+    na = fci.cistring.num_strings(norb, nelec//2)
+    ci0 = numpy.random.random((na,na))
 
 def tearDownModule():
     global mol, m, h1e, g2e, ci0, cis

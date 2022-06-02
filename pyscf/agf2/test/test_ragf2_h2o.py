@@ -17,7 +17,9 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
+import h5py
 from pyscf import gto, scf, agf2, lib
 
 
@@ -27,6 +29,7 @@ class KnownValues(unittest.TestCase):
     def setUpClass(self):
         self.mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='cc-pvdz', verbose=0)
         self.mf = scf.RHF(self.mol)
+        self.mf.chkfile = tempfile.NamedTemporaryFile().name
         self.mf.conv_tol = 1e-12
         self.mf.run()
         self.gf2 = agf2.RAGF2(self.mf)
@@ -85,6 +88,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e_ea,     0.15581330758457984 , 6)
         self.assertAlmostEqual(v_ea,     0.9903734898112396  , 6)
         gf2.dump_chk()
+        with h5py.File(gf2.chkfile, 'r') as f:
+            self.assertEqual(
+                set(f['agf2'].keys()),
+                {'e_1b', 'e_2b', 'e_init', 'converged', 'mo_energy', 'mo_coeff',
+                 'mo_occ', '_nmo', '_nocc', 'se', 'gf'})
+
         gf2 = agf2.RAGF2(self.mf)
         gf2.__dict__.update(agf2.chkfile.load(gf2.chkfile, 'agf2'))
         e_ip, v_ip = self.gf2.ipagf2(nroots=1)
@@ -162,7 +171,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(v_ip,     0.9726061540589924 , 6)
         self.assertAlmostEqual(e_ea,     0.15201672352177295, 6)
         self.assertAlmostEqual(v_ea,     0.988560730917133  , 6)
-
 
 if __name__ == '__main__':
     print('RAGF2 calculations for H2O')

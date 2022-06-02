@@ -1198,10 +1198,10 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
         double complex *csy = csx + nx;
         double complex *csz = csy + ny;
         int n;
-        char *empty = (char *)(csz + nz);
-        char *xempty = empty;
-        char *yempty = xempty + nx;
-        char *zempty = yempty + ny;
+        int8_t *empty = (int8_t *)(csz + nz);
+        int8_t *xempty = empty;
+        int8_t *yempty = xempty + nx;
+        int8_t *zempty = yempty + ny;
         for (n = 0; n < nx+ny+nz; n++) {
                 empty[n] = 1;
         }

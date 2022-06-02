@@ -6,17 +6,19 @@ from pyscf import lib, gto, scf, dft
 from pyscf.gw import ugw_ac
 from pyscf.gw import urpa
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = 'O'
-mol.basis = 'aug-cc-pvdz'
-mol.spin = 2
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = 'O'
+    mol.basis = 'aug-cc-pvdz'
+    mol.spin = 2
+    mol.build()
 
-mf = dft.UKS(mol)
-mf.xc = 'pbe0'
-mf.kernel()
+    mf = dft.UKS(mol)
+    mf.xc = 'pbe0'
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf

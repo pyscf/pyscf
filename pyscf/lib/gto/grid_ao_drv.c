@@ -146,7 +146,7 @@ static void _zset0(double complex *out, size_t odim, size_t bgrids, int counts)
 void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                       size_t nao, size_t ngrids, size_t bgrids,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
-                      double *ao, double *coord, char *non0table,
+                      double *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ncomp = param[TENSOR];
@@ -210,7 +210,7 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
 void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                        size_t nao, size_t ngrids, size_t bgrids,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
-                       double *ao, double *coord, char *non0table,
+                       double *ao, double *coord, uint8_t *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ncomp = param[TENSOR];
@@ -255,7 +255,7 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
 void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fac,
                          size_t nao, size_t ngrids, size_t bgrids,
                          int param[], int *shls_slice, int *ao_loc, double *buf,
-                         double complex *ao, double *coord, char *non0table,
+                         double complex *ao, double *coord, uint8_t *non0table,
                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ncomp_e1 = param[POS_E1];
@@ -338,7 +338,7 @@ int GTOshloc_by_atom(int *shloc, int *shls_slice, int *ao_loc, int *atm, int *ba
  */
 void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
                   int ngrids, int param[], int *shls_slice, int *ao_loc,
-                  double *ao, double *coord, char *non0table,
+                  double *ao, double *coord, uint8_t *non0table,
                   int *atm, int natm, int *bas, int nbas, double *env)
 {
         int shloc[shls_slice[1]-shls_slice[0]+1];
@@ -374,7 +374,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
 
 void GTOeval_sph_drv(FPtr_eval feval, FPtr_exp fexp, double fac, int ngrids,
                      int param[], int *shls_slice, int *ao_loc,
-                     double *ao, double *coord, char *non0table,
+                     double *ao, double *coord, uint8_t *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         GTOeval_loop(GTOeval_sph_iter, feval, fexp, fac, ngrids,
@@ -384,7 +384,7 @@ void GTOeval_sph_drv(FPtr_eval feval, FPtr_exp fexp, double fac, int ngrids,
 
 void GTOeval_cart_drv(FPtr_eval feval, FPtr_exp fexp, double fac, int ngrids,
                       int param[], int *shls_slice, int *ao_loc,
-                      double *ao, double *coord, char *non0table,
+                      double *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         GTOeval_loop(GTOeval_cart_iter, feval, fexp, fac, ngrids,
@@ -394,7 +394,7 @@ void GTOeval_cart_drv(FPtr_eval feval, FPtr_exp fexp, double fac, int ngrids,
 
 void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fac,
                         int ngrids, int param[], int *shls_slice, int *ao_loc,
-                        double complex *ao, double *coord, char *non0table,
+                        double complex *ao, double *coord, uint8_t *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env)
 {
         int shloc[shls_slice[1]-shls_slice[0]+1];

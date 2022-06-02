@@ -25,14 +25,16 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import df
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = '6-31g',
-)
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = '6-31g',
+    )
 
 def tearDownModule():
     global mol

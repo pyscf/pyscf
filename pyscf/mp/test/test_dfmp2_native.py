@@ -24,25 +24,30 @@ from pyscf.mp.dfmp2_native import DFMP2, SCSMP2
 from pyscf.mp.dfmp2_native import solve_cphf_rhf, fock_response_rhf
 
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = '''
-C    0.000   0.000   1.266
-C    0.000   0.000  -1.266
-H    0.000   1.756   2.328
-H    0.000  -1.756   2.328
-H    0.000   1.756  -2.328
-H    0.000  -1.756  -2.328
-'''
-mol.unit = 'Bohr'
-mol.basis = 'def2-SVP'
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = '''
+    C    0.000   0.000   1.266
+    C    0.000   0.000  -1.266
+    H    0.000   1.756   2.328
+    H    0.000  -1.756   2.328
+    H    0.000   1.756  -2.328
+    H    0.000  -1.756  -2.328
+    '''
+    mol.unit = 'Bohr'
+    mol.basis = 'def2-SVP'
+    mol.build()
 
-mf = scf.RHF(mol)
-mf.conv_tol = 1.0e-12
-mf.kernel()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1.0e-12
+    mf.kernel()
 
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 def check_orth(obj, mol, mo_coeff, thresh=1.0e-12):
     sao = mol.intor_symmetric('int1e_ovlp')

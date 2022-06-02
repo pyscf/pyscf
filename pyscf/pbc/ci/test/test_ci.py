@@ -3,8 +3,10 @@ from pyscf.pbc import gto, scf, ci
 from pyscf.pbc.ci import KCIS
 import unittest
 
-cell = make_test_cell.test_cell_n3(mesh=[29] * 3)
-cell.build()
+def setUpModule():
+    global cell
+    cell = make_test_cell.test_cell_n3(mesh=[29] * 3)
+    cell.build()
 
 def tearDownModule():
     global cell
@@ -24,7 +26,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eci[0][1], 0.223920101177, 5)
         eci, v = myci.kernel(nroots=2, kptlist=[1])
         #FIXME: value changed around commit de99aaad3 or earliear
-        # self.assertAlmostEqual(eci[0][0], 0.291182202333, 5)
+        self.assertAlmostEqual(eci[0][0], 0.291182202333, 5)
         self.assertAlmostEqual(eci[0][0], 0.330573456724, 5)
         self.assertAlmostEqual(eci[0][1], 0.330573456724, 5)
 

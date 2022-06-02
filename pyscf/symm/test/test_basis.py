@@ -33,7 +33,7 @@ def get_so(atoms, basis, cart=False):
     for c in so:
         if c.size > 0:
             n += c.shape[1]
-    assert(n == mol.nao_nr())
+    assert n == mol.nao_nr()
     return n, so
 
 

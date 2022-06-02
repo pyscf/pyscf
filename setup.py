@@ -120,6 +120,18 @@ from distutils.command.build import build
 build.sub_commands = ([c for c in build.sub_commands if c[0] == 'build_ext'] +
                       [c for c in build.sub_commands if c[0] != 'build_ext'])
 
+# scipy bugs
+# https://github.com/scipy/scipy/issues/12533
+_scipy_version = 'scipy!=1.5.0,!=1.5.1'
+import sys
+if sys.platform == 'darwin':
+    # https://github.com/scipy/scipy/issues/15362
+    if sys.version_info < (3, 8):
+        _scipy_version = 'scipy<=1.1.0'
+    else:
+        # https://github.com/scipy/scipy/issues/16151
+        print('scipy>1.1.0 may crash with segmentation fault when calling scipy.linalg.eigh')
+
 setup(
     name=NAME,
     version=VERSION,
@@ -140,7 +152,7 @@ setup(
     ext_modules=[Extension('pyscf_lib_placeholder', [])],
     cmdclass={'build_ext': CMakeBuildExt},
     install_requires=['numpy>=1.13,!=1.16,!=1.17',
-                      'scipy!=1.5.0,!=1.5.1',
+                      'scipy<=1.1.0' if sys.platform == "darwin" else 'scipy!=1.5.0,!=1.5.1',
                       'h5py>=2.7'],
     extras_require=EXTRAS,
 )

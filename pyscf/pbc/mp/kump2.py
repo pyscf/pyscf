@@ -341,10 +341,10 @@ def get_frozen_mask(mp):
         mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
 
     Returns:
-        moidx (list of :obj:`ndarray` of `np.bool`): Boolean mask of orbitals to include.
+        moidx (list of :obj:`ndarray` of `bool`): Boolean mask of orbitals to include.
 
     '''
-    moidx = [[np.ones(x.size, dtype=np.bool) for x in mp.mo_occ[s]] for s in [0,1]]
+    moidx = [[np.ones(x.size, dtype=bool) for x in mp.mo_occ[s]] for s in [0,1]]
 
     if mp.frozen is None:
         pass

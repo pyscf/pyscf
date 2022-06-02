@@ -22,19 +22,26 @@ import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
 
 
-cell = pbcgto.Cell()
-cell.unit = 'B'
-L = 7
-cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
-cell.a = 7 * np.identity(3)
-cell.a[1,0] = 5.0
+def setUpModule():
+    global cell
+    cell = pbcgto.Cell()
+    cell.unit = 'B'
+    L = 7
+    cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
+    cell.a = 7 * np.identity(3)
+    cell.a[1,0] = 5.0
 
-cell.basis = 'gth-szv'
-cell.pseudo = 'gth-pade-q2'
-cell.mesh = [12]*3
-cell.verbose = 5
-cell.output = '/dev/null'
-cell.build()
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade-q2'
+    cell.mesh = [12]*3
+    cell.verbose = 5
+    cell.output = '/dev/null'
+    cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
 
 def build_h_cell():
     # Returns FCC H cell.
@@ -89,7 +96,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf, -1.0585001200928885, 9)
         self.assertAlmostEqual(emp, -7.9832274354253814e-06, 9)
 
-    def test_h4_fcc_k2_frozen(self):
+    def test_h4_fcc_k2_frozen_high_cost(self):
         '''Metallic hydrogen fcc lattice with frozen lowest lying occupied
         and highest lying virtual orbitals.  Checks versus a corresponding
         supercell calculation.

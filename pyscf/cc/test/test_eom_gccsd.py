@@ -25,18 +25,6 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf.cc import gccsd, eom_gccsd, gintermediates
 
-mol = gto.Mole()
-mol.atom = [
-[8 , (0. , 0.     , 0.)],
-[1 , (0. , -0.757 , 0.587)],
-[1 , (0. , 0.757  , 0.587)]]
-mol.basis = '6-31g'
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.build()
-mf = scf.RHF(mol).run()
-mycc = cc.GCCSD(mf).run()
-
 def make_mycc1():
     mol = gto.M()
     nocc, nvir = 8, 14
@@ -76,8 +64,22 @@ def make_mycc1():
     mycc1.t1 = t1
     mycc1.t2 = t2
     return mycc1, eris1
-mycc1, eris1 = make_mycc1()
-nocc, nvir = mycc1.t1.shape
+
+def setUpModule():
+    global mol, mf, mycc, eris1, mycc1, nocc, nvir
+    mol = gto.Mole()
+    mol.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '6-31g'
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol).run()
+    mycc = cc.GCCSD(mf).run()
+    mycc1, eris1 = make_mycc1()
+    nocc, nvir = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, mycc, eris1, mycc1

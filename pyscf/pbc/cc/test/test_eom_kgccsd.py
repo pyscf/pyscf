@@ -6,18 +6,20 @@ from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP_Ta, EOMEA_Ta
 from pyscf.cc import eom_gccsd
 import unittest
 
-cell = make_test_cell.test_cell_n3_diffuse()
-kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None)
-kmf.conv_tol = 1e-10
-kmf.conv_tol_grad = 1e-6
-kmf.scf()
+def setUpModule():
+    global cell, kmf, mycc, eris
+    cell = make_test_cell.test_cell_n3_diffuse()
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None)
+    kmf.conv_tol = 1e-10
+    kmf.conv_tol_grad = 1e-6
+    kmf.scf()
 
-mycc = cc.KGCCSD(kmf)
-mycc.conv_tol = 1e-7
-mycc.conv_tol_normt = 1e-7
-mycc.run()
-eris = mycc.ao2mo()
-eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc.nkpts)]
+    mycc = cc.KGCCSD(kmf)
+    mycc.conv_tol = 1e-7
+    mycc.conv_tol_normt = 1e-7
+    mycc.run()
+    eris = mycc.ao2mo()
+    eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc.nkpts)]
 
 def tearDownModule():
     global cell, kmf, mycc, eris
@@ -114,7 +116,7 @@ class KnownValues(unittest.TestCase):
         mycc_frozen.conv_tol = 1e-7
         mycc_frozen.conv_tol_normt = 1e-7
         eris = mycc_frozen.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc_frozen.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc_frozen.nkpts)]
         ecc2, t1, t2 = mycc_frozen.kernel(eris=eris)
         self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
 

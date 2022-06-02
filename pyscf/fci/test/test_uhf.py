@@ -22,51 +22,54 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import fci_slow
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None#"out_h2o"
-mol.atom = [
-    ['H', ( 1.,-1.    , 0.   )],
-    ['H', ( 0.,-1.    ,-1.   )],
-    ['H', ( 0.,-0.5   ,-0.   )],
-    ['H', ( 0.,-0.    ,-1.   )],
-    ['H', ( 1.,-0.5   , 0.   )],
-    ['H', ( 0., 1.    , 1.   )],
-]
+def setUpModule():
+    global mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3
+    global norb, nelecr, neleci
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None#"out_h2o"
+    mol.atom = [
+        ['H', ( 1.,-1.    , 0.   )],
+        ['H', ( 0.,-1.    ,-1.   )],
+        ['H', ( 0.,-0.5   ,-0.   )],
+        ['H', ( 0.,-0.    ,-1.   )],
+        ['H', ( 1.,-0.5   , 0.   )],
+        ['H', ( 0., 1.    , 1.   )],
+    ]
 
-mol.basis = {'H': 'sto-3g'}
-mol.charge = 1
-mol.spin = 1
-mol.build()
+    mol.basis = {'H': 'sto-3g'}
+    mol.charge = 1
+    mol.spin = 1
+    mol.build()
 
-m = scf.UHF(mol)
-m.conv_tol_grad = 1e-8
-ehf = m.scf()
+    m = scf.UHF(mol)
+    m.conv_tol_grad = 1e-8
+    ehf = m.scf()
 
-mo_a, mo_b = m.mo_coeff
-norb = mo_a.shape[1]
-nelecr = ((mol.nelectron+1)//2, (mol.nelectron+1)//2)
-h1er = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
-g2er = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
-h1es = (h1er, h1er)
-g2es = (g2er, g2er, g2er)
-na = fci.cistring.num_strings(norb, nelecr[0])
-nb = fci.cistring.num_strings(norb, nelecr[1])
-numpy.random.seed(15)
-ci0 = numpy.random.random((na,nb))
-ci1 = numpy.random.random((na,nb))
+    mo_a, mo_b = m.mo_coeff
+    norb = mo_a.shape[1]
+    nelecr = ((mol.nelectron+1)//2, (mol.nelectron+1)//2)
+    h1er = reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a))
+    g2er = ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False)
+    h1es = (h1er, h1er)
+    g2es = (g2er, g2er, g2er)
+    na = fci.cistring.num_strings(norb, nelecr[0])
+    nb = fci.cistring.num_strings(norb, nelecr[1])
+    numpy.random.seed(15)
+    ci0 = numpy.random.random((na,nb))
+    ci1 = numpy.random.random((na,nb))
 
-neleci = ((mol.nelectron+1)//2, (mol.nelectron-1)//2)
-na = fci.cistring.num_strings(norb, neleci[0])
-nb = fci.cistring.num_strings(norb, neleci[1])
-h1ei = (reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a)),
-        reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b)))
-g2ei = (ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False),
-        ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False),
-        ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False))
-numpy.random.seed(15)
-ci2 = numpy.random.random((na,nb))
-ci3 = numpy.random.random((na,nb))
+    neleci = ((mol.nelectron+1)//2, (mol.nelectron-1)//2)
+    na = fci.cistring.num_strings(norb, neleci[0])
+    nb = fci.cistring.num_strings(norb, neleci[1])
+    h1ei = (reduce(numpy.dot, (mo_a.T, m.get_hcore(), mo_a)),
+            reduce(numpy.dot, (mo_b.T, m.get_hcore(), mo_b)))
+    g2ei = (ao2mo.incore.general(m._eri, (mo_a,)*4, compact=False),
+            ao2mo.incore.general(m._eri, (mo_a,mo_a,mo_b,mo_b), compact=False),
+            ao2mo.incore.general(m._eri, (mo_b,)*4, compact=False))
+    numpy.random.seed(15)
+    ci2 = numpy.random.random((na,nb))
+    ci3 = numpy.random.random((na,nb))
 
 def tearDownModule():
     global mol, m, h1er, h1ei, h1es, g2er, g2ei, g2es, ci0, ci1, ci2, ci3

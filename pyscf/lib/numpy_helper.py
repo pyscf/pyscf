@@ -157,6 +157,7 @@ def _contract(subscripts, *tensors, **kwargs):
     idxBt = list(idxB)
     inner_shape = 1
     insert_B_loc = 0
+    shared_idxAB = sorted(list(shared_idxAB))
     for n in shared_idxAB:
         if rangeA[n] != rangeB[n]:
             err = ('ERROR: In index string %s, the range of index %s is '
@@ -378,7 +379,7 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         elif filltriu == SYMMETRIC:
             #:for ij,(i,j) in enumerate(zip(*idx)):
             #:    out[i,j] = out[j,i] = tril[ij]
-            idxy = numpy.empty((nd,nd), dtype=numpy.int)
+            idxy = numpy.empty((nd,nd), dtype=int)
             idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
             numpy.take(tril, idxy, axis=0, out=out)
         else:
