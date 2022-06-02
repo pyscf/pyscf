@@ -89,8 +89,8 @@ class KnownValues(unittest.TestCase):
         driver = md.NVE(hf_scanner, mol=h2o, veloc=init_veloc, dt=5, steps=10)
 
         driver.kernel()
-        self.assertAlmostEqual(driver.ekin, 0.0068732364518669445, 12)
-        self.assertAlmostEqual(driver.epot, -75.96078835576954, 12)
+        self.assertAlmostEqual(driver.ekin, 0.0068732364518669445, 8)
+        self.assertAlmostEqual(driver.epot, -75.96078835576954, 8)
 
         final_coord = np.array([[0.0151120306, 0.0017437807, 0.0201833153],
                                 [-0.0163089669, -1.4306397410, 1.1556586744],
@@ -110,8 +110,8 @@ class KnownValues(unittest.TestCase):
 
         driver.kernel()
 
-        self.assertAlmostEqual(driver.ekin, 0.003450595146607895, 12)
-        self.assertAlmostEqual(driver.epot, -78.05265768928882, 12)
+        self.assertAlmostEqual(driver.ekin, 0.0034505950738415096, 8)
+        self.assertAlmostEqual(driver.epot, -78.05265768927349, 8)
 
         final_coord = np.array([[-0.0189651264, -0.0220674580, -0.0495315337],
                                 [-0.0015076774, 0.0643680776, 2.5462148239],

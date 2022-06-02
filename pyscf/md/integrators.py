@@ -276,6 +276,8 @@ class Integrator:
 
         return kernel(self, verbose=log)
 
+    run = kernel
+
     def dump_input(self, verbose=None):
         log = logger.new_logger(self, verbose)
         log.info('')
@@ -293,7 +295,7 @@ class Integrator:
         assert self.steps > 0
         assert self.veloc is not None
         assert self.veloc.shape == (self.mol.natm, 3)
-        assert self.method is not None
+        assert self.scanner is not None
 
         return self
 
