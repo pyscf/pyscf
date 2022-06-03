@@ -5,6 +5,7 @@ A simple example to run an NVE BOMD simulation.
 '''
 
 import pyscf
+import pyscf.md
 
 mol = pyscf.M(
     atom = 'O 0 0 0; O 0 0 1.2',

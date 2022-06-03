@@ -13,6 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+Molecular Dynamics
+==================
+
+Simple usage::
+
+    >>> from pyscf import gto, dft
+    >>> import pyscf.md as md
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='def2-tzvp'))
+    >>> mf = dft.RKS(mol)
+    >>> mf.xc = 'pbe,pbe'
+    >>> integrator = md.NVE(mf, dt=5, time=10).run()
+'''
+
 from pyscf.md import integrators
 
 NVE = integrators.VelocityVerlet
+

@@ -5,6 +5,7 @@ Run an NVE BOMD simulation while supplying some initial velocity.
 '''
 
 import pyscf
+import pyscf.md
 
 mol = pyscf.M(
     atom='''O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587''',
