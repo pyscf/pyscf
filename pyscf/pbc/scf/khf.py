@@ -359,7 +359,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell (is it well defined)?
+    ''' Dipole moment in the cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
