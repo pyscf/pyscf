@@ -150,7 +150,7 @@ class KnownValues(unittest.TestCase):
         mo_occ = numpy.ones(nao)
         mo_occ[-2:] = -1
         dm = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
-        
+
         rho0 = numpy.zeros((6,ngrids))
         rho0[0] = numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[0].conj())
         rho0[1] = numpy.einsum('pi,ij,pj->p', ao[1], dm, ao[0].conj()) + numpy.einsum('pi,ij,pj->p', ao[0], dm, ao[1].conj())
@@ -164,7 +164,6 @@ class KnownValues(unittest.TestCase):
         rho0[5]+= numpy.einsum('pi,ij,pj->p', ao[3], dm, ao[3].conj())
         rho0[4]+= rho0[5]*2
         rho0[5] *= .5
-        return rho0
 
         ni = dft.numint.NumInt()
         rho1 = ni.eval_rho (mol, ao, dm, xctype='MGGA')
