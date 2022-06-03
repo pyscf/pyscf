@@ -130,7 +130,7 @@ class Integrator:
         veloc : ndarray
             Initial velocity for the simulation. Values should be given
             in atomic units (Bohr/a.u.). Dimensions should be (natm, 3) such as
-            
+
              [[x1, y1, z1],
              [x2, y2, z2],
              [x3, y3, z3]]
@@ -204,7 +204,7 @@ class Integrator:
                 Initial velocity for the simulation. Values should be given
                 in atomic units (Bohr/a.u.). Dimensions should be (natm, 3)
                 such as
-                
+
                 [[x1, y1, z1],
                  [x2, y2, z2],
                  [x3, y3, z3]]
@@ -379,7 +379,7 @@ class VelocityVerlet(Integrator):
         accel : ndarray
             Current acceleration for the simulation. Values are given
             in atomic units (Bohr/a.u.^2). Dimensions is (natm, 3) such as
-            
+
              [[x1, y1, z1],
              [x2, y2, z2],
              [x3, y3, z3]]
