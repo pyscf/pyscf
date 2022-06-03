@@ -19,10 +19,10 @@ myscanner = mycas.nuc_grad_method().as_scanner()
 
 # Generate the integrator
 # sets the time step to 5 a.u. and will run for 100 steps
-# or for 500 a.u.
+# or for 50 a.u.
 myintegrator = pyscf.md.NVE(myscanner,
                             dt=5,
-                            steps=100,
+                            steps=10,
                             energy_output="BOMD.md.energies",
                             trajectory_output="BOMD.md.xyz").run()
 
