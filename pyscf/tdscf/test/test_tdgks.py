@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
 
     def test_ab_hf(self):
         mf = scf.GHF(molsym).newton().run(conv_tol=1e-12)
-        self._check_against_ab_ks_complex(mf.TDHF(), -8.599510783920131, -1.3910535963345607, 3)
+        self._check_against_ab_ks_complex(mf.TDHF(), -4.4803646453030055, -1.5206818818244117, 5)
 
     def test_col_lda_ab_ks(self):
         self._check_against_ab_ks_real(tdscf.gks.TDDFT(mf_lda), -0.5233726312108345, 0.07876886521779444)
@@ -131,11 +131,11 @@ class KnownValues(unittest.TestCase):
         mcol_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
         self._check_against_ab_ks_complex(mcol_m06l.TDDFT(), -0.5215225316715016, 1.9444403387002533)
 
-    def _check_against_ab_ks_real(self, td, refa, refb):
+    def _check_against_ab_ks_real(self, td, refa, refb, places=6):
         mf = td._scf
         a, b = td.get_ab()
-        self.assertAlmostEqual(lib.fp(abs(a)), refa, 6)
-        self.assertAlmostEqual(lib.fp(abs(b)), refb, 6)
+        self.assertAlmostEqual(lib.fp(abs(a)), refa, places)
+        self.assertAlmostEqual(lib.fp(abs(b)), refb, places)
         ftda = mf.TDA().gen_vind()[0]
         ftdhf = td.gen_vind()[0]
         nocc = numpy.count_nonzero(mf.mo_occ == 1)
