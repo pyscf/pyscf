@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(es[:3] * 27.2114), 3.1825211067032253, 5)
 
     def test_ab_hf(self):
-        mf = x2c.UHF(mol).run(conv_tol=1e-12)
+        mf = x2c.UHF(mol).newton().run(conv_tol=1e-12)
         self._check_against_ab_ks(mf.TDHF(), -0.2404548371794495, 0.6508765417771681, 4)
 
     def test_col_lda_ab_ks(self):
