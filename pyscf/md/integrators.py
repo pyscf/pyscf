@@ -252,7 +252,7 @@ class Integrator:
                 self.energy_output = open(self.energy_output, 'w')
                 self.energy_output.write(
                     'time          Epot                 Ekin                 '
-                    'Etot\n '
+                    'Etot\n'
                 )
 
         # avoid opening trajectory_output file twice
@@ -359,7 +359,7 @@ class Integrator:
     def _write_coord(self):
         '''Writes out the current geometry to the self.trajectroy_output
         stream in xyz format. '''
-        self.trajectory_output.write('%s\nMD Time %s\n' %
+        self.trajectory_output.write('%s\nMD Time %.2f\n' %
                                      (self.mol.natm, self.time))
         self.trajectory_output.write(self.mol.tostring(format='raw') + '\n')
 
