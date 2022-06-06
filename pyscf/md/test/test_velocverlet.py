@@ -22,43 +22,44 @@ import pyscf.md as md
 
 CHECK_STABILITY = False
 
-h2o = gto.M(verbose=3,
-            output='/dev/null',
-            atom=[['O', 0, 0, 0], ['H', 0, -0.757, 0.587],
-                  ['H', 0, 0.757, 0.587]],
-            basis='def2-svp')
+def setUpModule():
+    global h2o, hf_scanner, casscf_scanner
+    h2o = gto.M(verbose=3,
+                output='/dev/null',
+                atom=[['O', 0, 0, 0], ['H', 0, -0.757, 0.587],
+                      ['H', 0, 0.757, 0.587]],
+                basis='def2-svp')
 
-hf_scanner = scf.RHF(h2o)
-hf_scanner.build()
-hf_scanner.conv_tol_grad = 1e-6
-hf_scanner.max_cycle = 700
+    hf_scanner = scf.RHF(h2o)
+    hf_scanner.build()
+    hf_scanner.conv_tol_grad = 1e-6
+    hf_scanner.max_cycle = 700
 
-ethylene = gto.M(verbose=3,
-                 output='/dev/null',
-                 atom=''' C -0.0110224 -0.01183 -0.0271398
-    C -0.000902273 0.0348566 1.34708
-    H 1.07646 0.0030022 -0.456854
-    H 0.976273 -0.140089 1.93039
-    H -0.926855 -0.147441 1.98255
-    H -0.983897 0.0103535 -0.538589
-    ''',
-                 unit='ANG',
-                 basis='ccpvdz',
-                 spin=0)
+    ethylene = gto.M(verbose=3,
+                     output='/dev/null',
+                     atom=''' C -0.0110224 -0.01183 -0.0271398
+        C -0.000902273 0.0348566 1.34708
+        H 1.07646 0.0030022 -0.456854
+        H 0.976273 -0.140089 1.93039
+        H -0.926855 -0.147441 1.98255
+        H -0.983897 0.0103535 -0.538589
+        ''',
+                     unit='ANG',
+                     basis='ccpvdz',
+                     spin=0)
 
-hf = ethylene.RHF().run()
-ncas, nelecas = (2, 2)
-casscf_scanner = hf.CASSCF(ncas, nelecas)
-casscf_scanner.conv_tol = 1e-12
-casscf_scanner.conv_tol_grad = 1e-6
+    hf = ethylene.RHF().run()
+    ncas, nelecas = (2, 2)
+    casscf_scanner = hf.CASSCF(ncas, nelecas)
+    casscf_scanner.conv_tol = 1e-12
+    casscf_scanner.conv_tol_grad = 1e-6
 
 
 def tearDownModule():
-    global h2o, hf_scanner, ethylene, hf, casscf_scanner
-    h2o.stdout.close()
-    ethylene.stdout.close()
+    global h2o, hf_scanner, casscf_scanner
     hf_scanner.stdout.close()
-    del h2o, hf_scanner, ethylene, hf, casscf_scanner
+    casscf_scanner.stdout.close()
+    del h2o, hf_scanner, casscf_scanner
 
 
 class KnownValues(unittest.TestCase):
