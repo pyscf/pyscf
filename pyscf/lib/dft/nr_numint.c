@@ -41,13 +41,14 @@ int VXCao_empty_blocks(int8_t *empty, uint8_t *non0table, int *shls_slice,
         int has0 = 0;
         empty[box_id] = 1;
         for (bas_id = sh0; bas_id < sh1; bas_id++) {
-                empty[box_id] &= !non0table[bas_id];
                 if (ao_loc[bas_id] == bound) {
                         has0 |= empty[box_id];
                         box_id++;
                         bound += BOXSIZE;
                         empty[box_id] = 1;
-                } else if (ao_loc[bas_id] > bound) {
+                }
+                empty[box_id] &= !non0table[bas_id];
+                if (ao_loc[bas_id+1] > bound) {
                         has0 |= empty[box_id];
                         box_id++;
                         bound += BOXSIZE;
