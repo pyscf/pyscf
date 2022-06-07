@@ -46,6 +46,11 @@ if (BUILD_MARCH_NATIVE)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
     endif()
   endif()
+else()
+  if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+  endif()
 endif()
 
 

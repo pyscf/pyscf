@@ -22,7 +22,7 @@ from pyscf.dft import numint
 
 def setUpModule():
     numint.SWITCH_SIZE = 0
-    global mol, mf, h4, mf_h4, mol1, h2o, nao
+    global mol, mf, h4, mf_h4, mol1, h2o, nao, he2, mf_he2
     mol = gto.Mole()
     mol.verbose = 0
     mol.atom = [('h', (0,0,i*3)) for i in range(12)]
@@ -61,6 +61,15 @@ def setUpModule():
     h2o.basis = {"H": '6-31g', "O": '6-31g',}
     h2o.build()
 
+    he2 = gto.Mole()
+    he2.verbose = 0
+    he2.atom = 'He 0.0 0.0 0.0; He 0.0 0.0 20.0'
+    he2.basis = 'aug-pc-4'
+    he2.build()
+    mf_he2 = dft.RKS(he2)
+    mf_he2.grids.level = 0
+    mf_he2.grids.build(with_non0tab=True)
+
 def tearDownModule():
     numint.SWITCH_SIZE = 800
     global mol, mf, h4, mf_h4, mol1, h2o
@@ -80,6 +89,13 @@ class KnownValues(unittest.TestCase):
         nao = ao.shape[1]
         v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
         v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+        dm = mf_he2.get_init_guess(key='minao')
+        ao_loc = he2.ao_loc_nr()
+        ao = mf_he2._numint.eval_ao(he2, mf_he2.grids.coords).copy()
+        v1 = dft.numint._dot_ao_dm(he2, ao, dm, mf_he2.grids.non0tab, (0,he2.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(he2, ao, dm, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_dot_ao_dm_high_cost(self):
@@ -102,6 +118,14 @@ class KnownValues(unittest.TestCase):
         nao = h4.nao_nr()
         v1 = dft.numint._dot_ao_ao(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
         v2 = dft.numint._dot_ao_ao(h4, ao, ao, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+        dm = mf_he2.get_init_guess(key='minao')
+        ao_loc = he2.ao_loc_nr()
+        ao = mf_he2._numint.eval_ao(he2, mf_he2.grids.coords).copy()
+        nao = he2.nao_nr()
+        v1 = dft.numint._dot_ao_ao(he2, ao, ao, mf_he2.grids.non0tab, (0,he2.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_ao(he2, ao, ao, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_dot_ao_ao_high_cost(self):
