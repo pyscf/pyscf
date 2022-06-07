@@ -320,7 +320,7 @@ class Integrator:
     def __next__(self):
         if self._step < self.steps:
             if self._log.verbose >= lib.logger.NOTE:
-                self._log.note('\nBOMD Time %d', self.time)
+                self._log.note('\nBOMD Time %.2f', self.time)
 
             current_frame = self._next()
 
