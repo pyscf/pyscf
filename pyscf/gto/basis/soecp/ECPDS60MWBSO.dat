@@ -1,0 +1,242 @@
+ECP
+# Q=29., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Ac nelec 60
+Ac ul
+2	1.00000000	0.00000000
+Ac S
+2	14.65187951	476.14692192
+Ac P
+2	9.18034600	185.89552068	100.81825474
+Ac D
+2	9.52316367	204.17603473	-51.61524181
+Ac F
+2	7.59420962	100.81825474	25.33482998
+Ac G
+2	11.02773233	-51.61524181	4.47380230
+# Q=30., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Th nelec 60
+Th ul
+2	1.00000000	0.00000000
+Th S
+2	14.77642413	455.05596763
+Th P
+2	9.08318434	177.69179070	82.90872723
+Th D
+2	9.65385771	197.23270511	-55.12641906
+Th F
+2	7.38076589	82.90872723	21.25732126
+Th G
+2	11.60902462	-55.12641906	5.21577704
+# Q=31., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Pa nelec 60
+Pa ul
+2	1.00000000	0.00000000
+Pa S
+2	15.26917367	475.47573283
+Pa P
+2	9.95773699	207.66485962	67.98223685
+Pa D
+2	8.94314126	156.67411988	-57.63059989
+Pa F
+2	7.01046662	67.98223685	28.47977496
+Pa G
+2	12.20105601	-57.63059989	3.61463330
+# Q=32., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+U nelec 60
+U ul
+2	1.00000000	0.00000000
+U S
+2	16.41403869	536.51662778
+U P
+2	9.06055606	169.54492465	60.39307602
+U D
+2	8.83183198	142.61559837	-60.12998958
+U F
+2	7.01851629	60.39307602	14.90142900
+U G
+2	12.80408844	-60.12998958	2.72712409
+# Q=33., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Np nelec 60
+Np ul
+2	1.00000000	0.00000000
+Np S
+2	16.77194770	541.53853851
+Np P
+2	9.78355277	191.08457137	60.39433314
+Np D
+2	9.03422660	146.40258923	-62.62618508
+Np F
+2	7.12184827	60.39433314	19.66819400
+Np G
+2	13.41832253	-62.62618508	2.67442664
+# Q=34., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Pu nelec 60
+Pu ul
+2	1.00000000	0.00000000
+Pu S
+2	18.55968916	662.75624198
+Pu P
+2	9.47351697	179.41528979	56.04590914
+Pu D
+2	9.03069065	139.70591217	-65.12121611
+Pu F
+2	7.13879779	56.04590914	13.74208020
+Pu G
+2	14.04399655	-65.12121611	2.33751255
+# Q=35., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Am nelec 60
+Am ul
+2	1.00000000	0.00000000
+Am S
+2	19.13009648	672.42690848
+Am P
+2	9.55914207	180.98363004	51.27355314
+Am D
+2	9.16126617	139.03756389	-67.61694208
+Am F
+2	7.03575463	51.27355314	12.14727448
+Am G
+2	14.68133289	-67.61694208	2.45482702
+# Q=36., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Cm nelec 60
+Cm ul
+2	1.00000000	0.00000000
+Cm S
+2	19.25034634	648.91058192
+Cm P
+2	9.74566041	185.64663794	48.18099636
+Cm D
+2	9.26702314	137.84026176	-70.11497550
+Cm F
+2	7.06371412	48.18099636	11.14326376
+Cm G
+2	15.33052565	-70.11497550	2.27129473
+# Q=37., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Bk nelec 60
+Bk ul
+2	1.00000000	0.00000000
+Bk S
+2	20.28537610	696.47512220
+Bk P
+2	9.86839647	188.76026572	45.21650778
+Bk D
+2	8.91655740	124.93583585	-72.61718880
+Bk F
+2	7.02500314	45.21650778	9.72251120
+Bk G
+2	15.99180528	-72.61718880	1.69739902
+# Q=38., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Cf nelec 60
+Cf ul
+2	1.00000000	0.00000000
+Cf S
+2	22.27163201	823.74657643
+Cf P
+2	8.80079915	173.07043952	34.95259623
+Cf D
+2	9.31115746	125.56875116	-75.12525493
+Cf F
+2	6.62957784	34.95259623	2.63459550
+Cf G
+2	16.66536973	-75.12525493	1.60312970
+# Q=39., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Es nelec 60
+Es ul
+2	1.00000000	0.00000000
+Es S
+2	25.23943442	1109.05253371
+Es P
+2	8.57450440	175.31877724	29.55192708
+Es D
+2	9.45460730	124.58681414	-77.64107478
+Es F
+2	6.27339051	29.55192708	1.65191424
+Es G
+2	17.35145618	-77.64107478	1.49630937
+# Q=40., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Fm nelec 60
+Fm ul
+2	1.00000000	0.00000000
+Fm S
+2	26.49971356	1201.22279983
+Fm P
+2	8.45509135	179.58021904	29.49963960
+Fm D
+2	9.52611052	122.51530386	-80.16520155
+Fm F
+2	6.48364925	29.49963960	1.15206654
+Fm G
+2	18.05016051	-80.16520155	1.47790482
+# Q=41., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Md nelec 60
+Md ul
+2	1.00000000	0.00000000
+Md S
+2	26.25702941	1099.41031834
+Md P
+2	9.14467744	192.25142777	34.32932133
+Md D
+2	9.76984978	129.19158391	-82.70015285
+Md F
+2	6.96753140	34.32932133	1.63285916
+Md G
+2	18.76179172	-82.70015285	1.51775788
+# Q=42., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+No nelec 60
+No ul
+2	1.00000000	0.00000000
+No S
+2	26.78877434	1099.41255114
+No P
+2	9.67194189	203.31904971	31.66186279
+No D
+2	9.65954537	127.62744557	-85.24736741
+No F
+2	6.60473647	31.66186279	2.00386468
+No G
+2	19.48652544	-85.24736741	1.36222798
+# Q=43., MEFIT, WB, SO potential for [Rn] core, Ref 21, Ref 33.
+# [21] W. Kuechle, M. Dolg, H. Stoll, H. Preuss, J. Chem. Phys. 100, 7535 (1994).
+# [33] X. Cao, M. Dolg, H. Stoll, J. Chem. Phys. 118, 487 (2003) cf. also X. Cao, M. Dolg, J. Molec. Struct. (Theochem) 673, 203 (2004).
+Lr nelec 60
+Lr ul
+2	1.00000000	0.00000000
+Lr S
+2	26.29392783	1010.35204266
+Lr P
+2	11.11535047	228.20549149	48.14926090
+Lr D
+2	11.56320715	178.32498818	-87.80798252
+Lr F
+2	7.92353804	48.14926090	5.34979206
+Lr G
+2	20.22453342	-87.80798252	2.91199263
+END
