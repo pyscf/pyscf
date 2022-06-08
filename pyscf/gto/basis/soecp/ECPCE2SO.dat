@@ -1,0 +1,134 @@
+ECP
+# Lithium atom
+# Li, 2 el. core, 1 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+Li nelec 2
+Li ul
+2	.807800	-.118667
+2	2.550000	-1.217794
+1	7.253500	-1.375805
+Li S
+2	.799800	24.333699
+2	.774100	-20.666397
+1	1.194300	-1.142892
+0	2.199900	2.994019
+# Beryllium atom
+# Be, 2 el. core, 2 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+Be nelec 2
+Be ul
+2	1.882300	-.258288
+2	6.056600	-2.095509
+1	17.078000	-1.396102
+Be S
+2	1.514700	-28.574705
+2	1.584700	35.735227
+1	2.309100	-1.319421
+0	4.200100	2.969725
+# Boron atom
+# B, 2 el. core, 3 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+B nelec 2
+B ul
+2	3.561300	-.434946
+2	11.783200	-3.207452
+1	33.378200	-1.417788
+B S
+2	2.515500	-37.551118
+2	2.680800	51.025499
+1	3.956200	-2.384434
+0	7.410900	2.979742
+# Carbon atom
+# C, 2 el. core, 4 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+C nelec 2
+C ul
+2	5.352800	-.559313
+2	18.066800	-4.074550
+1	51.615900	-1.434846
+C S
+2	3.819100	-47.098215
+2	4.173200	71.589258
+1	6.270700	-4.675364
+0	12.211200	3.037970
+# Nitrogen atom
+# N, 2 el. core, 5 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+N nelec 2
+N ul
+2	7.479400	-.670937
+2	25.340800	-4.872023
+1	73.088800	-1.456021
+N S
+2	4.172600	-60.381084
+2	4.742500	69.864206
+1	8.161000	-9.608747
+0	2.386000	3.273330
+# Oxygen atom
+# O, 2 el. core, 6 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+O nelec 2
+O ul
+2	10.028600	-.798420
+2	34.198000	-5.766847
+1	100.003900	-1.486456
+O S
+2	2.247900	11.216304
+2	2.404900	-16.344477
+1	4.374000	1.042944
+0	2.189200	2.193891
+# Fluorine atom
+# F, 2 el. core, 7 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+F nelec 2
+F ul
+2	44.516600	-6.723024
+2	12.948700	-.929649
+1	132.496700	-1.526734
+F S
+2	2.883500	12.685306
+2	3.107700	-19.302589
+1	5.612200	1.002179
+0	2.814600	2.245349
+# Neon atom
+# Ne, 2 el. core, 8 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+Ne nelec 2
+Ne ul
+2	16.202400	-1.057842
+2	56.173500	-7.718126
+1	170.709500	-1.577675
+Ne S
+2	3.576200	13.665010
+2	3.882100	-21.938680
+1	6.985300	.921511
+0	3.483800	2.287581
+# Sodium atom
+# Na, 2 el. core, 9 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+Na nelec 2
+Na ul
+2	1.606800	-.000102
+2	22.523100	-1.715443
+1	76.236500	-1.361911
+Na S
+2	2.478300	-14.538661
+2	3.099000	31.911208
+2	3.947100	-32.322246
+1	8.216600	3.140947
+0	1.500800	1.877655
+# Magnesium atom
+# Mg, 2 el. core, 10 valence el., spin-orbit
+# L.F. Pacios and P.A. Christiansen, JCP 82, 2664 (1985)
+Mg nelec 2
+Mg ul
+2	1.132000	-.000053
+2	27.305700	-1.932494
+1	93.305600	-1.393847
+Mg S
+2	2.951600	-15.626710
+2	3.732500	33.531194
+2	4.811800	-36.073072
+1	9.919500	3.129634
+0	1.818500	1.938433
+END
