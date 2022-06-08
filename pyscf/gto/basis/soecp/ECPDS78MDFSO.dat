@@ -1,8 +1,7 @@
 ECP
-# CHECKME 78? 60?
 # Q=22., MEFIT, MCDHF+Breit+QED, Ref 29.
 # [29] B. Metz, H. Stoll, M. Dolg, J. Chem. Phys. 113, 2563 (2000).
-Pb nelec 60
+Pb nelec 78 
 Pb ul
 2	1.000000	0.000000
 Pb S
