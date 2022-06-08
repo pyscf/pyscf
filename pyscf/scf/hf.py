@@ -2056,6 +2056,19 @@ class RHF(SCF):
         return rhf.Gradients(self)
 
 
+def _hf1e_scf(mf, *args):
+    logger.info(mf, '\n')
+    logger.info(mf, '******** 1 electron system ********')
+    mf.converged = True
+    h1e = mf.get_hcore(mf.mol)
+    s1e = mf.get_ovlp(mf.mol)
+    mf.mo_energy, mf.mo_coeff = mf.eig(h1e, s1e)
+    mf.mo_occ = mf.get_occ(mf.mo_energy, mf.mo_coeff)
+    mf.e_tot = mf.mo_energy[mf.mo_occ>0][0].real + mf.mol.energy_nuc()
+    mf._finalize()
+    return mf.e_tot
+
+
 del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 

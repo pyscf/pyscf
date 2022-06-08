@@ -547,6 +547,11 @@ def _from_rhf_init_dm(dm, breaksym=True):
         dm[idx+nao,idy] = dm[idx,idy+nao] = dma.diagonal() * .05
     return dm
 
+
+class HF1e(GHF):
+    scf = hf._hf1e_scf
+
+
 del(PRE_ORTH_METHOD)
 
 
