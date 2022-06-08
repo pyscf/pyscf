@@ -168,6 +168,12 @@ class Integrator:
 
         time : float
             Time of the last step during the simulation.
+
+        callback : function(envs_dict) => None
+            Callback function takes one dict as the arugment which is
+            generaged by the builtin function :func:`locals`, so that the
+            callback function can access all local variables in the current
+            environment.
     '''
 
     def __init__(self, method, **kwargs):
@@ -195,6 +201,7 @@ class Integrator:
         self.time = 0
         self.energy_output = None
         self.trajectory_output = None
+        self.callback = None
 
         self.__dict__.update(kwargs)
 
@@ -332,6 +339,11 @@ class Integrator:
 
             if self.trajectory_output is not None:
                 self._write_coord()
+
+            if callable(self.callback):
+                mol = self.mol
+                scanner = self.scanner
+                self.callback(locals())
 
             self._step += 1
             self.time += self.dt
