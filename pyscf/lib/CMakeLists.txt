@@ -48,8 +48,12 @@ if (BUILD_MARCH_NATIVE)
   endif()
 else()
   if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-    # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+    include(CheckCCompilerFlag)
+    CHECK_C_COMPILER_FLAG("-msse3" COMPILER_SUPPORTS_SSE3)
+    if(COMPILER_SUPPORTS_SSE3)
+      # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+    endif()
   endif()
 endif()
 
