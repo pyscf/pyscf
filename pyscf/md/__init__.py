@@ -23,7 +23,7 @@ Simple usage::
 
     >>> from pyscf import gto, dft
     >>> import pyscf.md as md
-    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='def2-tzvp'))
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1', basis='def2-tzvp')
     >>> mf = dft.RKS(mol)
     >>> mf.xc = 'pbe,pbe'
     >>> integrator = md.NVE(mf, dt=5, time=10).run()
