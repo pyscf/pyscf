@@ -2676,8 +2676,8 @@ class Mole(lib.StreamObject):
     set_common_origin_ = set_common_orig  # for backward compatibility
 
     def with_common_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired common origin.
-        The required common origin has no effects out of the temporary context.
+        '''Return a temporary mol context which has the required common origin.
+        The required common origin has no effects outside the temporary context.
         See also :func:`mol.set_common_origin`
 
         Examples:
