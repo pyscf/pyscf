@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 '''
-An example how to use the ccsd.callback function to implement
-Tailored CCSD (TCCSD).
+An example how to use the ccsd.callback function to implement Tailored CCSD (TCCSD).
+Writes energies of HF, CCSD, CASCI(6,6), and TCCSD(6,6) to 'energies.txt'
 
 See: J. Chem. Phys. 123, 074106 (2005); https://doi.org/10.1063/1.2000251
 '''
@@ -16,6 +16,7 @@ import pyscf.cc
 import pyscf.ci
 import pyscf.mcscf
 from pyscf.mp.mp2 import _mo_without_core
+
 
 einsum = partial(np.einsum, optimize=True)
 
@@ -77,19 +78,23 @@ for d in np.arange(0.8, 2.9, 0.2):
     mol.verbose = 4
     mol.build()
 
+    # Hartree Fock
     mf = pyscf.scf.RHF(mol)
     mf.kernel()
     assert mf.converged
 
+    # CCSD
     cc = pyscf.cc.CCSD(mf)
     cc.kernel(t1=t1, t2=t2)
     t1, t2 = cc.t1, cc.t2
     e_ccsd = (cc.e_tot if cc.converged else np.nan)
 
+    # CASCI(6,6)
     cas = pyscf.mcscf.CASCI(mf, 6, 6)
     cas.kernel()
     assert cas.converged
 
+    # TCCSD tailored with CASCI(6,6)
     tcc = pyscf.cc.CCSD(mf)
     tcc = make_tailored_ccsd(tcc, cas)
     tcc.kernel()

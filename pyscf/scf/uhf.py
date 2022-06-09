@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-from functools import reduce, partial
+from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
@@ -131,8 +131,13 @@ def get_init_guess(mol, key='minao'):
     return UHF(mol).get_init_guess(mol, key)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
-    '''One-particle density matrix
+    '''One-particle density matrix in AO representation
 
+    Args:
+        mo_coeff : tuple of 2D ndarrays
+            Orbital coefficients for alpha and beta spins. Each column is one orbital.
+        mo_occ : tuple of 1D ndarrays
+            Occupancies for alpha and beta spins.
     Returns:
         A list of 2D ndarrays for alpha and beta spins
     '''
@@ -147,6 +152,16 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     return numpy.array((dm_a, dm_b))
 
 def make_rdm2(mo_coeff, mo_occ):
+    '''Two-particle density matrix in AO representation
+
+    Args:
+        mo_coeff : tuple of 2D ndarrays
+            Orbital coefficients for alpha and beta spins. Each column is one orbital.
+        mo_occ : tuple of 1D ndarrays
+            Occupancies for alpha and beta spins.
+    Returns:
+        A tuple of three 4D ndarrays for alpha,alpha and alpha,beta and beta,beta spins
+    '''
     dm1a, dm1b = make_rdm1(mo_coeff, mo_occ)
     dm2aa = (numpy.einsum('ij,kl->ijkl', dm1a, dm1a)
            - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
@@ -806,9 +821,12 @@ class UHF(hf.SCF):
             mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
+    @lib.with_doc(make_rdm2.__doc__)
     def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
         return make_rdm2(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
