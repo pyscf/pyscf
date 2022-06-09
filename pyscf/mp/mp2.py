@@ -319,7 +319,7 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
 def get_nocc(mp):
     if mp._nocc is not None:
         return mp._nocc
-    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
+    elif mp.frozen is None:
         nocc = numpy.count_nonzero(mp.mo_occ > 0)
         assert(nocc > 0)
         return nocc
@@ -339,7 +339,7 @@ def get_nocc(mp):
 def get_nmo(mp):
     if mp._nmo is not None:
         return mp._nmo
-    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
+    elif mp.frozen is None:
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
@@ -357,7 +357,7 @@ def get_frozen_mask(mp):
     moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
         moidx[mp._nmo:] = False
-    elif mp.frozen is None or (hasattr(mp.frozen, "__len__") and len(mp.frozen) == 0):
+    elif mp.frozen is None:
         pass
     elif isinstance(mp.frozen, (int, numpy.integer)):
         moidx[:mp.frozen] = False
