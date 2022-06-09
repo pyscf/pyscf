@@ -669,6 +669,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
             Orbital coefficients. Each column is one orbital.
         mo_occ : 1D ndarray
             Occupancy
+    Returns:
+        One-particle density matrix, 2D ndarray
     '''
     mocc = mo_coeff[:,mo_occ>0]
 # DO NOT make tag_array for dm1 here because this DM array may be modified and
@@ -677,6 +679,21 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # array and modifications to DM array may be ignored.
     return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
 
+def make_rdm2(mo_coeff, mo_occ, **kwargs):
+    '''Two-particle density matrix in AO representation
+
+    Args:
+        mo_coeff : 2D ndarray
+            Orbital coefficients. Each column is one orbital.
+        mo_occ : 1D ndarray
+            Occupancy
+    Returns:
+        Two-particle density matrix, 4D ndarray
+    '''
+    dm1 = make_rdm1(mo_coeff, mo_occ, **kwargs)
+    dm2 = (numpy.einsum('ij,kl->ijkl', dm1, dm1)
+         - numpy.einsum('ij,kl->iklj', dm1, dm1)/2)
+    return dm2
 
 ################################################
 # for general DM
@@ -1627,6 +1644,12 @@ class SCF(lib.StreamObject):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
+
+    @lib.with_doc(make_rdm2.__doc__)
+    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
+        if mo_occ is None: mo_occ = self.mo_occ
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return make_rdm2(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
     energy_tot = energy_tot
