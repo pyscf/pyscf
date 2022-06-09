@@ -2355,16 +2355,16 @@ class Mole(lib.StreamObject):
             # StringIO() does not have attribute 'name'
             and getattr(self.stdout, 'name', None) != self.output):
 
-            #if self.verbose > logger.QUIET:
-            #    if os.path.isfile(self.output):
-            #        print('overwrite output file: %s' % self.output)
-            #    else:
-            #        print('output file: %s' % self.output)
+            if self.verbose > logger.QUIET:
+                if os.path.isfile(self.output):
+                    print('overwrite output file: %s' % self.output)
+                else:
+                    print('output file: %s' % self.output)
 
             if self.output == '/dev/null':
                 self.stdout = open(os.devnull, 'w')
             else:
-                self.stdout = open(self.output, 'a')
+                self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -2531,9 +2531,9 @@ class Mole(lib.StreamObject):
         return gto_norm(l, expnt)
 
 
-    def dump_input(self, dump_input_file=False):
+    def dump_input(self):
         import __main__
-        if dump_input_file and hasattr(__main__, '__file__'):
+        if hasattr(__main__, '__file__'):
             try:
                 filename = os.path.abspath(__main__.__file__)
                 finput = open(filename, 'r')

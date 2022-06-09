@@ -24,7 +24,7 @@ def cmd_args():
     '''
     get input from cmdline
     '''
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose',
                         action='store_false', dest='verbose', default=0,
                         help='make lots of noise')
