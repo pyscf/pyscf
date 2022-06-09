@@ -140,7 +140,7 @@ def update_amps(mp, t2, eris):
     return t2new
 
 
-def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True, with_mf=True):
+def make_rdm1(mp, t2=None, eris=None, ao_repr=False):
     r'''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
@@ -161,8 +161,8 @@ def make_rdm1(mp, t2=None, eris=None, ao_repr=False, with_frozen=True, with_mf=T
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=with_frozen,
-                               ao_repr=ao_repr, with_mf=with_mf)
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2
@@ -240,7 +240,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     return numpy.arange(nocc+nvir_act,nmo), no_coeff
 
 
-def make_rdm2(mp, t2=None, eris=None, ao_repr=False, with_dm1=True):
+def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -299,17 +299,16 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False, with_dm1=True):
     #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
     #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
     # When adding dm1 contribution, dm1 subscripts need to be flipped
-    if with_dm1:
-        for i in range(nocc0):
-            dm2[i,i,:,:] += dm1.T * 2
-            dm2[:,:,i,i] += dm1.T * 2
-            dm2[:,i,i,:] -= dm1.T
-            dm2[i,:,:,i] -= dm1
+    for i in range(nocc0):
+        dm2[i,i,:,:] += dm1.T * 2
+        dm2[:,:,i,i] += dm1.T * 2
+        dm2[:,i,i,:] -= dm1.T
+        dm2[i,:,:,i] -= dm1
 
-        for i in range(nocc0):
-            for j in range(nocc0):
-                dm2[i,i,j,j] += 4
-                dm2[i,j,j,i] -= 2
+    for i in range(nocc0):
+        for j in range(nocc0):
+            dm2[i,i,j,j] += 4
+            dm2[i,j,j,i] -= 2
 
     if ao_repr:
         from pyscf.cc import ccsd_rdm

@@ -733,7 +733,7 @@ def _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo):
     return dm1, dm2
 
 # In AO representation
-def make_rdm12(casscf, mo_coeff=None, ci=None, ao_repr=True):
+def make_rdm12(casscf, mo_coeff=None, ci=None):
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
     assert(not _is_uhf_mo(mo_coeff))
@@ -743,9 +743,6 @@ def make_rdm12(casscf, mo_coeff=None, ci=None, ao_repr=True):
     nmo = mo_coeff.shape[1]
     casdm1, casdm2 = casscf.fcisolver.make_rdm12(ci, ncas, nelecas)
     rdm1, rdm2 = _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo)
-    if not ao_repr:
-        return rdm1, rdm2
-
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1, mo_coeff.T))
     rdm2 = numpy.dot(mo_coeff, rdm2.reshape(nmo,-1))
     rdm2 = numpy.dot(rdm2.reshape(-1,nmo), mo_coeff.T)
