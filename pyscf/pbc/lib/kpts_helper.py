@@ -89,7 +89,7 @@ def conj_mapping(cell, kpts):
     index[lex_order] = m_lex_order
     return index
 
-def get_kconserv(cell, kpts, n=3):
+def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
@@ -104,26 +104,14 @@ def get_kconserv(cell, kpts, n=3):
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2*np.pi)
 
-    if n == 2:
-        kconserv = np.zeros((nkpts,nkpts), dtype=int)
-        kvKL = kpts[:,None,:] - kpts
-        for N, kvN in enumerate(kpts):
-            kvKLN = np.einsum('wx,klx->wkl', a, kvKL - kvN, optimize=True)
-            # check whether (1/(2pi) k_{KLN} dot a) is an integer
-            kvKLN_int = np.rint(kvKLN)
-            mask = np.einsum('wkl->kl', abs(kvKLN - kvKLN_int), optimize=True) < 1e-9
-            kconserv[mask] = N
-    elif n == 3:
-        kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
-        kvKLM = kpts[:,None,None,:] - kpts[:,None,:] + kpts
-        for N, kvN in enumerate(kpts):
-            kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN, optimize=True)
-            # check whether (1/(2pi) k_{KLMN} dot a) is an integer
-            kvKLMN_int = np.rint(kvKLMN)
-            mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int), optimize=True) < 1e-9
-            kconserv[mask] = N
-    else:
-        raise NotImplementedError()
+    kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
+    kvKLM = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+    for N, kvN in enumerate(kpts):
+        kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN)
+        # check whether (1/(2pi) k_{KLMN} dot a) is an integer
+        kvKLMN_int = np.rint(kvKLMN)
+        mask = np.einsum('wklm->klm', abs(kvKLMN - kvKLMN_int)) < 1e-9
+        kconserv[mask] = N
     return kconserv
 
 
