@@ -343,6 +343,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
 
     return ci0
 
+
 def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
     ci = ci.reshape(strsa.size,strsb.size)
     airreps = numpy.zeros(strsa.size, dtype=numpy.int32)
@@ -357,7 +358,6 @@ def _symmetrize_wfn(ci, strsa, strsb, orbsym, wfnsym=0):
     ci1[mask] = ci[mask]
     ci1 *= 1/numpy.linalg.norm(ci1)
     return ci1
-
 def symmetrize_wfn(ci, norb, nelec, orbsym, wfnsym=0):
     '''Symmetrize the CI wavefunction by zeroing out the determinants which
     do not have the right symmetry.
@@ -399,7 +399,6 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
         if (strb & (1 << i)):
             birrep ^= ir
     return airrep ^ birrep
-
 def guess_wfnsym(ci, norb, nelec, orbsym):
     '''Guess the wavefunction symmetry based on the non-zero elements in the
     given CI coefficients.
@@ -428,6 +427,7 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
             warnings.warn('Different wfnsym %s found in different CI vecotrs' % wfnsym)
         wfnsym = wfnsym[0]
     return wfnsym
+
 
 def des_a(ci0, norb, neleca_nelecb, ap_id):
     r'''Construct (N-1)-electron wavefunction by removing an alpha electron from
@@ -681,7 +681,6 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     fciobj.davidson_only = True
     fciobj.contract_2e = contract_2e
     return fciobj
-
 def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
 
