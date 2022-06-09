@@ -232,7 +232,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'pw91, pw91'
         # Small change from libxc3 to libxc4
         self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-        
+
     def test_nr_symm_b88vwn(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
@@ -511,6 +511,32 @@ class KnownValues(unittest.TestCase):
         dm = dft.UKS(h2osym).init_guess_by_vsap()
         self.assertEqual(dm.ndim, 3)
         self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
+
+    def test_init(self):
+        mol_r = h2o
+        mol_u = gto.M(atom='Li', spin=1, verbose=0)
+        mol_r1 = gto.M(atom='H', spin=1, verbose=0)
+        sym_mol_r = h2osym
+        sym_mol_u = gto.M(atom='Li', spin=1, symmetry=1, verbose=0)
+        sym_mol_r1 = gto.M(atom='H', spin=1, symmetry=1, verbose=0)
+        self.assertTrue(isinstance(dft.RKS(mol_r), dft.rks.RKS))
+        self.assertTrue(isinstance(dft.RKS(mol_u), dft.roks.ROKS))
+        self.assertTrue(isinstance(dft.UKS(mol_r), dft.uks.UKS))
+        self.assertTrue(isinstance(dft.ROKS(mol_r), dft.roks.ROKS))
+        self.assertTrue(isinstance(dft.GKS(mol_r), dft.gks.GKS))
+        self.assertTrue(isinstance(dft.KS(mol_r), dft.rks.RKS))
+        self.assertTrue(isinstance(dft.KS(mol_u), dft.uks.UKS))
+        self.assertTrue(isinstance(dft.DKS(mol_u), dft.dks.UDKS))
+
+        self.assertTrue(isinstance(mol_r.RKS(), dft.rks.RKS))
+        self.assertTrue(isinstance(mol_u.RKS(), dft.roks.ROKS))
+        self.assertTrue(isinstance(mol_r.UKS(), dft.uks.UKS))
+        self.assertTrue(isinstance(mol_r.ROKS(), dft.roks.ROKS))
+        self.assertTrue(isinstance(mol_r.GKS(), dft.gks.GKS))
+        self.assertTrue(isinstance(mol_r.KS(), dft.rks.RKS))
+        self.assertTrue(isinstance(mol_u.KS(), dft.uks.UKS))
+        self.assertTrue(isinstance(mol_u.DKS(), dft.dks.UDKS))
+        #TODO: self.assertTrue(isinstance(dft.X2C(mol_r), x2c.dft.UKS))
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

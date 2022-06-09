@@ -20,7 +20,7 @@ cell.build()
 # SCF object
 #
 nks = [2,1,1]
-mf = scf.KRHF(cell, cell.make_kpts(nks))
+mf = scf.KRHF(cell, cell.make_kpts(nks)).density_fit()
 mf = scf.addons.smearing_(mf, sigma=.1, method='fermi')
 mf.kernel()
 print('Entropy = %s' % mf.entropy)
@@ -30,14 +30,17 @@ print('Zero temperature energy = %s' % ((mf.e_tot+mf.e_free)/2))
 #
 # The smearing method and parameters can be modified at runtime
 #
-mf = scf.addons.smearing_(scf.UHF(cell))
+#mf.sigma = .1
+#mf.method = 'gauss'
+#mf.max_cycle = 1
+#mf.kernel()
 mf.sigma = .1
-mf.method = 'gauss'
+mf.smearing_method = 'gauss'
 mf.max_cycle = 2
 mf.kernel()
 
 mf.sigma = .05
-mf.method = 'fermi'
+mf.smearing_method = 'fermi'
 mf.max_cycle = 50
 mf.kernel()
 

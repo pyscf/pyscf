@@ -27,12 +27,13 @@ Simple usage::
 
 try:
     from pyscf.dft import libxc
-    XC = libxc.XC
+    XC = {**libxc.XC, **libxc.XC_ALIAS}
 except (ImportError, OSError):
-    pass
+    XC = None
 try:
     from pyscf.dft import xcfun
-    XC = xcfun.XC
+    if XC is None:
+        XC = {**xcfun.XC, **xcfun.XC_ALIAS}
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc
@@ -66,24 +67,17 @@ A wrap function to create DFT object (RKS or UKS).\n
 DFT = KS
 
 def RKS(mol, xc='LDA,VWN'):
-    if mol.nelectron == 1:
-        return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
-        if mol.spin > 0:
-            return roks.ROKS(mol, xc)
-        else:
+    if mol.spin == 0:
+        if not mol.symmetry or mol.groupname == 'C1':
             return rks.RKS(mol, xc)
-    else:
-        if mol.spin > 0:
-            return rks_symm.ROKS(mol, xc)
         else:
             return rks_symm.RKS(mol, xc)
+    else:
+        return ROKS(mol, xc)
 RKS.__doc__ = rks.RKS.__doc__
 
 def ROKS(mol, xc='LDA,VWN'):
-    if mol.nelectron == 1:
-        return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return roks.ROKS(mol, xc)
     else:
         return rks_symm.ROKS(mol, xc)

@@ -37,7 +37,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
     w = numpy.einsum('ijae,kceb->ijkabc', t2aa, numpy.asarray(eris.get_ovvv()).conj())
-    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo.conj()))
+    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.ovov).conj(), t1a)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2aa, fvo) * .5
 
@@ -50,7 +50,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     # bbb
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eIA, eIA)
     w = numpy.einsum('ijae,kceb->ijkabc', t2bb, numpy.asarray(eris.get_OVVV()).conj())
-    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO.conj()))
+    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1b)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2bb, fVO) * .5
 
@@ -161,7 +161,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
     w = numpy.einsum('ijae,kceb->ijkabc', t2aa, numpy.asarray(eris.get_ovvv()).conj())
-    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo.conj()))
+    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.ovov).conj(), t1a)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2aa, fvo) * .5
 
@@ -176,7 +176,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     # bbb
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eIA, eIA)
     w = numpy.einsum('ijae,kceb->ijkabc', t2bb, numpy.asarray(eris.get_OVVV()).conj())
-    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO.conj()))
+    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1b)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2bb, fVO) * .5
 

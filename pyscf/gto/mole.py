@@ -178,7 +178,7 @@ def cart2sph(l, c_tensor=None, normalized=None):
         else:
             return c_tensor * 0.488602511902919921
     else:
-        assert(l <= 12)
+        assert l <= 15
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
