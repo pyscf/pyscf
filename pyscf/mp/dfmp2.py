@@ -17,7 +17,6 @@
 density fitting MP2,  3-center integrals incore.
 '''
 
-import functools
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -29,7 +28,6 @@ from pyscf import __config__
 
 WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
 
-einsum = functools.partial(numpy.einsum, optimize=True)
 
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
@@ -74,27 +72,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     return emp2, t2
 
-def energy(mp, t2, eris):
-    '''MP2 energy'''
-
-    nocc = mp.nocc
-    nvir = mp.nmo - nocc
-    naux = mp.with_df.get_naoaux()
-
-    Lov = numpy.empty((naux, nocc*nvir))
-    p1 = 0
-    for istep, qov in enumerate(mp.loop_ao2mo(eris.mo_coeff, nocc)):
-        logger.debug(mp, 'Load cderi step %d', istep)
-        p0, p1 = p1, p1 + qov.shape[0]
-        Lov[p0:p1] = qov
-
-    nocc, nvir = t2.shape[1:3]
-    govov = numpy.dot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = einsum('ijab,iajb', t2, govov) * 2
-    emp2 -= einsum('ijab,ibja', t2, govov)
-
-    return emp2.real
-
 
 class DFMP2(mp2.MP2):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -127,24 +104,10 @@ class DFMP2(mp2.MP2):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
-    def ao2mo(self, mo_coeff=None, store_eris=False):
+    def ao2mo(self, mo_coeff=None):
         eris = mp2._ChemistsERIs()
         # Initialize only the mo_coeff
         eris._common_init_(self, mo_coeff)
-
-        if store_eris:
-            nocc = self.nocc
-            nvir = self.nmo - nocc
-            naux = self.with_df.get_naoaux()
-            Lov = numpy.empty((naux, nocc*nvir))
-            p1 = 0
-            for istep, qov in enumerate(self.loop_ao2mo(eris.mo_coeff, nocc)):
-                logger.debug(self, 'Load cderi step %d', istep)
-                p0, p1 = p1, p1 + qov.shape[0]
-                Lov[p0:p1] = qov
-            Lov = Lov.reshape(naux, nocc, nvir)
-            eris.ovov = numpy.einsum("Qia,Qjb->iajb", Lov, Lov, optimize=True)
-
         return eris
 
     def make_rdm1(self, t2=None, ao_repr=False):
@@ -163,9 +126,6 @@ class DFMP2(mp2.MP2):
         raise NotImplementedError
 
     # For non-canonical MP2
-
-    energy = energy
-
     def update_amps(self, t2, eris):
         raise NotImplementedError
 
