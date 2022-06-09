@@ -1,3 +1,4 @@
+#spin-orbit ECPs converted from dirac' ECP library
 ECP
 # Tin atom
 # Q=4., MEFIT, MCDHF+Breit, Ref 32; CPP: alpha=2.264;delta=0.768;ncut=2.

@@ -1,3 +1,4 @@
+#spin-orbit ECPs converted from dirac' ECP library
 ECP
 # Germanium atom
 # Q=4., MEFIT, MCDHF+Breit, Ref 32; CPP: alpha=0.763;delta=1.251;ncut=2.
