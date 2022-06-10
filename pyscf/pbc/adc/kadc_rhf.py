@@ -52,7 +52,7 @@ import tempfile
 def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.method = adc.method.lower()
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x","adc(3)"):
        raise NotImplementedError(adc.method)
 
     cput0 = (logger.process_clock(), logger.perf_counter())
@@ -73,6 +73,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         kptlist = range(nkpts)
     
     dtype = np.result_type(adc.t2[0])
+    nkop_chk = adc.nkop_chk
+    kop_npick = adc.kop_npick
+    kop_w = np.zeros((len(kptlist),nroots), np.float)
+    kop_v = np.zeros((len(kptlist),nroots,size), dtype)
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
@@ -89,6 +93,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
         conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
     
+
         evals_k = evals_k.real
         evals[k] = evals_k
         evecs[k] = evecs_k
@@ -136,7 +141,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nmo = myadc.nmo
@@ -210,12 +215,12 @@ def compute_amplitudes(myadc, eris):
                         for p in range(0,nocc,chnk_size):
                              eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kd], eris.Lvv[ka,kc], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                              k = eris_ovvv.shape[0]
-                             t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
-                             t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
+                             t1_2[ki] += 1.5*lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1[ki,kk,kc,:,a:a+k],optimize=True)
+                             t1_2[ki] -= 0.5*lib.einsum('kdac,kicd->ia',eris_ovvv,t2_1[kk,ki,kc,a:a+k,:],optimize=True)
                              del eris_ovvv
                              eris_ovvv = dfadc.get_ovvv_df(myadc, eris.Lov[kk,kc], eris.Lvv[ka,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
-                             t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv.conj(),t2_1[ki,kk,kc,:,a:a+k].conj(),optimize=True)
-                             t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv.conj(),t2_1[kk,ki,kc,a:a+k,:].conj(),optimize=True)
+                             t1_2[ki] -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv,t2_1[ki,kk,kc,:,a:a+k],optimize=True)
+                             t1_2[ki] += 0.5*lib.einsum('kcad,kicd->ia',eris_ovvv,t2_1[kk,ki,kc,a:a+k,:],optimize=True)
                              del eris_ovvv
                              a += k
                     else:
@@ -230,10 +235,10 @@ def compute_amplitudes(myadc, eris):
                     kc = kconserv[kk, ki, kl]
                     ka = kconserv[kl, kc, kk]
  
-                    t1_2[ki] -= 1.5*lib.einsum('lcki,klac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
-                    t1_2[ki] += 0.5*lib.einsum('lcki,lkac->ia',eris_ovoo[kl,kc,kk].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
-                    t1_2[ki] -= 0.5*lib.einsum('kcli,lkac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kl,kk,ka].conj(),optimize=True)
-                    t1_2[ki] += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo[kk,kc,kl].conj(),t2_1[kk,kl,ka].conj(),optimize=True)
+                    t1_2[ki] -= 1.5*lib.einsum('lcki,klac->ia',eris_ovoo[kl,kc,kk],t2_1[kk,kl,ka],optimize=True)
+                    t1_2[ki] += 0.5*lib.einsum('lcki,lkac->ia',eris_ovoo[kl,kc,kk],t2_1[kl,kk,ka],optimize=True)
+                    t1_2[ki] -= 0.5*lib.einsum('kcli,lkac->ia',eris_ovoo[kk,kc,kl],t2_1[kl,kk,ka],optimize=True)
+                    t1_2[ki] += 0.5*lib.einsum('kcli,klac->ia',eris_ovoo[kk,kc,kl],t2_1[kk,kl,ka],optimize=True)
 
         for ki in range(nkpts):
             ka = ki
@@ -248,7 +253,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
     # Compute second-order doubles t2 (tijab)
         t2_1_vvvv = f.create_dataset('t2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
@@ -280,40 +285,40 @@ def compute_amplitudes(myadc, eris):
 
                     kc = kconserv[ki,ka,kk]
                     kb = kconserv[kj,kk,kc]
-                    t2_2[ki,kj,ka] -= lib.einsum('jkcb,kica->ijab',eris_oovv[kj,kk,kc].conj(),t2_1[kk,ki,kc],optimize=True)
+                    t2_2[ki,kj,ka] -= lib.einsum('kjbc,kica->ijab',eris_oovv[kk,kj,kb],t2_1[kk,ki,kc],optimize=True)
 
                     kc = kconserv[kk,ka,kj]
-                    kb = kconserv[ki,kc,kk]
-                    t2_2[ki,kj,ka] -= lib.einsum('ikcb,kjac->ijab',eris_oovv[ki,kk,kc].conj(),t2_1[kk,kj,ka],optimize=True)
+                    kb = kconserv[ki,kk,kc]
+                    t2_2[ki,kj,ka] -= lib.einsum('kibc,jkca->ijab',eris_oovv[kk,ki,kb],t2_1[kj,kk,kc],optimize=True)
 
                     kc = kconserv[ka,kj,kk]
-                    kb = kconserv[ki,kk,kc]
-                    t2_2[ki,kj,ka] -= lib.einsum('jkca,ikcb->ijab',eris_oovv[kj,kk,kc].conj(),t2_1[ki,kk,kc],optimize=True)
+                    kb = kconserv[ki,kc,kk]
+                    t2_2[ki,kj,ka] -= lib.einsum('kjac,ikcb->ijab',eris_oovv[kk,kj,ka],t2_1[ki,kk,kc],optimize=True)
 
                     kc = kconserv[ka,ki,kk]
-                    kb = kconserv[kk,kj,kc]
-                    t2_2[ki,kj,ka] -= lib.einsum('ikca,kjcb->ijab',eris_oovv[ki,kk,kc].conj(),t2_1[kk,kj,kc],optimize=True)
+                    kb = kconserv[kk,kc,kj]
+                    t2_2[ki,kj,ka] -= lib.einsum('kiac,kjcb->ijab',eris_oovv[kk,ki,ka],t2_1[kk,kj,kc],optimize=True)
 
             for kl in range(nkpts):
                     kk = kconserv[kj,kl,ki]
-                    t2_2[ki,kj,ka] += lib.einsum('ikjl,klab->ijab',eris_oooo[ki,kk,kj].conj(),t2_1[kk,kl,ka],optimize=True)
+                    t2_2[ki,kj,ka] += lib.einsum('kilj,klab->ijab',eris_oooo[kk,ki,kl],t2_1[kk,kl,ka],optimize=True)
 
             for kk in range(nkpts):
 
                     kc = kconserv[ki,ka,kk]
                     kb = kconserv[kc,kk,kj]
 
-                    t2_2[ki,kj,ka] += 2 * lib.einsum('jbck,kica->ijab',eris_ovvo[kj,kb,kc].conj(),t2_1[kk,ki,kc],optimize=True)
+                    t2_2[ki,kj,ka] += 2 * lib.einsum('kcbj,kica->ijab',eris_ovvo[kk,kc,kb],t2_1[kk,ki,kc],optimize=True)
                     kc = kconserv[kk,ka,ki]
-                    t2_2[ki,kj,ka] -= lib.einsum('jbck,ikca->ijab',eris_ovvo[kj,kb,kc].conj(),t2_1[ki,kk,kc],optimize=True)
+                    t2_2[ki,kj,ka] -= lib.einsum('kcbj,ikca->ijab',eris_ovvo[kk,kc,kb],t2_1[ki,kk,kc],optimize=True)
 
                     kc = kconserv[kk,ki,ka]
                     kb = kconserv[kk,kj,kc]
-                    t2_2[ki,kj,ka] += 2 * lib.einsum('iack,kjcb->ijab',eris_ovvo[ki,ka,kc].conj(),t2_1[kk,kj,kc],optimize=True)
+                    t2_2[ki,kj,ka] += 2 * lib.einsum('kcai,kjcb->ijab',eris_ovvo[kk,kc,ka],t2_1[kk,kj,kc],optimize=True)
   
                     kc = kconserv[kk,ki,ka]
                     kb = kconserv[kj,kk,kc]
-                    t2_2[ki,kj,ka] -= lib.einsum('iack,jkcb->ijab',eris_ovvo[ki,ka,kc].conj(),t2_1[kj,kk,kc],optimize=True)
+                    t2_2[ki,kj,ka] -= lib.einsum('kcai,jkcb->ijab',eris_ovvo[kk,kc,ka],t2_1[kj,kk,kc],optimize=True)
 
             kb = kconserv[ki, ka, kj]
             eia = _get_epq([0,nocc,ki,mo_e_o,nonzero_opadding],
@@ -346,7 +351,7 @@ def compute_energy(myadc, t2, eris):
 
     emp2 = 0.0
     eris_ovov = eris.ovov
-    t2_amp = t2[0][:].copy()     
+    t2_amp = t2[0][:] 
     
     if (myadc.method == "adc(3)"):
         t2_amp += t2[1]
@@ -434,6 +439,8 @@ class RADC(pyscf.adc.radc.RADC):
         self._nocc = None
         self._nmo = None
         self._nvir = None
+        self.nkop_chk = False
+        self.kop_npick = False
 
         self.t1 = None
         self.t2 = None
@@ -479,7 +486,7 @@ class RADC(pyscf.adc.radc.RADC):
         assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
     
         if self.verbose >= logger.WARN:
@@ -517,7 +524,7 @@ class RADC(pyscf.adc.radc.RADC):
         assert(self.mo_occ is not None)
     
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
     
         if self.verbose >= logger.WARN:
@@ -572,6 +579,19 @@ class RADC(pyscf.adc.radc.RADC):
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris, kptlist)
         return e_exc, v_exc, spec_fac, x, adc_es
 
+    def density_fit(self, auxbasis=None, with_df = None):
+        if with_df is None:
+            self.with_df = df.DF(self._scf.mol)
+            self.with_df.max_memory = self.max_memory
+            self.with_df.stdout = self.stdout
+            self.with_df.verbose = self.verbose
+            if auxbasis is None:
+                self.with_df.auxbasis = self._scf.with_df.auxbasis
+            else:
+                self.with_df.auxbasis = auxbasis
+        else:
+            self.with_df = with_df
+        return self
 
 def ea_vector_size(adc):
 
@@ -602,7 +622,7 @@ def get_imds_ea(adc, eris=None):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -685,33 +705,33 @@ def get_imds_ea(adc, eris=None):
                        kd = kconserv[ka,kb,kl]
                        eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov[kl,kd], eris.Lvv[ka,kb], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                        k = eris_ovvv.shape[0]
-                       M_ab[ka] += 2. * lib.einsum('ld,ldab->ab',t1_2[kl][a:a+k].conj(), eris_ovvv,optimize=True)
+                       M_ab[ka] += 2. * lib.einsum('ld,ldab->ab',t1_2[kl][a:a+k], eris_ovvv,optimize=True)
                        del eris_ovvv
                        kd = kconserv[kb,ka,kl]
                        eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov[kl,kd], eris.Lvv[kb,ka], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                        k = eris_ovvv.shape[0]
-                       M_ab[ka] += 2. * lib.einsum('ld,ldba->ab',t1_2[kl][a:a+k], eris_ovvv.conj(),optimize=True)
+                       M_ab[ka] += 2. * lib.einsum('ld,ldba->ab',t1_2[kl][a:a+k].conj(), eris_ovvv.conj(),optimize=True)
                        del eris_ovvv
                        kd = kconserv[ka,kb,kl]
                        eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov[kl,kb], eris.Lvv[ka,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                        k = eris_ovvv.shape[0]
-                       M_ab[ka] -= lib.einsum('ld,lbad->ab',t1_2[kl][a:a+k].conj(), eris_ovvv,optimize=True)
+                       M_ab[ka] -= lib.einsum('ld,lbad->ab',t1_2[kl][a:a+k], eris_ovvv,optimize=True)
                        del eris_ovvv
                        kd = kconserv[kb,ka,kl]
                        eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov[kl,ka], eris.Lvv[kb,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                        k = eris_ovvv.shape[0]
-                       M_ab[ka] -= lib.einsum('ld,labd->ab',t1_2[kl,a:a+k], eris_ovvv.conj(),optimize=True)
+                       M_ab[ka] -= lib.einsum('ld,labd->ab',t1_2[kl,a:a+k].conj(), eris_ovvv.conj(),optimize=True)
                        del eris_ovvv
                        a += k
 
                else :
                    eris_ovvv = eris.ovvv
                    kd = kconserv[ka,kb,kl]
-                   M_ab[ka] += 2. * lib.einsum('ld,ldab->ab',t1_2[kl].conj(), eris_ovvv[kl,kd,ka],optimize=True)
-                   M_ab[ka] -=  lib.einsum('ld,lbad->ab',t1_2[kl].conj(), eris_ovvv[kl,kb,ka],optimize=True)
+                   M_ab[ka] += 2. * lib.einsum('ld,ldab->ab',t1_2[kl], eris_ovvv[kl,kd,ka],optimize=True)
+                   M_ab[ka] -=  lib.einsum('ld,lbad->ab',t1_2[kl], eris_ovvv[kl,kb,ka],optimize=True)
                    kd = kconserv[kb,ka,kl]
-                   M_ab[ka] += 2. * lib.einsum('ld,ldba->ab',t1_2[kl], eris_ovvv[kl,kd,kb].conj(),optimize=True)
-                   M_ab[ka] -= lib.einsum('ld,labd->ab',t1_2[kl], eris_ovvv[kl,ka,kb].conj(),optimize=True)
+                   M_ab[ka] += 2. * lib.einsum('ld,ldba->ab',t1_2[kl].conj(), eris_ovvv[kl,kd,kb].conj(),optimize=True)
+                   M_ab[ka] -= lib.einsum('ld,labd->ab',t1_2[kl].conj(), eris_ovvv[kl,ka,kb].conj(),optimize=True)
 
        cput0 = log.timer_debug1("Completed M_ab ovvv ADC(3) calculation", *cput0)
 
@@ -895,7 +915,7 @@ def get_imds_ip(adc, eris=None):
     cput0 = (time.process_time(), time.time())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -948,13 +968,13 @@ def get_imds_ip(adc, eris=None):
 
                 t2_1_jld = adc.t2[0][kj,kl,kd]
                 M_ij[ki] += 0.5 * 0.5 *  lib.einsum('jlde,idle->ij',t2_1_jld.conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
-                M_ij[ki] -= 0.5 * 0.5 *  lib.einsum('jlde,ldie->ij',t2_1_jld.conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
+                M_ij[ki] -= 0.5 * 0.5 *  lib.einsum('jlde,ield->ij',t2_1_jld.conj(), eris_ovov[ki,ke,kl].conj(),optimize=True)
                 M_ij[ki] += 0.5 * lib.einsum('jlde,idle->ij',t2_1_jld.conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
                 del t2_1_jld
 
                 t2_1_ljd = adc.t2[0][kl,kj,kd]
                 M_ij[ki] -= 0.5 * 0.5 *  lib.einsum('ljde,idle->ij',t2_1_ljd.conj(), eris_ovov[ki,kd,kl].conj(),optimize=True)
-                M_ij[ki] += 0.5 * 0.5 *  lib.einsum('ljde,ldie->ij',t2_1_ljd.conj(), eris_ovov[kl,kd,ki].conj(),optimize=True)
+                M_ij[ki] += 0.5 * 0.5 *  lib.einsum('ljde,ield->ij',t2_1_ljd.conj(), eris_ovov[ki,ke,kl].conj(),optimize=True)
                 del t2_1_ljd
                 del t2_1    
 
@@ -970,12 +990,12 @@ def get_imds_ip(adc, eris=None):
             kj = ki
             for kl in range(nkpts):
                 kd = kconserv[kj,ki,kl]
-                M_ij[ki] += 2. * lib.einsum('ld,ldji->ij',t1_2[kl].conj(), eris_ovoo[kl,kd,kj],optimize=True)
-                M_ij[ki] -=      lib.einsum('ld,jdli->ij',t1_2[kl].conj(), eris_ovoo[kj,kd,kl],optimize=True)
+                M_ij[ki] += 2. * lib.einsum('ld,ldji->ij',t1_2[kl], eris_ovoo[kl,kd,kj],optimize=True)
+                M_ij[ki] -=      lib.einsum('ld,jdli->ij',t1_2[kl], eris_ovoo[kj,kd,kl],optimize=True)
 
                 kd = kconserv[ki,kj,kl]
-                M_ij[ki] += 2. * lib.einsum('ld,ldij->ij',t1_2[kl], eris_ovoo[kl,kd,ki].conj(),optimize=True)
-                M_ij[ki] -=      lib.einsum('ld,idlj->ij',t1_2[kl], eris_ovoo[ki,kd,kl].conj(),optimize=True)
+                M_ij[ki] += 2. * lib.einsum('ld,ldij->ij',t1_2[kl].conj(), eris_ovoo[kl,kd,ki].conj(),optimize=True)
+                M_ij[ki] -=      lib.einsum('ld,idlj->ij',t1_2[kl].conj(), eris_ovoo[ki,kd,kl].conj(),optimize=True)
 
                 for kd in range(nkpts):
                     t2_1 = adc.t2[0]
@@ -1004,30 +1024,30 @@ def get_imds_ip(adc, eris=None):
         
                 kl = kconserv[kd,km,ke]
                 kf = kconserv[kj,kd,kl]
-                temp_t2_v_1 = lib.einsum('lmde,jldf->mejf',t2_1[kl,km,kd], t2_1[kj,kl,kd].conj(),optimize=True)
+                temp_t2_v_1 = lib.einsum('lmde,jldf->mejf',t2_1[kl,km,kd].conj(), t2_1[kj,kl,kd],optimize=True)
                 M_ij[ki] -=  0.5 * 2 * lib.einsum('mejf,mefi->ij',temp_t2_v_1, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mefj->ij',temp_t2_v_1, eris_ovvo[km,ke,kf],optimize = True)
+                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mefj->ij',temp_t2_v_1.conj(), eris_ovvo[km,ke,kf].conj(),optimize = True)
                 M_ij[ki] +=  0.5 *     lib.einsum('mejf,mife->ij',temp_t2_v_1, eris_oovv[km,ki,kf],optimize = True)
-                M_ij[ki] +=  0.5 *     lib.einsum('meif,mjfe->ij',temp_t2_v_1, eris_oovv[km,kj,kf],optimize = True)
+                M_ij[ki] +=  0.5 *     lib.einsum('meif,mjfe->ij',temp_t2_v_1.conj(), eris_oovv[km,kj,kf].conj(),optimize = True)
 
-                temp_t2_v_new = lib.einsum('mlde,ljdf->mejf',t2_1[km,kl,kd], t2_1[kl,kj,kd].conj(),optimize=True)
+                temp_t2_v_new = lib.einsum('mlde,ljdf->mejf',t2_1[km,kl,kd].conj(), t2_1[kl,kj,kd],optimize=True)
                 M_ij[ki] -=  0.5 * 2 * lib.einsum('mejf,mefi->ij',temp_t2_v_new, eris_ovvo[km,ke,kf],optimize = True)
                 M_ij[ki] +=  0.5 *     lib.einsum('mejf,mife->ij',temp_t2_v_new, eris_oovv[km,ki,kf],optimize = True)
-                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mefj->ij',temp_t2_v_new, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] +=  0.5 *     lib.einsum('meif,mjfe->ij',temp_t2_v_new, eris_oovv[km,kj,kf],optimize = True)
+                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mefj->ij',temp_t2_v_new.conj(), eris_ovvo[km,ke,kf].conj(),optimize = True)
+                M_ij[ki] +=  0.5 *     lib.einsum('meif,mjfe->ij',temp_t2_v_new.conj(), eris_oovv[km,kj,kf].conj(),optimize = True)
                 del temp_t2_v_new       
 
-                temp_t2_v_2 = lib.einsum('lmde,ljdf->mejf',t2_1[kl,km,kd], t2_1[kl,kj,kd].conj(),optimize=True)
+                temp_t2_v_2 = lib.einsum('lmde,ljdf->mejf',t2_1[kl,km,kd].conj(), t2_1[kl,kj,kd],optimize=True)
                 M_ij[ki] +=  0.5 * 4 * lib.einsum('mejf,mefi->ij',temp_t2_v_2, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] +=  0.5 * 4 * lib.einsum('meif,mefj->ij',temp_t2_v_2, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mjfe->ij',temp_t2_v_2, eris_oovv[km,kj,kf],optimize = True)
+                M_ij[ki] +=  0.5 * 4 * lib.einsum('meif,mefj->ij',temp_t2_v_2.conj(), eris_ovvo[km,ke,kf].conj(),optimize = True)
+                M_ij[ki] -=  0.5 * 2 * lib.einsum('meif,mjfe->ij',temp_t2_v_2.conj(), eris_oovv[km,kj,kf].conj(),optimize = True)
                 M_ij[ki] -=  0.5 * 2 * lib.einsum('mejf,mife->ij',temp_t2_v_2, eris_oovv[km,ki,kf],optimize = True)
                 del temp_t2_v_2        
 
-                temp_t2_v_3 = lib.einsum('mlde,jldf->mejf',t2_1[km,kl,kd], t2_1[kj,kl,kd].conj(),optimize=True)
+                temp_t2_v_3 = lib.einsum('mlde,jldf->mejf',t2_1[km,kl,kd].conj(), t2_1[kj,kl,kd],optimize=True)
                 M_ij[ki] += 0.5 *    lib.einsum('mejf,mefi->ij',temp_t2_v_3, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] += 0.5 *    lib.einsum('meif,mefj->ij',temp_t2_v_3, eris_ovvo[km,ke,kf],optimize = True)
-                M_ij[ki] -= 0.5 *2 * lib.einsum('meif,mjfe->ij',temp_t2_v_3, eris_oovv[km,kj,kf],optimize = True)
+                M_ij[ki] += 0.5 *    lib.einsum('meif,mefj->ij',temp_t2_v_3.conj(), eris_ovvo[km,ke,kf].conj(),optimize = True)
+                M_ij[ki] -= 0.5 *2 * lib.einsum('meif,mjfe->ij',temp_t2_v_3.conj(), eris_oovv[km,kj,kf].conj(),optimize = True)
                 M_ij[ki] -= 0.5 *2 * lib.einsum('mejf,mife->ij',temp_t2_v_3, eris_oovv[km,ki,kf],optimize = True)
                 del temp_t2_v_3        
 
@@ -1069,43 +1089,41 @@ def get_imds_ip(adc, eris=None):
                 t2_1 = adc.t2[0]
                 kl = kconserv[kd,km,ke]
                 kn = kconserv[kd,ki,ke]
-                temp_t2_v_12 = lib.einsum('inde,lmde->inlm',t2_1[ki,kn,kd], t2_1[kl,km,kd].conj(),optimize=True)
-                M_ij[ki] += 0.5 * 1.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12, eris_oooo[kj,km,kn], optimize = True)
+                temp_t2_v_12 = lib.einsum('inde,lmde->inlm',t2_1[ki,kn,kd].conj(), t2_1[kl,km,kd],optimize=True)
+                M_ij[ki] += 0.5 * 1.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12, eris_oooo[kj,kl,kn].conj(), optimize = True)
+                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12, eris_oooo[kj,km,kn].conj(), optimize = True)
  
-                M_ij[kj] += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ji',temp_t2_v_12, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[kj] -= 0.5 * 0.25 * lib.einsum('inlm,lnmj->ji',temp_t2_v_12, eris_oooo[kl,kn,km].conj(), optimize = True)
-                M_ij[kj] += 0.5 * 1.00 * lib.einsum('inlm,ljmn->ji',temp_t2_v_12, eris_oooo[kl,kj,km].conj(), optimize = True)
+                M_ij[ki] += 0.5 * 1.25 * lib.einsum('jnlm,ilnm->ij',temp_t2_v_12.conj(), eris_oooo[ki,kl,kn], optimize = True)
+                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('jnlm,imnl->ij',temp_t2_v_12.conj(), eris_oooo[ki,km,kn], optimize = True)
                 del temp_t2_v_12
 
-                temp_t2_v_12_1 = lib.einsum('nide,mlde->inlm',t2_1[kn,ki,kd], t2_1[km,kl,kd].conj(),optimize=True)
-                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12_1, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12_1, eris_oooo[kj,km,kn], optimize = True)
-                M_ij[kj] -= 0.5 * 0.25 * lib.einsum('inlm,lnmj->ji',temp_t2_v_12_1, eris_oooo[kl,kn,km].conj(), optimize = True)
-                M_ij[kj] += 0.5 * 0.25 * lib.einsum('inlm,ljmn->ji',temp_t2_v_12_1, eris_oooo[kl,kj,km].conj(), optimize = True)
+                temp_t2_v_12_1 = lib.einsum('nide,mlde->inlm',t2_1[kn,ki,kd].conj(), t2_1[km,kl,kd],optimize=True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12_1, eris_oooo[kj,kl,kn].conj(), optimize = True)
+                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12_1, eris_oooo[kj,km,kn].conj(), optimize = True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('jnlm,ilnm->ij',temp_t2_v_12_1.conj(), eris_oooo[ki,kl,kn], optimize = True)
+                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('jnlm,imnl->ij',temp_t2_v_12_1.conj(), eris_oooo[ki,km,kn], optimize = True)
 
-                temp_t2_v_13 = lib.einsum('inde,mlde->inml',t2_1[ki,kn,kd], t2_1[km,kl,kd].conj(),optimize=True)
-                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ij',temp_t2_v_13, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13, eris_oooo[kj,km,kn], optimize = True)
+                temp_t2_v_13 = lib.einsum('inde,mlde->inml',t2_1[ki,kn,kd].conj(), t2_1[km,kl,kd],optimize=True)
+                M_ij[ki] -= 0.5 * 0.5 * lib.einsum('inml,jlnm->ij',temp_t2_v_13, eris_oooo[kj,kl,kn].conj(), optimize = True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13, eris_oooo[kj,km,kn].conj(), optimize = True)
 
-                M_ij[kj] -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ji',temp_t2_v_13, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[kj] += 0.5 * 0.25 * lib.einsum('inml,lnmj->ji',temp_t2_v_13, eris_oooo[kl,kn,km].conj(), optimize = True)
-
-                M_ij[kj] -= 0.5 * 0.25 * lib.einsum('inml,ljmn->ji',temp_t2_v_13, eris_oooo[kl,kj,km].conj(), optimize = True)
-                M_ij[kj] += 0.5 * 0.25 * lib.einsum('inml,lnmj->ji',temp_t2_v_13, eris_oooo[kl,kn,km].conj(), optimize = True)
+                M_ij[ki] -= 0.5 * 0.5 * lib.einsum('jnml,ilnm->ij',temp_t2_v_13.conj(), eris_oooo[ki,kl,kn], optimize = True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('jnml,imnl->ij',temp_t2_v_13.conj(), eris_oooo[ki,km,kn], optimize = True)
                 del temp_t2_v_13
 
-                temp_t2_v_13_1 = lib.einsum('nide,lmde->inlm',t2_1[kn,ki,kd], t2_1[kl,km,kd].conj(),optimize=True)
-                M_ij[ki] -= 0.5 * 0.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_13_1, eris_oooo[kj,kl,kn], optimize = True)
-                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_13_1, eris_oooo[kj,km,kn], optimize = True)
+                temp_t2_v_13_1 = lib.einsum('nide,lmde->inml',t2_1[kn,ki,kd].conj(), t2_1[kl,km,kd],optimize=True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13_1, eris_oooo[kj,km,kn].conj(), optimize = True)
+                M_ij[ki] += 0.5 * 0.25 * lib.einsum('jnml,imnl->ij',temp_t2_v_13_1.conj(), eris_oooo[ki,km,kn], optimize = True)
                 del temp_t2_v_13_1
+
+
     return M_ij
 
 def ea_adc_diag(adc,kshift,M_ab=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1166,7 +1184,7 @@ def ip_adc_diag(adc,kshift,M_ij=None,eris=None):
    
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1265,7 +1283,7 @@ def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
 
 def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1351,7 +1369,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
 ################ ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
 
                eris_oovv = eris.oovv
                eris_ovvo = eris.ovvo
@@ -1390,7 +1408,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
  
                if adc.exxdiv is not None:
                   s2 += -madelung * r2
-        if (method == "adc(2)-c" or method =="adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
 
@@ -1617,7 +1635,7 @@ def ea_adc_matvec(adc, kshift, M_ab=None, eris=None):
 
 def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1673,6 +1691,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
         for kj in range(nkpts):
             for kk in range(nkpts):
                 ka = kconserv[kk, kshift, kj]
+                ki = kconserv[kj, kk, ka]
 
                 s1 += 2. * lib.einsum('jaki,ajk->i', eris_ovoo[kj,ka,kk].conj(), r2[ka,kj], optimize = True)
                 s1 -= lib.einsum('kaji,ajk->i', eris_ovoo[kk,ka,kj].conj(), r2[ka,kj], optimize = True)
@@ -1688,7 +1707,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 ############### ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
 
                eris_oooo = eris.oooo
                eris_oovv = eris.oovv
@@ -1701,32 +1720,30 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
                           for kl in range(nkpts):
                               ki = kconserv[kj, kl, kk]
 
-                              s2[ka,kj] -= 0.5*lib.einsum('kijl,ali->ajk',eris_oooo[kk,ki,kj], r2[ka,kl], optimize = True)
-                              s2[ka,kj] -= 0.5*lib.einsum('klji,ail->ajk',eris_oooo[kk,kl,kj],r2[ka,ki], optimize = True)
+                              s2[ka,kj] -= 0.5*lib.einsum('ljik,ali->ajk',eris_oooo[kl,kj,ki], r2[ka,kl], optimize = True)
+                              s2[ka,kj] -= 0.5*lib.einsum('ijlk,ail->ajk',eris_oooo[ki,kj,kl],r2[ka,ki], optimize = True)
                           
                           for kl in range(nkpts):
                               kb = kconserv[ka, kk, kl]
-                              s2[ka,kj] += 0.5*lib.einsum('klba,bjl->ajk',eris_oovv[kk,kl,kb],r2[kb,kj],optimize = True)
+                              s2[ka,kj] += 0.5*lib.einsum('lkab,bjl->ajk',eris_oovv[kl,kk,ka],r2[kb,kj],optimize = True)
 
                               kb = kconserv[kl, kj, ka]
-                              s2[ka,kj] +=  0.5*lib.einsum('jabl,bkl->ajk',eris_ovvo[kj,ka,kb],r2[kb,kk],optimize = True)
-                              s2[ka,kj] -=  lib.einsum('jabl,blk->ajk',eris_ovvo[kj,ka,kb],r2[kb,kl],optimize = True)
-                              kb = kconserv[ka, kj, kl]
-                              s2[ka,kj] +=  0.5*lib.einsum('jlba,blk->ajk',eris_oovv[kj,kl,kb],r2[kb,kl],optimize = True)
+                              s2[ka,kj] +=  0.5*lib.einsum('lbaj,bkl->ajk',eris_ovvo[kl,kb,ka],r2[kb,kk],optimize = True)
+                              s2[ka,kj] -=  lib.einsum('lbaj,blk->ajk',eris_ovvo[kl,kb,ka],r2[kb,kl],optimize = True)
+                              s2[ka,kj] +=  0.5*lib.einsum('ljab,blk->ajk',eris_oovv[kl,kj,ka],r2[kb,kl],optimize = True)
 
                           for ki in range(nkpts):
                                kb = kconserv[ka, kk, ki]
-                               s2[ka,kj] += 0.5*lib.einsum('kiba,bji->ajk',eris_oovv[kk,ki,kb],r2[kb,kj],optimize = True)
+                               s2[ka,kj] += 0.5*lib.einsum('ikab,bji->ajk',eris_oovv[ki,kk,ka],r2[kb,kj],optimize = True)
 
                                kb = kconserv[ka, kj, ki]
-                               s2[ka,kj] += 0.5*lib.einsum('jiba,bik->ajk',eris_oovv[kj,ki,kb],r2[kb,ki],optimize = True)
-                               s2[ka,kj] -= lib.einsum('jabi,bik->ajk',eris_ovvo[kj,ka,kb],r2[kb,ki],optimize = True)
-                               kb = kconserv[ki, kj, ka]
-                               s2[ka,kj] += 0.5*lib.einsum('jabi,bki->ajk',eris_ovvo[kj,ka,kb],r2[kb,kk],optimize = True)
+                               s2[ka,kj] += 0.5*lib.einsum('ijab,bik->ajk',eris_oovv[ki,kj,ka],r2[kb,ki],optimize = True)
+                               s2[ka,kj] -= lib.einsum('ibaj,bik->ajk',eris_ovvo[ki,kb,ka],r2[kb,ki],optimize = True)
+                               s2[ka,kj] += 0.5*lib.einsum('ibaj,bki->ajk',eris_ovvo[ki,kb,ka],r2[kb,kk],optimize = True)
                if adc.exxdiv is not None:
                   s2 += madelung * r2
 
-        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
                eris_ovoo = eris.ovoo
 
@@ -1899,7 +1916,7 @@ def ip_adc_matvec(adc, kshift, M_ij=None, eris=None):
 
 def ea_compute_trans_moments(adc, orb, kshift):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise notimplementederror(adc.method)
 
     method = adc.method
@@ -1907,8 +1924,6 @@ def ea_compute_trans_moments(adc, orb, kshift):
     nocc = adc.nocc
     nvir = adc.nmo - adc.nocc
     t2_1 = adc.t2[0]
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
-        t1_2 = adc.t1[0]
 
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
@@ -1921,6 +1936,7 @@ def ea_compute_trans_moments(adc, orb, kshift):
     if orb < nocc:
 
         if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            t1_2 = adc.t1[0]
             T1 -= t1_2[kshift][orb,:]
 
         for kj in range(nkpts):
@@ -1948,7 +1964,7 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1]
 
@@ -2011,7 +2027,7 @@ def ea_compute_trans_moments(adc, orb, kshift):
 
 def ip_compute_trans_moments(adc, orb, kshift):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -2019,8 +2035,6 @@ def ip_compute_trans_moments(adc, orb, kshift):
     nocc = adc.nocc
     nvir = adc.nmo - adc.nocc
     t2_1 = adc.t2[0]
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
-        t1_2 = adc.t1[0]
 
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
@@ -2036,14 +2050,15 @@ def ip_compute_trans_moments(adc, orb, kshift):
             for kc in range(nkpts):
                 kd = adc.khelper.kconserv[kk, kc, kshift]
                 ki = adc.khelper.kconserv[kc, kk, kd]
-                T1 += 0.25*lib.einsum('kdc,ikdc->i',t2_1[kk,kshift,kd][:,orb,:,:], t2_1[ki,kk,kd].conj(), optimize = True)
-                T1 -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[kk,kshift,kc][:,orb,:,:], t2_1[ki,kk,kd].conj(), optimize = True)
-                T1 -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[kk,kshift,kd][:,orb,:,:], t2_1[ki,kk,kc].conj(), optimize = True)
-                T1 += 0.25*lib.einsum('kcd,ikcd->i',t2_1[kk,kshift,kc][:,orb,:,:], t2_1[ki,kk,kc].conj(), optimize = True)
-                T1 -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[kshift,kk,kd][orb,:,:,:], t2_1[ki,kk,kd].conj(), optimize = True)
-                T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[kshift,kk,kc][orb,:,:,:], t2_1[ki,kk,kc].conj(), optimize = True)
+                T1 += 0.25*lib.einsum('kdc,ikdc->i',t2_1[kk,kshift,kd][:,orb,:,:].conj(), t2_1[ki,kk,kd], optimize = True)
+                T1 -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[kk,kshift,kc][:,orb,:,:].conj(), t2_1[ki,kk,kd], optimize = True)
+                T1 -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[kk,kshift,kd][:,orb,:,:].conj(), t2_1[ki,kk,kc], optimize = True)
+                T1 += 0.25*lib.einsum('kcd,ikcd->i',t2_1[kk,kshift,kc][:,orb,:,:].conj(), t2_1[ki,kk,kc], optimize = True)
+                T1 -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[kshift,kk,kd][orb,:,:,:].conj(), t2_1[ki,kk,kd], optimize = True)
+                T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[kshift,kk,kc][orb,:,:,:].conj(), t2_1[ki,kk,kc], optimize = True)
     else :
         if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            t1_2 = adc.t1[0]
             T1 += t1_2[kshift][:,(orb-nocc)]
 
 ######## ADC(2) 2h-1p  part  ############################################
@@ -2059,7 +2074,7 @@ def ip_compute_trans_moments(adc, orb, kshift):
         del t2_1_t
 ####### ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1]
 
@@ -2081,19 +2096,19 @@ def ip_compute_trans_moments(adc, orb, kshift):
                 for kc in range(nkpts):
                     kd = adc.khelper.kconserv[kk, kc, kshift]
                     ki = adc.khelper.kconserv[kd, kk, kc]
-                    T1 += 0.25*lib.einsum('kdc,ikdc->i',t2_1[kk,ki,kd][:,orb,:,:], t2_2[ki,kk,kd].conj(), optimize = True)
-                    T1 -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[kk,ki,kc][:,orb,:,:], t2_2[ki,kk,kd].conj(), optimize = True)
-                    T1 -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[kk,ki,kd][:,orb,:,:], t2_2[ki,kk,kc].conj(), optimize = True)
-                    T1 += 0.25*lib.einsum('kcd,ikcd->i',t2_1[kk,ki,kc][:,orb,:,:], t2_2[ki,kk,kc].conj(), optimize = True)
-                    T1 -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[ki,kk,kd][orb,:,:,:], t2_2[ki,kk,kd].conj(), optimize = True)
-                    T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[ki,kk,kc][orb,:,:,:], t2_2[ki,kk,kc].conj(), optimize = True)
+                    T1 += 0.25*lib.einsum('kdc,ikdc->i',t2_1[kk,ki,kd][:,orb,:,:].conj(), t2_2[ki,kk,kd], optimize = True)
+                    T1 -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[kk,ki,kc][:,orb,:,:].conj(), t2_2[ki,kk,kd], optimize = True)
+                    T1 -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[kk,ki,kd][:,orb,:,:].conj(), t2_2[ki,kk,kc], optimize = True)
+                    T1 += 0.25*lib.einsum('kcd,ikcd->i',t2_1[kk,ki,kc][:,orb,:,:].conj(), t2_2[ki,kk,kc], optimize = True)
+                    T1 -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[ki,kk,kd][orb,:,:,:].conj(), t2_2[ki,kk,kd], optimize = True)
+                    T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[ki,kk,kc][orb,:,:,:].conj(), t2_2[ki,kk,kc], optimize = True)
 
-                    T1 += 0.25*lib.einsum('ikdc,kdc->i',t2_1[ki,kk,kd].conj(), t2_2[kk,ki,kd][:,orb,:,:],optimize = True)
-                    T1 -= 0.25*lib.einsum('ikcd,kdc->i',t2_1[ki,kk,kc].conj(), t2_2[kk,ki,kd][:,orb,:,:],optimize = True)
-                    T1 -= 0.25*lib.einsum('ikdc,kcd->i',t2_1[ki,kk,kd].conj(), t2_2[kk,ki,kc][:,orb,:,:],optimize = True)
-                    T1 += 0.25*lib.einsum('ikcd,kcd->i',t2_1[ki,kk,kc].conj(), t2_2[kk,ki,kc][:,orb,:,:],optimize = True)
-                    T1 -= 0.25*lib.einsum('ikcd,kcd->i',t2_1[ki,kk,kc].conj(), t2_2[ki,kk,kc][orb,:,:,:],optimize = True)
-                    T1 -= 0.25*lib.einsum('ikdc,kdc->i',t2_1[ki,kk,kd].conj(), t2_2[ki,kk,kd][orb,:,:,:],optimize = True)
+                    T1 += 0.25*lib.einsum('ikdc,kdc->i',t2_1[ki,kk,kd], t2_2[kk,ki,kd][:,orb,:,:].conj(),optimize = True)
+                    T1 -= 0.25*lib.einsum('ikcd,kdc->i',t2_1[ki,kk,kc], t2_2[kk,ki,kd][:,orb,:,:].conj(),optimize = True)
+                    T1 -= 0.25*lib.einsum('ikdc,kcd->i',t2_1[ki,kk,kd], t2_2[kk,ki,kc][:,orb,:,:].conj(),optimize = True)
+                    T1 += 0.25*lib.einsum('ikcd,kcd->i',t2_1[ki,kk,kc], t2_2[kk,ki,kc][:,orb,:,:].conj(),optimize = True)
+                    T1 -= 0.25*lib.einsum('ikcd,kcd->i',t2_1[ki,kk,kc], t2_2[ki,kk,kc][orb,:,:,:].conj(),optimize = True)
+                    T1 -= 0.25*lib.einsum('ikdc,kdc->i',t2_1[ki,kk,kd], t2_2[ki,kk,kd][orb,:,:,:].conj(),optimize = True)
         else:
 
             for kk in range(nkpts):
@@ -2263,6 +2278,8 @@ class RADCEA(RADC):
         self._nocc = adc._nocc
         self._nmo = adc._nmo
         self._nvir = adc._nvir
+        self.nkop_chk = adc.nkop_chk
+        self.kop_npick = adc.kop_npick
 
         self.t2 = adc.t2
         self.e_corr = adc.e_corr
@@ -2378,6 +2395,8 @@ class RADCIP(RADC):
         self._nocc = adc._nocc
         self._nmo = adc._nmo
         self._nvir = adc._nvir
+        self.nkop_chk = adc.nkop_chk
+        self.kop_npick = adc.kop_npick
 
         self.t2 = adc.t2
         self.e_corr = adc.e_corr

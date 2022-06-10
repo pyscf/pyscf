@@ -71,42 +71,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], 0.65279043, 6)
         self.assertAlmostEqual(e[0][2], 1.08236251, 6)
 
-        self.assertAlmostEqual(p[0][0], 1.93376135, 6)
-        self.assertAlmostEqual(p[0][1], 1.90737248, 6)
-        self.assertAlmostEqual(p[0][2], 0.00357378, 6)
-
-    def test_ip_adc2c_k(self):
-
-        kadc.method = 'adc(2)-c'
-        kadc.higher_excitation = True
-        kadc.kernel_gs()
-        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
-       
-        self.assertAlmostEqual(e[0][0], 0.02686973, 6)
-        self.assertAlmostEqual(e[0][1], 0.51798709, 6)
-        self.assertAlmostEqual(e[0][2], 0.92916398, 6)
-
-        self.assertAlmostEqual(p[0][0], 1.88496176, 6)
-        self.assertAlmostEqual(p[0][1], 1.79471337, 6)
-        self.assertAlmostEqual(p[0][2], 0.00003960, 6)
-
-    def test_ip_adc2xc_k(self):
-
-        nmp = [3,1,1]
-        kpts = cell.make_kpts((nmp))
-        kpts -= kpts[0]
-        kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
-        kadc  = adc.KRADC(kmf)
-        kadc.method = 'adc(2)-xc'
-        e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
- 
-        self.assertAlmostEqual(e[0][0], 0.21116811, 6)
-        self.assertAlmostEqual(e[0][1], 0.71795489, 6)
-        self.assertAlmostEqual(e[0][2], 0.98377928, 6)
-
-        self.assertAlmostEqual(p[0][0], 1.90176526, 6)
-        self.assertAlmostEqual(p[0][1], 1.80077089, 6)
-        self.assertAlmostEqual(p[0][2], 0.05015164, 6)
+        self.assertAlmostEqual(p[0][0], 1.93375487, 6)
+        self.assertAlmostEqual(p[0][1], 1.90733872, 6)
+        self.assertAlmostEqual(p[0][2], 0.00357151, 6)
 
     def test_ip_adc3_k(self):
 

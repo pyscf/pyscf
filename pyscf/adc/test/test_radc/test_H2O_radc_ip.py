@@ -80,25 +80,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8381884804163264, 6)
         self.assertAlmostEqual(p[2], 1.8669268953278064, 6)
 
-    def test_ip_adc2c(self):
-        myadc.higher_excitations = True
-        myadc.method = "adc(2)-c"
-        e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.2039852016968376, 6)
-
-        myadcip = adc.radc.RADCIP(myadc) 
-        e,v,p,x = myadcip.kernel(nroots=4)
-        myadcip.analyze()
-
-        self.assertAlmostEqual(e[0], 0.44509949, 6)
-        self.assertAlmostEqual(e[1], 0.52862398, 6)
-        self.assertAlmostEqual(e[2], 0.68258701, 6)
-        self.assertAlmostEqual(e[3], 1.16503557, 6)
-
-        self.assertAlmostEqual(p[0], 1.85955862, 6)
-        self.assertAlmostEqual(p[1], 1.86663719, 6)
-        self.assertAlmostEqual(p[2], 1.88458139, 6)
-        self.assertAlmostEqual(p[3], 0.1598467, 6)
 
     def test_ip_adc3(self):
         myadc.higher_excitations = True

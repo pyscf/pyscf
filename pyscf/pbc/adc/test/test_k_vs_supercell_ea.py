@@ -87,35 +87,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ediff, 0.00000000, 4)
         self.assertAlmostEqual(pdiff, 0.00000000, 4)
 
-    def test_ea_adc2c_supercell_vs_k(self):
-
-        myadc.method = 'adc(2)-c'
-        e1,v1,p1,x1 = myadc.kernel(nroots=3)
-        
-        kadc.method = 'adc(2)-c'
-        e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
-
-        ediff = e1[1] - e2[0][0]
-        pdiff = p1[1] - p2[0][0]
-
-        self.assertAlmostEqual(ediff, 0.00000000, 4)
-        self.assertAlmostEqual(pdiff, 0.00000000, 4)
-
-    def test_ea_adc2xc_supercell_vs_k(self):
-
-        myadc.method = 'adc(2)-xc'
-        e1,v1,p1,x1 = myadc.kernel(nroots=3)
-        
-        kadc.method = 'adc(2)-xc'
-        e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
-
-        ediff = e1[1] - e2[0][0]
-        pdiff = p1[1] - p2[0][0]
-
-        self.assertAlmostEqual(ediff, 0.00000000, 4)
-        self.assertAlmostEqual(pdiff, 0.00000000, 4)
-
-
     def test_ea_adc3_supercell_vs_k(self):
 
         myadc.method = 'adc(3)'

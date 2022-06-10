@@ -80,22 +80,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9905409664546319, 6)
         self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
 
-    def test_ea_adc2xc(self):
-        myadc.higher_excitations = True
-        myadc.method = "adc(2)-xc"
-        e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.2218560609876961, 6)
-
-        myadcea = adc.radc.RADCEA(myadc) 
-        e,v,p,x = myadcea.kernel(nroots=3)
-
-        self.assertAlmostEqual(e[0], 0.02880483, 6)
-        self.assertAlmostEqual(e[1], 0.05539307, 6)
-        self.assertAlmostEqual(e[2], 0.1651204, 6)
-
-        self.assertAlmostEqual(p[0], 1.9822316, 6)
-        self.assertAlmostEqual(p[1], 1.99230187, 6)
-        self.assertAlmostEqual(p[2], 1.96797144, 6)
 
     def test_ea_adc3(self):
         myadc.higher_excitations = True

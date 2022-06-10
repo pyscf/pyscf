@@ -32,7 +32,7 @@ from pyscf import symm
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     adc.method = adc.method.lower()
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     cput0 = (logger.process_clock(), logger.perf_counter())
@@ -92,7 +92,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nocc = myadc._nocc
@@ -166,7 +166,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
 
         # Compute second-order doubles t2 (tijab)
 
@@ -505,7 +505,7 @@ def compute_amplitudes(myadc, eris):
 
 def compute_energy(myadc, t2, eris):
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     eris_ovvo = eris.ovvo
@@ -733,7 +733,7 @@ class RADC(lib.StreamObject):
         assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
 
         if self.verbose >= logger.WARN:
@@ -774,7 +774,7 @@ class RADC(lib.StreamObject):
         assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
 
         if self.verbose >= logger.WARN:
@@ -862,7 +862,7 @@ def get_imds_ea(adc, eris=None):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1105,7 +1105,7 @@ def get_imds_ip(adc, eris=None):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1271,7 +1271,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     if M_ab is None:
@@ -1355,8 +1355,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    #if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     if M_ij is None:
@@ -1474,7 +1473,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv):
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1555,7 +1554,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 ############### ADC(3) iab - jcd block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
 
             eris_oovv = eris.oovv
             eris_ovvo = eris.ovvo
@@ -1582,7 +1581,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
             #print("Calculating additional terms for adc(3)")
 
-        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
             eris_ovoo = eris.ovoo
 
@@ -1722,7 +1721,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 def ip_adc_matvec(adc, M_ij=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1789,7 +1788,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 ################ ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
         
             eris_oooo = eris.oooo
             eris_oovv = eris.oovv
@@ -1810,7 +1809,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
             s[s2:f2] -= lib.einsum('jabi,bik->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
             s[s2:f2] += 0.5*lib.einsum('jabi,bki->ajk',eris_ovvo,r2,optimize = True).reshape(-1)
               
-        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
             eris_ovoo = eris.ovoo
             t2_1 = adc.t2[0]
@@ -1928,7 +1927,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 def ea_compute_trans_moments(adc, orb):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1978,7 +1977,7 @@ def ea_compute_trans_moments(adc, orb):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -2033,7 +2032,7 @@ def ea_compute_trans_moments(adc, orb):
 
 def ip_compute_trans_moments(adc, orb):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -2080,7 +2079,7 @@ def ip_compute_trans_moments(adc, orb):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
