@@ -69,7 +69,7 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
     pmol = reference_mol(mol, minao)
     # For PBC, we must use the pbc code for evaluating the integrals lest the
     # pbc conditions be ignored.
-    has_pbc = getattr(mol, 'dimension', 0) > 1
+    has_pbc = getattr(mol, 'dimension', 0) > 0
     if has_pbc:
         from pyscf.pbc import gto as pbcgto
         s1 = mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
