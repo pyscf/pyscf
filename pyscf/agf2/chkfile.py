@@ -27,8 +27,8 @@ from pyscf.lib import logger
 from pyscf import __config__
 from pyscf import gto
 from pyscf.lib import chkfile as chkutil
-from pyscf.agf2.aux import GreensFunction, SelfEnergy
 from pyscf.agf2 import mpi_helper
+from pyscf.agf2.aux_space import GreensFunction, SelfEnergy
 
 
 def load(chkfile, key):

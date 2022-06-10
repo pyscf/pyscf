@@ -19,23 +19,24 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import dft
 
-# for cgto
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [[2, (0.,0.,0.)], ]
-mol.basis = {"He": 'cc-pvdz'}
-mol.build()
-method = dft.RKS(mol)
+def setUpModule():
+    global mol, method, mol1
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [[2, (0.,0.,0.)], ]
+    mol.basis = {"He": 'cc-pvdz'}
+    mol.build()
+    method = dft.RKS(mol)
 
-mol1 = gto.Mole()
-mol1.verbose = 0
-mol1.output = None
-mol1.atom = 'He'
-mol1.basis = 'cc-pvdz'
-mol1.charge = 1
-mol1.spin = 1
-mol1.build()
+    mol1 = gto.Mole()
+    mol1.verbose = 0
+    mol1.output = None
+    mol1.atom = 'He'
+    mol1.basis = 'cc-pvdz'
+    mol1.charge = 1
+    mol1.spin = 1
+    mol1.build()
 
 def tearDownModule():
     global mol, method, mol1
@@ -95,6 +96,24 @@ class KnownValues(unittest.TestCase):
         m._numint.libxc = dft.xcfun
         m.xc = 'b88,lyp'
         self.assertAlmostEqual(m.scf(), -2.8978518405, 9)
+
+    def test_nr_m06l(self):
+        m = mol.RKS()
+        m.xc = 'm06l'
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+
+        m = mol.UKS()
+        m.xc = 'm06l'
+        self.assertAlmostEqual(m.scf(), -2.9039230673864243, 9)
+
+    def test_1e(self):
+        mf = dft.RKS(gto.M(atom='H', spin=1)).run()
+        self.assertTrue(isinstance(mf, dft.roks.ROKS))
+        self.assertAlmostEqual(mf.e_tot, -0.43567023283650547)
+
+        mf = dft.RKS(gto.M(atom='H', spin=1, symmetry=1)).run()
+        self.assertTrue(isinstance(mf, dft.rks_symm.ROKS))
+        self.assertAlmostEqual(mf.e_tot, -0.43567023283650547)
 
 if __name__ == "__main__":
     print("Full Tests for He")

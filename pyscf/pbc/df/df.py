@@ -136,7 +136,12 @@ def make_modchg_basis(auxcell, smooth_eta):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    # _estimate_rcut is based on the integral overlap. It's likely too tight for
+    # rcut of the model charge. Using the value of functions at rcut seems enough
+    # chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    rcut = 15.
+    chgcell.rcut = (numpy.log(4*numpy.pi*rcut**2/auxcell.precision) / smooth_eta)**.5
+
     logger.debug1(auxcell, 'make compensating basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
@@ -183,10 +188,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+    # Generally speaking, the int2c2e integrals with lattice sum applied on
+    # |j> are not necessary hermitian because int2c2e cannot be made converged
+    # with regular lattice sum unless the lattice sum vectors (from
+    # cell.get_lattice_Ls) are symmetric. After adding the planewaves
+    # contributions and fuse(fuse(j2c)), the output matrix is hermitian.
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = mydf.weighted_coulG(kpt, False, mesh)
@@ -197,15 +207,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aoaux = None
 
             if is_zero(kpt):  # kpti == kptj
-                j2c[k][naux:] -= lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
-                j2c[k][naux:] -= lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+                j2c_p  = lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
+                j2c_p += lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
             else:
                 j2cR, j2cI = zdotCN(LkR[naux:]*coulG[p0:p1],
                                     LkI[naux:]*coulG[p0:p1], LkR.T, LkI.T)
-                j2c[k][naux:] -= j2cR + j2cI * 1j
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
-            LkR = LkI = None
+                j2c_p = j2cR + j2cI * 1j
+            j2c[k][naux:] -= j2c_p
+            j2c[k][:naux,naux:] -= j2c_p[:,:naux].conj().T
+            j2c_p = LkR = LkI = None
+        # Symmetrizing the matrix is not must if the integrals converged.
+        # Since symmetry cannot be enforced in the pbc_intor('int2c2e'),
+        # the aggregated j2c here may have error in hermitian if the range of
+        # lattice sum is not big enough.
+        j2c[k] = (j2c[k] + j2c[k].conj().T) * .5
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
@@ -263,7 +278,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = fuse(mydf.auxbar(fused_cell))
+                vbar = mydf.auxbar(fused_cell)
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -832,7 +847,7 @@ def fuse_auxcell(mydf, auxcell):
             else:
                 npq = Lpq.shape[1]
                 Lpq_sph = numpy.empty((naux_sph,npq), dtype=Lpq.dtype)
-            if Lpq.dtype == numpy.complex:
+            if Lpq.dtype == numpy.complex128:
                 npq *= 2  # c2s_fn supports double only, *2 to handle complex
             for i in range(auxcell.nbas):
                 l  = auxcell.bas_angular(i)
@@ -908,16 +923,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
-
-        dat = h5group[key]
-        if isinstance(dat, h5py.Group):
-            # Check whether the integral tensor is stored with old data
-            # foramt (v1.5.1 or older). The old format puts the entire
-            # 3-index tensor in an HDF5 dataset. The new format divides
-            # the tensor into pieces and stores them in different groups.
-            # The code below combines the slices into a single tensor.
-            dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
+        hermi = False
     else:
         # swap ki,kj due to the hermiticity
         kptji = kpti_kptj[[1,0]]
@@ -934,16 +940,24 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
+        hermi = True
 
-#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
-# the 3D tensor if it is too big.
-        dat = _load_and_unpack(h5group[key])
+    dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
 class _load_and_unpack(object):
-    '''Load data lazily'''
-    def __init__(self, dat):
+    '''
+    This class returns an array-like object to an hdf5 file that can
+    be sliced, to allow for lazy loading
+
+    hermi : boolean
+    Take the conjugate transpose of the slice
+
+    See PR 1086 and Issue 1076
+    '''
+    def __init__(self, dat, hermi):
         self.dat = dat
+        self.hermi = hermi
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
@@ -951,9 +965,12 @@ class _load_and_unpack(object):
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
-        nao = int(numpy.sqrt(v.shape[-1]))
-        v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
-        return v1.reshape(v.shape)
+        if self.hermi:
+            nao = int(numpy.sqrt(v.shape[-1]))
+            v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+            return v1.reshape(v.shape)
+        else:
+            return v
     def __array__(self):
         '''Create a numpy array'''
         return self[()]

@@ -28,20 +28,22 @@ from pyscf.cc import gccsd_rdm
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.basis = '631g'
-mol.spin = 2
-mol.build()
-mf = scf.UHF(mol).run(conv_tol=1e-12)
-mf = scf.addons.convert_to_ghf(mf)
+def setUpModule():
+    global mol, mf, gcc1
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol).run(conv_tol=1e-12)
+    mf = scf.addons.convert_to_ghf(mf)
 
-gcc1 = gccsd.GCCSD(mf).run(conv_tol=1e-9)
+    gcc1 = gccsd.GCCSD(mf).run(conv_tol=1e-9)
 
 def tearDownModule():
     global mol, mf, gcc1

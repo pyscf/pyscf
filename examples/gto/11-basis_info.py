@@ -18,9 +18,9 @@ formats: tuple or string.  The tuple format has four elements:
 
 mol = gto.M(
     atom = '''
-        O  0 0.     0
-        H1 0 -2.757 2.587
-        H2 0 2.757  2.587''',
+O        0.000000    0.000000    0.117790
+H1       0.000000    0.755453   -0.471161
+H2       0.000000   -0.755453   -0.471161''',
     basis = 'ccpvdz',
 )
 

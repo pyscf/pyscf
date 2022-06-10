@@ -7,14 +7,26 @@ Python-based Simulations of Chemistry Framework
 [![Build Status](https://github.com/pyscf/pyscf/workflows/CI/badge.svg)](https://github.com/pyscf/pyscf/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/pyscf/pyscf/branch/master/graph/badge.svg)](https://codecov.io/gh/pyscf/pyscf)
 
-2020-03-28
+2021-11-01
 
-* [Stable release 1.7.6](https://github.com/pyscf/pyscf/releases/tag/v1.7.6)
+* [Stable release 2.0.0](https://github.com/pyscf/pyscf/releases/tag/v2.0.0)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
 
+
+## Announcement
+
+### PySCF annual developer's meeting
+
+Dear PySCF developer community,
+
+Thank you for your interest in PySCF and all your contributions to this software tool. The community has grown tremendously in the last few years to the point that many of us have never met! **To this end, we will be hosting the 1st annual PySCF developer conference July 28-29 2022 in Pasadena, California.** At the current time we are in the early planning stages. If you are interested in attending, please use the following [Google Form](https://forms.gle/nUyMuHs3sMTkBLK48), and more information will be available soon.
+
+best wishes,
+
+The PySCF board
 
 Installation
 ------------

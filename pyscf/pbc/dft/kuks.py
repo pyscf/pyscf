@@ -145,6 +145,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     get_rho = get_rho
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
     def nuc_grad_method(self):
         from pyscf.pbc.grad import kuks

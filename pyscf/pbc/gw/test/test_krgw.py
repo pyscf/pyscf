@@ -8,19 +8,21 @@ from pyscf.pbc import gto, dft, scf, df
 from pyscf.pbc.gw import krgw_ac
 from pyscf.pbc.gw import krgw_cd
 
-cell = gto.Cell()
-cell.build(
-    a = '''
-        0.000000     1.783500     1.783500
-        1.783500     0.000000     1.783500
-        1.783500     1.783500     0.000000
-    ''',
-    atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
-    verbose = 7,
-    output = '/dev/null',
-    pseudo = 'gth-pade',
-    basis='gth-szv',
-    precision=1e-8)
+def setUpModule():
+    global cell
+    cell = gto.Cell()
+    cell.build(
+        a = '''
+            0.000000     1.783500     1.783500
+            1.783500     0.000000     1.783500
+            1.783500     1.783500     0.000000
+        ''',
+        atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
+        verbose = 7,
+        output = '/dev/null',
+        pseudo = 'gth-pade',
+        basis='gth-szv',
+        precision=1e-8)
 
 def tearDownModule():
     global cell

@@ -59,8 +59,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 
@@ -108,13 +107,13 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
 
     def newton(self):
         from pyscf.mcscf import newton_casscf_symm
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
         # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
-        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         if isinstance (self, StateAverageMCSCFSolver):
-            mc1 = mc1.state_average_(self.weights)
+            mc1 = mc1.state_average_(self.weights, self.wfnsym)
         return mc1
 
 CASSCF = SymAdaptedCASSCF

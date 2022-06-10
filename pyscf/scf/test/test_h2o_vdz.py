@@ -21,15 +21,17 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dhf
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = 'cc-pvdz',
+    )
 
 def tearDownModule():
     global mol
@@ -115,12 +117,12 @@ class KnownValues(unittest.TestCase):
         uhf.direct_scf = False
         self.assertAlmostEqual(uhf.scf(), -76.02676567311958, 9)
 
-    def test_r_uhf(self):
+    def test_r_uhf_high_cost(self):
         uhf = dhf.UHF(mol)
         uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.081567907064198, 6)
 
-    def test_r_rhf(self):
+    def test_r_rhf_high_cost(self):
         uhf = dhf.RHF(mol)
         uhf.conv_tol_grad = 1e-5
         self.assertAlmostEqual(uhf.scf(), -76.081567907064198, 6)

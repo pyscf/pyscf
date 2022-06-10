@@ -20,6 +20,7 @@
 #		LMOs.
 # -ZL@20151225- Pipek-Mezey localizaiton 
 #
+from functools import reduce
 import math
 import numpy
 import scipy.linalg

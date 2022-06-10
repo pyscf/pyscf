@@ -29,17 +29,19 @@ from pyscf.cc import rccsd_lambda
 from pyscf.cc import ccsd_rdm
 from pyscf.cc import gccsd, gccsd_lambda
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
-mf = scf.RHF(mol).run()
-mycc = rccsd.RCCSD(mf)
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol).run()
+    mycc = rccsd.RCCSD(mf)
 
 def tearDownModule():
     global mol, mf, mycc
@@ -122,7 +124,7 @@ class KnownValues(unittest.TestCase):
 
         orbspin = np.zeros(nao*2, dtype=int)
         orbspin[1::2] = 1
-        eri1 = np.zeros([nao*2]*4, dtype=np.complex)
+        eri1 = np.zeros([nao*2]*4, dtype=np.complex128)
         eri1[0::2,0::2,0::2,0::2] = \
         eri1[0::2,0::2,1::2,1::2] = \
         eri1[1::2,1::2,0::2,0::2] = \

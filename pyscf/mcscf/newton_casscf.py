@@ -777,7 +777,6 @@ class CASSCF(mc1step.CASSCF):
         nvir = self.mo_coeff.shape[1] - ncore - ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d',
                  self.nelecas[0], self.nelecas[1], self.ncas, ncore, nvir)
-        assert(nvir > 0 and ncore > 0 and self.ncas > 0)
         if self.frozen is not None:
             log.info('frozen orbitals %s', str(self.frozen))
         log.info('max_cycle_macro = %d', self.max_cycle_macro)
@@ -820,7 +819,8 @@ class CASSCF(mc1step.CASSCF):
         else:
             fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log,
+                                            envs=envs)
         if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'

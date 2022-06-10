@@ -147,9 +147,59 @@ class VHFOpt(object):
         return numpy.ctypeslib.as_array(data, shape=shape)
     dm_cond = property(get_dm_cond)
 
+
+class SGXOpt(VHFOpt):
+    def __init__(self, mol, intor=None,
+                 prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
+        super(SGXOpt, self).__init__(mol, intor, prescreen, qcondname, dmcondname)
+        self.ngrids = None
+
+    def set_dm(self, dm, atm, bas, env):
+        if self._dmcondname is not None:
+            c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
+            c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
+            c_env = numpy.asarray(env, dtype=numpy.double, order='C')
+            natm = ctypes.c_int(c_atm.shape[0])
+            nbas = ctypes.c_int(c_bas.shape[0])
+            if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
+                n_dm = 1
+                ngrids = dm.shape[0]
+            else:
+                n_dm = len(dm)
+                ngrids = dm.shape[1]
+            dm = numpy.asarray(dm, order='C')
+            ao_loc = make_loc(c_bas, self._intor)
+            if isinstance(self._dmcondname, ctypes._CFuncPtr):
+                fsetdm = self._dmcondname
+            else:
+                fsetdm = getattr(libcvhf, self._dmcondname)
+            if self._dmcondname == 'SGXsetnr_direct_scf_dm':
+                fsetdm(self._this,
+                       dm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(n_dm),
+                       ao_loc.ctypes.data_as(ctypes.c_void_p),
+                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
+                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                       c_env.ctypes.data_as(ctypes.c_void_p),
+                       ctypes.c_int(ngrids))
+                self.ngrids = ngrids
+            else:
+                raise ValueError('Can only use SGX dm screening for SGXOpt')
+
+    def get_dm_cond(self):
+        '''Return an array associated to dm_cond. Contents of dm_cond can be
+        modified through this array
+        '''
+        nbas = self._this.contents.nbas
+        shape = (nbas, self.ngrids)
+        data = ctypes.cast(self._this.contents.dm_cond,
+                           ctypes.POINTER(ctypes.c_double))
+        return numpy.ctypeslib.as_array(data, shape=shape)
+    dm_cond = property(get_dm_cond)
+
+
 class _CVHFOpt(ctypes.Structure):
     _fields_ = [('nbas', ctypes.c_int),
-                ('_padding', ctypes.c_int),
+                ('ngrids', ctypes.c_int),
                 ('direct_scf_cutoff', ctypes.c_double),
                 ('q_cond', ctypes.c_void_p),
                 ('dm_cond', ctypes.c_void_p),
@@ -165,7 +215,7 @@ class _CVHFOpt(ctypes.Structure):
 def incore(eri, dms, hermi=0, with_j=True, with_k=True):
     assert(eri.dtype == numpy.double)
     eri = numpy.asarray(eri, order='C')
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
 
@@ -257,7 +307,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
     dms = dms.reshape(-1,nao,nao)
@@ -345,7 +395,7 @@ def direct_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -429,7 +479,7 @@ def direct_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -551,7 +601,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
         for j in range(n_dm):
             dm1[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
-    vjk = numpy.empty((njk,n_dm*ncomp,nao,nao), dtype=numpy.complex)
+    vjk = numpy.empty((njk,n_dm*ncomp,nao,nao), dtype=numpy.complex128)
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),
@@ -620,7 +670,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
-    vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex)
+    vjk = numpy.empty((njk,ncomp,nao,nao), dtype=numpy.complex128)
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),

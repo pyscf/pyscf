@@ -24,17 +24,19 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import jk
 
-mol = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = '631g',
-    cart = True,
-)
-mf = scf.RHF(mol).run(conv_tol=1e-10)
+def setUpModule():
+    global mol, mf
+    mol = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = '631g',
+        cart = True,
+    )
+    mf = scf.RHF(mol).run(conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mf

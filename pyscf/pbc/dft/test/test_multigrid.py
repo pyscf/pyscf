@@ -26,50 +26,53 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 multigrid.R_RATIO_SUBLOOP = 0.6
 
-numpy.random.seed(2)
-cell_orth = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    a = numpy.eye(3)*3.5668,
-    atom = '''C     0.      0.      0.    
-              C     1.8     1.8     1.8   ''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    precision = 1e-9,
-    mesh = [48] * 3,
-)
-cell_nonorth = gto.M(
-    a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
-    atom = '''C     0.      0.      0.    
-              C     0.8917  0.8917  0.8917''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    precision = 1e-9,
-    mesh = [44,43,42],
-)
+def setUpModule():
+    global cell_orth, cell_nonorth, cell_he, mydf
+    global kpts, nao, dm, dm1, vj_uks_orth, he_nao, dm_he
+    numpy.random.seed(2)
+    cell_orth = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        a = numpy.eye(3)*3.5668,
+        atom = '''C     0.      0.      0.
+                  C     1.8     1.8     1.8   ''',
+        basis = 'gth-dzv',
+        pseudo = 'gth-pade',
+        precision = 1e-9,
+        mesh = [48] * 3,
+    )
+    cell_nonorth = gto.M(
+        a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
+        atom = '''C     0.      0.      0.
+                  C     0.8917  0.8917  0.8917''',
+        basis = 'gth-dzv',
+        pseudo = 'gth-pade',
+        precision = 1e-9,
+        mesh = [44,43,42],
+    )
 
-cell_he = gto.M(atom='He 0 0 0',
-                basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
-                       [1, (.8, 1)]],
-                unit='B',
-                precision = 1e-9,
-                mesh=[18]*3,
-                a=numpy.eye(3)*5)
+    cell_he = gto.M(atom='He 0 0 0',
+                    basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
+                           [1, (.8, 1)]],
+                    unit='B',
+                    precision = 1e-9,
+                    mesh=[18]*3,
+                    a=numpy.eye(3)*5)
 
-kptsa = numpy.random.random((2,3))
-kpts = kptsa.copy()
-kpts[1] = -kpts[0]
-nao = cell_orth.nao_nr()
-dm = numpy.random.random((len(kpts),nao,nao)) * .2
-dm1 = dm + numpy.eye(nao)
-dm = dm1 + dm1.transpose(0,2,1)
-mydf = df.FFTDF(cell_orth)
-vj_uks_orth = mydf.get_jk(dm1, with_k=False)[0]
+    kptsa = numpy.random.random((2,3))
+    kpts = kptsa.copy()
+    kpts[1] = -kpts[0]
+    nao = cell_orth.nao_nr()
+    dm = numpy.random.random((len(kpts),nao,nao)) * .2
+    dm1 = dm + numpy.eye(nao)
+    dm = dm1 + dm1.transpose(0,2,1)
+    mydf = df.FFTDF(cell_orth)
+    vj_uks_orth = mydf.get_jk(dm1, with_k=False)[0]
 
-he_nao = cell_he.nao
-dm_he = numpy.random.random((len(kpts), he_nao, he_nao))
-dm_he = dm_he + dm_he.transpose(0,2,1)
-dm_he = dm_he * .2 + numpy.eye(he_nao)
+    he_nao = cell_he.nao
+    dm_he = numpy.random.random((len(kpts), he_nao, he_nao))
+    dm_he = dm_he + dm_he.transpose(0,2,1)
+    dm_he = dm_he * .2 + numpy.eye(he_nao)
 
 def tearDownModule():
     global cell_orth, cell_nonorth, cell_he, mydf
@@ -216,7 +219,7 @@ class KnownValues(unittest.TestCase):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0, with_j=True)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 8)
-        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
     def test_eval_rhoG_orth_kpts(self):
         numpy.random.seed(9)
@@ -232,7 +235,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_orth, ao_kpts, dm, hermi=0, xctype='LDA')
         rhoR = tools.ifft(rhoG[0], cell_orth.mesh).real
         rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_orth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
@@ -245,7 +248,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_orth, ao_kpts, dm, xctype='GGA')
         rhoR = tools.ifft(rhoG[0], cell_orth.mesh).real
         rhoR *= numpy.prod(cell_orth.mesh)/cell_orth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 8)
 
     def test_eval_rhoG_nonorth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_nonorth)
@@ -258,7 +261,7 @@ class KnownValues(unittest.TestCase):
         ref = ni.eval_rho(cell_nonorth, ao_kpts, dm, xctype='GGA')
         rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh).real
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
-        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 7)
 
     def test_gen_rhf_response(self):
         numpy.random.seed(9)
@@ -408,7 +411,7 @@ class KnownValues(unittest.TestCase):
         v = multigrid.nr_uks_fxc(mg_df, xc, (dm_he, dm_he), (dm1, dm1), kpts=kpts)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
-        self.assertAlmostEqual(abs(v-ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 8)
 
     def test_rcut_vs_ke_cut(self):
         xc = 'lda,'

@@ -8,6 +8,7 @@
   '("GTOval_ipig"       (#C(0 1) nabla g))
   '("GTOval_sp"         (sigma dot p))
   '("GTOval_ipsp"       (nabla sigma dot p))
+  '("GTOval_ipipsp"     (nabla nabla sigma dot p))
   '("GTOval_iprc"       (nabla rc))
   '("GTOval_ipr"        (nabla r))
 )

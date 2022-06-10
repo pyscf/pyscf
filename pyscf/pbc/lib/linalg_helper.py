@@ -96,21 +96,21 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
     Mmax = min(N,2000)
     tol = 1e-6
 
-    #Adiagcheck = np.zeros(N,np.complex)
+    #Adiagcheck = np.zeros(N,np.complex128)
     #for i in range(N):
-    #    test = np.zeros(N,np.complex)
+    #    test = np.zeros(N,np.complex128)
     #    test[i] = 1.0
     #    Adiagcheck[i] = mult_by_A(test)[i]
     #print "Analytical Adiag == numerical Adiag?", np.allclose(Adiag,Adiagcheck)
 
     if Adiag is None:
-        Adiag = np.zeros(N,np.complex)
+        Adiag = np.zeros(N,np.complex128)
         for i in range(N):
-            test = np.zeros(N,np.complex)
+            test = np.zeros(N,np.complex128)
             test[i] = 1.0
             Adiag[i] = mult_by_A(test)[i]
 
-    xi = np.zeros(N,np.complex)
+    xi = np.zeros(N,np.complex128)
 
     lamda_k_old = 0
     lamda_k = 0
@@ -120,7 +120,7 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
         assert x0.shape == (N, Mmin)
         b = x0.copy()
 
-        Ab = np.zeros((N,Mmin),np.complex)
+        Ab = np.zeros((N,Mmin),np.complex128)
         for m in range(Mmin):
             Ab[:,m] = mult_by_A(b[:,m])
 
@@ -137,7 +137,7 @@ def davidson(mult_by_A, N, neig, x0=None, Adiag=None, verbose=logger.INFO):
             #    b[:,m] /= np.linalg.norm(b[:,m])
             #    b,R = np.linalg.qr(b)
 
-            Ab = np.zeros((N,M),np.complex)
+            Ab = np.zeros((N,M),np.complex128)
             for m in range(M):
                 Ab[:,m] = mult_by_A(b[:,m])
         else:
@@ -199,24 +199,24 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
     Mmax = min(N,2000)
     tol = 1e-6
 
-    #Adiagcheck = np.zeros(N,np.complex)
+    #Adiagcheck = np.zeros(N,np.complex128)
     #for i in range(N):
-    #    test = np.zeros(N,np.complex)
+    #    test = np.zeros(N,np.complex128)
     #    test[i] = 1.0
     #    Adiagcheck[i] = mult_by_A(test)[i]
     #print "Analytical Adiag == numerical Adiag?", np.allclose(Adiag,Adiagcheck)
 
     if Adiag is None:
-        Adiag = np.zeros(N,np.complex)
+        Adiag = np.zeros(N,np.complex128)
         for i in range(N):
-            test = np.zeros(N,np.complex)
+            test = np.zeros(N,np.complex128)
             test[i] = 1.0
             Adiag[i] = mult_by_A(test)[i]
 
-    xi = np.zeros(N,np.complex)
+    xi = np.zeros(N,np.complex128)
 
-    evals = np.zeros(neig,np.complex)
-    evecs = np.zeros((N,neig),np.complex)
+    evals = np.zeros(neig,np.complex128)
+    evecs = np.zeros((N,neig),np.complex128)
 
     Mtot = 0
     for guess in range(neig):
@@ -226,7 +226,7 @@ def davidson_guess(mult_by_A,N,neig,Adiag=None):
                 # Unit vector 'target' as the guess
                 b = np.zeros((N,1))
                 b[guess,0] = 1.0
-                Ab = np.zeros((N,1),np.complex)
+                Ab = np.zeros((N,1),np.complex128)
                 Ab[:,0] = mult_by_A(b[:,0])
             else:
                 Ab = np.column_stack( (Ab,mult_by_A(b[:,M-1])) )

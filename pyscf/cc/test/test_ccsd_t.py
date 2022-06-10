@@ -22,23 +22,25 @@ from pyscf import cc
 from pyscf.cc import ccsd_t
 from pyscf.cc import gccsd, gccsd_t
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -.757 , .587)],
-    [1 , (0. ,  .757 , .587)]]
-mol.symmetry = True
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.basis = 'ccpvdz'
-mol.build()
-rhf = scf.RHF(mol)
-rhf.conv_tol = 1e-14
-rhf.scf()
+def setUpModule():
+    global mol, rhf, mcc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -.757 , .587)],
+        [1 , (0. ,  .757 , .587)]]
+    mol.symmetry = True
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.basis = 'ccpvdz'
+    mol.build()
+    rhf = scf.RHF(mol)
+    rhf.conv_tol = 1e-14
+    rhf.scf()
 
-mcc = cc.CCSD(rhf)
-mcc.conv_tol = 1e-14
-mcc.ccsd()
+    mcc = cc.CCSD(rhf)
+    mcc.conv_tol = 1e-14
+    mcc.ccsd()
 
 def tearDownModule():
     global mol, rhf, mcc
@@ -165,7 +167,7 @@ class KnownValues(unittest.TestCase):
         eris.mo_energy = eris.fock.diagonal().real
         e0 = ccsd_t.kernel(mcc, eris, t1, t2)
 
-        eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex)
+        eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex128)
         orbspin = numpy.zeros(nmo*2,dtype=int)
         orbspin[1::2] = 1
         eri2[0::2,0::2,0::2,0::2] = eri1
@@ -173,7 +175,7 @@ class KnownValues(unittest.TestCase):
         eri2[0::2,0::2,1::2,1::2] = eri1
         eri2[1::2,1::2,1::2,1::2] = eri1
         eri2 = eri2.transpose(0,2,1,3) - eri2.transpose(0,2,3,1)
-        fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex)
+        fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex128)
         fock[0::2,0::2] = eris.fock
         fock[1::2,1::2] = eris.fock
         eris1 = gccsd._PhysicistsERIs()

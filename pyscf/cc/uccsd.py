@@ -647,7 +647,7 @@ class UCCSD(ccsd.CCSD):
         return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
-        '''2-particle density matrix in spin-oribital basis.
+        '''2-particle density matrix in spin-orbital basis.
         '''
         from pyscf.cc import uccsd_rdm
         if t1 is None: t1 = self.t1
@@ -681,12 +681,12 @@ class UCCSD(ccsd.CCSD):
             return _make_eris_incore(self, mo_coeff)
 
         elif getattr(self._scf, 'with_df', None):
-            logger.warn(self, 'UCCSD detected DF being used in the HF object. '
-                        'MO integrals are computed based on the DF 3-index tensors.\n'
-                        'It\'s recommended to use dfccsd.CCSD for the '
-                        'DF-CCSD calculations')
-            raise NotImplementedError
-
+            # TODO: Uncomment once there is an unrestricted DF-CCSD implementation
+            #logger.warn(self, 'UCCSD detected DF being used in the HF object. '
+            #            'MO integrals are computed based on the DF 3-index tensors.\n'
+            #            'It\'s recommended to use dfccsd.CCSD for the '
+            #            'DF-CCSD calculations')
+            return _make_df_eris_outcore(self, mo_coeff)
         else:
             return _make_eris_outcore(self, mo_coeff)
 
@@ -802,7 +802,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         mo_idx = mycc.get_frozen_mask()
         self.mo_coeff = mo_coeff = \
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+        # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
@@ -950,6 +950,123 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
 
         OVvv = eris.OVvv.reshape(noccb*nvirb,nvira,nvira)
         eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
+    return eris
+
+def _make_df_eris_outcore(mycc, mo_coeff=None):
+    cput0 = (logger.process_clock(), logger.perf_counter())
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    eris = _ChemistsERIs()
+    eris._common_init_(mycc, mo_coeff)
+
+    moa, mob = eris.mo_coeff
+    nocca, noccb = eris.nocc
+    nao = moa.shape[0]
+    nmoa = moa.shape[1]
+    nmob = mob.shape[1]
+    nvira = nmoa - nocca
+    nvirb = nmob - noccb
+    nvira_pair = nvira*(nvira+1)//2
+    nvirb_pair = nvirb*(nvirb+1)//2
+    naux = mycc._scf.with_df.get_naoaux()
+
+    # --- Three-center integrals
+    # (L|aa)
+    Loo = np.empty((naux,nocca,nocca))
+    Lov = np.empty((naux,nocca,nvira))
+    Lvo = np.empty((naux,nvira,nocca))
+    Lvv = np.empty((naux,nvira_pair))
+    # (L|bb)
+    LOO = np.empty((naux,noccb,noccb))
+    LOV = np.empty((naux,noccb,nvirb))
+    LVO = np.empty((naux,nvirb,noccb))
+    LVV = np.empty((naux,nvirb_pair))
+    p1 = 0
+    oa, va = np.s_[:nocca], np.s_[nocca:]
+    ob, vb = np.s_[:noccb], np.s_[noccb:]
+    # Transform three-center integrals to MO basis
+    einsum = lib.einsum
+    for eri1 in mycc._scf.with_df.loop():
+        eri1 = lib.unpack_tril(eri1).reshape(-1,nao,nao)
+        # (L|aa)
+        Lpq = einsum('Lab,ap,bq->Lpq', eri1, moa, moa)
+        p0, p1 = p1, p1 + Lpq.shape[0]
+        blk = np.s_[p0:p1]
+        Loo[blk] = Lpq[:,oa,oa]
+        Lov[blk] = Lpq[:,oa,va]
+        Lvo[blk] = Lpq[:,va,oa]
+        Lvv[blk] = lib.pack_tril(Lpq[:,va,va].reshape(-1,nvira,nvira))
+        # (L|bb)
+        Lpq = einsum('Lab,ap,bq->Lpq', eri1, mob, mob)
+        LOO[blk] = Lpq[:,ob,ob]
+        LOV[blk] = Lpq[:,ob,vb]
+        LVO[blk] = Lpq[:,vb,ob]
+        LVV[blk] = lib.pack_tril(Lpq[:,vb,vb].reshape(-1,nvirb,nvirb))
+    Loo = Loo.reshape(naux,nocca*nocca)
+    Lov = Lov.reshape(naux,nocca*nvira)
+    Lvo = Lvo.reshape(naux,nocca*nvira)
+    LOO = LOO.reshape(naux,noccb*noccb)
+    LOV = LOV.reshape(naux,noccb*nvirb)
+    LVO = LVO.reshape(naux,noccb*nvirb)
+
+    # --- Four-center integrals
+    dot = lib.ddot
+    eris.feri1 = lib.H5TmpFile()
+    # (aa|aa)
+    eris.oooo = eris.feri1.create_dataset('oooo', (nocca,nocca,nocca,nocca), 'f8')
+    eris.oovv = eris.feri1.create_dataset('oovv', (nocca,nocca,nvira,nvira), 'f8', chunks=(nocca,nocca,1,nvira))
+    eris.ovoo = eris.feri1.create_dataset('ovoo', (nocca,nvira,nocca,nocca), 'f8', chunks=(nocca,1,nocca,nocca))
+    eris.ovvo = eris.feri1.create_dataset('ovvo', (nocca,nvira,nvira,nocca), 'f8', chunks=(nocca,1,nvira,nocca))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocca,nvira,nocca,nvira), 'f8', chunks=(nocca,1,nocca,nvira))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocca,nvira,nvira_pair), 'f8')
+    eris.vvvv = eris.feri1.create_dataset('vvvv', (nvira_pair,nvira_pair), 'f8')
+    eris.oooo[:] = dot(Loo.T, Loo).reshape(nocca,nocca,nocca,nocca)
+    eris.ovoo[:] = dot(Lov.T, Loo).reshape(nocca,nvira,nocca,nocca)
+    eris.oovv[:] = lib.unpack_tril(dot(Loo.T, Lvv)).reshape(nocca,nocca,nvira,nvira)
+    eris.ovvo[:] = dot(Lov.T, Lvo).reshape(nocca,nvira,nvira,nocca)
+    eris.ovov[:] = dot(Lov.T, Lov).reshape(nocca,nvira,nocca,nvira)
+    eris.ovvv[:] = dot(Lov.T, Lvv).reshape(nocca,nvira,nvira_pair)
+    eris.vvvv[:] = dot(Lvv.T, Lvv)
+    # (bb|bb)
+    eris.OOOO = eris.feri1.create_dataset('OOOO', (noccb,noccb,noccb,noccb), 'f8')
+    eris.OOVV = eris.feri1.create_dataset('OOVV', (noccb,noccb,nvirb,nvirb), 'f8', chunks=(noccb,noccb,1,nvirb))
+    eris.OVOO = eris.feri1.create_dataset('OVOO', (noccb,nvirb,noccb,noccb), 'f8', chunks=(noccb,1,noccb,noccb))
+    eris.OVVO = eris.feri1.create_dataset('OVVO', (noccb,nvirb,nvirb,noccb), 'f8', chunks=(noccb,1,nvirb,noccb))
+    eris.OVOV = eris.feri1.create_dataset('OVOV', (noccb,nvirb,noccb,nvirb), 'f8', chunks=(noccb,1,noccb,nvirb))
+    eris.OVVV = eris.feri1.create_dataset('OVVV', (noccb,nvirb,nvirb_pair), 'f8')
+    eris.VVVV = eris.feri1.create_dataset('VVVV', (nvirb_pair,nvirb_pair), 'f8')
+    eris.OOOO[:] = dot(LOO.T, LOO).reshape(noccb,noccb,noccb,noccb)
+    eris.OVOO[:] = dot(LOV.T, LOO).reshape(noccb,nvirb,noccb,noccb)
+    eris.OOVV[:] = lib.unpack_tril(dot(LOO.T, LVV)).reshape(noccb,noccb,nvirb,nvirb)
+    eris.OVVO[:] = dot(LOV.T, LVO).reshape(noccb,nvirb,nvirb,noccb)
+    eris.OVOV[:] = dot(LOV.T, LOV).reshape(noccb,nvirb,noccb,nvirb)
+    eris.OVVV[:] = dot(LOV.T, LVV).reshape(noccb,nvirb,nvirb_pair)
+    eris.VVVV[:] = dot(LVV.T, LVV)
+    # (aa|bb)
+    eris.ooOO = eris.feri1.create_dataset('ooOO', (nocca,nocca,noccb,noccb), 'f8')
+    eris.ooVV = eris.feri1.create_dataset('ooVV', (nocca,nocca,nvirb,nvirb), 'f8', chunks=(nocca,nocca,1,nvirb))
+    eris.ovOO = eris.feri1.create_dataset('ovOO', (nocca,nvira,noccb,noccb), 'f8', chunks=(nocca,1,noccb,noccb))
+    eris.ovVO = eris.feri1.create_dataset('ovVO', (nocca,nvira,nvirb,noccb), 'f8', chunks=(nocca,1,nvirb,noccb))
+    eris.ovOV = eris.feri1.create_dataset('ovOV', (nocca,nvira,noccb,nvirb), 'f8', chunks=(nocca,1,noccb,nvirb))
+    eris.ovVV = eris.feri1.create_dataset('ovVV', (nocca,nvira,nvirb_pair), 'f8')
+    eris.vvVV = eris.feri1.create_dataset('vvVV', (nvira_pair,nvirb_pair), 'f8')
+    eris.ooOO[:] = dot(Loo.T, LOO).reshape(nocca,nocca,noccb,noccb)
+    eris.ovOO[:] = dot(Lov.T, LOO).reshape(nocca,nvira,noccb,noccb)
+    eris.ooVV[:] = lib.unpack_tril(dot(Loo.T, LVV)).reshape(nocca,nocca,nvirb,nvirb)
+    eris.ovVO[:] = dot(Lov.T, LVO).reshape(nocca,nvira,nvirb,noccb)
+    eris.ovOV[:] = dot(Lov.T, LOV).reshape(nocca,nvira,noccb,nvirb)
+    eris.ovVV[:] = dot(Lov.T, LVV).reshape(nocca,nvira,nvirb_pair)
+    eris.vvVV[:] = dot(Lvv.T, LVV)
+    # (bb|aa)
+    eris.OOvv = eris.feri1.create_dataset('OOvv', (noccb,noccb,nvira,nvira), 'f8', chunks=(noccb,noccb,1,nvira))
+    eris.OVoo = eris.feri1.create_dataset('OVoo', (noccb,nvirb,nocca,nocca), 'f8', chunks=(noccb,1,nocca,nocca))
+    eris.OVvo = eris.feri1.create_dataset('OVvo', (noccb,nvirb,nvira,nocca), 'f8', chunks=(noccb,1,nvira,nocca))
+    eris.OVvv = eris.feri1.create_dataset('OVvv', (noccb,nvirb,nvira_pair), 'f8')
+    eris.OVoo[:] = dot(LOV.T, Loo).reshape(noccb,nvirb,nocca,nocca)
+    eris.OOvv[:] = lib.unpack_tril(dot(LOO.T, Lvv)).reshape(noccb,noccb,nvira,nvira)
+    eris.OVvo[:] = dot(LOV.T, Lvo).reshape(noccb,nvirb,nvira,nocca)
+    eris.OVvv[:] = dot(LOV.T, Lvv).reshape(noccb,nvirb,nvira_pair)
+
+    log.timer('CCSD integral transformation', *cput0)
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):

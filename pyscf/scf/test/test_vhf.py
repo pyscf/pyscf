@@ -23,20 +23,22 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf.scf import _vhf
 
-mol = gto.Mole()
-mol.build(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = '631g',
-)
+def setUpModule():
+    global mol, mf, nao, nmo
+    mol = gto.Mole()
+    mol.build(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = '631g',
+    )
 
-mf = scf.RHF(mol)
-mf.scf()
-nao, nmo = mf.mo_coeff.shape
+    mf = scf.RHF(mol)
+    mf.scf()
+    nao, nmo = mf.mo_coeff.shape
 
 def tearDownModule():
     global mol, mf

@@ -18,6 +18,7 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 
 from pyscf import lib
@@ -45,10 +46,12 @@ def make_primitive_cell(mesh):
     cell.build()
     return cell
 
-cell = make_primitive_cell([9]*3)
-kpts = cell.make_kpts([3,1,1])
-kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
-kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+def setUpModule():
+    global cell, kmf, kumf, kpts
+    cell = make_primitive_cell([9]*3)
+    kpts = cell.make_kpts([3,1,1])
+    kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+    kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
 
 def tearDownModule():
     global cell, kmf, kumf
@@ -94,6 +97,7 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf.chkfile = tempfile.NamedTemporaryFile().name
         kmf.conv_tol = 1e-9
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
@@ -141,6 +145,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -163,6 +168,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -185,6 +191,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -207,6 +214,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]

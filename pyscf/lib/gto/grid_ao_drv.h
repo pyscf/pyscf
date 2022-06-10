@@ -70,17 +70,17 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
 
 void GTOeval_sph_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
-                     double *ao, double *coord, char *non0table,
+                     double *ao, double *coord, uint8_t *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env);
 
 void GTOeval_cart_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
-                      double *ao, double *coord, char *non0table,
+                      double *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
 void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fac,
                         int ngrids, int param[], int *shls_slice, int *ao_loc,
-                        double complex *ao, double *coord, char *non0table,
+                        double complex *ao, double *coord, uint8_t *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env);
 
 #define GTO_D_I(o, i, l) \

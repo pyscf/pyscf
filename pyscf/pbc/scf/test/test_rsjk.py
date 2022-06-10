@@ -20,19 +20,21 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.scf import rsjk
 
-cell = Cell().build(
-     a = np.eye(3)*1.8,
-     atom = '''He     0.      0.      0.
-               He     0.4917  0.4917  0.4917''',
-     basis = {'He': [[0, [2.5, 1]]]})
+def setUpModule():
+    global cell, cell1
+    cell = Cell().build(
+         a = np.eye(3)*1.8,
+         atom = '''He     0.      0.      0.
+                   He     0.4917  0.4917  0.4917''',
+         basis = {'He': [[0, [2.5, 1]]]})
 
-cell1 = Cell().build(
-      a = np.eye(3)*2.6,
-      atom = '''He     0.4917  0.4917  0.4917''',
-      basis = {'He': [[0, [4.8, 1, -.1],
-                          [1.1, .3, .5],
-                          [0.15, .2, .8]],
-                      [1, [0.8, 1]],]})
+    cell1 = Cell().build(
+          a = np.eye(3)*2.6,
+          atom = '''He     0.4917  0.4917  0.4917''',
+          basis = {'He': [[0, [4.8, 1, -.1],
+                              [1.1, .3, .5],
+                              [0.15, .2, .8]],
+                          [1, [0.8, 1]],]})
 
 
 def tearDownModule():

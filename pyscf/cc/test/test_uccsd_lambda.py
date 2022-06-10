@@ -27,16 +27,18 @@ from pyscf.cc import addons
 from pyscf.cc import uccsd_lambda
 from pyscf.cc import gccsd, gccsd_lambda
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.spin = 2
-mol.build()
-mf = scf.UHF(mol).run()
-mycc = uccsd.UCCSD(mf)
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol).run()
+    mycc = uccsd.UCCSD(mf)
 
 def tearDownModule():
     global mol, mf, mycc
@@ -189,7 +191,7 @@ class KnownValues(unittest.TestCase):
         orbspin[1::2] = 1
         orbspin[nocc-1] = 0
         orbspin[nocc  ] = 1
-        eri1 = numpy.zeros([nao*2]*4, dtype=numpy.complex)
+        eri1 = numpy.zeros([nao*2]*4, dtype=numpy.complex128)
         idxa = numpy.where(orbspin == 0)[0]
         idxb = numpy.where(orbspin == 1)[0]
         eri1[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] = eri0aa

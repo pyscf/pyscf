@@ -35,20 +35,29 @@ from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.tools.make_test_cell as make_test_cell
 
 
-cell = pbcgto.Cell()
-cell.atom = '''
-He 0.000000000000   0.000000000000   0.000000000000
-He 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-#cell.verbose = 7
-cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell, rand_kmf
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    #cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+
+    rand_kmf = make_rand_kmf()
+
+def tearDownModule():
+    global cell, rand_kmf
+    cell.stdout.close()
+    del cell, rand_kmf
 
 
 # Helper functions
@@ -130,8 +139,6 @@ def make_rand_kmf():
     kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
                     np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
     return kmf
-
-rand_kmf = make_rand_kmf()
 
 
 #TODO Delete me; these functions were used to check the changes on
@@ -240,7 +247,7 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KGHF(cell, abs_kpts, exxdiv=None)
         kmf.conv_tol = 1e-14
         escf = kmf.scf()
-        self.assertAlmostEqual(escf, -6.1870676561726574, 9)
+        self.assertAlmostEqual(escf, -6.1870676561726574, 7)
 
         # GCCSD calculation
         cc = pbcc.kccsd.CCSD(kmf)

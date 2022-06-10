@@ -4,6 +4,7 @@
 CCSD with k-point sampling or at an individual k-point
 '''
 
+from functools import reduce
 import numpy
 from pyscf.pbc import gto, scf, cc
 

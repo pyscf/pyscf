@@ -140,7 +140,7 @@ def core_configuration(nelec_core):
         92: '5s4p3d2f',
     }
     if nelec_core not in conf_dic:
-        raise RuntimeError('Core configuration for %d core electrons is not available.')
+        raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
     coreshell = [int(x) for x in conf_dic[nelec_core][::2]]
     return coreshell
 

@@ -469,6 +469,8 @@ class KohnShamDFT(object):
         self.nlcgrids.reset(mol)
         return self
 
+# Update the KohnShamDFT label in scf.hf module
+hf.KohnShamDFT = KohnShamDFT
 
 def init_guess_by_vsap(mf, mol=None):
     '''Form SAP guess'''

@@ -21,15 +21,22 @@ from pyscf import lib
 from pyscf import scf
 from pyscf.lo import iao, ibo, orth, pipek
 
-mol = gto.Mole()
-mol.atom = '''
-     O    0.   0.       0
-     h    0.   -0.757   0.587
-     h    0.   0.757    0.587'''
-mol.basis = 'unc-sto3g'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.atom = '''
+         O    0.   0.       0
+         h    0.   -0.757   0.587
+         h    0.   0.757    0.587'''
+    mol.basis = 'unc-sto3g'
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.build()
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 class KnownValues(unittest.TestCase):
     def test_ibo(self):

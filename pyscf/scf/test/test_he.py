@@ -22,13 +22,15 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import lib
 
-# for cgto
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom.extend([[2, (0.,0.,0.)], ])
-mol.basis = {"He": 'cc-pvdz'}
-mol.build()
+def setUpModule():
+    global mol
+    # for cgto
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom.extend([[2, (0.,0.,0.)], ])
+    mol.basis = {"He": 'cc-pvdz'}
+    mol.build()
 
 def tearDownModule():
     global mol
