@@ -539,7 +539,7 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
-    print(name)
+
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)
