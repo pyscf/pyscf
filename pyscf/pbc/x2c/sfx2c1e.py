@@ -196,7 +196,7 @@ class SpinFreeX2C(X2C):
 
 
 # Use Ewald-like technique to compute spVsp.
-# spVsp may not be divergent because the numeriator spsp and the denorminator
+# spVsp may not be divergent because the numerator spsp and the denominator
 # in Coulomb kernel 4pi/G^2 are likely cancelled.  Even a real space lattice
 # sum can converge to a finite value, it's difficult to accurately converge
 # this value, i.e., large number of images in lattice summation is required.

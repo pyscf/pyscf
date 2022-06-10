@@ -18,24 +18,26 @@ from pyscf import scf
 from pyscf import gto
 from pyscf import mcscf
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    ["C", (-0.65830719,  0.61123287, -0.00800148)],
-    ["C", ( 0.73685281,  0.61123287, -0.00800148)],
-    ["H", ( 1.43439081,  1.81898387, -0.00800148)],
-    ["H", (-1.35568919,  1.81920887, -0.00868348)],
-    ["H", (-1.20806619, -0.34108413, -0.00755148)],
-    ["H", ( 1.28636081, -0.34128013, -0.00668648)],]
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        ["C", (-0.65830719,  0.61123287, -0.00800148)],
+        ["C", ( 0.73685281,  0.61123287, -0.00800148)],
+        ["H", ( 1.43439081,  1.81898387, -0.00800148)],
+        ["H", (-1.35568919,  1.81920887, -0.00868348)],
+        ["H", (-1.20806619, -0.34108413, -0.00755148)],
+        ["H", ( 1.28636081, -0.34128013, -0.00668648)],]
 
-mol.basis = {'H': 'cc-pvdz',
-             'C': 'cc-pvdz',}
-mol.build()
+    mol.basis = {'H': 'cc-pvdz',
+                 'C': 'cc-pvdz',}
+    mol.build()
 
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-12
-mf.scf()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-12
+    mf.scf()
 
 def tearDownModule():
     global mol, mf

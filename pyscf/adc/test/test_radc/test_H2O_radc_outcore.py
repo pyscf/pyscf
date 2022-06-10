@@ -23,27 +23,29 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-mol = gto.Mole()
-r = 0.957492
-x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
-y = r * math.cos(104.468205* math.pi/(2 * 180.0))
-mol.atom = [
-    ['O', ( 0., 0.    , 0)],
-    ['H', ( 0., -x, y)],
-    ['H', ( 0., x , y)],]
-mol.basis = {'H': 'aug-cc-pVDZ',
-             'O': 'aug-cc-pVDZ',}
-mol.verbose = 0
-mol.build()
+def setUpModule():
+    global mol, mf, myadc
+    mol = gto.Mole()
+    r = 0.957492
+    x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
+    y = r * math.cos(104.468205* math.pi/(2 * 180.0))
+    mol.atom = [
+        ['O', ( 0., 0.    , 0)],
+        ['H', ( 0., -x, y)],
+        ['H', ( 0., x , y)],]
+    mol.basis = {'H': 'aug-cc-pVDZ',
+                 'O': 'aug-cc-pVDZ',}
+    mol.verbose = 0
+    mol.build()
 
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
-myadc = adc.ADC(mf)
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 

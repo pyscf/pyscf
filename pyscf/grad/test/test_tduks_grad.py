@@ -23,27 +23,29 @@ from pyscf import gto, dft
 from pyscf import tdscf
 from pyscf.grad import tduks as tduks_grad
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ['H' , (0. , 0. , 1.804)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.unit = 'B'
-mol.charge = 2
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-pmol = mol.copy()
-mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
-mf_lda.kernel()
-mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
-mf_gga.kernel()
+def setUpModule():
+    global mol, pmol, mf_lda, mf_gga
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.unit = 'B'
+    mol.charge = 2
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+    pmol = mol.copy()
+    mf_lda = dft.UKS(mol).set(xc='LDA,', conv_tol=1e-12)
+    mf_lda.kernel()
+    mf_gga = dft.UKS(mol).set(xc='b88,', conv_tol=1e-12)
+    mf_gga.kernel()
 
 def tearDownModule():
-    global mol, pmol
+    global mol, pmol, mf_lda, mf_gga
     mol.stdout.close()
-    del mol, pmol
+    del mol, pmol, mf_lda, mf_gga
 
 class KnownValues(unittest.TestCase):
     def test_tda_lda(self):
@@ -79,6 +81,24 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
+    @unittest.skip('has bug')
+    def test_tda_mgga(self):
+        mf = dft.UKS(mol)
+        mf.xc = 'm06l'
+        mf.conv_tol = 1e-12
+        mf.kernel()
+        td = mf.TDA().run(nstates=3)
+        tdg = td.Gradients()
+        g1 = tdg.kernel(state=2)
+        self.assertAlmostEqual(g1[0,2], -0.31324464083043635, 4)
+
+        td_solver = td.as_scanner()
+        pmol = mol.copy()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 4)
+        self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[1,2]).max(), 0, 4)
+
     def test_tddft_b3lyp(self):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = '.2*HF + .8*b88, vwn'
@@ -96,7 +116,6 @@ class KnownValues(unittest.TestCase):
     def test_range_separated(self):
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.UKS(mol).set(xc='CAMB3LYP')
-        mf._numint.libxc = dft.xcfun
         td = mf.apply(tdscf.TDA)
         tdg_scanner = td.nuc_grad_method().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
@@ -110,4 +129,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for TD-UKS gradients")
     unittest.main()
-

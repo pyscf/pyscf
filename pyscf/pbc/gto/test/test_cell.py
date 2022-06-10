@@ -25,25 +25,31 @@ from pyscf import lib
 from pyscf.pbc import gto as pgto
 
 
-L = 1.5
-n = 41
-cl = pgto.Cell()
-cl.build(
-    a = [[L,0,0], [0,L,0], [0,0,L]],
-    mesh = [n,n,n],
-    atom = 'He %f %f %f' % ((L/2.,)*3),
-    basis = 'ccpvdz')
+def setUpModule():
+    global cl, cl1, L, n
+    L = 1.5
+    n = 41
+    cl = pgto.Cell()
+    cl.build(
+        a = [[L,0,0], [0,L,0], [0,0,L]],
+        mesh = [n,n,n],
+        atom = 'He %f %f %f' % ((L/2.,)*3),
+        basis = 'ccpvdz')
 
-numpy.random.seed(1)
-cl1 = pgto.Cell()
-cl1.build(a = numpy.random.random((3,3)).T,
-          precision = 1e-9,
-          mesh = [n,n,n],
-          atom ='''He .1 .0 .0
-                   He .5 .1 .0
-                   He .0 .5 .0
-                   He .1 .3 .2''',
-          basis = 'ccpvdz')
+    numpy.random.seed(1)
+    cl1 = pgto.Cell()
+    cl1.build(a = numpy.random.random((3,3)).T,
+              precision = 1e-9,
+              mesh = [n,n,n],
+              atom ='''He .1 .0 .0
+                       He .5 .1 .0
+                       He .0 .5 .0
+                       He .1 .3 .2''',
+              basis = 'ccpvdz')
+
+def tearDownModule():
+    global cl, cl1
+    del cl, cl1
 
 class KnownValues(unittest.TestCase):
     def test_nimgs(self):
@@ -97,9 +103,9 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1097, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1361, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1241, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1465, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()
@@ -230,7 +236,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
-        self.assertEqual(list(cl1.nimgs), [32,21,19])
+        self.assertEqual(list(cl1.nimgs), [34,23,20])
         s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
         self.assertAlmostEqual(lib.fp(s0[0]), 492.30658304804126, 4)
         self.assertAlmostEqual(lib.fp(s0[1]), 37.812956255000756-28.972806230140314j, 4)
@@ -412,6 +418,14 @@ class KnownValues(unittest.TestCase):
             cs1 = cell1._env[ptr1:ptr1+nprim*nc]
             self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
             self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
+
+    def test_conc_cell(self):
+        cl1 = pgto.M(a=np.eye(3)*5, atom='Cu', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl2 = pgto.M(a=np.eye(3)*5, atom='Cs', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        cl3 = cl1 + cl2
+        self.assertTrue(len(cl3._ecpbas), 20)
+        self.assertTrue(len(cl3._bas), 12)
+        self.assertTrue(len(cl3._atm), 8)
 
 
 if __name__ == '__main__':

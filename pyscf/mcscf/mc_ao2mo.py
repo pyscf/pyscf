@@ -117,9 +117,9 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
     ti0 = log.timer('Initializing trans_e1_outcore', *time0)
 
     # fmmm, ftrans, fdrv for level 1
-    fmmm = libmcscf.AO2MOmmm_ket_nr_s2
-    ftrans = libmcscf.AO2MOtranse1_nr_s4
-    fdrv = libmcscf.AO2MOnr_e2_drv
+    fmmm = _ao2mo.libao2mo.AO2MOmmm_ket_nr_s2
+    ftrans = _ao2mo.libao2mo.AO2MOtranse1_nr_s4
+    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
     for istep,sh_range in enumerate(shranges):
         log.debug('[%d/%d], AO [%d:%d], len(buf) = %d',
                   istep+1, nstep, *sh_range)

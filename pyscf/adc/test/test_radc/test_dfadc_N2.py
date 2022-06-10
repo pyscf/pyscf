@@ -23,22 +23,24 @@ from pyscf import scf
 from pyscf import adc
 from pyscf import df
 
-r = 1.098
-mol = gto.Mole()
-mol.atom = [
-    ['N', ( 0., 0.    , -r/2   )],
-    ['N', ( 0., 0.    ,  r/2)],]
-mol.basis = {'N':'cc-pvdz'}
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
-mf.kernel()
-myadc = adc.ADC(mf)
-myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
+def setUpModule():
+    global mol, mf, myadc
+    r = 1.098
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', ( 0., 0.    , -r/2   )],
+        ['N', ( 0., 0.    ,  r/2)],]
+    mol.basis = {'N':'cc-pvdz'}
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+    mf.kernel()
+    myadc = adc.ADC(mf)
+    myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
 
 def tearDownModule():
-    global mol,mf
-    del mol,mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 

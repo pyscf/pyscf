@@ -23,52 +23,54 @@ from pyscf import scf
 from pyscf import mcscf
 from pyscf import fci
 
-b = 1.4
-mol = gto.Mole()
-mol.build(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-symmetry = 1
-)
-mfr = scf.RHF(mol)
-mfr.scf()
-mcr = mcscf.CASSCF(mfr, 4, 4)
-mcr.conv_tol_grad = 1e-6
-mcr.mc1step()[0]
+def setUpModule():
+    global mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
+    b = 1.4
+    mol = gto.Mole()
+    mol.build(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    symmetry = 1
+    )
+    mfr = scf.RHF(mol)
+    mfr.scf()
+    mcr = mcscf.CASSCF(mfr, 4, 4)
+    mcr.conv_tol_grad = 1e-6
+    mcr.mc1step()[0]
 
-mfu = scf.UHF(mol)
-mfu.scf()
-mcu = mcscf.UCASSCF(mfu, 4, 4)
-mcu.conv_tol_grad = 1e-6
-mcu.mc1step()[0]
+    mfu = scf.UHF(mol)
+    mfu.scf()
+    mcu = mcscf.UCASSCF(mfu, 4, 4)
+    mcu.conv_tol_grad = 1e-6
+    mcu.mc1step()[0]
 
-mol_prg = gto.M(
-verbose = 0,
-atom = [
-    ['N',(  0.000000,  0.000000, -(b+0.1)/2)],
-    ['N',(  0.000000,  0.000000,  (b+0.1)/2)], ],
-basis = 'ccpvdz',
-symmetry=1)
-mfr_prg = scf.RHF(mol_prg).set (max_cycle=1).run()
-mcr_prg = mcscf.CASSCF(mfr_prg, 4, 4).set (max_cycle_macro=1).run()
-mfu_prg = scf.UHF(mol_prg).set (max_cycle=1).run()
-mcu_prg = mcscf.UCASSCF(mfu_prg, 4, 4).set (max_cycle_macro=1).run()
+    mol_prg = gto.M(
+    verbose = 0,
+    atom = [
+        ['N',(  0.000000,  0.000000, -(b+0.1)/2)],
+        ['N',(  0.000000,  0.000000,  (b+0.1)/2)], ],
+    basis = 'ccpvdz',
+    symmetry=1)
+    mfr_prg = scf.RHF(mol_prg).set (max_cycle=1).run()
+    mcr_prg = mcscf.CASSCF(mfr_prg, 4, 4).set (max_cycle_macro=1).run()
+    mfu_prg = scf.UHF(mol_prg).set (max_cycle=1).run()
+    mcu_prg = mcscf.UCASSCF(mfu_prg, 4, 4).set (max_cycle_macro=1).run()
 
-mol_prb = mol.copy ()
-mol_prb.basis = {'N': 'aug-cc-pvdz' }
-mol_prb.build ()
-mfr_prb = scf.RHF(mol_prb).set (max_cycle=1).run()
-mcr_prb = mcscf.CASSCF(mfr_prb, 4, 4).set (max_cycle_macro=1).run()
+    mol_prb = mol.copy ()
+    mol_prb.basis = {'N': 'aug-cc-pvdz' }
+    mol_prb.build ()
+    mfr_prb = scf.RHF(mol_prb).set (max_cycle=1).run()
+    mcr_prb = mcscf.CASSCF(mfr_prb, 4, 4).set (max_cycle_macro=1).run()
 
 
 def tearDownModule():
-    global mol, mfr, mcr, mfu, mcu
+    global mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
     mol.stdout.close()
-    del mol, mfr, mcr, mfu, mcu
+    del mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
 
 
 class KnownValues(unittest.TestCase):
@@ -236,6 +238,11 @@ class KnownValues(unittest.TestCase):
         ncas, nelecas = (8, 12)
         mymc = mcscf.CASCI(myhf, ncas, nelecas)
 
+        # Test UHF
+        # The tests below are only to ensure that `make_natural_orbitals` can 
+        # run at all since we've confirmed above that the NOONs are correct for MP2
+        mcscf.addons.make_natural_orbitals(myhf)
+
         # Test MP2
         # Trusted results from ORCA v4.2.1
         rmp2_noons = [1.99992786,1.99992701,1.99414062,1.98906552,1.96095173,1.96095165,1.95280755,1.02078458,1.02078457,0.04719006,0.01274288,0.01274278,0.00728679,0.00582683,0.00543964,0.00543962,0.00290772,0.00108258]
@@ -399,8 +406,8 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 6.782329983125268, 9)
-        
-    def test_project_init_guess_uhf (self): 
+
+    def test_project_init_guess_uhf (self):
         mo1_u = mcscf.addons.project_init_guess (mcu_prg, mfu.mo_coeff)
         for mo1 in mo1_u:
             s1 = reduce(numpy.dot, (mo1.T, mfu_prg.get_ovlp(), mo1))
@@ -439,7 +446,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (s1[0] > s1[1])
 
     def test_project_init_guess_gramschmidt (self):
-        gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
+        gram_schmidt_idx = numpy.arange (27, dtype=int)[:,None].tolist ()
         mo1 = mcscf.addons.project_init_guess (mcr_prg, mfr.mo_coeff, priority=gram_schmidt_idx)
         s1 = reduce(numpy.dot, (mo1.T, mfr_prg.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),

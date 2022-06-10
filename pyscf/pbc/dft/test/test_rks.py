@@ -18,19 +18,22 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
-L = 4.
-cell = pbcgto.Cell()
-cell.verbose = 0
-cell.a = np.eye(3)*L
-cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
-cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-cell.build()
+def setUpModule():
+    global cell
+    L = 4.
+    cell = pbcgto.Cell()
+    cell.verbose = 0
+    cell.a = np.eye(3)*L
+    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+    cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    cell.build()
 
 def tearDownModule():
     global cell
@@ -101,6 +104,7 @@ class KnownValues(unittest.TestCase):
         cell.verbose = 0
         cell.build()
         mf1 = pbcdft.RKS(cell)
+        mf1.chkfile = tempfile.NamedTemporaryFile().name
         mf1.max_cycle = 1
         mf1.kernel()
 
@@ -139,31 +143,31 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell)
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745140703871877, 7)
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3987595548455523, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.476617717375184, 7)
 
     def test_custom_rsh_df(self):
         mf = pbcdft.RKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.303232164939132, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.474520122522153, 7)
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
 
     def test_rsh_mdf(self):
         mf = pbcdft.RKS(cell).mix_density_fit()
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.303225896642264, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745138538438827, 7)
 
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.398759319488945, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766174820185456, 7)
 
     def test_rsh_aft_high_cost(self):
         from pyscf.pbc.df.aft import AFTDF
@@ -171,7 +175,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df = AFTDF(cell)
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.303226113014942, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745140705800446, 7)
 
     def test_rsh_0d(self):
         L = 4.
@@ -189,6 +193,30 @@ class KnownValues(unittest.TestCase):
         mf.exxdiv = None
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -2.4836596871145558, 7)
+
+        mol = cell.to_mol()
+        mf1 = mol.RKS().density_fit()
+        mf1.xc = 'camb3lyp'
+        mf1.omega = '0.7'
+        mf1.kernel()
+        self.assertAlmostEqual(mf1.e_tot, mf.e_tot, 4)
+
+    def test_rsh_0d_ewald(self):
+        L = 4.
+        cell = pbcgto.Cell()
+        cell.verbose = 0
+        cell.a = np.eye(3)*L
+        cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.dimension = 0
+        cell.mesh = [60]*3
+        cell.build()
+        mf = pbcdft.RKS(cell).density_fit()
+        mf.xc = 'camb3lyp'
+        mf.omega = '0.7'
+        mf.exxdiv = 'ewald'
+        mf.kernel()
+        self.assertAlmostEqual(mf.e_tot, -2.4836186361124617, 7)
 
         mol = cell.to_mol()
         mf1 = mol.RKS().density_fit()

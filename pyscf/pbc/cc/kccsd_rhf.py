@@ -790,7 +790,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                                  (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
-                if dtype == np.float: eri_kpt = eri_kpt.real
+                if dtype == np.double: eri_kpt = eri_kpt.real
                 eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                     eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -834,7 +834,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_r = mo_coeff[kr][:, :nocc]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbo_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nocc, nmo).transpose(0, 2, 1, 3)
                         self.dtype = buf_kpt.dtype
                         self.oooo[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
@@ -852,7 +852,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbv_r = mo_coeff[kr][:, nocc:]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(0, 2, 1, 3)
                         self.ovov[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
                         # TODO: compute vovv on the fly
@@ -874,7 +874,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #                orbva_p = orbv_p[:,a].reshape(-1,1)
             #                buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
             #                                 (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
-            #                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+            #                if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
             #                buf_kpt = buf_kpt.reshape((1,nvir,nvir,nvir)).transpose(0,2,1,3)
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
             # cput1 = log.timer_debug1('transforming vvvv', *cput1)
@@ -894,7 +894,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                      kpts[[ikp,ikq,ikr,iks]], compact=False)
-                    if dtype == np.float: buf_kpt = buf_kpt.real
+                    if dtype == np.double: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
                     for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                         buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -907,7 +907,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
                                          (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
                         self.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts

@@ -186,6 +186,9 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         self.grids.reset(mol)
         return self
 
+# Update the KohnShamDFT label in pbc.scf.hf module
+pbchf.KohnShamDFT = KohnShamDFT
+
 
 class RKS(KohnShamDFT, pbchf.RHF):
     '''RKS class adapted for PBCs.
@@ -208,6 +211,7 @@ class RKS(KohnShamDFT, pbchf.RHF):
     get_rho = get_rho
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    rs_density_fit = _patch_df_beckegrids(pbchf.RHF.rs_density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
 
 

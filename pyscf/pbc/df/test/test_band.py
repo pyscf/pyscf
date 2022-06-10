@@ -17,10 +17,12 @@ import numpy
 from pyscf import lib
 from pyscf.pbc import gto, scf, df
 
-cell = gto.M(atom='H 1 2 1; H 1 1 1', basis=[[0, (.8, 1)], [1, (0.5, 1)]],
-             a=numpy.eye(3)*2.5, verbose=0, mesh=[11]*3)
-numpy.random.seed(1)
-kband = numpy.random.random((2,3))
+def setUpModule():
+    global cell, kband
+    cell = gto.M(atom='H 1 2 1; H 1 1 1', basis=[[0, (.8, 1)], [1, (0.5, 1)]],
+                 a=numpy.eye(3)*2.5, verbose=0, mesh=[11]*3)
+    numpy.random.seed(1)
+    kband = numpy.random.random((2,3))
 
 def tearDownModule():
     global cell
@@ -41,7 +43,7 @@ class KnownValues(unittest.TestCase):
     def test_df_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
-        mf.with_df.exp_to_discard = mf.with_df.eta
+        mf.with_df.exp_to_discard = 0.518490303352116
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
         self.assertAlmostEqual(lib.fp(mf.get_bands(kband[0])[0]), 1.992205011752425, 7)
@@ -72,7 +74,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.KRHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
-        mf.with_df.exp_to_discard = mf.with_df.eta
+        mf.with_df.exp_to_discard = 0.518490303352116
         mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
         self.assertAlmostEqual(lib.fp(mf.get_bands(kband[0])[0]), 1.9648945030342437, 8)
@@ -91,4 +93,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for bands")
     unittest.main()
-

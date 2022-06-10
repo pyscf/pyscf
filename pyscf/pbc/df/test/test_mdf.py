@@ -24,51 +24,53 @@ from pyscf.pbc import df
 #from mpi4pyscf.pbc.df import mdf
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, cell1, mf0, kmdf, kmdf1, kpts
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.rcut = 17
-cell.build(0,0)
+    cell.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.rcut = 17
+    cell.build(0,0)
 
-mf0 = pscf.RHF(cell)
-mf0.exxdiv = 'vcut_sph'
+    mf0 = pscf.RHF(cell)
+    mf0.exxdiv = 'vcut_sph'
 
 
-numpy.random.seed(1)
-kpts = numpy.random.random((5,3))
-kpts[0] = 0
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpts[4] *= 1e-5
+    numpy.random.seed(1)
+    kpts = numpy.random.random((5,3))
+    kpts[0] = 0
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpts[4] *= 1e-5
 
-kmdf = mdf.MDF(cell)
-kmdf.linear_dep_threshold = 1e-7
-kmdf.auxbasis = 'weigend'
-kmdf.kpts = kpts
-kmdf.mesh = (11,)*3
-kmdf.eta = 0.154728892598
+    kmdf = mdf.MDF(cell)
+    kmdf.linear_dep_threshold = 1e-7
+    kmdf.auxbasis = 'weigend'
+    kmdf.kpts = kpts
+    kmdf.mesh = (11,)*3
+    kmdf.eta = 0.154728892598
 
-cell1 = pgto.Cell()
-cell1.a = numpy.eye(3) * 3.
-cell1.mesh = [10]*3
-cell1.atom = '''C    3.    2.       3.
-               C    1.    1.       1.'''
-cell1.basis = [[0, (3.5, 1)], [0, (1.0, 1)], [1, (0.6, 1)]]
-cell1.rcut = 9.5
-cell1.build(0,0)
+    cell1 = pgto.Cell()
+    cell1.a = numpy.eye(3) * 3.
+    cell1.mesh = [10]*3
+    cell1.atom = '''C    3.    2.       3.
+                   C    1.    1.       1.'''
+    cell1.basis = [[0, (3.5, 1)], [0, (1.0, 1)], [1, (0.6, 1)]]
+    cell1.rcut = 9.5
+    cell1.build(0,0)
 
-kmdf1 = mdf.MDF(cell1)
-kmdf1.linear_dep_threshold = 1e-7
-kmdf1.auxbasis = df.aug_etb(cell1, 1.8)
-kmdf1.kpts = kpts
-kmdf1.mesh = [6]*3
-kmdf1.eta = 0.1
+    kmdf1 = mdf.MDF(cell1)
+    kmdf1.linear_dep_threshold = 1e-7
+    kmdf1.auxbasis = df.aug_etb(cell1, 1.8)
+    kmdf1.kpts = kpts
+    kmdf1.mesh = [6]*3
+    kmdf1.eta = 0.1
 
 def tearDownModule():
     global cell, cell1, mf0, kmdf, kmdf1
@@ -132,12 +134,13 @@ class KnownValues(unittest.TestCase):
         check2 = kmdf.get_eri((kpts[0]+5e-9,kpts[1]+5e-9,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
 
-#    def test_get_eri_0123_high_cost(self):
-#        eri0123 = kmdf.get_eri(kpts[:4])
-#        self.assertTrue(eri0123.dtype == numpy.complex128)
-#        self.assertAlmostEqual(eri0123.real.sum(), 410.38308763371651, 6)
-#        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
-#        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
+    @unittest.skip('Reference seems wrong')
+    def test_get_eri_0123_high_cost(self):
+        eri0123 = kmdf.get_eri(kpts[:4])
+        self.assertTrue(eri0123.dtype == numpy.complex128)
+        self.assertAlmostEqual(eri0123.real.sum(), 410.38308763371651, 6)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
+        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
 
     def test_get_eri_gamma_1(self):
         odf = mdf.MDF(cell1)
@@ -161,8 +164,9 @@ class KnownValues(unittest.TestCase):
         eri1111 = kmdf1.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
         self.assertTrue(eri1111.dtype == numpy.complex128)
         self.assertAlmostEqual(eri1111.real.sum(), 44.106518037762719, 6)
-        self.assertAlmostEqual(abs(eri1111.imag).sum(), 11.560980263508144, 6)
-        self.assertAlmostEqual(lib.fp(eri1111), (5.8655421128841088+0.034457178081070433j), 7)
+        self.assertAlmostEqual(abs(eri1111.imag).sum(), 11.560980263508144, 5)
+        self.assertAlmostEqual(lib.fp(eri1111),
+                               (5.8655421128841088+0.034457178081070433j), 6)
         check2 = kmdf1.get_eri((kpts[1]+5e-9,kpts[1]+5e-9,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
 
@@ -182,15 +186,35 @@ class KnownValues(unittest.TestCase):
         check2 = kmdf1.get_eri((kpts[0]+5e-9,kpts[1]+5e-9,kpts[1],kpts[0]))
         self.assertTrue(numpy.allclose(eri0110, check2, atol=1e-7))
 
-#    def test_get_eri_0123_1(self):
-#        eri0123 = kmdf1.get_eri(kpts[:4])
-#        self.assertTrue(eri0123.dtype == numpy.complex128)
-#        self.assertAlmostEqual(eri0123.real.sum(), 85.318309473904634, 6)
-#        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
-#        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
+    @unittest.skip('Reference seems wrong')
+    def test_get_eri_0123_1(self):
+        eri0123 = kmdf1.get_eri(kpts[:4])
+        self.assertTrue(eri0123.dtype == numpy.complex128)
+        self.assertAlmostEqual(eri0123.real.sum(), 85.318309473904634, 6)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.18510527268199378, 6)
+        self.assertAlmostEqual(lib.fp(eri0123), 1.7644500565943559+0.30677193151572507j, 6)
 
+    # issue #1117
+    def test_cell_with_cart(self):
+        cell = pgto.M(
+            atom='Li 0 0 0; H 2 2 2',
+            a=(numpy.ones([3, 3]) - numpy.eye(3)) * 2,
+            cart=True,
+            basis={'H': '''
+H   S
+0.5    1''',
+                   'Li': '''
+Li  S
+0.8    1
+0.4    1
+Li  P
+0.8    1
+0.4    1'''})
+
+        eri0 = df.FFTDF(cell).get_eri()
+        eri1 = mdf.MDF(cell).set(auxbasis=df.aug_etb(cell)).get_eri()
+        self.assertAlmostEqual(abs(eri1-eri0).max(), 0, 5)
 
 if __name__ == '__main__':
     print("Full Tests for mdf")
     unittest.main()
-

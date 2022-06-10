@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 8516)
+        self.assertEqual(grids.weights.size, 8374)
 
     def test_becke_grids_1d(self):
         L = 4.
@@ -119,7 +119,7 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 8485)
+        self.assertEqual(grids.weights.size, 8347)
 
 
 if __name__ == '__main__':

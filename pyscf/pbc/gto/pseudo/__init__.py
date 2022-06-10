@@ -68,7 +68,7 @@ def load(pseudo_name, symb):
             Atomic symbol, Special characters will be removed.
 
     Examples:
-        Load GTH-BLYP pseudopotential of carbon 
+        Load GTH-BLYP pseudopotential of carbon
 
     >>> cell = gto.Cell()
     >>> cell.pseudo = {'C': load('gth-blyp', 'C')}

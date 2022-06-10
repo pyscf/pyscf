@@ -25,19 +25,25 @@ from pyscf.pbc.cc import eom_kccsd_ghf
 from pyscf.pbc.cc import eom_kccsd_uhf
 from pyscf.pbc.lib import kpts_helper
 
-cell = gto.Cell()
-cell.atom='''
-He 0.000000000000   0.000000000000   0.000000000000
-He 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-cell.mesh = [13,13,13]
-cell.build()
+def setUpModule():
+    global cell
+    cell = gto.Cell()
+    cell.atom='''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.mesh = [13,13,13]
+    cell.build()
+
+def tearDownModule():
+    global cell
+    del cell
 
 
 def rand_t1_t2(cell, kpts, nocc, nvir):

@@ -32,6 +32,7 @@ class KnownValues(unittest.TestCase):
         cell.basis = { 'He': [[0, (0.8, 1.0)],
                               [0, (1.2, 1.0)]] }
         cell.verbose = 0
+        cell.precision = 1e-9
         cell.build(0, 0)
         auxcell = incore.format_aux_basis(cell)
         a1 = incore.aux_e2(cell, auxcell, 'int3c1e_sph')

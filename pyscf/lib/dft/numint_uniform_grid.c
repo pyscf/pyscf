@@ -1609,7 +1609,7 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         size_t nijsh = nish * njsh;
         size_t dims[] = {naoi, naoj};
         size_t ijm;
-        int ish, jsh, ij, m, mm, i0, j0, ic;
+        int ish, jsh, ij, m, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
@@ -1622,7 +1622,7 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
                 ish = ij / njsh;
                 jsh = ij % njsh;
                 if (hermi != PLAIN && ish > jsh) {
-                        // fill up only upper triangle of F-array
+                        // fill up only upper triangle of F_mat
                         continue;
                 }
 
@@ -1643,26 +1643,6 @@ void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
         }
         free(cache);
         free(env_loc);
-
-        if (hermi != PLAIN) { // lower triangle of F-array
-                double *pmat, *pmat1;
-// Note hermitian character of the matrices can only be found by rearranging the
-// repeated images:
-//     mat - mat[::-1].transpose(0,2,1) == 0
-#pragma omp for schedule(static)
-                for (m = 0; m < nimgs; m++) {
-                        mm = nimgs - 1 - m;
-                        for (ic = 0; ic < comp; ic++) {
-                                pmat = F_mat + ((size_t)m*comp+ic) * naoi * naoi;
-                                pmat1 = F_mat + ((size_t)mm*comp+ic) * naoi * naoi;
-                                for (j0 = 1; j0 < naoi; j0++) {
-                                        for (i0 = 0; i0 < j0; i0++) {
-                                                pmat[i0*naoi+j0] = pmat1[j0*naoi+i0];
-                                        }
-                                }
-                        }
-                }
-        }
 }
 }
 
@@ -2095,7 +2075,7 @@ static void _nonorth_rho_z_1img(double *rho, double *rhoz, int offset, int meshz
         }
 }
 
-static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
+static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, int8_t *skip,
                                      int offset, int submeshz, int meshz,
                                      int nz0, int nz1, int grid_close_to_zij,
                                      double e_z0z0, double e_z0dz, double e_dzdz,
@@ -2143,7 +2123,7 @@ static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
         }
 }
 
-static int _make_grid_mask(char *skip, int nx0, int nx1, int mesh,
+static int _make_grid_mask(int8_t *skip, int nx0, int nx1, int mesh,
                            int offset, int submesh)
 {
         if (offset == 0 && submesh == mesh) { // allows nimg > 1
@@ -2257,9 +2237,9 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
         double *prho;
         int l;
 
-        char x_skip[ngridx];
-        char y_skip[ngridy];
-        char z_skip[ngridz];
+        int8_t x_skip[ngridx];
+        int8_t y_skip[ngridy];
+        int8_t z_skip[ngridz];
         int with_x_mask = _make_grid_mask(x_skip, nx0, nx1, mesh[0], offset[0], submesh[0]);
         int with_y_mask = _make_grid_mask(y_skip, ny0, ny1, mesh[1], offset[1], submesh[1]);
         int with_z_mask = _make_grid_mask(z_skip, nz0, nz1, mesh[2], offset[2], submesh[2]);
@@ -2618,22 +2598,23 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                     int *atm, int natm, int *bas, int nbas, double *env,
                     int nenv)
 {
-        const int ish0 = shls_slice[0];
-        const int ish1 = shls_slice[1];
-        const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
-        const int nish = ish1 - ish0;
-        const int njsh = jsh1 - jsh0;
-        const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
-        const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        int ish0 = shls_slice[0];
+        int ish1 = shls_slice[1];
+        int jsh0 = shls_slice[2];
+        int jsh1 = shls_slice[3];
+        int nish = ish1 - ish0;
+        int njsh = jsh1 - jsh0;
+        size_t naoi = ao_loc[ish1] - ao_loc[ish0];
+        size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        size_t nao2 = naoi * naoi;
 
         int lmax = 0;
         int ib;
         for (ib = 0; ib < nbas; ib++) {
                 lmax = MAX(lmax, bas(ANG_OF, ib));
         }
-        const int cache_size = _rho_cache_size(lmax, comp, submesh);
-        const size_t ngrids = ((size_t)submesh[0]) * submesh[1] * submesh[2];
+        int cache_size = _rho_cache_size(lmax, comp, submesh);
+        size_t ngrids = ((size_t)submesh[0]) * submesh[1] * submesh[2];
 
         if (dimension == 0) {
                 nimgs = 1;
@@ -2645,14 +2626,14 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
         size_t nijsh = nish * njsh;
         size_t dims[] = {naoi, naoj};
         size_t ijm;
-        int ish, jsh, ij, m, mm, i0, j0;
+        int ish, jsh, ij, m, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
         NPdcopy(env_loc, env, nenv);
         int ptrxyz;
         int thread_id = omp_get_thread_num();
-        double *rho_priv, *pdm, *pdm1;
+        double *rho_priv, *pdm;
         if (thread_id == 0) {
                 rho_priv = rho;
         } else {
@@ -2665,21 +2646,11 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
 //     dmR - dmR[::-1].transpose(0,2,1) == 0
 #pragma omp for schedule(static)
                 for (m = 0; m < nimgs; m++) {
-                        mm = nimgs - 1 - m; // index of the mirrored images
-                        pdm  = F_dm + ((size_t)m) * naoi * naoi;
-                        pdm1 = F_dm + ((size_t)mm) * naoi * naoi;
+                        pdm  = F_dm + m * nao2;
                         for (j0 = 1; j0 < naoi; j0++) {
                                 for (i0 = 0; i0 < j0; i0++) {
-                                        pdm[j0*naoi+i0] += pdm1[i0*naoi+j0];
-                                }
-                        }
-                }
-#pragma omp for schedule(static)
-                for (m = 0; m < nimgs; m++) {
-                        pdm = F_dm + ((size_t)m) * naoi * naoi;
-                        for (j0 = 0; j0 < naoi; j0++) {
-                                for (i0 = j0+1; i0 < naoi; i0++) {
-                                        pdm[j0*naoi+i0] = 0;
+                                        pdm[j0*naoi+i0] *= 2;
+                                        pdm[i0*naoi+j0] = 0;
                                 }
                         }
                 }

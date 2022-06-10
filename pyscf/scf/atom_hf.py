@@ -22,7 +22,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.lib import param
 from pyscf.data import elements
-from pyscf.scf import hf, rohf
+from pyscf.scf import hf, rohf, addons
 
 
 def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
@@ -33,7 +33,7 @@ def get_atm_nrhf(mol, atomic_configuration=elements.NRSRHF_CONFIGURATION):
     atm_template.charge = 0
     atm_template.symmetry = False  # TODO: enable SO3 symmetry here
     atm_template.atom = atm_template._atom = []
-    atm_template.cart = False  # AtomSphAverageRHF does not support cartensian basis
+    atm_template.cart = False  # AtomSphAverageRHF does not support cartesian basis
 
     atm_scf_result = {}
     for ia, a in enumerate(mol._atom):
@@ -83,6 +83,8 @@ class AtomSphAverageRHF(hf.RHF):
         # The default initial guess minao does not have super-heavy elements
         if mol.atom_charge(0) > 96:
             self.init_guess = '1e'
+
+        self = self.apply(addons.remove_linear_dep_)
 
     def check_sanity(self):
         pass
@@ -191,7 +193,7 @@ def frac_occ(symb, l, atomic_configuration=elements.NRSRHF_CONFIGURATION):
 
 
 def _angular_momentum_for_each_ao(mol):
-    ao_ang = numpy.zeros(mol.nao, dtype=numpy.int)
+    ao_ang = numpy.zeros(mol.nao, dtype=int)
     ao_loc = mol.ao_loc_nr()
     for i in range(mol.nbas):
         p0, p1 = ao_loc[i], ao_loc[i+1]

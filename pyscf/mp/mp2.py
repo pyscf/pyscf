@@ -354,7 +354,7 @@ def get_frozen_mask(mp):
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
         moidx[mp._nmo:] = False
     elif mp.frozen is None:

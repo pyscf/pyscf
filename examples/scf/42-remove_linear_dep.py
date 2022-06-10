@@ -11,7 +11,7 @@ basis linear dependency in a similar manner, but it also can handle
 pathological linear dependencies via the partial Cholesky procedure.
 '''
 
-
+from functools import reduce
 import numpy
 import numpy.linalg
 from pyscf import gto, scf, mcscf

@@ -18,17 +18,19 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = '''
-    O     0.   0.       0.
-    H     0.8  0.3      0.2
-    H     0.   -0.757   0.587
-    H     0.   0.757    0.587'''
-mol.charge = 0
-mol.spin = 3
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = '''
+        O     0.   0.       0.
+        H     0.8  0.3      0.2
+        H     0.   -0.757   0.587
+        H     0.   0.757    0.587'''
+    mol.charge = 0
+    mol.spin = 3
+    mol.build()
 
 def tearDownModule():
     global mol

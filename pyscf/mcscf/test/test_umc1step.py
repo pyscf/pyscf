@@ -23,20 +23,22 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-basis = '631g',
-spin = 2,
-)
-m = scf.UHF(mol)
-m.conv_tol = 1e-10
-m.scf()
+def setUpModule():
+    global mol, m
+    b = 1.4
+    mol = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+    basis = '631g',
+    spin = 2,
+    )
+    m = scf.UHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
 
 def tearDownModule():
     global mol, m

@@ -59,6 +59,7 @@ class KROKS(rks.KohnShamDFT, krohf.KROHF):
     get_rho = kuks.get_rho
 
     density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(krohf.KROHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(krohf.KROHF.mix_density_fit)
 
 

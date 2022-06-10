@@ -23,24 +23,6 @@ from pyscf import scf, dft
 from pyscf import cc
 from pyscf.cc import dfccsd, eom_rccsd
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol).density_fit(auxbasis='weigend')
-mf.conv_tol_grad = 1e-8
-mf.kernel()
-
-cc1 = dfccsd.RCCSD(mf).run(conv_tol=1e-10)
-mycc = cc.ccsd.CCSD(mf).density_fit().set(max_memory=0)
-mycc.__dict__.update(cc1.__dict__)
-
 def make_mycc1():
     mf1 = copy.copy(mf)
     no = mol.nelectron // 2
@@ -64,8 +46,29 @@ def make_mycc1():
     mycc1.t1 = r1*1e-5
     mycc1.t2 = r2*1e-5
     return mf1, mycc1, eris1
-mf1, mycc1, eris1 = make_mycc1()
-no, nv = mycc1.t1.shape
+
+def setUpModule():
+    global mol, mf, cc1, mycc, mf1, mycc1, eris1, no, nv
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol).density_fit(auxbasis='weigend')
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
+
+    cc1 = dfccsd.RCCSD(mf).run(conv_tol=1e-10)
+    mycc = cc.ccsd.CCSD(mf).density_fit().set(max_memory=0)
+    mycc.__dict__.update(cc1.__dict__)
+
+    mf1, mycc1, eris1 = make_mycc1()
+    no, nv = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, cc1, mycc, mf1, mycc1, eris1
@@ -78,12 +81,12 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         mo_coeff = numpy.random.random(mf.mo_coeff.shape)
         eris = cc.ccsd.CCSD(mf).ao2mo(mo_coeff)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.962033460861587 , 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3666078517246127, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.962033460861587 , 11)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3666078517246127, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.122525571320871, 11)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48517302161068, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.48517302161068, 11)
         self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 59.418747028576142, 11)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.562457227975969, 12)
+        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)), 43.562457227975969, 11)
 
 
     def test_df_ipccsd(self):

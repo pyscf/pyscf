@@ -24,27 +24,29 @@ from pyscf import lib
 import pyscf.lib.parameters as param
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 
-mol0 = gto.Mole()
-mol0.atom = [
-    [1  , (0.,1.,1.)],
-    ["O1", (0.,0.,0.)],
-    [1  , (1.,1.,0.)], ]
-mol0.nucmod = { "O":'gaussian', 3:'g' }
-mol0.unit = 'ang'
-mol0.basis = {
-    "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
-                                         (1, 3, 2, 1.8),
-                                         (2, 2, 1, 1.8),)),
-    "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
-          (1, -2, (1, 1)), ]}
-mol0.symmetry = 1
-mol0.charge = 1
-mol0.spin = 1
-mol0.verbose = 7
-mol0.ecp = {'O1': 'lanl2dz'}
-ftmp = tempfile.NamedTemporaryFile()
-mol0.output = ftmp.name
-mol0.build()
+def setUpModule():
+    global mol0, ftmp
+    mol0 = gto.Mole()
+    mol0.atom = [
+        [1  , (0.,1.,1.)],
+        ["O1", (0.,0.,0.)],
+        [1  , (1.,1.,0.)], ]
+    mol0.nucmod = { "O":'gaussian', 3:'g' }
+    mol0.unit = 'ang'
+    mol0.basis = {
+        "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
+                                             (1, 3, 2, 1.8),
+                                             (2, 2, 1, 1.8),)),
+        "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
+              (1, -2, (1, 1)), ]}
+    mol0.symmetry = 1
+    mol0.charge = 1
+    mol0.spin = 1
+    mol0.verbose = 7
+    mol0.ecp = {'O1': 'lanl2dz'}
+    ftmp = tempfile.NamedTemporaryFile()
+    mol0.output = ftmp.name
+    mol0.build()
 
 def tearDownModule():
     global mol0, ftmp
@@ -728,6 +730,13 @@ O    SP
         mol1.symmetry = "C3"
         self.assertRaises(PointGroupSymmetryError, mol1.build)
 
+        mol1 = gto.Mole()
+        mol1.atom = 'H 0 0 0; H 1 0 0'
+        mol1.basis = 'sto-3g'
+        mol1.symmetry = 'Dooh'
+        mol1.build()
+        self.assertAlmostEqual(abs(mol1._symm_axes - numpy.eye(3)[[1,2,0]]).max(), 0, 9)
+
     def test_symm_orb(self):
         rs = numpy.array([[.1, -.3, -.2],
                           [.3,  .1,  .8]])
@@ -868,6 +877,9 @@ O    SP
         mol2 = mol2 + mol2
         mol2.cart = True
         self.assertEqual(mol2.npgto_nr(), 100)
+        mol3 = gto.M(atom='Cu', basis='lanl2dz', ecp='lanl2dz', spin=None)
+        mol4 = mol1 + mol3
+        self.assertEqual(len(mol4._ecpbas), 16)
 
     def test_intor_cross_cart(self):
         mol1 = gto.M(atom='He', basis={'He': [(2,(1.,1))]}, cart=True)

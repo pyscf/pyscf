@@ -150,18 +150,20 @@ def grids_response(grids):
         w0[p0:p1] = vol * pbecke[ia] / z
     return coords_all, w0, w1
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.build()
-mf = dft.RKS(mol)
-mf.conv_tol = 1e-14
-mf.kernel()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.build()
+    mf = dft.RKS(mol)
+    mf.conv_tol = 1e-14
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf
@@ -170,13 +172,79 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_finite_diff_rks_grad(self):
+#[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
+# [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
+# [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
         g = mf.nuc_grad_method().kernel()
         self.assertAlmostEqual(lib.finger(g), -0.049887866191414401, 6)
 
+# O     0.0000000000    -0.0000000000     0.0210225191
+# H     0.0000000000     0.0281984036    -0.0105112595
+# H    -0.0000000000    -0.0281984036    -0.0105112595
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.049891265876709084, 7)
+
+        mol1 = mol.copy()
         mf_scanner = mf.as_scanner()
-        e1 = mf_scanner(mol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        e2 = mf_scanner(mol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
-        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 4)
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    def test_rks_grad_lda(self):
+        mol_hf = gto.Mole()
+        mol_hf.atom = [
+            ['H' , (0. , 0. , 1.804)],
+            ['F' , (0. , 0. , 0.   )], ]
+        mol_hf.unit = 'B'
+        mol_hf.basis = '631g'
+        mol_hf.build()
+
+#[[ 0  0  -2.68934738e-03]
+# [ 0  0   2.69333577e-03]]
+        mf = dft.RKS(mol_hf).run(conv_tol=1e-14)
+        self.assertAlmostEqual(lib.finger(mf.Gradients().kernel()), 0.0018831588319051444, 7)
+
+#[[ 0  0  -2.68931547e-03]
+# [ 0  0   2.68911282e-03]]
+        mf.grids.prune = None
+        mf.grids.level = 6
+        mf.run(conv_tol=1e-14)
+        self.assertAlmostEqual(lib.finger(mf.Gradients().kernel()), 0.0018819497229394144, 7)
+
+    def test_finite_diff_rks_grad_gga(self):
+#[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]
+# [  4.04977877e-17   2.11112794e-02  -6.08181640e-03]
+# [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
+        mf = mol.RKS().run(xc='b3lypg', conv_tol=1e-12)
+        g = mf.nuc_grad_method().set().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.035613964330885352, 7)
+
+#[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
+# [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
+# [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
+        mf = mol.RKS().run(xc='b88,p86', conv_tol=1e-12)
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.050382923259300716, 7)
+
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.05036316927480719, 7)
+
+        mol1 = mol.copy()
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
+
+    def test_finite_diff_rks_grad_mgga(self):
+        mf = mol.RKS().run(xc='m06l', conv_tol=1e-12)
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.02804214421452781, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
 
     def test_different_grids_for_grad(self):
         grids1 = dft.gen_grid.Grids(mol)
@@ -328,8 +396,8 @@ class KnownValues(unittest.TestCase):
         p0, p1 = mol.aoslice_by_atom()[0][2:]
         exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
         exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
-        self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
-        self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
+        self.assertAlmostEqual(dexc_t, exc1_approx[2], 3)
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 7)
 
         xc = 'pbe,'
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
@@ -353,7 +421,7 @@ class KnownValues(unittest.TestCase):
         exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
         exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
         self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
-        self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 7)
 
         xc = 'pbe0'
         grids.radii_adjust = None
@@ -380,15 +448,38 @@ class KnownValues(unittest.TestCase):
         exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
         exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
         self.assertAlmostEqual(dexc_t, exc1_approx[2], 1)
-#FIXME: exc1_full is quite different to the finite difference results, why?
-        self.assertAlmostEqual(dexc_t, exc1_full[2], 2)
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 7)
+
+        xc = 'm06l,'
+        exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
+        exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
+
+        grids0_w = copy.copy(grids0)
+        grids0_w.weights = grids1.weights
+        grids0_c = copy.copy(grids0)
+        grids0_c.coords = grids1.coords
+        exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
+        exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
+
+        dexc_t = (exc1 - exc0) * denom
+        dexc_c = (exc0_c - exc0) * denom
+        dexc_w = (exc0_w - exc0) * denom
+        self.assertAlmostEqual(dexc_t, dexc_c+dexc_w, 4)
+
+        vxc = rks.get_vxc(mf._numint, mol, grids, xc, dm0)[1]
+        ev1, vxc1 = rks.get_vxc_full_response(mf._numint, mol, grids, xc, dm0)
+        p0, p1 = mol.aoslice_by_atom()[0][2:]
+        exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
+        exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
+        self.assertAlmostEqual(dexc_t, exc1_approx[2], 1)
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 7)
 
     def test_range_separated(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'wb97x'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -76.36324624711915, 12)
+        self.assertAlmostEqual(mf.e_tot, -76.36324548001262, 7)
 
         g = mf.nuc_grad_method().kernel()
         self.assertAlmostEqual(lib.finger(g), -0.027003819523762924, 3)

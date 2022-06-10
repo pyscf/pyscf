@@ -67,8 +67,7 @@ def ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     kptjs = numpy.asarray(kptjs, order='C').reshape(-1,3)
     Gv = numpy.asarray(Gv, order='C').reshape(-1,3)
     nGv = Gv.shape[0]
-    GvT = numpy.asarray(Gv.T, order='C')
-    GvT += q.reshape(-1,1)
+    GvT = numpy.asarray(Gv.T, order='C') + q.reshape(-1,1)
 
     if (gxyz is None or b is None or Gvbase is None or (abs(q).sum() > 1e-9)
         # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs

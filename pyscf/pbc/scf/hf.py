@@ -48,9 +48,16 @@ from pyscf import __config__
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
+    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
+    s = lib.asarray(s)
+    hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
+    if hermi_error > cell.precision and hermi_error > 1e-12:
+        logger.warn(cell, '%.4g error found in overlap integrals. '
+                    'cell.precision  or  cell.rcut  can be adjusted to '
+                    'improve accuracy.')
+
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
@@ -506,7 +513,7 @@ class SCF(mol_hf.SCF):
         self.kpt = kpt
         self.conv_tol = cell.precision * 10
 
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
+        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpt(self):
@@ -555,6 +562,8 @@ class SCF(mol_hf.SCF):
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*cell.nelectron * -.5)
+        if getattr(self, 'smearing_method', None) is not None:
+            logger.info(self, 'Smearing method = %s', self.smearing_method)
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
@@ -756,6 +765,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def rs_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.pbc.df import rsdf_jk
+        return rsdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
@@ -817,6 +830,16 @@ class SCF(mol_hf.SCF):
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self
+
+
+class KohnShamDFT:
+    '''A mock DFT base class
+
+    The base class is defined in the pbc.dft.rks module. This class can
+    be used to verify if an SCF object is an pbc-Hartree-Fock method or an
+    pbc-DFT method. It should be overwritten by the actual KohnShamDFT class
+    when loading dft module.
+    '''
 
 
 class RHF(SCF, mol_hf.RHF):

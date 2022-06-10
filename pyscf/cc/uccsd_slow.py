@@ -527,7 +527,7 @@ class _PhysicistsERIs:
             self.feri1 = lib.H5TmpFile()
             orbo = so_coeff[:,:nocc]
             orbv = so_coeff[:,nocc:]
-            if mo_coeff[0].dtype == np.complex: ds_type = 'c16'
+            if mo_coeff[0].dtype == np.complex128: ds_type = 'c16'
             else: ds_type = 'f8'
             self.oooo = self.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
             self.ooov = self.feri1.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)

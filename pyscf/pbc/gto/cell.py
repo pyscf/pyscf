@@ -51,6 +51,8 @@ WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
+# cutoff penalty due to lattice summation
+LATTICE_SUM_PENALTY = 1e-1
 
 
 # For code compatiblity in python-2 and python-3
@@ -291,7 +293,7 @@ def conc_cell(cell1, cell2):
         if len(cell1._ecpbas) == 0:
             cell3._ecpbas = ecpbas2
         else:
-            cell3._ecpbas = np.hstack((cell1._ecpbas, ecpbas2))
+            cell3._ecpbas = np.vstack((cell1._ecpbas, ecpbas2))
 
     cell3.verbose = cell1.verbose
     cell3.output = cell1.output
@@ -472,11 +474,14 @@ def get_nimgs(cell, precision=None):
     return nimgs
 
 def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
-    C = (c**2+1e-200)*(2*l+1)*alpha / precision
+    '''rcut based on the overlap integrals. This estimation is too conservative
+    in many cases. A possible replacement can be the value of the basis
+    function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
+    C = (c**2)*(2*l+1) / (precision * LATTICE_SUM_PENALTY)
     r0 = 20
     # +1. to ensure np.log returning positive value
     r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
-    rcut = np.sqrt( 2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
+    rcut = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     return rcut
 
 def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):

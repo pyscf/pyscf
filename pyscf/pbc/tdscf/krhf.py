@@ -23,6 +23,7 @@
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.pbc.scf import _response_functions  # noqa
@@ -33,9 +34,6 @@ REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold
 POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
-    #FIXME: numerically unstable with small mesh?
-    #TODO: Add a warning message for small mesh.
-
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
@@ -59,10 +57,6 @@ class TDA(rhf.TDA):
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         e_ia = _get_e_ia(mo_energy, mo_occ)
-        # FIXME: hdiag corresponds to the orbital energy with the exxdiv
-        # correction. The integrals in A, B matrices do not have the
-        # contribution from the exxdiv. Should the exchange correction be
-        # removed from hdiag?
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
 
         mem_now = lib.current_memory()[0]
@@ -98,12 +92,17 @@ class TDA(rhf.TDA):
         mo_occ = mf.mo_occ
         e_ia = numpy.hstack([x.ravel() for x in _get_e_ia(mo_energy, mo_occ)])
 
+        e_ia_max = e_ia.max()
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia.ravel())
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
+        # Handle degeneracy, include all degenerated states in initial guess
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None):
@@ -115,13 +114,21 @@ class TDA(rhf.TDA):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            return w[idx], v[:,idx], idx
+
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=self.nstates, lindep=self.lindep,
-                              max_space=self.max_space,
+                              max_space=self.max_space, pick=pickeig,
+                              fill_heff=purify_krlyov_heff(precision, 0, log),
                               verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
@@ -151,7 +158,7 @@ class TDHF(TDA):
         e_ia = _get_e_ia(mo_energy, mo_occ)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
-        hdiag = numpy.hstack((hdiag, hdiag))
+        hdiag = numpy.hstack((hdiag, -hdiag))
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -218,11 +225,16 @@ class TDHF(TDA):
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+        hermi = 0
+
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
+                                    fill_heff=purify_krlyov_heff(precision, hermi, log),
                                     verbose=self.verbose)
         mo_occ = self._scf.mo_occ
         self.e = w
@@ -256,6 +268,22 @@ def _unpack(vo, mo_occ):
         p0, p1 = p1, p1 + no * nv
         z.append(vo[p0:p1].reshape(no,nv))
     return z
+
+def purify_krlyov_heff(precision, hermi, log):
+    def fill_heff(heff, xs, ax, xt, axt, dot):
+        if hermi == 1:
+            heff = linalg_helper._fill_heff_hermitian(heff, xs, ax, xt, axt, dot)
+        else:
+            heff = linalg_helper._fill_heff(heff, xs, ax, xt, axt, dot)
+        space = len(axt)
+        # TODO: PBC integrals has larger errors than molecule systems.
+        # purify the effective Hamiltonian with symmetry and other
+        # possible conditions.
+        if abs(heff[:space,:space].imag).max() < precision:
+            log.debug('Remove imaginary part of the Krylov space effective Hamiltonian')
+            heff[:space,:space].imag = 0
+        return heff
+    return fill_heff
 
 
 from pyscf.pbc import scf
