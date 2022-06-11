@@ -185,6 +185,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mycc1.t1-r1).max(), 0, 14)
         self.assertAlmostEqual(abs(mycc1.t2-r2).max(), 0, 14)
 
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.GHF(mol).apply(cc.GCCSD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0]*2, 4
+        nmo = nocc + nvir
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        def check_overwritten(method):
+            vec = numpy.zeros(method.vector_size())
+            vec_orig = vec.copy()
+            t1, t2 = method.vector_to_amplitudes(vec)
+            t1[:] = 1
+            t2[:] = 1
+            self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
+        check_overwritten(mycc)
+        check_overwritten(mycc.EOMIP())
+        check_overwritten(mycc.EOMEA())
+        check_overwritten(mycc.EOMEE())
+
     def test_ip_matvec(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((nocc))-.9 + numpy.random.random((nocc))*.2j
@@ -309,4 +330,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for EOM GCCSD")
     unittest.main()
-
