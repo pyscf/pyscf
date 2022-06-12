@@ -34,7 +34,7 @@ jobs:
         if: runner.os != 'Linux'
         uses: pypa/cibuildwheel@2.6.0
         env:
-          CIBW_ARCHS_MACOS: x86_64 arm64
+          CIBW_ARCHS_MACOS: arm64
 
       - uses: actions/upload-artifact@v2
         with:
