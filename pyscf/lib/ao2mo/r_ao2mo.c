@@ -836,7 +836,7 @@ void AO2MOr_e1_drv(int (*intor)(), void (*fill)(),
         assert(eri_ao);
         int ish, kl;
         int (*fprescreen)();
-        if (vhfopt) {
+        if (vhfopt != NULL) {
                 fprescreen = vhfopt->fprescreen;
         } else {
                 fprescreen = CVHFnoscreen;
