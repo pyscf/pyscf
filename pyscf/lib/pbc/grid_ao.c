@@ -217,7 +217,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
                 } else {
-                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
+                        atm_imag_max[i] = MIN(atm_imag_max[i], nimgs);
                 }
         }
 
@@ -337,7 +337,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
                 } else {
-                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
+                        atm_imag_max[i] = MIN(atm_imag_max[i], nimgs);
                 }
         }
 
