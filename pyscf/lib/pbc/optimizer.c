@@ -34,11 +34,11 @@ void PBCinit_optimizer(PBCOpt **opt, int *atm, int natm,
 void PBCdel_optimizer(PBCOpt **opt)
 {
         PBCOpt *opt0 = *opt;
-        if (!opt0) {
+        if (opt0 == NULL) {
                 return;
         }
 
-        if (!opt0->rrcut) {
+        if (opt0->rrcut != NULL) {
                 free(opt0->rrcut);
         }
         free(opt0);
@@ -53,7 +53,7 @@ int PBCnoscreen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
 
 int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         const int ish = shls[0];
@@ -71,7 +71,7 @@ int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
 void PBCset_rcut_cond(PBCOpt *opt, double *rcut,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (opt->rrcut) {
+        if (opt->rrcut != NULL) {
                 free(opt->rrcut);
         }
         opt->rrcut = (double *)malloc(sizeof(double) * nbas);

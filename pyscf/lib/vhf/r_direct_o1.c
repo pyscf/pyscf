@@ -48,7 +48,7 @@
         double *cache = (double *)(buf + di * dj * dim * dim * ncomp); \
         int (*fprescreen)(); \
         int (*r_vkscreen)(); \
-        if (vhfopt) { \
+        if (vhfopt != NULL) { \
                 fprescreen = vhfopt->fprescreen; \
                 r_vkscreen = vhfopt->r_vkscreen; \
         } else { \

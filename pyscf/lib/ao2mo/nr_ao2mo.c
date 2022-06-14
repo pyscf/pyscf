@@ -1280,7 +1280,7 @@ void AO2MOnr_e1fill_drv(int (*intor)(), void (*fill)(), double *eri,
                                   klsh_start, klsh_count, 0, 0, 0, 0,
                                   ncomp, ao_loc, NULL, cintopt, vhfopt};
         int (*fprescreen)();
-        if (vhfopt) {
+        if (vhfopt != NULL) {
                 fprescreen = vhfopt->fprescreen;
         } else {
                 fprescreen = CVHFnoscreen;
