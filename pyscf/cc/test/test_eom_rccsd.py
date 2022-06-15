@@ -255,9 +255,13 @@ class KnownValues(unittest.TestCase):
         def check_overwritten(method):
             vec = numpy.zeros(method.vector_size())
             vec_orig = vec.copy()
-            t1, t2 = method.vector_to_amplitudes(vec)
-            t1[:] = 1
-            t2[:] = 1
+            ts = method.vector_to_amplitudes(vec)
+            for ti in ts:
+                if isinstance(ti, numpy.ndarray):
+                    ti[:] = 1
+                else:
+                    for t in ti:
+                        t[:] = 1
             self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
         check_overwritten(mycc)
