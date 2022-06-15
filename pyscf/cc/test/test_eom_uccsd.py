@@ -310,16 +310,20 @@ class KnownValues(unittest.TestCase):
         mol = gto.M()
         mycc = scf.UHF(mol).apply(cc.UCCSD)
         nelec = (3,3)
-        nocc, nvir = nelec[0], 4
-        nmo = nocc + nvir
+        nocc = nelec
+        nmo = (5, 5)
         mycc.nocc = nocc
         mycc.nmo = nmo
         def check_overwritten(method):
             vec = numpy.zeros(method.vector_size())
             vec_orig = vec.copy()
             ts = method.vector_to_amplitudes(vec)
-            for t in ts:
-                ts[:] = 1
+            for ti in ts:
+                if isinstance(ti, numpy.ndarray):
+                    ti[:] = 1
+                else:
+                    for t in ti:
+                        t[:] = 1
             self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
         check_overwritten(mycc)
