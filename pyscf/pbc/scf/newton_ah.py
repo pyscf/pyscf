@@ -281,20 +281,22 @@ def newton(mf):
                 mo = ([numpy.dot(mo, u[0][k]) for k, mo in enumerate(mo_coeff[0])],
                       [numpy.dot(mo, u[1][k]) for k, mo in enumerate(mo_coeff[1])])
                 return lib.asarray(mo)
-
-        return SecondOrderKUHF(mf)
+        mf2 = SecondOrderKUHF(mf)
 
     elif isinstance(mf, pscf.krohf.KROHF):
         class SecondOrderKROHF(SecondOrderKRHF):
             gen_g_hop = gen_g_hop_rohf
 
-        return SecondOrderKROHF(mf)
+        mf2 = SecondOrderKROHF(mf)
 
     elif isinstance(mf, pscf.kghf.KGHF):
         raise NotImplementedError
 
     else:
-        return SecondOrderKRHF(mf)
+        mf2 = SecondOrderKRHF(mf)
+
+    mf2.with_df = mf.with_df
+    return mf2
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pbcgto
