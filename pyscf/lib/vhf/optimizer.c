@@ -479,12 +479,12 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 // symmetrize dm_cond because nrs8_prescreen only tests the lower (or upper)
 // triangular part of dm_cond. Without the symmetrization, some integrals may be
 // incorrectly skipped.
-                                tmp = .5 * (fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]));
+                                tmp = fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]);
                                 dmax = MAX(dmax, tmp);
                         } }
                 }
-                opt->dm_cond[ish*nbas+jsh] = dmax;
-                opt->dm_cond[jsh*nbas+ish] = dmax;
+                opt->dm_cond[ish*nbas+jsh] = .5 * dmax;
+                opt->dm_cond[jsh*nbas+ish] = .5 * dmax;
         } }
 }
 
