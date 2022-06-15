@@ -247,15 +247,15 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = .5 * (cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]));
+                                tmp = cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]);
                                 dmaxi = MAX(dmaxi, tmp);
                         } }
-                        dmscond[iset*nbas*nbas+ish*nbas+jsh] = dmaxi;
-                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = dmaxi;
+                        dmscond[iset*nbas*nbas+ish*nbas+jsh] = .5 * dmaxi;
+                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = .5 * dmaxi;
                         dmax = MAX(dmax, dmaxi);
                 }
-                dmcond[ish*nbas+jsh] = dmax;
-                dmcond[jsh*nbas+ish] = dmax;
+                dmcond[ish*nbas+jsh] = .5 * dmax;
+                dmcond[jsh*nbas+ish] = .5 * dmax;
         } }
 }
 
