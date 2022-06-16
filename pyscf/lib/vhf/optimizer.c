@@ -189,13 +189,15 @@ int CVHFnrs8_vj_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls
                 rho += dm_cond[j*n+i] * q_cond[j*n+i];
         } }
 
-        cutoff = 4 * direct_scf_cutoff / rho;
-        for (l = l0; l < l1; l++) {
-        for (k = k0; k < k1; k++) {
-                if (q_cond[l*n+k] > cutoff) {
-                        return 1;
-                }
-        } }
+        if (rho != 0) {
+                cutoff = 4 * direct_scf_cutoff / fabs(rho);
+                for (l = l0; l < l1; l++) {
+                for (k = k0; k < k1; k++) {
+                        if (q_cond[l*n+k] > cutoff) {
+                                return 1;
+                        }
+                } }
+        }
 
         rho = 0;
         for (l = l0; l < l1; l++) {
@@ -204,13 +206,15 @@ int CVHFnrs8_vj_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls
                 rho += dm_cond[l*n+k] * q_cond[l*n+k];
         } }
 
-        cutoff = 4 * direct_scf_cutoff / rho;
-        for (j = j0; j < j1; j++) {
-        for (i = i0; i < i1; i++) {
-                if (q_cond[j*n+i] > cutoff) {
-                        return 1;
-                }
-        } }
+        if (rho != 0) {
+                cutoff = 4 * direct_scf_cutoff / fabs(rho);
+                for (j = j0; j < j1; j++) {
+                for (i = i0; i < i1; i++) {
+                        if (q_cond[j*n+i] > cutoff) {
+                                return 1;
+                        }
+                } }
+        }
         return 0;
 }
 
