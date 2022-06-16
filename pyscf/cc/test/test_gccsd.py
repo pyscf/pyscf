@@ -473,4 +473,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for GCCSD")
     unittest.main()
-
