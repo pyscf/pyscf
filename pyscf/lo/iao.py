@@ -95,10 +95,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
             ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
         # s1 can be singular in large basis sets: Use canonical orthogonalization in this case:
         except numpy.linalg.LinAlgError:
-            se, sv = numpy.linalg.eigh(s1)
-            keep = (se >= lindep_threshold)
-            sinv = numpy.einsum("ai,i,bi->ab", sv[:,keep], 1/se[keep], sv[:,keep])
-            p12 = numpy.dot(sinv, s12)
+            x = scf.addons.canonical_orth_(s1, lindep_threshold)
+            p12 = numpy.linalg.multi_dot((x, x.T, s12))
             ctild = numpy.dot(p12, ctild)
         # If there are no occupied orbitals at this k-point, all but the first term will vanish:
         if mo.shape[-1] == 0:
