@@ -27,12 +27,13 @@ Simple usage::
 
 try:
     from pyscf.dft import libxc
-    XC = libxc.XC
+    XC = {**libxc.XC, **libxc.XC_ALIAS}
 except (ImportError, OSError):
-    pass
+    XC = None
 try:
     from pyscf.dft import xcfun
-    XC = xcfun.XC
+    if XC is None:
+        XC = {**xcfun.XC, **xcfun.XC_ALIAS}
 except (ImportError, OSError):
     pass
 #from pyscf.dft import xc
@@ -48,6 +49,7 @@ from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.dft import numint
 from pyscf.df import density_fit
+from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft.gen_grid import sg1_prune, nwchem_prune, treutler_prune, \
         stratmann, original_becke, Grids
 from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
@@ -66,24 +68,17 @@ A wrap function to create DFT object (RKS or UKS).\n
 DFT = KS
 
 def RKS(mol, xc='LDA,VWN'):
-    if mol.nelectron == 1:
-        return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
-        if mol.spin > 0:
-            return roks.ROKS(mol, xc)
-        else:
+    if mol.spin == 0:
+        if not mol.symmetry or mol.groupname == 'C1':
             return rks.RKS(mol, xc)
-    else:
-        if mol.spin > 0:
-            return rks_symm.ROKS(mol, xc)
         else:
             return rks_symm.RKS(mol, xc)
+    else:
+        return ROKS(mol, xc)
 RKS.__doc__ = rks.RKS.__doc__
 
 def ROKS(mol, xc='LDA,VWN'):
-    if mol.nelectron == 1:
-        return uks.UKS(mol)
-    elif not mol.symmetry or mol.groupname == 'C1':
+    if not mol.symmetry or mol.groupname == 'C1':
         return roks.ROKS(mol, xc)
     else:
         return rks_symm.ROKS(mol, xc)
@@ -109,3 +104,15 @@ def DKS(mol, xc='LDA,VWN'):
         return dks.RDKS(mol, xc=xc)
     else:
         return dks.UDKS(mol, xc=xc)
+
+UDKS = dks.UDKS
+RDKS = dks.RDKS
+
+def X2C(mol, *args):
+    '''X2C Kohn-Sham'''
+    from pyscf.scf import dhf
+    from pyscf.x2c import dft
+    if dhf.zquatev and mol.spin == 0:
+        return dft.RKS(mol, *args)
+    else:
+        return dft.UKS(mol, *args)

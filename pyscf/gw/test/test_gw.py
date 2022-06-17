@@ -4,20 +4,23 @@ import unittest
 import numpy
 from pyscf import lib, gto, scf, dft, tdscf
 from pyscf import gw
+from pyscf.gw import rpa
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    ['O' , (0. , 0.     , 0.)],
-    ['H' , (0. , -0.7571 , 0.5861)],
-    ['H' , (0. , 0.7571 , 0.5861)]]
-mol.basis = 'def2-svp'
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['O' , (0. , 0.     , 0.)],
+        ['H' , (0. , -0.7571 , 0.5861)],
+        ['H' , (0. , 0.7571 , 0.5861)]]
+    mol.basis = 'def2-svp'
+    mol.build()
 
-mf = dft.RKS(mol)
-mf.xc = 'pbe'
-mf.kernel()
+    mf = dft.RKS(mol)
+    mf.xc = 'pbe'
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf
@@ -70,6 +73,12 @@ class KnownValues(unittest.TestCase):
         gw_obj.kernel(orbs=[nocc-1,nocc])
         self.assertAlmostEqual(gw_obj.mo_energy[nocc-1], -0.44684106, 7)
         self.assertAlmostEqual(gw_obj.mo_energy[nocc]  ,  0.17292032, 7)
+
+    def test_rpa(self):
+        rpa_obj = rpa.RPA(mf, frozen=0)
+        rpa_obj.kernel()
+        self.assertAlmostEqual(rpa_obj.e_tot, -76.26428191794182, 6)
+        self.assertAlmostEqual(rpa_obj.e_corr, -0.30783004035780076, 6)
 
 
 if __name__ == "__main__":

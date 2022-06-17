@@ -178,7 +178,7 @@ def cart2sph(l, c_tensor=None, normalized=None):
         else:
             return c_tensor * 0.488602511902919921
     else:
-        assert(l <= 12)
+        assert l <= 15
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
@@ -348,7 +348,7 @@ def format_atom(atoms, origin=0, axes=None,
                 sys.stderr.write('\nFailed to parse geometry file  %s\n\n' % atoms)
                 raise
 
-        atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
         fmt_atoms = []
         for dat in atoms.split('\n'):
             dat = dat.strip()
@@ -697,7 +697,7 @@ def conc_mol(mol1, mol2):
         if len(mol1._ecpbas) == 0:
             mol3._ecpbas = ecpbas2
         else:
-            mol3._ecpbas = numpy.hstack((mol1._ecpbas, ecpbas2))
+            mol3._ecpbas = numpy.vstack((mol1._ecpbas, ecpbas2))
 
     mol3.verbose = mol1.verbose
     mol3.output = mol1.output
@@ -1341,7 +1341,7 @@ def time_reversal_map(mol):
 
 CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
 
-def energy_nuc(mol, charges=None, coords=None):
+def classical_coulomb_energy(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
@@ -1358,6 +1358,8 @@ def energy_nuc(mol, charges=None, coords=None):
         raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+energy_nuc = classical_coulomb_energy
 
 def inter_distance(mol, coords=None):
     '''
@@ -2413,10 +2415,11 @@ class Mole(lib.StreamObject):
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        logger.debug3(self, 'arg.atm = %s', str(self._atm))
-        logger.debug3(self, 'arg.bas = %s', str(self._bas))
-        logger.debug3(self, 'arg.env = %s', str(self._env))
-        logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
+        if self.verbose >= logger.DEBUG3:
+            logger.debug3(self, 'arg.atm = %s', self._atm)
+            logger.debug3(self, 'arg.bas = %s', self._bas)
+            logger.debug3(self, 'arg.env = %s', self._env)
+            logger.debug3(self, 'ecpbas  = %s', self._ecpbas)
 
         self._built = True
         return self
@@ -2432,31 +2435,42 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            try:
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                        self.symmetry)
-            except PointGroupSymmetryError:
-                raise PointGroupSymmetryError(
-                    'Unable to identify input symmetry %s. Try symmetry="%s"' %
-                    (self.symmetry, self.topgroup))
+            groupname = None
+            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+                if symm.check_symm(self.symmetry, self._atom, self._basis):
+                    # Try to use original axes (issue #1209)
+                    groupname = self.symmetry
+                    axes = np.eye(3)
+                else:
+                    logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
+                                'Different symmetry axes will be used.')
+            if groupname is None:
+                try:
+                    groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                       self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
         else:
-            self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                    self.symmetry_subgroup)
+            groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                               self.symmetry_subgroup)
         self._symm_orig = orig
         self._symm_axes = axes
 
-        if self.cart and self.groupname in ('Dooh', 'Coov', 'SO3'):
-            if self.groupname == 'Coov':
-                self.groupname, lgroup = 'C2v', self.groupname
+        if self.cart and groupname in ('Dooh', 'Coov', 'SO3'):
+            if groupname == 'Coov':
+                groupname, lgroup = 'C2v', groupname
             else:
-                self.groupname, lgroup = 'D2h', self.groupname
+                groupname, lgroup = 'D2h', groupname
             logger.warn(self, 'This version does not support symmetry %s '
                         'for cartesian GTO basis. Its subgroup %s is used',
-                        lgroup, self.groupname)
+                        lgroup, groupname)
+        self.groupname = groupname
 
         self.symm_orb, self.irrep_id = \
-                symm.symm_adapted_basis(self, self.groupname, orig, axes)
-        self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
+                symm.symm_adapted_basis(self, groupname, orig, axes)
+        self.irrep_name = [symm.irrep_id2name(groupname, ir)
                            for ir in self.irrep_id]
         return self
 
@@ -2621,6 +2635,10 @@ class Mole(lib.StreamObject):
                 else:
                     logger.info(self, 'point group symmetry = %s, use subgroup %s',
                                 self.topgroup, self.groupname)
+                logger.info(self, "symmetry origin: %s", self._symm_orig)
+                logger.info(self, "symmetry axis x: %s", self._symm_axes[0])
+                logger.info(self, "symmetry axis y: %s", self._symm_axes[1])
+                logger.info(self, "symmetry axis z: %s", self._symm_axes[2])
                 for ir in range(self.symm_orb.__len__()):
                     logger.info(self, 'num. orbitals of irrep %s = %d',
                                 self.irrep_name[ir], self.symm_orb[ir].shape[1])
@@ -2653,7 +2671,7 @@ class Mole(lib.StreamObject):
     set_common_origin_ = set_common_orig  # for backward compatibility
 
     def with_common_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired common origin.
+        '''Return a temporary mol context which has the rquired common origin.
         The required common origin has no effects out of the temporary context.
         See also :func:`mol.set_common_origin`
 
@@ -2682,7 +2700,7 @@ class Mole(lib.StreamObject):
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
     def with_rinv_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        '''Return a temporary mol context which has the rquired origin of 1/r
         operator.  The required origin has no effects out of the temporary
         context.  See also :func:`mol.set_rinv_origin`
 
@@ -2717,7 +2735,7 @@ class Mole(lib.StreamObject):
     omega = omega.setter(set_range_coulomb)
 
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which sets the required parameter
+        '''Return a temporary mol context which sets the required parameter
         omega for range-separated Coulomb operator.
         If omega = None, return the context for regular Coulomb integrals.
         See also :func:`mol.set_range_coulomb`
@@ -2731,13 +2749,13 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def with_long_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for long-range part of
+        '''Return a temporary mol context for long-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(abs(omega))
 
     def with_short_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for short-range part of
+        '''Return a temporary mol context for short-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(-abs(omega))
@@ -2778,7 +2796,7 @@ class Mole(lib.StreamObject):
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        '''Return a temporary mol context which has the rquired Gaussian charge
         distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
@@ -2791,7 +2809,7 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_at_nucleus(self, atm_id):
-        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        '''Return a temporary mol context in which the rinv operator (1/r) is
         treated like the Coulomb potential of a Gaussian charge distribution
         rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
@@ -2817,7 +2835,7 @@ class Mole(lib.StreamObject):
     with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def with_integral_screen(self, threshold):
-        '''Retuen a temporary mol context which has the rquired integral
+        '''Return a temporary mol context which has the rquired integral
         screen threshold
         '''
         expcutoff0 = self._env[PTR_EXPCUTOFF]

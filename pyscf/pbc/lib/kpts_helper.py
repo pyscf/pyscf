@@ -209,7 +209,7 @@ def get_kconserv3(cell, kpts, kijkab):
                 kconserv[i,j,mask] = c
 
     new_shape = [shape[i] for i, x in enumerate(kijkab)
-                 if not isinstance(x, (int,np.int))]
+                 if not isinstance(x, (int, np.integer))]
     kconserv = kconserv.reshape(new_shape)
     return kconserv
 

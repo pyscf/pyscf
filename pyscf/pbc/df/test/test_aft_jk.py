@@ -20,12 +20,14 @@ from pyscf.pbc import scf
 from pyscf.pbc.df import aft, aft_jk
 
 
-cell = gto.Cell()
-cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
-cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
-cell.a = numpy.eye(3) * 2.5
-cell.mesh = [21] * 3
-cell.build()
+def setUpModule():
+    global cell
+    cell = gto.Cell()
+    cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
+    cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
+    cell.a = numpy.eye(3) * 2.5
+    cell.mesh = [21] * 3
+    cell.build()
 
 def tearDownModule():
     global cell

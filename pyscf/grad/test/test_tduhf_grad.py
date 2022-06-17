@@ -23,19 +23,21 @@ from pyscf import tdscf
 from pyscf.grad import tduhf as tduhf_grad
 
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    ['H' , (0. , 0. , 1.804)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.unit = 'B'
-mol.charge = 2
-mol.spin = 2
-mol.basis = '631g'
-mol.build()
-pmol = mol.copy()
-mf = scf.UHF(mol).set(conv_tol=1e-12).run()
+def setUpModule():
+    global mol, pmol, mf
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['H' , (0. , 0. , 1.804)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.unit = 'B'
+    mol.charge = 2
+    mol.spin = 2
+    mol.basis = '631g'
+    mol.build()
+    pmol = mol.copy()
+    mf = scf.UHF(mol).set(conv_tol=1e-12).run()
 
 def tearDownModule():
     global mol, pmol, mf

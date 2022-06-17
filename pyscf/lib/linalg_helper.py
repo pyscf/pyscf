@@ -74,11 +74,11 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
         seig is the eigenvalue vector of the metric s.
     '''
     seig, t = scipy.linalg.eigh(s)
-    try:
+    mask = seig >= lindep
+    if numpy.all(mask):
         w, v = scipy.linalg.eigh(h, s)
-    except numpy.linalg.LinAlgError:
-        idx = seig >= lindep
-        t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
+    else:
+        t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
         if t.size > 0:
             heff = reduce(numpy.dot, (t.T.conj(), h, t))
             w, v = scipy.linalg.eigh(heff)
@@ -458,6 +458,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if callable(pick):
             w, v, idx = pick(w, v, nroots, locals())
+            if len(w) == 0:
+                raise RuntimeError(f'Not enough eigenvalues found by {pick}')
+
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
             if elast.size != e.size:
@@ -842,7 +845,11 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         fill_heff(heff, xs, ax, xt, axt, dot)
         xt = axt = None
         w, v = scipy.linalg.eig(heff[:space,:space])
-        w, v, idx = pick(w, v, nroots, locals())
+        if callable(pick):
+            w, v, idx = pick(w, v, nroots, locals())
+            if len(w) == 0:
+                raise RuntimeError(f'Not enough eigenvalues found by {pick}')
+
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
@@ -967,6 +974,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         warnings.warn('Left eigenvectors from subspace diagonalization method may not be converged')
         w, vl, v = scipy.linalg.eig(heff[:space,:space], left=True)
         e, v, idx = pick(w, v, nroots, locals())
+        if len(e) == 0:
+            raise RuntimeError(f'Not enough eigenvalues found by {pick}')
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
         xl = [x for x in xl]  # nparray -> list

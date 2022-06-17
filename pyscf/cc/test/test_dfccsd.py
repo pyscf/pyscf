@@ -23,24 +23,6 @@ from pyscf import scf, dft
 from pyscf import cc
 from pyscf.cc import dfccsd, eom_rccsd
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol).density_fit(auxbasis='weigend')
-mf.conv_tol_grad = 1e-8
-mf.kernel()
-
-cc1 = dfccsd.RCCSD(mf).run(conv_tol=1e-10)
-mycc = cc.ccsd.CCSD(mf).density_fit().set(max_memory=0)
-mycc.__dict__.update(cc1.__dict__)
-
 def make_mycc1():
     mf1 = copy.copy(mf)
     no = mol.nelectron // 2
@@ -64,8 +46,29 @@ def make_mycc1():
     mycc1.t1 = r1*1e-5
     mycc1.t2 = r2*1e-5
     return mf1, mycc1, eris1
-mf1, mycc1, eris1 = make_mycc1()
-no, nv = mycc1.t1.shape
+
+def setUpModule():
+    global mol, mf, cc1, mycc, mf1, mycc1, eris1, no, nv
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol).density_fit(auxbasis='weigend')
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
+
+    cc1 = dfccsd.RCCSD(mf).run(conv_tol=1e-10)
+    mycc = cc.ccsd.CCSD(mf).density_fit().set(max_memory=0)
+    mycc.__dict__.update(cc1.__dict__)
+
+    mf1, mycc1, eris1 = make_mycc1()
+    no, nv = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, cc1, mycc, mf1, mycc1, eris1

@@ -21,15 +21,17 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import rsdf
 
-cell = pgto.Cell(
-    atom="H 0 0 0; H 0.75 0 0",
-    a = numpy.eye(3)*3,
-    basis={"H": [[0,(0.5,1.)],[1,(0.3,1.)]]},
-)
-cell.verbose = 0
-cell.max_memory = 1000
-cell.build()
-scaled_center = numpy.array([0.392, 0.105, 0.872])
+def setUpModule():
+    global cell, scaled_center
+    cell = pgto.Cell(
+        atom="H 0 0 0; H 0.75 0 0",
+        a = numpy.eye(3)*3,
+        basis={"H": [[0,(0.5,1.)],[1,(0.3,1.)]]},
+    )
+    cell.verbose = 0
+    cell.max_memory = 1000
+    cell.build()
+    scaled_center = numpy.array([0.392, 0.105, 0.872])
 
 
 def tearDownModule():

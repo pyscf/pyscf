@@ -314,10 +314,6 @@ class SymAdaptedUHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in self.mol.irrep_name:
-                    logger.warn(self, 'No irrep %s', irname)
-
             hf_symm.check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return uhf.UHF.build(self, mol)
 
@@ -353,7 +349,7 @@ class SymAdaptedUHF(uhf.UHF):
         eb = numpy.hstack(es)
         cb = hf_symm.so2ao_mo_coeff(mol.symm_orb, cs)
         cb = lib.tag_array(cb, orbsym=numpy.hstack(orbsym))
-        return (ea,eb), (ca,cb)
+        return numpy.asarray((ea,eb)), (ca,cb)
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = uhf.UHF.get_grad(self, mo_coeff, mo_occ, fock)
@@ -380,7 +376,6 @@ class SymAdaptedUHF(uhf.UHF):
             return uhf.UHF.get_occ(self, mo_energy, mo_coeff)
 
         orbsyma, orbsymb = self.get_orbsym(mo_coeff, self.get_ovlp())
-
         mo_occ = numpy.zeros_like(mo_energy)
         idx_ea_left = []
         idx_eb_left = []
@@ -523,17 +518,7 @@ UHF = SymAdaptedUHF
 
 
 class HF1e(UHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig([h1e]*2, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[0][self.mo_occ[0]>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = uhf._hf1e_scf
 
 
 del(WITH_META_LOWDIN)

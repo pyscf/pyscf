@@ -167,19 +167,19 @@ class UCCSD(ccsd.CCSD):
     def nip(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nip = nocc + nocc*(nocc-1)/2*nvir
+        self._nip = nocc + nocc*(nocc-1)//2*nvir
         return self._nip
 
     def nea(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nea = nvir + nocc*nvir*(nvir-1)/2
+        self._nea = nvir + nocc*nvir*(nvir-1)//2
         return self._nea
 
     def nee(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        self._nee = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
+        self._nee = nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         return self._nee
 
     def ipccsd_matvec(self, vector):
@@ -253,7 +253,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ip(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nocc + nocc*(nocc-1)/2*nvir
+        size = nocc + nocc*(nocc-1)//2*nvir
         vector = np.zeros(size, r1.dtype)
         vector[:nocc] = r1.copy()
         index = nocc
@@ -338,7 +338,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ea(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nvir + nvir*(nvir-1)/2*nocc
+        size = nvir + nvir*(nvir-1)//2*nocc
         vector = np.zeros(size, r1.dtype)
         vector[:nvir] = r1.copy()
         index = nvir
@@ -450,7 +450,7 @@ class UCCSD(ccsd.CCSD):
     def amplitudes_to_vector_ee(self,r1,r2):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        size = nocc*nvir + nocc*(nocc-1)/2*nvir*(nvir-1)/2
+        size = nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
         vector = np.zeros(size, r1.dtype)
         vector[:nocc*nvir] = r1.copy().reshape(nocc*nvir)
         index = nocc*nvir

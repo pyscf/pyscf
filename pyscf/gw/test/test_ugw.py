@@ -4,18 +4,21 @@ import unittest
 import numpy
 from pyscf import lib, gto, scf, dft
 from pyscf.gw import ugw_ac
+from pyscf.gw import urpa
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = 'O'
-mol.basis = 'aug-cc-pvdz'
-mol.spin = 2
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = 'O'
+    mol.basis = 'aug-cc-pvdz'
+    mol.spin = 2
+    mol.build()
 
-mf = dft.UKS(mol)
-mf.xc = 'pbe0'
-mf.kernel()
+    mf = dft.UKS(mol)
+    mf.xc = 'pbe0'
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf
@@ -34,6 +37,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(gw_obj.mo_energy[0][nocca],    0.167547592784, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[1][noccb-1], -0.464605523684, 5)
         self.assertAlmostEqual(gw_obj.mo_energy[1][noccb],   -0.0133557793765, 5)
+
+    def test_rpa(self):
+        rpa_obj = urpa.URPA(mf, frozen=0)
+        rpa_obj.kernel()
+        self.assertAlmostEqual(rpa_obj.e_tot, -74.98258098665727, 6)
+        self.assertAlmostEqual(rpa_obj.e_corr, -0.18821540003542925, 6)
+
 
 if __name__ == "__main__":
     print("Full Tests for UGW")

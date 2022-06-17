@@ -25,18 +25,6 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf.cc import gccsd, eom_gccsd, gintermediates
 
-mol = gto.Mole()
-mol.atom = [
-[8 , (0. , 0.     , 0.)],
-[1 , (0. , -0.757 , 0.587)],
-[1 , (0. , 0.757  , 0.587)]]
-mol.basis = '6-31g'
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.build()
-mf = scf.RHF(mol).run()
-mycc = cc.GCCSD(mf).run()
-
 def make_mycc1():
     mol = gto.M()
     nocc, nvir = 8, 14
@@ -76,8 +64,22 @@ def make_mycc1():
     mycc1.t1 = t1
     mycc1.t2 = t2
     return mycc1, eris1
-mycc1, eris1 = make_mycc1()
-nocc, nvir = mycc1.t1.shape
+
+def setUpModule():
+    global mol, mf, mycc, eris1, mycc1, nocc, nvir
+    mol = gto.Mole()
+    mol.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '6-31g'
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol).run()
+    mycc = cc.GCCSD(mf).run()
+    mycc1, eris1 = make_mycc1()
+    nocc, nvir = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, mycc, eris1, mycc1
@@ -182,6 +184,27 @@ class KnownValues(unittest.TestCase):
         r1, r2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(mycc1.t1, mycc1.t2))
         self.assertAlmostEqual(abs(mycc1.t1-r1).max(), 0, 14)
         self.assertAlmostEqual(abs(mycc1.t2-r2).max(), 0, 14)
+
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.GHF(mol).apply(cc.GCCSD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0]*2, 4
+        nmo = nocc + nvir
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        def check_overwritten(method):
+            vec = numpy.zeros(method.vector_size())
+            vec_orig = vec.copy()
+            t1, t2 = method.vector_to_amplitudes(vec)
+            t1[:] = 1
+            t2[:] = 1
+            self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
+        check_overwritten(mycc)
+        check_overwritten(mycc.EOMIP())
+        check_overwritten(mycc.EOMEA())
+        check_overwritten(mycc.EOMEE())
 
     def test_ip_matvec(self):
         numpy.random.seed(12)
@@ -307,4 +330,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for EOM GCCSD")
     unittest.main()
-

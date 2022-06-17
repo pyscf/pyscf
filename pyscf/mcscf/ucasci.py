@@ -83,7 +83,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
              reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''UHF-CASCI solver
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff

@@ -20,35 +20,37 @@ from pyscf import scf
 from pyscf import mcscf
 from pyscf import fci
 
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. ,-0.757  , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-basis = '631g',
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-10
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym, mc_ref
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. ,-0.757  , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+    basis = '631g',
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. ,-0.757  , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-basis = '631g',
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. ,-0.757  , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+    basis = '631g',
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
-mc_ref = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4)
-mc_ref.kernel ()
+    mc_ref = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4)
+    mc_ref.kernel ()
 
 def tearDownModule():
     global mol, molsym, m, msym, mc_ref

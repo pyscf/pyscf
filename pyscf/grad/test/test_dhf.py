@@ -20,16 +20,18 @@ from pyscf import gto
 from pyscf import grad
 from pyscf.grad import dhf
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-h2o.basis = {"H": '6-31g',
-             "O": '6-31g',}
-h2o.build()
+def setUpModule():
+    global h2o
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    h2o.basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    h2o.build()
 
 def tearDownModule():
     global h2o

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,15 +23,27 @@ from pyscf import scf
 from pyscf import lib
 from pyscf.x2c import x2c
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 
 class KnownValues(unittest.TestCase):
@@ -176,7 +188,7 @@ C     F
         xmol, c = x2c.X2C(mol).get_xmol(mol)
         self.assertEqual(xmol.nbas, 18)
         self.assertEqual(xmol.nao, 42)
-        self.assertAlmostEqual(lib.finger(c), -5.480689638416739, 12)
+        self.assertAlmostEqual(lib.fp(c), -5.480689638416739, 12)
 
     def test_get_hcore(self):
         myx2c = scf.RHF(mol).sfx2c1e()
@@ -208,5 +220,3 @@ C     F
 if __name__ == "__main__":
     print("Full Tests for x2c")
     unittest.main()
-
-

@@ -26,6 +26,8 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+DEBUG = False
+
 libri = lib.load_library('libri')
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
@@ -88,7 +90,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
             mf.only_dfj = only_dfj
         return mf
 
-    class DFHF(_DFHF, mf_class):
+    class DensityFitting(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -143,7 +145,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         def auxbasis(self):
             return getattr(self.with_df, 'auxbasis', None)
 
-    return DFHF(mf, with_df, only_dfj)
+    return DensityFitting(mf, with_df, only_dfj)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
@@ -151,12 +153,12 @@ class _DFHF(object):
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, uhf, rks, uks
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
             else:
                 return uhf.Gradients(self)
         elif isinstance(self, scf.rhf.RHF):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Gradients(self)
             else:
                 return rhf.Gradients(self)
@@ -168,12 +170,12 @@ class _DFHF(object):
     def Hessian(self):
         from pyscf.df.hessian import rhf, uhf, rks, uks
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Hessian(self)
             else:
                 return uhf.Hessian(self)
         elif isinstance(self, scf.rhf.RHF):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Hessian(self)
             else:
                 return rhf.Hessian(self)
@@ -413,6 +415,11 @@ def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     tao = mol.tmap()
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]
+
+    if hermi == 0 and DEBUG:
+        # J matrix is symmetrized in this function which is only true for
+        # density matrix with time reversal symmetry
+        scf.dhf._ensure_time_reversal_symmetry(mol, dms)
 
     def fjk(dm):
         dm = numpy.asarray(dm, dtype=numpy.complex128)

@@ -337,6 +337,16 @@ ALIAS = {
     'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
     'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
+#spin-orbit ECPs
+    'ecpds10mdfso' : os.path.join('soecp', 'ECPDS10MDFSO.dat'),
+    'ecpds28mdfso' : os.path.join('soecp', 'ECPDS28MDFSO.dat'),
+    'ecpds28mwbso' : os.path.join('soecp', 'ECPDS28MWBSO.dat'),
+    'ecpds46mdfso' : os.path.join('soecp', 'ECPDS46MDFSO.dat'),
+    'ecpds60mdfso' : os.path.join('soecp', 'ECPDS60MDFSO.dat'),
+    'ecpds60mwbso' : os.path.join('soecp', 'ECPDS60MWBSO.dat'),
+    'ecpds78mdfso' : os.path.join('soecp', 'ECPDS78MDFSO.dat'),
+    'ecpds92mdfbso' : os.path.join('soecp', 'ECPDS92MDFBSO.dat'),
+    'ecpds92mdfbqso' : os.path.join('soecp', 'ECPDS92MDFBQSO.dat'),
 }
 
 def _is_pople_basis(basis):
@@ -529,6 +539,7 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)

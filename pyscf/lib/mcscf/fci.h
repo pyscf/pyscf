@@ -22,16 +22,16 @@
 typedef struct {
         unsigned int addr;
         unsigned short ia;
-        signed char sign;
-        signed char _padding;
+        int8_t sign;
+        int8_t _padding;
 } _LinkTrilT;
 
 typedef struct {
         unsigned int addr;
-        unsigned char a;
-        unsigned char i;
-        char sign;
-        char _padding;
+        uint8_t a;
+        uint8_t i;
+        int8_t sign;
+        int8_t _padding;
 } _LinkT;
 
 #define EXTRACT_A(I)    (I.a)

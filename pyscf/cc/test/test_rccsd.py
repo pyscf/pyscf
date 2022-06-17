@@ -30,24 +30,27 @@ from pyscf import mp
 from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, mf, eris, mycc
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol_grad = 1e-8
-mf.kernel()
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.conv_tol_grad = 1e-8
+    mf.kernel()
 
-mycc = rccsd.RCCSD(mf)
-mycc.conv_tol = 1e-10
-eris = mycc.ao2mo()
-mycc.kernel(eris=eris)
+    mycc = rccsd.RCCSD(mf)
+    mycc.conv_tol = 1e-10
+    eris = mycc.ao2mo()
+    mycc.kernel(eris=eris)
 
 def tearDownModule():
     global mol, mf, eris, mycc
@@ -114,15 +117,9 @@ class KnownValues(unittest.TestCase):
         cc1.nocc = mol.nelectron // 2
         cc1.dump_chk()
         cc1 = cc.CCSD(mf)
-        cc1.__dict__.update(lib.chkfile.load(cc1._scf.chkfile, 'ccsd'))
+        cc1.__dict__.update(lib.chkfile.load(cc1.chkfile, 'ccsd'))
         e = cc1.energy(cc1.t1, cc1.t2, eris)
         self.assertAlmostEqual(e, -0.13539788638119823, 8)
-
-        cc1.e_corr = -1
-        cc1.chkfile = None
-        cc1.dump_chk(frozen=2)
-        self.assertEqual(lib.chkfile.load(cc1._scf.chkfile, 'ccsd/e_corr'),
-                         mycc.e_corr)
 
     def test_ccsd_t(self):
         e = mycc.ccsd_t()
@@ -187,7 +184,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cc1.t2 - cc2.t2).max(), 0, 9)
 
     def test_iterative_dampling(self):
-        ftmp = tempfile.NamedTemporaryFile()
         cc1 = cc.CCSD(mf)
         cc1.max_cycle = 3
         cc1.iterative_damping = 0.7
@@ -205,6 +201,21 @@ class KnownValues(unittest.TestCase):
         r1, r2 = mycc.vector_to_amplitudes(vec)
         vec1 = mycc.amplitudes_to_vector(r1, r2)
         self.assertAlmostEqual(abs(vec-vec1).max(), 0, 14)
+
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.RHF(mol).apply(cc.CCSD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0], 4
+        nmo = nocc + nvir
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        vec = numpy.zeros(mycc.vector_size())
+        vec_orig = vec.copy()
+        t1, t2 = mycc.vector_to_amplitudes(vec)
+        t1[:] = 1
+        t2[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
     def test_vector_size(self):
         self.assertEqual(mycc.vector_size(), 860)

@@ -25,7 +25,7 @@ from pyscf.dft import rks
 from pyscf.dft import uks
 
 
-class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
+class SymAdaptedRKS(rks.KohnShamDFT, hf_symm.SymAdaptedRHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.RHF.__init__(self, mol)
@@ -42,8 +42,6 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
 
     init_guess_by_vsap = rks.init_guess_by_vsap
 
-    reset = rks.KohnShamDFT.reset
-
     def nuc_grad_method(self):
         from pyscf.grad import rks
         return rks.Gradients(self)
@@ -51,7 +49,7 @@ class SymAdaptedRKS(hf_symm.SymAdaptedRHF, rks.KohnShamDFT):
 RKS = SymAdaptedRKS
 
 
-class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
+class SymAdaptedROKS(rks.KohnShamDFT, hf_symm.SymAdaptedROHF):
     ''' Restricted Kohn-Sham '''
     def __init__(self, mol, xc='LDA,VWN'):
         hf_symm.ROHF.__init__(self, mol)
@@ -67,8 +65,6 @@ class SymAdaptedROKS(hf_symm.SymAdaptedROHF, rks.KohnShamDFT):
     energy_elec = uks.energy_elec
 
     init_guess_by_vsap = rks.init_guess_by_vsap
-
-    reset = rks.KohnShamDFT.reset
 
     def nuc_grad_method(self):
         from pyscf.grad import roks

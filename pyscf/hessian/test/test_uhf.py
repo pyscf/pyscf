@@ -18,16 +18,18 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad, hessian
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.spin = 2
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.spin = 2
+    mol.build()
 
 def tearDownModule():
     global mol

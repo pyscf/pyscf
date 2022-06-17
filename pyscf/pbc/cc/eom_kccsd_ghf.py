@@ -96,7 +96,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     if dtype is None:
         dtype = np.result_type(*imds.t1)
 
-    evals = np.zeros((len(kptlist),nroots), np.float)
+    evals = np.zeros((len(kptlist),nroots))
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
     convs = np.zeros((len(kptlist),nroots), dtype)
 

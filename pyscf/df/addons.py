@@ -132,7 +132,10 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             for l, n in enumerate(numpy.ceil(ns).astype(int)):
                 if n > 0:
                     etb.append((l, n, emin_by_l[l], beta))
-            newbasis[symb] = gto.expand_etbs(etb)
+            if etb:
+                newbasis[symb] = gto.expand_etbs(etb)
+            else:
+                raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
     return newbasis
 

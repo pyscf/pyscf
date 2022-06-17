@@ -16,28 +16,17 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf.pbc.tdscf import kuhf
-
-KTDA = TDA = kuhf.TDA
-
-RPA = KTDDFT = TDDFT = kuhf.TDHF
-
-#TODO:
-TDDFTNoHybrid = TDDFT
-
-
-def tddft(mf):
-    '''Driver to create TDDFT or TDDFTNoHybrid object'''
-    if mf._numint.libxc.is_hybrid_xc(mf.xc):
-        return TDDFT(mf)
-    else:
-        return TDDFTNoHybrid(mf)
-
 from pyscf import lib
 from pyscf.pbc import dft
+from pyscf.pbc.tdscf import kuhf
+
+
+KTDA = TDA = kuhf.TDA
+RPA = KTDDFT = TDDFT = kuhf.TDHF
+
 dft.kuks.KUKS.TDA   = lib.class_as_method(KTDA)
 dft.kuks.KUKS.TDHF  = None
-dft.kuks.KUKS.TDDFT = tddft
+dft.kuks.KUKS.TDDFT = lib.class_as_method(TDDFT)
 
 
 if __name__ == '__main__':

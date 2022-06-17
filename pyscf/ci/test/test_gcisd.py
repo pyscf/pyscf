@@ -636,9 +636,22 @@ class KnownValues(unittest.TestCase):
         check_frozen([10])
         check_frozen([10,3])
 
+    def test_cisdvec_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        myci = scf.GHF(mol).apply(ci.GCISD)
+        nelec = (3,3)
+        nocc, nvir = sum(nelec), 4
+        nmo = nocc + nvir
+        myci.nocc = nocc
+        myci.nmo = nmo
+        vec = numpy.zeros(myci.vector_size())
+        vec_orig = vec.copy()
+        c0, c1, c2 = myci.cisdvec_to_amplitudes(vec)
+        c1[:] = 1
+        c2[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
 
 if __name__ == "__main__":
     print("Full Tests for GCISD")
     unittest.main()
-
-

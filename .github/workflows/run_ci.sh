@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -e
+
 if [ "$RUNNER_OS" == "Linux" ]; then
     os='linux'
 elif [ "$RUNNER_OS" == "macOS" ]; then

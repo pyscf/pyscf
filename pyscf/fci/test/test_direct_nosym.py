@@ -22,14 +22,16 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import fci_slow
 
-nelec = (3,4)
-norb = 7
-numpy.random.seed(10)
-h1e = numpy.random.random((norb,norb))
-h2e = numpy.random.random((norb,norb,norb,norb))
-h2e = h2e + h2e.transpose(2,3,0,1)
-na = fci.cistring.num_strings(norb, nelec[0])
-nb = fci.cistring.num_strings(norb, nelec[1])
+def setUpModule():
+    global h1e, h2e, norb, nelec, na, nb
+    nelec = (3,4)
+    norb = 7
+    numpy.random.seed(10)
+    h1e = numpy.random.random((norb,norb))
+    h2e = numpy.random.random((norb,norb,norb,norb))
+    h2e = h2e + h2e.transpose(2,3,0,1)
+    na = fci.cistring.num_strings(norb, nelec[0])
+    nb = fci.cistring.num_strings(norb, nelec[1])
 
 def tearDownModule():
     global h1e, h2e

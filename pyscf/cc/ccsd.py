@@ -894,12 +894,15 @@ You see this error message because of the API updates in pyscf v0.10.
 In the new API, the first argument of CC class is HF objects.  Please see
 http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventions''')
 
-        if 'dft' in str(mf.__module__):
+        from pyscf.scf import hf
+        if isinstance(mf, hf.KohnShamDFT):
             raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
                                'CCSD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
                                'the code:\n'
                                '    mf_hf = mol.HF()\n'
+                               '    if getattr(mf_dft, "with_x2c", False):\n'
+                               '        mf_hf = mf_hf.x2c()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff

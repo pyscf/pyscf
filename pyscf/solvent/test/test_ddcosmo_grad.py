@@ -628,15 +628,21 @@ def B1_dot_x(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
     return Bx
 
 
-dx = 0.0001
-mol0 = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
-mol1 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%(-dx), unit='B')
-mol2 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%dx, unit='B')
-dx = dx * 2
-nao = mol0.nao_nr()
-numpy.random.seed(1)
-dm = numpy.random.random((nao,nao))
-dm = dm + dm.T
+def setUpModule():
+    global dx, mol0, mol1, mol2, nao, dm
+    dx = 0.0001
+    mol0 = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', unit='B')
+    mol1 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%(-dx), unit='B')
+    mol2 = gto.M(atom='H 0 0 %g; H 0 1 1.2; H 1. .1 0; H .5 .5 1'%dx, unit='B')
+    dx = dx * 2
+    nao = mol0.nao_nr()
+    numpy.random.seed(1)
+    dm = numpy.random.random((nao,nao))
+    dm = dm + dm.T
+
+def tearDownModule():
+    global dx, mol0, mol1, mol2, nao, dm
+    del dx, mol0, mol1, mol2, nao, dm
 
 class KnownValues(unittest.TestCase):
 

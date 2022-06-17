@@ -393,7 +393,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE,
-                 with_meta_lowdin=WITH_META_LOWDIN):
+                 with_meta_lowdin=WITH_META_LOWDIN, stav_dm1=False):
     '''Canonicalized CASCI/CASSCF orbitals of effecitive Fock matrix and
     update CI coefficients accordingly.
 
@@ -436,6 +436,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             canonicalized orbitals of state-average effective Fock matrix.
             To canonicalize the orbitals for one particular state, you can
             assign the density matrix of that state to the kwarg casdm1.
+        stav_dm1 (bool): Use state-average 1-particle density matrix for
+            computing Fock matrices and natural orbitals
 
     Returns:
         A tuple, (natural orbitals, CI coefficients, orbital energies)
@@ -448,10 +450,21 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if ci is None: ci = mc.ci
     if casdm1 is None:
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
-            not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
-            log.warn('Mulitple states found in CASCI solver. First state is '
-                     'used to compute the natural orbitals in active space.')
-            casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
+            if stav_dm1:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'Use state-average 1RDM  to compute the Fock matrix'
+                         ' and natural orbitals in the active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                for root in range(1, len(ci)):
+                    casdm1 += mc.fcisolver.make_rdm1(ci[root], mc.ncas,
+                                                     mc.nelecas)
+                casdm1 /= len(ci)
+            else:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'First state is used to compute the Fock matrix'
+                         ' and natural orbitals in active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
 
@@ -517,8 +530,26 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, ci, mo_energy
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''CASCI solver
+
+    Args:
+        casci: CASCI or CASSCF object
+
+        mo_coeff : ndarray
+            orbitals to construct active space Hamiltonian
+        ci0 : ndarray or custom types
+            FCI sovler initial guess. For external FCI-like solvers, it can be
+            overloaded different data type. For example, in the state-average
+            FCI solver, ci0 is a list of ndarray. In other solvers such as
+            DMRGCI solver, SHCI solver, ci0 are custom types.
+
+    kwargs:
+        envs: dict
+            The variable envs is created (for PR 807) to passes MCSCF runtime
+            environment variables to SHCI solver. For solvers which do not
+            need this parameter, a kwargs should be created in kernel method
+            and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
@@ -998,12 +1029,12 @@ To enable the solvent model for CASCI, the following code needs to be called
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average_(self, weights)
+    def state_average_(self, weights=(0.5,0.5), wfnsym=None):
+        addons.state_average_(self, weights, wfnsym)
         return self
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average(self, weights=(0.5,0.5)):
-        return addons.state_average(self, weights)
+    def state_average(self, weights=(0.5,0.5), wfnsym=None):
+        return addons.state_average(self, weights, wfnsym)
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):

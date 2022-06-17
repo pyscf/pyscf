@@ -23,14 +23,19 @@ from pyscf import mcscf
 from pyscf import grad
 from pyscf.qmmm import itrf
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = ''' H                 -0.00000000   -0.000    0.
- H                 -0.00000000   -0.000    1.
- H                 -0.00000000   -0.82    0.
- H                 -0.91000000   -0.020    0.''',
-    basis = 'cc-pvdz')
+def setUpModule():
+    global mol
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = ''' H                 -0.00000000   -0.000    0.
+     H                 -0.00000000   -0.000    1.
+     H                 -0.00000000   -0.82    0.
+     H                 -0.91000000   -0.020    0.''',
+        basis = 'cc-pvdz')
+
+def tearDownModule():
+    global mol
 
 class KnowValues(unittest.TestCase):
     def test_energy(self):

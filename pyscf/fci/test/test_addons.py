@@ -22,26 +22,28 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = '''
-      H     1  -1.      0
-      H     0  -1.     -1
-      H     0  -0.5    -0
-      H     0  -0.     -1
-      H     1  -0.5     0
-      H     0   1.      1'''
-mol.basis = 'sto-3g'
-mol.build()
-m = scf.RHF(mol)
-m.conv_tol = 1e-15
-ehf = m.scf()
-norb = m.mo_coeff.shape[1]
-nelec = mol.nelectron
-h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
-g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
-na = fci.cistring.num_strings(norb, nelec//2)
-e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec, tol=1e-15)
+def setUpModule():
+    global mol, m, h1e, g2e, ci0, norb, nelec
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = '''
+          H     1  -1.      0
+          H     0  -1.     -1
+          H     0  -0.5    -0
+          H     0  -0.     -1
+          H     1  -0.5     0
+          H     0   1.      1'''
+    mol.basis = 'sto-3g'
+    mol.build()
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-15
+    ehf = m.scf()
+    norb = m.mo_coeff.shape[1]
+    nelec = mol.nelectron
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff))
+    g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
+    na = fci.cistring.num_strings(norb, nelec//2)
+    e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec, tol=1e-15)
 
 def tearDownModule():
     global mol, m, h1e, g2e, ci0

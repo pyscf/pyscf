@@ -20,23 +20,29 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.lo import nao
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = '''
-     O    0.   0.       0
-     1    0.   -0.757   0.587
-     1    0.   0.757    0.587'''
+def setUpModule():
+    global mol, mf, mol1, mf1
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = '''
+         O    0.   0.       0
+         1    0.   -0.757   0.587
+         1    0.   0.757    0.587'''
 
-mol.basis = 'cc-pvdz'
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-14
-mf.scf()
+    mol.basis = 'cc-pvdz'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-14
+    mf.scf()
 
-mol1 = mol.copy()
-mol1.cart = True
-mf1 = scf.RHF(mol1).set(conv_tol=1e-14).run()
+    mol1 = mol.copy()
+    mol1.cart = True
+    mf1 = scf.RHF(mol1).set(conv_tol=1e-14).run()
+
+def tearDownModule():
+    global mol, mf, mol1, mf1
+    del mol, mf, mol1, mf1
 
 class KnowValues(unittest.TestCase):
     def test_pre_nao(self):

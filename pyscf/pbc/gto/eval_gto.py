@@ -29,7 +29,7 @@ EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 libpbc = _pbcintor.libpbc
 
 def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
-             shls_slice=None, non0tab=None, ao_loc=None, out=None):
+             shls_slice=None, non0tab=None, ao_loc=None, out=None, Ls=None, rcut=None):
     r'''Evaluate PBC-AO function value on the given grids,
 
     Args:
@@ -112,7 +112,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                               dtype=numpy.uint8)
 # non0tab stores the number of images to be summed in real space.
-# Initializing it to 255 means all images are summed
+# Initializing it to 255 means all images should be included
         non0tab[:] = 0xff
 
     if ao_loc is None:
@@ -127,13 +127,15 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
     # dimensional systems) to include lattice translations in all 3 dimensions.
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-    else:
-        Ls = cell.get_lattice_Ls(dimension=3)
-    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
+    if Ls is None:
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+        else:
+            Ls = cell.get_lattice_Ls(dimension=3)
+        Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
-    rcut = _estimate_rcut(cell)
+    if rcut is None:
+        rcut = _estimate_rcut(cell)
 
     drv = getattr(libpbc, eval_name)
     drv(ctypes.c_int(ngrids),
@@ -175,6 +177,7 @@ def _estimate_rcut(cell):
         cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
         r = 5.
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r[r < 1.] = 1.
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
         rcut.append(r.max())
     return numpy.array(rcut)

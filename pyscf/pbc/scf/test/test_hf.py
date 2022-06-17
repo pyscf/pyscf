@@ -17,6 +17,7 @@
 #
 
 import unittest
+import tempfile
 import numpy
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
@@ -24,22 +25,24 @@ from pyscf.pbc.scf import hf as pbchf
 import pyscf.pbc.scf as pscf
 from pyscf.pbc import df as pdf
 
-L = 4
-n = 21
-cell = pbcgto.Cell()
-cell.build(unit = 'B',
-           verbose = 7,
-           output = '/dev/null',
-           a = ((L,0,0),(0,L,0),(0,0,L)),
-           mesh = [n,n,n],
-           atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
-                   ['He', (L/2.   ,L/2.,L/2.+.5)]],
-           basis = { 'He': [[0, (0.8, 1.0)],
-                            [0, (1.0, 1.0)],
-                            [0, (1.2, 1.0)]]})
+def setUpModule():
+    global cell, mf, kmf
+    L = 4
+    n = 21
+    cell = pbcgto.Cell()
+    cell.build(unit = 'B',
+               verbose = 7,
+               output = '/dev/null',
+               a = ((L,0,0),(0,L,0),(0,0,L)),
+               mesh = [n,n,n],
+               atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
+                       ['He', (L/2.   ,L/2.,L/2.+.5)]],
+               basis = { 'He': [[0, (0.8, 1.0)],
+                                [0, (1.0, 1.0)],
+                                [0, (1.2, 1.0)]]})
 
-mf = pbchf.RHF(cell, exxdiv='ewald').run()
-kmf = pscf.KRHF(cell, [[0,0,0]], exxdiv='ewald').run()
+    mf = pbchf.RHF(cell, exxdiv='ewald').run()
+    kmf = pscf.KRHF(cell, [[0,0,0]], exxdiv='ewald').run()
 
 def tearDownModule():
     global cell, mf, kmf
@@ -149,6 +152,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         k = numpy.random.random(3)
         mf = pbchf.RHF(cell, k, exxdiv='vcut_sph')
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
