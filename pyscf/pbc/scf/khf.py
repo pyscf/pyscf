@@ -232,7 +232,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
                          mo_energy_kpts[k][mo_occ_kpts[k]==0])
         np.set_printoptions(threshold=1000)
 
-    assert abs(np.sum(mo_occ_kpts) - 2*nocc) < 1e-14
+    assert abs(sum([mo.sum() for mo in mo_occ_kpts]) - 2*nocc) < 2e-14
     return mo_occ_kpts
 
 
