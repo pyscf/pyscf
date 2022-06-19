@@ -612,6 +612,7 @@ def decontract_basis(mol, atoms=None, to_cart=False):
                     nc = mol.bas_nctr(ib)
                     c = numpy.einsum('pi,xm->pxim', numpy.eye(nc), c2s[l])
                     contr_coeff.append(c.reshape(nc * c2s[l].shape[0], -1))
+                _bas.append(mol._bas[ib0:ib1])
                 continue
 
         lmax = mol._bas[ib0:ib1,ANG_OF].max()
@@ -627,13 +628,18 @@ def decontract_basis(mol, atoms=None, to_cart=False):
             bs[:,ATOM_OF] = ia
             bs[:,ANG_OF ] = l
             bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
-            bs[:,PTR_EXP] = pexp + numpy.arange(nprim)
-            bs[:,PTR_COEFF] = pexp + numpy.arange(nprim, nprim*2)
             norm = gto_norm(l, mol_exps)
-            _env[pexp:pexp+nprim] = mol_exps
-            _env[pexp+nprim:pexp+nprim*2] = norm
+            if atoms is None:
+                bs[:,PTR_EXP] = pexp + numpy.arange(nprim)
+                bs[:,PTR_COEFF] = pexp + numpy.arange(nprim, nprim*2)
+                _env[pexp:pexp+nprim] = mol_exps
+                _env[pexp+nprim:pexp+nprim*2] = norm
+                pexp += nprim * 2
+            else:
+                bs[:,PTR_EXP] = _env.size + numpy.arange(nprim)
+                bs[:,PTR_COEFF] = _env.size + numpy.arange(nprim, nprim*2)
+                _env = np.hstack([_env, mol_exps, norm])
             _bas.append(bs)
-            pexp += nprim * 2
 
             c = numpy.einsum('pi,p,xm->pxim', b_coeff, 1./norm, c2s[l])
             contr_coeff.append(c.reshape(nprim * c2s[l].shape[0], -1))

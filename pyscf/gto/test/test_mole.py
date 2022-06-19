@@ -1027,6 +1027,13 @@ H    P
         #serl.assertEqual(gto.uncontract(basis),
         #                 [[1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
 
+    def test_decontract_basis(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 01', basis='ccpvdz')
+        pmol, ctr_coeff = mol.decontract_basis(atoms=[1], to_cart=True)
+        ctr_coeff = scipy.linalg.block_diag(*ctr_coeff)
+        s = ctr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(ctr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
 if __name__ == "__main__":
     print("test mole.py")
     unittest.main()
