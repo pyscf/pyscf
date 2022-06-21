@@ -42,6 +42,7 @@ supcell = super_cell(cell,nmp)
 mf  = scf.RHF(supcell,exxdiv=None).density_fit()
 ehf  = mf.kernel()
 myadc = mol_adc.RADC(mf)
+myadc.approx_trans_moments = True
 
 # periodic calculation at gamma point
 kpts = cell.make_kpts((nmp))

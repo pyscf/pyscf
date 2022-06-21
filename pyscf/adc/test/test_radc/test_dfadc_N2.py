@@ -47,14 +47,12 @@ class KnownValues(unittest.TestCase):
     def test_df_gs(self):
   
         mf = scf.RHF(mol).run()
-        myadc.higher_excitations = True
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.31081009625, 6)
 
     def test_dfhf_dfadc_gs(self):
   
-        myadc.higher_excitations = True
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.3108102956, 6)
@@ -63,7 +61,6 @@ class KnownValues(unittest.TestCase):
   
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 2
-        myadc.higher_excitations = True
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
         
@@ -83,7 +80,6 @@ class KnownValues(unittest.TestCase):
     def test_dfhf_dfadc2_ea(self):
   
         myadc.max_memory = 20
-        myadc.higher_excitations = True
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
 
@@ -105,7 +101,6 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run()
         myadc = adc.ADC(mf).density_fit(auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
-        myadc.higher_excitations = True
         myadc.method = "adc(2)"
         myadc.method_type = "ea"
        

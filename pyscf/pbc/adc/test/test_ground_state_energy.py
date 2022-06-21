@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = 'adc(3)'
         e_mp, t1, t2 = myadc.kernel_gs()
 
-        self.assertAlmostEqual(e_mp, -0.0206292096859, 6)
+        self.assertAlmostEqual(e_mp, -0.0207106109728, 6)
 
 if __name__ == "__main__":
     print("Ground state calculations for helium")

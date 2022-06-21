@@ -32,7 +32,7 @@ from pyscf import df
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 
     adc.method = adc.method.lower()
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     cput0 = (logger.process_clock(), logger.perf_counter())
@@ -95,7 +95,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     nocc_a = myadc._nocc[0]
@@ -177,7 +177,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
     t1_2 = (None,)
-    if myadc.higher_excitations == True or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
 
         t1_2_a = np.zeros((nocc_a,nvir_a))
@@ -264,7 +264,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = (None,)
     t2_1_vvvv = (None,)
 
-    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
 
         # Compute second-order doubles t2 (tijab)
 
@@ -382,7 +382,7 @@ def compute_amplitudes(myadc, eris):
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
-    if (myadc.method == "adc(3)" and myadc.higher_excitations == True):
+    if (myadc.method == "adc(3)" and myadc.approx_trans_moments == False):
         # Compute third-order singles (tij)
 
         eris_ovoo = eris.ovoo
@@ -656,7 +656,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
 
-    if (myadc.method == "adc(2)-x" or myadc.method =="adc(2)-xc" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
         t2_1_vvvv = (t2_1_vvvv_a, t2_1_vvvv_ab, t2_1_vvvv_b)
 
@@ -673,7 +673,7 @@ def compute_energy(myadc, t1, t2, eris):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
-    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if myadc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(myadc.method)
 
     eris_ovvo = eris.ovvo
@@ -908,7 +908,7 @@ class UADC(lib.StreamObject):
         self.compute_mpn_energy = True
         self.compute_spec = True
         self.compute_properties = True
-        self.higher_excitations = False
+        self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
         self.E = None
@@ -952,7 +952,7 @@ class UADC(lib.StreamObject):
         assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
 
         if self.verbose >= logger.WARN:
@@ -993,7 +993,7 @@ class UADC(lib.StreamObject):
         assert(self.mo_occ is not None)
 
         self.method = self.method.lower()
-        if self.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+        if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
 
         if self.verbose >= logger.WARN:
@@ -1081,7 +1081,7 @@ def get_imds_ea(adc, eris=None):
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1530,7 +1530,7 @@ def get_imds_ip(adc, eris=None):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -1757,7 +1757,7 @@ def get_imds_ip(adc, eris=None):
 
 def ea_adc_diag(adc,M_ab=None,eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     if M_ab is None:
@@ -1931,7 +1931,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
 
 def ip_adc_diag(adc,M_ij=None,eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     if M_ij is None:
@@ -2183,7 +2183,7 @@ def ea_contract_r_vvvv(myadc,r2,vvvv_d):
 
 def ea_adc_matvec(adc, M_ab=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -2380,7 +2380,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 ############### ADC(3) iab - jcd block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
 
             eris_oovv = eris.oovv
             eris_OOVV = eris.OOVV
@@ -2513,8 +2513,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
             temp += 0.5*lib.einsum('jwyi,jxw->ixy',eris_ovVO,r_aba,optimize = True)
             s[s_bbb:f_bbb] += temp[:,ab_ind_b[0],ab_ind_b[1]].reshape(-1)
 
-        #if (method == "adc(3)"):
-        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
             #print("Calculating additional terms for adc(3)")
 
@@ -2851,7 +2850,7 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
 
 def ip_adc_matvec(adc, M_ij=None, eris=None):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
@@ -2993,7 +2992,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 ############### ADC(3) ajk - bil block ############################
 
-        if (method == "adc(2)-x" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(2)-x" or method == "adc(3)"):
 
             eris_oooo = eris.oooo
             eris_OOOO = eris.OOOO
@@ -3100,7 +3099,7 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
             temp -= 0.5*lib.einsum('jabi,bik->ajk',eris_OVvo,r_aba,optimize = True)
             s[s_bbb:f_bbb] += temp[:,ij_ind_b[0],ij_ind_b[1]].reshape(-1)
 
-        if (method == "adc(2)-c" or method == "adc(2)-xc" or method == "adc(3)"):
+        if (method == "adc(3)"):
 
             eris_ovoo = eris.ovoo
             eris_OVOO = eris.OVOO
@@ -3386,12 +3385,12 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
 
 def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
 
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
         t1_2_a, t1_2_b = adc.t1[0]
 
     nocc_a = adc.nocc_a
@@ -3440,7 +3439,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
         t2_1_ab = adc.t2[0][1][:]
         if orb < nocc_a:
 
-            if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
                 T[s_a:f_a] = -t1_2_a[orb,:]
 
             t2_1_t = t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]].copy()
@@ -3456,7 +3455,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*lib.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
 ######## ADC(3) 2p-1h  part  ############################################
 
-        if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -3473,7 +3472,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
         if (method=='adc(3)'):
 
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_a:
@@ -3481,7 +3480,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
                 T[s_a:f_a] += 0.5*lib.einsum('kac,ck->a',t2_1_a[:,orb,:,:], t1_2_a.T,optimize = True)
                 T[s_a:f_a] -= 0.5*lib.einsum('kac,ck->a',t2_1_ab[orb,:,:,:], t1_2_b.T,optimize = True)
 
-                if (adc.higher_excitations == True):
+                if (adc.approx_trans_moments == False):
                     T[s_a:f_a] -= t1_3_a[orb,:]
 
             else:
@@ -3509,7 +3508,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
         t2_1_ab = adc.t2[0][1][:]
         if orb < nocc_b:
 
-            if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
                 T[s_b:f_b] = -t1_2_b[orb,:]
 
             t2_1_t = t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]].copy()
@@ -3527,7 +3526,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######### ADC(3) 2p-1h part  ############################################
 
-        if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
             t2_2_ab = adc.t2[1][1][:]
             t2_2_b = adc.t2[1][2][:]
@@ -3544,7 +3543,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
         if(method=='adc(3)'):
 
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_b:
@@ -3552,7 +3551,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
                 T[s_b:f_b] += 0.5*lib.einsum('kac,ck->a',t2_1_b[:,orb,:,:], t1_2_b.T,optimize = True)
                 T[s_b:f_b] -= 0.5*lib.einsum('kca,ck->a',t2_1_ab[:,orb,:,:], t1_2_a.T,optimize = True)
 
-                if (adc.higher_excitations == True):
+                if (adc.approx_trans_moments == False):
                         T[s_b:f_b] -= t1_3_b[orb,:]
 
             else:
@@ -3576,12 +3575,12 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
-    if adc.method not in ("adc(2)", "adc(2)-x", "adc(2)-c", "adc(2)-xc", "adc(3)"):
+    if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
     method = adc.method
 
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
         t1_2_a, t1_2_b = adc.t1[0]
 
     t2_1_a = adc.t2[0][0][:]
@@ -3638,7 +3637,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize = True)
             T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize = True)
         else:
-            if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
                 T[s_a:f_a] += t1_2_a[:,(orb-nocc_a)]
 
 ######## ADC(2) 2h-1p  part  ############################################
@@ -3652,7 +3651,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-        if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -3669,7 +3668,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
         if (method == 'adc(3)'):
 
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_a:
@@ -3697,7 +3696,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
                 T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_a_tmp, t1_2_a,optimize = True)
                 T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_ab_tmp, t1_2_b,optimize = True)
-                if (adc.higher_excitations == True):
+                if (adc.approx_trans_moments == False):
                     T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
                 del t2_1_a_tmp, t2_1_ab_tmp
 
@@ -3726,7 +3725,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab_tmp, t2_1_ab, optimize = True)
             del t2_1_b_tmp, t2_1_ab_tmp
         else:
-            if (adc.higher_excitations == True or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
                 T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
 
 ######## ADC(2) 2h-1p part  ############################################
@@ -3740,7 +3739,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p part  ############################################
 
-        if (adc.method == "adc(2)-x" or adc.method =="adc(2)-xc" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -3759,7 +3758,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
         if (method=='adc(3)'):
 
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_b:
@@ -3788,7 +3787,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
                 T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',t2_1_b_tmp, t1_2_b,optimize = True)
                 T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',t2_1_ab_tmp, t1_2_a,optimize = True)
-                if (adc.higher_excitations == True):
+                if (adc.approx_trans_moments == False):
                     T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
                 del t2_1_b_tmp, t2_1_ab_tmp
                 del t2_2_b
@@ -4347,7 +4346,7 @@ class UADCEA(UADC):
         self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
-        self.higher_excitations = adc.higher_excitations
+        self.approx_trans_moments = adc.approx_trans_moments
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P
@@ -4468,7 +4467,7 @@ class UADCIP(UADC):
         self.evec_print_tol = adc.evec_print_tol
 
         self.compute_properties = adc.compute_properties
-        self.higher_excitations = adc.higher_excitations
+        self.approx_trans_moments = adc.approx_trans_moments
         self.E = adc.E
         self.U = adc.U
         self.P = adc.P

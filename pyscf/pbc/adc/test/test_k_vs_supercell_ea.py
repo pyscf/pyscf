@@ -43,6 +43,7 @@ mf  = scf.RHF(supcell,exxdiv=None).density_fit()
 ehf  = mf.kernel()
 myadc = mol_adc.RADC(mf)
 myadc.method_type = 'ea'
+myadc.approx_trans_moments = True
 
 # periodic calculation at gamma point
 kpts = cell.make_kpts((nmp))
@@ -54,8 +55,6 @@ kadc.method_type = 'ea'
 class KnownValues(unittest.TestCase):
     def test_ea_adc2_supercell(self):
         e1,v1,p1,x1 = myadc.kernel(nroots=3)
-
-        self.assertAlmostEqual(e1[0], 0.60897958, 6)
         self.assertAlmostEqual(e1[1], 0.83425538, 6)
         self.assertAlmostEqual(e1[2], 1.29595017, 6)
 
@@ -91,7 +90,7 @@ class KnownValues(unittest.TestCase):
 
         myadc.method = 'adc(3)'
         e1,v1,p1,x1 = myadc.kernel(nroots=3)
-        
+    
         kadc.method = 'adc(3)'
         e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
 

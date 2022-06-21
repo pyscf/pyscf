@@ -53,7 +53,6 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc2(self):
 
         myadc.max_memory = 20
-        myadc.higher_excitations = True
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
@@ -74,7 +73,6 @@ class KnownValues(unittest.TestCase):
 
         myadc.method = "adc(3)"
         myadc.max_memory = 20
-        myadc.higher_excitations = True
         myadc.incore_complete = False
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
@@ -98,7 +96,6 @@ class KnownValues(unittest.TestCase):
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
         myadc.incore_complete = False
-        myadc.higher_excitations = True
         myadc.max_memory = 10
 
         e,v,p,x = myadc.kernel(nroots=3)

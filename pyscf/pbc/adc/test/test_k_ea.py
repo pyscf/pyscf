@@ -79,19 +79,16 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc3_k(self):
 
-        kmf = scf.KRHF(cell, kpts,exxdiv=None).run()
-        kadc  = adc.KRADC(kmf)
         kadc.method = 'adc(3)'
-        kadc.method_type = 'ea'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
- 
-        self.assertAlmostEqual(e[0][0], 0.8243132, 6)
-        self.assertAlmostEqual(e[0][1], 1.24436009, 6)
-        self.assertAlmostEqual(e[0][2], 1.55279152, 6)
 
-        self.assertAlmostEqual(p[0][0], 1.95906609, 6)
-        self.assertAlmostEqual(p[0][1], 0.00336371, 6)
-        self.assertAlmostEqual(p[0][2], 0.01358274, 6)
+        self.assertAlmostEqual(e[0][0], 0.83386812, 6)
+        self.assertAlmostEqual(e[0][1], 1.26993734, 6)
+        self.assertAlmostEqual(e[0][2], 1.56058118, 6)
+
+        self.assertAlmostEqual(p[0][0], 1.95985989, 6)
+        self.assertAlmostEqual(p[0][1], 0.00111690, 6)
+        self.assertAlmostEqual(p[0][2], 0.00385444, 6)
 
 if __name__ == "__main__":
     print("k-point calculations for EA-ADC methods")

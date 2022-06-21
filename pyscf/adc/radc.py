@@ -128,7 +128,7 @@ def compute_amplitudes(myadc, eris):
     
     t1_2 = None
 
-    if myadc.higher_excitations == True or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
         t1_2 = np.zeros((nocc,nvir))
  
@@ -166,7 +166,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
 
         # Compute second-order doubles t2 (tijab)
 
@@ -185,7 +185,6 @@ def compute_amplitudes(myadc, eris):
         if not isinstance(eris.oooo, np.ndarray):
             t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
 
-        t2_2 = np.zeros_like((t2_1))
         t2_2 = t2_1_vvvv[:].copy()
 
         t2_2 += lib.einsum('kilj,klab->ijab',eris_oooo,t2_1[:],optimize=True)
@@ -208,9 +207,8 @@ def compute_amplitudes(myadc, eris):
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
-    if (myadc.method == "adc(3)" and myadc.higher_excitations == True):
+    if (myadc.method == "adc(3)" and myadc.approx_trans_moments == False):
 
-        t1_3 = np.zeros((nocc,nvir), dtype=t2_1.dtype)
         eris_ovoo = eris.ovoo
 
         t1_3 =  lib.einsum('d,ilad,ld->ia',e[nocc:],t2_1[:],t1_2,optimize=True)
@@ -690,7 +688,7 @@ class RADC(lib.StreamObject):
         self.method_type = "ip"
         self.with_df = None
         self.compute_properties = True
-        self.higher_excitations = False
+        self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
 
@@ -1298,7 +1296,6 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     D_n = -d_i + d_ab.reshape(-1)
     D_iab = D_n.reshape(-1)
   
-    D_iab_one = np.ones_like(D_iab)
     diag = np.zeros(dim)
 
     # Compute precond in p1-p1 block
@@ -1382,8 +1379,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     D_n = -d_a + d_ij.reshape(-1)
     D_aij = D_n.reshape(-1)
 
-    D_aij_one = np.ones_like(D_aij)
-
     diag = np.zeros(dim)
 
     # Compute precond in h1-h1 block
@@ -1393,7 +1388,6 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     # Compute precond in 2p1h-2p1h block
 
     diag[s2:f2] = D_aij.copy() 
-    #diag[s2:f2] = 1e-13 * D_aij.copy()
 
 #    ###### Additional terms for the preconditioner ####
 #    if (method == "adc(2)-x" or method == "adc(3)"):
@@ -1933,7 +1927,7 @@ def ea_compute_trans_moments(adc, orb):
     method = adc.method
 
     t2_1 = adc.t2[0][:]
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
         t1_2 = adc.t1[0][:]
 
     nocc = adc._nocc
@@ -1957,7 +1951,7 @@ def ea_compute_trans_moments(adc, orb):
 
     if orb < nocc:
 
-        if (adc.higher_excitations == True or adc.method == "adc(3)"):
+        if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
             T[s1:f1] = -t1_2[orb,:]
 
         t2_1_t = -t2_1.transpose(1,0,2,3)
@@ -1977,7 +1971,7 @@ def ea_compute_trans_moments(adc, orb):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -1992,14 +1986,14 @@ def ea_compute_trans_moments(adc, orb):
     if(method=='adc(3)'):
 
         t2_2 = adc.t2[1][:]
-        if (adc.higher_excitations == True):
+        if (adc.approx_trans_moments == False):
             t1_3 = adc.t1[1]
 
         if orb < nocc:
             T[s1:f1] += 0.5*lib.einsum('kac,ck->a',t2_1[:,orb,:,:], t1_2.T,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kac,ck->a',t2_1[orb,:,:,:], t1_2.T,optimize = True)
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 T[s1:f1] -= t1_3[orb,:]
 
         else:
@@ -2038,7 +2032,7 @@ def ip_compute_trans_moments(adc, orb):
     method = adc.method
 
     t2_1 = adc.t2[0][:]
-    if (adc.higher_excitations == True or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
         t1_2 = adc.t1[0][:]
 
     nocc = adc._nocc
@@ -2068,7 +2062,7 @@ def ip_compute_trans_moments(adc, orb):
         T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1, optimize = True)
         T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1, optimize = True)
     else :
-        if (adc.higher_excitations == True or adc.method == "adc(3)"):
+        if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
             T[s1:f1] += t1_2[:,(orb-nocc)]
 
 ######### ADC(2) 2h-1p  part  ############################################
@@ -2079,7 +2073,7 @@ def ip_compute_trans_moments(adc, orb):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" and adc.higher_excitations == True) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -2092,7 +2086,7 @@ def ip_compute_trans_moments(adc, orb):
 
     if(method=='adc(3)'):
         t2_2 = adc.t2[1][:]
-        if (adc.higher_excitations == True):
+        if (adc.approx_trans_moments == False):
             t1_3 = adc.t1[1]
         if orb < nocc:
             T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_2, optimize = True)
@@ -2112,7 +2106,7 @@ def ip_compute_trans_moments(adc, orb):
             T[s1:f1] += 0.5 * lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize = True)
-            if (adc.higher_excitations == True):
+            if (adc.approx_trans_moments == False):
                 T[s1:f1] += t1_3[:,(orb-nocc)]
 
         del t2_2
@@ -2436,7 +2430,7 @@ class RADCEA(RADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
-        self.higher_excitations = adc.higher_excitations
+        self.approx_trans_moments = adc.approx_trans_moments
         self.E = None
         self.U = None
         self.P = None
@@ -2551,7 +2545,7 @@ class RADCIP(RADC):
         self.transform_integrals = adc.transform_integrals
         self.with_df = adc.with_df
         self.compute_properties = adc.compute_properties
-        self.higher_excitations = adc.higher_excitations
+        self.approx_trans_moments = adc.approx_trans_moments
         self.E = None
         self.U = None
         self.P = None
