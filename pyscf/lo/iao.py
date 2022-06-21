@@ -69,7 +69,7 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
     pmol = reference_mol(mol, minao)
     # For PBC, we must use the pbc code for evaluating the integrals lest the
     # pbc conditions be ignored.
-    has_pbc = getattr(mol, 'dimension', 0) > 1
+    has_pbc = getattr(mol, 'dimension', 0) > 0
     if has_pbc:
         from pyscf.pbc import gto as pbcgto
         s1 = mol.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
@@ -95,10 +95,8 @@ def iao(mol, orbocc, minao=MINAO, kpts=None, lindep_threshold=1e-8):
             ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
         # s1 can be singular in large basis sets: Use canonical orthogonalization in this case:
         except numpy.linalg.LinAlgError:
-            se, sv = numpy.linalg.eigh(s1)
-            keep = (se >= lindep_threshold)
-            sinv = numpy.einsum("ai,i,bi->ab", sv[:,keep], 1/se[keep], sv[:,keep])
-            p12 = numpy.dot(sinv, s12)
+            x = scf.addons.canonical_orth_(s1, lindep_threshold)
+            p12 = numpy.linalg.multi_dot((x, x.conj().T, s12))
             ctild = numpy.dot(p12, ctild)
         # If there are no occupied orbitals at this k-point, all but the first term will vanish:
         if mo.shape[-1] == 0:
