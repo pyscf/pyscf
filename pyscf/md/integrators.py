@@ -319,6 +319,15 @@ class Integrator:
 
         return energy
 
+    def temperature(self):
+        '''Returns the temperature of the system'''
+        dof = 3*len(self.mol.atom_coords()) - 3
+        if dof == 0:
+            dof = 1
+
+        # Temp = 2/(3*k*N_f)*\sum_i (m_i v_i^2)
+        return ((2*self.ekin)/(3*dof*data.nist.BOLTZMANN/data.nist.HARTREE2J))
+
     def __iter__(self):
         self._step = 0
         self._log = logger.new_logger(self, self.verbose)
