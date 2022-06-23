@@ -321,9 +321,7 @@ class Integrator:
 
     def temperature(self):
         '''Returns the temperature of the system'''
-        dof = 3*len(self.mol.atom_coords()) - 3
-        if dof == 0:
-            dof = 1
+        dof = 3*len(self.mol.atom_coords())
 
         # Temp = 2/(3*k*N_f)*\sum_i (m_i v_i^2)
         return ((2*self.ekin)/(3*dof*data.nist.BOLTZMANN/data.nist.HARTREE2J))
@@ -394,7 +392,7 @@ class VelocityVerlet(Integrator):
         method : lib.GradScanner or rhf.GradientsMixin instance, or
         has nuc_grad_method method.
             Method by which to compute the energy gradients and energies
-            in order to propogate the equations of motion. Realistically,
+            in order to propagate the equations of motion. Realistically,
             it can be any callable object such that it returns the energy
             and potential energy gradient when given a mol.
 

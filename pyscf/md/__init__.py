@@ -29,7 +29,7 @@ Simple usage::
     >>> integrator = md.NVE(mf, dt=5, time=10).run()
 '''
 
-from pyscf.md import integrators
+from pyscf.md import integrators, distributions
 
 NVE = integrators.VelocityVerlet
 
