@@ -113,7 +113,7 @@ def kernel(integrator, verbose=logger.NOTE):
     return integrator
 
 
-class Integrator:
+class Integrator(lib.StreamObject):
     '''Integrator base class
 
     Args:
@@ -286,8 +286,6 @@ class Integrator:
             self.dump_input()
 
         return kernel(self, verbose=log)
-
-    run = kernel
 
     def dump_input(self, verbose=None):
         log = logger.new_logger(self, verbose)

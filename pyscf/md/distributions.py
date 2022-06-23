@@ -30,7 +30,7 @@ def MaxwellBoltzmannVelocity(mol, T=298.15, seed=None):
     Tkb = T*data.nist.BOLTZMANN/data.nist.HARTREE2J
     MEAN = 0.0
 
-    rng = np.random.default_rng(seed=seed)
+    rng = np.random.Generator(np.random.PCG64(seed=seed))
 
     for m in mol.atom_charges():
         m = data.elements.COMMON_ISOTOPE_MASSES[m]
@@ -40,15 +40,3 @@ def MaxwellBoltzmannVelocity(mol, T=298.15, seed=None):
         veloc.append(rng.normal(loc=MEAN, scale=sigma, size=(3)))
 
     return np.array(veloc)
-
-
-if __name__ == "__main__":
-    from pyscf import gto
-
-    h2o = gto.M(verbose=3,
-                output='/dev/null',
-                atom=[['O', 0, 0, 0], ['H', 0, -0.757, 0.587],
-                      ['H', 0, 0.757, 0.587]],
-                basis='def2-svp')
-
-    print(MaxwellBoltzmannVelocity(h2o))
