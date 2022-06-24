@@ -20,10 +20,7 @@ import numpy as np
 from pyscf import data
 from pyscf import __config__
 
-#PYSCF_SEED = getattr(__config__, 'seed', False)
-
-
-
+#PYSCF_SEED = getattr(__config__, 'seed', None)
 
 def MaxwellBoltzmannVelocity(mol, T=298.15, seed=None):
     veloc = []

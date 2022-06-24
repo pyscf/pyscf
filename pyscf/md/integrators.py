@@ -203,6 +203,9 @@ class Integrator(lib.StreamObject):
         self.trajectory_output = None
         self.callback = None
 
+        # Cache the masses into a list, they will be in atomic units
+        self._masses = None
+
         self.__dict__.update(kwargs)
 
     def kernel(self, veloc=None, steps=None, dump_flags=True, verbose=None):
@@ -244,6 +247,9 @@ class Integrator(lib.StreamObject):
         # Default velocities are 0 if none specified
         if self.veloc is None:
             self.veloc = np.full((self.mol.natm, 3), 0.0)
+
+        # Store the masses into a cached variable so we don't have to keep looking them up
+        self._masses = np.array([data.elements.COMMON_ISOTOPE_MASSES[m]*data.nist.AMU2AU for m in self.mol.atom_charges()])
 
         # avoid opening energy_output file twice
         if type(self.energy_output) is str:
@@ -311,9 +317,8 @@ class Integrator(lib.StreamObject):
     def compute_kinetic_energy(self):
         '''Compute the kinetic energy of the current frame.'''
         energy = 0
-        for v, m in zip(self.veloc, self.mol.atom_charges()):
-            m = data.elements.COMMON_ISOTOPE_MASSES[m]
-            energy += 0.5 * m * data.nist.AMU2AU * np.linalg.norm(v)**2
+        for v, m in zip(self.veloc, self._masses):
+            energy += 0.5 * m * np.linalg.norm(v)**2
 
         return energy
 
@@ -375,12 +380,18 @@ class Integrator(lib.StreamObject):
             '%8.2f  %.12E  %.12E  %.12E\n' %
             (self.time, self.epot, self.ekin, self.ekin + self.epot))
 
+        # If we don't flush, there is a possibility of losing data
+        self.energy_output.flush()
+
     def _write_coord(self):
         '''Writes out the current geometry to the self.trajectroy_output
         stream in xyz format. '''
         self.trajectory_output.write('%s\nMD Time %.2f\n' %
                                      (self.mol.natm, self.time))
         self.trajectory_output.write(self.mol.tostring(format='raw') + '\n')
+
+        # If we don't flush, there is a possibility of losing data
+        self.trajectory_output.flush()
 
 
 class VelocityVerlet(Integrator):
@@ -442,37 +453,18 @@ class VelocityVerlet(Integrator):
         if not self.scanner.converged:
             raise RuntimeError('Gradients did not converge!')
 
-        a = []
-        for m, g in zip(self.mol.atom_charges(), grad):
-            m = data.elements.COMMON_ISOTOPE_MASSES[m]
-            # a = - \nabla U / m
-            a.append(-1 * g / m / data.nist.AMU2AU)
-
-        return e_tot, np.array(a)
-
-    def _next_atom_position(self, r, v, a):
-        return r + self.dt * v + 0.5 * (self.dt**2) * a
-
-    def _next_atom_velocity(self, v, a2, a1):
-        return v + self.dt * 0.5 * (a2 + a1)
+        a = -1 * grad / self._masses.reshape(-1,1)
+        return e_tot, a
 
     def _next_geometry(self):
         '''Computes the next geometry using the Velocity Verlet algorithm. The
         necessary equations of motion for the position is
             r(t_i+1) = r(t_i) + /delta t * v(t_i) + 0.5(/delta t)^2 a(t_i)
         '''
-        new_coords = []
-        for r, v, a in zip(self.mol.atom_coords(), self.veloc, self.accel):
-            new_coords.append(self._next_atom_position(r, v, a))
-
-        return np.array(new_coords)
+        return self.mol.atom_coords() + self.dt * self.veloc + 0.5 * (self.dt ** 2) * self.accel
 
     def _next_velocity(self, next_accel):
         '''Compute the next velocity using the Velocity Verlet algorithm. The
         necessary equations of motion for the velocity is
             v(t_i+1) = v(t_i) + 0.5(a(t_i+1) + a(t_i))'''
-        new_veloc = []
-        for v, a2, a1 in zip(self.veloc, next_accel, self.accel):
-            new_veloc.append(self._next_atom_velocity(v, a2, a1))
-
-        return np.array(new_veloc)
+        return self.veloc + 0.5 * self.dt * (self.accel + next_accel)
