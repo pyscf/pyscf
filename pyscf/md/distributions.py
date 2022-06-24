@@ -20,15 +20,23 @@ import numpy as np
 from pyscf import data, md
 
 def MaxwellBoltzmannVelocity(mol, T=298.15):
+    '''Computes velocities for a molecular structure using
+        a Maxwell-Boltzmann distribution.
+        Args:
+            mol : gto.mol object
+
+            T : float
+                Temperature, in Kelvin, that the distribution represents
+        '''
+
     veloc = []
     Tkb = T*data.nist.BOLTZMANN/data.nist.HARTREE2J
     MEAN = 0.0
 
     for m in mol.atom_charges():
         m = data.elements.COMMON_ISOTOPE_MASSES[m]
-        arg = Tkb/m
-        sigma = np.sqrt(arg)
+        sigma = np.sqrt(Tkb/m)
 
-        veloc.append(md.rng.normal(loc=MEAN, scale=sigma, size=(3)))
+        veloc.append(md.rng.normal(loc=MEAN, scale=sigma, size=3))
 
     return np.array(veloc)

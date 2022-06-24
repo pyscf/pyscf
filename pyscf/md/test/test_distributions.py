@@ -36,7 +36,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_water_MB_velocity(self):
-        TEMPERATURE = 100000
+        TEMPERATURE = 300
         v = []
 
         for i in range(10000):
@@ -44,11 +44,11 @@ class KnownValues(unittest.TestCase):
 
         v = np.array(v).flatten()
         v_squared = v**2
-        self.assertAlmostEqual(np.mean(v), 0.0, 2)
+        self.assertAlmostEqual(np.mean(v), 0.0, 4)
 
         # <v^2> = kbT/m
         expected_v_squared = TEMPERATURE*data.nist.BOLTZMANN/data.nist.HARTREE2J/data.elements.COMMON_ISOTOPE_MASSES[8]
-        self.assertAlmostEqual(np.mean(v_squared), expected_v_squared, 3)
+        self.assertAlmostEqual(np.mean(v_squared), expected_v_squared, 6)
 
 if __name__ == "__main__":
     print("Full Tests for Distribution Sampling")
