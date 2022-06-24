@@ -376,9 +376,18 @@ class Integrator(lib.StreamObject):
     def _write_energy(self):
         '''Writes out the potential, kinetic, and total energy to the
         self.energy_output stream. '''
-        self.energy_output.write(
-            '%8.2f  %.12E  %.12E  %.12E\n' %
-            (self.time, self.epot, self.ekin, self.ekin + self.epot))
+
+        output = '%8.2f  %.12E  %.12E  %.12E' % (self.time, self.epot,
+                                                 self.ekin,
+                                                 self.ekin + self.epot)
+
+        # We follow OM of writing all of the states at the end of the file
+        if getattr(self.scanner.base, 'e_states', None):
+            if len(self.scanner.base.e_states) > 1:
+                for e in self.scanner.base.e_states:
+                    output += '  %.12E' % e
+
+        self.energy_output.write(output+'\n')
 
         # If we don't flush, there is a possibility of losing data
         self.energy_output.flush()
