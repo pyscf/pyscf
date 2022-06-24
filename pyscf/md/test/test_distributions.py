@@ -27,7 +27,7 @@ def setUpModule():
                 atom=[['O', 0, 0, 0], ['O', 0, 0, 0.587]],
                 basis='def2-svp')
 
-
+    md.set_seed(0)
 
 def tearDownModule():
     global o2

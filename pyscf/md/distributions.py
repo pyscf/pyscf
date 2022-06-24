@@ -17,23 +17,18 @@
 
 import numpy as np
 
-from pyscf import data
-from pyscf import __config__
+from pyscf import data, md
 
-#PYSCF_SEED = getattr(__config__, 'seed', None)
-
-def MaxwellBoltzmannVelocity(mol, T=298.15, seed=None):
+def MaxwellBoltzmannVelocity(mol, T=298.15):
     veloc = []
     Tkb = T*data.nist.BOLTZMANN/data.nist.HARTREE2J
     MEAN = 0.0
-
-    rng = np.random.Generator(np.random.PCG64(seed=seed))
 
     for m in mol.atom_charges():
         m = data.elements.COMMON_ISOTOPE_MASSES[m]
         arg = Tkb/m
         sigma = np.sqrt(arg)
 
-        veloc.append(rng.normal(loc=MEAN, scale=sigma, size=(3)))
+        veloc.append(md.rng.normal(loc=MEAN, scale=sigma, size=(3)))
 
     return np.array(veloc)

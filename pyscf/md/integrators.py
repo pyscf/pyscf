@@ -17,6 +17,7 @@
 
 import os
 import numpy as np
+
 from pyscf import data
 from pyscf import lib
 from pyscf.lib import logger
@@ -248,8 +249,11 @@ class Integrator(lib.StreamObject):
         if self.veloc is None:
             self.veloc = np.full((self.mol.natm, 3), 0.0)
 
-        # Store the masses into a cached variable so we don't have to keep looking them up
-        self._masses = np.array([data.elements.COMMON_ISOTOPE_MASSES[m]*data.nist.AMU2AU for m in self.mol.atom_charges()])
+        # Store the masses into a cached variable
+        # so we don't have to keep looking them up
+        self._masses = np.array([
+            data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
+            for m in self.mol.atom_charges()])
 
         # avoid opening energy_output file twice
         if type(self.energy_output) is str:
@@ -318,16 +322,17 @@ class Integrator(lib.StreamObject):
         '''Compute the kinetic energy of the current frame.'''
         energy = 0
         for v, m in zip(self.veloc, self._masses):
-            energy += 0.5 * m * np.linalg.norm(v)**2
+            energy += 0.5 * m * np.linalg.norm(v) ** 2
 
         return energy
 
     def temperature(self):
         '''Returns the temperature of the system'''
-        dof = 3*len(self.mol.atom_coords())
+        dof = 3 * len(self.mol.atom_coords())
 
         # Temp = 2/(3*k*N_f)*\sum_i (m_i v_i^2)
-        return ((2*self.ekin)/(3*dof*data.nist.BOLTZMANN/data.nist.HARTREE2J))
+        return ((2 * self.ekin) / (
+                3 * dof * data.nist.BOLTZMANN / data.nist.HARTREE2J))
 
     def __iter__(self):
         self._step = 0
@@ -377,7 +382,8 @@ class Integrator(lib.StreamObject):
         '''Writes out the potential, kinetic, and total energy to the
         self.energy_output stream. '''
 
-        output = '%8.2f  %.12E  %.12E  %.12E' % (self.time, self.epot,
+        output = '%8.2f  %.12E  %.12E  %.12E' % (self.time,
+                                                 self.epot,
                                                  self.ekin,
                                                  self.ekin + self.epot)
 
@@ -387,7 +393,7 @@ class Integrator(lib.StreamObject):
                 for e in self.scanner.base.e_states:
                     output += '  %.12E' % e
 
-        self.energy_output.write(output+'\n')
+        self.energy_output.write(output + '\n')
 
         # If we don't flush, there is a possibility of losing data
         self.energy_output.flush()
@@ -462,7 +468,7 @@ class VelocityVerlet(Integrator):
         if not self.scanner.converged:
             raise RuntimeError('Gradients did not converge!')
 
-        a = -1 * grad / self._masses.reshape(-1,1)
+        a = -1 * grad / self._masses.reshape(-1, 1)
         return e_tot, a
 
     def _next_geometry(self):
@@ -470,7 +476,8 @@ class VelocityVerlet(Integrator):
         necessary equations of motion for the position is
             r(t_i+1) = r(t_i) + /delta t * v(t_i) + 0.5(/delta t)^2 a(t_i)
         '''
-        return self.mol.atom_coords() + self.dt * self.veloc + 0.5 * (self.dt ** 2) * self.accel
+        return self.mol.atom_coords() + self.dt * self.veloc + \
+            0.5 * (self.dt ** 2) * self.accel
 
     def _next_velocity(self, next_accel):
         '''Compute the next velocity using the Velocity Verlet algorithm. The
