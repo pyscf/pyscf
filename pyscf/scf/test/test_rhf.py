@@ -838,6 +838,15 @@ H     0    0.757    0.587'''
         mf1.opt.prescreen = 'CVHFnoscreen'
         self.assertEqual(mf1.opt.prescreen, scf._vhf._fpointer('CVHFnoscreen').value)
 
+        # issue #1114
+        dm = numpy.eye(nao, dtype=int)
+        vj, vk = mf.get_jk(mol, dm)
+        self.assertAlmostEqual(lib.fp(vj), 1.6593323222866125, 9)
+        self.assertAlmostEqual(lib.fp(vk), -1.4662135224053987, 9)
+        vj, vk = mf1.get_jk(mol, dm)
+        self.assertAlmostEqual(lib.fp(vj), 1.6593323222866125, 9)
+        self.assertAlmostEqual(lib.fp(vk), -1.4662135224053987, 9)
+
     def test_get_vk_direct_scf(self):
         numpy.random.seed(1)
         nao = mol.nao

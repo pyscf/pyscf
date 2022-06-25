@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyver: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39]
+        pyver: [cp36-cp36m, cp37-cp37m, cp38-cp38, cp39-cp39, cp310-cp310]
       fail-fast: false
     env:
       img: quay.io/pypa/manylinux2014_aarch64
@@ -56,6 +56,7 @@ jobs:
             yum install -y openblas-devel gcc && \
             export src=${GITHUB_WORKSPACE:-/src/pyscf} && \
             export dst=${GITHUB_WORKSPACE:-/src/pyscf}/linux-wheels && \
+            export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF" && \
             mkdir -p /root/wheelhouse $src/linux-wheels && \
             sed -i "/            if basename(fn) not in needed_libs:/s/basename.*libs/1/" /opt/_internal/pipx/venvs/auditwheel/lib/python3.9/site-packages/auditwheel/wheel_abi.py && \
             /opt/python/${{ matrix.pyver }}/bin/pip wheel -v --no-deps --no-clean -w /root/wheelhouse $src && \

@@ -69,7 +69,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
     vk_oo = -np.einsum('piiq->pq', eris.oooo)
     vk_ov = -np.einsum('iqpi->pq', eris.ovoo)
     vk_vv = -np.einsum('ipqi->pq', eris.ovvo).conj()
-    vk = np.array(np.bmat([[vk_oo, vk_ov],[vk_ov.T, vk_vv]]))
+    vk = np.block([[vk_oo, vk_ov],[vk_ov.T, vk_vv]])
 
     nexc = len(td_e)
     # factor of 2 for normalization, see tdscf/rhf.py
@@ -80,7 +80,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
     tdm_vv = einsum('via,iapq->vpq', td_z, eris.ovvv)
     tdm = []
     for oo,ov,vv in zip(tdm_oo,tdm_ov,tdm_vv):
-        tdm.append(np.array(np.bmat([[oo, ov],[ov.T, vv]])))
+        tdm.append(np.block([[oo, ov],[ov.T, vv]]))
     tdm = np.asarray(tdm)
 
     conv = True

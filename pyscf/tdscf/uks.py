@@ -20,17 +20,12 @@
 import numpy
 from pyscf import symm
 from pyscf import lib
-from pyscf import scf
 from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
-
-# Low excitation filter to avoid numerical instability
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
 class TDA(uhf.TDA):
@@ -46,18 +41,20 @@ class TDDFT(uhf.TDHF):
 RPA = TDUKS = TDDFT
 
 
-class TDDFTNoHybrid(TDDFT, TDA):
-    ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
+class CasidaTDDFT(TDDFT, TDA):
+    '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
 
     init_guess = TDA.init_guess
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf=None):
+        if mf is None:
+            mf = self._scf
         wfnsym = self.wfnsym
 
         mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert(mo_coeff[0].dtype == numpy.double)
+        assert mo_coeff[0].dtype == numpy.double
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff[0].shape
@@ -138,14 +135,14 @@ class TDDFTNoHybrid(TDDFT, TDA):
             self.nstates = nstates
         log = logger.Logger(self.stdout, self.verbose)
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         self.converged, w2, x1 = \
@@ -174,7 +171,7 @@ class TDDFTNoHybrid(TDDFT, TDA):
         e = []
         xy = []
         for i, z in enumerate(x1):
-            if w2[i] < POSTIVE_EIG_THRESHOLD**2:
+            if w2[i] < self.positive_eig_threshold:
                 continue
             w = numpy.sqrt(w2[i])
             zp = e_ia * z
@@ -204,12 +201,14 @@ class TDDFTNoHybrid(TDDFT, TDA):
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
+TDDFTNoHybrid = CasidaTDDFT
+
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uks()
         mf.xc = ''
         TDDFTNoHybrid.__init__(self, mf)
 
@@ -219,23 +218,24 @@ class dTDA(TDA):
     def __init__(self, mf):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uks()
         mf.xc = ''
         TDA.__init__(self, mf)
 
 
 def tddft(mf):
-    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
         return TDDFT(mf)
     else:
-        return TDDFTNoHybrid(mf)
+        return CasidaTDDFT(mf)
 
 from pyscf import dft
 dft.uks.UKS.TDA           = dft.uks_symm.UKS.TDA           = lib.class_as_method(TDA)
 dft.uks.UKS.TDHF          = dft.uks_symm.UKS.TDHF          = None
 #dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = lib.class_as_method(TDDFT)
 dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.uks.UKS.CasidaTDDFT   = dft.uks_symm.UKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = tddft
 dft.uks.UKS.dTDA          = dft.uks_symm.UKS.dTDA          = lib.class_as_method(dTDA)
 dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method(dRPA)

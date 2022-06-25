@@ -240,7 +240,7 @@ class EOMIP(eom_rccsd.EOMIP):
     def vector_size(self):
         nocc = self.nocc
         nvir = self.nmo - nocc
-        return nocc + nocc*(nocc-1)/2*nvir
+        return nocc + nocc*(nocc-1)//2*nvir
 
     def make_imds(self, eris=None):
         imds = _IMDS(self._cc, eris)

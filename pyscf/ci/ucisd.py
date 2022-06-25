@@ -115,7 +115,7 @@ def contract(myci, civec, eris):
     nvira = nmoa - nocca
     nvirb = nmob - noccb
     c0, (c1a,c1b), (c2aa,c2ab,c2bb) = \
-            cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb))
+            cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb), copy=False)
 
     #:t2 += 0.5*einsum('ijef,abef->ijab', c2, eris.vvvv)
     #:eris_vvvv = ao2mo.restore(1, eris.vvvv, nvira)
@@ -331,7 +331,7 @@ def amplitudes_to_cisdvec(c0, c1, c2):
     lib.take_2d(c2bb.reshape(noccb**2,nvirb**2), ooidxb, vvidxb, out=civec[loc[4]:loc[5]])
     return civec
 
-def cisdvec_to_amplitudes(civec, nmo, nocc):
+def cisdvec_to_amplitudes(civec, nmo, nocc, copy=True):
     norba, norbb = nmo
     nocca, noccb = nocc
     nvira = norba - nocca
@@ -344,9 +344,10 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
             nooa*nvva, noob*nvvb)
     loc = numpy.cumsum(size)
     c0 = civec[0]
-    c1a = civec[loc[0]:loc[1]].reshape(nocca,nvira)
-    c1b = civec[loc[1]:loc[2]].reshape(noccb,nvirb)
-    c2ab = civec[loc[2]:loc[3]].reshape(nocca,noccb,nvira,nvirb)
+    cp = lambda x: (x.copy() if copy else x)
+    c1a = cp(civec[loc[0]:loc[1]].reshape(nocca,nvira))
+    c1b = cp(civec[loc[1]:loc[2]].reshape(noccb,nvirb))
+    c2ab = cp(civec[loc[2]:loc[3]].reshape(nocca,noccb,nvira,nvirb))
     c2aa = _unpack_4fold(civec[loc[3]:loc[4]], nocca, nvira)
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
@@ -381,7 +382,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     nocc = nocca, noccb
     nvira, nvirb = nmoa - nocca, nmob - noccb
 
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc, copy=False)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
     t1addra, t1signa = cisd.tn_addrs_signs(nmoa, nocca, 1)
@@ -508,8 +509,8 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
     nocca, noccb = nocc
     nvira, nvirb = nmoa - nocca, nmob - noccb
 
-    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, (nmoa,nmob), nocc)
-    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, (nmoa,nmob), nocc)
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, (nmoa,nmob), nocc, copy=False)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, (nmoa,nmob), nocc, copy=False)
 
     ooidx = numpy.tril_indices(nocca, -1)
     vvidx = numpy.tril_indices(nvira, -1)
@@ -651,7 +652,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
@@ -682,7 +683,7 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
     nocca, noccb = nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
@@ -780,8 +781,8 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     '''
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
-    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc, copy=False)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc, copy=False)
 
     nmoa, nmob = nmo
     nocca, noccb = nocc
@@ -957,10 +958,10 @@ class UCISD(cisd.CISD):
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
 
-    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None, copy=True):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
-        return cisdvec_to_amplitudes(civec, nmo, nocc)
+        return cisdvec_to_amplitudes(civec, nmo, nocc, copy=copy)
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2

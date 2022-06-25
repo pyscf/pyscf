@@ -178,7 +178,7 @@ def cart2sph(l, c_tensor=None, normalized=None):
         else:
             return c_tensor * 0.488602511902919921
     else:
-        assert(l <= 12)
+        assert l <= 15
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
@@ -1341,7 +1341,7 @@ def time_reversal_map(mol):
 
 CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
 
-def energy_nuc(mol, charges=None, coords=None):
+def classical_coulomb_energy(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
@@ -1358,6 +1358,8 @@ def energy_nuc(mol, charges=None, coords=None):
         raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+energy_nuc = classical_coulomb_energy
 
 def inter_distance(mol, coords=None):
     '''
@@ -2669,7 +2671,7 @@ class Mole(lib.StreamObject):
     set_common_origin_ = set_common_orig  # for backward compatibility
 
     def with_common_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired common origin.
+        '''Return a temporary mol context which has the rquired common origin.
         The required common origin has no effects out of the temporary context.
         See also :func:`mol.set_common_origin`
 
@@ -2698,7 +2700,7 @@ class Mole(lib.StreamObject):
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
     def with_rinv_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        '''Return a temporary mol context which has the rquired origin of 1/r
         operator.  The required origin has no effects out of the temporary
         context.  See also :func:`mol.set_rinv_origin`
 
@@ -2733,7 +2735,7 @@ class Mole(lib.StreamObject):
     omega = omega.setter(set_range_coulomb)
 
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which sets the required parameter
+        '''Return a temporary mol context which sets the required parameter
         omega for range-separated Coulomb operator.
         If omega = None, return the context for regular Coulomb integrals.
         See also :func:`mol.set_range_coulomb`
@@ -2747,13 +2749,13 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def with_long_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for long-range part of
+        '''Return a temporary mol context for long-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(abs(omega))
 
     def with_short_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for short-range part of
+        '''Return a temporary mol context for short-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(-abs(omega))
@@ -2794,7 +2796,7 @@ class Mole(lib.StreamObject):
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        '''Return a temporary mol context which has the rquired Gaussian charge
         distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
@@ -2807,7 +2809,7 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_at_nucleus(self, atm_id):
-        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        '''Return a temporary mol context in which the rinv operator (1/r) is
         treated like the Coulomb potential of a Gaussian charge distribution
         rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
@@ -2833,7 +2835,7 @@ class Mole(lib.StreamObject):
     with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def with_integral_screen(self, threshold):
-        '''Retuen a temporary mol context which has the rquired integral
+        '''Return a temporary mol context which has the rquired integral
         screen threshold
         '''
         expcutoff0 = self._env[PTR_EXPCUTOFF]

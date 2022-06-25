@@ -349,13 +349,25 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.KKS().__class__, dft.KKS(cell).__class__)
         self.assertEqual(cell.CCSD().__class__, cc.ccsd.RCCSD)
         self.assertEqual(cell.TDA().__class__, tdscf.rhf.TDA)
-        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.CasidaTDDFT)
         self.assertEqual(cell.TDB3LYP().__class__, tdscf.rks.TDDFT)
         self.assertEqual(cell.KCCSD().__class__, cc.kccsd_rhf.KRCCSD)
         self.assertEqual(cell.KTDA().__class__, tdscf.krhf.TDA)
-        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFTNoHybrid)
+        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFT)
         self.assertRaises(AttributeError, lambda: cell.xyz)
         self.assertRaises(AttributeError, lambda: cell.TDxyz)
+
+        cell = pgto.M(atom='He', charge=1, spin=1, a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
+        self.assertTrue(cell.HF().__class__, scf.uhf.UHF)
+        self.assertTrue(cell.KS().__class__, dft.uks.UKS)
+        self.assertTrue(cell.KKS().__class__, dft.kuks.KUKS)
+        self.assertTrue(cell.CCSD().__class__, cc.ccsd.UCCSD)
+        self.assertTrue(cell.TDA().__class__, tdscf.uhf.TDA)
+        self.assertTrue(cell.TDBP86().__class__, tdscf.uks.CasidaTDDFT)
+        self.assertTrue(cell.TDB3LYP().__class__, tdscf.uks.TDDFT)
+        self.assertTrue(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
+        self.assertTrue(cell.KTDA().__class__, tdscf.kuhf.TDA)
+        self.assertTrue(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
 
     def test_ghost(self):
         cell = pgto.Cell(
@@ -431,4 +443,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()
-
