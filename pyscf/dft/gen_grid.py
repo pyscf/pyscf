@@ -211,6 +211,9 @@ def original_becke(g):
 #    return g
     pass
 
+def becke_lko(g):
+    pass
+
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                      level=3, prune=nwchem_prune, **kwargs):
     '''Generate number of radial grids and angular grids for the given molecule.
@@ -291,7 +294,7 @@ def get_partition(mol, atom_grids_tab,
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
     atm_dist = gto.inter_distance(mol)
-    if (becke_scheme is original_becke and
+    if (becke_scheme in [original_becke, becke_lko] and
         (radii_adjust is radi.treutler_atomic_radii_adjust or
          radii_adjust is radi.becke_atomic_radii_adjust or
          f_radii_adjust is None)):
@@ -303,15 +306,20 @@ def get_partition(mol, atom_grids_tab,
                                            for j in range(mol.natm)])
             p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
 
+        if becke_scheme == original_becke:
+            gen_grid_fn = libdft.VXCgen_grid
+        else:
+            gen_grid_fn = libdft.VXCgen_grid_lko
+
         def gen_grid_partition(coords):
             coords = numpy.asarray(coords, order='F')
             ngrids = coords.shape[0]
             pbecke = numpy.empty((mol.natm,ngrids))
-            libdft.VXCgen_grid(pbecke.ctypes.data_as(ctypes.c_void_p),
-                               coords.ctypes.data_as(ctypes.c_void_p),
-                               atm_coords.ctypes.data_as(ctypes.c_void_p),
-                               p_radii_table,
-                               ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
+            gen_grid_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                        coords.ctypes.data_as(ctypes.c_void_p),
+                        atm_coords.ctypes.data_as(ctypes.c_void_p),
+                        p_radii_table,
+                        ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
             return pbecke
     else:
         def gen_grid_partition(coords):

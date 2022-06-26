@@ -163,7 +163,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_nuc = _gen_batch_nuc(mol)
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt, sgx.pjs)
+                                  sgx._opt, sgx.pjs, tot_grids=grids.weights.size)
 
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
@@ -250,7 +250,17 @@ def _gen_batch_nuc(mol):
         return lib.unpack_tril(j3c.T, out=out)
     return batch_nuc
 
-def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=False):
+def _gen_batch_nuc_grad(mol):
+    '''Coulomb integrals of the given points and orbital pairs'''
+    cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, 'int3c2e_ip1')
+    def batch_nuc(mol, grid_coords, out=None):
+        fakemol = gto.fakemol_for_charges(grid_coords)
+        j3c = aux_e2(mol, fakemol, intor='int3c2e_ip1', aosym=None, cintopt=cintopt)
+        return lib.unpack_tril(j3c.T, out=out)
+    return batch_nuc
+
+def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
+                   sgxopt=None, pjs=False, grad=False, tot_grids=None):
     '''Contraction between sgX Coulomb integrals and density matrices
     J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
        einsum('gij,xij->xg', gbn, dms) if dms are density matrices
@@ -258,10 +268,13 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
     '''
     if sgxopt is None:
         from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol, pjs=pjs)
+        sgxopt = sgx._make_opt(mol, pjs=pjs, grad=grad)
     sgxopt.direct_scf_tol = direct_scf_tol
 
-    ncomp = 1
+    if grad:
+        ncomp = 3
+    else:
+        ncomp = 1
     nao = mol.nao
     cintor = _vhf._fpointer(sgxopt._intor)
     fdot = _vhf._fpointer('SGXdot_nrk')
@@ -274,7 +287,11 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
         env[gto.NGRIDS] = ngrids
         env[gto.PTR_GRIDS] = mol._env.size
         if pjs:
-            sgxopt.set_dm(fg / numpy.sqrt(numpy.abs(weights[None,:])),
+            if tot_grids is not None:
+                fac = numpy.sqrt(direct_scf_tol * tot_grids)
+            else:
+                fac = 1.0
+            sgxopt.set_dm(fac * fg / numpy.sqrt(numpy.abs(weights[None,:])),
                           mol._atm, mol._bas, env)
 
         ao_loc = moleintor.make_loc(bas, sgxopt._intor)
@@ -300,7 +317,10 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
                     vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
                     fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_ji_g'))
         if with_k:
-            vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
+            if grad:
+                vk = numpy.zeros((len(fg),ncomp,nao,ngrids))
+            else:
+                vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
             for i, dm in enumerate(fg):
                 dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
                 vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
@@ -321,11 +341,159 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=
             ctypes.c_int(env.shape[0]),
             ctypes.c_int(2 if aosym == 's2' else 1))
         if vk is not None:
-            vk = vk.transpose(0,2,1)
+            if grad:
+                vk = vk.transpose(0,1,3,2)
+            else:
+                vk = vk.transpose(0,2,1)
             vk = numpy.ascontiguousarray(vk)
         return vj, vk
     return jk_part
 
+
+from pyscf.dft import radi
+from pyscf.dft.gen_grid import libdft
+def get_dw_partition(mol, ia, atom_grids_tab,
+                     radii_adjust=None, atomic_radii=radi.BRAGG_RADII,
+                     concat=True, wtonly=False):
+    if callable(radii_adjust) and atomic_radii is not None:
+        f_radii_adjust = radii_adjust(mol, atomic_radii)
+    else:
+        f_radii_adjust = None
+    atm_coords = numpy.asarray(mol.atom_coords() , order='C')
+    atm_dist = gto.inter_distance(mol)
+    gen_grid_fn = libdft.VXCgen_grid_lko
+    gen_deriv_fn = libdft.VXCgen_grid_lko_deriv
+
+    if f_radii_adjust is None:
+        p_radii_table = lib.c_null_ptr()
+    else:
+        f_radii_table = numpy.asarray([f_radii_adjust(i, j, 0)
+                                       for i in range(mol.natm)
+                                       for j in range(mol.natm)])
+        p_radii_table = f_radii_table.ctypes.data_as(ctypes.c_void_p)
+
+    def gen_grid_partition(coords):
+        coords = numpy.asarray(coords, order='F')
+        ngrids = coords.shape[0]
+        pbecke = numpy.empty((mol.natm,ngrids))
+        gen_grid_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                    coords.ctypes.data_as(ctypes.c_void_p),
+                    atm_coords.ctypes.data_as(ctypes.c_void_p),
+                    p_radii_table,
+                    ctypes.c_int(mol.natm), ctypes.c_int(ngrids))
+        return pbecke
+
+    def gen_grid_deriv(coords, dbecke):
+        coords = numpy.asarray(coords, order='F')
+        ngrids = coords.shape[0]
+        pbecke = numpy.empty((4,mol.natm,ngrids))
+        gen_deriv_fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+                     dbecke.ctypes.data_as(ctypes.c_void_p),
+                     coords.ctypes.data_as(ctypes.c_void_p),
+                     atm_coords.ctypes.data_as(ctypes.c_void_p),
+                     p_radii_table,
+                     ctypes.c_int(mol.natm), ctypes.c_int(ngrids),
+                     ctypes.c_int(ia))
+        return pbecke[1:]
+
+    coords, vol = atom_grids_tab[mol.atom_symbol(ia)]
+    coords = coords + atm_coords[ia]
+    pbecke = gen_grid_partition(coords)
+    invsum = (1./pbecke.sum(axis=0))
+    weights = vol * pbecke[ia] * invsum
+    dbecke = numpy.empty_like(pbecke)
+    if wtonly:
+        return coords, weights
+    else:
+        dbecke = -pbecke * pbecke[ia] * vol * invsum**2
+        dbecke[ia,:] += pbecke[ia] * invsum * vol
+        dbecke = numpy.ascontiguousarray(dbecke)
+        weights1 = gen_grid_deriv(coords, dbecke)
+        return coords, weights, weights1
+
+
+def grids_response_cc(grids):
+    mol = grids.mol
+    atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
+                                            grids.radi_method,
+                                            grids.level, grids.prune)
+    atm_coords = numpy.asarray(mol.atom_coords() , order='C')
+    atm_dist = gto.inter_distance(mol, atm_coords)
+
+    for ia in range(mol.natm):
+        coord, weight, weight1 = get_dw_partition(mol, ia, atom_grids_tab,
+                                                  grids.radii_adjust,
+                                                  grids.atomic_radii)
+        yield coord, weight, weight1
+
+
+from pyscf.dft.gen_grid import LEBEDEV_ORDER, LEBEDEV_NGRID, becke_lko
+def sgx_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
+    '''NWChem
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Kwargs:
+        radii : 1D array
+            radii (in Bohr) for atoms in periodic table
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
+    alphas = numpy.array((
+        (0.25  , 0.5, 1.0, 4.5),
+        (0.1667, 0.5, 0.9, 3.5),
+        (0.1   , 0.4, 0.8, 2.5)))
+    leb_ngrid = LEBEDEV_NGRID[4:]  # [38, 50, 74, 86, ...]
+    lvls = [LEBEDEV_ORDER[l] for l in SGX_ANG_MAPPING[:,3]]
+    level = (n_ang > numpy.array(lvls)).sum()
+    leb_l = SGX_ANG_MAPPING[level]
+
+    r_atom = radii[nuc] + 1e-200
+    if nuc <= 2:  # H, He
+        place = ((rads/r_atom).reshape(-1,1) > alphas[0]).sum(axis=1)
+    elif nuc <= 10:  # Li - Ne
+        place = ((rads/r_atom).reshape(-1,1) > alphas[1]).sum(axis=1)
+    else:
+        place = ((rads/r_atom).reshape(-1,1) > alphas[2]).sum(axis=1)
+    angs = leb_l[place]
+    angs = numpy.array([LEBEDEV_ORDER[ang] for ang in angs], dtype=numpy.int32)
+    return angs
+
+
+SGX_ANG_MAPPING = numpy.array(
+    [[ 5,  7, 11, 11, 7],
+     [ 5,  7, 11, 17, 11],
+     [ 7, 11, 17, 23, 27],
+     [ 7, 17, 23, 29, 23],
+     [ 7, 23, 29, 35, 29],
+     [11, 29, 35, 41, 35],
+     [17, 35, 41, 47, 41]]
+)
+
+
+SGX_RAD_GRIDS = []
+for eps in [3.816, 4.020, 4.338, 4.871, 4.871, 4.871, 4.871]:
+    nums = []
+    for row in range(1,8):
+        nums.append(int(eps*15 - 40 + 5*row))
+    SGX_RAD_GRIDS.append(nums)
+SGX_RAD_GRIDS = numpy.array(SGX_RAD_GRIDS)
+
+
+def _get_row(nuc):
+    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+    period = (nuc > tab).sum()
+    return period
 
 # pre for get_k
 # Use default mesh grids and weights
@@ -333,6 +501,16 @@ def get_gridss(mol, level=1, gthrd=1e-10):
     Ktime = (logger.process_clock(), logger.perf_counter())
     grids = gen_grid.Grids(mol)
     grids.level = level
+    grids.becke_scheme = becke_lko
+    grids.prune = sgx_prune
+    grids.atom_grid = {}
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb not in grids.atom_grid:
+            chg = gto.charge(symb)
+            period = _get_row(chg)
+            grids.atom_grid[symb] = (SGX_RAD_GRIDS[level, period],
+                                     LEBEDEV_ORDER[SGX_ANG_MAPPING[level, 3]])
     grids.build()
 
     ngrids = grids.weights.size
@@ -344,9 +522,10 @@ def get_gridss(mol, level=1, gthrd=1e-10):
         mask.append(numpy.any(wao_v0>gthrd, axis=1) |
                     numpy.any(wao_v0<-gthrd, axis=1))
 
-    mask = numpy.hstack(mask)
-    grids.coords = grids.coords[mask]
-    grids.weights = grids.weights[mask]
+    if gthrd > 0:
+        mask = numpy.hstack(mask)
+        grids.coords = grids.coords[mask]
+        grids.weights = grids.weights[mask]
     logger.debug(mol, 'threshold for grids screening %g', gthrd)
     logger.debug(mol, 'number of grids %d', grids.weights.size)
     logger.timer_debug1(mol, "Xg screening", *Ktime)

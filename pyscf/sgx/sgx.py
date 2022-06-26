@@ -197,16 +197,32 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
             self._last_vj = 0
             self._last_vk = 0
 
-        def nuc_grad_method(self):
-            raise NotImplementedError
-
     return SGXHF(mf, with_df, auxbasis)
 
 # A tag to label the derived SCF class
 class _SGXHF(object):
     def method_not_implemented(self, *args, **kwargs):
         raise NotImplementedError
-    nuc_grad_method = Gradients = method_not_implemented
+
+    def nuc_grad_method(self):
+        from pyscf.sgx.grad import rhf#, uhf, rks, uks
+        if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
+            raise NotImplemented
+            if isinstance(self, scf.hf.KohnShamDFT):
+                return uks.Gradients(self)
+            else:
+                return uhf.Gradients(self)
+        elif isinstance(self, scf.rhf.RHF):
+            if isinstance(self, scf.hf.KohnShamDFT):
+                raise NotImplemented
+                return rks.Gradients(self)
+            else:
+                return rhf.Gradients(self)
+        else:
+            raise NotImplementedError
+
+    Gradients = nuc_grad_method
+
     Hessian = method_not_implemented
     NMR = method_not_implemented
     NSR = method_not_implemented
@@ -222,9 +238,13 @@ scf.hf.SCF.COSX = sgx_fit
 mcscf.casci.CASCI.COSX = sgx_fit
 
 
-def _make_opt(mol, pjs=False):
+def _make_opt(mol, pjs=False, grad=False):
     '''Optimizer to genrate 3-center 2-electron integrals'''
-    intor = mol._add_suffix('int1e_grids')
+    if grad:
+        intor_name = 'int1e_grids_ip'
+    else:
+        intor_name = 'int1e_grids'
+    intor = mol._add_suffix(intor_name)
     cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
     # intor 'int1e_ovlp' is used by the prescreen method
     # 'SGXnr_ovlp_prescreen' only. Not used again in other places.

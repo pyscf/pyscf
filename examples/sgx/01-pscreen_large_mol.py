@@ -12,10 +12,11 @@ from pyscf import dft
 from pyscf import sgx
 import time
 
-mol = gto.M(atom='a12.xyz', basis='sto-3g')
+mol = gto.M(atom='a12.xyz', basis='def2-svp')
 
 mf = dft.RKS(mol)
 mf.xc = 'PBE'
+mf = mf.density_fit()
 mf.kernel()
 dm = mf.make_rdm1()
 
@@ -28,10 +29,12 @@ t0 = time.monotonic() - ts
 print('Without P-junction screening:', t0, 's')
 print('Energy:', en0)
 
+mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
+mf.with_df.dfj = True
 # Turn on P-junction screening. dfj must also be true.
 mf.with_df.pjs = True
 # Set larger screening tolerance to demonstrate speedup.
-mf.direct_scf_tol = 1e-10
+mf.direct_scf_tol = 1e-12
 mf.build()
 ts = time.monotonic()
 en1 = mf.energy_tot(dm=dm)
