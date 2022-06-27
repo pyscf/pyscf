@@ -60,6 +60,9 @@ def _toframe(integrator):
     '''Convert an Integrator to a Frame given current saved data.
     Args:
         integrator : md.integrator.Integrator object
+
+    Returns:
+        Frame with all data taken from the integrator.
     '''
     return Frame(ekin=integrator.ekin,
                  epot=integrator.epot,

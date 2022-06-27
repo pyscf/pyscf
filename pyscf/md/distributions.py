@@ -26,7 +26,10 @@ def MaxwellBoltzmannVelocity(mol, T=298.15):
             mol : gto.mol object
 
             T : float
-                Temperature, in Kelvin, that the distribution represents
+                Temperature, in Kelvin, that the distribution represents.
+
+        Returns:
+            Velocities as a ndarray of dimension (natm, 3) in atomic units.
         '''
 
     veloc = []

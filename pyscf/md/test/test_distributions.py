@@ -35,7 +35,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-    def test_water_MB_velocity(self):
+    def test_o2_mbveloc(self):
         TEMPERATURE = 300
         v = []
 
