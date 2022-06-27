@@ -4,7 +4,7 @@
 GF-CCSD via moments of the Green's function.
 """
 
-from pyscf import gto, scf, cc
+from pyscf import gto, scf, cc, lib
 
 # Define system
 mol = gto.Mole()
@@ -37,3 +37,14 @@ assert ccsd.converged_lambda
 #
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
 gfcc.kernel()
+
+# The poles of the Green's function can then be accessed and very
+# cheaply expressed on a real or Matsubara axis to give access to
+# the photoemission spectrum at the EOM-CCSD level of theory.
+e = np.concatenate([gfcc.eh, gfcc.ep], axis=0)
+v = np.concatenate([gfcc.vh[0], gfcc.vp[0]], axis=1)
+u = np.concatenate([gfcc.vh[1], gfcc.vp[1]], axis=1)
+grid = np.linspace(-5.0, 5.0, 100)
+eta = 1e-2
+denom = grid[:, None] - (e + np.sign(e) * eta * 1.0j)[None]
+gf = lib.einsum("pk,qk,wk->wpq", v, u.conj(), 1.0/denom)
