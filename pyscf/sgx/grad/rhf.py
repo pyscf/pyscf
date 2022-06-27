@@ -42,6 +42,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     grids = sgx.grids
     grids.build()
     gthrd = sgx.grids_thrd
+    include_grid_response = True
 
     dms = numpy.asarray(dm)
     dm_shape = dms.shape
@@ -55,12 +56,13 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
                                   sgx._opt, sgx.pjs, tot_grids=grids.weights.size)
 
-    if sgx.debug:
-        raise NotImplemented #batch_nuc = _gen_batch_nuc(mol)
-    else:
-        batch_jk_grad = _gen_jk_direct(mol, 's1', with_j, with_k, direct_scf_tol,
-                                       None, sgx.pjs, tot_grids=grids.weights.size,
-                                       grad=True)
+    if include_grid_response:
+        if sgx.debug:
+            raise NotImplemented #batch_nuc = _gen_batch_nuc(mol)
+        else:
+            batch_jk_grad = _gen_jk_direct(mol, 's1', with_j, with_k, direct_scf_tol,
+                                           None, sgx.pjs, tot_grids=grids.weights.size,
+                                           grad=True)
 
     de = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
     sn = numpy.zeros((nao,nao))
@@ -89,8 +91,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     #for i0, i1 in lib.prange(0, ngrids, blksize):
     for ia, (coord_ia, weight_ia, weight1_ia) in enumerate(grids_response_sgx(grids)):
         ngrids = weight_ia.size
-        dvk_tmp1 = numpy.zeros_like(dvk)
-        dvk_tmp2 = numpy.zeros_like(dvk)
+        dvk_tmp = numpy.zeros_like(dvk)
         for i0, i1 in lib.prange(0, ngrids, blksize):
             weights1 = weight1_ia[...,i0:i1]
             weights = weight_ia[i0:i1,None]
@@ -109,7 +110,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             for i in range(nset):
                 mask |= numpy.any(fg[i]>gthrd, axis=1)
                 mask |= numpy.any(fg[i]<-gthrd, axis=1)
-            if False:#not numpy.all(mask):
+            if not numpy.all(mask):
                 ao = ao[mask]
                 dao = dao[:,mask]
                 fg = fg[:,mask]
@@ -135,10 +136,8 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
                 tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
                 if with_j: rhog = rhog.copy()
                 jpart, gv = batch_jk(mol, coords, rhog, fg.copy(), weights)
-                tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
-                tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
-                if with_j: rhog = rhog.copy()
-                _, dgv = batch_jk_grad(mol, coords, rhog, fg.copy(), weights)
+                if include_grid_response:
+                    _, dgv = batch_jk_grad(mol, coords, rhog, fg.copy(), weights)
                 tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
             if with_j:
@@ -147,26 +146,24 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
                 for i in range(nset):
                     vk[i] += lib.einsum('gu,gv->uv', ao, gv[i])
                     # THIS IS THE ORBITAL RESPONE TERM FOR SGX
-                    dvk_tmp1[i] -= 1.0 * lib.einsum('xgu,gv->xuv', dao, gv[i]) # TODO factor of 2?
-                    #dvk_tmp2[i] -= 1.0 * lib.einsum('xgu,gv->xuv', dgv[i], ao)
-                    # TODO numerical stability? indexing?
-                    xed = lib.einsum(
-                        'gu,gu->g',
-                        fg[i]/(weights + 1e-200),
-                        gv[i]/(weights + 1e-200),
-                    )
-                    #de[:,:] += numpy.dot(weights1, xed).T
+                    if not include_grid_response:
+                        dvk_tmp[i] -= 1.0 * lib.einsum('xgu,gv->xuv', dao, gv[i]) # TODO factor of 2?
+                    else:
+                        dvk_tmp[i] -= 0.5 * lib.einsum('xgu,gv->xuv', dao, gv[i])
+                        dvk_tmp[i] -= 0.5 * lib.einsum('xgu,gv->xuv', dgv[i], ao)
+                        # TODO numerical stability? indexing?
+                        xed = lib.einsum(
+                            'gu,gu->g',
+                            fg[i]/(weights + 1e-200),
+                            gv[i]/(weights + 1e-200),
+                        )
+                        de[:,:] += numpy.dot(weights1, xed).T
 
             jpart = gv = None
-        dvk += dvk_tmp1 + dvk_tmp2
-        for i in range(nset):
-            #de[ia] -= (dvk_tmp1[i] * dms[i]).sum(axis=(1,2))
-            #de[ia] -= numpy.einsum('xuv,uv->x', dvk_tmp1[i], dms[i])
-            #de[ia] -= (0.5 * (dvk_tmp2[i] + dvk_tmp2[i].transpose(0,2,1)) * dms[i]).sum()
-            pass
-
-    for ia in range(mol.natm):
-        print("DE i", de[ia])
+        dvk += dvk_tmp
+        if include_grid_response:
+            for i in range(nset):
+                de[ia] -= 4 * (dvk_tmp[i] * dms[i]).sum(axis=(1,2))
 
     t2 = logger.timer_debug1(mol, "sgX J/K builder", *t1)
     tdot = t2[0] - t1[0] - tnuc[0] , t2[1] - t1[1] - tnuc[1]
@@ -177,8 +174,6 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     #for i in range(nset):
     #    lib.hermi_triu(vj[i], inplace=True)
     vj, vk = dvj, dvk
-    #if with_k and hermi == 1:
-    #    vk = (vk + vk.transpose(0,1,3,2))*.5
     logger.timer(mol, "vj and vk", *t0)
     dm_shape = (nset, 3) + dms.shape[1:]
     vk = vk.reshape(dm_shape)
