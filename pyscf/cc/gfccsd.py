@@ -17,9 +17,10 @@
 #
 
 """
-GF-CCSD solver.
+GF-CCSD solver via moment constraints.
+
+See reference: Backhouse, Booth, arXiv:2206.13198 (2022).
 """
-# TODO add reference
 
 from collections import defaultdict
 

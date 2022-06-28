@@ -1,7 +1,9 @@
 # Author: Oliver Backhouse <olbackhouse@gmail.com>
 
 """
-GF-CCSD with different hermiticity options.
+Moment constrained GF-CCSD with different hermiticity options.
+
+Ref: Backhouse, Booth, arXiv:2206.13198 (2022).
 """
 
 from pyscf import gto, scf, cc
@@ -28,30 +30,36 @@ assert ccsd.converged
 ccsd.solve_lambda()
 assert ccsd.converged_lambda
 
-# Run GF-CCSD
+# Run moment-constrained GF-CCSD
 #
-# We can force hermiticity in the moments, and additionally
-# force the solver to be hermitian (positively defined).
-#
-gfcc1 = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
+# Default mode: GF Moments are non-hermitian, and 
+# full Hamiltonian/Green's function is non-hermitian
+gfcc1 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
 gfcc1.hermi_moments = False
 gfcc1.hermi_solver = False
 gfcc1.kernel()
 ip1 = gfcc1.ipccsd(nroots=1)[0]
 
-gfcc2 = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
+# We can force the CCSD GF moments to be hermitian
+gfcc2 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
 gfcc2.hermi_moments = True
 gfcc2.hermi_solver = False
 gfcc2.kernel()
 ip2 = gfcc2.ipccsd(nroots=1)[0]
 
-gfcc3 = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
+# We can constrain the GF moments and full GF / 
+# hamiltonian to be hermitian
+gfcc3 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
 gfcc3.hermi_moments = True
 gfcc3.hermi_solver = True
 gfcc3.kernel()
 ip3 = gfcc3.ipccsd(nroots=1)[0]
 
+# Compare to EOM-CCSD-IP first ionization potential
+eip = ccsd.ipccsd(nroots=1)[0]
+
 print("Ionisation potentials:")
 print("non-hermitian solver, non-hermitian moments", ip1)
 print("non-hermitian solver, hermitian moments    ", ip2)
 print("hermitian solver,     hermitian moments    ", ip3)
+print("IP-EOM-CCSD solver                         ", eip)

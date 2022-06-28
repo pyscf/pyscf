@@ -1,7 +1,9 @@
 # Author: Oliver Backhouse <olbackhouse@gmail.com>
 
 """
-GF-CCSD with reuse of moments or custom moment input.
+Moment-constrained GF-CCSD with reuse of moments or custom moment input.
+
+Ref: Backhouse, Booth, arXiv:2206.13198 (2022).
 """
 
 from pyscf import gto, scf, cc
@@ -29,12 +31,17 @@ assert ccsd.converged
 ccsd.solve_lambda()
 assert ccsd.converged_lambda
 
-# Run a GF-CCSD calculation
+# Run a moment-constrained GF-CCSD calculation
+# Note: 5 cycles of moment constraint in the EA
+# sector compared to 3 in the IP sector.
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel()
 ip = gfcc.ipccsd(nroots=1)[0]
 
-# We can also build the moments ahead of time
+# We can also build the moments ahead of time, and
+# pass them in as the moment constraints, with the
+# subsequent GF construction agnostic to the 
+# provenance of these moments.
 th = gfcc.build_hole_moments()
 tp = gfcc.build_part_moments()
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
@@ -44,7 +51,7 @@ assert np.allclose(ip, gfcc.ipccsd(nroots=1)[0])
 # Or use custom moments, which must enumerate at least the moments
 # of order 0 through 2n+1 where n is the `niter` parameter in each
 # sector (since these are not physical this example will typically
-# spit out a bunch of warnings!)
+# spit out a bunch of warnings and complex pole positions!)
 th = np.random.random((3*2+2, ccsd.nmo, ccsd.nmo))
 tp = np.random.random((5*2+2, ccsd.nmo, ccsd.nmo))
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
