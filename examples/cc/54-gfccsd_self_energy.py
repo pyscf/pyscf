@@ -1,9 +1,10 @@
 # Author: Oliver Backhouse <olbackhouse@gmail.com>
 
 """
-Construct the self-energy via an inverse Dyson equation
-for a given Green's function computed at the CCSD level
-via GFCCSD.
+Directly construct a pole representation of the 
+self-energy via an implicit Dyson equation
+for a Green's function computed at the CCSD level
+via moment-constrained GFCCSD.
 
 Ref: Backhouse, Booth, arXiv:2206.13198 (2022).
 """
@@ -42,7 +43,7 @@ ip = gfcc.ipgfccsd(nroots=1)[0]
 ea = gfcc.eagfccsd(nroots=1)[0]
 
 # Transform the Green's function poles from the GFCCSD calculation
-# to poles of the self-energy. With the approximate moment-conserving
+# to poles of the self-energy. With the moment-conserving
 # GFCCSD solver, this can be done statically without the need to
 # numerically solve the Dyson equation. This procedure is described
 # in arXiv:2206.13198 (2022).

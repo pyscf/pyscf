@@ -1,7 +1,8 @@
 # Author: Oliver Backhouse <olbackhouse@gmail.com>
 
 """
-Moment-constrained GF-CCSD with reuse of moments or custom moment input.
+Moment-constrained GF-CCSD with reuse of moments or custom moment input
+from other level of theory.
 
 Ref: Backhouse, Booth, arXiv:2206.13198 (2022).
 """
@@ -13,7 +14,7 @@ import numpy as np
 mol = gto.Mole()
 mol.atom = "Li 0 0 0; H 0 0 1.64"
 mol.basis = "cc-pvdz"
-mol.verbose = 4
+mol.verbose = 5
 mol.build()
 
 # Run mean-field
@@ -54,7 +55,8 @@ assert np.allclose(ip, gfcc.ipgfccsd(nroots=1)[0])
 # moments must be in an orthogonal basis.
 
 # For example, moments of the Hartree--Fock Green's function (powers
-# of the Fock matrix):
+# of the Fock matrix), which should give exactly the MO energies
+# (the other states will be linearly dependent):
 f = np.diag(mf.mo_energy)
 t = np.array([np.linalg.matrix_power(f, n) for n in range(5*2+2)])
 th, tp = t.copy(), t.copy()
@@ -63,7 +65,8 @@ tp[:, :ccsd.nocc, :ccsd.nocc] = 0.0
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel(hole_moments=th, part_moments=tp)
 
-# Or, moments from another post-HF Green's function method, i.e. AGF2:
+# Or, moments from another post-HF Green's function method to
+# approximate its spectrum, i.e. AGF2:
 from pyscf.agf2 import AGF2
 agf2 = AGF2(mf)
 agf2.kernel()
