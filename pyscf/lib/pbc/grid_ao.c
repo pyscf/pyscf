@@ -217,7 +217,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
                 } else {
-                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
+                        atm_imag_max[i] = MIN(atm_imag_max[i], nimgs);
                 }
         }
 
@@ -251,7 +251,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                         aobufk[i] = 0;
                 }
                 for (iL0 = 0; iL0 < bas_nimgs; iL0+=IMGBLK) {
-                        iLcount = MIN(IMGBLK, nimgs - iL0);
+                        iLcount = MIN(IMGBLK, bas_nimgs - iL0);
 
                         count = 0;
                         for (iL = iL0; iL < iL0+iLcount; iL++) {
@@ -337,7 +337,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                 if (atm_imag_max[i] == ALL_IMAGES) {
                         atm_imag_max[i] = nimgs;
                 } else {
-                        atm_imag_max[i] = MIN(atm_imag_max, nimgs);
+                        atm_imag_max[i] = MIN(atm_imag_max[i], nimgs);
                 }
         }
 
@@ -370,7 +370,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
 
                 NPdset0(aobufk, ((size_t)nkpts2) * dimc);
                 for (iL0 = 0; iL0 < bas_nimgs; iL0+=IMGBLK) {
-                        iLcount = MIN(IMGBLK, nimgs - iL0);
+                        iLcount = MIN(IMGBLK, bas_nimgs - iL0);
 
                         count = 0;
                         for (iL = iL0; iL < iL0+iLcount; iL++) {

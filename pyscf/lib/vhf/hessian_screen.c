@@ -44,7 +44,7 @@ int int2e_spsp1spsp2_sph();
 int CVHFgrad_jk_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -71,7 +71,7 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         nbas = opt->nbas;
@@ -141,7 +141,7 @@ void CVHFgrad_jk_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                                int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         nbas = opt->nbas;
@@ -179,7 +179,7 @@ void CVHFgrad_jk_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 int CVHFip1ip2_prescreen(int *shls, CVHFOpt *opt,
                          int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -223,7 +223,7 @@ void CVHFip1ip2_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 int CVHFipip1_prescreen(int *shls, CVHFOpt *opt,
                         int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -251,7 +251,7 @@ void CVHFipip1_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                           int *ao_loc, int *atm, int natm,
                           int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         nbas = opt->nbas;
@@ -345,7 +345,7 @@ void CVHFipip1_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 int CVHFipvip1_prescreen(int *shls, CVHFOpt *opt,
                          int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];

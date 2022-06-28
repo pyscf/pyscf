@@ -101,7 +101,7 @@ void CVHFrs1_ji_s1kl(double complex *eri,
                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
                      double *dm_cond, int nbas, double dm_atleast)
 {
-        if (dm_cond && DMCOND(1,0) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(1,0) < dm_atleast) { return; }
         LOCIJKL;
         int INC1 = 1;
         char TRANST = 'T';
@@ -129,7 +129,7 @@ void CVHFrs1_lk_s1ij(double complex *eri,
                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
                      double *dm_cond, int nbas, double dm_atleast)
 {
-        if (dm_cond && DMCOND(3,2) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(3,2) < dm_atleast) { return; }
         LOCIJKL;
         int INC1 = 1;
         char TRANSN = 'N';
@@ -157,7 +157,7 @@ void CVHFrs1_jk_s1il(double complex *eri,
                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
                      double *dm_cond, int nbas, double dm_atleast)
 {
-        if (dm_cond && DMCOND(1,2) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(1,2) < dm_atleast) { return; }
         LOCIJKL;
         int INC1 = 1;
         char TRANSN = 'N';
@@ -186,7 +186,7 @@ void CVHFrs1_li_s1kj(double complex *eri,
                      int nao, int ncomp, int *shls, int *ao_loc, int *tao,
                      double *dm_cond, int nbas, double dm_atleast)
 {
-        if (dm_cond && DMCOND(3,0) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(3,0) < dm_atleast) { return; }
         LOCIJKL;
         int INC1 = 1;
         char TRANST = 'T';
@@ -219,7 +219,7 @@ void CVHFrs2ij_ji_s1kl(double complex *eri,
                                 dm_cond, nbas, dm_atleast);
                 return;
         }
-        if (dm_cond && DMCOND(1,0)+DMCOND(0,1) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(1,0)+DMCOND(0,1) < dm_atleast) { return; }
         LOCIJKL;
         int INC1 = 1;
         char TRANST = 'T';
@@ -263,7 +263,7 @@ void CVHFrs2ij_jk_s1il(double complex *eri,
         if (shls[0] == shls[1]) {
                 return;
         }
-        if (dm_cond && DMCOND(0,2) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(0,2) < dm_atleast) { return; }
 
         LOCIJKL;
         int INC1 = 1;
@@ -299,7 +299,7 @@ void CVHFrs2ij_li_s1kj(double complex *eri,
         if (shls[0] == shls[1]) {
                 return;
         }
-        if (dm_cond && DMCOND(3,1) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(3,1) < dm_atleast) { return; }
 
         LOCIJKL;
         int INC1 = 1;
@@ -344,7 +344,7 @@ void CVHFrs2kl_lk_s1ij(double complex *eri,
                                 dm_cond, nbas, dm_atleast);
                 return;
         }
-        if (dm_cond && DMCOND(2,3)+DMCOND(3,2) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(2,3)+DMCOND(3,2) < dm_atleast) { return; }
 
         LOCIJKL;
         int INC1 = 1;
@@ -380,7 +380,7 @@ void CVHFrs2kl_jk_s1il(double complex *eri,
         if (shls[2] == shls[3]) {
                 return;
         }
-        if (dm_cond && DMCOND(1,3) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(1,3) < dm_atleast) { return; }
 
         LOCIJKL;
         int INC1 = 1;
@@ -416,7 +416,7 @@ void CVHFrs2kl_li_s1kj(double complex *eri,
         if (shls[2] == shls[3]) {
                 return;
         }
-        if (dm_cond && DMCOND(2,0) < dm_atleast) { return; }
+        if (dm_cond != NULL && DMCOND(2,0) < dm_atleast) { return; }
 
         LOCIJKL;
         int INC1 = 1;
@@ -493,7 +493,7 @@ void CVHFrs4_jk_s1il(double complex *eri,
         int l, ic;
 
         // tjtikl
-        if (!dm_cond || DMCOND(0,2) > dm_atleast) {
+        if (dm_cond == NULL || DMCOND(0,2) > dm_atleast) {
                 CVHFtimerev_iT(sdm, dm, tao, istart, iend, kstart, kend, nao);
                 for (ic = 0; ic < ncomp; ic++) {
                         NPzset0(svk, djl);
@@ -511,7 +511,7 @@ void CVHFrs4_jk_s1il(double complex *eri,
         }
 
         // tjtitltk
-        if (!dm_cond || DMCOND(0,3) > dm_atleast) {
+        if (dm_cond == NULL || DMCOND(0,3) > dm_atleast) {
                 CVHFtimerev_blockT(sdm, dm, tao, istart, iend, lstart, lend, nao);
                 for (ic = 0; ic < ncomp; ic++) {
                         NPzset0(svk, djk);
@@ -559,7 +559,7 @@ void CVHFrs4_li_s1kj(double complex *eri,
         int l, ic;
 
         // tjtikl
-        if (!dm_cond || DMCOND(3,1) > dm_atleast) {
+        if (dm_cond == NULL || DMCOND(3,1) > dm_atleast) {
                 CVHFtimerev_j(sdm, dm, tao, lstart, lend, jstart, jend, nao);
                 for (ic = 0; ic < ncomp; ic++) {
                         NPzset0(svk, dik);
@@ -577,7 +577,7 @@ void CVHFrs4_li_s1kj(double complex *eri,
         }
 
         // tjtitltk
-        if (!dm_cond || DMCOND(2,1) > dm_atleast) {
+        if (dm_cond == NULL || DMCOND(2,1) > dm_atleast) {
                 CVHFtimerev_block(sdm, dm, tao, kstart, kend, jstart, jend,nao);
                 for (ic = 0; ic < ncomp; ic++) {
                         NPzset0(svk, dil);
