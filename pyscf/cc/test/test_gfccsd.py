@@ -66,8 +66,8 @@ class KnownValues(unittest.TestCase):
     def _test_niter(self, niter):
         gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
 
@@ -98,8 +98,8 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(self.mycc, t1=None, t2=None, l1=None, l2=None):
             gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
             eh, vh, ep, vp = gfcc.kernel(t1=t1, t2=t2, l1=l1, l2=l2, imds=imds)
-            self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-            self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+            self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+            self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
             self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
             self._test_moments(ep, vp, 2*niter+1, self.part_moments)
 
@@ -109,8 +109,8 @@ class KnownValues(unittest.TestCase):
         hole_moments = self.hole_moments[:2*niter+2]
         part_moments = self.part_moments[:2*niter+2]
         eh, vh, ep, vp = gfcc.kernel(hole_moments=hole_moments, part_moments=part_moments)
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
 
@@ -121,8 +121,8 @@ class KnownValues(unittest.TestCase):
         hole_moments = self.hole_moments[:2*niter+2]
         part_moments = self.part_moments[:2*niter+2]
         eh, vh, ep, vp = gfcc.kernel(hole_moments=hole_moments, part_moments=part_moments)
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[(niter, True)])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[(niter, True)])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[(niter, True)])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[(niter, True)])
         self._test_moments(eh, vh, 2*niter+1, 0.5*(self.hole_moments+self.hole_moments.swapaxes(1,2).conj()))
         self._test_moments(ep, vp, 2*niter+1, 0.5*(self.part_moments+self.part_moments.swapaxes(1,2).conj()))
 
@@ -134,8 +134,8 @@ class KnownValues(unittest.TestCase):
         hole_moments = self.hole_moments[:2*niter+2]
         part_moments = self.part_moments[:2*niter+2]
         eh, vh, ep, vp = gfcc.kernel(hole_moments=hole_moments, part_moments=part_moments)
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[(niter, True, True)])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[(niter, True, True)])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[(niter, True, True)])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[(niter, True, True)])
         self._test_moments(eh, vh, 2*niter+1, 0.5*(self.hole_moments+self.hole_moments.swapaxes(1,2).conj()))
         self._test_moments(ep, vp, 2*niter+1, 0.5*(self.part_moments+self.part_moments.swapaxes(1,2).conj()))
 
@@ -144,8 +144,8 @@ class KnownValues(unittest.TestCase):
         gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
         gfcc.reset()
         eh, vh, ep, vp = gfcc.kernel()
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
         dma = gfcc.make_rdm1()
@@ -159,15 +159,15 @@ class KnownValues(unittest.TestCase):
         niter = 1
         gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
         gfcc.dump_chk(chkfile="tmp.chk")
         gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
         gfcc.update("tmp.chk")
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
         os.remove("tmp.chk")
@@ -186,8 +186,8 @@ class KnownValues(unittest.TestCase):
         niter = 3
         gfcc = cc.gfccsd.GFCCSD(self.mycc, niter=(niter, niter))
         eh, vh, ep, vp = gfcc.kernel()
-        self.assertAlmostEqual(gfcc.ipccsd(nroots=1)[0], self.ips[niter])
-        self.assertAlmostEqual(gfcc.eaccsd(nroots=1)[0], self.eas[niter])
+        self.assertAlmostEqual(gfcc.ipgfccsd(nroots=1)[0], self.ips[niter])
+        self.assertAlmostEqual(gfcc.eagfccsd(nroots=1)[0], self.eas[niter])
         self._test_moments(eh, vh, 2*niter+1, self.hole_moments)
         self._test_moments(ep, vp, 2*niter+1, self.part_moments)
 

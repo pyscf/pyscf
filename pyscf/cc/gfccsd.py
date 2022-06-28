@@ -90,12 +90,12 @@ def kernel(
 
     log.info("Solving for the hole moments.")
     blocks = solver(gfccsd, hole_moments)
-    orth = mat_sqrt(hole_moments[0])
+    orth = mat_sqrt(hole_moments[0], hermi=gfccsd.hermi_solver)
     eh, vh = eig(gfccsd, *blocks, orth=orth)
 
     log.info("Solving for the particle moment.")
     blocks = solver(gfccsd, part_moments)
-    orth = mat_sqrt(part_moments[0])
+    orth = mat_sqrt(part_moments[0], hermi=gfccsd.hermi_solver)
     ep, vp = eig(gfccsd, *blocks, orth=orth)
 
     # Check the moments
@@ -154,8 +154,8 @@ def mat_isqrt(m, tol=1e-16, hermi=False):
     else:
         w, v = np.linalg.eig(m)
         mask = np.abs(w) >= tol
-        w, v = w[mask], v[:, mask]
         vinv = np.linalg.inv(v)[mask]
+        w, v = w[mask], v[:, mask]
         out = np.dot(v * w[None]**(-0.5+0j), vinv)
 
     return out
@@ -581,6 +581,9 @@ class GFCCSD(lib.StreamObject):
         self.verbose = mycc.verbose
         self.stdout = mycc.stdout
 
+        if isinstance(mycc, cc.uccsd.UCCSD):
+            raise NotImplementedError("GFCCSD for unrestricted CCSD")
+
         if isinstance(niter, int):
             self.niter = (niter, niter)
         else:
@@ -612,8 +615,8 @@ class GFCCSD(lib.StreamObject):
         log.info("chkfile = %s", self.chkfile)
 
     def _finalize(self):
-        self.ipccsd()
-        self.eaccsd()
+        self.ipgfccsd()
+        self.eagfccsd()
         return self
 
     def reset(self, mol=None):
@@ -788,7 +791,7 @@ class GFCCSD(lib.StreamObject):
 
     update = update_from_chk = update_from_chk_
 
-    def ipccsd(self, nroots=5):
+    def ipgfccsd(self, nroots=5):
         """Print and return ionisation potentials.
         """
 
@@ -813,7 +816,7 @@ class GFCCSD(lib.StreamObject):
         else:
             return e_ip.real, v_ip, u_ip
 
-    def eaccsd(self, nroots=5):
+    def eagfccsd(self, nroots=5):
         """Print and return electron affinities.
         """
 
@@ -870,10 +873,10 @@ if __name__ == "__main__":
     gfcc.kernel()
 
     ip1, vip1 = ccsd.ipccsd(nroots=8)
-    ip2, vip2, uip2 = gfcc.ipccsd(nroots=8)
+    ip2, vip2, uip2 = gfcc.ipgfccsd(nroots=8)
 
     ea1, vea1 = ccsd.eaccsd(nroots=8)
-    ea2, vea2, uea2 = gfcc.eaccsd(nroots=8)
+    ea2, vea2, uea2 = gfcc.eagfccsd(nroots=8)
 
     print("    %12s %12s %12s" % ("EOM", "GF", "Error"))
     print("IP1 %12.8f %12.8f %12.8f" % (ip1[0],ip2[0],np.abs(ip1[0]-ip2[0])))
