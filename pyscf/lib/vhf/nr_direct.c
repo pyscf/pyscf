@@ -27,8 +27,6 @@
 #include "np_helper/np_helper.h"
 #include "gto/gto.h"
 
-#define AO_BLOCK_SIZE   32
-
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
         const int *bas = envs->bas; \
@@ -55,7 +53,8 @@
                    int i0, int i1, int j0, int j1, \
                    int k0, int k1, int l0, int l1); \
         int (*fprescreen)(); \
-        if (vhfopt) { \
+        int notempty; \
+        if (vhfopt != NULL) { \
                 fprescreen = vhfopt->fprescreen; \
         } else { \
                 fprescreen = CVHFnoscreen; \
@@ -67,9 +66,15 @@
         shls[1] = jsh; \
         shls[2] = ksh; \
         shls[3] = lsh; \
-        if ((*fprescreen)(shls, vhfopt, atm, bas, env) \
-            && (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, \
-                        cintopt, cache)) { \
+        if (vhfopt != NULL) { \
+                notempty = (*fprescreen)(shls, vhfopt, atm, bas, env) && \
+                        (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, \
+                                 cintopt, cache); \
+        } else { \
+                notempty = (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, \
+                                    cintopt, cache); \
+        } \
+        if (notempty) { \
                 i0 = ao_loc[ish] - ioff; \
                 j0 = ao_loc[jsh] - joff; \
                 k0 = ao_loc[ksh] - koff; \
@@ -178,6 +183,22 @@ void CVHFdot_nrs8(int (*intor)(), JKOperator **jkop, JKArray **vjk,
                   int *ishls, int *jshls, int *kshls, int *lshls,
                   CVHFOpt *vhfopt, IntorEnvs *envs)
 {
+        if (vhfopt != NULL) {
+                if (vhfopt->fprescreen == &CVHFnrs8_prescreen) {
+                        if (!CVHFnrs8_prescreen_block(vhfopt, ishls, jshls, kshls, lshls)) {
+                                return;
+                        }
+                } else if (vhfopt->fprescreen == &CVHFnrs8_vj_prescreen) {
+                        if (!CVHFnrs8_vj_prescreen_block(vhfopt, ishls, jshls, kshls, lshls)) {
+                                return;
+                        }
+                } else if (vhfopt->fprescreen == &CVHFnrs8_vk_prescreen) {
+                        if (!CVHFnrs8_vk_prescreen_block(vhfopt, ishls, jshls, kshls, lshls)) {
+                                return;
+                        }
+                }
+        }
+
         if (ishls[0] > kshls[0]) {
                 return CVHFdot_nrs4(intor, jkop, vjk, dms, buf, cache, n_dm,
                                     ishls, jshls, kshls, lshls, vhfopt, envs);

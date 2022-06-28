@@ -96,7 +96,7 @@ int _max_cache_size_sgx(int (*intor)(), int *shls_slice, int ncenter,
 int SGXnr_pj_prescreen(int *shls, CVHFOpt *opt,
                        int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1;
         }
         int i = shls[0];
@@ -198,7 +198,7 @@ void SGXnr_direct_drv(int (*intor)(), void (*fdot)(), SGXJKOperator **jkop,
         }
 
         int (*fprescreen)();
-        if (vhfopt) {
+        if (vhfopt != NULL) {
                 fprescreen = vhfopt->fprescreen;
         } else {
                 fprescreen = CVHFnoscreen;
@@ -262,7 +262,7 @@ void SGXsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                          int *ao_loc, int *atm, int natm,
                          int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         nbas = opt->nbas;
@@ -324,7 +324,7 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                             int ngrids)
 {
         nbas = opt->nbas;
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * nbas*ngrids);
@@ -353,7 +353,7 @@ void SGXsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 int SGXnr_ovlp_prescreen(int *shls, CVHFOpt *opt,
                          int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1;
         }
         int i = shls[0];

@@ -19,6 +19,8 @@
 #include "cint.h"
 #include "optimizer.h"
 
+#define AO_BLOCK_SIZE   32
+
 #define NOVALUE 0xffffffff
 
 typedef struct {

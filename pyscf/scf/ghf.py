@@ -113,18 +113,19 @@ def get_jk(mol, dm, hermi=0,
     dmaa = dms[:,:nao,:nao]
     dmab = dms[:,:nao,nao:]
     dmbb = dms[:,nao:,nao:]
-    dms = numpy.vstack((dmaa, dmbb, dmab))
-    if dm.dtype == numpy.complex128:
-        dms = numpy.vstack((dms.real, dms.imag))
+    if with_k:
+        if hermi:
+            dms = numpy.stack((dmaa, dmbb, dmab))
+        else:
+            dmba = dms[:,nao:,:nao]
+            dms = numpy.stack((dmaa, dmbb, dmab, dmba))
+        # Note the off-diagonal block breaks the hermitian
+        _hermi = 0
+    else:
+        dms = numpy.stack((dmaa, dmbb))
+        _hermi = 1
 
-    hermi = 0  # The off-diagonal blocks are not hermitian
-    j1, k1 = jkbuild(mol, dms, hermi, with_j, with_k, omega)
-    if with_j: j1 = j1.reshape(-1,n_dm,nao,nao)
-    if with_k: k1 = k1.reshape(-1,n_dm,nao,nao)
-
-    if dm.dtype == numpy.complex128:
-        if with_j: j1 = j1[:3] + j1[3:] * 1j
-        if with_k: k1 = k1[:3] + k1[3:] * 1j
+    j1, k1 = jkbuild(mol, dms, _hermi, with_j, with_k, omega)
 
     vj = vk = None
     if with_j:
@@ -137,7 +138,10 @@ def get_jk(mol, dm, hermi=0,
         vk[:,:nao,:nao] = k1[0]
         vk[:,nao:,nao:] = k1[1]
         vk[:,:nao,nao:] = k1[2]
-        vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        if hermi:
+            vk[:,nao:,:nao] = k1[2].conj().transpose(0,2,1)
+        else:
+            vk[:,nao:,:nao] = k1[3]
         vk = vk.reshape(dm.shape)
 
     return vj, vk

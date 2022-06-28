@@ -399,6 +399,21 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(myci.mol is mol1)
         self.assertTrue(myci._scf.mol is mol1)
 
+    def test_cisdvec_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        myci = scf.RHF(mol).apply(ci.CISD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0], 4
+        nmo = nocc + nvir
+        myci.nocc = nocc
+        myci.nmo = nmo
+        vec = numpy.zeros(myci.vector_size())
+        vec_orig = vec.copy()
+        c0, c1, c2 = myci.cisdvec_to_amplitudes(vec)
+        c1[:] = 1
+        c2[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
 
 def t1_strs_ref(norb, nelec):
     nocc = nelec

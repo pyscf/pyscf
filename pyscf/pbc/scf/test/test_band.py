@@ -37,7 +37,7 @@ def tearDownModule():
     global cell
     del cell
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_band(self):
         mf = scf.RHF(cell).run()
         kpts = cell.make_kpts([5,1,1])
@@ -71,4 +71,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for kpt-bands")
     unittest.main()
-

@@ -45,6 +45,7 @@ class VHFOpt(object):
             self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         self._dmcondname = dmcondname
+        self._qcondname = qcondname
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
@@ -632,14 +633,16 @@ def rdirect_bindm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        dms = dms[numpy.newaxis,:,:]
+        dms = dms[numpy.newaxis]
     n_dm = len(dms)
     nao = dms[0].shape[0]
     dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
         jkdescript = (jkdescript,)
     njk = len(jkdescript)
-    assert(njk == n_dm)
+    # for SSLL integrals, njk can be less than n_dm, extra dms are required by
+    # set_dm function to get dm_cond
+    assert njk == n_dm or njk*4 == n_dm*3
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -664,8 +667,8 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     unpackas = _INTUNPACKMAP_R[aosym]
     descr_sym = [x.split('->') for x in jkdescript]
-    fjk = (ctypes.c_void_p*(n_dm))()
-    dm1 = (ctypes.c_void_p*(n_dm))()
+    fjk = (ctypes.c_void_p*(njk))()
+    dm1 = (ctypes.c_void_p*(njk))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
@@ -674,7 +677,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),
-         ctypes.c_int(n_dm), ctypes.c_int(ncomp),
+         ctypes.c_int(njk), ctypes.c_int(ncomp),
          (ctypes.c_int*8)(*shls_slice),
          ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,

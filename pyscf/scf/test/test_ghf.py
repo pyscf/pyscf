@@ -317,10 +317,12 @@ H     0    0.757    0.587'''
         self.assertEqual(vhf3.ndim, 3)
         self.assertAlmostEqual(abs(vhf3[0]-vhf2).max(), 0, 12)
 
+        vhf4 = mf1.get_veff(pmol, dm, hermi=1)
+        self.assertEqual(vhf4.ndim, 4)
+        self.assertAlmostEqual(lib.fp(vhf4), 17.264430281812047-5.533144783448073j, 12)
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
-        self.assertAlmostEqual(lib.fp(vhf4),
-                               17.264430281812047-5.533144783448073j, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), 4.95789766380037-5.2816995816903045j, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
 
         vj = mf1.get_j(pmol, dm[0,0], hermi=0)

@@ -18,6 +18,7 @@ import numpy
 from pyscf import gto
 from pyscf import lib
 from pyscf import dft
+from pyscf import scf
 
 def setUpModule():
     global mol, method, mol1
@@ -114,6 +115,81 @@ class KnownValues(unittest.TestCase):
         mf = dft.RKS(gto.M(atom='H', spin=1, symmetry=1)).run()
         self.assertTrue(isinstance(mf, dft.rks_symm.ROKS))
         self.assertAlmostEqual(mf.e_tot, -0.43567023283650547)
+
+    def test_convert(self):
+        rhf = scf.RHF(mol)
+        uhf = scf.UHF(mol)
+        ghf = scf.GHF(mol)
+        rks = dft.RKS(mol)
+        uks = dft.UKS(mol)
+        gks = dft.GKS(mol)
+        dhf = scf.DHF(mol)
+        dks = dft.DKS(mol)
+        udhf = scf.dhf.UDHF(mol)
+        udks = dft.dks.UDKS(mol)
+
+        self.assertTrue(isinstance(rhf.to_rhf(), scf.rhf.RHF))
+        self.assertTrue(isinstance(rhf.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(rhf.to_ghf(), scf.ghf.GHF))
+        self.assertTrue(isinstance(rhf.to_rks(), dft.rks.RKS))
+        self.assertTrue(isinstance(rhf.to_uks(), dft.uks.UKS))
+        self.assertTrue(isinstance(rhf.to_gks(), dft.gks.GKS))
+
+        self.assertTrue(isinstance(rks.to_rhf(), scf.rhf.RHF))
+        self.assertTrue(isinstance(rks.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(rks.to_ghf(), scf.ghf.GHF))
+        self.assertTrue(isinstance(rks.to_rks('pbe'), dft.rks.RKS))
+        self.assertTrue(isinstance(rks.to_uks('pbe'), dft.uks.UKS))
+        self.assertTrue(isinstance(rks.to_gks('pbe'), dft.gks.GKS))
+
+        self.assertTrue(isinstance(uhf.to_rhf(), scf.rhf.RHF))
+        self.assertTrue(isinstance(uhf.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(uhf.to_ghf(), scf.ghf.GHF))
+        self.assertTrue(isinstance(uhf.to_rks(), dft.rks.RKS))
+        self.assertTrue(isinstance(uhf.to_uks(), dft.uks.UKS))
+        self.assertTrue(isinstance(uhf.to_gks(), dft.gks.GKS))
+
+        self.assertTrue(isinstance(rks.to_rhf(), scf.rhf.RHF))
+        self.assertTrue(isinstance(rks.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(rks.to_ghf(), scf.ghf.GHF))
+        self.assertTrue(isinstance(uks.to_rks('pbe'), dft.rks.RKS))
+        self.assertTrue(isinstance(uks.to_uks('pbe'), dft.uks.UKS))
+        self.assertTrue(isinstance(uks.to_gks('pbe'), dft.gks.GKS))
+
+        #self.assertTrue(isinstance(ghf.to_rhf(), scf.rhf.RHF))
+        #self.assertTrue(isinstance(ghf.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(ghf.to_ghf(), scf.ghf.GHF))
+        #self.assertTrue(isinstance(ghf.to_rks(), dft.rks.RKS))
+        #self.assertTrue(isinstance(ghf.to_uks(), dft.uks.UKS))
+        self.assertTrue(isinstance(ghf.to_gks(), dft.gks.GKS))
+
+        #self.assertTrue(isinstance(gks.to_rhf(), scf.rhf.RHF))
+        #self.assertTrue(isinstance(gks.to_uhf(), scf.uhf.UHF))
+        self.assertTrue(isinstance(gks.to_ghf(), scf.ghf.GHF))
+        #self.assertTrue(isinstance(gks.to_rks('pbe'), dft.rks.RKS))
+        #self.assertTrue(isinstance(gks.to_uks('pbe'), dft.uks.UKS))
+        self.assertTrue(isinstance(gks.to_gks('pbe'), dft.gks.GKS))
+
+        self.assertRaises(RuntimeError, dhf.to_rhf)
+        self.assertRaises(RuntimeError, dhf.to_uhf)
+        self.assertRaises(RuntimeError, dhf.to_ghf)
+        self.assertRaises(RuntimeError, dks.to_rks)
+        self.assertRaises(RuntimeError, dks.to_uks)
+        self.assertRaises(RuntimeError, dks.to_gks)
+
+        if scf.dhf.zquatev is not None:
+            self.assertTrue(isinstance(dhf.to_dhf(), scf.dhf.RDHF))
+            self.assertTrue(isinstance(dhf.to_dks(), dft.dks.RDKS))
+            self.assertTrue(isinstance(dks.to_dhf(), scf.dhf.RDHF))
+            self.assertTrue(isinstance(dks.to_dks('pbe'), dft.dks.RDKS))
+        self.assertTrue(isinstance(dhf.to_dhf(), scf.dhf.DHF))
+        self.assertTrue(isinstance(dhf.to_dks(), dft.dks.DKS))
+        self.assertTrue(isinstance(dks.to_dhf(), scf.dhf.DHF))
+        self.assertTrue(isinstance(dks.to_dks('pbe'), dft.dks.DKS))
+        self.assertTrue(isinstance(udhf.to_dhf(), scf.dhf.DHF))
+        self.assertTrue(isinstance(udhf.to_dks(), dft.dks.DKS))
+        self.assertTrue(isinstance(udks.to_dhf(), scf.dhf.DHF))
+        self.assertTrue(isinstance(udks.to_dks('pbe'), dft.dks.DKS))
 
 if __name__ == "__main__":
     print("Full Tests for He")
