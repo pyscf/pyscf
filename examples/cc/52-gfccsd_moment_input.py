@@ -52,6 +52,7 @@ assert np.allclose(ip, gfcc.ipccsd(nroots=1)[0])
 # of order 0 through 2n+1 where n is the `niter` parameter in each
 # sector (since these are not physical this example will typically
 # spit out a bunch of warnings and complex pole positions!)
+# Note that physical moments must be in an orthogonal basis.
 th = np.random.random((3*2+2, ccsd.nmo, ccsd.nmo))
 tp = np.random.random((5*2+2, ccsd.nmo, ccsd.nmo))
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
