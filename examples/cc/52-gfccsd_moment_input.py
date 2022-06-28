@@ -11,9 +11,9 @@ import numpy as np
 
 # Define system
 mol = gto.Mole()
-mol.atom = "O 0 0 0; O 0 0 1"
+mol.atom = "Li 0 0 0; H 0 0 1.64"
 mol.basis = "cc-pvdz"
-mol.verbose = 5
+mol.verbose = 4
 mol.build()
 
 # Run mean-field
@@ -36,7 +36,7 @@ assert ccsd.converged_lambda
 # sector compared to 3 in the IP sector.
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel()
-ip = gfcc.ipccsd(nroots=1)[0]
+ip = gfcc.ipgfccsd(nroots=1)[0]
 
 # We can also build the moments ahead of time, and
 # pass them in as the moment constraints, with the
@@ -46,14 +46,31 @@ th = gfcc.build_hole_moments()
 tp = gfcc.build_part_moments()
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel(hole_moments=th, part_moments=tp)
-assert np.allclose(ip, gfcc.ipccsd(nroots=1)[0])
+assert np.allclose(ip, gfcc.ipgfccsd(nroots=1)[0])
 
-# Or use custom moments, which must enumerate at least the moments
-# of order 0 through 2n+1 where n is the `niter` parameter in each
-# sector (since these are not physical this example will typically
-# spit out a bunch of warnings and complex pole positions!)
-# Note that physical moments must be in an orthogonal basis.
-th = np.random.random((3*2+2, ccsd.nmo, ccsd.nmo))
-tp = np.random.random((5*2+2, ccsd.nmo, ccsd.nmo))
+# Or use custom moments of the Green's function, via ndarrays which
+# must enumerate at least the moments of order 0 through 2n+1 where
+# n is the `niter` parameter in each sector. Note that physical
+# moments must be in an orthogonal basis.
+
+# For example, moments of the Hartree--Fock Green's function (powers
+# of the Fock matrix):
+f = np.diag(mf.mo_energy)
+t = np.array([np.linalg.matrix_power(f, n) for n in range(5*2+2)])
+th, tp = t.copy(), t.copy()
+th[:, ccsd.nocc:, ccsd.nocc:] = 0.0
+tp[:, :ccsd.nocc, :ccsd.nocc] = 0.0
 gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc.kernel(hole_moments=th, part_moments=tp)
+
+# Or, moments from another post-HF Green's function method, i.e. AGF2:
+from pyscf.agf2 import AGF2
+agf2 = AGF2(mf)
+agf2.kernel()
+gf = agf2.gf
+th = gf.get_occupied().moment(np.arange(3*2+2))
+tp = gf.get_virtual().moment(np.arange(5*2+2))
+gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc.hermi_moments = True
+gfcc.hermi_solver = True
 gfcc.kernel(hole_moments=th, part_moments=tp)
