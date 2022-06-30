@@ -185,6 +185,58 @@ def treutler_prune(nuc, rads, n_ang, radii=None):
     leb_ngrid[nr//2:] = n_ang
     return leb_ngrid
 
+SGX_ANG_MAPPING = numpy.array(
+    [[ 5,  7, 11, 11, 7],
+     [ 5,  7, 11, 17, 11],
+     [ 7, 11, 17, 23, 27],
+     [ 7, 17, 23, 29, 23],
+     [ 7, 23, 29, 35, 29],
+     [11, 29, 35, 41, 35],
+     [17, 35, 41, 47, 41],
+     [47, 47, 47, 47, 47]]
+)
+
+# Prune scheme similar to ORCA for SGX
+def sgx_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
+    '''ORCA-like pruning for SGX grids with same alphas
+       vectors as nwchem pruning
+
+    Args:
+        nuc : int
+            Nuclear charge.
+
+        rads : 1D array
+            Grid coordinates on radical axis.
+
+        n_ang : int
+            Max number of grids over angular part.
+
+    Kwargs:
+        radii : 1D array
+            radii (in Bohr) for atoms in periodic table
+
+    Returns:
+        A list has the same length as rads. The list element is the number of
+        grids over angular part for each radial grid.
+    '''
+    alphas = numpy.array((
+        (0.25  , 0.5, 1.0, 4.5),
+        (0.1667, 0.5, 0.9, 3.5),
+        (0.1   , 0.4, 0.8, 2.5)))
+    lvls = [LEBEDEV_ORDER[l] for l in SGX_ANG_MAPPING[:,3]]
+    level = (n_ang > numpy.array(lvls)).sum()
+    leb_l = SGX_ANG_MAPPING[level]
+
+    r_atom = radii[nuc] + 1e-200
+    if nuc <= 2:  # H, He
+        place = ((rads/r_atom).reshape(-1,1) > alphas[0]).sum(axis=1)
+    elif nuc <= 10:  # Li - Ne
+        place = ((rads/r_atom).reshape(-1,1) > alphas[1]).sum(axis=1)
+    else:
+        place = ((rads/r_atom).reshape(-1,1) > alphas[2]).sum(axis=1)
+    angs = leb_l[place]
+    angs = numpy.array([LEBEDEV_ORDER[ang] for ang in angs], dtype=numpy.int32)
+    return angs
 
 
 ###########################################################

@@ -205,16 +205,14 @@ class _SGXHF(object):
         raise NotImplementedError
 
     def nuc_grad_method(self):
-        from pyscf.sgx.grad import rhf#, uhf, rks, uks
+        from pyscf.sgx.grad import rhf, uhf, rks, uks
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
-            raise NotImplemented
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
             else:
                 return uhf.Gradients(self)
         elif isinstance(self, scf.rhf.RHF):
             if isinstance(self, scf.hf.KohnShamDFT):
-                raise NotImplemented
                 return rks.Gradients(self)
             else:
                 return rhf.Gradients(self)
@@ -267,8 +265,10 @@ class SGX(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.grids_thrd = 1e-10
-        self.grids_level_i = 0  # initial grids level
+        self.grids_level_i = 1  # initial grids level
         self.grids_level_f = 1  # final grids level
+        self.fit_ovlp = True # whether to numerically fit overlap matrix 
+                             # to improve numerical precision
         self.grids_switch_thrd = 0.03
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
