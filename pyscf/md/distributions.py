@@ -37,7 +37,7 @@ def MaxwellBoltzmannVelocity(mol, T=298.15):
     MEAN = 0.0
 
     for m in mol.atom_charges():
-        m = data.elements.COMMON_ISOTOPE_MASSES[m]
+        m = data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
         sigma = np.sqrt(Tkb/m)
 
         veloc.append(md.rng.normal(loc=MEAN, scale=sigma, size=3))

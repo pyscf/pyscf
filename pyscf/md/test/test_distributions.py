@@ -47,8 +47,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(np.mean(v), 0.0, 4)
 
         # <v^2> = kbT/m
-        expected_v_squared = TEMPERATURE*data.nist.BOLTZMANN/data.nist.HARTREE2J/data.elements.COMMON_ISOTOPE_MASSES[8]
-        self.assertAlmostEqual(np.mean(v_squared), expected_v_squared, 6)
+        expected_v_squared = TEMPERATURE*data.nist.BOLTZMANN/data.nist.HARTREE2J/(data.elements.COMMON_ISOTOPE_MASSES[8]*data.nist.AMU2AU)
+        self.assertAlmostEqual(np.mean(v_squared), expected_v_squared, 9)
 
 if __name__ == "__main__":
     print("Full Tests for Distribution Sampling")
