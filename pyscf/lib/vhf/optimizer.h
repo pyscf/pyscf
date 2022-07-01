@@ -37,12 +37,14 @@ void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
 
 void CVHFdel_optimizer(CVHFOpt **opt);
 
-int CVHFnoscreen(int *shls, CVHFOpt *opt,
-                  int *atm, int *bas, double *env);
-int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
-                        int *atm, int *bas, double *env);
-int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
-                       int *atm, int *bas, double *env);
+int CVHFnoscreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env);
+int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env);
+int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env);
+int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env);
+int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env);
+int CVHFnrs8_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls);
+int CVHFnrs8_vj_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls);
+int CVHFnrs8_vk_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls);
 
 int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
                      double **dms_cond, int n_dm, double *dm_atleast,

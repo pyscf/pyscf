@@ -39,7 +39,7 @@ int int2e_spsp1spsp2_spinor();
 int CVHFrkbllll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -88,7 +88,7 @@ int CVHFrkbllll_vkscreen(int *shls, CVHFOpt *opt,
 int CVHFrkbssll_prescreen(int *shls, CVHFOpt *opt,
                           int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -192,7 +192,7 @@ void CVHFrkbllll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
@@ -205,7 +205,7 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
@@ -219,7 +219,7 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
                             int *ao_loc, int *atm, int natm,
                             int *bas, int nbas, double *env)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
@@ -247,15 +247,15 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = .5 * (cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]));
+                                tmp = cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]);
                                 dmaxi = MAX(dmaxi, tmp);
                         } }
-                        dmscond[iset*nbas*nbas+ish*nbas+jsh] = dmaxi;
-                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = dmaxi;
+                        dmscond[iset*nbas*nbas+ish*nbas+jsh] = .5 * dmaxi;
+                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = .5 * dmaxi;
                         dmax = MAX(dmax, dmaxi);
                 }
-                dmcond[ish*nbas+jsh] = dmax;
-                dmcond[jsh*nbas+ish] = dmax;
+                dmcond[ish*nbas+jsh] = .5 * dmax;
+                dmcond[jsh*nbas+ish] = .5 * dmax;
         } }
 }
 
@@ -264,7 +264,7 @@ void CVHFrkbllll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *ao_loc, int *atm, int natm,
                                int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
+        if (opt->dm_cond != NULL) { // NOT reuse opt->dm_cond because nset may be diff in different call
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
@@ -278,7 +278,7 @@ void CVHFrkbssss_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *ao_loc, int *atm, int natm,
                                int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*(1+nset));
@@ -293,7 +293,7 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
                                int *ao_loc, int *atm, int natm,
                                int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         if (nset < 4) {
