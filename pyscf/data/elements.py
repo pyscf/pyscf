@@ -1076,18 +1076,18 @@ N_CORE_VALENCE_SHELLS = [
     '7s6p4d2f',         #118  Og
 ]
 
-#chemcore_atm = [
-#    0,                                                                  0,
-#    0,  0,                                          1,  1,  1,  1,  1,  1,
-#    1,  1,                                          5,  5,  5,  5,  5,  5,
-#    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
-#    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18, 
-#   18, 18, 
-#           18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23, # lanthanides
-#               23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34, 
-#   34, 34, 
-#           34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, # actinides
-#               50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
+chemcore_atm = [
+    0,                                                                  0,
+    0,  0,                                          1,  1,  1,  1,  1,  1,
+    1,  1,                                          5,  5,  5,  5,  5,  5,
+    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
+    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18, 
+   18, 18, 
+           18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23, # lanthanides
+               23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34, 
+   34, 34, 
+           34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, # actinides
+               50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
 
 def chemcore(mol, spinorb=False):
     '''
@@ -1096,10 +1096,11 @@ def chemcore(mol, spinorb=False):
     '''
     core = 0
     for a in mol.atom_charges():
-        coreshell = [int(x) for x in N_CORE_SHELLS[a][::2]]
-        chemcore_atm = coreshell[0]*1 + coreshell[1]*3 \
-                       + coreshell[2]*5 + coreshell[3]*7
-        core += chemcore_atm
+        #coreshell = [int(x) for x in N_CORE_SHELLS[a][::2]]
+        #chemcore_atm = coreshell[0]*1 + coreshell[1]*3 \
+        #               + coreshell[2]*5 + coreshell[3]*7
+        #core += chemcore_atm
+        core += chemcore_atm[a]
     if spinorb:
         core *= 2
     return core
