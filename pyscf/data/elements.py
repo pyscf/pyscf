@@ -1076,7 +1076,7 @@ N_CORE_VALENCE_SHELLS = [
     '7s6p4d2f',         #118  Og
 ]
 
-chemcore_atm = [
+chemcore_atm = [0, # ghost
     0,                                                                  0,
     0,  0,                                          1,  1,  1,  1,  1,  1,
     1,  1,                                          5,  5,  5,  5,  5,  5,
