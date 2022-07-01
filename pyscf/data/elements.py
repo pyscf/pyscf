@@ -1076,28 +1076,37 @@ N_CORE_VALENCE_SHELLS = [
     '7s6p4d2f',         #118  Og
 ]
 
-chemcore_atm = [
-    0,                                                                  0,
-    0,  0,                                          1,  1,  1,  1,  1,  1,
-    1,  1,                                          5,  5,  5,  5,  5,  5,
-    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
-    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18, 
-   18, 18, 
-           18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23, # lanthanides
-               23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34, 
-   34, 34, 
-           34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, # actinides
-               50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
-def chemcore(mol):
+#chemcore_atm = [
+#    0,                                                                  0,
+#    0,  0,                                          1,  1,  1,  1,  1,  1,
+#    1,  1,                                          5,  5,  5,  5,  5,  5,
+#    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
+#    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18, 
+#   18, 18, 
+#           18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23, # lanthanides
+#               23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34, 
+#   34, 34, 
+#           34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, # actinides
+#               50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
+
+def chemcore(mol, spinorb=False):
+    '''
+    Set spinorb=True for GMP2, GCCSD, etc.
+    For R/U ones, spinorb=False is fine.
+    '''
     core = 0
     for a in mol.atom_charges():
-        core += chemcore_atm[a]
+        coreshell = [int(x) for x in N_CORE_SHELLS[a][::2]]
+        chemcore_atm = coreshell[0]*1 + coreshell[1]*3 \
+                       + coreshell[2]*5 + coreshell[3]*7
+        core += chemcore_atm
+    if spinorb:
+        core *= 2
     return core
 
-def frozen_chemcore(mf):
-    ncore = chemcore(mf.mol)
-    mf.frozen = list(range(ncore))
-    return mf
+#def chemcore_list(mol):
+#    ncore = chemcore(mol)
+#    return list(range(ncore))
 
 
 ########################################

@@ -225,6 +225,10 @@ class KnownValues(unittest.TestCase):
         cc1.frozen = 1
         self.assertEqual(cc1.nmo, 12)
         self.assertEqual(cc1.nocc, 4)
+        from pyscf.data import elements
+        cc1.frozen = elements.chemcore(cc1.mol)
+        self.assertEqual(cc1.nmo, 12)
+        self.assertEqual(cc1.nocc, 4)
         cc1.frozen = [0,1]
         self.assertEqual(cc1.nmo, 11)
         self.assertEqual(cc1.nocc, 3)

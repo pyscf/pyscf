@@ -853,6 +853,9 @@ class CCSD(lib.StreamObject):
             >>> mf = scf.RHF(mol).run()
             >>> # freeze 2 core orbitals
             >>> mycc = cc.CCSD(mf).set(frozen = 2).run()
+            >>> # auto-generate the number of core orbitals to be frozen (1 in this case)
+            >>> from pyscf.data import elements
+            >>> mycc = cc.CCSD(mf).set(frozen = elements.chemcore(mol)).run()
             >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
             >>> mycc.set(frozen = [0,1,16,17,18]).run()
 
