@@ -46,7 +46,6 @@ class KnownValues(unittest.TestCase):
         with lib.light_speed(2) as c:
             mf = scf.RHF(cell).sfx2c1e()
             mf.with_df = df.AFTDF(cell)
-            mf.with_x2c.approx = 'NONE'
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.20522508213548604 + 0j, 8)
@@ -69,7 +68,6 @@ class KnownValues(unittest.TestCase):
             mf.with_df = df.AFTDF(cell)
             mf.kpts = cell.make_kpts([3,1,1])
             dm = mf.get_init_guess()
-            mf.with_x2c.approx = 'NONE'
             h1 = mf.get_hcore()
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]), -0.25949615001885146 + 0j, 8)
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]), -0.006286599310207025 + 0j, 8)
@@ -88,7 +86,6 @@ class KnownValues(unittest.TestCase):
             # KGHF.sfx2c1e should reproduce the KRHF.x2c1e() result
             mf = scf.KGHF(cell).sfx2c1e()
             mf.with_df = df.AFTDF(cell)
-            mf.with_x2c.approx = 'NONE'
             mf.kpts = cell.make_kpts([3, 1, 1])
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
@@ -100,7 +97,6 @@ class KnownValues(unittest.TestCase):
 
             mf = scf.KGHF(cell).x2c1e()
             mf.with_df = df.AFTDF(cell)
-            mf.with_x2c.approx = 'NONE'
             mf.kpts = cell.make_kpts([3, 1, 1])
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()

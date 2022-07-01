@@ -18,7 +18,10 @@
 #
 
 '''
-X2C correction for extended systems (experimental feature)
+One-electron spin-free X2C approximation for extended systems
+Ref: [1] arXiv:2202.02252 (2022)
+The implementation of the spin-orbital version follows the notations in [1].
+Additional information can be found in [1] and references therein.
 '''
 
 
@@ -40,13 +43,15 @@ from pyscf.pbc.x2c import sfx2c1e
 from pyscf import __config__
 
 def x2c1e_gscf(mf):
-    '''2-component X2C (including spin-free and spin-dependent terms) in spin-orbital basis
-    For an given generalized SCF object, update the hcore constructor
+    '''
+    For the given *GHF* object, it generates X2C1E-GSCF object in spin-orbital basis
+    and updates the hcore constructor.
 
     Args:
-        mf: A gerneralized SCF object
+        mf : an GHF/GKS object
+
     Return:
-        A generalized SCF object
+        An GHF/GKS object
 
     Examples:
 
@@ -60,7 +65,11 @@ def x2c1e_gscf(mf):
 
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
-            return mf.__class__(mf)
+            mf.with_x2c = SpinOrbitalX2CHelper(mf.mol)
+            return mf
+        elif not isinstance(mf.with_x2c, SpinOrbitalX2CHelper):
+            # An object associated to sfx2c1e.SpinFreeX2CHelper
+            raise NotImplementedError
         else:
             return mf
 
@@ -69,6 +78,7 @@ def x2c1e_gscf(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
+
     class X2C1E_GSCF(mf_class, x2c._X2C_SCF):
         __doc__ = doc + '''
         Attributes for spin-orbital X2C1E for PBC.
@@ -97,7 +107,8 @@ def x2c1e_gscf(mf):
                 self.with_x2c.dump_flags(verbose)
             return self
 
-    return X2C1E_GSCF(mf)
+    with_x2c = SpinOrbitalX2C1EHelper(mf.mol)
+    return mf.view(X2C1E_GSCF).add_keys(with_x2c=with_x2c)
 
 class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
     def get_hcore(self, cell=None, kpts=None):
@@ -116,9 +127,9 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
 
         c = lib.param.LIGHT_SPEED
 
-        if 'ATOM1E' in self.approx.upper():
+        if 'ATOM' in self.approx.upper():
             raise NotImplementedError
-        elif 'NONE' in self.approx.upper():
+        else:
             w_sr = sfx2c1e.get_pnucp(with_df, kpts_lst)
             w_soc = get_pbc_pvxp(with_df, kpts_lst)
             #w_soc = get_pbc_pvxp(xcell, kpts_lst)
@@ -128,8 +139,6 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
                 w_k = _sigma_dot(w_spblk)
                 w.append(w_k)
             w = lib.asarray(w)
-        else:
-            raise NotImplementedError
 
         t_aa = xcell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
         t    = numpy.array([_block_diag(t_aa[k]) for k in range(len(kpts_lst))])
@@ -146,13 +155,11 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            if 'ATOM1E' in self.approx.upper():
+            if 'ATOM' in self.approx.upper():
                 raise NotImplementedError
-            elif 'NONE' in self.approx.upper():
+            else:
                 xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
                 h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
-            else:
-                raise NotImplementedError
 
             if self.basis is not None:
                 # If cell = xcell, U = identity matrix
@@ -192,6 +199,7 @@ def get_1c_pvxp(cell, kpts=None):
         mat_soc[:,p0:p1,p0:p1] = w
     return mat_soc
 
+# W_SOC with lattice summation (G != 0)
 def get_pbc_pvxp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
@@ -261,84 +269,6 @@ def get_pbc_pvxp(mydf, kpts=None):
         soc_mat_kpts = soc_mat_kpts[0]
     return numpy.asarray(soc_mat_kpts)
 
-#
-# SOC with lattice summation (G != 0)
-#
-def get_pbc_pvxp_legacy(cell, kpts=None):
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-
-    log = logger.Logger(cell.stdout, cell.verbose)
-    t1 = (logger.process_clock(), logger.perf_counter())
-    #t1 = (time.clock(), time.time())
-
-    mydf = aft.AFTDF(cell, kpts)
-    mydf.eta = 0.2
-    ke_guess = aft.estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
-    mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-    log.debug('mydf.mesh %s', mydf.mesh)
-
-    nkpts = len(kpts_lst)
-    nao = cell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
-
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-    charge = -cell.atom_charges() # Apply Koseki effective charge?
-    kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
-    coulG *= kws
-    if mydf.eta == 0:
-        soc_mat = numpy.zeros((nkpts,3,nao*nao), dtype=numpy.complex128)
-        SI = cell.get_SI(Gv)
-        vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-    else:
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/mole.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
-        soc_mat = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvxp1_sph',
-                                     aosym='s1', comp=3)
-        # Some corrections are needed.
-        soc_mat = numpy.asarray(soc_mat).reshape(nkpts,3,nao**2)
-        t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
-
-        aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
-
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
-                                       max_memory=max_memory, aosym='s1',
-                                       intor='GTO_ft_pxp_sph', comp=3):
-        for k, aoao in enumerate(aoaoks):
-            aoao = aoao.reshape(3,-1,nao**2)
-            if aft_jk.gamma_point(kpts_lst[k]):
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].real, aoao.real)
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].imag, aoao.imag)
-            else:
-                soc_mat[k] += numpy.einsum('k,ckx->cx', vG[p0:p1].conj(), aoao)
-    t1 = log.timer_debug1('contracting pnucp', *t1)
-
-    soc_mat_kpts = []
-    for k, kpt in enumerate(kpts_lst):
-        if aft_jk.gamma_point(kpt):
-            soc_mat_kpts.append(soc_mat[k].real.reshape(3,nao,nao))
-        else:
-            soc_mat_kpts.append(soc_mat[k].reshape(3,nao,nao))
-
-    if kpts is None or numpy.shape(kpts) == (3,):
-        soc_mat_kpts = soc_mat_kpts[0]
-    return numpy.asarray(soc_mat_kpts)
-
-
 def _block_diag(mat):
     '''
     [A 0]
@@ -371,7 +301,8 @@ if __name__ == '__main__':
     enr = mf.kernel()
     print('E(NR) = %.12g' % enr)
 
-    mf = x2c1e_gscf(mf)
+    mf = scf.GHF(cell)
+    mf.with_df = aft.AFTDF(cell)
     ex2c = mf.kernel()
     print('E(X2C1E-GHF) = %.12g' % ex2c)
 
@@ -381,19 +312,21 @@ if __name__ == '__main__':
     enr = mf.kernel()
     print('E(k-NR) = %.12g' % enr)
 
-    mf = x2c1e_gscf(mf)
+    mf = scf.KGHF(cell)
+    mf.with_df = aft.AFTDF(cell)
+    mf.kpts = cell.make_kpts([2, 2, 1])
     ex2c = mf.kernel()
     print('E(k-X2C1E-GHF) = %.12g' % ex2c)
 
-#    cell = pbcgto.M(unit = 'B',
-#               a = numpy.eye(3)*4,
-#               atom = 'H 0 0 0; H 0 0 1.8',
-#               mesh = None,
-#               dimension = 2,
-#               basis='sto3g')
-#    with_df = aft.AFTDF(cell)
-#    w0 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
-#    with_df = aft.AFTDF(cell)
-#    with_df.eta = 0
-#    w1 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
-#    print(abs(w0-w1).max())
+    cell = pbcgto.M(unit = 'B',
+               a = numpy.eye(3)*4,
+               atom = 'H 0 0 0; H 0 0 1.8',
+               mesh = None,
+               dimension = 2,
+               basis='sto3g')
+    with_df = aft.AFTDF(cell)
+    w0 = get_pbc_pvxp(with_df, cell.make_kpts([2, 2, 1]))
+    with_df = aft.AFTDF(cell)
+    with_df.eta = 0
+    w1 = get_pbc_pvxp(with_df, cell.make_kpts([2, 2, 1]))
+    print(abs(w0-w1).max())

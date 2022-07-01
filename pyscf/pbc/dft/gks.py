@@ -17,7 +17,7 @@
 #
 
 '''
-General spin-orbital Kohn-Sham for periodic systems at a single k-point (experimental feature)
+Generalized collinear Kohn-Sham in the spin-orbital basis for periodic systems at a single k-point
 
 See Also:
     pyscf.pbc.dft.kgks.py : General spin-orbital Kohn-Sham for periodic
@@ -33,7 +33,6 @@ from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
-from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -69,9 +68,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_a+dm_b, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
-    # Only the collinear DFT is implemented
-    # where vxc is diagonal in spin space, i.e. vxc_aa[dm_aa], vxc_bb[dm_bb] and vxc_ab is neglected.
-    # vxc = (vxc_aa, vxc_bb)
+    # vxc = (vxc_aa, vxc_bb). vxc_ab is neglected in collinear DFT.
     n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), 0,
                                     kpt, kpts_band)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
@@ -86,21 +83,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vxc += vj
     else:
         raise NotImplementedError
-        # TODO Hybrid functional
-        #if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-        #    ks.with_df._j_only = False
-        #vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
-        #vj = vj[0] + vj[1]
-        #vk *= hyb
-        #if abs(omega) > 1e-10:
-        #    vklr = ks.get_k(cell, dm, hermi, kpt, kpts_band, omega=omega)
-        #    vklr *= (alpha - hyb)
-        #    vk += vklr
-        #vxc += vj - vk
-
-        #if ground_state:
-        #    exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-        #           numpy.einsum('ij,ji', dm[1], vk[1])).real * .5
 
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
@@ -133,9 +115,9 @@ class GKS(rks.KohnShamDFT, pbcghf.GHF):
     mix_density_fit = rks._patch_df_beckegrids(pbcghf.GHF.mix_density_fit)
 
     def x2c1e(self):
-         '''X2C1e with spin-orbit coupling effects in spin-orbital basis'''
-         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
-         return x2c1e_gscf(self)
+        '''Adds spin-orbit coupling effects to H0 through the x2c1e approximation'''
+        from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+        return x2c1e_gscf(self)
 
     x2c = x2c1e
 

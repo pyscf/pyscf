@@ -17,7 +17,7 @@
 #
 
 '''
-General spin-orbital Kohn-Sham for periodic systems with k-point sampling (experimental feature)
+Generalized collinear Kohn-Sham in the spin-orbital basis for periodic systems with k-point sampling
 
 See Also:
     pyscf.pbc.dft.rks.py : General spin-orbital Kohn-Sham for periodic
@@ -31,8 +31,8 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kghf
 from pyscf.pbc.dft import gen_grid
+from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import rks
-from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
@@ -81,13 +81,8 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm_a+dm_b, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
-    # Check ks._numint.r_vxc in pyscf.dft.dks.py: It takes the entire dm and generate vxc with off-diagonal spin block.
-    #max_memory = ks.max_memory - lib.current_memory()[0]
-    #n, exc, vxc = ks._numint.r_vxc(mol, ks.grids, ks.xc, dm, hermi=hermi,
-    #                               max_memory=max_memory)
-
-    # vxc_spblk = ([alpha, beta], nkpts, nao, nao)
-    n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), 0,
+    # vxc_spblk = (vxc_aa, vxc_bb), vxc_aa = (nkpts, nao, nao), vxc_bb = (nkpts, nao, nao)
+    n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), hermi,
                                         kpts, kpts_band)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
@@ -107,20 +102,7 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm_kpts, hermi, kpts, kpts_band)
         vxc += vj
     else:
-        # TODO Hybrid functional
         raise NotImplementedError
-        #if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-        #    ks.with_df._j_only = False
-        #vj, vk = ks.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        #vk *= hyb
-        #if abs(omega) > 1e-10:
-        #    vklr = ks.get_k(cell, dm_kpts, hermi, kpts, kpts_band, omega=omega)
-        #    vklr *= (alpha - hyb)
-        #    vk += vklr
-        #vxc += vj - vk * .5
-
-        #if ground_state:
-        #    exc -= np.einsum('Kij,Kji', dm_kpts, vk).real * .5 * .5 * weight
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm_kpts, vj).real * .5 * weight
@@ -144,24 +126,8 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
         return self
 
     get_veff = get_veff
-
-    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
-        if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(self.cell, dm_kpts)
-
-        weight = 1./len(h1e_kpts)
-        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
-        tot_e = e1 + vhf.ecoul + vhf.exc
-        self.scf_summary['e1'] = e1.real
-        self.scf_summary['coul'] = vhf.ecoul.real
-        self.scf_summary['exc'] = vhf.exc.real
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e.real, vhf.ecoul + vhf.exc
-
-    # TODO Check if it is necessary
-    #get_rho = None
+    energy_elec = krks.energy_elec
+    get_rho = krks.get_rho
 
     density_fit = rks._patch_df_beckegrids(kghf.KGHF.density_fit)
     rs_density_fit = rks._patch_df_beckegrids(kghf.KGHF.rs_density_fit)
@@ -169,7 +135,7 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
     newton = khf.KSCF.newton
 
     def x2c1e(self):
-         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+         '''Adds spin-orbit coupling effects to H0 through the x2c1e approximation'''
          from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
          return x2c1e_gscf(self)
 

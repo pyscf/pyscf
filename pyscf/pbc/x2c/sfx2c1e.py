@@ -18,7 +18,7 @@
 #
 
 '''
-spin-free X2C correction for extended systems (experimental feature)
+One-electron spin-free X2C approximation for extended systems
 '''
 
 
@@ -41,7 +41,7 @@ from pyscf import __config__
 
 def sfx2c1e(mf):
     '''Spin-free X2C.
-    For the given SCF object, update the hcore constructor.
+    For the given SCF object, it updates the hcore constructor.
 
     Args:
         mf : an SCF object
@@ -112,16 +112,17 @@ def sfx2c1e(mf):
                 self.with_x2c.dump_flags(verbose)
             return self
 
-    return SFX2C1E_SCF(mf)
+    with_x2c = SpinFreeX2CHelper(mf.mol)
+    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
 
 sfx2c = sfx2c1e
 
 class PBCX2CHelper(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
-    # NONE: X2C1e, ATOM1E: X2C1e with one-center approximation
+    # 1e: X2C1e, atom1e: X2C1e with one-center approximation
     approx = getattr(__config__, 'pbc_x2c_X2C_approx', '1e')
-    # By default, uncontracted cell.basis plus additional steep orbital is used to construct the modified Dirac equation.
+    # By default, uncontracted cell.basis is used to construct the modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
@@ -178,12 +179,12 @@ class SpinFreeX2CHelper(PBCX2CHelper):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            if 'ATOM1E' in self.approx.upper():
+            if 'ATOM' in self.approx.upper():
                 # The treatment of pnucp local part has huge effects to hcore
                 #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
                 #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
                 h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
-            elif 'NONE' in self.approx.upper():
+            else:
                 xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
                 h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
 
@@ -233,11 +234,7 @@ class SpinFreeX2CHelper(PBCX2CHelper):
         return self
 
 
-# Use Ewald-like technique to compute spVsp.
-# spVsp may not be divergent because the numerator spsp and the denominator
-# in Coulomb kernel 4pi/G^2 are likely cancelled.  Even a real space lattice
-# sum can converge to a finite value, it's difficult to accurately converge
-# this value, i.e., large number of images in lattice summation is required.
+# Use Ewald-like technique to compute spVsp without the G=0 contribution.
 def get_pnucp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
