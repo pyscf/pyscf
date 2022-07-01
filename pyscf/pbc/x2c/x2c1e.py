@@ -118,7 +118,7 @@ class SpinOrbitalX2C1EHelper(sfx2c1e.PBCX2CHelper):
             kpts_lst = numpy.zeros((1,3))
         else:
             kpts_lst = numpy.reshape(kpts, (-1,3))
-        # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
+        # By default, we use uncontracted cell.basis for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
         if contr_coeff is not None:
             contr_coeff = _block_diag(contr_coeff)
