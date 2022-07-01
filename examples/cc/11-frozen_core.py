@@ -30,8 +30,21 @@ print('CCSD correlation energy', mycc.e_corr)
 mycc = cc.CCSD(mf)
 from pyscf.data import elements
 mycc.frozen = elements.chemcore(mol)
+print('Number of core orbital frozen: %d' % mycc.frozen)
 mycc.kernel()
 print('CCSD correlation energy', mycc.e_corr)
+# Shorter code, it's identical to the above one
+mycc.set_frozen()
+print('Number of core orbital frozen: %d' % mycc.frozen)
+mycc.kernel()
+print('CCSD correlation energy', mycc.e_corr)
+# Note: for GCCSD, the frozen is 2 times that of RCCSD/UCCSD
+mycc = cc.GCCSD(mf)
+mycc.set_frozen()
+print('Number of core orbital frozen: %d' % mycc.frozen)
+mycc.kernel()
+print('GCCSD correlation energy', mycc.e_corr)
+
 
 #
 # Freeze orbitals based on the list of indices.
