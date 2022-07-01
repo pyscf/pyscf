@@ -26,7 +26,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
-from pyscf.dft.numint import libdft, BLKSIZE
+from pyscf.dft.numint import libdft, BLKSIZE, MGGA_DENSITY_LAPL
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
@@ -146,14 +146,14 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     for wv in weights:
         if cell.dimension == 0:
             mat = make_mat(wv)[0].transpose(0,2,1)
-            if hermi:
+            if hermi == 1:
                 for i in range(comp):
                     lib.hermi_triu(mat[i], inplace=True)
             if comp == 1:
                 mat = mat[0]
         elif kpts is None or gamma_point(kpts):
             mat = make_mat(wv).sum(axis=0).transpose(0,2,1)
-            if hermi:
+            if hermi == 1:
                 for i in range(comp):
                     lib.hermi_triu(mat[i], inplace=True)
             if comp == 1:
@@ -164,7 +164,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             mat = make_mat(wv)
             expkL = numpy.exp(1j*kpts.reshape(-1,3).dot(Ls.T))
             mat = lib.einsum('kr,rcij->kcij', expkL, mat)
-            if hermi:
+            if hermi == 1:
                 for i in range(comp):
                     for k in range(len(kpts)):
                         lib.hermi_triu(mat[k,i], inplace=True)
@@ -181,6 +181,10 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
              mesh=None, offset=None, submesh=None, ignore_imag=False,
              out=None):
     '''Collocate the *real* density (opt. gradients) on the real-space grid.
+
+    Kwargs:
+        ignore_image :
+            The output density is assumed to be real if ignore_imag=True.
     '''
     assert(all(cell._bas[:,NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
@@ -190,7 +194,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
     i0, i1, j0, j1 = shls_slice
-    if hermi:
+    if hermi == 1:
         assert(i0 == j0 and i1 == j1)
     j0 += cell.nbas
     j1 += cell.nbas
@@ -265,18 +269,30 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
 
     rho = []
     for i, dm_i in enumerate(dm):
-        if out is None:
-            rho_i = numpy.zeros(shape)
-        else:
-            rho_i = out[i]
-            assert(rho_i.size == numpy.prod(shape))
-
         if cell.dimension == 0:
-            # make a copy because the dm may be overwritten in the
-            # NUMINT_rho_drv inplace
-            make_rho_(rho_i, numpy.array(dm_i, order='C', copy=True), hermi)
+            if ignore_imag:
+                # basis are real. dm.imag can be dropped if ignore_imag
+                dm_i = dm_i.real
+            has_imag = dm_i.dtype == numpy.complex128
+            if has_imag:
+                dmR = numpy.array(dm_i.real, order='C')
+                dmI = numpy.array(dm_i.imag, order='C')
+            else:
+                # make a copy because the dm may be overwritten in the
+                # NUMINT_rho_drv inplace
+                dmR = numpy.array(dm_i, order='C', copy=True)
+
         elif kpts is None or gamma_point(kpts):
-            make_rho_(rho_i, numpy.repeat(dm_i, nimgs, axis=0), hermi)
+            if ignore_imag:
+                # basis are real. dm.imag can be dropped if ignore_imag
+                dm_i = dm_i.real
+            has_imag = dm_i.dtype == numpy.complex128
+            if has_imag:
+                dmR = numpy.repeat(dm_i.real, nimgs, axis=0)
+                dmI = numpy.repeat(dm_i.imag, nimgs, axis=0)
+            else:
+                dmR = numpy.repeat(dm_i, nimgs, axis=0)
+
         else:
             dm_L = lib.dot(expkL.T, dm_i.reshape(nkpts,-1)).reshape(nimgs,naoj,naoi)
             dmR = numpy.asarray(dm_L.real, order='C')
@@ -295,18 +311,29 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
                     has_imag = False
             dm_L = None
 
-            if has_imag:
-                if out is None:
-                    rho_i  = make_rho_(rho_i, dmI, 0)*1j
-                    rho_i += make_rho_(numpy.zeros(shape), dmR, 0)
-                else:
-                    out[i]  = make_rho_(numpy.zeros(shape), dmI, 0)*1j
-                    out[i] += make_rho_(numpy.zeros(shape), dmR, 0)
-            else:
-                assert(rho_i.dtype == numpy.double)
-                make_rho_(rho_i, dmR, hermi)
-            dmR = dmI = None
 
+        if has_imag:
+            # complex density cannot be updated inplace directly by
+            # function NUMINT_rho_drv
+            if out is None:
+                rho_i = numpy.empty(shape, numpy.complex128)
+                rho_i.real = make_rho_(numpy.zeros(shape), dmR, 0)
+                rho_i.imag = make_rho_(numpy.zeros(shape), dmI, 0)
+            else:
+                assert out[i].dtype == numpy.complex128
+                rho_i = out[i].reshape(shape)
+                rho_i.real += make_rho_(numpy.zeros(shape), dmR, 0)
+                rho_i.imag += make_rho_(numpy.zeros(shape), dmI, 0)
+        else:
+            if out is None:
+                # rho_i needs to be initialized to 0 because rho_i is updated
+                # inplace in function NUMINT_rho_drv
+                rho_i = make_rho_(numpy.zeros(shape), dmR, hermi)
+            else:
+                assert out[i].dtype == numpy.double
+                rho_i = out[i].reshape(shape)
+                make_rho_(rho_i, dmR, hermi)
+        dmR = dmI = None
         rho.append(rho_i)
 
     if n_dm == 1:
@@ -328,7 +355,8 @@ def get_nuc(mydf, kpts=None):
 
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
-    vne = _get_j_pass2(mydf, vneG, kpts_lst)[0]
+    hermi = 1
+    vne = _get_j_pass2(mydf, vneG, hermi, kpts_lst)[0]
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
@@ -353,7 +381,8 @@ def get_pp(mydf, kpts=None):
     vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
     ngrids = len(vpplocG)
 
-    vpp = _get_j_pass2(mydf, vpplocG, kpts_lst)[0]
+    hermi = 1
+    vpp = _get_j_pass2(mydf, vpplocG, hermi, kpts_lst)[0]
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -452,7 +481,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     vG *= coulG
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
-    vj_kpts = _get_j_pass2(mydf, vG, kpts_band)
+    vj_kpts = _get_j_pass2(mydf, vG, hermi, kpts_band)
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
 
@@ -486,11 +515,11 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
-        assert(hermi == 1 or gamma_point(kpts))
+        #if hermi != 1 and not gamma_point(kpts):
+        #    raise NotImplementedError
 
     elif deriv == 2:  # meta-GGA
         raise NotImplementedError
-        assert(hermi == 1 or gamma_point(kpts))
 
     ignore_imag = (hermi == 1)
 
@@ -548,20 +577,19 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
                     #:               offset=None, submesh=None, ignore_imag=True)
                     rho = _eval_rho_bra(t_cell, pgto_dms, shls_slice, 0,
                                         'LDA', kpts, grids_dense, True, log)
-
                 else:
                     pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_ht, h_coeff, t_coeff)
                     shls_slice = (0, nshells_h, 0, nshells_t)
                     #:rho = eval_rho(t_cell, pgto_dms, shls_slice, 0, 'LDA', kpts,
                     #:               offset=None, submesh=None)
                     rho = _eval_rho_bra(t_cell, pgto_dms, shls_slice, 0,
-                                        'LDA', kpts, grids_dense, True, log)
+                                        'LDA', kpts, grids_dense, ignore_imag, log)
                     pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_lh, l_coeff, h_coeff)
                     shls_slice = (nshells_h, nshells_t, 0, nshells_h)
                     #:rho += eval_rho(t_cell, pgto_dms, shls_slice, 0, 'LDA', kpts,
                     #:                offset=None, submesh=None)
                     rho += _eval_rho_ket(t_cell, pgto_dms, shls_slice, 0,
-                                         'LDA', kpts, grids_dense, True, log)
+                                         'LDA', kpts, grids_dense, ignore_imag, log)
 
             elif deriv == 1:
                 h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
@@ -680,6 +708,7 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
         nshells_i = sum(len(x) for x in rest_bas)
         sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
         sub_dms = numpy.concatenate(rest_dms, axis=2)
+        # Update rho inplace
         eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
                  mesh, ignore_imag=ignore_imag, out=rho)
     return rho.reshape((nset, rhodim, numpy.prod(mesh)))
@@ -757,12 +786,13 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
         nshells_j = sum(len(x) for x in rest_bas)
         sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
         sub_dms = numpy.concatenate(rest_dms, axis=3)
+        # Update rho inplace
         eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
                  mesh, ignore_imag=ignore_imag, out=rho)
     return rho.reshape((nset, rhodim, numpy.prod(mesh)))
 
 
-def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
+def _get_j_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     nkpts = len(kpts)
@@ -796,8 +826,13 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         v_rs = tools.ifft(sub_vG, mesh).reshape(nset,ngrids)
         vR = numpy.asarray(v_rs.real, order='C')
         vI = numpy.asarray(v_rs.imag, order='C')
-        if at_gamma_point:
+        ignore_vG_imag = hermi == 1 or abs(vI.sum()) < IMAG_TOL
+        if ignore_vG_imag:
             v_rs = vR
+        elif vj_kpts.dtype == numpy.double:
+            # ensure result complex array if tddft amplitudes are complex while
+            # at gamma point
+            vj_kpts = vj_kpts.astype(numpy.complex128)
 
         idx_h = grids_dense.ao_idx
         if grids_sparse is None:
@@ -805,7 +840,8 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
                     for i in range(nset):
-                        vj_sub = lib.dot(ao_h[k].conj().T*v_rs[i,p0:p1], ao_h[k])
+                        aow = numint._scale_ao(ao_h[k], v_rs[i,p0:p1])
+                        vj_sub = lib.dot(ao_h[k].conj().T, aow)
                         vj_kpts[i,k,idx_h[:,None],idx_h] += vj_sub
                 ao_h = ao_h_etc = None
         else:
@@ -817,38 +853,46 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             h_cell = grids_dense.cell
             l_cell = grids_sparse.cell
             t_cell = h_cell + l_cell
-            t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
+            t_cell, coeff = t_cell.to_uncontracted_cartesian_basis()
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
 
-            h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-            #l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
-            t_coeff = scipy.linalg.block_diag(*t_coeff)
+            h_coeff = scipy.linalg.block_diag(*coeff[:h_cell.nbas])
+            t_coeff = scipy.linalg.block_diag(*coeff)
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
-            vp = lib.einsum('nkpq,pi,qj->nkij', vp, h_coeff, t_coeff)
-
             # Imaginary part may contribute
-            if not at_gamma_point and abs(vI).max() > IMAG_TOL:
+            if not ignore_vG_imag:
                 vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'LDA', kpts)
-                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, h_coeff, t_coeff)
-                vp = vp + vpI * 1j
+                vp = numpy.asarray(vp) + numpy.asarray(vpI) * 1j
                 vpI = None
+
+            vp = lib.einsum('nkpq,pi,qj->nkij', vp, h_coeff, t_coeff)
 
             vj_kpts[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh]
             vj_kpts[:,:,idx_h[:,None],idx_l] += vp[:,:,:,naoh:]
 
-            #:shls_slice = (nshells_h, nshells_t, 0, nshells_h)
-            #:vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
-            #:vp = lib.einsum('nkpq,pi,qj->nkij', vp, l_coeff, h_coeff)
-            #:vj_kpts[:,:,idx_l[:,None],idx_h] += vp
-            vj_kpts[:,:,idx_l[:,None],idx_h] += \
-                    vp[:,:,:,naoh:].transpose(0,1,3,2).conj()
+            if hermi == 1:
+                vj_kpts[:,:,idx_l[:,None],idx_h] += \
+                        vp[:,:,:,naoh:].transpose(0,1,3,2).conj()
+            else:
+                l_coeff = scipy.linalg.block_diag(*coeff[h_cell.nbas:])
+                shls_slice = (nshells_h, nshells_t, 0, nshells_h)
+                vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
+                # Imaginary part may contribute
+                if not ignore_vG_imag:
+                    vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'LDA', kpts)
+                    vp = numpy.asarray(vp) + numpy.asarray(vpI) * 1j
+                    vpI = None
+                vp = lib.einsum('nkpq,pi,qj->nkij', vp, l_coeff, h_coeff)
+                vj_kpts[:,:,idx_l[:,None],idx_h] += vp
 
     return vj_kpts
 
 
-def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
+def _get_gga_pass2(mydf, vG, hermi=1, kpts=numpy.zeros((1,3)), verbose=None):
+    #if hermi != 1:
+    #    raise NotImplementedError('_get_gga_pass2 assumes hermi=1')
     log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     nkpts = len(kpts)
@@ -857,7 +901,8 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
     vG = vG.reshape(-1,4,nx,ny,nz)
     nset = vG.shape[0]
 
-    if gamma_point(kpts):
+    at_gamma_point = gamma_point(kpts)
+    if at_gamma_point:
         veff = numpy.zeros((nset,nkpts,nao,nao))
     else:
         veff = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
@@ -872,8 +917,16 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
         #:sub_vG = vG[:,:,gx[:,None,None],gy[:,None],gz].reshape(-1,ngrids)
         sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
-        wv = tools.ifft(sub_vG, mesh).real.reshape(nset,4,ngrids)
-        wv = numpy.asarray(wv, order='C')
+        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,4,ngrids)
+        vR = numpy.asarray(v_rs.real, order='C')
+        vI = numpy.asarray(v_rs.imag, order='C')
+        ignore_vG_imag = hermi == 1 or abs(vI.sum()) < IMAG_TOL
+        if ignore_vG_imag:
+            v_rs = vR
+        elif veff.dtype == numpy.double:
+            # ensure result complex array if tddft amplitudes are complex while
+            # at gamma point
+            veff = veff.astype(numpy.complex128)
 
         if grids_sparse is None:
             idx_h = grids_dense.ao_idx
@@ -882,9 +935,15 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
                     for i in range(nset):
-                        aow = numint._scale_ao(ao_h[k], wv[i])
-                        v = lib.dot(aow.conj().T, ao_h[k][0])
-                        veff[i,k,idx_h[:,None],idx_h] += v + v.conj().T
+                        aow = numint._scale_ao(ao_h[k], v_rs[i])
+                        v = lib.dot(ao_h[k][0].conj().T, aow)
+                        veff[i,k,idx_h[:,None],idx_h] += v
+                        if hermi == 1:
+                            veff[i,k,idx_h[:,None],idx_h] += v.conj().T
+                        else:
+                            aow = numint._scale_ao(ao_h[k], v_rs[i].conj())
+                            v = lib.dot(aow.conj().T, ao_h[k][0])
+                            veff[i,k,idx_h[:,None],idx_h] += v
                 ao_h = ao_h_etc = None
         else:
             idx_h = grids_dense.ao_idx
@@ -895,27 +954,48 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             h_cell = grids_dense.cell
             l_cell = grids_sparse.cell
             t_cell = h_cell + l_cell
-            t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
+            t_cell, coeff = t_cell.to_uncontracted_cartesian_basis()
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
 
-            h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
-            l_coeff = scipy.linalg.block_diag(*t_coeff[h_cell.nbas:])
-            t_coeff = scipy.linalg.block_diag(*t_coeff)
+            h_coeff = scipy.linalg.block_diag(*coeff[:h_cell.nbas])
+            l_coeff = scipy.linalg.block_diag(*coeff[h_cell.nbas:])
+            t_coeff = scipy.linalg.block_diag(*coeff)
 
             shls_slice = (0, nshells_h, 0, nshells_t)
-            v = eval_mat(t_cell, wv, shls_slice, 1, 0, 'GGA', kpts)
-            v = lib.einsum('nkpq,pi,qj->nkij', v, h_coeff, t_coeff)
-            veff[:,:,idx_h[:,None],idx_h] += v[:,:,:,:naoh]
-            veff[:,:,idx_h[:,None],idx_h] += v[:,:,:,:naoh].conj().transpose(0,1,3,2)
-            veff[:,:,idx_h[:,None],idx_l] += v[:,:,:,naoh:]
-            veff[:,:,idx_l[:,None],idx_h] += v[:,:,:,naoh:].conj().transpose(0,1,3,2)
+            vpR = eval_mat(t_cell, vR, shls_slice, 1, 0, 'GGA', kpts)
+            vp = vpR = lib.einsum('nkpq,pi,qj->nkij', vpR, h_coeff, t_coeff)
+            if not ignore_vG_imag:
+                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'GGA', kpts)
+                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, h_coeff, t_coeff)
+                vp = numpy.asarray(vpR) + numpy.asarray(vpI) * 1j
+            veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh]
+            veff[:,:,idx_h[:,None],idx_l] += vp[:,:,:,naoh:]
+            if hermi == 1:
+                veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh].conj().transpose(0,1,3,2)
+                veff[:,:,idx_l[:,None],idx_h] += vp[:,:,:,naoh:].conj().transpose(0,1,3,2)
+            else:
+                if not ignore_vG_imag:
+                    # eval_mat only supports <nabla i|v|j>. Evaluate <i|v|nabla j>
+                    # by conj(<nabla j|conj(v)|>)
+                    vp = numpy.asarray(vpR) - numpy.asarray(vpI) * 1j
+                veff[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh].conj().transpose(0,1,3,2)
+                veff[:,:,idx_l[:,None],idx_h] += vp[:,:,:,naoh:].conj().transpose(0,1,3,2)
 
             shls_slice = (nshells_h, nshells_t, 0, nshells_h)
-            v = eval_mat(t_cell, wv, shls_slice, 1, 0, 'GGA', kpts)#, offset, submesh)
-            v = lib.einsum('nkpq,pi,qj->nkij', v, l_coeff.conj(), h_coeff)
-            veff[:,:,idx_l[:,None],idx_h] += v
-            veff[:,:,idx_h[:,None],idx_l] += v.conj().transpose(0,1,3,2)
+            vpR = eval_mat(t_cell, vR, shls_slice, 1, 0, 'GGA', kpts)
+            vp = vpR = lib.einsum('nkpq,pi,qj->nkij', vpR, l_coeff, h_coeff)
+            if not ignore_vG_imag:
+                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'GGA', kpts)
+                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, l_coeff, h_coeff)
+                vp = numpy.asarray(vpR) + numpy.asarray(vpI) * 1j
+            veff[:,:,idx_l[:,None],idx_h] += vp
+            if hermi == 1:
+                veff[:,:,idx_h[:,None],idx_l] += vp.conj().transpose(0,1,3,2)
+            else:
+                if not ignore_vG_imag:
+                    vp = numpy.asarray(vpR) - numpy.asarray(vpI) * 1j
+                veff[:,:,idx_h[:,None],idx_l] += vp.conj().transpose(0,1,3,2)
 
     return veff
 
@@ -957,6 +1037,9 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
+    elif xctype == 'MGGA':
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
+        raise NotImplementedError
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
 
     mesh = mydf.mesh
@@ -973,21 +1056,20 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rhoR = rhoR.reshape(nset,-1,ngrids)
+    nelec = rhoR[:,0].sum(axis=1) * weight
+
     wv_freq = []
-    nelec = numpy.zeros(nset)
     excsum = numpy.zeros(nset)
     for i in range(nset):
-        exc, vxc = ni.eval_xc(xc_code, rhoR[i], spin=0, deriv=1)[:2]
         if xctype == 'LDA':
-            wv = vxc[0].reshape(1,ngrids) * weight
-        elif xctype == 'GGA':
-            wv = numint._rks_gga_wv0(rhoR[i], vxc, weight)
-
-        nelec[i] += rhoR[i,0].sum() * weight
+            exc, vxc = ni.eval_xc_eff(xc_code, rhoR[i,0], deriv=1, xctype=xctype)[:2]
+        else:
+            exc, vxc = ni.eval_xc_eff(xc_code, rhoR[i], deriv=1, xctype=xctype)[:2]
         excsum[i] += (rhoR[i,0]*exc).sum() * weight
+        wv = weight * vxc
         wv_freq.append(tools.fft(wv, mesh))
-    rhoR = rhoG = None
     wv_freq = numpy.asarray(wv_freq).reshape(nset,-1,*mesh)
+    rhoR = rhoG = None
 
     if nset == 1:
         ecoul = ecoul[0]
@@ -999,15 +1081,17 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     if xctype == 'LDA':
         if with_j:
             wv_freq[:,0] += vG.reshape(nset,*mesh)
-        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        veff = _get_j_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     elif xctype == 'GGA':
-        if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
-            wv_freq[:,0] += vG.reshape(nset,*mesh) * .5
-        veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        if with_j:
+            wv_freq[:,0] += vG.reshape(nset,*mesh)
+        # *.5 because v+v.T is always called in _get_gga_pass2
+        wv_freq[:,0] *= .5
+        veff = _get_gga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
     if return_j:
-        vj = _get_j_pass2(mydf, vG, kpts_band, verbose=log)
+        vj = _get_j_pass2(mydf, vG, hermi, kpts_band, verbose=log)
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
@@ -1047,7 +1131,9 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    assert(nset == 2)
+    nset //= 2
+    # Do not support gks
+    assert nset == 1
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
 
     ni = mydf._numint
@@ -1057,14 +1143,17 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
+    elif xctype == 'MGGA':
+        raise NotImplementedError
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
+    rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
+    rhoG = rhoG.reshape(nset,2,-1,ngrids)
     coulG = tools.get_coulG(cell, mesh=mesh)
-    vG = numpy.einsum('ng,g->g', rhoG[:,0], coulG)
-    ecoul = .5 * numpy.einsum('ng,g->', rhoG[:,0].real, vG.real)
-    ecoul+= .5 * numpy.einsum('ng,g->', rhoG[:,0].imag, vG.imag)
+    vG = numpy.einsum('nsg,g->ng', rhoG[:,:,0], coulG)
+    ecoul = .5 * numpy.einsum('nsg,ng->n', rhoG[:,:,0].real, vG.real)
+    ecoul+= .5 * numpy.einsum('nsg,ng->n', rhoG[:,:,0].imag, vG.imag)
     ecoul /= cell.vol
     log.debug('Multigrid Coulomb energy %s', ecoul)
 
@@ -1072,42 +1161,43 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-    rhoR = rhoR.reshape(2,-1,ngrids)
+    rhoR = rhoR.reshape(nset,2,-1,ngrids)
+    nelec = numpy.einsum('nsg->n', rhoR[:,:,0]) * weight
+
     wv_freq = []
-    nelec = numpy.zeros((2))
-    excsum = 0
-
-    exc, vxc = ni.eval_xc(xc_code, rhoR, spin=1, deriv=1)[:2]
-    if xctype == 'LDA':
-        vrho = vxc[0]
-        wva = vrho[:,0].reshape(1,ngrids) * weight
-        wvb = vrho[:,1].reshape(1,ngrids) * weight
-    elif xctype == 'GGA':
-        wva, wvb = numint._uks_gga_wv0(rhoR, vxc, weight)
-
-    nelec[0] += rhoR[0,0].sum() * weight
-    nelec[1] += rhoR[1,0].sum() * weight
-    excsum += (rhoR[0,0]*exc).sum() * weight
-    excsum += (rhoR[1,0]*exc).sum() * weight
-    wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
-    wv_freq = wv_freq.reshape(2,-1,*mesh)
+    excsum = numpy.zeros(nset)
+    for i in range(nset):
+        exc, vxc = ni.eval_xc_eff(xc_code, rhoR[i], deriv=1, xctype=xctype)[:2]
+        excsum[i] = (rhoR[i,:,0]*exc).sum() * weight
+        log.debug('Multigrid exc %g  nelec %s', excsum, nelec[i])
+        wv = weight * vxc
+        wv_freq.append(tools.fft(wv, mesh))
+    wv_freq = numpy.asarray(wv_freq).reshape(nset,2,-1,*mesh)
     rhoR = rhoG = None
-    log.debug('Multigrid exc %g  nelec %s', excsum, nelec)
 
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+    if with_j:
+        wv_freq[:,:,0] += vG.reshape(*mesh)
+
     if xctype == 'LDA':
-        if with_j:
-            wv_freq[:,0] += vG.reshape(*mesh)
-        veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        veff = _get_j_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     elif xctype == 'GGA':
-        if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
-            wv_freq[:,0] += vG.reshape(*mesh) * .5
-        veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
+        # *.5 because v+v.T is always called in _get_gga_pass2
+        wv_freq[:,0] *= .5
+        veff = _get_gga_pass2(mydf, wv_freq, hermi, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
+    veff = veff.reshape(nset, 2, len(kpts_band), nao, nao)
+
+    if nset == 1:
+        veff = veff[0]
+        ecoul = ecoul[0]
+        nelec = nelec[0]
+        excsum = excsum[0]
 
     if return_j:
-        vj = _get_j_pass2(mydf, vG, kpts_band, verbose=log)
+        vj = _get_j_pass2(mydf, vG, hermi, kpts_band, verbose=log)
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
+        if nset == 1:
+            vj = vj[0]
     else:
         vj = None
 
@@ -1115,7 +1205,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     return nelec, excsum, veff
 
 
-def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
+def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc
     '''
@@ -1136,46 +1226,48 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    else:
-        deriv = 2
+    elif xctype == 'MGGA':
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
+        raise NotImplementedError
 
     weight = cell.vol / ngrids
     if rho0 is None:
         rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+        if xctype == 'LDA':
+            rho0 = rho0.reshape(ngrids)
 
-    if vxc is None or fxc is None:
-        vxc, fxc = ni.eval_xc(xc_code, rho0, spin=0, deriv=2)[1:3]
+    if fxc is None:
+        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
 
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
+    if hermi == 1:
+        rho1 = rho1.real
+    rho1 *= (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
+    wv = numpy.einsum('nxg,xyg->nyg', rho1, fxc)
+    wv *= weight
+    wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
+
     if with_j:
         coulG = tools.get_coulG(cell, mesh=mesh)
         vG = rhoG[:,0] * coulG
         vG = vG.reshape(nset, *mesh)
+        wv[:,0] += vG
 
     if xctype == 'LDA':
-        frr = fxc[0]
-        wv = weight * frr * rho1
-        wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG
-        veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
+        veff = _get_j_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     elif xctype == 'GGA':
-        wv = [numint._rks_gga_wv1(rho0, rho1[i], vxc, fxc, weight)
-              for i in range(nset)]
-        wv = numpy.vstack(wv).reshape(-1,ngrids)
-        wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG * .5
-        veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
+        # *.5 because v+v.T is always called in _get_gga_pass2
+        wv[:,0] *= .5
+        veff = _get_gga_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=1, singlet=True, with_j=False,
+def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, singlet=True,
                   rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_rks_fxc_st
     '''
@@ -1196,68 +1288,54 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=1, singlet=True, with_j=F
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    else:
-        deriv = 2
+    elif xctype == 'MGGA':
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
+        raise NotImplementedError
 
     weight = cell.vol / ngrids
     if rho0 is None:
-        rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
+        rhoG = _eval_rhoG(mydf, dm0, 1, kpts, deriv)
         # *.5 to get alpha density
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (.5/weight)
-        rho0 = (rho0, rho0)
+        if xctype == 'LDA':
+            rho0 = rho0.reshape(ngrids)
+        rho0 = numpy.stack((rho0, rho0))
 
-    if vxc is None or fxc is None:
-        vxc, fxc = ni.eval_xc(xc_code, rho0, spin=1, deriv=2)[1:3]
+    if gamma_point(kpts):
+        # implies real orbitals and real matrix, thus K_{ia,bj} = K_{ia,jb}
+        # The output matrix v = K*x_{ia} is symmetric
+        hermi = 1
+    else:
+        hermi = 0
 
+    if fxc is None:
+        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
+    if singlet:
+        fxc = fxc[0,:,0] + fxc[0,:,1]
+    else:
+        fxc = fxc[0,:,0] - fxc[0,:,1]
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
+    if hermi == 1:
+        rho1 = rho1.real
+    rho1 *= (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
-    if with_j:
-        coulG = tools.get_coulG(cell, mesh=mesh)
-        vG = rhoG[:,0] * coulG
-        vG = vG.reshape(nset, *mesh)
+    wv = numpy.einsum('nxg,xyg->nyg', rho1, fxc)
+    wv *= weight
+    wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
 
     if xctype == 'LDA':
-        u_u, u_d, d_d = fxc[0].T
-        if singlet:
-            frho = u_u + u_d
-        else:
-            frho = u_u - u_d
-        wv = weight * frho * rho1
-        wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG
-        veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
+        veff = _get_j_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     elif xctype == 'GGA':
-        vsigma = vxc[1].T
-        u_u, u_d, d_d = fxc[0].T  # v2rho2
-        u_uu, u_ud, u_dd, d_uu, d_ud, d_dd = fxc[1].T  # v2rhosigma
-        uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd = fxc[2].T  # v2sigma2
-        if singlet:
-            fgamma = vsigma[0] + vsigma[1] * .5
-            frho = u_u + u_d
-            fgg = uu_uu + .5*ud_ud + 2*uu_ud + uu_dd
-            frhogamma = u_uu + u_dd + u_ud
-        else:
-            fgamma = vsigma[0] - vsigma[1] * .5
-            frho = u_u - u_d
-            fgg = uu_uu - uu_dd
-            frhogamma = u_uu - u_dd
-
-        wv = [numint._rks_gga_wv1(rho0[0], rho1[i], (None,fgamma),
-                                  (frho,frhogamma,fgg), weight)
-              for i in range(nset)]
-        wv = numpy.asarray(wv).reshape(-1,ngrids)
-        wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG * .5
-        veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
+        # *.5 because v+v.T is always called in _get_gga_pass2
+        wv[:,0] *= .5
+        veff = _get_gga_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
+def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
     '''multigrid version of function pbc.dft.numint.nr_uks_fxc
     '''
@@ -1271,7 +1349,7 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
     dm_kpts = lib.asarray(dms, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    assert(nset == 2)
+    nstates = nset // 2
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
@@ -1279,43 +1357,45 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
         deriv = 0
     elif xctype == 'GGA':
         deriv = 1
-    else:
-        deriv = 2
+    elif xctype == 'MGGA':
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
+        raise NotImplementedError
 
     weight = cell.vol / ngrids
     if rho0 is None:
         rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-        rho0 = rho0.reshape(nset,-1,ngrids)
+        if xctype == 'LDA':
+            rho0 = rho0.reshape(2,ngrids)
+        else:
+            rho0 = rho0.reshape(2,-1,ngrids)
 
-    if vxc is None or fxc is None:
-        vxc, fxc = ni.eval_xc(xc_code, rho0, spin=1, deriv=2)[1:3]
+    if fxc is None:
+        fxc = ni.eval_xc_eff(xc_code, rho0, deriv=2, xctype=xctype)[2]
 
     rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-    rho1 = rho1.reshape(nset,-1,ngrids)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh)
+    if hermi == 1:
+        rho1 = rho1.real
+    rho1 *= (1./weight)
+    # rho1 = (rho1a, rho1b); rho1.shape = (2, nstates, nvar, ngrids)
+    rho1 = rho1.reshape(2,nstates,-1,ngrids)
+    wv = numpy.einsum('anxg,axbyg->nbyg', rho1, fxc)
+    wv *= weight
+    wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
     if with_j:
         coulG = tools.get_coulG(cell, mesh=mesh)
         vG = (rhoG[0,0] + rhoG[1,0]) * coulG
         vG = vG.reshape(mesh)
+        wv[:,0] += vG
 
     if xctype == 'LDA':
-        u_u, u_d, d_d = fxc[0].T
-        wv = numpy.asarray([u_u * rho1[0] + u_d * rho1[1],
-                            u_d * rho1[0] + d_d * rho1[1]])
-        wv *= weight
-        wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG
-        veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
+        veff = _get_j_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     elif xctype == 'GGA':
-        wv = numint._uks_gga_wv1(rho0, rho1, vxc, fxc, weight)
-        wv = numpy.vstack(wv).reshape(-1,ngrids)
-        wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
-        if with_j:
-            wv[:,0] += vG * .5
-        veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
+        # *.5 because v+v.T is always called in _get_gga_pass2
+        wv[:,0] *= .5
+        veff = _get_gga_pass2(mydf, wv, hermi, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
@@ -1338,19 +1418,26 @@ def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
     elif xctype == 'GGA':
         deriv = 1
         comp = 4
-    else:
-        deriv = 2
+    elif xctype == 'MGGA':
+        deriv = 2 if MGGA_DENSITY_LAPL else 1
+        comp = 6
 
     hermi = 1
     weight = cell.vol / ngrids
     rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv)
     rho = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
-    if spin == 0:
-        rho = rho.reshape(comp,ngrids)
+    if xctype == 'LDA':
+        if spin == 0:
+            rho = rho.ravel()
+        else:
+            rho = rho.reshape(2,ngrids)
     else:
-        rho = rho.reshape(2,comp,ngrids)
+        if spin == 0:
+            rho = rho.reshape(comp,ngrids)
+        else:
+            rho = rho.reshape(2,comp,ngrids)
 
-    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, deriv=2)[1:3]
+    vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
     return rho, vxc, fxc
 
 def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
@@ -1376,11 +1463,11 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
             v1 = nr_rks_fxc(mf.with_df, mf.xc, dm0, dm1, hermi,
                             True, rho0, vxc, fxc, kpts)
         elif singlet:
-            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, hermi, singlet,
-                               True, rho0, vxc, fxc, kpts)
+            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, singlet,
+                               rho0, vxc, fxc, kpts)
         else:
-            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, hermi, singlet,
-                               False, rho0, vxc, fxc, kpts)
+            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, singlet,
+                               rho0, vxc, fxc, kpts)
         return v1
     return vind
 

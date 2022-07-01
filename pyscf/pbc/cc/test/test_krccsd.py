@@ -1108,19 +1108,4 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
-    #unittest.main()
-    if 1:
-        kmf = make_rand_kmf()
-        rand_cc = pbcc.KRCCSD(kmf)
-        rand_cc.direct = True
-        rand_cc._scf.with_df = pbc_df.GDF(kmf.cell, kmf.kpts)
-        eris3 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff,
-                                     method='outcore')
-        print(lib.fp(eris3.oooo) - (  0.13807643618081983+0.02706881005926997j))
-        print(lib.fp(eris3.ooov) - (  0.11503403213521873-0.04088028212967049j))
-        print(lib.fp(eris3.oovv) - ( -0.23166000424452704+0.01922808953198968j))
-        print(lib.fp(eris3.ovov) - ( -0.4333329222923895 -0.2542273009739961j ))
-        print(lib.fp(eris3.voov) - ( -0.3851423191571177 +0.26086853075652333j))
-        print(lib.fp(eris3.vovv) - ( -0.12653400070346893+0.17634730801555784j))
-        print(lib.fp(np.array(eris3.Lpv.tolist())) -
-              (-2.2567245766867092+0.7648803028093745j))
+    unittest.main()

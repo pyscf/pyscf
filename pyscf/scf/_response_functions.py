@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 Generate SCF response functions
 '''
 
+import warnings
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -172,9 +173,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
-        #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
-        #      numpy.dot(mo_coeff[1]*mo_occ[1], mo_coeff[1].T.conj()))
-        dm0 = None
+        dm0 = None  #mf.make_rdm1(mo_coeff, mo_occ)
 
         if max_memory is None:
             mem_now = lib.current_memory()[0]
@@ -227,7 +226,51 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if isinstance(mf, hf.KohnShamDFT):
-        raise NotImplementedError
+        from pyscf.dft import numint2c, r_numint
+        ni = mf._numint
+        assert isinstance(ni, (numint2c.NumInt2C, r_numint.RNumInt))
+        ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+        if getattr(mf, 'nlc', '') != '':
+            raise NotImplementedError('NLC')
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.UKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            raise NotImplementedError
+
+        rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc, mo_coeff, mo_occ, 1)
+        dm0 = None
+
+        if max_memory is None:
+            mem_now = lib.current_memory()[0]
+            max_memory = max(2000, mf.max_memory*.8-mem_now)
+
+        def vind(dm1):
+            if hermi == 2:
+                v1 = numpy.zeros_like(dm1)
+            else:
+                v1 = ni.get_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, 0, hermi,
+                                rho0, vxc, fxc, max_memory=max_memory)
+            if not hybrid:
+                if with_j:
+                    vj = mf.get_j(mol, dm1, hermi=hermi)
+                    v1 += vj
+            else:
+                if with_j:
+                    vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 += vj - vk
+                else:
+                    vk = mf.get_k(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if omega > 1e-10:  # For range separated Coulomb
+                        vk += mf.get_k(mol, dm1, hermi, omega) * (alpha-hyb)
+                    v1 -= vk
+            return v1
 
     elif with_j:
         def vind(dm1):
@@ -246,22 +289,7 @@ def _gen_dhf_response(mf, mo_coeff=None, mo_occ=None,
     '''Generate a function to compute the product of DHF response function and
     DHF density matrices.
     '''
-    if mo_coeff is None: mo_coeff = mf.mo_coeff
-    if mo_occ is None: mo_occ = mf.mo_occ
-    mol = mf.mol
-    if isinstance(mf, hf.KohnShamDFT):
-        raise NotImplementedError
-
-    elif with_j:
-        def vind(dm1):
-            vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-            return vj - vk
-
-    else:
-        def vind(dm1):
-            return -mf.get_k(mol, dm1, hermi=hermi)
-
-    return vind
+    return _gen_ghf_response(mf, mo_coeff, mo_occ, with_j, hermi, max_memory)
 
 
 hf.RHF.gen_response = _gen_rhf_response

@@ -25,7 +25,7 @@ from pyscf.lib import logger
 from pyscf import lib
 from pyscf.grad import rks as rks_grad
 from pyscf.pbc.grad import kuhf as uhf_grad
-from pyscf.pbc.dft import numint
+from pyscf.dft import numint
 from pyscf.pbc import gto
 
 
