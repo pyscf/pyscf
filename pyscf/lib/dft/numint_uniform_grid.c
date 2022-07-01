@@ -2640,7 +2640,7 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                 rho_priv = calloc(comp*ngrids, sizeof(double));
         }
         rhobufs[thread_id] = rho_priv;
-        if (hermi) {
+        if (hermi == 1) {
 // Note hermitian character of the density matrices can only be found by
 // rearranging the repeated images:
 //     dmR - dmR[::-1].transpose(0,2,1) == 0

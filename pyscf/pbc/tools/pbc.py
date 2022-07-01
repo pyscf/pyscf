@@ -633,7 +633,7 @@ def cutoff_to_mesh(a, cutoff):
 
     Args:
         a : (3,3) ndarray
-            The real-space unit cell lattice vectors. Each row represents a
+            The real-space cell lattice vectors. Each row represents a
             lattice vector.
         cutoff : float
             KE energy cutoff in a.u.

@@ -64,7 +64,7 @@ def contract(myci, civec, eris):
     nocc = myci.nocc
     nmo = myci.nmo
 
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
 
     fock = eris.fock
     foo = fock[:nocc,:nocc]
@@ -110,10 +110,11 @@ def amplitudes_to_cisdvec(c0, c1, c2):
                          ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
     return numpy.hstack((c0, c1.ravel(), c2tril.ravel()))
 
-def cisdvec_to_amplitudes(civec, nmo, nocc):
+def cisdvec_to_amplitudes(civec, nmo, nocc, copy=True):
     nvir = nmo - nocc
     c0 = civec[0]
-    c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
+    cp = lambda x: (x.copy() if copy else x)
+    c1 = cp(civec[1:nocc*nvir+1].reshape(nocc,nvir))
     c2 = ccsd._unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
     return c0, c1, c2
 
@@ -130,9 +131,9 @@ def from_ucisdvec(civec, nocc, orbspin):
     nvira = nmoa - nocca
 
     if civec.size == nocca*nvira + (nocca*nvira)**2 + 1:  # RCISD
-        c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca)
+        c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca, copy=False)
     else:  # UCISD
-        c0, c1, c2 = ucisd.cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb))
+        c0, c1, c2 = ucisd.cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb), copy=False)
     c1 = spatial2spin(c1, orbspin)
     c2 = spatial2spin(c2, orbspin)
     return amplitudes_to_cisdvec(c0, c1, c2)
@@ -140,7 +141,7 @@ from_rcisdvec = from_ucisdvec
 
 def to_ucisdvec(civec, nmo, nocc, orbspin):
     '''Convert the GCISD coefficient vector to UCISD coefficient vector'''
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     c1 = spin2spatial(c1, orbspin)
     c2 = spin2spatial(c2, orbspin)
     ucisdvec = ucisd.amplitudes_to_cisdvec(c0, c1, c2)
@@ -237,7 +238,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
                                 ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     dvo = c0.conj() * c1.T
     dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2)
     dov = dvo.T.conj()
@@ -248,7 +249,7 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     return doo, dov, dvo, dvv
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
-    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     goovv = c0 * c2.conj() * .5
     govvv = numpy.einsum('ia,ikcd->kadc', c1, c2.conj()) * .5
     gooov = numpy.einsum('ia,klac->klic', c1, c2.conj()) *-.5
@@ -280,8 +281,8 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     '''
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
-    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc, copy=False)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc, copy=False)
 
     dvo = c0bra.conj() * c1ket.T
     dvo += numpy.einsum('jb,ijab->ai', c1bra.conj(), c2ket)
@@ -391,10 +392,10 @@ class GCISD(cisd.CISD):
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
 
-    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None, copy=True):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
-        return cisdvec_to_amplitudes(civec, nmo, nocc)
+        return cisdvec_to_amplitudes(civec, nmo, nocc, copy=copy)
 
     @lib.with_doc(from_ucisdvec.__doc__)
     def from_ucisdvec(self, civec, nocc=None, orbspin=None):

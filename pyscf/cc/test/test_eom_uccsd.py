@@ -306,8 +306,33 @@ class KnownValues(unittest.TestCase):
         v1 = eomsf.amplitudes_to_vector(r1, r2)
         self.assertAlmostEqual(abs(v-v1).max(), 0, 12)
 
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.UHF(mol).apply(cc.UCCSD)
+        nelec = (3,3)
+        nocc = nelec
+        nmo = (5, 5)
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        def check_overwritten(method):
+            vec = numpy.zeros(method.vector_size())
+            vec_orig = vec.copy()
+            ts = method.vector_to_amplitudes(vec)
+            for ti in ts:
+                if isinstance(ti, numpy.ndarray):
+                    ti[:] = 1
+                else:
+                    for t in ti:
+                        t[:] = 1
+            self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
+        check_overwritten(mycc)
+        check_overwritten(mycc.EOMIP())
+        check_overwritten(mycc.EOMEA())
+        check_overwritten(mycc.EOMEESpinKeep())
+        check_overwritten(mycc.EOMEESpinFlip())
+
 
 if __name__ == "__main__":
     print("Tests for UCCSD")
     unittest.main()
-

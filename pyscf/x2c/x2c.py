@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+X2C 2-component HF methods
+'''
 
 from functools import reduce
 import copy
@@ -406,14 +409,12 @@ def get_jk(mol, dm, hermi=1, mf_opt=None, with_j=True, with_k=True, omega=None):
     '''non-relativistic J/K matrices (without SSO,SOO etc) in the j-adapted
     spinor basis.
     '''
-    n2c = dm.shape[0]
-    dd = numpy.zeros((n2c*2,)*2, dtype=numpy.complex128)
-    dd[:n2c,:n2c] = dm
-    dhf._call_veff_llll(mol, dd, hermi, None)
     vj, vk = _vhf.rdirect_mapdm('int2e_spinor', 's8',
                                 ('ji->s2kl', 'jk->s1il'), dm, 1,
                                 mol._atm, mol._bas, mol._env, mf_opt)
-    return dhf._jk_triu_(vj, vk, hermi)
+    vj = vj.reshape(dm.shape)
+    vk = vk.reshape(dm.shape)
+    return dhf._jk_triu_(mol, vj, vk, hermi)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
     return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
@@ -451,7 +452,7 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 
-class X2C_UHF(hf.SCF):
+class SCF(hf.SCF):
     '''The full X2C problem (scaler + soc terms) in j-adapted spinor basis'''
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
@@ -468,8 +469,7 @@ class X2C_UHF(hf.SCF):
 
     def dump_flags(self, verbose=None):
         hf.SCF.dump_flags(self, verbose)
-        if self.with_x2c:
-            self.with_x2c.dump_flags(verbose)
+        self.with_x2c.dump_flags(verbose)
         return self
 
     def init_guess_by_minao(self, mol=None):
@@ -503,14 +503,18 @@ class X2C_UHF(hf.SCF):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         mo_occ = numpy.zeros_like(mo_energy)
-        mo_occ[:mol.nelectron] = 1
-        if mol.nelectron < len(mo_energy):
-            logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
-                        mol.nelectron, mo_energy[mol.nelectron-1],
-                        mo_energy[mol.nelectron])
+        nocc = mol.nelectron
+        mo_occ[:nocc] = 1
+        if nocc < len(mo_energy):
+            if mo_energy[nocc-1]+1e-3 > mo_energy[nocc]:
+                logger.warn(self, 'HOMO %.15g == LUMO %.15g',
+                            mo_energy[nocc-1], mo_energy[nocc])
+            else:
+                logger.info(self, 'nocc = %d  HOMO = %.12g  LUMO = %.12g',
+                            nocc, mo_energy[nocc-1], mo_energy[nocc])
         else:
             logger.info(self, 'nocc = %d  HOMO = %.12g  no LUMO',
-                        mol.nelectron, mo_energy[mol.nelectron-1])
+                        nocc, mo_energy[nocc-1])
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
@@ -608,9 +612,55 @@ class X2C_UHF(hf.SCF):
     def sfx2c1e(self):
         raise NotImplementedError
 
-UHF = X2C_UHF
+    def newton(self):
+        from pyscf.x2c.newton_ah import newton
+        return newton(self)
 
-class X2C_RHF(X2C_UHF):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+        '''
+        X2C-HF/X2C-KS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            return_status: bool
+                Whether to return `stable_i` and `stable_e`
+
+        Returns:
+            If return_status is False (default), the return value includes
+            two set of orbitals, which are more close to the stable condition.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+
+            Else, another two boolean variables (indicating current status:
+            stable or unstable) are returned.
+            The first corresponds to the internal stability
+            and the second corresponds to the external stability.
+        '''
+        from pyscf.x2c.stability import x2chf_stability
+        return x2chf_stability(self, verbose, return_status)
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
+X2C_SCF = SCF
+
+class UHF(SCF):
+    def to_ks(self, xc='HF'):
+        '''Convert the input mean-field object to an X2C-KS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.x2c import dft
+        mf = self.view(dft.UKS)
+        mf.converged = False
+        return mf
+
+X2C_UHF = UHF
+
+class RHF(SCF):
     def __init__(self, mol):
         super().__init__(mol)
         if dhf.zquatev is None:
@@ -619,46 +669,25 @@ class X2C_RHF(X2C_UHF):
     def _eigh(self, h, s):
         return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
 
-RHF = X2C_RHF
+    def to_ks(self, xc='HF'):
+        '''Convert the input mean-field object to an X2C-KS object.
 
-try:
-    from pyscf.dft import rks, dks, gks, r_numint
-    class X2C_UKS(X2C_UHF, rks.KohnShamDFT):
-        def __init__(self, mol):
-            X2C_UHF.__init__(self, mol)
-            rks.KohnShamDFT.__init__(self)
-            self._numint = r_numint.RNumInt()
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        from pyscf.x2c import dft
+        mf = self.view(dft.RKS)
+        mf.converged = False
+        return mf
 
-        def dump_flags(self, verbose=None):
-            hf.SCF.dump_flags(self, verbose)
-            rks.KohnShamDFT.dump_flags(self, verbose)
-            if self.with_x2c:
-                self.with_x2c.dump_flags(verbose)
-            return self
-
-        get_veff = dks.get_veff
-        energy_elec = rks.energy_elec
-
-    UKS = X2C_UKS
-
-    class X2C_RKS(X2C_UKS):
-        def __init__(self, mol):
-            super().__init__(mol)
-            if dhf.zquatev is None:
-                raise RuntimeError('zquatev library is required to perform Kramers-restricted X2C-RHF')
-
-        def _eigh(self, h, s):
-            return dhf.zquatev.solve_KR_FCSCE(self.mol, h, s)
-
-    RKS = X2C_RKS
-
-except ImportError:
-    pass
+X2C_RHF = RHF
 
 def x2c1e_ghf(mf):
     '''
     For the given *GHF* object, generate X2C-GSCF object in GHF spin-orbital
-    basis
+    basis. Note the orbital basis of X2C_GSCF is different to the X2C_RHF and
+    X2C_UHF objects. X2C_RHF and X2C_UHF use spinor basis.
 
     Args:
         mf : an GHF/GKS object
@@ -1011,6 +1040,7 @@ class _X2C_SCF:
 
 
 if __name__ == '__main__':
+    from pyscf.x2c import dft
     mol = mole.Mole()
     mol.build(
         verbose = 0,
@@ -1032,6 +1062,6 @@ if __name__ == '__main__':
     method.with_x2c.approx = 'atom1e'
     print('E(X2C1E) = %.12g' % method.kernel())
 
-    method = UKS(mol)
+    method = dft.UKS(mol)
     ex2c = method.kernel()
     print('E(X2C1E) = %.12g' % ex2c)

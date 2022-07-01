@@ -19,6 +19,7 @@
 import unittest
 import numpy
 from pyscf import gto
+from pyscf import lib
 from pyscf import symm
 
 def get_so(atoms, basis, cart=False):
@@ -171,6 +172,21 @@ class KnowValues(unittest.TestCase):
         idx, idy = numpy.where(numpy.hstack(so) != 0)
         self.assertEqual(idy.argsort().tolist(),
                          [0,1,2,3,4,6,9,12,15,7,10,13,16,5,8,11,14,17,22,18,23,19,24,20,25,21,26,27,28,29,30,31,32,33])
+
+    def test_so3_symb2id(self):
+        ref = symm.basis._SO3_SYMB2ID
+        with lib.temporary_env(symm.basis, _SO3_SYMB2ID={}):
+            for s in ['p+1', 'd+0', 'f-2', 'g+4', 'f+0']:
+                self.assertEqual(ref[s], symm.basis.so3_irrep_symb2id(s))
+        self.assertRaises(KeyError, symm.basis.so3_irrep_symb2id, 'k-8')
+
+    def test_so3_id2symb(self):
+        ref = symm.basis._SO3_ID2SYMB
+        with lib.temporary_env(symm.basis, _SO3_ID2SYMB={}):
+            for s in [200, 202, 314, 317, 421, 420]:
+                self.assertEqual(ref[s], symm.basis.so3_irrep_id2symb(s))
+        self.assertRaises(KeyError, symm.basis.so3_irrep_id2symb, 746)
+        self.assertRaises(KeyError, symm.basis.so3_irrep_id2symb, 729)
 
 
 if __name__ == "__main__":

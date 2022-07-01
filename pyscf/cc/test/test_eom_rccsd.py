@@ -244,6 +244,32 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mycc1.t1-t1).sum(), 0, 9)
         self.assertAlmostEqual(abs(mycc1.t2-t2).sum(), 0, 9)
 
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.RHF(mol).apply(cc.RCCSD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0], 4
+        nmo = nocc + nvir
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        def check_overwritten(method):
+            vec = numpy.zeros(method.vector_size())
+            vec_orig = vec.copy()
+            ts = method.vector_to_amplitudes(vec)
+            for ti in ts:
+                if isinstance(ti, numpy.ndarray):
+                    ti[:] = 1
+                else:
+                    for t in ti:
+                        t[:] = 1
+            self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
+        check_overwritten(mycc)
+        check_overwritten(mycc.EOMIP())
+        check_overwritten(mycc.EOMEA())
+        check_overwritten(mycc.EOMEESinglet())
+        check_overwritten(mycc.EOMEETriplet())
+
     def test_eomee_ccsd_matvec_singlet(self):
         numpy.random.seed(10)
         r1 = numpy.random.random((no,nv)) - .9
@@ -876,4 +902,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Tests for EOM RCCSD")
     unittest.main()
-

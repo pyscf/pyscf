@@ -478,16 +478,7 @@ class ROHF(hf.RHF):
 
 
 class HF1e(ROHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = hf._hf1e_scf
+
 
 del(WITH_META_LOWDIN)

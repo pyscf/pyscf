@@ -46,6 +46,15 @@ if (BUILD_MARCH_NATIVE)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
     endif()
   endif()
+else()
+  if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    include(CheckCCompilerFlag)
+    CHECK_C_COMPILER_FLAG("-msse3" COMPILER_SUPPORTS_SSE3)
+    if(COMPILER_SUPPORTS_SSE3)
+      # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+    endif()
+  endif()
 endif()
 
 
@@ -157,7 +166,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v5.1.0
+    GIT_TAG v5.1.3
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_CACHE_ARGS

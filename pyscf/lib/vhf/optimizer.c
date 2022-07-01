@@ -21,7 +21,9 @@
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
+#include "fblas.h"
 #include "optimizer.h"
+#include "nr_direct.h"
 #include "np_helper/np_helper.h"
 #include "gto/gto.h"
 
@@ -46,14 +48,14 @@ void CVHFinit_optimizer(CVHFOpt **opt, int *atm, int natm,
 void CVHFdel_optimizer(CVHFOpt **opt)
 {
         CVHFOpt *opt0 = *opt;
-        if (!opt0) {
+        if (opt0 == NULL) {
                 return;
         }
 
-        if (!opt0->q_cond) {
+        if (opt0->q_cond != NULL) {
                 free(opt0->q_cond);
         }
-        if (!opt0->dm_cond) {
+        if (opt0->dm_cond != NULL) {
                 free(opt0->dm_cond);
         }
 
@@ -61,16 +63,14 @@ void CVHFdel_optimizer(CVHFOpt **opt)
         *opt = NULL;
 }
 
-int CVHFnoscreen(int *shls, CVHFOpt *opt,
-                 int *atm, int *bas, double *env)
+int CVHFnoscreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env)
 {
         return 1;
 }
 
-int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
-                        int *atm, int *bas, double *env)
+int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1;
         }
         int i = shls[0];
@@ -87,10 +87,9 @@ int CVHFnr_schwarz_cond(int *shls, CVHFOpt *opt,
         return qijkl > opt->direct_scf_cutoff;
 }
 
-int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
-                       int *atm, int *bas, double *env)
+int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -117,10 +116,9 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
             || (  dm_cond[i*n+l]*qijkl > direct_scf_cutoff));
 }
 
-int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt,
-                          int *atm, int *bas, double *env)
+int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -141,10 +139,9 @@ int CVHFnrs8_vj_prescreen(int *shls, CVHFOpt *opt,
             || (4*qijkl*opt->dm_cond[l*n+k] > direct_scf_cutoff));
 }
 
-int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
-                          int *atm, int *bas, double *env)
+int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt, int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         int i = shls[0];
@@ -169,6 +166,129 @@ int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
             || (  dm_cond[i*n+l]*qijkl > direct_scf_cutoff));
 }
 
+int CVHFnrs8_vj_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls)
+{
+        int i0 = ishls[0];
+        int j0 = jshls[0];
+        int k0 = kshls[0];
+        int l0 = lshls[0];
+        int i1 = ishls[1];
+        int j1 = jshls[1];
+        int k1 = kshls[1];
+        int l1 = lshls[1];
+        int i, j, k, l;
+        size_t n = opt->nbas;
+        double *q_cond = opt->q_cond;
+        double *dm_cond = opt->dm_cond;
+        double direct_scf_cutoff = opt->direct_scf_cutoff;
+        double rho, cutoff;
+        rho = 0;
+        for (j = j0; j < j1; j++) {
+#pragma GCC ivdep
+        for (i = i0; i < i1; i++) {
+                rho += dm_cond[j*n+i] * q_cond[j*n+i];
+        } }
+
+        if (rho != 0) {
+                cutoff = 4 * direct_scf_cutoff / fabs(rho);
+                for (l = l0; l < l1; l++) {
+                for (k = k0; k < k1; k++) {
+                        if (q_cond[l*n+k] > cutoff) {
+                                return 1;
+                        }
+                } }
+        }
+
+        rho = 0;
+        for (l = l0; l < l1; l++) {
+#pragma GCC ivdep
+        for (k = k0; k < k1; k++) {
+                rho += dm_cond[l*n+k] * q_cond[l*n+k];
+        } }
+
+        if (rho != 0) {
+                cutoff = 4 * direct_scf_cutoff / fabs(rho);
+                for (j = j0; j < j1; j++) {
+                for (i = i0; i < i1; i++) {
+                        if (q_cond[j*n+i] > cutoff) {
+                                return 1;
+                        }
+                } }
+        }
+        return 0;
+}
+
+int CVHFnrs8_vk_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls)
+{
+        const double D0 = 0;
+        const double D1 = 1;
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        int i0 = ishls[0];
+        int j0 = jshls[0];
+        int k0 = kshls[0];
+        int l0 = lshls[0];
+        int i1 = ishls[1];
+        int j1 = jshls[1];
+        int k1 = kshls[1];
+        int l1 = lshls[1];
+        int di = i1 - i0;
+        int dj = j1 - j0;
+        int dk = k1 - k0;
+        int dl = l1 - l0;
+        int i;
+        int nbas = opt->nbas;
+        size_t n = opt->nbas;
+        double *q_cond = opt->q_cond;
+        double *dm_cond = opt->dm_cond;
+        double direct_scf_cutoff = opt->direct_scf_cutoff;
+        assert(di < 128);
+        assert(dj < 128);
+        assert(dk < 128);
+        assert(dl < 128);
+        double buf1[128*128];
+        double buf2[128*128];
+
+        dgemm_(&TRANS_N, &TRANS_T, &di, &dk, &dj, &D1, q_cond+j0*n+i0, &nbas, dm_cond+j0*n+k0, &nbas, &D0, buf1, &di);
+        dgemm_(&TRANS_N, &TRANS_T, &dl, &di, &dk, &D1, q_cond+k0*n+l0, &nbas, buf1, &di, &D0, buf2, &dl);
+        for (i = 0; i < di * dl; i++) {
+                if (buf2[i] > direct_scf_cutoff) {
+                        return 1;
+                }
+        }
+
+        dgemm_(&TRANS_N, &TRANS_T, &di, &dl, &dj, &D1, q_cond+j0*n+i0, &nbas, dm_cond+j0*n+l0, &nbas, &D0, buf1, &di);
+        dgemm_(&TRANS_N, &TRANS_T, &dk, &di, &dl, &D1, q_cond+l0*n+k0, &nbas, buf1, &di, &D0, buf2, &dk);
+        for (i = 0; i < di * dk; i++) {
+                if (buf2[i] > direct_scf_cutoff) {
+                        return 1;
+                }
+        }
+
+        dgemm_(&TRANS_N, &TRANS_T, &dj, &dk, &di, &D1, q_cond+i0*n+j0, &nbas, dm_cond+i0*n+k0, &nbas, &D0, buf1, &dj);
+        dgemm_(&TRANS_N, &TRANS_T, &dl, &dj, &dk, &D1, q_cond+k0*n+l0, &nbas, buf1, &dj, &D0, buf2, &dl);
+        for (i = 0; i < dj * dl; i++) {
+                if (buf2[i] > direct_scf_cutoff) {
+                        return 1;
+                }
+        }
+
+        dgemm_(&TRANS_N, &TRANS_T, &dj, &dl, &di, &D1, q_cond+i0*n+j0, &nbas, dm_cond+i0*n+l0, &nbas, &D0, buf1, &dj);
+        dgemm_(&TRANS_N, &TRANS_T, &dk, &dj, &dl, &D1, q_cond+l0*n+k0, &nbas, buf1, &dj, &D0, buf2, &dk);
+        for (i = 0; i < dj * dk; i++) {
+                if (buf2[i] > direct_scf_cutoff) {
+                        return 1;
+                }
+        }
+        return 0;
+}
+
+int CVHFnrs8_prescreen_block(CVHFOpt *opt, int *ishls, int *jshls, int *kshls, int *lshls)
+{
+        return (CVHFnrs8_vj_prescreen_block(opt, ishls, jshls, kshls, lshls) ||
+                CVHFnrs8_vk_prescreen_block(opt, ishls, jshls, kshls, lshls));
+}
+
 // return flag to decide whether transpose01324
 int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
                      double **dms_cond, int n_dm, double *dm_atleast,
@@ -185,7 +305,7 @@ int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_vj_pass1_prescreen(int *shls, CVHFOpt *opt,
                                int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -208,7 +328,7 @@ int CVHFnr3c2e_vj_pass1_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_vj_pass2_prescreen(int *shls, CVHFOpt *opt,
                                int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -231,7 +351,7 @@ int CVHFnr3c2e_vj_pass2_prescreen(int *shls, CVHFOpt *opt,
 int CVHFnr3c2e_schwarz_cond(int *shls, CVHFOpt *opt,
                             int *atm, int *bas, double *env)
 {
-        if (!opt) {
+        if (opt == NULL) {
                 return 1; // no screen
         }
         size_t n = opt->nbas;
@@ -266,7 +386,7 @@ void CVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 {
         /* This memory is released in void CVHFdel_optimizer, Don't know
          * why valgrind raises memory leak here */
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         // nbas in the input arguments may different to opt->nbas.
@@ -330,7 +450,7 @@ void CVHFset_int2e_q_cond(int (*intor)(), CINTOpt *cintopt, double *q_cond,
 
 void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
 {
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         opt->q_cond = (double *)malloc(sizeof(double) * len);
@@ -340,7 +460,7 @@ void CVHFset_q_cond(CVHFOpt *opt, double *q_cond, int len)
 void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
                              int *atm, int natm, int *bas, int nbas, double *env)
 {
-        if (opt->dm_cond) { // NOT reuse opt->dm_cond because nset may be diff in different call
+        if (opt->dm_cond != NULL) { // NOT reuse opt->dm_cond because nset may be diff in different call
                 free(opt->dm_cond);
         }
         // nbas in the input arguments may different to opt->nbas.
@@ -363,18 +483,18 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
 // symmetrize dm_cond because nrs8_prescreen only tests the lower (or upper)
 // triangular part of dm_cond. Without the symmetrization, some integrals may be
 // incorrectly skipped.
-                                tmp = .5 * (fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]));
+                                tmp = fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]);
                                 dmax = MAX(dmax, tmp);
                         } }
                 }
-                opt->dm_cond[ish*nbas+jsh] = dmax;
-                opt->dm_cond[jsh*nbas+ish] = dmax;
+                opt->dm_cond[ish*nbas+jsh] = .5 * dmax;
+                opt->dm_cond[jsh*nbas+ish] = .5 * dmax;
         } }
 }
 
 void CVHFset_dm_cond(CVHFOpt *opt, double *dm_cond, int len)
 {
-        if (opt->dm_cond) {
+        if (opt->dm_cond != NULL) {
                 free(opt->dm_cond);
         }
         opt->dm_cond = (double *)malloc(sizeof(double) * len);

@@ -18,6 +18,7 @@
 
 import copy
 import numpy
+import scipy.linalg
 import unittest
 from pyscf import lib
 from pyscf import gto
@@ -96,6 +97,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 9)
 
     def test_1e(self):
+        mf = scf.uhf.HF1e(mol)
+        self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
+
         mf = scf.UHF(gto.M(atom='H', spin=-1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
@@ -446,6 +450,20 @@ H     0    0.757    0.587'''
         dm = mf.make_rdm1()
         mf.kernel(dm)
         self.assertAlmostEqual(mf.e_tot, -75.983602246415373, 9)
+
+    def test_custom_h1e(self):
+        h1 = scf.hf.get_hcore(n2sym)
+        s1 = scf.hf.get_ovlp(n2sym)
+        mf = scf.UHF(n2sym)
+        mf.get_hcore = lambda *args: (h1, h1)
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -108.9298383856092, 9)
+
+        mf = scf.uhf.HF1e(n2sym)
+        mf.get_hcore = lambda *args: (h1, h1)
+        eref = scipy.linalg.eigh(h1, s1)[0][0] + n2sym.energy_nuc()
+        e = mf.kernel()
+        self.assertAlmostEqual(e, eref, 9)
 
 
 if __name__ == "__main__":
