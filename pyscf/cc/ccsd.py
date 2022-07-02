@@ -760,7 +760,7 @@ def get_d2_diagnostic(t2):
     d2norm_ab = f(numpy.linalg.eigh(numpy.einsum('ijac,ijbc->ab',t2,t2)))
     d2norm = max(d2norm_ij, d2norm_ab)
     return d2norm
-    
+
 def set_frozen(mycc, method='auto', window=(-1000.0, 1000.0), is_gcc=False):
     if method == 'auto':
         from pyscf.data import elements
