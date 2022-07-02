@@ -448,8 +448,7 @@ class MP2(lib.StreamObject):
             >>> # freeze 2 core orbitals
             >>> pt = mp.MP2(mf).set(frozen = 2).run()
             >>> # auto-generate the number of core orbitals to be frozen (1 in this case)
-            >>> from pyscf.data import elements
-            >>> pt = mp.MP2(mf).set(frozen = elements.chemcore(mol)).run()
+            >>> pt = mp.MP2(mf).set_frozen().run()
             >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
             >>> pt.set(frozen = [0,1,16,17,18]).run()
 
@@ -518,6 +517,14 @@ class MP2(lib.StreamObject):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+
+    def set_frozen(self, method='auto'):
+        from pyscf import mp
+        is_gmp = isinstance(self, mp.gmp2.GMP2)
+        if method == 'auto':
+            from pyscf.data import elements
+            self.frozen = elements.chemcore(self.mol, spinorb=is_gmp)
+        return self
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
