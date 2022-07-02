@@ -760,6 +760,27 @@ def get_d2_diagnostic(t2):
     d2norm_ab = f(numpy.linalg.eigh(numpy.einsum('ijac,ijbc->ab',t2,t2)))
     d2norm = max(d2norm_ij, d2norm_ab)
     return d2norm
+    
+def set_frozen(mycc, method='auto', window=(-1000.0, 1000.0), is_gcc=False):
+    if method == 'auto':
+        from pyscf.data import elements
+        mycc.frozen = elements.chemcore(mycc.mol, spinorb=is_gcc)
+    elif method == 'window':
+        emin, emax = window
+        mo_e = numpy.asarray(mycc._scf.mo_energy)
+        if mo_e.ndim == 1:
+            fr1 = list(numpy.flatnonzero(mo_e < emin))
+            fr2 = list(numpy.flatnonzero(mo_e > emax))
+            frozen = fr1 + fr2
+        elif mo_e.ndim == 2:
+            fr1a = list(numpy.flatnonzero(mo_e[0] < emin))
+            fr2a = list(numpy.flatnonzero(mo_e[0] > emax))
+            fr1b = list(numpy.flatnonzero(mo_e[1] < emin))
+            fr2b = list(numpy.flatnonzero(mo_e[1] > emax))
+            frozen = [fr1a+fr2a, fr1b+fr2b]
+        mycc.frozen = frozen
+    return mycc
+
 
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
@@ -975,13 +996,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def set_frozen(self, method='auto'):
+    def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import cc
         is_gcc = isinstance(self, cc.gccsd.GCCSD)
-        if method == 'auto':
-            from pyscf.data import elements
-            self.frozen = elements.chemcore(self.mol, spinorb=is_gcc)
-        return self
+        return set_frozen(self, method=method, window=window, is_gcc=is_gcc)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)

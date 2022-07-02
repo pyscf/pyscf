@@ -49,7 +49,16 @@ print('GCCSD correlation energy', mycc.e_corr)
 #
 # Freeze orbitals based on the list of indices.
 #
+mycc = cc.CCSD(mf)
 mycc.frozen = [0,1,16,17,18]
 mycc.kernel()
 print('CCSD correlation energy', mycc.e_corr)
 
+#
+# Freeze orbitals based on energy window (in a.u.).
+#
+mycc.set_frozen(method='window', window=(-1000.0, 4.1))
+#print(mycc._scf.mo_energy)
+print('List of orbital frozen: ', mycc.frozen)
+mycc.kernel()
+print('CCSD correlation energy', mycc.e_corr)

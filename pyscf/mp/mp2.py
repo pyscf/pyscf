@@ -518,13 +518,11 @@ class MP2(lib.StreamObject):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def set_frozen(self, method='auto'):
+    def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import mp
         is_gmp = isinstance(self, mp.gmp2.GMP2)
-        if method == 'auto':
-            from pyscf.data import elements
-            self.frozen = elements.chemcore(self.mol, spinorb=is_gmp)
-        return self
+        from pyscf.cc.ccsd import set_frozen
+        return set_frozen(self, method=method, window=window, is_gcc=is_gmp)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
