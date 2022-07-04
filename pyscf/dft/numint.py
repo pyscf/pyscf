@@ -201,7 +201,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
 
         rho[tau_idx] = 0
         for i in range(1, 4):
-            c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
+            c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
             #:rho[tau_idx] += numpy.einsum('pi,pi->p', c1, ao[i])
             rho[tau_idx] += _contract_rho(ao[i], c1)
 
@@ -2705,6 +2705,7 @@ class NumInt(_NumIntMixin):
     nr_sap_vxc = nr_sap_vxc
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
+    nr_rks_fxc_st = nr_rks_fxc_st
     cache_xc_kernel  = cache_xc_kernel
 
     @lib.with_doc(make_mask.__doc__)
