@@ -49,7 +49,10 @@ class KnownValues(unittest.TestCase):
         myci.conv_tol = 1e-10
         myci.kernel()
         g1 = ucisd_grad.Gradients(myci).kernel(myci.ci)
-        self.assertAlmostEqual(lib.finger(g1), -0.22651925227633429, 6)
+# O     0.0000000000    -0.0000000000     0.1456473095
+# H    -0.0000000000     0.1107223084    -0.0728236548
+# H     0.0000000000    -0.1107223084    -0.0728236548
+        self.assertAlmostEqual(lib.fp(g1), -0.22651925227633429, 6)
 
     def test_cisd_grad_finite_diff(self):
         ci_scanner = scf.UHF(mol).set(conv_tol=1e-14).apply(ucisd.UCISD).as_scanner()
@@ -84,10 +87,12 @@ class KnownValues(unittest.TestCase):
         myci.max_memory = 1
         myci.kernel()
         g1 = myci.Gradients().kernel(myci.ci)
-        self.assertAlmostEqual(lib.finger(g1), -0.23578589551312196, 6)
+# O    -0.0000000000    -0.0000000000     0.1540204772
+# H     0.0000000000     0.1144196177    -0.0770102386
+# H     0.0000000000    -0.1144196177    -0.0770102386
+        self.assertAlmostEqual(lib.fp(g1), -0.23578589551312196, 6)
 
 
 if __name__ == "__main__":
     print("Tests for UCISD gradients")
     unittest.main()
-

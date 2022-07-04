@@ -68,7 +68,7 @@ class KnownValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 7)
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
@@ -76,9 +76,9 @@ class KnownValues(unittest.TestCase):
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
         e = fci.direct_spin0.energy(h1e, g2e, c, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelec)

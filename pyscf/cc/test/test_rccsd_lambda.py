@@ -79,15 +79,15 @@ class KnownValues(unittest.TestCase):
 
         imds = rccsd_lambda.make_intermediates(mycc, t1, t2, eris)
         l1new, l2new = rccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-        self.assertAlmostEqual(lib.finger(l1new), -6699.5335665027187, 9)
-        self.assertAlmostEqual(lib.finger(l2new), -514.7001243502192 , 9)
+        self.assertAlmostEqual(lib.fp(l1new), -6699.5335665027187, 9)
+        self.assertAlmostEqual(lib.fp(l2new), -514.7001243502192 , 9)
         self.assertAlmostEqual(abs(l2new-l2new.transpose(1,0,3,2)).max(), 0, 12)
 
         mycc.max_memory = 0
         imds = rccsd_lambda.make_intermediates(mycc, t1, t2, eris)
         l1new, l2new = rccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-        self.assertAlmostEqual(lib.finger(l1new), -6699.5335665027187, 9)
-        self.assertAlmostEqual(lib.finger(l2new), -514.7001243502192 , 9)
+        self.assertAlmostEqual(lib.fp(l1new), -6699.5335665027187, 9)
+        self.assertAlmostEqual(lib.fp(l2new), -514.7001243502192 , 9)
         self.assertAlmostEqual(abs(l2new-l2new.transpose(1,0,3,2)).max(), 0, 12)
 
     def test_update_lambda_complex(self):
@@ -167,7 +167,7 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+        self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
         d1 = ccsd_rdm._gamma1_intermediates(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
         mycc1 = copy.copy(mycc)
@@ -177,7 +177,7 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+        self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
     def test_rdm_trace(self):
         mycc = rccsd.RCCSD(mf)
@@ -218,24 +218,24 @@ class KnownValues(unittest.TestCase):
         fdm2 = lib.H5TmpFile()
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
                 ccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2, True)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovov)), -14384.907042073517, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dvvvv)), -25.374007033024839, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(doooo)),  60.114594698129963, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(doovv)), -79.176348067958401, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovvo)),   9.864134457251815, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovvv)), -421.90333700061342, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dooov)), -592.66863759586136, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovov)), -14384.907042073517, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dvvvv)), -25.374007033024839, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(doooo)),  60.114594698129963, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(doovv)), -79.176348067958401, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovvo)),   9.864134457251815, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovvv)), -421.90333700061342, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dooov)), -592.66863759586136, 9)
         fdm2 = None
 
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
                 ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovov)), -14384.907042073517, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dvvvv)),  45.872344902116758, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(doooo)),  60.114594698129963, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(doovv)), -79.176348067958401, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovvo)),   9.864134457251815, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dovvv)), -421.90333700061342, 9)
-        self.assertAlmostEqual(lib.finger(numpy.array(dooov)), -592.66863759586136, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovov)), -14384.907042073517, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dvvvv)),  45.872344902116758, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(doooo)),  60.114594698129963, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(doovv)), -79.176348067958401, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovvo)),   9.864134457251815, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dovvv)), -421.90333700061342, 9)
+        self.assertAlmostEqual(lib.fp(numpy.array(dooov)), -592.66863759586136, 9)
 
         self.assertAlmostEqual(numpy.einsum('kilj,kilj', doooo, eris.oooo)*2, 15939.9007625418, 7)
         self.assertAlmostEqual(numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2, 37581.823919588 , 7)

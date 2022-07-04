@@ -44,7 +44,7 @@ def tearDownModule():
     global mol, mf, mol1, mf1
     del mol, mf, mol1, mf1
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_pre_nao(self):
         c = nao.prenao(mol, mf.make_rdm1())
         self.assertAlmostEqual(numpy.linalg.norm(c), 5.7742626195362039, 9)

@@ -98,11 +98,11 @@ class KnownValues(unittest.TestCase):
     def test_casscf_grad(self):
         mc = mcscf.CASSCF(mf, 4, 4).run()
         g1 = casscf_grad.Gradients(mc).kernel()
-        self.assertAlmostEqual(lib.fp(g1), -0.065094188906156134, 7)
+        self.assertAlmostEqual(lib.fp(g1), -0.065094188906156134, 6)
 
         g1ref = grad_elec(mc, mf.nuc_grad_method())
         g1ref += rhf_grad.grad_nuc(mol)
-        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 9)
+        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 7)
 
         mcs = mc.as_scanner()
         pmol = mol.copy()
@@ -126,8 +126,8 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4)
         gs = mc.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gs(mol.atom, atmlst=range(4))
-        self.assertAlmostEqual(e, -108.39289688030243, 9)
-        self.assertAlmostEqual(lib.fp(g1), -0.065094188906156134, 7)
+        self.assertAlmostEqual(e, -108.39289688030243, 8)
+        self.assertAlmostEqual(lib.fp(g1), -0.065094188906156134, 6)
 
     def test_state_specific_scanner(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', verbose=0)
@@ -178,7 +178,7 @@ class KnownValues(unittest.TestCase):
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
         fcisolvers = [fci.solver (mol, singlet=bool(i)) for i in range (2)]
         fcisolvers[0].conv_tol = fcisolvers[1].conv_tol = 1e-10
-        fcisolvers[0].spin = 2      
+        fcisolvers[0].spin = 2
         mc = mcscf.addons.state_average_mix_(mc, fcisolvers, (.5, .5))
         gs = mc.nuc_grad_method().as_scanner()
         e_avg, de_avg = gs(mol)
@@ -242,7 +242,7 @@ class KnownValues(unittest.TestCase):
                  H                 -0.00000000   -0.84695236    0.59109389
                  H                 -0.00000000    0.89830571    0.52404783 ''')
         ref = (e1 - e2)/0.002 * lib.param.BOHR
-        self.assertAlmostEqual(g[0,0], ref, 4)
+        self.assertAlmostEqual(g[0,0], ref, 5)
 
         mf = scf.RHF(mol)
         mc = qmmm.add_mm_charges(mcscf.CASSCF(mf, 4, 4).as_scanner(), coords, charges)

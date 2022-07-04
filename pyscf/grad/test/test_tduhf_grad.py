@@ -18,7 +18,7 @@
 
 import unittest
 import numpy
-from pyscf import gto, scf
+from pyscf import gto, scf, lib
 from pyscf import tdscf
 from pyscf.grad import tduhf as tduhf_grad
 
@@ -49,7 +49,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 7)
+        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 6)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
@@ -71,5 +71,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for TD-UHF gradients")
     unittest.main()
-
-

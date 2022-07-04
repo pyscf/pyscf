@@ -56,18 +56,18 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_rhf(self):
         mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 8)
         self.assertTrue(mf._eri is None)
 
     def test_uhf(self):
         mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 8)
 
     def test_uhf_cart(self):
         pmol = mol.copy()
         pmol.cart = True
         mf = scf.density_fit(scf.UHF(pmol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -76.026760700636046, 9)
+        self.assertAlmostEqual(mf.scf(), -76.026760700636046, 8)
 
     def test_rohf(self):
         pmol = mol.copy()
@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.density_fit(scf.ROHF(pmol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
+        self.assertAlmostEqual(mf.scf(), -75.626515724371814, 8)
 
     def test_dhf(self):
         pmol = mol.copy()
@@ -86,11 +86,11 @@ class KnownValues(unittest.TestCase):
 
     def test_rhf_symm(self):
         mf = scf.density_fit(scf.RHF(symol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 8)
 
     def test_uhf_symm(self):
         mf = scf.density_fit(scf.UHF(symol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)
+        self.assertAlmostEqual(mf.scf(), -76.025936299702536, 8)
 
     def test_rohf_symm(self):
         pmol = mol.copy()
@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.density_fit(scf.ROHF(pmol), auxbasis='weigend')
-        self.assertAlmostEqual(mf.scf(), -75.626515724371814, 9)
+        self.assertAlmostEqual(mf.scf(), -75.626515724371814, 8)
 
     def test_rhf_veff(self):
         nao = mol.nao_nr()
@@ -139,7 +139,7 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
         mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
-        self.assertAlmostEqual(mf.kernel(), -76.026765673110447, 9)
+        self.assertAlmostEqual(mf.kernel(), -76.026765673110447, 8)
 
     def test_nr_get_jk(self):
         numpy.random.seed(1)
@@ -148,21 +148,21 @@ class KnownValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
 
         vj, vk = mf.get_jk(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vj), -194.15910890730066, 9)
-        self.assertAlmostEqual(lib.finger(vk), -46.365071587653517, 9)
+        self.assertAlmostEqual(lib.fp(vj), -194.15910890730066, 9)
+        self.assertAlmostEqual(lib.fp(vk), -46.365071587653517, 9)
         vj = mf.get_j(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vj), -194.15910890730066, 9)
+        self.assertAlmostEqual(lib.fp(vj), -194.15910890730066, 9)
         vk = mf.get_k(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vk), -46.365071587653517, 9)
+        self.assertAlmostEqual(lib.fp(vk), -46.365071587653517, 9)
 
         mf.with_df = None
         vj, vk = mf.get_jk(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vj), -194.08878302990749, 9)
-        self.assertAlmostEqual(lib.finger(vk), -46.530782983591152, 9)
+        self.assertAlmostEqual(lib.fp(vj), -194.08878302990749, 9)
+        self.assertAlmostEqual(lib.fp(vk), -46.530782983591152, 9)
         vj = mf.get_j(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vj), -194.08878302990749, 9)
+        self.assertAlmostEqual(lib.fp(vj), -194.08878302990749, 9)
         vk = mf.get_k(mol, dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vk), -46.530782983591152, 9)
+        self.assertAlmostEqual(lib.fp(vk), -46.530782983591152, 9)
 
     def test_r_get_jk(self):
         numpy.random.seed(1)
@@ -171,8 +171,8 @@ class KnownValues(unittest.TestCase):
         n4c = n2c * 2
         dms = numpy.random.random((2,n4c,n4c))
         vj, vk = dfobj.get_jk(dms, hermi=0)
-        self.assertAlmostEqual(lib.finger(vj), 12.961687328405461+55.686811159338134j, 9)
-        self.assertAlmostEqual(lib.finger(vk), 41.984238099875462+12.870888901217896j, 9)
+        self.assertAlmostEqual(lib.fp(vj), 12.961687328405461+55.686811159338134j, 9)
+        self.assertAlmostEqual(lib.fp(vk), 41.984238099875462+12.870888901217896j, 9)
 
     def test_df_jk_density_fit(self):
         mf = scf.RHF(mol).density_fit()
@@ -192,7 +192,7 @@ class KnownValues(unittest.TestCase):
         vj0 = mf.get_j(mol, dms)
         vj1 = mf.get_jk(mol, dms)[0]
         self.assertAlmostEqual(abs(vj0-vj1).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(vj0), -194.15910890730052, 9)
+        self.assertAlmostEqual(lib.fp(vj0), -194.15910890730052, 9)
 
 
 if __name__ == "__main__":

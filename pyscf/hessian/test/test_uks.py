@@ -95,12 +95,13 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.8503072107510495, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8503072107510495, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
         e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
     def test_finite_diff_b3lyp_hess(self):
@@ -109,12 +110,13 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'b3lyp'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.8208641727673912, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8208641727673912, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
         e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 3)
 
     def test_finite_diff_wb97x_hess(self):
@@ -123,12 +125,13 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'wb97x'
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.8207572641132195, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8207572641132195, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
         e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 2)
 
     def test_finite_diff_m06l_hess(self):
@@ -139,12 +142,13 @@ class KnownValues(unittest.TestCase):
         mf.grids.level = 4
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.8108006455574677, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.8108006455574677, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
         e1 = g_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
         e2 = g_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))[1]
+        #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 1)
 
     def test_finite_diff_lda_hess_high_cost(self):
@@ -154,7 +158,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.kernel()
         e2 = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(e2), -0.058957876613586674, 3)
+        self.assertAlmostEqual(lib.fp(e2), -0.058957876613586674, 3)
         e2ref = finite_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 4)
 
@@ -165,7 +169,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.kernel()
         e2 = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(e2), -0.12571388626848667, 4)
+        self.assertAlmostEqual(lib.fp(e2), -0.12571388626848667, 4)
         e2ref = finite_diff(mf)
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 4)
 
@@ -176,8 +180,9 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         mf.kernel()
         e2 = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(e2), -0.1846235372107723, 3)
+        self.assertAlmostEqual(lib.fp(e2), -0.1846235372107723, 3)
         e2ref = finite_diff(mf)
+        #FIXME: errors seems too big
         self.assertAlmostEqual(abs(e2-e2ref).max(), 0, 2)
 
     def test_finite_diff_lda_partial_hess_high_cost(self):

@@ -318,10 +318,10 @@ class KnownValues(unittest.TestCase):
     def test_casci_grad(self):
         mc = mcscf.CASCI(mf, 4, 4).run()
         g1 = casci_grad.Gradients(mc).kernel()
-        self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
+        self.assertAlmostEqual(lib.fp(g1), -0.066025991364829367, 7)
 
         g1ref = kernel(mc)
-        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 7)
+        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 6)
 
         mcs = mc.as_scanner()
         pmol = mol.copy()
@@ -334,10 +334,10 @@ class KnownValues(unittest.TestCase):
         mc.fcisolver.nroots = 3
         g_scan = mc.nuc_grad_method().as_scanner(state=2)
         g1 = g_scan(mol, atmlst=range(4))[1]
-        self.assertAlmostEqual(lib.finger(g1), -0.058112001722577293, 7)
+        self.assertAlmostEqual(lib.fp(g1), -0.058112001722577293, 6)
 
         g2 = g_scan.kernel()
-        self.assertAlmostEqual(lib.finger(g2), -0.066025991364829367, 7)
+        self.assertAlmostEqual(lib.fp(g2), -0.066025991364829367, 6)
 
         mcs = mc.as_scanner()
         pmol = mol.copy()
@@ -353,24 +353,24 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         mc = mcscf.CASCI(mf, 4, 4).run()
         g1 = mc.nuc_grad_method().kernel(atmlst=range(mol.natm))
-        self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 9)
+        self.assertAlmostEqual(lib.fp(g1), -0.066025991364829367, 8)
 
         g1ref = casci_grad_with_ccsd_solver(mc)
-        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 8)
+        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 7)
 
     def test_scanner(self):
         mc = mcscf.CASCI(mf, 4, 4)
         gs = mc.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gs(mol.atom)
-        self.assertAlmostEqual(e, -108.38187009571901, 9)
-        self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
+        self.assertAlmostEqual(e, -108.38187009571901, 8)
+        self.assertAlmostEqual(lib.fp(g1), -0.066025991364829367, 6)
 
     def test_state_specific_scanner(self):
         mc = mcscf.CASCI(mf, 4, 4)
         gs = mc.state_specific_(2).nuc_grad_method().as_scanner()
         e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.27330628098245, 9)
-        self.assertAlmostEqual(lib.finger(de), -0.058111987691940134, 7)
+        self.assertAlmostEqual(e, -108.27330628098245, 8)
+        self.assertAlmostEqual(lib.fp(de), -0.058111987691940134, 6)
 
         mcs = gs.base
         pmol = mol.copy()
@@ -382,8 +382,8 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASCI(mf, 4, 4)
         gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
         e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.37395097152324, 9)
-        self.assertAlmostEqual(lib.finger(de), -0.1170409338178659, 7)
+        self.assertAlmostEqual(e, -108.37395097152324, 8)
+        self.assertAlmostEqual(lib.fp(de), -0.1170409338178659, 6)
         self.assertRaises(RuntimeError, mc.nuc_grad_method().as_scanner, state=2)
 
         mcs = gs.base
@@ -399,8 +399,8 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.addons.state_average_mix_(mc, [mc.fcisolver, mc.fcisolver], (.5, .5))
         gs = mc.nuc_grad_method().as_scanner()
         e, de = gs(mol)
-        self.assertAlmostEqual(e, -108.38187009582806, 9)
-        self.assertAlmostEqual(lib.finger(de), -0.0660259910725428, 7)
+        self.assertAlmostEqual(e, -108.38187009582806, 8)
+        self.assertAlmostEqual(lib.fp(de), -0.0660259910725428, 6)
 
         mcs = gs.base
         pmol = mol.copy()
@@ -415,7 +415,7 @@ class KnownValues(unittest.TestCase):
             mcs = mcscf.CASCI(mf, 4, 4).as_scanner().x2c()
             gscan = mcs.nuc_grad_method().as_scanner()
             g1 = gscan(mol)[1]
-            self.assertAlmostEqual(lib.finger(g1), -0.0707065428512548, 7)
+            self.assertAlmostEqual(lib.fp(g1), -0.0707065428512548, 6)
 
             e1 = mcs('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
             e2 = mcs('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
@@ -437,8 +437,8 @@ class KnownValues(unittest.TestCase):
         mf = qmmm.add_mm_charges(scf.RHF(mol), coords, charges)
         mc = mcscf.CASCI(mf, 4, 4).as_scanner()
         e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
-        self.assertAlmostEqual(e_tot, -75.98156095286714, 9)
-        self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
+        self.assertAlmostEqual(e_tot, -75.98156095286714, 8)
+        self.assertAlmostEqual(lib.fp(g), 0.08335504754051845, 6)
         e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
                  H                 -0.00000000   -0.84695236    0.59109389
                  H                 -0.00000000    0.89830571    0.52404783 ''')
@@ -452,12 +452,12 @@ class KnownValues(unittest.TestCase):
         mc = qmmm.add_mm_charges(mcscf.CASCI(mf, 4, 4).as_scanner(), coords, charges)
         e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
         self.assertAlmostEqual(e_tot, -75.98156095286714, 7)
-        self.assertAlmostEqual(lib.finger(g), 0.08335504754051845, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.08335504754051845, 5)
 
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().CASCI(4, 4).run().Gradients().kernel()
-        self.assertAlmostEqual(lib.finger(g), 0.11555543375018221, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.11555543375018221, 6)
 
 
 if __name__ == "__main__":
