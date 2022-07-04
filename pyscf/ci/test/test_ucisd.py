@@ -96,11 +96,11 @@ class KnownValues(unittest.TestCase):
         dm1ref, dm2ref = fci.direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
         rdm1 = myci.make_rdm1(myci.ci, myci.get_nmo(), myci.get_nocc())
         rdm2 = myci.make_rdm2(myci.ci, myci.get_nmo(), myci.get_nocc())
-        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[0]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[1]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[0]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[0]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[1]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[0]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 4)
 
     def test_h4_a(self):
         '''Compare to FCI'''
@@ -124,7 +124,7 @@ class KnownValues(unittest.TestCase):
         mo = numpy.random.random((2,nao,nao))
 
         eris = myci.ao2mo(mo)
-        self.assertAlmostEqual(lib.finger(myci.make_diagonal(eris)),
+        self.assertAlmostEqual(lib.fp(myci.make_diagonal(eris)),
                                -838.45507742639279, 6)
 
         numpy.random.seed(12)
@@ -140,7 +140,7 @@ class KnownValues(unittest.TestCase):
         cisdvec = myci.amplitudes_to_cisdvec(1., (c1a, c1b), (c2aa, c2ab, c2bb))
 
         hcisd0 = myci.contract(myci.amplitudes_to_cisdvec(1., (c1a,c1b), (c2aa,c2ab,c2bb)), eris)
-        self.assertAlmostEqual(lib.finger(hcisd0), 466.56620234351681, 7)
+        self.assertAlmostEqual(lib.fp(hcisd0), 466.56620234351681, 6)
         eris = myci.ao2mo(mf.mo_coeff)
         hcisd0 = myci.contract(cisdvec, eris)
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
@@ -156,12 +156,12 @@ class KnownValues(unittest.TestCase):
         hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
         hci1 -= ehf0 * fcivec
         hcisd1 = myci.from_fcivec(hci1, nmo, mol.nelec)
-        self.assertAlmostEqual(abs(hcisd1-hcisd0).max(), 0, 9)
+        self.assertAlmostEqual(abs(hcisd1-hcisd0).max(), 0, 8)
 
         ecisd = myci.kernel(eris=eris)[0]
         efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                      h1a.shape[0], mol.nelec)[0]
-        self.assertAlmostEqual(ecisd, -0.037067274690894436, 9)
+        self.assertAlmostEqual(ecisd, -0.037067274690894436, 8)
         self.assertTrue(myci.e_tot-mol.energy_nuc() - efci < 0.002)
 
     def test_rdm_h4(self):

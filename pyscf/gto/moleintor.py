@@ -279,6 +279,7 @@ _INTOR_FUNCTIONS = {
     'int1e_zz'                  : (1, 1),
     'int1e_r'                   : (3, 3),
     'int1e_r2'                  : (1, 1),
+    'int1e_r4'                  : (1, 1),
     'int1e_rr'                  : (9, 9),
     'int1e_rrr'                 : (27, 27),
     'int1e_rrrr'                : (81, 81),

@@ -338,24 +338,3 @@ Grad = Gradients
 
 from pyscf import mcscf
 mcscf.casci.CASCI.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import mcscf
-
-    mol = gto.Mole()
-    mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-    mol.build()
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-    mc = mcscf.CASCI(mf, 4, 4).run()
-    g1 = mc.Gradients().kernel()
-    print(lib.finger(g1) - -0.066025991364829367)
-
-    mcs = mc.as_scanner()
-    mol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
-    e1 = mcs(mol)
-    mol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
-    e2 = mcs(mol)
-    print(g1[1,2], (e1-e2)/0.002*lib.param.BOHR)

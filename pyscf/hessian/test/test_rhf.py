@@ -40,7 +40,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = hessian.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.7800532318291435, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.7800532318291435, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = hessian.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.7816353049729151, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.7816353049729151, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()
@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
                     ecp={'Cu':'lanl2dz'}, verbose=0)
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         hess = hessian.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.20927804440983355, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.20927804440983355, 6)
 
         mfs = mf.nuc_grad_method().as_scanner()
         e1 = mfs(mol.set_geom_('Cu 0 0  0.001; H 0 0 1.5'))[1]

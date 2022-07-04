@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA(mf_gga).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
+        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 7)
 
     @unittest.skipIf(not hasattr(dft, 'xcfun'), 'xcfun not available')
     def test_tda_singlet_b3lyp_xcfun(self):
@@ -124,6 +124,7 @@ class KnownValues(unittest.TestCase):
         pmol = mol.copy()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        # FIXME: why the error is larger than 1e-4?
         self.assertAlmostEqual(abs((e1[2]-e2[2])/.002 - g1[0,2]).max(), 0, 3)
 
     def test_tddft_lda(self):
@@ -156,7 +157,7 @@ class KnownValues(unittest.TestCase):
         td = mf.apply(tdscf.TDA)
         tdg_scanner = td.nuc_grad_method().as_scanner().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
-        self.assertAlmostEqual(lib.finger(g), 0.60109310253094916, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.60109310253094916, 7)
         smf = td.as_scanner()
         e1 = smf(mol.set_geom_("H; H 1 1.001"))[2]
         e2 = smf(mol.set_geom_("H; H 1 0.999"))[2]

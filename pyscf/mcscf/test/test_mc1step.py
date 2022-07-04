@@ -154,10 +154,10 @@ class KnownValues(unittest.TestCase):
         mc1.kernel()
         self.assertAlmostEqual(numpy.dot(mc1.e_states, [.5,.5]), -108.80445340617777, 8)
         mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
-        self.assertAlmostEqual(lib.finger(mo_occ), 1.8748844779923917, 4)
+        self.assertAlmostEqual(lib.fp(mo_occ), 1.8748844779923917, 4)
         dm1 = mc1.analyze()
-        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6993157521103779, 4)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6993157521103779, 4)
+        self.assertAlmostEqual(lib.fp(dm1[0]), 2.6993157521103779, 4)
+        self.assertAlmostEqual(lib.fp(dm1[1]), 2.6993157521103779, 4)
 
     def test_natorb(self):
         mc1 = mcscf.CASSCF(msym, 4, 4)
@@ -167,12 +167,12 @@ class KnownValues(unittest.TestCase):
         mc1.kernel(mo)
         mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
         self.assertAlmostEqual(mc1.e_tot, -105.83025103050596, 9)
-        self.assertAlmostEqual(lib.finger(mo_occ), 2.4188178285392317, 4)
+        self.assertAlmostEqual(lib.fp(mo_occ), 2.4188178285392317, 4)
 
         mc1.mc2step(mo)
         mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
         self.assertAlmostEqual(mc1.e_tot, -105.83025103050596, 9)
-        self.assertAlmostEqual(lib.finger(mo_occ), 2.418822007439851, 4)
+        self.assertAlmostEqual(lib.fp(mo_occ), 2.418822007439851, 4)
 
     def test_dep4(self):
         mc1 = mcscf.CASSCF(msym, 4, 4)
@@ -236,7 +236,7 @@ class KnownValues(unittest.TestCase):
         mc1.kernel()
         self.assertAlmostEqual(mc1.e_tot, -108.85974001740854, 8)
         dm1 = mc1.analyze(with_meta_lowdin=False)
-        self.assertAlmostEqual(lib.finger(dm1[0]), 5.33303, 4)
+        self.assertAlmostEqual(lib.fp(dm1[0]), 5.33303, 4)
 
     def test_casci_in_casscf(self):
         mc1 = mcscf.CASSCF(m, 4, 4)

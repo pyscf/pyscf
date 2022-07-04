@@ -124,8 +124,8 @@ class KnownValues(unittest.TestCase):
         ci0 /= numpy.linalg.norm(ci0)
         dm2baab = fci.spin_op.make_rdm2_baab(ci0, norb, nelec)
         dm2abba = fci.spin_op.make_rdm2_abba(ci0, norb, nelec)
-        self.assertAlmostEqual(lib.finger(dm2baab), -0.04113790921902272, 12)
-        self.assertAlmostEqual(lib.finger(dm2abba), -0.10910630874863614, 12)
+        self.assertAlmostEqual(lib.fp(dm2baab), -0.04113790921902272, 12)
+        self.assertAlmostEqual(lib.fp(dm2abba), -0.10910630874863614, 12)
 
         dm2ab = fci.direct_spin1.make_rdm12s(ci0, norb, nelec)[1][1]
         self.assertAlmostEqual(abs(dm2baab - -dm2ab.transpose(2,1,0,3)).max(), 0, 12)

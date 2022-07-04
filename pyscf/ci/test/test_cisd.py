@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         ecisd = ci.CISD(mf).kernel()[0]
-        self.assertAlmostEqual(ecisd, -0.024780739973407784, 8)
+        self.assertAlmostEqual(ecisd, -0.024780739973407784, 6)
 
         h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
@@ -141,7 +141,7 @@ class KnownValues(unittest.TestCase):
         myci.frozen = 1
         eris = myci.ao2mo()
         ecisd, civec = myci.kernel(eris=eris)
-        self.assertAlmostEqual(ecisd, -0.048800218694077746, 8)
+        self.assertAlmostEqual(ecisd, -0.048800218694077746, 6)
 
         nmo = myci.nmo
         nocc = myci.nocc
@@ -275,7 +275,7 @@ class KnownValues(unittest.TestCase):
         myci.nocc = 5
         myci.direct = True
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.1319371817220385, 8)
+        self.assertAlmostEqual(ecisd, -0.1319371817220385, 6)
 
     def test_multi_roots(self):
         mol = gto.Mole()
@@ -293,7 +293,7 @@ class KnownValues(unittest.TestCase):
         myci.nroots = 3
         myci.run()
         myci.dump_chk()
-        self.assertAlmostEqual(myci.e_tot[2], -1.6979890451316759, 8)
+        self.assertAlmostEqual(myci.e_tot[2], -1.6979890451316759, 6)
 
     def test_with_df(self):
         mol = gto.Mole()
@@ -308,7 +308,7 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).density_fit('weigend').run(conv_tol=1e-14)
         myci = ci.cisd.RCISD(mf).run()
-        self.assertAlmostEqual(myci.e_corr, -0.18730699567992737, 8)
+        self.assertAlmostEqual(myci.e_corr, -0.18730699567992737, 6)
 
     def test_scanner(self):
         mol = gto.M(atom='''
