@@ -94,27 +94,27 @@ def update_amps(cc, t1, t2, eris):
         tmp = einsum('ki,kjab->ijab', Loo2, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
     else:
-        Loo = imd.Loo(t1, t2, eris)
-        Lvv = imd.Lvv(t1, t2, eris)
+        Loo = imd.Loo(t1, t2, eris, cc.dcsd)
+        Lvv = imd.Lvv(t1, t2, eris, cc.dcsd)
         Loo -= np.diag(np.diag(foo))
         Lvv -= np.diag(np.diag(fvv))
-        Woooo = imd.cc_Woooo(t1, t2, eris)
-        Wvoov = imd.cc_Wvoov(t1, t2, eris)
-        Wvovo = imd.cc_Wvovo(t1, t2, eris)
+        Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
+        Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
+        Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
         tau = t2 + einsum('ia,jb->ijab', t1, t1)
-        t2new += einsum('klij,klab->ijab', Woooo, tau)
+        t2new += einsum('klij,klab->ijab', Woooo, tau) # contains t2 t2 ladder, removed for dcsd
         t2new += einsum('abcd,ijcd->ijab', Wvvvv, tau)
-        tmp = einsum('ac,ijcb->ijab', Lvv, t2)
+        tmp = einsum('ac,ijcb->ijab', Lvv, t2) # contains t2 t2 mosaic, multiplied by 0.5
         t2new += (tmp + tmp.transpose(1,0,3,2))
-        tmp = einsum('ki,kjab->ijab', Loo, t2)
+        tmp = einsum('ki,kjab->ijab', Loo, t2) # contains t2 t2 mosaic, multiplied by 0.5
         t2new -= (tmp + tmp.transpose(1,0,3,2))
-        tmp  = 2*einsum('akic,kjcb->ijab', Wvoov, t2)
-        tmp -=   einsum('akci,kjcb->ijab', Wvovo, t2)
+        tmp  = 2*einsum('akic,kjcb->ijab', Wvoov, t2) # contains t2 t2 ring, removed partly
+        tmp -=   einsum('akci,kjcb->ijab', Wvovo, t2) # contains t2 t2 ring, <lk|cd>t_il^da t_kj^cb, removed for dcsd
         t2new += (tmp + tmp.transpose(1,0,3,2))
-        tmp = einsum('akic,kjbc->ijab', Wvoov, t2)
+        tmp = einsum('akic,kjbc->ijab', Wvoov, t2) # contains t2 t2 ring, removed partly
         t2new -= (tmp + tmp.transpose(1,0,3,2))
-        tmp = einsum('bkci,kjac->ijab', Wvovo, t2)
+        tmp = einsum('bkci,kjac->ijab', Wvovo, t2) # contains t2 t2 crossring, removed for dcsd
         t2new -= (tmp + tmp.transpose(1,0,3,2))
 
     tmp2  = einsum('kibc,ka->abic', eris.oovv, -t1)
@@ -171,9 +171,9 @@ class RCCSD(ccsd.CCSD):
         return self.emp2, t1, t2
 
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
-        return self.ccsd(t1, t2, eris, mbpt2, cc2)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False, dcsd=False):
+        return self.ccsd(t1, t2, eris, mbpt2, cc2, dcsd)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False, dcsd=False):
         '''Ground-state CCSD.
 
         Kwargs:
@@ -181,9 +181,15 @@ class RCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
             cc2 : bool
                 Use CC2 approximation to CCSD.
+            dcsd : bool
+                Do DCSD instead of CCSD.
         '''
         if mbpt2 and cc2:
             raise RuntimeError('MBPT2 and CC2 are mutually exclusive approximations to the CCSD ground state.')
+        if mbpt2 and dcsd:
+            raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
+        if cc2 and dcsd:
+            raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.e_hf = self.get_e_hf()
         self.eris = eris
@@ -194,9 +200,15 @@ class RCCSD(ccsd.CCSD):
         else:
             if cc2:
                 cctyp = 'CC2'
+                self.dcsd = False
                 self.cc2 = True
+            elif dcsd:
+                cctyp = 'DCSD'
+                self.dcsd = True
+                self.cc2 = False
             else:
                 cctyp = 'CCSD'
+                self.dcsd = False
                 self.cc2 = False
             self.converged, self.e_corr, self.t1, self.t2 = \
                     ccsd.kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
