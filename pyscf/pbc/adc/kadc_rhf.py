@@ -1,4 +1,4 @@
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
-    conv = np.zeros((len(kptlist),nroots), dtype)
+    conv = np.zeros((len(kptlist),nroots), np.bool)
     P = np.zeros((len(kptlist),nroots), np.float)
     X = np.zeros((len(kptlist),nmo,nroots), dtype)
 
@@ -92,7 +92,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         guess = adc.get_init_guess(nroots, diag, ascending = True)
 
         conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
-    
 
         evals_k = evals_k.real
         evals[k] = evals_k
@@ -120,7 +119,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
             print_string = ('%s k-point %d | root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, kshift, n, evals[k][n], evals[k][n]*27.2114))
             if adc.compute_properties:
                 print_string += ("|  Spec factors = %10.8f  " % P[k][n])
-            print_string += ("|  conv = %s" % conv[k][n])
+            print_string += ("|  conv = %s" % conv[k][n].real)
             logger.info(adc, print_string)
 
     log.timer('ADC', *cput0)
@@ -274,7 +273,7 @@ def compute_amplitudes(myadc, eris):
                     t2_1_vvvv[ki,kj,ka] += contract_ladder(myadc,t2_1[ki,kj,kc],eris.vvvv,kc,kd,ka) 
 
         t2_2 = f.create_dataset('t2_2', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
-        t2_2 = t2_1_vvvv[:].copy()
+        t2_2 = t2_1_vvvv[:]
 
         if myadc.exxdiv is not None:
            t2_2 -= 2.0 * madelung * t2_1
@@ -352,7 +351,7 @@ def compute_energy(myadc, t2, eris):
     t2_amp = t2[0][:] 
     
     if (myadc.method == "adc(3)"):
-        t2_amp += t2[1]
+        t2_amp += t2[1][:]
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
 
@@ -807,7 +806,7 @@ def get_imds_ea(adc, eris=None):
            for km in range(nkpts):
                for kl in range(nkpts):
                    kf = kconserv[km,kl,ka]
-                   temp_t2 = adc.imds.t2_1_vvvv
+                   temp_t2 = adc.imds.t2_1_vvvv[:]
                    t2_1_mla = adc.t2[0][km,kl,ka]
                    M_ab[ka] -= 0.5 * 0.25*lib.einsum('mlaf,mlbf->ab',t2_1_mla, temp_t2[km,kl,kb].conj(), optimize=True)
                    M_ab[ka] += 0.5 * 0.25*lib.einsum('mlaf,lmbf->ab',t2_1_mla, temp_t2[kl,km,kb].conj(), optimize=True)

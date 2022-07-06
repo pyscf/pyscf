@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,10 @@
 # limitations under the License.
 
 from pyscf.pbc import scf
-from pyscf.pbc.adc import adc,kadc_rhf 
-
-def RADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
-    mf = scf.addons.convert_to_rhf(mf)
-    return adc.RADC(mf, frozen, mo_coeff, mo_occ)
-
-ADC = RADC
-
+from pyscf.pbc.adc import kadc_rhf 
 
 def KRADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.adc import kadc_rhf
     if not isinstance(mf, scf.khf.KRHF):
         mf = scf.addons.convert_to_rhf(mf)
     return kadc_rhf.RADC(mf, frozen, mo_coeff, mo_occ)
-
-#KCCSD = KRCCSD
