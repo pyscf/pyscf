@@ -48,7 +48,6 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
   
-        myadc.higher_excitations = True
         myadc.max_memory = 50
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=3)
@@ -67,7 +66,6 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2x(self):
   
-        myadc.higher_excitations = True
         myadc.max_memory = 50
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
@@ -86,7 +84,6 @@ class KnownValues(unittest.TestCase):
 
     def test_ea_adc3(self):
   
-        myadc.higher_excitations = True
         myadc.max_memory = 60
         myadc.incore_complete = False
         myadc.method = "adc(3)"
