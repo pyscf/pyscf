@@ -44,6 +44,15 @@ ekrhf = kmf.kernel()
 # KADC
 kadc  = adc.KRADC(kmf)
 
+#KMP2 energy
+emp2, t1, t2 = kadc.kernel_gs()
+print("PBC KMP2 Energy:", emp2)
+
+#KMP3 energy
+kadc.method = 'adc(3)'
+emp3, t1, t2 = kadc.kernel_gs()
+print("PBC KMP3 Energy:", emp3)
+
 # IP-KRADC
 kadc.method_type = 'ip'
 kadc.method = 'adc(3)'
@@ -75,7 +84,7 @@ myadc.method = 'adc(3)'
 mol_e_ea,mol_v_ea,mol_p_ea,mol_x_ea = myadc.kernel(nroots=nroots_test*np.product(nmp))
 
 print("PBC KRHF Energy:", ekrhf)
-print("PBC RHF Energy :", erhf)
+print("PBC RHF Energy :", erhf / np.product(nmp))
 print("PBC IP-ADC(3) roots:", k_e_ip)
 print("Mol IP-ADC(3) roots:", mol_e_ip)
 print("PBC EA-ADC(3) roots:", k_e_ea)
