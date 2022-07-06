@@ -19,7 +19,7 @@ import numpy as np
 
 from pyscf import data, md
 
-def MaxwellBoltzmannVelocity(mol, T=298.15):
+def MaxwellBoltzmannVelocity(mol, T=298.15, rng=md.rng):
     '''Computes velocities for a molecular structure using
         a Maxwell-Boltzmann distribution.
         Args:
@@ -27,6 +27,11 @@ def MaxwellBoltzmannVelocity(mol, T=298.15):
 
             T : float
                 Temperature, in Kelvin, that the distribution represents.
+
+            rng : np.random.Generator
+                Random number generator to sample from. Must contain a method
+                `normal`. Default is to use the md.rng which is a
+                np.random.Generator
 
         Returns:
             Velocities as a ndarray of dimension (natm, 3) in atomic units.
@@ -40,6 +45,6 @@ def MaxwellBoltzmannVelocity(mol, T=298.15):
         m = data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
         sigma = np.sqrt(Tkb/m)
 
-        veloc.append(md.rng.normal(loc=MEAN, scale=sigma, size=3))
+        veloc.append(rng.normal(loc=MEAN, scale=sigma, size=3))
 
     return np.array(veloc)
