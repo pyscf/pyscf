@@ -86,6 +86,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9918705979602267, 6)
         self.assertAlmostEqual(p[2], 0.9772855298541363, 6)
 
+
     def test_ea_adc3(self):
   
         myadc.method = "adc(3)"
