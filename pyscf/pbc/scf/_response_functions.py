@@ -203,7 +203,7 @@ krohf.KROHF.gen_response = _gen_uhf_response
 from pyscf.pbc.scf import hf, uhf, rohf, ghf
 
 def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
-                      singlet=None, hermi=0, max_memory=None):
+                          singlet=None, hermi=0, max_memory=None):
     from pyscf.pbc.dft import numint, multigrid
     assert isinstance(mf, hf.RHF)
 
@@ -304,7 +304,7 @@ def _gen_rhf_response_gam(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
+                          with_j=True, hermi=0, max_memory=None):
     from pyscf.pbc.dft import multigrid
     assert isinstance(mf, (uhf.UHF, rohf.ROHF))
 
@@ -366,7 +366,7 @@ def _gen_uhf_response_gam(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 def _gen_ghf_response_gam(mf, mo_coeff=None, mo_occ=None,
-                      with_j=True, hermi=0, max_memory=None):
+                          with_j=True, hermi=0, max_memory=None):
     '''Generate a function to compute the product of KGHF response function and
     KGHF density matrices.
     '''
