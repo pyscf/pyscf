@@ -813,7 +813,7 @@ def nr_sap_vxc(ni, mol, grids, max_memory=2000, verbose=None):
     atom_charges = mol.atom_charges()
     eps = numpy.finfo(float).eps
 
-    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
         aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
         vxc = numpy.ndarray(coords.shape[0], buffer=vxcw)
         vxc.fill(0.0)
@@ -894,7 +894,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     def block_loop(ao_deriv):
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
@@ -933,7 +933,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         vvweight=numpy.empty([nset,0])
         vvcoords=numpy.empty([nset,0,3])
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rhotmp = numpy.empty([0,4,weight.size])
             weighttmp = numpy.empty([0,weight.size])
             coordstmp = numpy.empty([0,weight.size,3])
@@ -949,7 +949,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             vvcoords=numpy.concatenate((vvcoords,coordstmp),axis=1)
             rhotmp = weighttmp = coordstmp = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for i in range(nset):
                 rho = make_rho(i, ao, mask, 'GGA')
@@ -1049,7 +1049,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     def block_loop(ao_deriv):
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             for i in range(nset):
                 rho_a = make_rhoa(i, ao, mask, xctype)
                 rho_b = make_rhob(i, ao, mask, xctype)
@@ -1196,7 +1196,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         p1 = 0
         _rho0 = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is not None:
                 if xctype == 'LDA':
@@ -1301,7 +1301,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if fxc is None:
                 if rho0 is None:
@@ -1332,7 +1332,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is None:
                 rhoa = make_rho0a(0, ao, mask, xctype)
@@ -1388,7 +1388,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is None:
                 rhoa = make_rho0a(0, ao, mask, xctype)
@@ -1643,7 +1643,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         p1 = 0
         rho0a = rho0b = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is not None:
                 if xctype == 'LDA':
@@ -2469,7 +2469,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhoa = []
         rhob = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
@@ -2485,7 +2485,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao, mask, weight, coords \
-            in ni.block_loop(mol, grids, nao, 0, max_memory):
+            in ni.block_loop(mol, grids, nao, 0, max_memory=max_memory):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
