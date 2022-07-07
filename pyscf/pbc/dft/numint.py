@@ -695,11 +695,11 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 vmat[i] += ni._vxc_mat(cell, ao_k1, wv, mask, xctype,
                                        shls_slice, ao_loc, hermi)
 
+        vmat = numpy.stack(vmat)
         # For only real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         if hermi == 1:
             vmat = vmat + vmat.conj().swapaxes(-2,-1)
-        vmat = numpy.stack(vmat)
         if nset == 1:
             vmat = vmat.reshape(dms_alpha.shape)
     else:
