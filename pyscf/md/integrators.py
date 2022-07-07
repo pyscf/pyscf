@@ -390,7 +390,7 @@ class Integrator(lib.StreamObject):
                                                  self.ekin,
                                                  self.ekin + self.epot)
 
-        # We follow OM of writing all of the states at the end of the file
+        # We follow OM of writing all of the states at the end of the line 
         if getattr(self.scanner.base, 'e_states', None) is not None:
             if len(self.scanner.base.e_states) > 1:
                 for e in self.scanner.base.e_states:
