@@ -325,6 +325,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
 
+    def test_small_system(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g')
+        mf = scf.RHF(mol).run()
+        mc = mcscf.CASSCF(mf, 2, 2)
+        mc.max_cycle = 5
+        mc.mc2step()
+        self.assertAlmostEqual(mc.e_tot, -1.14623442196547, 9)
+        self.assertTrue(mc.converged)
+
 
 if __name__ == "__main__":
     print("Full Tests for mc1step")
