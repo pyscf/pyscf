@@ -239,6 +239,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     dr = 0
     ikf = 0
     g_op = lambda: g_orb
+    problem_size = g_orb.size
 
     for ah_end, ihop, w, dxi, hdxi, residual, seig \
             in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -251,13 +252,13 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
             (seig < casscf.ah_lindep)):
             imic += 1
             dxmax = numpy.max(abs(dxi))
-            if dxmax > max_stepsize:
+            if ihop == problem_size:
+                log.debug1('... Hx=g fully converged for small systems')
+            elif dxmax > max_stepsize:
                 scale = max_stepsize / dxmax
                 log.debug1('... scale rotation size %g', scale)
                 dxi *= scale
                 hdxi *= scale
-            else:
-                scale = None
 
             g_orb = g_orb + hdxi
             dr = dr + dxi

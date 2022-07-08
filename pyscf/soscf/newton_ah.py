@@ -351,6 +351,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
             x0_guess = dxi
         g_orb = g_kf
         norm_gorb = norm_gkf
+        problem_size = g_orb.size
 
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -374,13 +375,13 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                 (seig < mf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > mf.max_stepsize:
+                if ihop == problem_size:
+                    log.debug1('... Hx=g fully converged for small systems')
+                elif dxmax > mf.max_stepsize:
                     scale = mf.max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
-                else:
-                    scale = None
 
                 dr = dr + dxi
                 g_orb = g_orb + hdxi
