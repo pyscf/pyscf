@@ -320,10 +320,10 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # Rotate CI according to the unitary coefficients ucas if applicable
     fcivec = None
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
-        if isinstance(ci, numpy.ndarray):
+        if isinstance(ci, (fci.FCIvector, fci.SCIvector, numpy.ndarray)):
             fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
         elif (isinstance(ci, (list, tuple)) and
-              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+              all(isinstance(x[0], (fci.FCIvector, fci.SCIvector, numpy.ndarray)) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
     elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):

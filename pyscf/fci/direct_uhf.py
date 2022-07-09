@@ -70,7 +70,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                             link_indexa.ctypes.data_as(ctypes.c_void_p),
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(direct_spin1.FCIvector)
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
@@ -94,7 +94,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                              ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                              link_indexa.ctypes.data_as(ctypes.c_void_p),
                              link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(direct_spin1.FCIvector)
 
 def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
@@ -120,7 +120,7 @@ def contract_2e_hubbard(u, fcivec, norb, nelec, opt=None):
         for i in range(norb):
             maskb = (strsb & (1 << i)) > 0
             fcinew[:,maskb] += u_bb * fcivec[:,maskb]
-    return fcinew
+    return fcinew.view(direct_spin1.FCIvector)
 
 def make_hdiag(h1e, eri, norb, nelec):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
