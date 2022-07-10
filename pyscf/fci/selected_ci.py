@@ -906,10 +906,14 @@ class SCIvector(numpy.ndarray):
     def __array_finalize__(self, obj):
         self._strs = getattr(obj, '_strs', None)
 
-    # Whenever the contents of the array was modified (through ufunc), the tag
-    # should be expired. Overwrite the output of ufunc to restore ndarray type.
-    def __array_wrap__(self, out, context=None):
-        return numpy.ndarray.__array_wrap__(self, out, context).view(numpy.ndarray)
+    # Special cases for ndarray when the array was modified (through ufunc)
+    def __array_wrap__(self, out):
+        if out.shape == self.shape:
+            return out
+        elif out.shape == ():  # if ufunc returns a scalar
+            return out[()]
+        else:
+            return out.view(numpy.ndarray)
 
 def _as_SCIvector(civec, ci_strs):
     civec = civec.view(SCIvector)

@@ -181,7 +181,7 @@ class KnownValues(unittest.TestCase):
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.8292690292608, 8)
+        self.assertAlmostEqual(mc1.e_tot, -105.82840377848402, 8)
 
     def test_dep4_df(self):
         mc1 = mcscf.CASSCF(msym, 4, 4).density_fit()
@@ -190,7 +190,7 @@ class KnownValues(unittest.TestCase):
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.82923271851176, 8)
+        self.assertAlmostEqual(mc1.e_tot, -105.82833244029327, 8)
 
     # FIXME: How to test ci_response_space? The test below seems numerical instable
     #def test_ci_response_space(self):
