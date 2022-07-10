@@ -253,7 +253,7 @@ class KnownValues(unittest.TestCase):
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
         g = mol.RHF.run().CASSCF(4, 4).run().Gradients().kernel()
-        self.assertAlmostEqual(lib.fp(g), 0.12355818572359845, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.12355818572359845, 5)
 
 
 if __name__ == "__main__":

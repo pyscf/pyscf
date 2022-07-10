@@ -917,7 +917,15 @@ FCI = FCISolver
 
 class FCIvector(numpy.ndarray):
     '''An 2D np array for FCI coefficients'''
-    pass
+
+    # Special cases for ndarray when the array was modified (through ufunc)
+    def __array_wrap__(self, out):
+        if out.shape == self.shape:
+            return out
+        elif out.shape == ():  # if ufunc returns a scalar
+            return out[()]
+        else:
+            return out.view(numpy.ndarray)
 
 def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:
