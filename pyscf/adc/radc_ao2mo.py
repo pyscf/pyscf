@@ -37,8 +37,6 @@ def transform_integrals_incore(myadc):
 
     eris = lambda:None
 
-    # TODO: check if myadc._scf._eri is not None
-
     eris.oooo = ao2mo.general(myadc._scf._eri, (occ, occ, occ, occ), compact=False).reshape(nocc, nocc, nocc, nocc).copy()  # noqa: E501
     eris.ovoo = ao2mo.general(myadc._scf._eri, (occ, vir, occ, occ), compact=False).reshape(nocc, nvir, nocc, nocc).copy()  # noqa: E501
     eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()  # noqa: E501
