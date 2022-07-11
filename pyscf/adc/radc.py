@@ -25,8 +25,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-#from pyscf.adc import radc_ip
-#from pyscf.adc import radc_ea
 from pyscf.adc import radc_amplitudes
 from pyscf import __config__
 from pyscf import df
@@ -289,11 +287,13 @@ class RADC(lib.StreamObject):
         return self
 
     def ea_adc(self, nroots=1, guess=None, eris=None):
+        from pyscf.adc import radc_ea
         adc_es = radc_ea.RADCEA(self)
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 
     def ip_adc(self, nroots=1, guess=None, eris=None):
+        from pyscf.adc import radc_ip
         adc_es = radc_ip.RADCIP(self)
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
