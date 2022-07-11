@@ -53,7 +53,9 @@ FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', Fa
 
 
 def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
-    '''Solve generalized eigenvalue problem  h v = w s v.
+    '''Solve generalized eigenvalue problem  h v = w s v  in two passes.
+    First diagonalize s to get eigenvectors. Then in the eigenvectors space
+    transform and diagonalize h.
 
     .. note::
         The number of eigenvalues and eigenvectors might be less than the
@@ -75,17 +77,14 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     '''
     seig, t = scipy.linalg.eigh(s)
     mask = seig >= lindep
-    if numpy.all(mask):
-        w, v = scipy.linalg.eigh(h, s)
+    t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
+    if t.size > 0:
+        heff = reduce(numpy.dot, (t.T.conj(), h, t))
+        w, v = scipy.linalg.eigh(heff)
+        v = numpy.dot(t, v)
     else:
-        t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
-        if t.size > 0:
-            heff = reduce(numpy.dot, (t.T.conj(), h, t))
-            w, v = scipy.linalg.eigh(heff)
-            v = numpy.dot(t, v)
-        else:
-            w = numpy.zeros((0,))
-            v = t
+        w = numpy.zeros((0,))
+        v = t
     return w, v, seig
 
 def eigh_by_blocks(h, s=None, labels=None):
