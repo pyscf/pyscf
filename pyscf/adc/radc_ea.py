@@ -23,6 +23,7 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
@@ -30,7 +31,7 @@ from pyscf import df
 from pyscf import symm
 
 
-def get_imds_ea(adc, eris=None):
+def get_imds(adc, eris=None):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -274,7 +275,7 @@ def get_imds_ea(adc, eris=None):
 
 
 
-def ea_adc_diag(adc,M_ab=None,eris=None):
+def get_diag(adc,M_ab=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
 
@@ -357,41 +358,7 @@ def ea_adc_diag(adc,M_ab=None,eris=None):
     return diag
 
 
-
-def ea_contract_r_vvvv(myadc,r2,vvvv):
-
-    nocc = myadc._nocc
-    nvir = myadc._nvir
-
-    r2_vvvv = np.zeros((nocc,nvir,nvir))
-    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
-    chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
-
-    a = 0
-    if isinstance(vvvv, list):
-        for dataset in vvvv:
-            k = dataset.shape[0]
-            dataset = dataset[:].reshape(-1,nvir*nvir)
-            r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
-            del dataset
-            a += k
-    elif getattr(myadc, 'with_df', None):
-        for p in range(0,nvir,chnk_size):
-            vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
-            k = vvvv_p.shape[0]
-            vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
-            r2_vvvv[:,a:a+k] = np.dot(r2,vvvv_p.T).reshape(nocc,-1,nvir)
-            del vvvv_p
-            a += k
-    else:
-        raise Exception("Unknown vvvv type")
-
-    r2_vvvv = r2_vvvv.reshape(-1)
-
-    return r2_vvvv
-
-
-def ea_adc_matvec(adc, M_ab=None, eris=None):
+def get_matvec(adc, M_ab=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -639,8 +606,20 @@ def ea_adc_matvec(adc, M_ab=None, eris=None):
     return sigma_
 
 
+def get_trans_moments(adc):
 
-def ea_compute_trans_moments(adc, orb):
+    nmo  = adc.nmo
+    T = []
+    for orb in range(nmo):
+
+        T_a = adc.compute_trans_moments(orb)
+        T.append(T_a)
+
+    T = np.array(T)
+    return T
+
+
+def compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -745,21 +724,7 @@ def ea_compute_trans_moments(adc, orb):
     return T
 
 
-
-def get_trans_moments(adc):
-
-    nmo  = adc.nmo
-    T = []
-    for orb in range(nmo):
-
-        T_a = adc.compute_trans_moments(orb)
-        T.append(T_a)
-
-    T = np.array(T)
-    return T
-
-
-def analyze_eigenvector_ea(adc):
+def analyze_eigenvector(adc):
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -831,7 +796,6 @@ def analyze_eigenvector_ea(adc):
         logger.info(adc, "\n*************************************************************\n")
 
 
-
 def analyze_spec_factor(adc):
 
     X = adc.X
@@ -871,7 +835,7 @@ def analyze_spec_factor(adc):
         logger.info(adc, "\n*************************************************************\n")
 
 
-def renormalize_eigenvectors_ea(adc, nroots=1):
+def renormalize_eigenvectors(adc, nroots=1):
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -889,7 +853,6 @@ def renormalize_eigenvectors_ea(adc, nroots=1):
     return U
 
 
-
 def get_properties(adc, nroots=1):
 
     #Transition moments
@@ -903,6 +866,7 @@ def get_properties(adc, nroots=1):
     P = 2.0*lib.einsum("pi,pi->i", X, X)
 
     return P,X
+
 
 def analyze(myadc):
 
@@ -935,6 +899,7 @@ def compute_dyson_mo(myadc):
     dyson_mo = np.dot(myadc.mo_coeff,X)
 
     return dyson_mo
+
 
 class RADCEA(RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
@@ -1013,22 +978,22 @@ class RADCEA(RADC):
 
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    kernel = kernel
-    get_imds = get_imds_ea
-    matvec = ea_adc_matvec
-    get_diag = ea_adc_diag
-    compute_trans_moments = ea_compute_trans_moments
+    kernel = radc.kernel
+    get_imds = get_imds
+    matvec = get_matvec
+    get_diag = get_diag
+    compute_trans_moments = compute_trans_moments
     get_trans_moments = get_trans_moments
-    renormalize_eigenvectors = renormalize_eigenvectors_ea
+    renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
     analyze_spec_factor = analyze_spec_factor
-    analyze_eigenvector = analyze_eigenvector_ea
+    analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
-            diag = self.ea_adc_diag()
+            diag = self.get_diag()
         idx = None
         if ascending:
             idx = np.argsort(diag)
@@ -1050,3 +1015,36 @@ class RADCEA(RADC):
         diag = self.get_diag(imds, eris)
         matvec = self.matvec(imds, eris)
         return matvec, diag
+
+
+def contract_r_vvvv(myadc,r2,vvvv):
+
+    nocc = myadc._nocc
+    nvir = myadc._nvir
+
+    r2_vvvv = np.zeros((nocc,nvir,nvir))
+    r2 = np.ascontiguousarray(r2.reshape(nocc,-1))
+    chnk_size = radc_ao2mo.calculate_chunk_size(myadc)
+
+    a = 0
+    if isinstance(vvvv, list):
+        for dataset in vvvv:
+            k = dataset.shape[0]
+            dataset = dataset[:].reshape(-1,nvir*nvir)
+            r2_vvvv[:,a:a+k] = np.dot(r2,dataset.T).reshape(nocc,-1,nvir)
+            del dataset
+            a += k
+    elif getattr(myadc, 'with_df', None):
+        for p in range(0,nvir,chnk_size):
+            vvvv_p = dfadc.get_vvvv_df(myadc, vvvv, p, chnk_size)
+            k = vvvv_p.shape[0]
+            vvvv_p = vvvv_p.reshape(-1,nvir*nvir)
+            r2_vvvv[:,a:a+k] = np.dot(r2,vvvv_p.T).reshape(nocc,-1,nvir)
+            del vvvv_p
+            a += k
+    else:
+        raise Exception("Unknown vvvv type")
+
+    r2_vvvv = r2_vvvv.reshape(-1)
+
+    return r2_vvvv
