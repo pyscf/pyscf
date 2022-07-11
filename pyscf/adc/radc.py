@@ -25,8 +25,9 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf.adc import radc_ip
-from pyscf.adc import radc_ea
+#from pyscf.adc import radc_ip
+#from pyscf.adc import radc_ea
+from pyscf.adc import radc_amplitudes
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
@@ -168,8 +169,8 @@ class RADC(lib.StreamObject):
 
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    compute_amplitudes = compute_amplitudes
-    compute_energy = compute_energy
+    compute_amplitudes = radc_amplitudes.compute_amplitudes
+    compute_energy = radc_amplitudes.compute_energy
     transform_integrals = radc_ao2mo.transform_integrals_incore
 
     def dump_flags(self, verbose=None):
@@ -225,7 +226,7 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         return self.e_corr, self.t1, self.t2
@@ -266,7 +267,7 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         self.method_type = self.method_type.lower()

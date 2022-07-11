@@ -24,6 +24,7 @@ import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc
+#from pyscf.adc.radc import RADC
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
@@ -198,7 +199,7 @@ def get_imds(adc, eris=None):
     return M_ij
 
 
-def diag(adc,M_ij=None,eris=None):
+def get_diag(adc,M_ij=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
 
@@ -774,7 +775,7 @@ def compute_dyson_mo(myadc):
     return dyson_mo
 
 
-class RADCIP(RADC):
+class RADCIP(radc.RADC):
     '''restricted ADC for IP energies and spectroscopic amplitudes
 
     Attributes:

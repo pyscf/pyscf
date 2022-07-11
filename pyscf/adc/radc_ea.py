@@ -901,7 +901,7 @@ def compute_dyson_mo(myadc):
     return dyson_mo
 
 
-class RADCEA(RADC):
+class RADCEA(radc.RADC):
     '''restricted ADC for EA energies and spectroscopic amplitudes
 
     Attributes:
