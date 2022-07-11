@@ -283,7 +283,7 @@ def get_diag(adc,M_ij=None,eris=None):
     return diag
 
 
-def get_matvec(adc, M_ij=None, eris=None):
+def matvec(adc, M_ij=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -495,14 +495,14 @@ def get_trans_moments(adc):
     T = []
     for orb in range(nmo):
 
-        T_a = adc.compute_trans_moments(orb)
+        T_a = get_trans_moments_orbital(orb)
         T.append(T_a)
 
     T = np.array(T)
     return T
 
 
-def compute_trans_moments(adc, orb):
+def get_trans_moments_orbital(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -853,8 +853,7 @@ class RADCIP(radc.RADC):
     kernel = radc.kernel
     get_imds = get_imds
     get_diag = get_diag
-    matvec = get_matvec
-    compute_trans_moments = compute_trans_moments
+    matvec = matvec
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties

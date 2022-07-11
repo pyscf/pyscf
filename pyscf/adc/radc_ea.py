@@ -358,7 +358,7 @@ def get_diag(adc,M_ab=None,eris=None):
     return diag
 
 
-def get_matvec(adc, M_ab=None, eris=None):
+def matvec(adc, M_ab=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -612,14 +612,14 @@ def get_trans_moments(adc):
     T = []
     for orb in range(nmo):
 
-        T_a = adc.compute_trans_moments(orb)
+        T_a = get_trans_moments_orbital(orb)
         T.append(T_a)
 
     T = np.array(T)
     return T
 
 
-def compute_trans_moments(adc, orb):
+def get_trans_moments_orbital(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -980,9 +980,8 @@ class RADCEA(radc.RADC):
 
     kernel = radc.kernel
     get_imds = get_imds
-    matvec = get_matvec
+    matvec = matvec
     get_diag = get_diag
-    compute_trans_moments = compute_trans_moments
     get_trans_moments = get_trans_moments
     renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
