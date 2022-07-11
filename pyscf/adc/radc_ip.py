@@ -23,6 +23,7 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.adc import radc
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
@@ -30,7 +31,7 @@ from pyscf import df
 from pyscf import symm
 
 
-def get_imds_ip(adc, eris=None):
+def get_imds(adc, eris=None):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -197,7 +198,7 @@ def get_imds_ip(adc, eris=None):
     return M_ij
 
 
-def ip_adc_diag(adc,M_ij=None,eris=None):
+def diag(adc,M_ij=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
 
@@ -281,7 +282,7 @@ def ip_adc_diag(adc,M_ij=None,eris=None):
     return diag
 
 
-def ip_adc_matvec(adc, M_ij=None, eris=None):
+def get_matvec(adc, M_ij=None, eris=None):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -487,7 +488,20 @@ def ip_adc_matvec(adc, M_ij=None, eris=None):
     return sigma_
 
 
-def ip_compute_trans_moments(adc, orb):
+def get_trans_moments(adc):
+
+    nmo  = adc.nmo
+    T = []
+    for orb in range(nmo):
+
+        T_a = adc.compute_trans_moments(orb)
+        T.append(T_a)
+
+    T = np.array(T)
+    return T
+
+
+def compute_trans_moments(adc, orb):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
@@ -583,20 +597,7 @@ def ip_compute_trans_moments(adc, orb):
     return T
 
 
-def get_trans_moments(adc):
-
-    nmo  = adc.nmo
-    T = []
-    for orb in range(nmo):
-
-        T_a = adc.compute_trans_moments(orb)
-        T.append(T_a)
-
-    T = np.array(T)
-    return T
-
-
-def analyze_eigenvector_ip(adc):
+def analyze_eigenvector(adc):
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -707,7 +708,7 @@ def analyze_spec_factor(adc):
         logger.info(adc, "\n*************************************************************\n")
 
 
-def renormalize_eigenvectors_ip(adc, nroots=1):
+def renormalize_eigenvectors(adc, nroots=1):
 
     nocc = adc._nocc
     nvir = adc._nvir
@@ -738,6 +739,7 @@ def get_properties(adc, nroots=1):
     P = 2.0*lib.einsum("pi,pi->i", X, X)
 
     return P,X
+
 
 def analyze(myadc):
 
@@ -847,22 +849,22 @@ class RADCIP(RADC):
                     'max_space', 't2', 'max_cycle'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    kernel = kernel
-    get_imds = get_imds_ip
-    get_diag = ip_adc_diag
-    matvec = ip_adc_matvec
-    compute_trans_moments = ip_compute_trans_moments
+    kernel = radc.kernel
+    get_imds = get_imds
+    get_diag = get_diag
+    matvec = get_matvec
+    compute_trans_moments = compute_trans_moments
     get_trans_moments = get_trans_moments
-    renormalize_eigenvectors = renormalize_eigenvectors_ip
+    renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
     analyze_spec_factor = analyze_spec_factor
-    analyze_eigenvector = analyze_eigenvector_ip
+    analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :
-            diag = self.ip_adc_diag()
+            diag = self.get_diag()
         idx = None
         if ascending:
             idx = np.argsort(diag)
@@ -883,3 +885,5 @@ class RADCIP(RADC):
         diag = self.get_diag(imds, eris)
         matvec = self.matvec(imds, eris)
         return matvec, diag
+
+

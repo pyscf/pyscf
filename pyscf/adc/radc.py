@@ -315,9 +315,6 @@ class RADC(lib.StreamObject):
         return self._adc_es.compute_dyson_mo()
 
 
-
-
-
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
