@@ -15,6 +15,8 @@
 
 from pyscf.pbc import scf
 from pyscf.pbc.adc import kadc_rhf 
+from pyscf.pbc.adc import kadc_rhf_ip 
+from pyscf.pbc.adc import kadc_rhf_ea 
 
 def KRADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.adc import kadc_rhf

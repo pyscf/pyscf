@@ -27,6 +27,13 @@ from pyscf import scf
 from pyscf import lib
 from pyscf.adc import uadc
 from pyscf.adc import radc
+from pyscf.adc import radc_amplitudes
+from pyscf.adc import uadc_amplitudes
+from pyscf.adc import radc_ip
+from pyscf.adc import radc_ea
+from pyscf.adc import uadc_ip
+from pyscf.adc import uadc_ea
+
 
 def ADC(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not (frozen is None or frozen == 0):

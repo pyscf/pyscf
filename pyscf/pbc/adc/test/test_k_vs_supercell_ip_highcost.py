@@ -30,7 +30,7 @@ cell.build(
         1.783500     1.783500     0.000000
     ''',
     atom = 'C 1.337625 1.337625 1.337625; C 2.229375 2.229375 2.229375',
-    verbose = 6,
+    verbose = 0,
     output = '/dev/null',
     basis = 'gth-dzv',
     pseudo = 'gth-pade',
