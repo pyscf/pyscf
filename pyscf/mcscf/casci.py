@@ -973,14 +973,23 @@ To enable the solvent model for CASCI, the following code needs to be called
         log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             if isinstance(self.e_cas, (float, numpy.number)):
-                ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-                log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         self.e_tot, self.e_cas, ss[0])
+                try:
+                    ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
+                    log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                             self.e_tot, self.e_cas, ss[0])
+                except NotImplementedError:
+                    log.note('CASCI E = %.15g  E(CI) = %.15g',
+                             self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                             i, self.e_tot[i], e, ss[0])
+                    try:
+                        ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                                 i, self.e_tot[i], e, ss[0])
+                    except NotImplementedError:
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                                 i, self.e_tot[i], e)
+
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
                 log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
