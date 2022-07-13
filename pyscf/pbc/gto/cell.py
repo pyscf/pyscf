@@ -780,8 +780,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
-    # See also Eq. (32) of ewald.pdf at
-    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
+
     mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
