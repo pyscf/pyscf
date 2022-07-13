@@ -24,7 +24,6 @@ import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc
-#from pyscf.adc.radc import RADC
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
 from pyscf import __config__
@@ -495,7 +494,7 @@ def get_trans_moments(adc):
     T = []
     for orb in range(nmo):
 
-        T_a = get_trans_moments_orbital(orb)
+        T_a = get_trans_moments_orbital(adc,orb)
         T.append(T_a)
 
     T = np.array(T)

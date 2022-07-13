@@ -57,7 +57,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
         
-        myadcea = adc.radc.RADCEA(myadc) 
+        myadcea = adc.radc_ea.RADCEA(myadc) 
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
-        myadcea = adc.radc.RADCEA(myadc) 
+        myadcea = adc.radc_ea.RADCEA(myadc) 
         e,v,p,x = myadcea.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.0277406670820452, 6)

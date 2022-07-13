@@ -30,6 +30,7 @@ from pyscf import __config__
 from pyscf import df
 from pyscf import symm
 
+
 # Excited-state kernel
 def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
 

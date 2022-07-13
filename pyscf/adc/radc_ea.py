@@ -274,7 +274,6 @@ def get_imds(adc, eris=None):
     return M_ab
 
 
-
 def get_diag(adc,M_ab=None,eris=None):
 
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -453,9 +452,9 @@ def matvec(adc, M_ab=None, eris=None):
                 eris_vvvv = eris.vvvv
                 s[s2:f2] += np.dot(r_bab_t,eris_vvvv.T).reshape(-1)
             elif isinstance(eris.vvvv, list):
-                s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris.vvvv)
+                s[s2:f2] += contract_r_vvvv(adc,r2,eris.vvvv)
             else :
-                s[s2:f2] += ea_contract_r_vvvv(adc,r2,eris.Lvv)
+                s[s2:f2] += contract_r_vvvv(adc,r2,eris.Lvv)
 
             s[s2:f2] -= 0.5*lib.einsum('jzyi,jzx->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
             s[s2:f2] += lib.einsum('jzyi,jxz->ixy',eris_ovvo,r2,optimize = True).reshape(-1)
@@ -612,7 +611,7 @@ def get_trans_moments(adc):
     T = []
     for orb in range(nmo):
 
-        T_a = get_trans_moments_orbital(orb)
+        T_a = get_trans_moments_orbital(adc,orb)
         T.append(T_a)
 
     T = np.array(T)
