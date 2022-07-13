@@ -85,49 +85,49 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 0.20823964, 6)
 
 
-#    def test_ip_dfadc3_dif_aux_basis(self):
-#
-#        mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
-#        mf.kernel()
-#        myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
-#        myadc.max_memory = 2
-#        myadc.method = "adc(3)"
-#        myadc.method_type = "ip"
-#        
-#        e,v,p,x = myadc.kernel(nroots=3)
-#        e_corr = myadc.e_corr
-#
-#        self.assertAlmostEqual(e_corr, -0.16330973, 6)
-#
-#        self.assertAlmostEqual(e[0], 0.45707428, 6)
-#        self.assertAlmostEqual(e[1], 0.46818375, 6)
-#        self.assertAlmostEqual(e[2], 0.55652918, 6)
-#
-#        self.assertAlmostEqual(p[0], 0.93869064, 6)
-#        self.assertAlmostEqual(p[1], 0.58692581, 6)
-#        self.assertAlmostEqual(p[2], 0.35111056, 6)
-#      
-#
-#    def test_hf_dfadc3_ip(self):
-#  
-#        mf = scf.UHF(mol).run()
-#        myadc = adc.ADC(mf)
-#        myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
-#        myadc.method = "adc(3)"
-#
-#        e,v,p,x = myadc.kernel(nroots=3)
-#        myadc.analyze()
-#        e_corr = myadc.e_corr        
-#
-#        self.assertAlmostEqual(e_corr, -0.1633223874, 6)
-#
-#        self.assertAlmostEqual(e[0], 0.45707376, 6)
-#        self.assertAlmostEqual(e[1], 0.46818480, 6)
-#        self.assertAlmostEqual(e[2], 0.55652975, 6)
-#
-#        self.assertAlmostEqual(p[0], 0.93868596, 6)
-#        self.assertAlmostEqual(p[1], 0.58692425, 6)
-#        self.assertAlmostEqual(p[2], 0.35110754 ,6)
+    def test_ip_dfadc3_dif_aux_basis(self):
+
+        mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
+        mf.kernel()
+        myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
+        myadc.max_memory = 2
+        myadc.method = "adc(3)"
+        myadc.method_type = "ip"
+        
+        e,v,p,x = myadc.kernel(nroots=3)
+        e_corr = myadc.e_corr
+
+        self.assertAlmostEqual(e_corr, -0.16330973, 6)
+
+        self.assertAlmostEqual(e[0], 0.45707428, 6)
+        self.assertAlmostEqual(e[1], 0.46818375, 6)
+        self.assertAlmostEqual(e[2], 0.55652918, 6)
+
+        self.assertAlmostEqual(p[0], 0.93869064, 6)
+        self.assertAlmostEqual(p[1], 0.58692581, 6)
+        self.assertAlmostEqual(p[2], 0.35111056, 6)
+      
+
+    def test_hf_dfadc3_ip(self):
+  
+        mf = scf.UHF(mol).run()
+        myadc = adc.ADC(mf)
+        myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
+        myadc.method = "adc(3)"
+
+        e,v,p,x = myadc.kernel(nroots=3)
+        myadc.analyze()
+        e_corr = myadc.e_corr        
+
+        self.assertAlmostEqual(e_corr, -0.1633223874, 6)
+
+        self.assertAlmostEqual(e[0], 0.45707376, 6)
+        self.assertAlmostEqual(e[1], 0.46818480, 6)
+        self.assertAlmostEqual(e[2], 0.55652975, 6)
+
+        self.assertAlmostEqual(p[0], 0.93868596, 6)
+        self.assertAlmostEqual(p[1], 0.58692425, 6)
+        self.assertAlmostEqual(p[2], 0.35110754 ,6)
 
 if __name__ == "__main__":
     print("DF-ADC calculations for different UADC methods for OH")
