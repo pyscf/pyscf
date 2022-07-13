@@ -1357,7 +1357,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               pseudo=None, basis=None, h=None, dimension=None, rcut= None,
-              ecp=None, low_dim_ft_type=None, *args, **kwargs):
+              ecp=None, low_dim_ft_type=None, rcut_by_shell_radius=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1408,6 +1408,7 @@ class Cell(mole.Mole):
         if ecp is not None: self.ecp = ecp
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
+        if rcut_by_shell_radius is not None: self.rcut_by_shell_radius = rcut_by_shell_radius
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
