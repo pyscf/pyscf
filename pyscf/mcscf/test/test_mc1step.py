@@ -125,7 +125,7 @@ class KnownValues(unittest.TestCase):
         mo1 = mc1.mo_coeff
         ci1 = mc1.ci
         s = numpy.einsum('pi,pq,qj->ij', mo0[:,5:9], msym.get_ovlp(), mo1[:,5:9])
-        self.assertAlmostEqual(fci.addons.overlap(ci0, ci1, 4, 4, s), 1, 9)
+        self.assertAlmostEqual(abs(fci.addons.overlap(ci0, ci1, 4, 4, s)), 1, 9)
 
     def test_get_h2eff(self):
         mc1 = mcscf.CASSCF(m, 4, 4).approx_hessian()
