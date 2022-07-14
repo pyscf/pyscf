@@ -62,3 +62,22 @@ mycc.set_frozen(method='window', window=(-1000.0, 4.1))
 print('List of orbital frozen: ', mycc.frozen)
 mycc.kernel()
 print('CCSD correlation energy', mycc.e_corr)
+
+#
+# set_frozen will reduce the number of frozen orbitals 
+# when ECP exists, and return 0 if 
+# number of elec screened by ECP > number of chemical core electrons
+#
+mol = gto.M(
+    atom = 'Mg 0 0 0',
+    basis = 'def2-svp')
+mf = scf.RHF(mol).run()
+mycc = cc.CCSD(mf)
+mycc.set_frozen()
+print('Number of core orbital frozen: %d' % mycc.frozen)
+mol.set(basis='lanl2dz', ecp='lanl2dz').build()
+mf = scf.RHF(mol).run()
+mycc = cc.CCSD(mf)
+mycc.set_frozen()
+print('Number of core orbital frozen: %d' % mycc.frozen)
+

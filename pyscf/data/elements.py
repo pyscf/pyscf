@@ -1098,12 +1098,18 @@ def chemcore(mol, spinorb=False):
     For R/U ones, spinorb=False is fine.
     '''
     core = 0
-    for a in mol.atom_charges():
-        #coreshell = [int(x) for x in N_CORE_SHELLS[a][::2]]
-        #chemcore_atm = coreshell[0]*1 + coreshell[1]*3 \
-        #               + coreshell[2]*5 + coreshell[3]*7
-        #core += chemcore_atm
-        core += chemcore_atm[a]
+    for a in range(mol.natm):
+        atm_nelec = mol.atom_charge(a)
+        atm_z = charge(mol.atom_symbol(a))
+        ne_ecp = atm_z - atm_nelec
+        atm_ncore = chemcore_atm[atm_z]
+        if ne_ecp == 0:
+            core += atm_ncore
+        elif ne_ecp > atm_ncore:
+            core += 0
+        else:
+            core += atm_ncore - ne_ecp
+
     if spinorb:
         core *= 2
     return core
