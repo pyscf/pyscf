@@ -39,7 +39,7 @@ class KnownValues(unittest.TestCase):
         TEMPERATURE = 3000
         v = []
 
-        for i in range(10000):
+        for i in range(1000000):
             v.extend(md.distributions.MaxwellBoltzmannVelocity(o2, T=TEMPERATURE))
 
         v = np.array(v).flatten()

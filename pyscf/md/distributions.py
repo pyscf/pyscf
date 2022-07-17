@@ -20,7 +20,7 @@ import numpy as np
 from pyscf import data, md
 
 def MaxwellBoltzmannVelocity(mol, T=298.15, rng=md.rng):
-    '''Computes velocities for a molecular structure using
+    """Computes velocities for a molecular structure using
         a Maxwell-Boltzmann distribution.
         Args:
             mol : gto.mol object
@@ -35,7 +35,7 @@ def MaxwellBoltzmannVelocity(mol, T=298.15, rng=md.rng):
 
         Returns:
             Velocities as a ndarray of dimension (natm, 3) in atomic units.
-        '''
+        """
 
     veloc = []
     Tkb = T*data.nist.BOLTZMANN/data.nist.HARTREE2J

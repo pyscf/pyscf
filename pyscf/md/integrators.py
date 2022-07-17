@@ -58,6 +58,7 @@ class Frame:
 
 def _toframe(integrator):
     '''Convert an Integrator to a Frame given current saved data.
+    
     Args:
         integrator : md.integrator.Integrator object
 
@@ -73,6 +74,7 @@ def _toframe(integrator):
 
 def _write(dev, mol, vec, atmlst=None):
     '''Format output of molecular vector quantity.
+    
     Args:
         dev : lib.logger.Logger object
         mol : gto.mol object
@@ -252,7 +254,7 @@ class Integrator(lib.StreamObject):
         if self.veloc is None:
             self.veloc = np.full((self.mol.natm, 3), 0.0)
 
-        # Store the masses into a cached variable
+        # Store the masses into a cached variable,
         # so we don't have to keep looking them up
         self._masses = np.array([
             data.elements.COMMON_ISOTOPE_MASSES[m] * data.nist.AMU2AU
@@ -289,6 +291,7 @@ class Integrator(lib.StreamObject):
 
             if self.trajectory_output == '/dev/null':
                 self.trajectory_output = open(os.devnull, 'w')
+            
             else:
                 self.trajectory_output = open(self.trajectory_output, 'w')
 
@@ -323,6 +326,8 @@ class Integrator(lib.StreamObject):
 
     def compute_kinetic_energy(self):
         '''Compute the kinetic energy of the current frame.'''
+        # TODO, can make this cleaner by removing an explicit zip and
+        # try to leverage numpy vectors
         energy = 0
         for v, m in zip(self.veloc, self._masses):
             energy += 0.5 * m * np.linalg.norm(v) ** 2
@@ -333,7 +338,8 @@ class Integrator(lib.StreamObject):
         '''Returns the temperature of the system'''
         dof = 3 * len(self.mol.atom_coords())
 
-        # Temp = 2/(3*k*N_f)*\sum_i (m_i v_i^2)
+        # Temp = 2/(3*k*N_f) * KE
+        #      = 2/(3*k*N_f)*\sum_i (1/2 m_i v_i^2)
         return ((2 * self.ekin) / (
                 3 * dof * data.nist.BOLTZMANN / data.nist.HARTREE2J))
 
@@ -390,7 +396,7 @@ class Integrator(lib.StreamObject):
                                                  self.ekin,
                                                  self.ekin + self.epot)
 
-        # We follow OM of writing all of the states at the end of the line
+        # We follow OM of writing all the states at the end of the line
         if getattr(self.scanner.base, 'e_states', None) is not None:
             if len(self.scanner.base.e_states) > 1:
                 for e in self.scanner.base.e_states:
@@ -402,7 +408,7 @@ class Integrator(lib.StreamObject):
         self.energy_output.flush()
 
     def _write_coord(self):
-        '''Writes out the current geometry to the self.trajectroy_output
+        '''Writes out the current geometry to the self.trajectory_output
         stream in xyz format. '''
         self.trajectory_output.write('%s\nMD Time %.2f\n' %
                                      (self.mol.natm, self.time))
