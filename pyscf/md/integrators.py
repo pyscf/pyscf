@@ -58,7 +58,7 @@ class Frame:
 
 def _toframe(integrator):
     '''Convert an Integrator to a Frame given current saved data.
-    
+
     Args:
         integrator : md.integrator.Integrator object
 
@@ -74,7 +74,7 @@ def _toframe(integrator):
 
 def _write(dev, mol, vec, atmlst=None):
     '''Format output of molecular vector quantity.
-    
+
     Args:
         dev : lib.logger.Logger object
         mol : gto.mol object
@@ -291,7 +291,7 @@ class Integrator(lib.StreamObject):
 
             if self.trajectory_output == '/dev/null':
                 self.trajectory_output = open(os.devnull, 'w')
-            
+
             else:
                 self.trajectory_output = open(self.trajectory_output, 'w')
 
