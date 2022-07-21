@@ -57,7 +57,7 @@ class Mole(gto.Mole):
             _atm[:,gto.NUC_MOD_OF] = gto.NUC_FRAC_CHARGE
             charges = numpy.asarray(charges)[:,numpy.newaxis]
 
-        # enable gaussians for MM charges; could placed in _env and setting _bas 
+        # enable gaussians for MM charges; could placed in _env and setting _bas
         # but I'd rather keep this simple interface
         if expnts is None:
             self._expnts = [1e16] * natm
@@ -93,7 +93,7 @@ def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom'):
     if radii is None:
         expnts = None
     else:
-        # unit conversion 
+        # unit conversion
         if not unit.upper().startswith(('B', 'AU')):
             from pyscf.lib import param
             radii = [r / param.BOHR for r in radii]

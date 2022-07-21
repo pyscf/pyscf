@@ -3921,10 +3921,10 @@ def fakemol_for_charges(coords, expnt=1e16):
     distribution with the Gaussian exponent (expnt).
     '''
     nbas = coords.shape[0]
-    if hasattr(expnt, '__iter__'):
-        assert len(expnt) == nbas
-    else:
+    if isinstance(expnt, (float, np.floating)):
         expnt = [expnt] * nbas
+    else:
+        assert len(expnt) == nbas
     fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
     fakeenv = [0] * PTR_ENV_START
