@@ -3921,7 +3921,7 @@ def fakemol_for_charges(coords, expnt=1e16):
     distribution with the Gaussian exponent (expnt).
     '''
     nbas = coords.shape[0]
-    if isinstance(expnt, (float, np.floating)):
+    if isinstance(expnt, (float, numpy.floating)):
         expnt = [expnt] * nbas
     else:
         assert len(expnt) == nbas
