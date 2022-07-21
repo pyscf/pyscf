@@ -3921,6 +3921,10 @@ def fakemol_for_charges(coords, expnt=1e16):
     distribution with the Gaussian exponent (expnt).
     '''
     nbas = coords.shape[0]
+    if hasattr(expnt, '__iter__'):
+        assert len(expnt) == nbas
+    else:
+        expnt = [expnt] * nbas
     fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
     fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
     fakeenv = [0] * PTR_ENV_START
@@ -3932,10 +3936,12 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakebas[:,NPRIM_OF] = 1
     fakebas[:,NCTR_OF] = 1
 # approximate point charge with gaussian distribution exp(-1e16*r^2)
-    fakebas[:,PTR_EXP] = ptr
-    fakebas[:,PTR_COEFF] = ptr+1
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
-    ptr += 2
+    for iatm in range(nbas):
+        fakebas[iatm,PTR_EXP] = ptr
+        fakebas[iatm,PTR_COEFF] = ptr+1
+        e = expnt[iatm]
+        fakeenv.append([e, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,e))])
+        ptr += 2
     fakemol = Mole()
     fakemol._atm = fakeatm
     fakemol._bas = fakebas

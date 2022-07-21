@@ -39,7 +39,7 @@ class Mole(gto.Mole):
         charges : fractional charges of MM particles
 
     '''
-    def __init__(self, atoms, charges=None):
+    def __init__(self, atoms, charges=None, expnts=None):
         gto.Mole.__init__(self)
         self.atom = self._atom = atoms
         self.unit = 'Bohr'
@@ -57,6 +57,14 @@ class Mole(gto.Mole):
             _atm[:,gto.NUC_MOD_OF] = gto.NUC_FRAC_CHARGE
             charges = numpy.asarray(charges)[:,numpy.newaxis]
 
+        # enable gaussians for MM charges; could placed in _env and setting _bas 
+        # but I'd rather keep this simple interface
+        if expnts is None:
+            self._expnts = [1e16] * natm
+        else:
+            assert len(expnts) == natm
+            self._expnts = expnts
+
         self._env = numpy.append(numpy.zeros(gto.PTR_ENV_START),
                                  numpy.hstack((coords, charges)).ravel())
         _atm[:,gto.PTR_COORD] = gto.PTR_ENV_START + numpy.arange(natm) * 4
@@ -65,7 +73,7 @@ class Mole(gto.Mole):
 
         self._built = True
 
-def create_mm_mol(atoms_or_coords, charges=None, unit='Angstrom'):
+def create_mm_mol(atoms_or_coords, charges=None, radii=None, unit='Angstrom'):
     '''Create an MM object based on the given coordinates and charges of MM
     particles.
     '''
@@ -82,5 +90,13 @@ def create_mm_mol(atoms_or_coords, charges=None, unit='Angstrom'):
     else:
         atoms = atoms_or_coords
     atoms = gto.format_atom(atoms, unit=unit)
-    return Mole(atoms, charges)
+    if radii is None:
+        expnts = None
+    else:
+        # unit conversion 
+        if not unit.upper().startswith(('B', 'AU')):
+            from pyscf.lib import param
+            radii = [r / param.BOHR for r in radii]
+        expnts = [1/r**2 for r in radii]
+    return Mole(atoms, charges, expnts)
 
