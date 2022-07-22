@@ -284,6 +284,19 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
     mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
                                'small_rho_cutoff'])
 
+def dft3c(mf, method='b97-3c'):
+    from pyscf.dftd3 import dftd3
+    if method=='b97-3c':
+        mf.mol.set(basis='mTZVP').build()
+        mf.xc = 'b97-3c'
+    elif method=='r2scan3c'
+        mf.mol.set(basis='mTZVPP').build()
+        mf.xc = 'r2scan'
+    mf = mf.density_fit()
+    mf = dftd3(mf)
+    mf = gcp(mf)
+    return mf
+
 class KohnShamDFT(object):
     '''
     Attributes for Kohn-Sham DFT:
@@ -474,6 +487,9 @@ class KohnShamDFT(object):
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
         return self
+
+    def dft3c(self, method='b97-3c'):
+        return dft3c(self, method=method)
 
     def initialize_grids(self, mol=None, dm=None):
         '''Initialize self.grids the first time call get_veff'''
