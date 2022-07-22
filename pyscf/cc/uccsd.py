@@ -632,7 +632,8 @@ class UCCSD(ccsd.CCSD):
         return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
     uccsd_t = ccsd_t
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_mf=True):
         '''Un-relaxed 1-particle density matrix in MO space
 
         Returns:
@@ -644,9 +645,11 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                   with_frozen=with_frozen, with_mf=with_mf)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_dm1=True):
         '''2-particle density matrix in spin-orbital basis.
         '''
         from pyscf.cc import uccsd_rdm
@@ -655,7 +658,8 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                   with_frozen=with_frozen, with_dm1=with_dm1)
 
     def spin_square(self, mo_coeff=None, s=None):
         from pyscf.fci.spin_op import spin_square_general
