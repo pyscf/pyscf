@@ -873,7 +873,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
             log.debug('CAS space CI energy = %.15g', e_cas)
 
             if getattr(self.fcisolver, 'spin_square', None):
-                ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                try:
+                    ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                except NotImplementedError:
+                    ss = None
             else:
                 ss = None
 
