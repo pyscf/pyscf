@@ -1076,6 +1076,48 @@ N_CORE_VALENCE_SHELLS = [
     '7s6p4d2f',         #118  Og
 ]
 
+chemcore_atm = [
+    0, # ghost
+    0,                                                                  0,
+    0,  0,                                          1,  1,  1,  1,  1,  1,
+    1,  1,                                          5,  5,  5,  5,  5,  5,
+    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
+    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18,
+    18, 18,
+    # lanthanides
+    18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34,
+    34, 34,
+    # actinides
+    34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+    50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
+
+def chemcore(mol, spinorb=False):
+    '''
+    Set spinorb=True for GMP2, GCCSD, etc.
+    For R/U ones, spinorb=False is fine.
+    '''
+    core = 0
+    for a in range(mol.natm):
+        atm_nelec = mol.atom_charge(a)
+        atm_z = charge(mol.atom_symbol(a))
+        ne_ecp = atm_z - atm_nelec
+        atm_ncore = chemcore_atm[atm_z]
+        if ne_ecp == 0:
+            core += atm_ncore
+        elif ne_ecp > atm_ncore:
+            core += 0
+        else:
+            core += atm_ncore - ne_ecp
+
+    if spinorb:
+        core *= 2
+    return core
+
+#def chemcore_list(mol):
+#    ncore = chemcore(mol)
+#    return list(range(ncore))
+
 
 ########################################
 #
