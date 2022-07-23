@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -119,11 +119,6 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
     else:
         ngrids, nao = ao[0].shape
 
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                              dtype=numpy.uint8)
-        non0tab[:] = 0xff
-
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
@@ -203,11 +198,6 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         ngrids, nao = ao.shape
     else:
         ngrids, nao = ao[0].shape
-
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
-                              dtype=numpy.uint8)
-        non0tab[:] = 0xff
 
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(mo_coeff):
@@ -900,23 +890,6 @@ class NumInt(numint.NumInt):
     periodic images.
     '''
 
-    eval_ao = staticmethod(eval_ao)
-
-    @lib.with_doc(make_mask.__doc__)
-    def make_mask(self, cell, coords, relativity=0, shls_slice=None,
-                  verbose=None):
-        return make_mask(cell, coords, relativity, shls_slice, verbose)
-
-    @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-                 with_lapl=True, verbose=None):
-        return eval_rho(cell, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
-
-    def eval_rho2(self, cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
-                  with_lapl=True, verbose=None):
-        return eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab, xctype, with_lapl,
-                         verbose)
-
     def nr_vxc(self, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
                kpt=None, kpts_band=None, max_memory=2000, verbose=None):
         '''Evaluate RKS/UKS XC functional and potential matrix.
@@ -1015,18 +988,23 @@ class NumInt(numint.NumInt):
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
-                                 cutoff=self.cutoff)
+                                 cutoff=grids.cutoff)
             if abs(kpt1-kpt2).sum() < 1e-9:
                 ao_k1 = ao_k2
             else:
                 ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv,
-                                     cutoff=self.cutoff)
+                                     cutoff=grids.cutoff)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
-    def _gen_rho_evaluator(self, cell, dms, hermi=0, with_lapl=False):
-        return numint._NumIntMixin._gen_rho_evaluator(self, cell, dms, hermi, with_lapl)
+    def eval_rho1(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0,
+                  with_lapl=True, cutoff=CUTOFF, grids=None, verbose=None):
+        return eval_rho(cell, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
 
+    eval_ao = staticmethod(eval_ao)
+    make_mask = staticmethod(make_mask)
+    eval_rho = staticmethod(eval_rho)
+    eval_rho2 = staticmethod(eval_rho2)
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
@@ -1074,6 +1052,10 @@ class KNumInt(numint.NumInt):
             rho += rho_ks[k]
         rho *= 1./nkpts
         return rho
+
+    def eval_rho1(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA', hermi=0,
+                  with_lapl=True, cutoff=CUTOFF, grids=None, verbose=None):
+        return eval_rho(cell, ao_kpts, dm_kpts, non0tab, xctype, hermi, with_lapl, verbose)
 
     def eval_rho2(self, cell, ao_kpts, mo_coeff_kpts, mo_occ_kpts,
                   non0tab=None, xctype='LDA', with_lapl=True, verbose=None):
@@ -1186,28 +1168,6 @@ class KNumInt(numint.NumInt):
                                      non0tab=non0, cutoff=self.cutoff)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
-
-    def _gen_rho_evaluator(self, cell, dms, hermi=0, with_lapl=False):
-        if getattr(dms, 'mo_coeff', None) is not None:
-            mo_coeff = dms.mo_coeff
-            mo_occ = dms.mo_occ
-            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
-                mo_coeff = [mo_coeff]
-                mo_occ = [mo_occ]
-            nao = cell.nao_nr()
-            ndms = len(mo_occ)
-            def make_rho(idm, ao, non0tab, xctype):
-                return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],
-                                      non0tab, xctype, with_lapl)
-        else:
-            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
-                dms = [numpy.stack(dms)]
-            nao = dms[0].shape[-1]
-            ndms = len(dms)
-            def make_rho(idm, ao_kpts, non0tab, xctype):
-                return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
-                                     hermi, with_lapl)
-        return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc

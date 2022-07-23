@@ -31,7 +31,7 @@
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
 #define NPRIMAX         40
-#define BLKSIZE         104
+#define BLKSIZE         56
 #define EXPCUTOFF       50  // 1e-22
 #define NOTZERO(e)      (fabs(e)>1e-18)
 

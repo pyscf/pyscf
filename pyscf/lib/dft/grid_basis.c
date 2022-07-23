@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -23,61 +23,71 @@
 #include "gto/grid_ao_drv.h"
 #include "np_helper/np_helper.h"
 
-#define MAX_THREADS     256
-
-void VXCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+void VXC_screen_index(uint8_t *screen_index, int nbins, double cutoff,
+                      double *coords, int ngrids,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+        double scale = -nbins / log(MIN(cutoff, .1));
+#pragma omp parallel
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         int i, j;
-        int np, nc, atm_id;
+        int np, nc, atm_id, ng0, ng1, dg;
         size_t bas_id, ib;
-        double rr, arr, maxc;
-        double logcoeff[NPRIMAX];
-        double dr[3];
+        double min_exp, log_coeff, maxc, arr, arr_min, si;
+        double dx, dy, dz, atom_x, atom_y, atom_z;
         double *p_exp, *pcoeff, *ratm;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
+        double rr[BLKSIZE];
+        double *coordx = coords;
+        double *coordy = coords + ngrids;
+        double *coordz = coords + ngrids * 2;
 
+#pragma omp for nowait schedule(static)
         for (bas_id = 0; bas_id < nbas; bas_id++) {
-                np = bas[NPRIM_OF];
-                nc = bas[NCTR_OF ];
-                p_exp = env + bas[PTR_EXP];
-                pcoeff = env + bas[PTR_COEFF];
-                atm_id = bas[ATOM_OF];
+                np = bas[NPRIM_OF+bas_id*BAS_SLOTS];
+                nc = bas[NCTR_OF +bas_id*BAS_SLOTS];
+                p_exp = env + bas[PTR_EXP+bas_id*BAS_SLOTS];
+                pcoeff = env + bas[PTR_COEFF+bas_id*BAS_SLOTS];
+                atm_id = bas[ATOM_OF+bas_id*BAS_SLOTS];
                 ratm = env + atm[atm_id*ATM_SLOTS+PTR_COORD];
+                atom_x = ratm[0];
+                atom_y = ratm[1];
+                atom_z = ratm[2];
 
+                maxc = 0;
+                min_exp = 1e9;
                 for (j = 0; j < np; j++) {
-                        maxc = 0;
+                        min_exp = MIN(min_exp, p_exp[j]);
                         for (i = 0; i < nc; i++) {
                                 maxc = MAX(maxc, fabs(pcoeff[i*np+j]));
                         }
-                        logcoeff[j] = log(maxc);
                 }
+                log_coeff = log(maxc);
 
                 for (ib = 0; ib < nblk; ib++) {
-                        for (i = ib*BLKSIZE; i < MIN(ngrids, (ib+1)*BLKSIZE); i++) {
-                                dr[0] = coords[0*ngrids+i] - ratm[0];
-                                dr[1] = coords[1*ngrids+i] - ratm[1];
-                                dr[2] = coords[2*ngrids+i] - ratm[2];
-                                rr = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
-                                for (j = 0; j < np; j++) {
-                                        arr = p_exp[j] * rr;
-                                        if (arr-logcoeff[j] < expcutoff) {
-                                                non0table[ib*nbas+bas_id] = 1;
-                                                goto next_blk;
-                                        }
-                                }
+                        ng0 = ib * BLKSIZE;
+                        ng1 = MIN(ngrids, (ib+1)*BLKSIZE);
+                        dg = ng1 - ng0;
+                        for (i = 0; i < dg; i++) {
+                                dx = coordx[ng0+i] - atom_x;
+                                dy = coordy[ng0+i] - atom_y;
+                                dz = coordz[ng0+i] - atom_z;
+                                rr[i] = dx*dx + dy*dy + dz*dz;
                         }
-                        non0table[ib*nbas+bas_id] = 0;
-next_blk:;
+                        arr_min = 1e9;
+                        for (i = 0; i < dg; i++) {
+                                arr = min_exp * rr[i] - log_coeff;
+                                arr_min = MIN(arr_min, arr);
+                        }
+                        si = nbins - arr_min * scale;
+                        if (si <= 0) {
+                                screen_index[ib*nbas+bas_id] = 0;
+                        } else {
+                                screen_index[ib*nbas+bas_id] = (int8_t)(si + 1);
+                        }
                 }
-                bas += BAS_SLOTS;
         }
+}
 }
 
 // 1k grids per block

@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #include "nr_direct.h"
 #include "np_helper/np_helper.h"
 #include "gto/gto.h"
+
+#define AO_BLOCK_SIZE   64
 
 #define DECLARE_ALL \
         const int *atm = envs->atm; \
@@ -352,7 +354,8 @@ static void assemble_v(double *vjk, JKOperator *op, JKArray *jkarray,
 }
 
 // Divide shls into subblocks with roughly equal number of AOs in each block
-int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc)
+int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc,
+                             int block_size)
 {
         int ish0 = shls_slice[0];
         int ish1 = shls_slice[1];
@@ -362,7 +365,7 @@ int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc)
 
         block_loc[0] = ish0;
         for (ish = ish0 + 1; ish < ish1; ish++) {
-                if (ao_loc[ish] - ao_loc_last > AO_BLOCK_SIZE) {
+                if (ao_loc[ish+1] - ao_loc_last > block_size) {
                         block_loc[count] = ish;
                         count++;
                         ao_loc_last = ao_loc[ish];
@@ -421,10 +424,10 @@ void CVHFnr_direct_drv(int (*intor)(), void (*fdot)(), JKOperator **jkop,
         int *block_jloc = block_iloc + nish + 1;
         int *block_kloc = block_jloc + njsh + 1;
         int *block_lloc = block_kloc + nksh + 1;
-        const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc);
-        const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc);
-        const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc);
-        const size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc);
+        const size_t nblock_i = CVHFshls_block_partition(block_iloc, shls_slice+0, ao_loc, AO_BLOCK_SIZE);
+        const size_t nblock_j = CVHFshls_block_partition(block_jloc, shls_slice+2, ao_loc, AO_BLOCK_SIZE);
+        const size_t nblock_k = CVHFshls_block_partition(block_kloc, shls_slice+4, ao_loc, AO_BLOCK_SIZE);
+        const size_t nblock_l = CVHFshls_block_partition(block_lloc, shls_slice+6, ao_loc, AO_BLOCK_SIZE);
         const size_t nblock_kl = nblock_k * nblock_l;
         const size_t nblock_jkl = nblock_j * nblock_kl;
 
