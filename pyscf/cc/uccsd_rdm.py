@@ -34,37 +34,41 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape
 
+    tmpA  = einsum('imef,jmef->ij', l2ab, t2ab)
+    tmpA += einsum('imef,jmef->ij', l2aa, t2aa) * .5
+
+    tmpB  = einsum('mief,mjef->ij', l2ab, t2ab)
+    tmpB += einsum('imef,jmef->ij', l2bb, t2bb) * .5
+
+    tmpC  = einsum('mnae,mnbe->ab', t2ab, l2ab)
+    tmpC += einsum('mnae,mnbe->ab', t2aa, l2aa) * .5
+
+    tmpD  = einsum('mnea,mneb->ab', t2ab, l2ab)
+    tmpD += einsum('mnae,mnbe->ab', t2bb, l2bb) * .5
+
     dooa  = -einsum('ie,je->ij', l1a, t1a)
-    dooa -=  einsum('imef,jmef->ij', l2ab, t2ab)
-    dooa -=  einsum('imef,jmef->ij', l2aa, t2aa) * .5
+    dooa -= tmpA
     doob  = -einsum('ie,je->ij', l1b, t1b)
-    doob -=  einsum('mief,mjef->ij', l2ab, t2ab)
-    doob -=  einsum('imef,jmef->ij', l2bb, t2bb) * .5
+    doob -= tmpB
 
     dvva  = einsum('ma,mb->ab', t1a, l1a)
-    dvva += einsum('mnae,mnbe->ab', t2ab, l2ab)
-    dvva += einsum('mnae,mnbe->ab', t2aa, l2aa) * .5
+    dvva += tmpC
     dvvb  = einsum('ma,mb->ab', t1b, l1b)
-    dvvb += einsum('mnea,mneb->ab', t2ab, l2ab)
-    dvvb += einsum('mnae,mnbe->ab', t2bb, l2bb) * .5
+    dvvb += tmpD
 
-    xt1a  = einsum('mnef,inef->mi', l2aa, t2aa) * .5
-    xt1a += einsum('mnef,inef->mi', l2ab, t2ab)
-    xt2a  = einsum('mnaf,mnef->ae', t2aa, l2aa) * .5
-    xt2a += einsum('mnaf,mnef->ae', t2ab, l2ab)
+    xt1a = tmpA
+    xt2a = tmpC
     xt2a += einsum('ma,me->ae', t1a, l1a)
+
+    xt1b = tmpB
+    xt2b = tmpD
+    xt2b += einsum('ma,me->ae', t1b, l1b)
 
     dvoa  = numpy.einsum('imae,me->ai', t2aa, l1a)
     dvoa += numpy.einsum('imae,me->ai', t2ab, l1b)
     dvoa -= einsum('mi,ma->ai', xt1a, t1a)
     dvoa -= einsum('ie,ae->ai', t1a, xt2a)
     dvoa += t1a.T
-
-    xt1b  = einsum('mnef,inef->mi', l2bb, t2bb) * .5
-    xt1b += einsum('nmef,nief->mi', l2ab, t2ab)
-    xt2b  = einsum('mnaf,mnef->ae', t2bb, l2bb) * .5
-    xt2b += einsum('mnfa,mnfe->ae', t2ab, l2ab)
-    xt2b += einsum('ma,me->ae', t1b, l1b)
 
     dvob  = numpy.einsum('imae,me->ai', t2bb, l1b)
     dvob += numpy.einsum('miea,me->ai', t2ab, l1a)
