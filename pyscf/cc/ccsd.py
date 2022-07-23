@@ -763,6 +763,27 @@ def get_d2_diagnostic(t2):
     d2norm = max(d2norm_ij, d2norm_ab)
     return d2norm
 
+def set_frozen(mycc, method='auto', window=(-1000.0, 1000.0), is_gcc=False):
+    if method == 'auto':
+        from pyscf.data import elements
+        mycc.frozen = elements.chemcore(mycc.mol, spinorb=is_gcc)
+    elif method == 'window':
+        emin, emax = window
+        mo_e = numpy.asarray(mycc._scf.mo_energy)
+        if mo_e.ndim == 1:
+            fr1 = list(numpy.flatnonzero(mo_e < emin))
+            fr2 = list(numpy.flatnonzero(mo_e > emax))
+            frozen = fr1 + fr2
+        elif mo_e.ndim == 2:
+            fr1a = list(numpy.flatnonzero(mo_e[0] < emin))
+            fr2a = list(numpy.flatnonzero(mo_e[0] > emax))
+            fr1b = list(numpy.flatnonzero(mo_e[1] < emin))
+            fr2b = list(numpy.flatnonzero(mo_e[1] > emax))
+            frozen = [fr1a+fr2a, fr1b+fr2b]
+        mycc.frozen = frozen
+    return mycc
+
+
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
 
@@ -855,6 +876,8 @@ class CCSD(lib.StreamObject):
             >>> mf = scf.RHF(mol).run()
             >>> # freeze 2 core orbitals
             >>> mycc = cc.CCSD(mf).set(frozen = 2).run()
+            >>> # auto-generate the number of core orbitals to be frozen (1 in this case)
+            >>> mycc = cc.CCSD(mf).set_frozen().run()
             >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
             >>> mycc.set(frozen = [0,1,16,17,18]).run()
 
@@ -981,6 +1004,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+
+    def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
+        from pyscf import cc
+        is_gcc = isinstance(self, cc.gccsd.GCCSD)
+        return set_frozen(self, method=method, window=window, is_gcc=is_gcc)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -1141,7 +1169,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self)
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_mf=True):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
         if t1 is None: t1 = self.t1
@@ -1149,9 +1178,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                  with_frozen=with_frozen, with_mf=with_mf)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_dm1=True):
         '''2-particle density matrix in MO space.  The density matrix is
         stored as
 
@@ -1163,7 +1194,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return ccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                  with_frozen=with_frozen, with_dm1=with_dm1)
 
     def ao2mo(self, mo_coeff=None):
         # Pseudo code how eris are implemented:

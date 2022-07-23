@@ -191,6 +191,9 @@ class KnownValues(unittest.TestCase):
         ucc1.frozen = 1
         self.assertEqual(ucc1.nmo, (12,12))
         self.assertEqual(ucc1.nocc, (4,4))
+        ucc1.set_frozen()
+        self.assertEqual(ucc1.nmo, (12,12))
+        self.assertEqual(ucc1.nocc, (4,4))
         ucc1.frozen = [0,1]
         self.assertEqual(ucc1.nmo, (11,11))
         self.assertEqual(ucc1.nocc, (3,3))

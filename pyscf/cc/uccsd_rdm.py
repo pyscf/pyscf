@@ -342,7 +342,7 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
     d2 = _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv)
     return d2
 
-def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_mf=True):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -354,10 +354,10 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
+    return _make_rdm1(mycc, d1, with_frozen=with_frozen, ao_repr=ao_repr, with_mf=with_mf)
 
 # spin-orbital rdm2 in Chemist's notation
-def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_dm1=True):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
@@ -381,10 +381,10 @@ def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+    return _make_rdm2(mycc, d1, d2, with_dm1=with_dm1, with_frozen=with_frozen,
                       ao_repr=ao_repr)
 
-def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
+def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False, with_mf=True):
     doo, dOO = d1[0]
     dov, dOV = d1[1]
     dvo, dVO = d1[2]
@@ -400,7 +400,6 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1a[nocca:,:nocca] = dm1a[:nocca,nocca:].conj().T
     dm1a[nocca:,nocca:] = dvv + dvv.conj().T
     dm1a *= .5
-    dm1a[numpy.diag_indices(nocca)] += 1
 
     dm1b = numpy.empty((nmob,nmob), dtype=dOO.dtype)
     dm1b[:noccb,:noccb] = dOO + dOO.conj().T
@@ -408,7 +407,9 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].conj().T
     dm1b[noccb:,noccb:] = dVV + dVV.conj().T
     dm1b *= .5
-    dm1b[numpy.diag_indices(noccb)] += 1
+    if with_mf:
+        dm1a[numpy.diag_indices(nocca)] += 1
+        dm1b[numpy.diag_indices(noccb)] += 1
 
     if with_frozen and mycc.frozen is not None:
         nmoa = mycc.mo_occ[0].size
@@ -417,8 +418,9 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
         rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
         rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
-        rdm1a[numpy.diag_indices(nocca)] = 1
-        rdm1b[numpy.diag_indices(noccb)] = 1
+        if with_mf:
+            rdm1a[numpy.diag_indices(nocca)] = 1
+            rdm1b[numpy.diag_indices(noccb)] = 1
         moidx = mycc.get_frozen_mask()
         moidxa = numpy.where(moidx[0])[0]
         moidxb = numpy.where(moidx[1])[0]
