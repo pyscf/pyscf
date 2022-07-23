@@ -25,6 +25,7 @@ import warnings
 import tempfile
 import functools
 import itertools
+import inspect
 import collections
 import ctypes
 import numpy
@@ -633,28 +634,83 @@ def alias(fn, alias_name=None):
     overloaded in the child class. Using "alias" can make sure that the
     overloaded mehods were called when calling the aliased method.
     '''
-    fname = fn.__name__
-    def aliased_fn(self, *args, **kwargs):
-        return getattr(self, fname)(*args, **kwargs)
+    name = fn.__name__
+    if alias_name is None:
+        alias_name = name
 
-    if alias_name is not None:
-        aliased_fn.__name__ = alias_name
-
-    doc_str = 'An alias to method %s\n' % fname
-    if sys.version_info >= (3,):
-        from inspect import signature
-        sig = str(signature(fn))
-        if alias_name is None:
-            doc_str += 'Function Signature: %s\n' % sig
+    _locals = {}
+    co = fn.__code__
+    sig = inspect.signature(fn)
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
         else:
-            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
-    doc_str += '----------------------------------------\n\n'
+            var_args.append(k)
+    txt = f'''def {alias_name}{sig}:
+    return self.{name}({", ".join(var_args[1:])})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[alias_name]
 
-    if fn.__doc__ is not None:
-        doc_str += fn.__doc__
+    new_fn.__module__ = fn.__module__
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
-    aliased_fn.__doc__ = doc_str
-    return aliased_fn
+def module_method(fn, absences=None):
+    '''
+    The statement "fn1 = module_method(fn, absences=['a','b'])"
+    in a class is equivalent to define the following method in the class:
+
+    .. code-block:: python
+        def fn1(self, ..., a=None, b=None, ...):
+            if a is None: a = self.a
+            if b is None: b = self.b
+            return fn(..., a, b, ...)
+
+    If absences are not specified, all position arguments will be assigned in
+    terms of the corresponding attributes of self, i.e.
+
+    .. code-block:: python
+        def fn1(self, a, b, ...):
+            if a is None: a = self.a
+            if b is None: b = self.b
+            return fn(a, b, ...)
+    '''
+    _locals = {}
+    name = fn.__name__
+    sig = inspect.signature(fn)
+    body = []
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
+        else:
+            var_args.append(k)
+            if absences is None and v.default == v.empty:  # positional argument
+                body.append(f'    if {k} is None: {k} = self.{k}')
+
+    txt = [f'def {name}(self, {", ".join(var_args)}):'] + body
+    if absences is not None:
+        for k in absences:
+            assert k in var_args, f'Unknown argument {k}'
+            txt.append(f'    if {k} is None: {k} = self.{k}')
+
+    txt.append(f'    return {name}({", ".join(var_args)})')
+    exec('\n'.join(txt), fn.__globals__, _locals)
+    new_fn = _locals[name]
+
+    fn_defaults = fn.__defaults__
+    nargs = fn.__code__.co_argcount
+    if fn_defaults is None:
+        new_fn.__defaults__ = (None,) * nargs
+    else:
+        new_fn.__defaults__ = (None,) * (nargs-len(fn_defaults)) + fn_defaults
+
+    new_fn.__module__ = fn.__module__
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
 def class_as_method(cls):
     '''
@@ -1113,8 +1169,3 @@ def isintsequence(obj):
         for i in obj:
             are_ints = are_ints and isinteger(i)
         return are_ints
-
-
-if __name__ == '__main__':
-    for i,j in prange_tril(0, 90, 300):
-        print(i, j, j*(j+1)//2-i*(i+1)//2)

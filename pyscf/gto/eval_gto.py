@@ -22,7 +22,7 @@ import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
-BLKSIZE = 104  # must be equal to lib/gto/grid_ao_drv.h
+BLKSIZE = 56  # must be equal to lib/gto/grid_ao_drv.h
 
 libcgto = lib.load_library('libcgto')
 
@@ -111,9 +111,10 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0]
     if 'spinor' in eval_name:
-        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
+        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128,
+                           buffer=out).transpose(0,1,3,2)
     else:
-        ao = numpy.ndarray((comp,nao,ngrids), buffer=out)
+        ao = numpy.ndarray((comp,nao,ngrids), buffer=out).transpose(0,2,1)
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
@@ -130,7 +131,6 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
             env.ctypes.data_as(ctypes.c_void_p))
 
-    ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:
         if 'spinor' in eval_name:
             ao = ao[:,0]
