@@ -1,33 +1,16 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Author: Qiming Sun <osirpt.sun@gmail.com>
-#
+
+'''
+Renormalized perturbative triples correction on CCSD (R-CCSD(T)) - slow version
+
+See: Comput. Phys. Commun. 149, 71 (2002); https://doi.org/10.1016/S0010-4655(02)00598-2
+'''
 
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc.ccsd_t_slow import r3 
 
-'''
-Renormalized perturbative triples correction on CCSD (R-CCSD(T))
-'''
-
-# t3 as ijkabc
-
-# Comput. Phys. Commun. 149, 71 (2002); DOI:10.1016/S0010-4655(02)00598-2
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -191,33 +174,33 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     log.info('R-CCSD(T) correction = %.15g', et / dn)
     return et / dn
 
-if __name__ == '__main__':
-    import pyscf
-    from pyscf.data import nist
-    re = 1.7328 * nist.BOHR
-    r = re * 3 
-    
-    mol = pyscf.M(
-        atom = 'H 0 0 0; F 0 0 %f' % r,
-        basis = 'dz')
-    
-    mf = mol.RHF().run(max_cycle=100, verbose=0)
 
-    print('> Comput. Phys. Commun. 149, 71 (2002); DOI:10.1016/S0010-4655(02)00598-2')    
-    cisolver = pyscf.fci.FCI(mf)
-    e_fci = cisolver.kernel()[0]
-    print(' E(FCI)          /  Eh = %.6f' % e_fci)
-    
-    mycc = mf.CCSD().run(verbose=0)
-    e_ccsd = mf.e_tot + mycc.e_corr
-    print(' CCSD error      / mEh = %.3f' % ((e_ccsd - e_fci) * 1e3))
-    
-    et = mycc.ccsd_t()
-    e_ccsd_t = e_ccsd + et
-    print(' CCSD(T) error   / mEh = %.3f' % ((e_ccsd_t - e_fci) * 1e3))
-      
-    eris = mycc.ao2mo(mycc.mo_coeff)
-    et = kernel(mycc, eris, mycc.t1, mycc.t2) 
-    e_r_ccsd_t = e_ccsd + et
-    print(' R-CCSD(T) error / mEh = %.3f' % ((e_r_ccsd_t - e_fci) * 1e3))
-    
+print('> An example in Comput. Phys. Commun. 149, 71 (2002); DOI:10.1016/S0010-4655(02)00598-2')    
+import pyscf
+from pyscf.data import nist
+re = 1.7328 * nist.BOHR
+r = re * 3 
+
+mol = pyscf.M(
+    atom = 'H 0 0 0; F 0 0 %f' % r,
+    basis = 'dz')
+
+mf = mol.RHF().run(max_cycle=100, verbose=0)
+
+cisolver = pyscf.fci.FCI(mf)
+e_fci = cisolver.kernel()[0]
+print(' E(FCI)          /  Eh = %.6f' % e_fci)
+
+mycc = mf.CCSD().run(verbose=0)
+e_ccsd = mf.e_tot + mycc.e_corr
+print(' CCSD error      / mEh = %.3f' % ((e_ccsd - e_fci) * 1e3))
+
+et = mycc.ccsd_t()
+e_ccsd_t = e_ccsd + et
+print(' CCSD(T) error   / mEh = %.3f' % ((e_ccsd_t - e_fci) * 1e3))
+  
+eris = mycc.ao2mo(mycc.mo_coeff)
+et = kernel(mycc, eris, mycc.t1, mycc.t2) 
+e_r_ccsd_t = e_ccsd + et
+print(' R-CCSD(T) error / mEh = %.3f' % ((e_r_ccsd_t - e_fci) * 1e3))
+
