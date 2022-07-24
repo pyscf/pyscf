@@ -1638,22 +1638,18 @@ class Cell(mole.Mole):
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
                            shls_slice, **kwargs)
 
-    @lib.with_doc(pbc_eval_gto.__doc__)
-    def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                     shls_slice=None, non0tab=None, ao_loc=None, out=None):
-        return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
-                            shls_slice, non0tab, ao_loc, out)
-    pbc_eval_ao = pbc_eval_gto
+    pbc_eval_ao = pbc_eval_gto = pbc_eval_gto
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                 shls_slice=None, non0tab=None, ao_loc=None, out=None):
+                 shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
+                 out=None):
         if eval_name[:3] == 'PBC':
             return self.pbc_eval_gto(eval_name, coords, comp, kpts, kpt,
-                                     shls_slice, non0tab, ao_loc, out)
+                                     shls_slice, non0tab, ao_loc, cutoff, out)
         else:
             return mole.eval_gto(self, eval_name, coords, comp,
-                                 shls_slice, non0tab, ao_loc, out)
+                                 shls_slice, non0tab, ao_loc, cutoff, out)
     eval_ao = eval_gto
 
     def from_ase(self, ase_atom):

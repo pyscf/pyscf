@@ -2845,10 +2845,16 @@ class Mole(lib.StreamObject):
         '''Return a temporary mol context which has the rquired integral
         screen threshold
         '''
+        if threshold is None:
+            # This calls the default cutoff settings in cint library
+            expcutoff = 0
+        else:
+            expcutoff = abs(numpy.log(threshold))
         expcutoff0 = self._env[PTR_EXPCUTOFF]
-        expcutoff = abs(numpy.log(threshold))
+
         def set_cutoff(cut):
             self._env[PTR_EXPCUTOFF] = cut
+
         return self._TemporaryMoleContext(set_cutoff, (expcutoff,), (expcutoff0,))
 
     def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,

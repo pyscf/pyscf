@@ -538,10 +538,7 @@ class NumInt2C(numint._NumIntMixin):
     def __init__(self):
         self.omega = None  # RSH paramter
 
-    @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-                 with_lapl=True, verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
+    eval_rho = eval_rho
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
