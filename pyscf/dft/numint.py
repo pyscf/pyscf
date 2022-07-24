@@ -2497,10 +2497,12 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 class _NumIntMixin(lib.StreamObject):
     libxc = libxc
     cutoff = None  # cutoff for small AO values
-    omega = None  # RSH paramter
 
     eval_ao = staticmethod(eval_ao)
     get_rho = get_rho
+
+    def __init__(self):
+        self.omega = None  # RSH paramter
 
     def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
