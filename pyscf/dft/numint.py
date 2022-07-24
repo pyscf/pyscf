@@ -50,7 +50,7 @@ SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
 MGGA_DENSITY_LAPL = False
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
-            non0tab=None, out=None, verbose=None):
+            non0tab=None, cutoff=None, out=None, verbose=None):
     '''Evaluate AO function value on the given grids.
 
     Args:
@@ -75,6 +75,9 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
         verbose : int or object of :class:`Logger`
@@ -108,7 +111,8 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         feval = 'GTOval_cart_deriv%d' % deriv
     else:
         feval = 'GTOval_sph_deriv%d' % deriv
-    return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
+    return mol.eval_gto(feval, coords, comp, shls_slice, non0tab,
+                        cutoff=cutoff, out=out)
 
 def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
              with_lapl=True, verbose=None):
@@ -2492,12 +2496,10 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
 
 class _NumIntMixin(lib.StreamObject):
     libxc = libxc
+    cutoff = None  # cutoff for small AO values
+    omega = None  # RSH paramter
 
-    @lib.with_doc(eval_ao.__doc__)
-    def eval_ao(self, mol, coords, deriv=0, shls_slice=None,
-                non0tab=None, out=None, verbose=None):
-        return eval_ao(mol, coords, deriv, shls_slice, non0tab, out, verbose)
-
+    eval_ao = staticmethod(eval_ao)
     get_rho = get_rho
 
     def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
@@ -2526,7 +2528,8 @@ class _NumIntMixin(lib.StreamObject):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0, out=buf)
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0,
+                              cutoff=self.cutoff, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True):
@@ -2668,9 +2671,6 @@ class _NumIntMixin(lib.StreamObject):
 
 class NumInt(_NumIntMixin):
     '''Numerical integration methods for non-relativistic RKS and UKS'''
-
-    def __init__(self):
-        self.omega = None  # RSH paramter
 
     @lib.with_doc(nr_vxc.__doc__)
     def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,

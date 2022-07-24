@@ -28,7 +28,8 @@ from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
 
 libpbc = lib.load_library('libpbc')
 
-def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
+def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
+              verbose=None):
     '''Mask to indicate whether a shell is zero on grid.
     The resultant mask array is an extension to the mask array used in
     molecular code (see also pyscf.dft.numint.make_mask function).
@@ -51,8 +52,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
         Ls = cell.get_lattice_Ls(dimension=3)
     Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
-    non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                          dtype=np.uint8)
+    non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas), dtype=np.uint8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
