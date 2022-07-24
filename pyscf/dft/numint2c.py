@@ -535,9 +535,6 @@ class NumInt2C(numint._NumIntMixin):
     collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
     collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
-    def __init__(self):
-        self.omega = None  # RSH paramter
-
     eval_rho = eval_rho
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',

@@ -141,7 +141,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     if rcut is None:
         rcut = _estimate_rcut(cell)
 
-    with mol.with_integral_screen(cutoff):
+    with cell.with_integral_screen(cutoff):
         drv = getattr(libpbc, eval_name)
         drv(ctypes.c_int(ngrids),
             (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
