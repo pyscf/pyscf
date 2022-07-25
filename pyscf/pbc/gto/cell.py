@@ -1132,8 +1132,8 @@ class Cell(mole.Mole):
         '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
         from Cell object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Cell object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
