@@ -692,7 +692,7 @@ def make_rdm2(mo_coeff, mo_occ, **kwargs):
     '''
     dm1 = make_rdm1(mo_coeff, mo_occ, **kwargs)
     dm2 = (numpy.einsum('ij,kl->ijkl', dm1, dm1)
-         - numpy.einsum('ij,kl->iklj', dm1, dm1)/2)
+           - numpy.einsum('ij,kl->iklj', dm1, dm1)/2)
     return dm2
 
 ################################################
