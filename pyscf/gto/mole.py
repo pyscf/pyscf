@@ -2151,6 +2151,9 @@ class Mole(lib.StreamObject):
         # contents of _pseudo.
         self._pseudo = {}
 
+        # Some methods modify ._env. These method are executed in the context
+        # _TemporaryMoleContext which is protected by the _ctx_lock.
+        self._ctx_lock = None
         keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
         self._keys = set(self.__dict__.keys()).union(keys)
         self.__dict__.update(kwargs)
@@ -2217,8 +2220,8 @@ class Mole(lib.StreamObject):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
         from Mole object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Mole object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Mole object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -2854,7 +2857,6 @@ class Mole(lib.StreamObject):
 
         def set_cutoff(cut):
             self._env[PTR_EXPCUTOFF] = cut
-
         return self._TemporaryMoleContext(set_cutoff, (expcutoff,), (expcutoff0,))
 
     def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,
@@ -3552,18 +3554,18 @@ class Mole(lib.StreamObject):
         '''Almost every method depends on the Mole environment. Ensure the
         modification in temporary environment being thread safe
         '''
-        haslock = hasattr(self, '_lock')
-        if not haslock:
-            self._lock = threading.RLock()
+        haslock = self._ctx_lock
+        if haslock is None:
+            self._ctx_lock = threading.RLock()
 
-        with self._lock:
+        with self._ctx_lock:
             method(*args)
             try:
                 yield
             finally:
                 method(*args_bak)
-                if not haslock:
-                    del self._lock
+                if haslock is None:
+                    self._ctx_lock = None
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
