@@ -13,7 +13,7 @@ of DIIS.  Without other convergence technique, none of them can converge.
 
 from pyscf import gto, scf, dft
 
-mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*')
+mol = gto.M(atom='O 0 0 0; O 0 0 1.222', basis='631g*')
 
 #
 # Default DIIS scheme is CDIIS.  DIIS parameters can be assigned to mf object
@@ -51,9 +51,9 @@ mf = scf.HF(mol)
 #mf.diis = my_diis_obj
 #mf.run()
 
-my_diis_obj = scf.EDIIS()
-my_diis_obj.space = 12
-my_diis_obj.filename = 'o2_ediis.h5'
+my_diis_obj = scf.FDIIS()
+my_diis_obj.space = 5
+#my_diis_obj.filename = 'o2_ediis.h5'
 mf.diis = my_diis_obj
 mf.kernel()
 

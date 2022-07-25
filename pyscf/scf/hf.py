@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python/
 # Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ Hartree-Fock
 
 import sys
 import tempfile
+import time
 
 from functools import reduce
 import numpy
@@ -109,6 +110,12 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
     >>> print('conv = %s, E(HF) = %.12f' % (conv, e))
     conv = True, E(HF) = -1.081170784378
     '''
+   # print("Hartree-Fock Begin")
+    
+
+    chkTime1 = time.time()
+    print("Begin Initialising.")
+    
     if 'init_dm' in kwargs:
         raise RuntimeError('''
 You see this error message because of the API updates in pyscf v0.11.
@@ -164,19 +171,28 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     # A preprocessing hook before the SCF iteration
     mf.pre_kernel(locals())
 
+    chkTime2 = time.time()
+    print("Begin SCF Cycles. Init time: " + str(chkTime2-chkTime1) + " ms")
+
+
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
     for cycle in range(mf.max_cycle):
+        chkTimeC1 = time.time()
+
         dm_last = dm
         last_hf_e = e_tot
 
         fock = mf.get_fock(h1e, s1e, vhf, dm, cycle, mf_diis)
+        chkTimeC2 = time.time()
         mo_energy, mo_coeff = mf.eig(fock, s1e)
+        chkTimeC3 = time.time()
         mo_occ = mf.get_occ(mo_energy, mo_coeff)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         # attach mo_coeff and mo_occ to dm to improve DFT get_veff efficiency
         dm = lib.tag_array(dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
+        chkTimeC4 = time.time()
 
         # Here Fock matrix is h1e + vhf, without DIIS.  Calling get_fock
         # instead of the statement "fock = h1e + vhf" because Fock matrix may
@@ -188,9 +204,16 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         norm_ddm = numpy.linalg.norm(dm-dm_last)
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
+        print("Cycle: " + str(cycle) + ", Energy: " + str(e_tot))
+        print("Fock time: " + str(chkTimeC2 - chkTimeC1))
+        print("Mo Coeff time: " + str(chkTimeC3 - chkTimeC2))
+        print("DM Setup time: " + str(chkTimeC4 - chkTimeC3))
+        print("")
 
         if callable(mf.check_convergence):
             scf_conv = mf.check_convergence(locals())
+        elif abs(e_tot-last_hf_e) < conv_tol:
+            scf_conv = True
         elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
@@ -310,7 +333,11 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
+    
+    
+    
     h = mol.intor_symmetric('int1e_kin')
+
 
     if mol._pseudo:
         # Although mol._pseudo for GTH PP is only available in Cell, GTH PP
@@ -670,13 +697,17 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
         mo_occ : 1D ndarray
             Occupancy
     '''
+
+    # mocc: 2D matrix of orbital coefficients of occupied orbitals. Asymmetric matrix. Height: Number of Basis functions. Width: Number of occ orbitals
     mocc = mo_coeff[:,mo_occ>0]
 # DO NOT make tag_array for dm1 here because this DM array may be modified and
 # passed to functions like get_jk, get_vxc.  These functions may take the tags
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # array and modifications to DM array may be ignored.
-    return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
 
+    dm = numpy.dot(mocc*mo_occ[mo_occ>0], mocc.conj().T)
+    
+    return dm
 
 ################################################
 # for general DM
@@ -906,9 +937,14 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         level_shift_factor : float or int
             Level shift (in AU) for virtual space.  Default is 0.
     '''
-    if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
+    
+    
+    if h1e is None:
+        h1e = mf.get_hcore()
+    if vhf is None:
+        vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
+
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
         return f
 
@@ -1147,7 +1183,9 @@ def eig(h, s):
     '''
     e, c = scipy.linalg.eigh(h, s)
     idx = numpy.argmax(abs(c.real), axis=0)
+    # FLIP EIGENVEC TO POINT IN POS DIRECTION
     c[:,c[idx,numpy.arange(len(e))].real<0] *= -1
+
     return e, c
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
@@ -1517,11 +1555,13 @@ class SCF(lib.StreamObject):
         return self._eigh(h, s)
 
     def get_hcore(self, mol=None):
-        if mol is None: mol = self.mol
+        if mol is None:
+            mol = self.mol
         return get_hcore(mol)
 
     def get_ovlp(self, mol=None):
-        if mol is None: mol = self.mol
+        if mol is None:
+            mol = self.mol
         return get_ovlp(mol)
 
     get_fock = get_fock
