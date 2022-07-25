@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.14132152692445013, 6)
 
-        myadcea = adc.uadc.UADCEA(myadc) 
+        myadcea = adc.uadc.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.018742831458017323, 6)
@@ -62,7 +62,7 @@ class KnownValues(unittest.TestCase):
     def test_ea_adc2x_high_cost(self):
         myadc.method = "adc(2)-x"
         myadc.kernel_gs()
-        myadcea = adc.uadc.UADCEA(myadc) 
+        myadcea = adc.uadc.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.03555509265158591, 6)
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295977562, 6)
 
-        myadcea = adc.uadc.UADCEA(myadc) 
+        myadcea = adc.uadc.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0],-0.023863148551389757, 6)
@@ -88,7 +88,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.8718954487972692, 6)
         self.assertAlmostEqual(p[1], 0.8718954487972691, 6)
         self.assertAlmostEqual(p[2], 0.8718954487972662, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell atom")
     unittest.main()
