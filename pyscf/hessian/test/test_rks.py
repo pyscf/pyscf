@@ -131,7 +131,7 @@ class KnownValues(unittest.TestCase):
         #FIXME: errors seems too big
         self.assertAlmostEqual(abs(hess[0,:,2] - (e1-e2)/2e-4*lib.param.BOHR).max(), 0, 2)
 
-    def test_finite_diff_m06l_hess(self):
+    def test_finite_diff_m06l_hess_high_cost(self):
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-14
         mf.xc = 'm06l'
