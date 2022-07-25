@@ -535,7 +535,7 @@ class NumInt2C(numint._NumIntMixin):
     collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
     collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
-    eval_rho = eval_rho
+    eval_rho = staticmethod(eval_rho)
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
