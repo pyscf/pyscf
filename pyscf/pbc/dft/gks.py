@@ -78,7 +78,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = numpy.asarray(scipy.linalg.block_diag(*vxc), dtype=dm.dtype)
 
     if not hybrid:
-        vk = None
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:

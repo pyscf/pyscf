@@ -213,9 +213,9 @@ class KGHF(pbcghf.GHF, khf.KSCF):
     newton = khf.KSCF.newton
 
     def x2c1e(self):
-         '''X2C with spin-orbit coupling effects in spin-orbital basis'''
-         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
-         return x2c1e_gscf(self)
+        '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+        from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+        return x2c1e_gscf(self)
 
     x2c = x2c1e
     sfx2c1e = khf.KSCF.sfx2c1e
