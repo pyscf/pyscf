@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 
 '''
-X2C1e Hartree-Fock/DFT with k-points sampling for all-electron
-calculations.
-
-Currently, X2C1e can only be solved in the spin-orbital GTO basis.
-The spinor basis version has not yet been implemented.
+X2C1e Hartree-Fock/DFT with k-points sampling for all-electron calculations.
 '''
 
 import numpy as np

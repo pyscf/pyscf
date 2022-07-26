@@ -83,7 +83,7 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
 
     # vxc_spblk = (vxc_aa, vxc_bb), vxc_aa = (nkpts, nao, nao), vxc_bb = (nkpts, nao, nao)
     n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), hermi,
-                                        kpts, kpts_band)
+                                          kpts, kpts_band)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -98,7 +98,6 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
 
     weight = 1./len(kpts)
     if not hybrid:
-        vk = None
         vj = ks.get_j(cell, dm_kpts, hermi, kpts, kpts_band)
         vxc += vj
     else:
@@ -135,9 +134,9 @@ class KGKS(rks.KohnShamDFT, kghf.KGHF):
     newton = khf.KSCF.newton
 
     def x2c1e(self):
-         '''Adds spin-orbit coupling effects to H0 through the x2c1e approximation'''
-         from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
-         return x2c1e_gscf(self)
+        '''Adds spin-orbit coupling effects to H0 through the x2c1e approximation'''
+        from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+        return x2c1e_gscf(self)
 
     x2c = x2c1e
     sfx2c1e = khf.KSCF.sfx2c1e

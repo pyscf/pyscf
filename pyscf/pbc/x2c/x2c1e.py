@@ -65,9 +65,9 @@ def x2c1e_gscf(mf):
 
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
-            mf.with_x2c = SpinOrbitalX2CHelper(mf.mol)
+            mf.with_x2c = SpinOrbitalX2C1EHelper(mf.mol)
             return mf
-        elif not isinstance(mf.with_x2c, SpinOrbitalX2CHelper):
+        elif not isinstance(mf.with_x2c, SpinOrbitalX2C1EHelper):
             # An object associated to sfx2c1e.SpinFreeX2CHelper
             raise NotImplementedError
         else:
@@ -213,7 +213,6 @@ def get_pbc_pvxp(mydf, kpts=None):
 
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
-    nao_pair = nao * (nao+1) // 2
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
     charge = -cell.atom_charges() # Apply Koseki effective charge?
@@ -285,48 +284,3 @@ def _sigma_dot(mat):
     quaternion = numpy.vstack([1j * lib.PauliMatrices, numpy.eye(2)[None, :, :]])
     nao = mat.shape[-1] * 2
     return lib.einsum('sxy,spq->xpyq', quaternion, mat).reshape(nao, nao)
-
-if __name__ == '__main__':
-    from pyscf.pbc import scf
-    cell = pbcgto.Cell()
-    cell.build(unit = 'B',
-               a = numpy.eye(3)*4,
-               mesh = [11]*3,
-               atom = 'H 0 0 0; H 0 0 1.8',
-               verbose = 4,
-               basis='sto3g')
-    lib.param.LIGHT_SPEED = 2
-    mf = scf.RHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    enr = mf.kernel()
-    print('E(NR) = %.12g' % enr)
-
-    mf = scf.GHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    ex2c = mf.kernel()
-    print('E(X2C1E-GHF) = %.12g' % ex2c)
-
-    mf = scf.KRHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    mf.kpts = cell.make_kpts([2,2,1])
-    enr = mf.kernel()
-    print('E(k-NR) = %.12g' % enr)
-
-    mf = scf.KGHF(cell)
-    mf.with_df = aft.AFTDF(cell)
-    mf.kpts = cell.make_kpts([2, 2, 1])
-    ex2c = mf.kernel()
-    print('E(k-X2C1E-GHF) = %.12g' % ex2c)
-
-    cell = pbcgto.M(unit = 'B',
-               a = numpy.eye(3)*4,
-               atom = 'H 0 0 0; H 0 0 1.8',
-               mesh = None,
-               dimension = 2,
-               basis='sto3g')
-    with_df = aft.AFTDF(cell)
-    w0 = get_pbc_pvxp(with_df, cell.make_kpts([2, 2, 1]))
-    with_df = aft.AFTDF(cell)
-    with_df.eta = 0
-    w1 = get_pbc_pvxp(with_df, cell.make_kpts([2, 2, 1]))
-    print(abs(w0-w1).max())

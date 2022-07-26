@@ -132,7 +132,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     if h1e_kpts is None: h1e_kpts = mf.get_hcore(mf.cell, mf.kpts)
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
-         vhf = mf.get_veff(mf.cell, dm_kpts)
+        vhf = mf.get_veff(mf.cell, dm_kpts)
 
     weight = 1./len(h1e_kpts)
     e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
