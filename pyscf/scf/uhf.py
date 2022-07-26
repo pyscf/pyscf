@@ -164,9 +164,9 @@ def make_rdm2(mo_coeff, mo_occ):
     '''
     dm1a, dm1b = make_rdm1(mo_coeff, mo_occ)
     dm2aa = (numpy.einsum('ij,kl->ijkl', dm1a, dm1a)
-             - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
+           - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
     dm2bb = (numpy.einsum('ij,kl->ijkl', dm1b, dm1b)
-             - numpy.einsum('ij,kl->iklj', dm1b, dm1b))
+           - numpy.einsum('ij,kl->iklj', dm1b, dm1b))
     dm2ab = numpy.einsum('ij,kl->ijkl', dm1a, dm1b)
     return dm2aa, dm2ab, dm2bb
 
