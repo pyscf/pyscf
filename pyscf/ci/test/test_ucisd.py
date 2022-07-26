@@ -285,8 +285,27 @@ class KnownValues(unittest.TestCase):
         s1 = ucisd.overlap(cibra, ciket, nmo, nocc, (s_mo, s_mo))
         self.assertAlmostEqual(s1, s0, 9)
 
+    def test_cisdvec_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        myci = scf.UHF(mol).apply(ci.UCISD)
+        nelec = (3, 3)
+        nocc = nelec
+        nmo = (5, 5)
+        myci.nocc = nocc
+        myci.nmo = nmo
+        vec = numpy.zeros(myci.vector_size())
+        vec_orig = vec.copy()
+        c0, t1, t2 = myci.cisdvec_to_amplitudes(vec)
+        t1a, t1b = t1
+        t2aa, t2ab, t2bb = t2
+        t1a[:] = 1
+        t1b[:] = 1
+        t2aa[:] = 1
+        t2ab[:] = 1
+        t2bb[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
 
 if __name__ == "__main__":
     print("Full Tests for UCISD")
     unittest.main()
-

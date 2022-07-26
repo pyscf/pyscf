@@ -46,25 +46,35 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
     nso = dm_kpts.shape[-1]
     nao = nso // 2
     dms = dm_kpts.reshape(-1,nkpts,nso,nso)
-    n_dm = dms.shape[0]
 
     dmaa = dms[:,:,:nao,:nao]
     dmab = dms[:,:,nao:,:nao]
     dmbb = dms[:,:,nao:,nao:]
-    dms = np.vstack((dmaa, dmbb, dmab))
+    if with_k:
+        if hermi:
+            dms = np.stack((dmaa, dmbb, dmab))
+        else:
+            dmba = dms[:,:,nao:,:nao]
+            dms = np.stack((dmaa, dmbb, dmab, dmba))
+        _hermi = 0
+    else:
+        dms = np.stack((dmaa, dmbb))
+        _hermi = 1
+    nblocks, n_dm = dms.shape[:2]
+    dms = dms.reshape(nblocks*n_dm, nkpts, nao, nao)
 
-    j1, k1 = mf.with_df.get_jk(dms, hermi, kpts, kpts_band, with_j, with_k,
+    j1, k1 = mf.with_df.get_jk(dms, _hermi, kpts, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
-    j1 = j1.reshape(3,n_dm,nband,nao,nao)
-    k1 = k1.reshape(3,n_dm,nband,nao,nao)
 
     vj = vk = None
     if with_j:
+        j1 = j1.reshape(nblocks,n_dm,nband,nao,nao)
         vj = np.zeros((n_dm,nband,nso,nso), j1.dtype)
         vj[:,:,:nao,:nao] = vj[:,:,nao:,nao:] = j1[0] + j1[1]
         vj = _format_jks(vj, dm_kpts, kpts_band, kpts)
 
     if with_k:
+        k1 = k1.reshape(nblocks,n_dm,nband,nao,nao)
         vk = np.zeros((n_dm,nband,nso,nso), k1.dtype)
         vk[:,:,:nao,:nao] = k1[0]
         vk[:,:,nao:,nao:] = k1[1]

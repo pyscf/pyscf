@@ -114,9 +114,13 @@ class KnownValues(unittest.TestCase):
 
     def test_gmp2_frozen(self):
         pt = mp.GMP2(gmf)
-        pt.frozen = [2,3]
+        pt.frozen = [0, 1]
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.087828433042835427, 9)
+        self.assertAlmostEqual(pt.emp2, -0.12783149583822068, 9)
+        pt.set_frozen()
+        pt.kernel(with_t2=False)
+        self.assertEqual(pt.frozen, 2)
+        self.assertAlmostEqual(pt.emp2, -0.12783149583822068, 9)
 
     def test_gmp2_outcore_frozen(self):
         pt = mp.GMP2(gmf)

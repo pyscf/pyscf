@@ -1341,7 +1341,7 @@ def time_reversal_map(mol):
 
 CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
 
-def energy_nuc(mol, charges=None, coords=None):
+def classical_coulomb_energy(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
@@ -1353,11 +1353,20 @@ def energy_nuc(mol, charges=None, coords=None):
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
+        raise_err = False
         for atm_idx in numpy.argwhere(rr<1e-5):
-            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
-        raise RuntimeError('Ill geometry')
+            # Only raise error if atoms with charge != 0 have the same coordinates
+            if charges[atm_idx[0]] * charges[atm_idx[1]] != 0:
+                logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+                raise_err = True
+            # At least one of the atoms is a ghost atom; suppress divide by 0 warning
+            else:
+                rr[atm_idx[0], atm_idx[1]] = 1e200
+        if raise_err: raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+energy_nuc = classical_coulomb_energy
 
 def inter_distance(mol, coords=None):
     '''

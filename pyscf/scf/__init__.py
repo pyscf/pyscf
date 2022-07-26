@@ -186,11 +186,15 @@ DHF.__doc__ = dhf.DHF.__doc__
 
 
 def X2C(mol, *args):
-    '''X2C UHF (in testing)'''
+    '''X2C Hartree-Fock'''
     from pyscf.x2c import x2c
-    return x2c.UHF(mol, *args)
+    if dhf.zquatev and mol.spin == 0:
+        return x2c.RHF(mol, *args)
+    else:
+        return x2c.UHF(mol, *args)
 
 def sfx2c1e(mf):
+    '''spin-free (the scalar part) X2C with 1-electron X-matrix'''
     return mf.sfx2c1e()
 sfx2c = sfx2c1e
 

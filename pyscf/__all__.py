@@ -9,6 +9,7 @@ from . import qmmm
 from . import sgx
 from . import solvent
 from . import tools
+from . import x2c
 
 from . import geomopt
 

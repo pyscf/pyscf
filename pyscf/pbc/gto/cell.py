@@ -999,7 +999,7 @@ def tot_electrons(cell, nkpts=1):
     '''
     if cell._nelectron is None:
         nelectron = cell.atom_charges().sum() * nkpts - cell.charge
-    else: # Custom cell.nelectron stands for num. electrons per unit cell
+    else: # Custom cell.nelectron stands for num. electrons per cell
         nelectron = cell._nelectron * nkpts
     # Round off to the nearest integer
     nelectron = int(nelectron+0.5)
@@ -1126,7 +1126,7 @@ class Cell(mole.Mole):
             nbeta = nalpha - self.spin
             if nalpha + nbeta != ne:
                 warnings.warn('Electron number %d and spin %d are not consistent '
-                              'in unit cell\n' % (ne, self.spin))
+                              'in cell\n' % (ne, self.spin))
             return nalpha, nbeta
 
     def __getattr__(self, key):
@@ -1198,7 +1198,7 @@ class Cell(mole.Mole):
 
         Kwargs:
             a : (3,3) ndarray
-                The real-space unit cell lattice vectors. Each row represents
+                The real-space cell lattice vectors. Each row represents
                 a lattice vector.
             mesh : (3,) ndarray of ints
                 The number of *positive* G-vectors along each direction.

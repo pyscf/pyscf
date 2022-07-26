@@ -48,6 +48,6 @@ def ss(mol):
 # wxyz are the spin indices, ijkl are the AO indicies
     alpha = 137.036
     fac = alpha ** 2 / 2
-    mat = numpy.einsum('swx,tyz,stijkl->wxyzijkl', s[:,0,0], s[:,0,0], mat) * fac
+    mat = numpy.einsum('swx,tyz,stijkl->wxyzijkl', s, s, mat) * fac
     return mat
 

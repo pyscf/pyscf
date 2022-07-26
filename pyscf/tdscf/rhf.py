@@ -31,7 +31,7 @@ from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf_symm
-from pyscf.scf import _response_functions  # noqa
+from pyscf.scf import _response_functions
 from pyscf.data import nist
 from pyscf import __config__
 
@@ -39,12 +39,9 @@ OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
-# Low excitation filter to avoid numerical instability
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
-
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
-    '''Generate function to compute (A+B)x
+    '''Generate function to compute A x
 
     Kwargs:
         wfnsym : int or str
@@ -96,7 +93,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
             zs[:,sym_forbid] = 0
 
         # *2 for double occupancy
-        dmov = lib.einsum('xov,po,qv->xpq', zs*2, orbo, orbv.conj())
+        dmov = lib.einsum('xov,qv,po->xpq', zs*2, orbv.conj(), orbo)
         v1ao = vresp(dmov)
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
         v1ov += lib.einsum('xqs,sp->xqp', zs, fvv)
@@ -144,6 +141,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
         b -= numpy.einsum('jaib->iajb', eri_mo[:nocc,nocc:,:nocc,nocc:]) * hyb
 
     if isinstance(mf, scf.hf.KohnShamDFT):
+        from pyscf.dft import xc_deriv
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -164,7 +162,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             ao_deriv = 0
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                rho = make_rho(0, ao, mask, 'LDA')
+                rho = make_rho(0, ao, mask, xctype)
                 fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[2]
                 frr = fxc[0]
 
@@ -180,34 +178,43 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             ao_deriv = 1
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
-                rho = make_rho(0, ao, mask, 'GGA')
+                rho = make_rho(0, ao, mask, xctype)
                 vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
-                vgamma = vxc[1]
-                frho, frhogamma, fgg = fxc[:3]
-
+                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=0)
+                wfxc = fxc * weight
                 rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
                 rho_ov = numpy.einsum('xri,ra->xria', rho_o, rho_v[0])
                 rho_ov[1:4] += numpy.einsum('ri,xra->xria', rho_o[0], rho_v[1:4])
-                # sigma1 ~ \nabla(\rho_\alpha+\rho_\beta) dot \nabla(|b><j|) z_{bj}
-                sigma1 = numpy.einsum('xr,xria->ria', rho[1:4], rho_ov[1:4])
-
-                w_ov = numpy.empty_like(rho_ov)
-                w_ov[0]  = numpy.einsum('r,ria->ria', frho, rho_ov[0])
-                w_ov[0] += numpy.einsum('r,ria->ria', 2*frhogamma, sigma1)
-                f_ov = numpy.einsum('r,ria->ria', 4*fgg, sigma1)
-                f_ov+= numpy.einsum('r,ria->ria', 2*frhogamma, rho_ov[0])
-                w_ov[1:] = numpy.einsum('ria,xr->xria', f_ov, rho[1:4])
-                w_ov[1:]+= numpy.einsum('r,xria->xria', 2*vgamma, rho_ov[1:4])
-                w_ov *= weight[:,None,None]
-                iajb = lib.einsum('xria,xrjb->iajb', rho_ov, w_ov) * 2
+                w_ov = numpy.einsum('xyr,xria->yria', wfxc, rho_ov)
+                iajb = lib.einsum('xria,xrjb->iajb', w_ov, rho_ov) * 2
                 a += iajb
                 b += iajb
 
+        elif xctype == 'HF':
+            pass
+
         elif xctype == 'NLC':
             raise NotImplementedError('NLC')
+
         elif xctype == 'MGGA':
-            raise NotImplementedError('meta-GGA')
+            ao_deriv = 1
+            for ao, mask, weight, coords \
+                    in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
+                rho = make_rho(0, ao, mask, xctype)
+                vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
+                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=0)
+                wfxc = fxc * weight
+                rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
+                rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
+                rho_ov = numpy.einsum('xri,ra->xria', rho_o, rho_v[0])
+                rho_ov[1:4] += numpy.einsum('ri,xra->xria', rho_o[0], rho_v[1:4])
+                tau_ov = numpy.einsum('xri,xra->ria', rho_o[1:4], rho_v[1:4]) * .5
+                rho_ov = numpy.vstack([rho_ov, tau_ov[numpy.newaxis]])
+                w_ov = numpy.einsum('xyr,xria->yria', wfxc, rho_ov)
+                iajb = lib.einsum('xria,xrjb->iajb', w_ov, rho_ov) * 2
+                a += iajb
+                b += iajb
 
     else:
         add_hf_(a, b)
@@ -639,6 +646,8 @@ class TDMixin(lib.StreamObject):
     level_shift = getattr(__config__, 'tdscf_rhf_TDA_level_shift', 0)
     max_space = getattr(__config__, 'tdscf_rhf_TDA_max_space', 50)
     max_cycle = getattr(__config__, 'tdscf_rhf_TDA_max_cycle', 100)
+    # Low excitation filter to avoid numerical instability
+    positive_eig_threshold = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
     def __init__(self, mf):
         self.verbose = mf.verbose
@@ -677,7 +686,9 @@ class TDMixin(lib.StreamObject):
         log.info('\n')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        if self.singlet:
+        if self.singlet is None:
+            log.info('nstates = %d', self.nstates)
+        elif self.singlet:
             log.info('nstates = %d singlet', self.nstates)
         else:
             log.info('nstates = %d triplet', self.nstates)
@@ -705,7 +716,7 @@ class TDMixin(lib.StreamObject):
         self._scf.reset(mol)
         return self
 
-    def gen_vind(self, mf):
+    def gen_vind(self, mf=None):
         raise NotImplementedError
 
     @lib.with_doc(get_ab.__doc__)
@@ -769,8 +780,10 @@ class TDA(TDMixin):
             excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
             normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
-    def gen_vind(self, mf):
-        '''Compute Ax'''
+    def gen_vind(self, mf=None):
+        '''Generate function to compute Ax'''
+        if mf is None:
+            mf = self._scf
         return gen_tda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
@@ -825,7 +838,7 @@ class TDA(TDMixin):
             x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         self.converged, self.e, x1 = \
@@ -906,12 +919,12 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         xs, ys = xys.transpose(1,0,2,3)
         # dms = AX + BY
         # *2 for double occupancy
-        dms  = lib.einsum('xov,po,qv->xpq', xs*2, orbo, orbv.conj())
+        dms  = lib.einsum('xov,qv,po->xpq', xs*2, orbv.conj(), orbo)
         dms += lib.einsum('xov,pv,qo->xpq', ys*2, orbv, orbo.conj())
 
         v1ao = vresp(dms)
         v1ov = lib.einsum('xpq,po,qv->xov', v1ao, orbo.conj(), orbv)
-        v1vo = lib.einsum('xpq,pv,qo->xov', v1ao, orbv.conj(), orbo)
+        v1vo = lib.einsum('xpq,qo,pv->xov', v1ao, orbo, orbv.conj())
         v1ov += lib.einsum('xqs,sp->xqp', xs, fvv)  # AX
         v1ov -= lib.einsum('xpr,sp->xsr', xs, foo)  # AX
         v1vo += lib.einsum('xqs,sp->xqp', ys, fvv)  # AY
@@ -951,13 +964,15 @@ class TDHF(TDA):
             normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
     @lib.with_doc(gen_tdhf_operation.__doc__)
-    def gen_vind(self, mf):
+    def gen_vind(self, mf=None):
+        if mf is None:
+            mf = self._scf
         return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
-        return numpy.hstack((x0,y0))
+        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
 
     def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -980,7 +995,7 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+                                  (w.real > self.positive_eig_threshold))[0]
             # If the complex eigenvalue has small imaginary part, both the
             # real part and the imaginary part of the eigenvector can
             # approximately be used as the "real" eigen solutions.

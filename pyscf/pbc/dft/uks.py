@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point
+Non-relativistic unrestricted Kohn-Sham for periodic systems at a single k-point
 
 See Also:
     pyscf.pbc.dft.krks.py : Non-relativistic Restricted Kohn-Sham for periodic
@@ -75,7 +75,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, hermi,
                                         kpt, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)

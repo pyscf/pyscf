@@ -202,12 +202,30 @@ class KnownValues(unittest.TestCase):
         vec1 = mycc.amplitudes_to_vector(r1, r2)
         self.assertAlmostEqual(abs(vec-vec1).max(), 0, 14)
 
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.RHF(mol).apply(cc.CCSD)
+        nelec = (3,3)
+        nocc, nvir = nelec[0], 4
+        nmo = nocc + nvir
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        vec = numpy.zeros(mycc.vector_size())
+        vec_orig = vec.copy()
+        t1, t2 = mycc.vector_to_amplitudes(vec)
+        t1[:] = 1
+        t2[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
     def test_vector_size(self):
         self.assertEqual(mycc.vector_size(), 860)
 
     def test_rccsd_frozen(self):
         cc1 = copy.copy(mycc)
         cc1.frozen = 1
+        self.assertEqual(cc1.nmo, 12)
+        self.assertEqual(cc1.nocc, 4)
+        cc1.set_frozen()
         self.assertEqual(cc1.nmo, 12)
         self.assertEqual(cc1.nocc, 4)
         cc1.frozen = [0,1]

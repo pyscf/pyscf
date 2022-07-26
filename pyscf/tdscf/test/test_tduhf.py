@@ -50,7 +50,7 @@ class KnownValues(unittest.TestCase):
         td.nstates = 5
         e = td.kernel()[0]
         ref = [11.01748568, 11.01748568, 11.90277134, 11.90277134, 13.16955369]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf(self):
         td = mf.TDHF()
@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         td.singlet = False
         e = td.kernel()[0]
         ref = [10.89192986, 10.89192986, 11.83487865, 11.83487865, 12.6344099]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tda_triplet(self):
         td = mf1.TDA()
