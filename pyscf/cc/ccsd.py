@@ -28,6 +28,7 @@ from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import lib
+from pyscf import common
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
@@ -64,7 +65,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     else:
         adiis = None
 
-    conv = False
+    iterinfo = common.IterationInfo()
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         if callback is not None:
@@ -86,10 +87,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
-            conv = True
+            iterinfo.converged = True
+            iterinfo.cycle = istep + 1
             break
     log.timer('CCSD', *cput0)
-    return conv, eccsd, t1, t2
+    return iterinfo, eccsd, t1, t2
 
 
 def update_amps(mycc, t1, t2, eris):
@@ -889,8 +891,8 @@ class CCSD(lib.StreamObject):
 
     Saved results
 
-        converged : bool
-            CCSD converged or not
+        iterinfo : pyscf.common.IterationInfo
+            Information about iteration (see pyscf.common.Iteration in detail)
         e_corr : float
             CCSD correlation correction
         e_tot : float
@@ -953,7 +955,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 # don't modify the following attributes, they are not input options
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
-        self.converged = False
+        self.iterinfo = common.IterationInfo()
         self.converged_lambda = False
         self.emp2 = None
         self.e_hf = None
@@ -980,6 +982,14 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     @property
     def e_tot(self):
         return self.e_hf + self.e_corr
+
+    @property
+    def converged(self):
+        return self.iterinfo.converged
+
+    @property
+    def cycle(self):
+        return self.iterinfo.cycle
 
     @property
     def nocc(self):
@@ -1088,7 +1098,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self.e_hf is None:
             self.e_hf = self._scf.e_tot
 
-        self.converged, self.e_corr, self.t1, self.t2 = \
+        self.iterinfo, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose, callback=self.callback)
