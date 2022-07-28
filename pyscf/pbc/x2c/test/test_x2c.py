@@ -43,7 +43,7 @@ def setUpModule():
     cell1.basis = {'He': [[0, [0.8, 1]],
                           [1, [0.6, 1]]
                          ]}
-    cell1.mesh = [11] * 3
+    cell1.mesh = [15] * 3
     cell1.a = numpy.array(([2.0,  .9, 0. ],
                            [0.1, 1.9, 0.4],
                            [0.8, 0  , 2.1]))
