@@ -335,8 +335,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
         def makedm(mos, occs):
             moa, mob = mos
-            mos =([fproj(mo, None) for mo in moa],
-                  [fproj(mo, None) for mo in mob])
+            mos = (fproj(moa, kpts), fproj(mob, kpts))
             return make_rdm1(mos, occs)
     else:
         def makedm(mos, occs):

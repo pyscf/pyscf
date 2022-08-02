@@ -222,7 +222,8 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
     ax = list(ax)
     nx = len(xs)
 
-    max_cycle = min(max_cycle, x0.size)
+    problem_size = x0.size
+    max_cycle = min(max_cycle, problem_size)
     heff = numpy.zeros((max_cycle+nx+1,max_cycle+nx+1), dtype=x0.dtype)
     ovlp = numpy.eye(max_cycle+nx+1, dtype=x0.dtype)
     if nx == 0:
@@ -264,7 +265,9 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g',
                    istep+1, index, norm_dx, w_t, v_t[0].real, s0)
         hx *= 1/v_t[0] # == h_op(xtrial)
-        if (abs(w_t-wlast) < tol and norm_dx < toloose) or s0 < lindep:
+        if ((abs(w_t-wlast) < tol and norm_dx < toloose) or
+            s0 < lindep or
+            istep+1 == problem_size):
             # Avoid adding more trial vectors if hessian converged
             yield True, istep+1, w_t, xtrial, hx, dx, s0
             if s0 < lindep or norm_dx < lindep:# or numpy.linalg.norm(xtrial) < lindep:

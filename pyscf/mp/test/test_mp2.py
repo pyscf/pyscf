@@ -189,9 +189,12 @@ class KnownValues(unittest.TestCase):
 
     def test_mp2_frozen(self):
         pt = mp.mp2.MP2(mf)
-        pt.frozen = [1]
+        pt.frozen = [0]
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.14660835345250667, 9)
+        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 9)
+        pt.set_frozen()
+        pt.kernel(with_t2=False)
+        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 9)
 
     def test_mp2_outcore_frozen(self):
         pt = mp.mp2.MP2(mf)

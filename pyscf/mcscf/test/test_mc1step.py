@@ -125,7 +125,7 @@ class KnownValues(unittest.TestCase):
         mo1 = mc1.mo_coeff
         ci1 = mc1.ci
         s = numpy.einsum('pi,pq,qj->ij', mo0[:,5:9], msym.get_ovlp(), mo1[:,5:9])
-        self.assertAlmostEqual(fci.addons.overlap(ci0, ci1, 4, 4, s), 1, 9)
+        self.assertAlmostEqual(abs(fci.addons.overlap(ci0, ci1, 4, 4, s)), 1, 9)
 
     def test_get_h2eff(self):
         mc1 = mcscf.CASSCF(m, 4, 4).approx_hessian()
@@ -181,7 +181,7 @@ class KnownValues(unittest.TestCase):
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.8292690292608, 8)
+        self.assertAlmostEqual(mc1.e_tot, -105.82840377848402, 6)
 
     def test_dep4_df(self):
         mc1 = mcscf.CASSCF(msym, 4, 4).density_fit()
@@ -190,7 +190,7 @@ class KnownValues(unittest.TestCase):
         mc1.max_cycle = 1
         mc1.max_cycle_micro = 6
         mc1.kernel(mo)
-        self.assertAlmostEqual(mc1.e_tot, -105.82923271851176, 8)
+        self.assertAlmostEqual(mc1.e_tot, -105.82833244029327, 6)
 
     # FIXME: How to test ci_response_space? The test below seems numerical instable
     #def test_ci_response_space(self):
@@ -324,6 +324,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc.e_states[1], -108.8582272809495, 5)
         self.assertAlmostEqual(abs((civec[0]*mc.ci[0]).sum()), 1, 7)
         self.assertAlmostEqual(abs((civec[1]*mc.ci[1]).sum()), 1, 7)
+
+    def test_small_system(self):
+        mol = gto.M(atom='H 0 0 0; H 0 0 .74', symmetry=True, basis='6-31g')
+        mf = scf.RHF(mol).run()
+        mc = mcscf.CASSCF(mf, 2, 2)
+        mc.max_cycle = 5
+        mc.mc2step()
+        self.assertAlmostEqual(mc.e_tot, -1.14623442196547, 9)
+        self.assertTrue(mc.converged)
 
 
 if __name__ == "__main__":

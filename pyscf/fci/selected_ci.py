@@ -334,7 +334,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
     link_index = _all_linkstr_index(ci_strs, norb, nelec)
     hdiag = myci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
 
-    if isinstance(ci0, _SCIvector):
+    if isinstance(ci0, SCIvector):
         if ci0.size == na*nb:
             ci0 = [ci0.ravel()]
         else:
@@ -376,7 +376,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     h2e = ao2mo.restore(1, h2e, norb)
 
 # TODO: initial guess from CISD
-    if isinstance(ci0, _SCIvector):
+    if isinstance(ci0, SCIvector):
         if ci0.size == len(ci0._strs[0])*len(ci0._strs[1]):
             ci0 = [ci0.ravel()]
         else:
@@ -901,17 +901,22 @@ def _all_linkstr_index(ci_strs, norb, nelec):
 
 # numpy.ndarray does not allow to attach attribtues.  Overwrite the
 # numpy.ndarray class to tag the ._strs attribute
-class _SCIvector(numpy.ndarray):
+class SCIvector(numpy.ndarray):
+    '''An 2D np array for selected CI coefficients'''
     def __array_finalize__(self, obj):
         self._strs = getattr(obj, '_strs', None)
 
-    # Whenever the contents of the array was modified (through ufunc), the tag
-    # should be expired. Overwrite the output of ufunc to restore ndarray type.
-    def __array_wrap__(self, out, context=None):
-        return numpy.ndarray.__array_wrap__(self, out, context).view(numpy.ndarray)
+    # Special cases for ndarray when the array was modified (through ufunc)
+    def __array_wrap__(self, out):
+        if out.shape == self.shape:
+            return out
+        elif out.shape == ():  # if ufunc returns a scalar
+            return out[()]
+        else:
+            return out.view(numpy.ndarray)
 
 def _as_SCIvector(civec, ci_strs):
-    civec = civec.view(_SCIvector)
+    civec = civec.view(SCIvector)
     civec._strs = ci_strs
     return civec
 

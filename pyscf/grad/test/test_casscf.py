@@ -163,12 +163,12 @@ class KnownValues(unittest.TestCase):
         e2_0 = mcs.e_states[0]
         e2_1 = mcs.e_states[1]
 
-        self.assertAlmostEqual(e_avg, -1.083838462140703e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877615413e-01, 7)
-        self.assertAlmostEqual(e_0, -1.083902662192770e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_0), -6.398928175384316e-02, 7) 
-        self.assertAlmostEqual(e_1, -1.083774262088640e+02, 9)
-        self.assertAlmostEqual(lib.fp(de_1), -1.428890918624837e-01, 7)
+        self.assertAlmostEqual(e_avg, -1.083838462140703e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_avg), -1.034340877615413e-01, 4)
+        self.assertAlmostEqual(e_0, -1.083902662192770e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_0), -6.398928175384316e-02, 5)
+        self.assertAlmostEqual(e_1, -1.083774262088640e+02, 6)
+        self.assertAlmostEqual(lib.fp(de_1), -1.428890918624837e-01, 4)
         self.assertAlmostEqual(de_avg[1,2], (e1_avg-e2_avg)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_0[1,2], (e1_0-e2_0)/0.002*lib.param.BOHR, 4)
         self.assertAlmostEqual(de_1[1,2], (e1_1-e2_1)/0.002*lib.param.BOHR, 4)
@@ -207,12 +207,12 @@ class KnownValues(unittest.TestCase):
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
-            mc = mcscf.CASSCF(mf.x2c(), 4, 4).run()
+            mc = mcscf.CASSCF(mf.x2c(), 4, 4).run(conv_tol=1e-9)
             gscan = mc.nuc_grad_method().as_scanner()
             g1 = gscan(mol)[1]
-            self.assertAlmostEqual(lib.fp(g1), -0.07027493570511917, 7)
+            self.assertAlmostEqual(lib.fp(g1), -0.07027493570511917, 5)
 
-            mcs = mcscf.CASSCF(mf, 4, 4).as_scanner().x2c()
+            mcs = mcscf.CASSCF(mf, 4, 4).set(conv_tol=1e-9).as_scanner().x2c()
             e1 = mcs('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
             e2 = mcs('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
             self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
@@ -234,7 +234,7 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4).as_scanner()
         e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
         self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
-        self.assertAlmostEqual(lib.fp(g), 0.042835374915102364, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.042835374915102364, 5)
         e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
                  H                 -0.00000000   -0.84695236    0.59109389
                  H                 -0.00000000    0.89830571    0.52404783 ''')
@@ -248,12 +248,12 @@ class KnownValues(unittest.TestCase):
         mc = qmmm.add_mm_charges(mcscf.CASSCF(mf, 4, 4).as_scanner(), coords, charges)
         e_tot, g = mc.nuc_grad_method().as_scanner()(mol)
         self.assertAlmostEqual(e_tot, -76.0461574155984, 7)
-        self.assertAlmostEqual(lib.fp(g), 0.042835374915102364, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.042835374915102364, 5)
 
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True, verbose=0)
         g = mol.RHF.run().CASSCF(4, 4).run().Gradients().kernel()
-        self.assertAlmostEqual(lib.fp(g), 0.12355818572359845, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.12355818572359845, 5)
 
 
 if __name__ == "__main__":
