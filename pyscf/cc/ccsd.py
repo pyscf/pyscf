@@ -989,7 +989,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_tot(self):
-        return (self.e_hf or self._scf.e_tot) + self.e_corr
+        return self.e_hf + self.e_corr
 
     @property
     def nocc(self):
