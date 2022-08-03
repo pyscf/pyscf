@@ -266,7 +266,7 @@ def spin_square(mo, s=1):
     '''
     nao = mo.shape[0] // 2
     if isinstance(s, numpy.ndarray):
-        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     mo_a = mo[:nao]
     mo_b = mo[nao:]
@@ -315,7 +315,7 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     dma = dm[:nao,:nao]
     dmb = dm[nao:,nao:]
     if s is not None:
-        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
@@ -327,7 +327,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     dma = dm_ao[:nao,:nao]
     dmb = dm_ao[nao:,nao:]
     if s is not None:
-        assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+        assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
         s = s[:nao,:nao]
     return uhf.mulliken_meta(mol, (dma,dmb), verbose, pre_orth_method, s)
 
@@ -556,7 +556,7 @@ class HF1e(GHF):
     scf = hf._hf1e_scf
 
 
-del(PRE_ORTH_METHOD)
+del (PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

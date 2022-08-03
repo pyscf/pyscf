@@ -40,7 +40,7 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
         # aoLa, aoLb = aoL
         ao = aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
     else:
-        assert(deriv <= 1)  # only GTOval_ipsp_spinor
+        assert (deriv <= 1)  # only GTOval_ipsp_spinor
         ngrids = coords.shape[0]
         nao = mol.nao_2c()
         ao = numpy.ndarray((4,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)

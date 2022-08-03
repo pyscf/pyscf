@@ -29,12 +29,12 @@ if conf_file is not None:
     if sys.version_info < (3,0):
         import imp
         imp.load_source('pyscf.__config__', conf_file)
-        del(imp)
+        del (imp)
     else:
         from importlib import machinery
         machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
-        del(machinery)
-del(os, sys)
+        del (machinery)
+del (os, sys)
 
 #
 # All parameters initialized after loading pyscf_conf.py will be kept in the

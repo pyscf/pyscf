@@ -124,7 +124,7 @@ class SpinFreeX2C(X2C):
         xcell, contr_coeff = self.get_xmol(cell)
         with_df = aft.AFTDF(xcell)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
@@ -175,7 +175,7 @@ class SpinFreeX2C(X2C):
         if cell is None: cell = self.cell
         xcell, contr_coeff = self.get_xmol(cell)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()

@@ -41,7 +41,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, cell.nbas)
-    assert(shls_slice == (0, cell.nbas))
+    assert (shls_slice == (0, cell.nbas))
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
     # dimensional systems) to include lattice translations in all 3 dimensions.

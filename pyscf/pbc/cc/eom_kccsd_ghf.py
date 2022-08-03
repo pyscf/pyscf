@@ -160,7 +160,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
 
 def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
     '''Enforces condition that net spin can only change by +/- 1/2'''
-    assert(excitation in ['ip', 'ea'])
+    assert (excitation in ['ip', 'ea'])
     if excitation == 'ip':
         nkpts, nocc, nvir = np.array(r2.shape)[[1, 3, 4]]
     elif excitation == 'ea':

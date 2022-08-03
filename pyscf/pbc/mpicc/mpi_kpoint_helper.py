@@ -43,7 +43,7 @@ class unique_pqr_list:
 
         ivec = 0
         not_done = True
-        while( not_done ):
+        while (not_done):
             current_kvec = klist[ivec]
             # check to see if it's been done...
             kp = current_kvec[0]

@@ -909,8 +909,8 @@ class UADC(lib.StreamObject):
         return self
 
     def kernel_gs(self):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -950,8 +950,8 @@ class UADC(lib.StreamObject):
         return self.e_corr, self.t1, self.t2
 
     def kernel(self, nroots=1, guess=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -989,10 +989,10 @@ class UADC(lib.StreamObject):
         self._finalize()
 
         self.method_type = self.method_type.lower()
-        if(self.method_type == "ea"):
+        if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif(self.method_type == "ip"):
+        elif (self.method_type == "ip"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
@@ -1148,7 +1148,7 @@ def get_imds_ea(adc, eris=None):
     cput0 = log.timer_debug1("Completed M_ab second-order terms ADC(2) calculation", *cput0)
 
     #Third-order terms
-    if(method =='adc(3)'):
+    if (method =='adc(3)'):
 
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
@@ -3695,7 +3695,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*lib.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
 ######## ADC(3) 2p-1h  part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -3763,7 +3763,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######### ADC(3) 2p-1h part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_ab = adc.t2[1][1][:]
             t2_2_b = adc.t2[1][2][:]
@@ -3778,7 +3778,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######### ADC(2) 1p part  ############################################
 
-        if(method=='adc(3)'):
+        if (method=='adc(3)'):
 
             t1_3_a, t1_3_b = adc.t1[1]
 
@@ -3883,7 +3883,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]

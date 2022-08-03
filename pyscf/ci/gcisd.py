@@ -157,7 +157,7 @@ def to_ucisdvec(civec, nmo, nocc, orbspin):
     return ucisdvec
 
 def to_fcivec(cisdvec, nelec, orbspin, frozen=None):
-    assert(numpy.count_nonzero(orbspin == 0) ==
+    assert (numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
@@ -181,7 +181,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=None):
     if not (frozen is None or frozen == 0):
         raise NotImplementedError
 
-    assert(numpy.count_nonzero(orbspin == 0) ==
+    assert (numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
     frozen_mask = numpy.zeros(norb, dtype=bool)
@@ -404,7 +404,7 @@ class GCISD(cisd.CISD):
             orbspin = getattr(self.mo_coeff, 'orbspin', None)
             if orbspin is not None:
                 orbspin = orbspin[self.get_frozen_mask()]
-        assert(orbspin is not None)
+        assert (orbspin is not None)
         return from_ucisdvec(civec, nocc, orbspin=orbspin)
     from_rcisdvec = from_ucisdvec
 

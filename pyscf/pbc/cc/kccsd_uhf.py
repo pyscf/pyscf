@@ -439,7 +439,7 @@ def energy(cc, t1, t2, eris):
 
     kka, noa, nva = t1a.shape
     kkb, nob, nvb = t1b.shape
-    assert(kka == kkb)
+    assert (kka == kkb)
     nkpts = kka
     s = 0.0 + 0j
     fa, fb = eris.fock
@@ -476,7 +476,7 @@ def energy(cc, t1, t2, eris):
 #    if cc._nocc is not None:
 #        return cc._nocc
 #
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        nocca = [(np.count_nonzero(cc.mo_occ[0][k] > 0) - cc.frozen) for k in range(cc.nkpts)]
@@ -495,7 +495,7 @@ def energy(cc, t1, t2, eris):
 #    if cc._nmo is not None:
 #        return cc._nmo
 #
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        nmoa = [(cc.mo_occ[0][k].size - cc.frozen) for k in range(cc.nkpts)]
@@ -514,7 +514,7 @@ def energy(cc, t1, t2, eris):
 #
 #    moidxa = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[0]]
 #    moidxb = [np.ones(x.size, dtype=np.bool) for x in cc.mo_occ[1]]
-#    assert(cc.frozen == 0)
+#    assert (cc.frozen == 0)
 #
 #    if isinstance(cc.frozen, (int, np.integer)):
 #        for idx in moidxa:
@@ -640,7 +640,7 @@ class KUCCSD(uccsd.UCCSD):
     max_space = getattr(__config__, 'pbc_cc_kccsd_uhf_KUCCSD_max_space', 20)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
@@ -897,7 +897,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,noccb,nmob,nmob,nmob), dtype)
     oppp = thisdf.ao2mo_7d([orbob,mo_coeff[1],mo_coeff[1],mo_coeff[1]], kpts,
                            factor=1./nkpts, out=out)
@@ -913,7 +913,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,nocca,nmoa,nmob,nmob), dtype)
     oppp = thisdf.ao2mo_7d([orboa,mo_coeff[0],mo_coeff[1],mo_coeff[1]], kpts,
                            factor=1./nkpts, out=out)
@@ -929,7 +929,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     oppp = None
 
     if isinstance(buf, h5py.Group):
-        del(buf['tmp'])
+        del (buf['tmp'])
         out = buf.create_dataset('tmp', (nkpts,nkpts,nkpts,noccb,nmob,nmoa,nmoa), dtype)
     oppp = thisdf.ao2mo_7d([orbob,mo_coeff[1],mo_coeff[0],mo_coeff[0]], kpts,
                            factor=1./nkpts, out=out)

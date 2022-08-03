@@ -192,7 +192,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
 
 def symmetrize(mol, de, atmlst=None):
     '''Symmetrize the gradients wrt the point group symmetry of the molecule.'''
-    assert(mol.symmetry)
+    assert (mol.symmetry)
     pmol = mol.copy()
     # The symmetry of gradients should be the same to the p-type functions.
     # We use p-type AOs to generate the symmetry adaptation projector.

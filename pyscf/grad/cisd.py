@@ -31,7 +31,7 @@ from pyscf.grad import ccsd as ccsd_grad
 def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
     myci = cigrad.base
     if civec is None: civec = myci.ci
-    assert(not isinstance(civec, (list, tuple)))
+    assert (not isinstance(civec, (list, tuple)))
     nocc = myci.nocc
     nmo = myci.nmo
     d1 = cisd._gamma1_intermediates(myci, civec, nmo, nocc)

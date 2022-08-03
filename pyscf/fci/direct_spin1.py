@@ -63,7 +63,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     f1e_tril = lib.pack_tril(f1e)
     ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -127,7 +127,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -509,7 +509,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     log = logger.new_logger(fci, verbose)
 
     nelec = _unpack_nelec(nelec, fci.spin)
-    assert(0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
+    assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]

@@ -794,7 +794,7 @@ def newton(mf):
     if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
     if mf.__doc__ is None:
         mf_doc = ''
     else:
@@ -956,7 +956,7 @@ SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
 def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
-del(SVD_TOL)
+del (SVD_TOL)
 
 def _force_SO3_degeneracy_(dr, orbsym):
     '''Force orbitals of same angular momentum to use the same rotation matrix'''

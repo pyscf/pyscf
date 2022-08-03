@@ -36,7 +36,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
@@ -122,7 +122,7 @@ def energy(mp, t2, eris):
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''
-    #assert(isinstance(eris, _ChemistsERIs))
+    #assert (isinstance(eris, _ChemistsERIs))
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     mo_ea_o = eris.mo_energy[0][:nocca]
@@ -172,7 +172,7 @@ def get_nocc(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
-        #assert(nocca > 0 and noccb > 0)
+        #assert (nocca > 0 and noccb > 0)
     elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
             # The same frozen orbital indices for alpha and beta orbitals
@@ -561,8 +561,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
     ao2mopt = _ao2mo.AO2MOpt(mol, int2e, 'CVHFnr_schwarz_cond',
                              'CVHFsetnr_direct_scf')
     nbas = mol.nbas
-    assert(nvira <= nao)
-    assert(nvirb <= nao)
+    assert (nvira <= nao)
+    assert (nvirb <= nao)
 
     ao_loc = mol.ao_loc_nr()
     dmax = max(4, min(nao/3, numpy.sqrt(max_memory*.95e6/8/(nao+nocca)**2)))
@@ -684,7 +684,7 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

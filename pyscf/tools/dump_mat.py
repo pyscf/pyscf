@@ -190,7 +190,7 @@ def dump_mo(mol, c, label=None,
         label = mol.ao_labels()
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
 
-del(BASE)
+del (BASE)
 
 
 if __name__ == '__main__':

@@ -1121,7 +1121,7 @@ To enable the solvent model for CASCI, the following code needs to be called
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
+del (WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':

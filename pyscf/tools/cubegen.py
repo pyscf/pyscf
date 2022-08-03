@@ -289,8 +289,8 @@ class Cube(object):
 
     def write(self, field, fname, comment=None):
         """  Result: .cube file with the field in the file fname.  """
-        assert(field.ndim == 3)
-        assert(field.shape == (self.nx, self.ny, self.nz))
+        assert (field.ndim == 3)
+        assert (field.shape == (self.nx, self.ny, self.nz))
         if comment is None:
             comment = 'Generic field? Supply the optional argument "comment" to define this line'
 

@@ -397,7 +397,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             tspans[2] += tick_ - tock_
 
         for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
+            del (fswap['j3c-junk/%d'%ji])
 
     # Wrapped around boundary and symmetry between k and -k can be used
     # explicitly for the metric integrals.  We consider this symmetry

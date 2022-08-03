@@ -120,7 +120,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
 class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
-        #assert('UHF' == mf.__class__.__name__)
+        #assert ('UHF' == mf.__class__.__name__)
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.UHF(mf_or_mol)
         else:
@@ -446,7 +446,7 @@ class UCASCI(casci.CASCI):
 
 CASCI = UCASCI
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL)
+del (WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':

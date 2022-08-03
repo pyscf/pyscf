@@ -35,7 +35,7 @@ class TDA(uhf.TDA):
 
     def __init__(self, mf):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
         warn_pbc2d_eri(mf)

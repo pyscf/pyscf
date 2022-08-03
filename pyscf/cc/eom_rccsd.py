@@ -1790,7 +1790,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip(self, cc, ip_partition=None):
-        assert(ip_partition is None)
+        assert (ip_partition is None)
         cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
@@ -1828,7 +1828,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ea(self, cc, ea_partition=None):
-        assert(ea_partition is None)
+        assert (ea_partition is None)
         cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris

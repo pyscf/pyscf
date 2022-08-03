@@ -533,7 +533,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
         #aow += numpy.einsum('pi,p->pi', ao[0], .5*weight*vrho)
         vrho, vsigma = vxc[:2]
         if spin == 0:
-            assert(vsigma is not None and rho.ndim==2)
+            assert (vsigma is not None and rho.ndim==2)
             wv = _rks_gga_wv0(rho, vxc, weight)
         else:
             rho_a, rho_b = rho
@@ -2481,7 +2481,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
-    assert(nset == 1)
+    assert (nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao, mask, weight, coords \
