@@ -110,14 +110,14 @@ def update_amps(cc, t1, t2, eris):
         tmp = lib.einsum('ki,kjab->ijab', Loo2, t2)
         t2new -= (tmp + tmp.transpose(1,0,3,2))
     else:
-        Loo = imd.Loo(t1, t2, eris)
-        Lvv = imd.Lvv(t1, t2, eris)
+        Loo = imd.Loo(t1, t2, eris, cc.dcsd)
+        Lvv = imd.Lvv(t1, t2, eris, cc.dcsd)
         Loo[np.diag_indices(nocc)] -= mo_e_o
         Lvv[np.diag_indices(nvir)] -= mo_e_v
 
-        Woooo = imd.cc_Woooo(t1, t2, eris)
-        Wvoov = imd.cc_Wvoov(t1, t2, eris)
-        Wvovo = imd.cc_Wvovo(t1, t2, eris)
+        Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
+        Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
+        Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
 
         tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
@@ -168,15 +168,19 @@ class RCCSD(ccsd.CCSD):
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
     '''
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
+        return self.ccsd(t1, t2, eris, mbpt2, dcsd)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
         '''Ground-state CCSD.
 
         Kwargs:
             mbpt2 : bool
                 Use one-shot MBPT2 approximation to CCSD.
+            dcsd : bool
+                Do DCSD instead of CCSD.
         '''
+        if mbpt2 and dcsd:
+            raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
         if mbpt2:
             pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
@@ -186,7 +190,7 @@ class RCCSD(ccsd.CCSD):
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        return ccsd.CCSD.ccsd(self, t1, t2, eris)
+        return ccsd.CCSD.ccsd(self, t1, t2, eris, dcsd)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo
