@@ -156,7 +156,7 @@ def transform_integrals_outcore(myadc):
             eris.oovv[i] = buf[:nocc_a,nocc_a:,nocc_a:]
             eris.ovvo[i] = buf[nocc_a:,nocc_a:,:nocc_a]
             eris.ovvv[i] = lib.pack_tril(buf[nocc_a:,nocc_a:,nocc_a:])
-        del(tmpf['aa'])
+        del (tmpf['aa'])
 
     if nocc_b > 0:
         buf = np.empty((nmo_b,nmo_b,nmo_b))
@@ -168,7 +168,7 @@ def transform_integrals_outcore(myadc):
             eris.OOVV[i] = buf[:nocc_b,nocc_b:,nocc_b:]
             eris.OVVO[i] = buf[nocc_b:,nocc_b:,:nocc_b]
             eris.OVVV[i] = lib.pack_tril(buf[nocc_b:,nocc_b:,nocc_b:])
-        del(tmpf['bb'])
+        del (tmpf['bb'])
 
     if nocc_a > 0:
         buf = np.empty((nmo_a,nmo_b,nmo_b))
@@ -180,7 +180,7 @@ def transform_integrals_outcore(myadc):
             eris.ooVV[i] = buf[:nocc_a,nocc_b:,nocc_b:]
             eris.ovVO[i] = buf[nocc_a:,nocc_b:,:nocc_b]
             eris.ovVV[i] = lib.pack_tril(buf[nocc_a:,nocc_b:,nocc_b:])
-        del(tmpf['ab'])
+        del (tmpf['ab'])
 
     if nocc_b > 0:
         buf = np.empty((nmo_b,nmo_a,nmo_a))
@@ -191,7 +191,7 @@ def transform_integrals_outcore(myadc):
             eris.OOvv[i] = buf[:nocc_b,nocc_a:,nocc_a:]
             eris.OVvo[i] = buf[nocc_b:,nocc_a:,:nocc_a]
             eris.OVvv[i] = lib.pack_tril(buf[nocc_b:,nocc_a:,nocc_a:])
-        del(tmpf['ba'])
+        del (tmpf['ba'])
 
     buf = None
     cput1 = logger.timer_debug1(myadc, 'transforming oopq, ovpq', *cput1)

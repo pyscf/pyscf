@@ -42,8 +42,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
                  max_memory=MAX_MEMORY, auxmol=None, verbose=logger.NOTE):
     '''3-index density-fitting tensor.
     '''
-    assert(aosym in ('s1', 's2ij'))
-    assert(comp == 1)
+    assert (aosym in ('s1', 's2ij'))
+    assert (comp == 1)
     log = logger.new_logger(mol, verbose)
     time0 = (logger.process_clock(), logger.perf_counter())
 
@@ -103,7 +103,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     '''3-center 2-electron DF tensor. Similar to cholesky_eri while this
     function stores DF tensor in blocks.
     '''
-    assert(aosym in ('s1', 's2ij'))
+    assert (aosym in ('s1', 's2ij'))
     log = logger.new_logger(mol, verbose)
     time0 = (logger.process_clock(), logger.perf_counter())
 
@@ -200,7 +200,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
             max_memory=MAX_MEMORY, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''
-    assert(aosym in ('s1', 's2ij'))
+    assert (aosym in ('s1', 's2ij'))
     time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
@@ -274,12 +274,12 @@ def _create_h5file(erifile, dataname):
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile, 'a')
         if dataname in feri:
-            del(feri[dataname])
+            del (feri[dataname])
     else:
         feri = h5py.File(erifile, 'w')
     return feri
 
-del(MAX_MEMORY)
+del (MAX_MEMORY)
 
 
 if __name__ == '__main__':

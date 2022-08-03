@@ -1618,9 +1618,9 @@ class _Xlist(list):
 
     def pop(self, index):
         key = self.index.pop(index)
-        del(self.scr_h5[str(key)])
+        del (self.scr_h5[str(key)])
 
-del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
+del (SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':

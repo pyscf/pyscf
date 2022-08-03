@@ -56,7 +56,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
-    assert(fcivec.size == na**2)
+    assert (fcivec.size == na**2)
     ci1 = numpy.empty_like(fcivec)
     f1e_tril = lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -86,7 +86,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri *= .5
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
-    assert(fcivec.size == na**2)
+    assert (fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
     libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
@@ -158,7 +158,7 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
@@ -234,8 +234,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         max_memory = fci.max_memory - lib.current_memory()[0]
     log = logger.new_logger(fci, verbose)
 
-    assert(fci.spin is None or fci.spin == 0)
-    assert(0 <= numpy.sum(nelec) <= norb*2)
+    assert (fci.spin is None or fci.spin == 0)
+    assert (0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
@@ -405,7 +405,7 @@ class FCISolver(direct_spin1.FCISolver):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         if tril:
             link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
         else:
@@ -421,7 +421,7 @@ def _unpack(norb, nelec, link_index):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         return cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     else:
         return link_index

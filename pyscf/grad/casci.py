@@ -60,7 +60,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
     neleca, nelecb = mol.nelec
-    assert(neleca == nelecb)
+    assert (neleca == nelecb)
     orbo = mo_coeff[:,:neleca]
     orbv = mo_coeff[:,neleca:]
 
@@ -282,7 +282,7 @@ class Gradients(rhf_grad.GradientsMixin):
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
         if self.state is None:  # state average MCSCF calculations
-            assert(state is None)
+            assert (state is None)
         elif isinstance(ci, (list, tuple, RANGE_TYPE)):
             if state is None:
                 state = self.state

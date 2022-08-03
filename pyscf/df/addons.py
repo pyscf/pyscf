@@ -154,7 +154,7 @@ def make_auxbasis(mol, mp2fit=False):
         default_basis = mol.basis['default']
         _basis = dict(((a, default_basis) for a in uniq_atoms))
         _basis.update(mol.basis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = mol._basis
 
@@ -213,7 +213,7 @@ def make_auxmol(mol, auxbasis=None):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
         _basis.update(auxbasis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = auxbasis
     pmol._basis = pmol.format_basis(_basis)
@@ -225,4 +225,4 @@ def make_auxmol(mol, auxbasis=None):
                  pmol.nbas, pmol.nao_nr())
     return pmol
 
-del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)
+del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

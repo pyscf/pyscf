@@ -231,7 +231,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
     vj = vj.reshape(dm.shape)
     vk = vk.reshape(dm.shape)
-    assert(vj.ndim >= 3 and vj.shape[0] == 2)
+    assert (vj.ndim >= 3 and vj.shape[0] == 2)
     vhf = vj[0] + vj[1] - vk
     vhf += numpy.asarray(vhf_last)
     return vhf
@@ -638,7 +638,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     virtual subspaces separatedly (without change occupancy).
     '''
     mo_occ = numpy.asarray(mo_occ)
-    assert(mo_occ.ndim == 2)
+    assert (mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_fock(dm=dm)
@@ -1051,4 +1051,4 @@ class HF1e(UHF):
     def spin_square(self, mo_coeff=None, s=None):
         return .75, 2
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD, BREAKSYM)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD, BREAKSYM)

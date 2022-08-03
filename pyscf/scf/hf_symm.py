@@ -219,7 +219,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
         idx = numpy.argsort(es, kind='mergesort')
-        assert(numpy.allclose(es[idx], esub.round(7)))
+        assert (numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
 
@@ -420,7 +420,7 @@ class SymAdaptedRHF(hf.RHF):
                 nelec_fix += n
                 rest_idx[ir_idx] = False
         nelec_float = mol.nelectron - nelec_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
             occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
@@ -620,7 +620,7 @@ class SymAdaptedROHF(rohf.ROHF):
                 rest_idx[ir_idx] = False
 
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if len(rest_idx) > 0:
             rest_idx = numpy.where(rest_idx)[0]
             nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
@@ -882,7 +882,7 @@ class HF1e(ROHF):
     scf = hf._hf1e_scf
 
 
-del(WITH_META_LOWDIN)
+del (WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

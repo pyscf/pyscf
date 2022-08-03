@@ -213,7 +213,7 @@ def dumps(cell):
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
         if k in celldic:
-            del(celldic[k])
+            del (celldic[k])
     for k in celldic:
         if isinstance(celldic[k], np.ndarray):
             celldic[k] = celldic[k].tolist()
@@ -1267,7 +1267,7 @@ class Cell(mole.Mole):
                 default_pseudo = self.pseudo['default']
                 _pseudo = dict(((a, default_pseudo) for a in uniq_atoms))
                 _pseudo.update(self.pseudo)
-                del(_pseudo['default'])
+                del (_pseudo['default'])
             else:
                 _pseudo = self.pseudo
             self._pseudo = self.format_pseudo(_pseudo)
@@ -1537,11 +1537,11 @@ class Cell(mole.Mole):
         '''  # noqa: E501
         a = self.lattice_vectors()
         if self.dimension == 1:
-            assert(abs(np.dot(a[0], a[1])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[1])) < 1e-9 and
                    abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         elif self.dimension == 2:
-            assert(abs(np.dot(a[0], a[2])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         b = np.linalg.inv(a.T)
         return norm_to * b
@@ -1687,4 +1687,4 @@ class Cell(mole.Mole):
               **kwargs):
         raise NotImplementedError
 
-del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)
+del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

@@ -69,7 +69,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     >>> mf.scf()
     -100.00978770951018
     '''
-    assert(isinstance(mf, scf.hf.SCF))
+    assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
         with_df = SGX(mf.mol, pjs=pjs)

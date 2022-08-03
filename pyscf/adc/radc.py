@@ -654,8 +654,8 @@ class RADC(lib.StreamObject):
         return self
 
     def kernel_gs(self):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -695,8 +695,8 @@ class RADC(lib.StreamObject):
         return self.e_corr, self.t1, self.t2
 
     def kernel(self, nroots=1, guess=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -734,10 +734,10 @@ class RADC(lib.StreamObject):
         self._finalize()
 
         self.method_type = self.method_type.lower()
-        if(self.method_type == "ea"):
+        if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif(self.method_type == "ip"):
+        elif (self.method_type == "ip"):
             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
@@ -857,7 +857,7 @@ def get_imds_ea(adc, eris=None):
 
     #Third-order terms
 
-    if(method =='adc(3)'):
+    if (method =='adc(3)'):
 
         eris_oovv = eris.oovv
         eris_oooo = eris.oooo
@@ -2071,7 +2071,7 @@ def ea_compute_trans_moments(adc, orb):
 
 ######### ADC(3) 2p-1h  part  ############################################
 
-    if(method=="adc(2)-x"or adc.method=="adc(3)"):
+    if (method=="adc(2)-x"or adc.method=="adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -2083,7 +2083,7 @@ def ea_compute_trans_moments(adc, orb):
 
 ########### ADC(3) 1p part  ############################################
 
-    if(adc.method=="adc(3)"):
+    if (adc.method=="adc(3)"):
 
         t1_3 = adc.t1[1]
 
@@ -2169,7 +2169,7 @@ def ip_compute_trans_moments(adc, orb):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-    if(method=='adc(2)-x'or method=='adc(3)'):
+    if (method=='adc(2)-x'or method=='adc(3)'):
 
         t2_2 = adc.t2[1][:]
 
@@ -2180,7 +2180,7 @@ def ip_compute_trans_moments(adc, orb):
 
 ######### ADC(3) 1h part  ############################################
 
-    if(method=='adc(3)'):
+    if (method=='adc(3)'):
 
         t1_3 = adc.t1[1]
 

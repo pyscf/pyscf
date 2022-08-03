@@ -484,7 +484,7 @@ class EOMIP(eom_kgccsd.EOMIP):
                                  (kshift, len(tmp_obeta)+len(tmp_oalpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_oalpha) > 0:
                     idx[total_count] = tmp_oalpha.pop()
                 else:
@@ -987,7 +987,7 @@ class EOMEA(eom_kgccsd.EOMEA):
                                  (kshift, len(tmp_vbeta)+len(tmp_valpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_valpha) > 0:
                     idx[total_count] = tmp_valpha.pop(0)
                 else:

@@ -179,8 +179,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
-    assert(mo_energy_kpts[0].ndim == 1)
-    assert(mo_occ_kpts[0].ndim == 1)
+    assert (mo_energy_kpts[0].ndim == 1)
+    assert (mo_occ_kpts[0].ndim == 1)
 
     # occ array in mo_occ_kpts may have different size. See issue #250
     nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
@@ -858,7 +858,7 @@ class KRHF(KSCF, pbchf.RHF):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

@@ -77,7 +77,7 @@ class X2CHelperMixin(lib.StreamObject):
 
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         s = xmol.intor_symmetric('int1e_ovlp_spinor')
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
@@ -230,7 +230,7 @@ class X2CHelperMixin(lib.StreamObject):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
@@ -289,7 +289,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
 
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         t = _block_diag(xmol.intor_symmetric('int1e_kin'))
         v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
@@ -361,7 +361,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
@@ -826,7 +826,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
             continue
 
         lmax = mol._bas[ib0:ib1,mole.ANG_OF].max()
-        assert(all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
+        assert (all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
         # TODO: loop based on kappa
         for l in range(lmax+1):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,mole.ANG_OF] == l)[0]

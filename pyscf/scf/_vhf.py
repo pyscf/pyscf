@@ -214,7 +214,7 @@ class _CVHFOpt(ctypes.Structure):
 # hermi = 2 : anti-hermitian
 ################################################
 def incore(eri, dms, hermi=0, with_j=True, with_k=True):
-    assert(eri.dtype == numpy.double)
+    assert (eri.dtype == numpy.double)
     eri = numpy.asarray(eri, order='C')
     dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
@@ -384,7 +384,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
 def direct_mapdm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                  shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -468,7 +468,7 @@ def direct_mapdm(intor, aosym, jkdescript,
 def direct_bindm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                  shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -486,7 +486,7 @@ def direct_bindm(intor, aosym, jkdescript,
     else:
         jkdescripts = jkdescript
     njk = len(jkdescripts)
-    assert(njk == n_dm)
+    assert (njk == n_dm)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -554,7 +554,7 @@ def int2e_sph(atm, bas, env, cart=False):  # pragma: no cover
 def rdirect_mapdm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -623,7 +623,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 def rdirect_bindm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
