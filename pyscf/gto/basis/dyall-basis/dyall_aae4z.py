@@ -1,12 +1,12 @@
-# 
+#
 # Elements Supported
 # H  He
 # B  C  N  O  F  Ne Al Si P  S  Cl Ar
-# Ga Ge As Se Br Kr In Sn Sb Te I  Xe Tl Pb Bi Po At Rn 
+# Ga Ge As Se Br Kr In Sn Sb Te I  Xe Tl Pb Bi Po At Rn
 # Nh Fl Mc Lv Ts Og
-# 
+#
 #  REFERENCE
-# 
+#
 # 1s:    K.G. Dyall, unpublished.
 # 2p-3p: K.G. Dyall, Theor. Chem. Acc. (2016) 135:128.
 # 4p-6p: K.G. Dyall, Theor. Chem. Acc. (2006) 115:441;
@@ -15,8 +15,8 @@
 #        K.G. Dyall, Theor. Chem. Acc. (2012) 131:1217.
 # Available from the Dirac web site, http://dirac.chem.sdu.dk.
 #
-# 
-# 
+#
+#
 
 H  = [[0, 0, [4.29410792e+03, 1.0]],
       [0, 0, [6.20952722e+02, 1.0]],
