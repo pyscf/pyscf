@@ -321,7 +321,6 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
 
         self.oooo = None
@@ -352,7 +351,7 @@ class _PhysicistsERIs:
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         self.nocc = mycc.nocc
         self.mol = mycc.mol
 

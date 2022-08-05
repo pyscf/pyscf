@@ -715,7 +715,6 @@ class KMP2(mp2.MP2):
         self._nocc = None
         self._nmo = None
         self.e_corr = None
-        self.e_hf = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -756,13 +755,11 @@ class KMP2(mp2.MP2):
 
         mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 
-        # TODO: compute e_hf for non-canonical SCF
-        self.e_hf = self._scf.e_tot
-
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
+
 KRMP2 = KMP2
 
 

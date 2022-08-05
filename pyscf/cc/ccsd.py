@@ -956,7 +956,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged = False
         self.converged_lambda = False
         self.emp2 = None
-        self.e_hf = None
         self.e_corr = None
         self.t1 = None
         self.t2 = None
@@ -976,6 +975,27 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     @property
     def ecc(self):
         return self.e_corr
+
+    @property
+    def e_hf(self):
+        # Get HF energy, which is needed for total CCSD energy.
+        if self._scf.mo_coeff is None:
+            mo_coeff = self.mo_coeff
+            logger.warn(self, 'HF MO coefficients are not defined. Using '
+                              'those passed to post-HF calculations for '
+                              'HF energy calculation.\n')
+        else:
+            mo_coeff = self._scf.mo_coeff
+        if self._scf.mo_occ is None:
+            mo_occ = self.mo_occ
+            logger.warn(self, 'HF MO occupancies are not defined. Using '
+                              'those passed to post-HF calculations for '
+                              'HF energy calculation.\n')
+        else:
+            mo_occ = self._scf.mo_occ
+        dm = self._scf.make_rdm1(mo_coeff, mo_occ)
+        vhf = self._scf.get_veff(self._scf.mol, dm)
+        return self._scf.energy_tot(dm=dm, vhf=vhf)
 
     @property
     def e_tot(self):
@@ -1060,10 +1080,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
         self.emp2 = emp2.real
 
-        e_hf = self.e_hf or eris.e_hf
-
         logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
-                    e_hf + self.emp2, self.emp2)
+                    self.e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -1083,10 +1101,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -1321,7 +1335,6 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
 
         self.oooo = None
         self.ovoo = None
@@ -1341,7 +1354,7 @@ class _ChemistsERIs:
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 

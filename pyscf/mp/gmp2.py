@@ -228,7 +228,6 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
         self.oovv = None
 
@@ -257,13 +256,11 @@ class _PhysicistsERIs:
         if mp_mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             self.mo_energy = mp._scf.mo_energy[mo_idx]
             self.fock = numpy.diag(self.mo_energy)
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mp_mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
 
 def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):

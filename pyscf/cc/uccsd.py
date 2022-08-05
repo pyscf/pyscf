@@ -813,7 +813,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 

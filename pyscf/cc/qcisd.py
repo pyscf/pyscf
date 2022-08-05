@@ -410,10 +410,6 @@ class QCISD(CCSD):
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
 
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
-
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -429,6 +425,7 @@ class QCISD(CCSD):
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         return qcisd_t.kernel(self, eris, t1, t2, self.verbose)
+
 
 RQCISD = QCISD
 
