@@ -714,6 +714,7 @@ class KMP2(mp2.MP2):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
+        self._e_hf = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())

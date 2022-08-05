@@ -367,6 +367,26 @@ def get_frozen_mask(mp):
         raise NotImplementedError
     return moidx
 
+def get_e_hf(mp):
+    # Get HF energy, which is needed for total MP2 energy.
+    if mp._scf.mo_coeff is None:
+        mo_coeff = mp.mo_coeff
+        logger.warn(mp, 'HF MO coefficients are not defined. Are using '
+                        'those passed to post-HF calculations for '
+                        'HF energy calculation.\n')
+    else:
+        mo_coeff = mp._scf.mo_coeff
+    if mp._scf.mo_occ is None:
+        mo_occ = mp.mo_occ
+        logger.warn(mp, 'HF MO occupancies are not defined. Are using '
+                        'those passed to post-HF calculations for '
+                        'HF energy calculation.\n')
+    else:
+        mo_occ = mp._scf.mo_occ
+    dm = mp._scf.make_rdm1(mo_coeff, mo_occ)
+    vhf = mp._scf.get_veff(mp._scf.mol, dm)
+    return mp._scf.energy_tot(dm=dm, vhf=vhf)
+
 
 def as_scanner(mp):
     '''Generating a scanner/solver for MP2 PES.
@@ -489,6 +509,7 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
+        self._e_hf = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
@@ -511,11 +532,13 @@ class MP2(lib.StreamObject):
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
+        self._e_hf = None
         return self
 
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_e_hf = get_e_hf
 
     def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import mp
@@ -541,23 +564,9 @@ class MP2(lib.StreamObject):
     @property
     def e_hf(self):
         # Get HF energy, which is needed for total MP2 energy.
-        if self._scf.mo_coeff is None:
-            mo_coeff = self.mo_coeff
-            logger.warn(self, 'HF MO coefficients are not defined. Are using '
-                              'those passed to post-HF calculations for '
-                              'HF energy calculation.\n')
-        else:
-            mo_coeff = self._scf.mo_coeff
-        if self._scf.mo_occ is None:
-            mo_occ = self.mo_occ
-            logger.warn(self, 'HF MO occupancies are not defined. Are using '
-                              'those passed to post-HF calculations for '
-                              'HF energy calculation.\n')
-        else:
-            mo_occ = self._scf.mo_occ
-        dm = self._scf.make_rdm1(mo_coeff, mo_occ)
-        vhf = self._scf.get_veff(self._scf.mol, dm)
-        return self._scf.energy_tot(dm=dm, vhf=vhf)
+        if self._e_hf is None:
+            self._e_hf = self.get_e_hf()
+        return self._e_hf
 
     @property
     def e_tot(self):

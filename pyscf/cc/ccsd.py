@@ -32,7 +32,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
@@ -957,6 +957,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged_lambda = False
         self.emp2 = None
         self.e_corr = None
+        self._e_hf = None
         self.t1 = None
         self.t2 = None
         self.l1 = None
@@ -978,24 +979,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_hf(self):
-        # Get HF energy, which is needed for total CCSD energy.
-        if self._scf.mo_coeff is None:
-            mo_coeff = self.mo_coeff
-            logger.warn(self, 'HF MO coefficients are not defined. Using '
-                              'those passed to post-HF calculations for '
-                              'HF energy calculation.\n')
-        else:
-            mo_coeff = self._scf.mo_coeff
-        if self._scf.mo_occ is None:
-            mo_occ = self.mo_occ
-            logger.warn(self, 'HF MO occupancies are not defined. Using '
-                              'those passed to post-HF calculations for '
-                              'HF energy calculation.\n')
-        else:
-            mo_occ = self._scf.mo_occ
-        dm = self._scf.make_rdm1(mo_coeff, mo_occ)
-        vhf = self._scf.get_veff(self._scf.mol, dm)
-        return self._scf.energy_tot(dm=dm, vhf=vhf)
+        # Get HF energy, which is needed for total MP2 energy.
+        if self._e_hf is None:
+            self._e_hf = self.get_e_hf()
+        return self._e_hf
 
     @property
     def e_tot(self):
@@ -1019,11 +1006,13 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
+        self._e_hf = None
         return self
 
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_e_hf = get_e_hf
 
     def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import cc
