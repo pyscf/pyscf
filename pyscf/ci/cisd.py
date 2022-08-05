@@ -885,6 +885,7 @@ class CISD(lib.StreamObject):
         self.converged = False
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
+        self._e_hf = None
         self.e_corr = None
         self.emp2 = None
         self.ci = None
@@ -914,8 +915,15 @@ class CISD(lib.StreamObject):
         return self
 
     @property
+    def e_hf(self):
+        # Get HF energy, which is needed for total MP2 energy.
+        if self._e_hf is None:
+            self._e_hf = self.get_e_hf()
+        return self._e_hf
+
+    @property
     def e_tot(self):
-        return numpy.asarray(self.e_corr) + self._scf.e_tot
+        return numpy.asarray(self.e_corr) + self.e_hf
 
     @property
     def nstates(self):
@@ -950,11 +958,13 @@ class CISD(lib.StreamObject):
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
+        self._e_hf = None
         return self
 
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
     get_frozen_mask = ccsd.get_frozen_mask
+    get_e_hf = ccsd.get_e_hf
 
     def kernel(self, ci0=None, eris=None):
         return self.cisd(ci0, eris)
