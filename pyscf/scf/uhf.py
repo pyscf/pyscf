@@ -834,9 +834,7 @@ class UHF(hf.SCF):
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''
         if mol is None: mol = self.mol
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
+        breaksym = getattr(self, "init_guess_breaksym", breaksym)
         # For spin polarized system, no need to manually break spin symmetry
         if mol.spin != 0:
             breaksym = False
@@ -844,16 +842,12 @@ class UHF(hf.SCF):
 
     def init_guess_by_atom(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
+        breaksym = getattr(self, "init_guess_breaksym", breaksym)
         return init_guess_by_atom(mol, breaksym)
 
     def init_guess_by_huckel(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
+        breaksym = getattr(self, "init_guess_breaksym", breaksym)
         logger.info(self, 'Initial guess from on-the-fly Huckel, doi:10.1021/acs.jctc.8b01089.')
         mo_energy, mo_coeff = hf._init_guess_huckel_orbitals(mol)
         mo_energy = (mo_energy, mo_energy)
@@ -866,9 +860,7 @@ class UHF(hf.SCF):
 
     def init_guess_by_1e(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
-        user_set_breaksym = getattr(self, "init_guess_breaksym", None)
-        if user_set_breaksym is not None:
-            breaksym = user_set_breaksym
+        breaksym = getattr(self, "init_guess_breaksym", breaksym)
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
         s1e = self.get_ovlp(mol)
@@ -877,7 +869,8 @@ class UHF(hf.SCF):
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
-        if breaksym:
+        natm = getattr(mol, 'natm', 0)  # handle custom Hamiltonian
+        if natm > 0 and breaksym:
             dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
         return numpy.array((dma,dmb))
 
