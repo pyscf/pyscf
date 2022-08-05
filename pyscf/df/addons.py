@@ -56,6 +56,8 @@ DEFAULT_AUXBASIS = {
     'def2qzvpd'   : ('def2-qzvp-jkfit'        , None                 ),
     'def2qzvpp'   : ('def2-qzvpp-jkfit'       , 'def2-qzvpp-ri'      ),
     'def2qzvppd'  : ('def2-qzvpp-jkfit'       , 'def2-qzvppd-ri'     ),
+    'def2mtzvp'   : ('def2-mtzvp-jfit'        , None                 ),
+    'def2mtzvpp'  : ('def2-mtzvpp-jfit'       , None                 ),
     'sto3g'       : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '321g'        : ('def2-svp-jkfit'         , 'def2-svp-ri'        ),
     '631g'        : ('cc-pvdz-jkfit'          , 'cc-pvdz-ri'         ),

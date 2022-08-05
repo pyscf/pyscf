@@ -379,6 +379,7 @@ else:
         'GGA_X_WPBEH'                  : 524, # J. Heyd, G. E. Scuseria, and M. Ernzerhof, J. Chem. Phys. 118, 8207 (2003)
         'GGA_X_XPBE'                   : 123, # X. Xu and W. A. Goddard, J. Chem. Phys. 121, 4068 (2004)
         'GGA_XC_B97_D'                 : 170, # S. Grimme, J. Comput. Chem. 27, 1787 (2006)
+        'GGA_XC_B97_3C'                : 327, # J. G. Brandenburg, J. Chem. Phys. 148, 064104 (2018)
         'GGA_XC_B97_GGA1'              : 96 , # A. J. Cohen and N. C. Handy, Chem. Phys. Lett. 316, 160 (2000)
         'GGA_XC_BEEFVDW'               : 286, # J. Wellendorff, K. T. Lundgaard, A. Mogelhoj, V. Petzold, D. D. Landis, J. K. Norskov, T. Bligaard, and K. W. Jacobsen, Phys. Rev. B 85, 235149 (2012)
         'GGA_XC_EDF1'                  : 165, # R. D. Adamson, P. M. W. Gill, and J. A. Pople, Chem. Phys. Lett. 284, 6 (1998)
@@ -1305,6 +1306,7 @@ _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',
                    'B97-3'    : 'B97_3',
                    'B97-K'    : 'B97_K',
                    'B97-D'    : 'B97_D',
+                   'B97-3C'    : 'B97_3C',
                    'HCTH-93'  : 'HCTH_93',
                    'HCTH-120' : 'HCTH_120',
                    'HCTH-147' : 'HCTH_147',
