@@ -1,21 +1,21 @@
-#  
+#
 # Elements Supported
 # H  He Li Be Na Mg
-# K  Ca Rb Sr Cs Ba Fr Ra 
+# K  Ca Rb Sr Cs Ba Fr Ra
 # B  C  N  O  F  Ne Al Si P  S  Cl Ar
-# Ga Ge As Se Br Kr In Sn Sb Te I  Xe Tl Pb Bi Po At Rn 
+# Ga Ge As Se Br Kr In Sn Sb Te I  Xe Tl Pb Bi Po At Rn
 # Nh Fl Mc Lv Ts Og
 # Sc Ti V  Cr Mn Fe Co Ni Cu Zn
-# Y  Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W  Re Os Ir Pt Au Hg 
+# Y  Zr Nb Mo Tc Ru Rh Pd Ag Cd Hf Ta W  Re Os Ir Pt Au Hg
 # Rf Db Sg Bh Hs Mt Ds Rg Cn
-# La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu 
-# Ac Th Pa U  Np Pu Am Cm Bk Cf Es Fm Md No Lr 
-#  
+# La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu
+# Ac Th Pa U  Np Pu Am Cm Bk Cf Es Fm Md No Lr
+#
 #  REFERENCE
-#  
+#
 # 1s-3s: K.G. Dyall, Theor. Chem. Acc. (2016) 135:128
-# 4s-5s: K.G. Dyall, J. Phys. Chem. A. (2009) 113:12638 
-# 6s-7s: K.G. Dyall, J. Phys. Chem. A. (2009) 113:12638; 
+# 4s-5s: K.G. Dyall, J. Phys. Chem. A. (2009) 113:12638
+# 6s-7s: K.G. Dyall, J. Phys. Chem. A. (2009) 113:12638;
 #        K.G. Dyall, Theor. Chem. Acc. (2012) 131:1217.
 # 2p-3p: K.G. Dyall, Theor. Chem. Acc. (2016) 135:128
 #    4p: K.G. Dyall, Theor. Chem. Acc. (1998) 99:366;
@@ -28,7 +28,7 @@
 #    3d: K.G. Dyall and A.S.P. Gomes, unpublished.
 #    4d: K.G. Dyall, Theor. Chem. Acc. (2007) 117:483.
 #    5d: K.G. Dyall, Theor. Chem. Acc. (2004) 112:403;
-#        revision K.G. Dyall and A.S.P. Gomes, Theor. Chem. Acc. (2009) 125:97 
+#        revision K.G. Dyall and A.S.P. Gomes, Theor. Chem. Acc. (2009) 125:97
 #    6d: K.G. Dyall, Theor. Chem. Acc. (2011) 129:603;
 #        K.G. Dyall, Theor. Chem. Acc. (2012) 131:1217.
 #    4f: A.S.P. Gomes, K.G. Dyall and L. Visscher, Theor. Chem. Acc. (2010)
@@ -36,8 +36,8 @@
 #    5f: K.G. Dyall, Theor. Chem. Acc. (2007) 117:491;
 #        K.G. Dyall, Theor. Chem. Acc. (2012) 131:1217.
 # Available from the Dirac web site, http://dirac.chem.sdu.dk.
-#    
-#  
+#
+#
 #
 
 H  = [[0, 0, [8.29687389e+01, 1.0]],
