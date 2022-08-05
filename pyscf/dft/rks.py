@@ -86,7 +86,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
-
+    
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
 
@@ -284,6 +284,20 @@ def _dft_common_init_(mf, xc='LDA,VWN'):
     mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
                                'small_rho_cutoff'])
 
+def dft3c(mf, method='b97-3c', df=True, **kwargs):
+    #from pyscf.dftd3 import dftd3
+    if method=='b97-3c':
+        mf.mol.set(basis='def2-mTZVP').build()
+        mf.xc = 'b97-3c'
+    elif method=='r2scan-3c':
+        mf.mol.set(basis='def2-mTZVPP').build()
+        mf.xc = 'r2scan'
+    if df:
+        mf = mf.density_fit()
+    #mf = dftd3(mf)
+    #mf = gcp(mf)
+    return mf
+
 class KohnShamDFT(object):
     '''
     Attributes for Kohn-Sham DFT:
@@ -474,6 +488,9 @@ class KohnShamDFT(object):
         self.grids.reset(mol)
         self.nlcgrids.reset(mol)
         return self
+
+    def dft3c(self, method='b97-3c', **kwargs):
+        return dft3c(self, method=method, **kwargs)
 
     def initialize_grids(self, mol=None, dm=None):
         '''Initialize self.grids the first time call get_veff'''
