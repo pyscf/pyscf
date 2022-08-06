@@ -877,8 +877,8 @@ class UHF(hf.SCF):
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
-        natm = getattr(mol, 'natm', 0)  # handle custom Hamiltonian 
-        if natm > 0 and breaksym: 
+        natm = getattr(mol, 'natm', 0)  # handle custom Hamiltonian
+        if natm > 0 and breaksym:
             dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
         return numpy.array((dma,dmb))
 
