@@ -23,6 +23,8 @@ from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
 BLKSIZE = 56  # must be equal to lib/gto/grid_ao_drv.h
+NBINS = 80
+CUTOFF = 1e-15
 
 libcgto = lib.load_library('libcgto')
 
@@ -117,19 +119,21 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
         ao = numpy.ndarray((comp,nao,ngrids), buffer=out).transpose(0,2,1)
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
-                             dtype=numpy.uint8)
+        if cutoff is None:
+            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
+                                 dtype=numpy.uint8)
+        else:
+            non0tab = make_screen_index(mol, coords, shls_slice, cutoff)
 
-    with mol.with_integral_screen(cutoff):
-        drv = getattr(libcgto, eval_name)
-        drv(ctypes.c_int(ngrids),
-            (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-            ao.ctypes.data_as(ctypes.c_void_p),
-            coords.ctypes.data_as(ctypes.c_void_p),
-            non0tab.ctypes.data_as(ctypes.c_void_p),
-            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
+    drv = getattr(libcgto, eval_name)
+    drv(ctypes.c_int(ngrids),
+        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+        ao.ctypes.data_as(ctypes.c_void_p),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        non0tab.ctypes.data_as(ctypes.c_void_p),
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        env.ctypes.data_as(ctypes.c_void_p))
 
     if comp == 1:
         if 'spinor' in eval_name:
@@ -137,6 +141,52 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
         else:
             ao = ao[0]
     return ao
+
+def make_screen_index(mol, coords, shls_slice=None, cutoff=CUTOFF):
+    '''Screen index indicates how important a shell is on grid. The shell is
+    ignorable if its screen index is 0. Screen index ~= nbins + log(ao)
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        coords : 2D array, shape (N,3)
+            The coordinates of grids.
+
+    Kwargs:
+        relativity : bool
+            No effects.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        2D array of shape (N,nbas), where N is the number of grids, nbas is the
+        number of shells.
+    '''
+    assert NBINS < 120
+
+    coords = numpy.asarray(coords, order='F')
+    ngrids = len(coords)
+    if shls_slice is None:
+        shls_slice = (0, mol.nbas)
+    nbas = shls_slice[1] - shls_slice[0]
+
+    s_index = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
+                          dtype=numpy.uint8)
+    libcgto.GTO_screen_index(
+        s_index.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(NBINS), ctypes.c_double(cutoff),
+        coords.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ngrids),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    return s_index
 
 def _get_intor_and_comp(mol, eval_name, comp=None):
     if not ('_sph' in eval_name or '_cart' in eval_name or

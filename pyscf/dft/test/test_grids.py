@@ -123,11 +123,12 @@ class KnownValues(unittest.TestCase):
     def test_make_mask(self):
         grid = gen_grid.Grids(h2o)
         grid.atom_grid = {"H": (10, 110), "O": (10, 110),}
+        grid.cutoff = 1e-15
         grid.build()
         coords = grid.coords*10.
         non0 = gen_grid.make_mask(h2o, coords)
-        self.assertEqual(non0.sum(), 107)
-        self.assertAlmostEqual(lib.fp(non0), 1.1116137420399061, 9)
+        self.assertEqual(non0.sum(), 6325)
+        self.assertAlmostEqual(lib.fp(non0), -76.69622526441744, 9)
 
     def test_overwriting_grids_attribute(self):
         g = gen_grid.Grids(h2o).run()

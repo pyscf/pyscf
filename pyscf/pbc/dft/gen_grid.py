@@ -24,7 +24,7 @@ from pyscf import dft
 from pyscf.pbc.gto.cell import get_uniform_grids, gen_uniform_grids
 from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
-                                BLKSIZE)
+                                BLKSIZE, NBINS, CUTOFF)
 
 libpbc = lib.load_library('libpbc')
 
@@ -65,6 +65,8 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
 
 class UniformGrids(lib.StreamObject):
     '''Uniform Grid class.'''
+
+    cutoff = CUTOFF
 
     def __init__(self, cell):
         self.cell = cell

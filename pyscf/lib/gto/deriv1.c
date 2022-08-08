@@ -28,26 +28,14 @@
 double CINTcommon_fac_sp(int l);
 
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids,
-                     double fac, double expcutoff)
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
 {
         size_t i, j, k;
-        double arr, maxc, eprim;
-        double logcoeff[nprim];
+        double arr, eprim;
         double rr[ngrids];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
-        int not0 = 0;
-
-        // the maximum value of the coefficients for each pGTO
-        for (j = 0; j < nprim; j++) {
-                maxc = 0;
-                for (i = 0; i < nctr; i++) {
-                        maxc = MAX(maxc, fabs(coeff[i*nprim+j]));
-                }
-                logcoeff[j] = log(maxc);
-        }
 
         for (i = 0; i < ngrids; i++) {
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
@@ -59,16 +47,12 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < expcutoff) {
-                        not0 = 1;
-                        eprim = exp(-arr) * fac;
-                        for (k = 0; k < nctr; k++) {
-                                ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
-                        }
+                eprim = exp(-arr) * fac;
+                for (k = 0; k < nctr; k++) {
+                        ectr[k*BLKSIZE+i] += eprim * coeff[k*nprim+j];
                 }
         } }
-
-        return not0;
+        return 1;
 }
 
 /*
@@ -210,28 +194,16 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 }
 
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids,
-                     double fac, double expcutoff)
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
 {
         size_t i, j, k;
-        double arr, maxc, eprim;
-        double logcoeff[nprim];
+        double arr, eprim;
         double rr[ngrids];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
         double *ectr_2a = ectr + NPRIMAX*BLKSIZE;
         double coeff2a[nprim*nctr];
-        int not0 = 0;
-
-        // the maximum value of the coefficients for each pGTO
-        for (j = 0; j < nprim; j++) {
-                maxc = 0;
-                for (i = 0; i < nctr; i++) {
-                        maxc = MAX(maxc, fabs(coeff[i*nprim+j]));
-                }
-                logcoeff[j] = log(maxc);
-        }
 
         for (i = 0; i < ngrids; i++) {
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
@@ -250,17 +222,13 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < expcutoff) {
-                        not0 = 1;
-                        eprim = exp(-arr) * fac;
-                        for (k = 0; k < nctr; k++) {
-                                ectr   [k*BLKSIZE+i] += eprim * coeff  [k*nprim+j];
-                                ectr_2a[k*BLKSIZE+i] += eprim * coeff2a[k*nprim+j];
-                        }
+                eprim = exp(-arr) * fac;
+                for (k = 0; k < nctr; k++) {
+                        ectr   [k*BLKSIZE+i] += eprim * coeff  [k*nprim+j];
+                        ectr_2a[k*BLKSIZE+i] += eprim * coeff2a[k*nprim+j];
                 }
         } }
-
-        return not0;
+        return 1;
 }
 
 void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,

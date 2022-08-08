@@ -23,73 +23,6 @@
 #include "gto/grid_ao_drv.h"
 #include "np_helper/np_helper.h"
 
-void VXC_screen_index(uint8_t *screen_index, int nbins, double cutoff,
-                      double *coords, int ngrids,
-                      int *atm, int natm, int *bas, int nbas, double *env)
-{
-        double scale = -nbins / log(MIN(cutoff, .1));
-#pragma omp parallel
-{
-        const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        int i, j;
-        int np, nc, atm_id, ng0, ng1, dg;
-        size_t bas_id, ib;
-        double min_exp, log_coeff, maxc, arr, arr_min, si;
-        double dx, dy, dz, atom_x, atom_y, atom_z;
-        double *p_exp, *pcoeff, *ratm;
-        double rr[BLKSIZE];
-        double *coordx = coords;
-        double *coordy = coords + ngrids;
-        double *coordz = coords + ngrids * 2;
-
-#pragma omp for nowait schedule(static)
-        for (bas_id = 0; bas_id < nbas; bas_id++) {
-                np = bas[NPRIM_OF+bas_id*BAS_SLOTS];
-                nc = bas[NCTR_OF +bas_id*BAS_SLOTS];
-                p_exp = env + bas[PTR_EXP+bas_id*BAS_SLOTS];
-                pcoeff = env + bas[PTR_COEFF+bas_id*BAS_SLOTS];
-                atm_id = bas[ATOM_OF+bas_id*BAS_SLOTS];
-                ratm = env + atm[atm_id*ATM_SLOTS+PTR_COORD];
-                atom_x = ratm[0];
-                atom_y = ratm[1];
-                atom_z = ratm[2];
-
-                maxc = 0;
-                min_exp = 1e9;
-                for (j = 0; j < np; j++) {
-                        min_exp = MIN(min_exp, p_exp[j]);
-                        for (i = 0; i < nc; i++) {
-                                maxc = MAX(maxc, fabs(pcoeff[i*np+j]));
-                        }
-                }
-                log_coeff = log(maxc);
-
-                for (ib = 0; ib < nblk; ib++) {
-                        ng0 = ib * BLKSIZE;
-                        ng1 = MIN(ngrids, (ib+1)*BLKSIZE);
-                        dg = ng1 - ng0;
-                        for (i = 0; i < dg; i++) {
-                                dx = coordx[ng0+i] - atom_x;
-                                dy = coordy[ng0+i] - atom_y;
-                                dz = coordz[ng0+i] - atom_z;
-                                rr[i] = dx*dx + dy*dy + dz*dz;
-                        }
-                        arr_min = 1e9;
-                        for (i = 0; i < dg; i++) {
-                                arr = min_exp * rr[i] - log_coeff;
-                                arr_min = MIN(arr_min, arr);
-                        }
-                        si = nbins - arr_min * scale;
-                        if (si <= 0) {
-                                screen_index[ib*nbas+bas_id] = 0;
-                        } else {
-                                screen_index[ib*nbas+bas_id] = (int8_t)(si + 1);
-                        }
-                }
-        }
-}
-}
-
 // 1k grids per block
 #define GRIDS_BLOCK     512
 
@@ -120,6 +53,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
         for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
                 ngs = MIN(Ngrids-ig0, GRIDS_BLOCK);
                 for (i = 0; i < natm; i++) {
+#pragma GCC ivdep
                 for (n = 0; n < ngs; n++) {
                         dx = coords[0*Ngrids+ig0+n] - atm_coords[i*3+0];
                         dy = coords[1*Ngrids+ig0+n] - atm_coords[i*3+1];
