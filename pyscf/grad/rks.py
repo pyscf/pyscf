@@ -120,7 +120,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[1]
                 wv = weight * vxc
                 wv[0] *= .5
-                wv[4] *= .5
+                wv[4] *= .5  # for the factor 1/2 in tau
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
                 _tau_grad_dot_(vmat[idm], mol, ao, wv[4], mask, ao_loc, True)
 
@@ -248,7 +248,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             exc, vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[:2]
             wv = weight * vxc
             wv[0] *= .5
-            wv[4] *= .5
+            wv[4] *= .5  # for the factor 1/2 in tau
 
             vtmp = numpy.zeros((3,nao,nao))
             _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
