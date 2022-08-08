@@ -24,6 +24,7 @@ from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm, _tau_dot
 from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
+from pyscf.dft.gen_grid import NBINS, CUTOFF
 from pyscf.pbc.dft.gen_grid import make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import member, is_zero
 
@@ -1055,7 +1056,8 @@ class KNumInt(numint.NumInt):
 
     def eval_rho1(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA', hermi=0,
                   with_lapl=True, cutoff=CUTOFF, grids=None, verbose=None):
-        return eval_rho(cell, ao_kpts, dm_kpts, non0tab, xctype, hermi, with_lapl, verbose)
+        return self.eval_rho(cell, ao_kpts, dm_kpts, non0tab, xctype, hermi,
+                             with_lapl, verbose)
 
     def eval_rho2(self, cell, ao_kpts, mo_coeff_kpts, mo_occ_kpts,
                   non0tab=None, xctype='LDA', with_lapl=True, verbose=None):
@@ -1168,6 +1170,28 @@ class KNumInt(numint.NumInt):
                                      non0tab=non0, cutoff=self.cutoff)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
+
+    def _gen_rho_evaluator(self, cell, dms, hermi=0, with_lapl=False, grids=None):
+        if getattr(dms, 'mo_coeff', None) is not None:
+            mo_coeff = dms.mo_coeff
+            mo_occ = dms.mo_occ
+            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
+                mo_coeff = [mo_coeff]
+                mo_occ = [mo_occ]
+            nao = cell.nao_nr()
+            ndms = len(mo_occ)
+            def make_rho(idm, ao, non0tab, xctype):
+                return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],
+                                      non0tab, xctype, with_lapl)
+        else:
+            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
+                dms = [numpy.stack(dms)]
+            nao = dms[0].shape[-1]
+            ndms = len(dms)
+            def make_rho(idm, ao_kpts, non0tab, xctype):
+                return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
+                                     hermi, with_lapl)
+        return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc

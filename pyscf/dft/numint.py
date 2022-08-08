@@ -305,7 +305,10 @@ def eval_rho1(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
                 rho[i] += _contract_rho_sparse(c1, ao[0], screen_index, ao_loc)
     else: # meta-GGA
         if with_lapl:
-            raise NotImplementedError('density laplacian not supported')
+            if MGGA_DENSITY_LAPL:
+                raise NotImplementedError('density laplacian not supported')
+            rho = numpy.empty((6,ngrids))
+            tau_idx = 5
         else:
             rho = numpy.empty((5,ngrids))
             tau_idx = 4
@@ -1472,6 +1475,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('NLC')
 
     elif xctype == 'MGGA':
+        assert not MGGA_DENSITY_LAPL
         ao_deriv = 2 if MGGA_DENSITY_LAPL else 1
         for i, ao, mask, wv in block_loop(ao_deriv):
             wv[0] *= .5  # *.5 for v+v.conj().T
@@ -2667,7 +2671,7 @@ class _NumIntMixin(lib.StreamObject):
             blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))*BLKSIZE
             blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
 
-        if non0tab is None:
+        if non0tab is None and mol is grids.mol:
             non0tab = grids.non0tab
         if non0tab is None:
             non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
@@ -2681,16 +2685,16 @@ class _NumIntMixin(lib.StreamObject):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             mask = screen_index[ip0//BLKSIZE:]
-            if mol is not grids.mol or not _sparse_enough(mask):
-                # Unset mask for dense AO tensor. It determines which eval_rho
-                # to be called in make_rho
-                mask = None
             # TODO: pass grids.cutoff to eval_ao
             ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
                               cutoff=grids.cutoff, out=buf)
+            if not _sparse_enough(mask):
+                # Unset mask for dense AO tensor. It determines which eval_rho
+                # to be called in make_rho
+                mask = None
             yield ao, mask, weight, coords
 
-    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
+    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
             #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff
@@ -2714,7 +2718,7 @@ class _NumIntMixin(lib.StreamObject):
         ndms = len(dms)
 
         def make_rho(idm, ao, sindex, xctype):
-            if sindex is not None:
+            if sindex is not None and grids is not None:
                 return self.eval_rho1(mol, ao, dms[idm], sindex, xctype, hermi,
                                       with_lapl, cutoff=self.cutoff, grids=grids)
             elif mo_coeff is not None:

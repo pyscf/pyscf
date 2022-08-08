@@ -194,12 +194,6 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         const char TRANS_T = 'T';
         const double D1 = 1;
         const int nkpts2 = nkpts * OF_CMPLX;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         int i, j, k, l, np, nc, atm_id, bas_id, deg, ao_id;
         int iL, iL0, iLcount, dimc;
@@ -270,7 +264,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, expcutoff)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
                 pao = aobuf + count * dimc;
                 (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
                          l, np, nc, nc*deg, bgrids, bgrids);
@@ -319,12 +313,6 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         const char TRANS_T = 'T';
         const double D1 = 1;
         const int nkpts2 = nkpts * OF_CMPLX;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         int i, j, k, l, np, nc, atm_id, bas_id, deg, dcart, ao_id;
         int iL, iL0, iLcount, dimc;
@@ -395,7 +383,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
 
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, expcutoff)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
                 pao = aobuf + ((size_t)count) * dimc;
                 if (l <= 1) { // s, p functions
                         (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,

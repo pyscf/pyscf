@@ -609,8 +609,7 @@ class NumInt2C(numint._NumIntMixin):
                 rhob.append(ni.eval_rho(mol, ao, dm_b, mask, xctype, hermi, with_lapl))
             rho = np.stack([np.hstack(rhoa), np.hstack(rhob)])
             assert rho.dtype == np.double
-            vxc, fxc = ni.eval_xc(xc_code, rho, spin=1, relativity=0, deriv=2,
-                                  verbose=0)[1:3]
+            vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
         return rho, vxc, fxc
 
     def get_rho(self, mol, dm, grids, max_memory=2000):
