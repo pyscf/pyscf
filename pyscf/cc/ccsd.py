@@ -46,6 +46,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     log = logger.new_logger(mycc, verbose)
     if eris is None:
         eris = mycc.ao2mo(mycc.mo_coeff)
+        mycc.e_hf = mycc.get_e_hf(mo_coeff=mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
@@ -700,7 +701,9 @@ def energy(mycc, t1=None, t2=None, eris=None):
     '''CCSD correlation energy'''
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
-    if eris is None: eris = mycc.ao2mo()
+    if eris is None:
+        eris = mycc.ao2mo()
+        mycc.e_hf = mycc.get_e_hf()
 
     nocc, nvir = t1.shape
     fock = eris.fock
@@ -956,8 +959,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.converged = False
         self.converged_lambda = False
         self.emp2 = None
+        self.e_hf = None
         self.e_corr = None
-        self._e_hf = None
         self.t1 = None
         self.t2 = None
         self.l1 = None
@@ -976,13 +979,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     @property
     def ecc(self):
         return self.e_corr
-
-    @property
-    def e_hf(self):
-        # Get HF energy, which is needed for total MP2 energy.
-        if self._e_hf is None:
-            self._e_hf = self.get_e_hf()
-        return self._e_hf
 
     @property
     def e_tot(self):
@@ -1006,7 +1002,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
-        self._e_hf = None
         return self
 
     get_nocc = get_nocc
@@ -1051,6 +1046,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
+            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         mo_e = eris.mo_energy
         nocc = self.nocc
         nvir = mo_e.size - nocc
@@ -1087,6 +1083,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf()
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
@@ -1129,7 +1127,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import ccsd_t
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         return ccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,

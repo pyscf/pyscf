@@ -885,7 +885,7 @@ class CISD(lib.StreamObject):
         self.converged = False
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
-        self._e_hf = None
+        self.e_hf = None
         self.e_corr = None
         self.emp2 = None
         self.ci = None
@@ -913,13 +913,6 @@ class CISD(lib.StreamObject):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
-
-    @property
-    def e_hf(self):
-        # Get HF energy, which is needed for total MP2 energy.
-        if self._e_hf is None:
-            self._e_hf = self.get_e_hf()
-        return self._e_hf
 
     @property
     def e_tot(self):
@@ -958,7 +951,6 @@ class CISD(lib.StreamObject):
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
-        self._e_hf = None
         return self
 
     get_nocc = ccsd.get_nocc
@@ -969,6 +961,7 @@ class CISD(lib.StreamObject):
     def kernel(self, ci0=None, eris=None):
         return self.cisd(ci0, eris)
     def cisd(self, ci0=None, eris=None):
+        self.e_hf = self.get_e_hf()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         if self.verbose >= logger.WARN:
@@ -1014,7 +1007,9 @@ class CISD(lib.StreamObject):
             MP2 energy and initial guess(es) for CISD coefficients.
 
         '''
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
+            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         nocc = self.nocc
         mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])

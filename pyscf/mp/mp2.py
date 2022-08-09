@@ -39,6 +39,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
+        mp.e_hf = mp.get_e_hf(mo_coeff=mo_coeff)
 
     if mo_energy is None:
         mo_energy = eris.mo_energy
@@ -367,23 +368,11 @@ def get_frozen_mask(mp):
         raise NotImplementedError
     return moidx
 
-def get_e_hf(mp):
+def get_e_hf(mp, mo_coeff=None):
     # Get HF energy, which is needed for total MP2 energy.
-    if mp._scf.mo_coeff is None:
+    if mo_coeff is None:
         mo_coeff = mp.mo_coeff
-        logger.warn(mp, 'HF MO coefficients are not defined. Are using '
-                        'those passed to post-HF calculations for '
-                        'HF energy calculation.\n')
-    else:
-        mo_coeff = mp._scf.mo_coeff
-    if mp._scf.mo_occ is None:
-        mo_occ = mp.mo_occ
-        logger.warn(mp, 'HF MO occupancies are not defined. Are using '
-                        'those passed to post-HF calculations for '
-                        'HF energy calculation.\n')
-    else:
-        mo_occ = mp._scf.mo_occ
-    dm = mp._scf.make_rdm1(mo_coeff, mo_occ)
+    dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
     vhf = mp._scf.get_veff(mp._scf.mol, dm)
     return mp._scf.energy_tot(dm=dm, vhf=vhf)
 
@@ -509,7 +498,7 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self._e_hf = None
+        self.e_hf = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
@@ -532,7 +521,6 @@ class MP2(lib.StreamObject):
         if mol is not None:
             self.mol = mol
         self._scf.reset(mol)
-        self._e_hf = None
         return self
 
     get_nocc = get_nocc
@@ -562,13 +550,6 @@ class MP2(lib.StreamObject):
         return self.e_corr
 
     @property
-    def e_hf(self):
-        # Get HF energy, which is needed for total MP2 energy.
-        if self._e_hf is None:
-            self._e_hf = self.get_e_hf()
-        return self._e_hf
-
-    @property
     def e_tot(self):
         return self.e_hf + self.e_corr
 
@@ -580,7 +561,10 @@ class MP2(lib.StreamObject):
         '''
         if self.verbose >= logger.WARN:
             self.check_sanity()
+
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)

@@ -714,7 +714,7 @@ class KMP2(mp2.MP2):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self._e_hf = None
+        self.e_hf = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
@@ -753,6 +753,8 @@ class KMP2(mp2.MP2):
             log.warn('mo_coeff, mo_energy are not given.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
+
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
         mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 

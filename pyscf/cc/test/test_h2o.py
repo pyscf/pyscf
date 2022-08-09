@@ -55,6 +55,7 @@ class KnownValues(unittest.TestCase):
         mcc = cc.ccsd.CC(mf)
         mcc.conv_tol = 1e-9
         mcc.conv_tol_normt = 1e-7
+        mcc.e_hf = mcc.get_e_hf()
         eris = mcc.ao2mo()
         emp2, t1, t2 = mcc.init_amps(eris)
         self.assertAlmostEqual(abs(t2).sum(), 4.9556571211255909, 6)
