@@ -225,11 +225,11 @@ def symmetrize(mol, e, c, s, log):
                 cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
             es = numpy.hstack(es)
             idx = numpy.argsort(es, kind='mergesort')
-            assert(numpy.allclose(es[idx], esub, rtol=1e-3, atol=1e-4))
+            assert (numpy.allclose(es[idx], esub, rtol=1e-3, atol=1e-4))
             c[:,degidx] = numpy.hstack(cs)[:,idx]
     return c
 
-del(THRESHOLD, OCC_CUTOFF, BASE, ORTH_METHOD, CANONICALIZE, FREEZE_IMP)
+del (THRESHOLD, OCC_CUTOFF, BASE, ORTH_METHOD, CANONICALIZE, FREEZE_IMP)
 
 if __name__ == '__main__':
     from pyscf import mcscf

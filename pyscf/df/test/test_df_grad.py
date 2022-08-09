@@ -47,6 +47,26 @@ class KnownValues(unittest.TestCase):
         g1 = scf.RHF(mol).density_fit().run().nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(gref - g1).max(), 0, 5)
 
+    def test_rks_lda_grad(self):
+        gref = mol.RKS(xc='lda,').run().nuc_grad_method().kernel()
+        g1 = mol.RKS(xc='lda,').density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
+    def test_rks_grad(self):
+        gref = mol.RKS(xc='b3lyp').run().nuc_grad_method().kernel()
+        g1 = mol.RKS(xc='b3lyp').density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
+    def test_uhf_grad(self):
+        gref = mol.UHF.run().nuc_grad_method().kernel()
+        g1 = mol.UHF.density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 5)
+
+    def test_uks_lda_grad(self):
+        gref = mol.UKS.run(xc='lda,').nuc_grad_method().kernel()
+        g1 = mol.UKS.density_fit().run(xc='lda,').nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
     def test_uks_grad(self):
         gref = mol.UKS.run(xc='b3lyp').nuc_grad_method().kernel()
         g1 = mol.UKS.density_fit().run(xc='b3lyp').nuc_grad_method().kernel()

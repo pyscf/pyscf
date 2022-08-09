@@ -203,8 +203,8 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
         l = kappa
         nd = l * 2
     else:
-        assert(l is not None)
-        assert(l <= 12)
+        assert (l is not None)
+        assert (l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
     c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex128)
@@ -251,8 +251,8 @@ def sph2spinor_kappa(kappa, l=None):
         ua = ua[:,:l*2]
         ub = ub[:,:l*2]
     else:
-        assert(l is not None)
-        assert(l <= 12)
+        assert (l is not None)
+        assert (l <= 12)
     return ua, ub
 
 def sph2spinor_l(l):
@@ -1076,7 +1076,7 @@ def dumps(mol):
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
         if k in moldic:
-            del(moldic[k])
+            del (moldic[k])
     for k in nparray_keys:
         if isinstance(moldic[k], numpy.ndarray):
             moldic[k] = moldic[k].tolist()
@@ -2151,6 +2151,9 @@ class Mole(lib.StreamObject):
         # contents of _pseudo.
         self._pseudo = {}
 
+        # Some methods modify ._env. These method are executed in the context
+        # _TemporaryMoleContext which is protected by the _ctx_lock.
+        self._ctx_lock = None
         keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
         self._keys = set(self.__dict__.keys()).union(keys)
         self.__dict__.update(kwargs)
@@ -2167,7 +2170,7 @@ class Mole(lib.StreamObject):
         ne = self.nelectron
         nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
-        assert(nalpha >= 0 and nbeta >= 0)
+        assert (nalpha >= 0 and nbeta >= 0)
         if nalpha + nbeta != ne:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
@@ -2217,8 +2220,8 @@ class Mole(lib.StreamObject):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
         from Mole object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Mole object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Mole object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -2381,7 +2384,7 @@ class Mole(lib.StreamObject):
             default_basis = self.basis['default']
             _basis = dict(((a, default_basis) for a in uniq_atoms))
             _basis.update(self.basis)
-            del(_basis['default'])
+            del (_basis['default'])
         else:
             _basis = self.basis
         self._basis = self.format_basis(_basis)
@@ -2397,7 +2400,7 @@ class Mole(lib.StreamObject):
                 _ecp = dict(((a, default_ecp)
                              for a in uniq_atoms if not is_ghost_atom(a)))
                 _ecp.update(self.ecp)
-                del(_ecp['default'])
+                del (_ecp['default'])
             else:
                 _ecp = self.ecp
             self._ecp = self.format_ecp(_ecp)
@@ -2845,8 +2848,13 @@ class Mole(lib.StreamObject):
         '''Return a temporary mol context which has the rquired integral
         screen threshold
         '''
+        if threshold is None:
+            # This calls the default cutoff settings in cint library
+            expcutoff = 0
+        else:
+            expcutoff = abs(numpy.log(threshold))
         expcutoff0 = self._env[PTR_EXPCUTOFF]
-        expcutoff = abs(numpy.log(threshold))
+
         def set_cutoff(cut):
             self._env[PTR_EXPCUTOFF] = cut
         return self._TemporaryMoleContext(set_cutoff, (expcutoff,), (expcutoff0,))
@@ -3305,7 +3313,7 @@ class Mole(lib.StreamObject):
         bas = self._bas
         env = self._env
         if 'ECP' in intor:
-            assert(self._ecp is not None)
+            assert (self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
             env[AS_ECPBAS_OFFSET] = len(self._bas)
             env[AS_NECPBAS] = len(self._ecpbas)
@@ -3390,7 +3398,7 @@ class Mole(lib.StreamObject):
     def intor_by_shell(self, intor, shells, comp=None, grids=None):
         intor = self._add_suffix(intor)
         if 'ECP' in intor:
-            assert(self._ecp is not None)
+            assert (self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[AS_ECPBAS_OFFSET] = len(self._bas)
             self._env[AS_NECPBAS] = len(self._ecpbas)
@@ -3546,18 +3554,18 @@ class Mole(lib.StreamObject):
         '''Almost every method depends on the Mole environment. Ensure the
         modification in temporary environment being thread safe
         '''
-        haslock = hasattr(self, '_lock')
-        if not haslock:
-            self._lock = threading.RLock()
+        haslock = self._ctx_lock
+        if haslock is None:
+            self._ctx_lock = threading.RLock()
 
-        with self._lock:
+        with self._ctx_lock:
             method(*args)
             try:
                 yield
             finally:
                 method(*args_bak)
-                if not haslock:
-                    del self._lock
+                if haslock is None:
+                    self._ctx_lock = None
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
@@ -3632,7 +3640,7 @@ def from_zmatrix(atomstr):
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1
                 ang   = float(vals[3])/180*numpy.pi
-                assert(ang >= 0)
+                assert (ang >= 0)
                 v1 = coord[anga] - coord[bonda]
                 if not numpy.allclose(v1[:2], 0):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
@@ -3651,7 +3659,7 @@ def from_zmatrix(atomstr):
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1
                 ang   = float(vals[3])/180*numpy.pi
-                assert(ang >= 0 and ang <= numpy.pi)
+                assert (ang >= 0 and ang <= numpy.pi)
                 v1 = coord[anga] - coord[bonda]
                 v1 /= numpy.linalg.norm(v1)
                 if ang < 1e-7:
@@ -3792,4 +3800,4 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakemol._built = True
     return fakemol
 
-del(BASE)
+del (BASE)

@@ -1129,7 +1129,7 @@ def chemcore(mol, spinorb=False):
 import sys
 if sys.version_info >= (3,):
     unicode = str
-del(sys)
+del (sys)
 
 def _rm_digit(symb):
     if symb.isalpha():

@@ -388,7 +388,7 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
             vxc = fxc = kxc = rho = rho1 = None
 
     elif xctype == 'MGGA':
-        logger.warn(mol, 'More tests are needed for TD-MGGA')
+        logger.warn(mol, 'TD-MGGA gradients may be incorrect.')
         def mgga_sum_(vmat, ao, wv, mask):
             aow = numint._scale_ao(ao[:4], wv[:4])
             tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
@@ -453,76 +453,3 @@ Grad = Gradients
 
 from pyscf import tdscf
 tdscf.uks.TDA.Gradients = tdscf.uks.TDDFT.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import dft
-    from pyscf import tddft
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , 1.804)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.unit = 'B'
-    mol.basis = '631g'
-    mol.charge = -2
-    mol.spin = 2
-    mol.build()
-
-    mf = dft.UKS(mol).set(conv_tol=1e-14)
-    mf.xc = 'LDA,'
-    mf.grids.prune = False
-    mf.kernel()
-
-    td = tddft.TDDFT(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=3)
-    print(g1)
-# [[ 0  0  -1.72842011e-01]
-#  [ 0  0   1.72846027e-01]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
-
-    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
-    mf = dft.UKS(mol).set(conv_tol=1e-14)
-    mf.xc = '.2*HF + .8*b88, vwn'
-    #mf._numint.libxc = dft.xcfun
-    mf.grids.prune = False
-    mf.kernel()
-
-    td = tddft.TDA(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=3)
-    print(g1)
-# [[ 0  0  -1.05330714e-01]
-#  [ 0  0   1.05311313e-01]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
-
-    mf = dft.UKS(mol)
-    mf.xc = 'm06l'
-    mf.conv_tol = 1e-14
-    mf.kernel()
-    td = tddft.TDA(mf)
-    td.nstates = 3
-    e, z = td.kernel()
-    tdg = td.Gradients()
-    g1 = tdg.kernel(state=3)
-    print(g1)
-# [[ 0  0  -0.82199321]
-#  [ 0  0   0.82199321]]
-    td_solver = td.as_scanner()
-    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())

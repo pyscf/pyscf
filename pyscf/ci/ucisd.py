@@ -414,7 +414,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     if nfroza == nfrozb == 0:
         return fcivec
 
-    assert(norb < 63)
+    assert (norb < 63)
 
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     strsb = cistring.gen_strings4orblist(range(norb), nelecb)

@@ -48,7 +48,10 @@ class KnownValues(unittest.TestCase):
         myci.conv_tol = 1e-10
         myci.kernel()
         g1 = myci.nuc_grad_method().kernel(myci.ci, atmlst=[0,1,2])
-        self.assertAlmostEqual(lib.finger(g1), -0.032562347119070523, 6)
+# O     0.0000000000    -0.0000000000     0.0065498854
+# H    -0.0000000000     0.0208760610    -0.0032749427
+# H    -0.0000000000    -0.0208760610    -0.0032749427
+        self.assertAlmostEqual(lib.fp(g1), -0.032562347119070523, 6)
 
     def test_cisd_grad_finite_diff(self):
         mol = gto.M(
@@ -86,7 +89,10 @@ class KnownValues(unittest.TestCase):
         myci.max_memory = 1
         myci.kernel()
         g1 = cisd_grad.Gradients(myci).kernel(myci.ci)
-        self.assertAlmostEqual(lib.finger(g1), 0.10224149952700579, 6)
+# O    -0.0000000000     0.0000000000     0.0106763547
+# H     0.0000000000    -0.0763194988    -0.0053381773
+# H     0.0000000000     0.0763194988    -0.0053381773
+        self.assertAlmostEqual(lib.fp(g1), 0.10224149952700579, 6)
 
     def test_as_scanner(self):
         myci = ci.cisd.CISD(mf)
@@ -95,12 +101,12 @@ class KnownValues(unittest.TestCase):
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.032220245016717, 9)
-        self.assertAlmostEqual(lib.finger(g1), 0.10224149952700579, 6)
+        self.assertAlmostEqual(lib.fp(g1), 0.10224149952700579, 6)
 
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().CISD().run().Gradients().kernel()
-        self.assertAlmostEqual(lib.finger(g), 0.11924457198332741, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.11924457198332741, 7)
 
 
 if __name__ == "__main__":

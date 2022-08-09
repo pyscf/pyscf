@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         t2 = mycc.spatial2spin((t2aa, t2ab, t2bb))
         eris = mycc.ao2mo()
         e3a = gccsd_t.kernel(mycc, eris, t1, t2)
-        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
+        self.assertAlmostEqual(e3a, 9877.2780859693339, 5)
 
     def test_gccsd_t_complex(self):
         nocc, nvir = 4, 6

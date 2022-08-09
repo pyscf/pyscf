@@ -311,7 +311,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-        assert(neleca == nelecb)
+        assert (neleca == nelecb)
 
     frozen_mask = numpy.zeros(norb, dtype=bool)
     if frozen is None:
@@ -348,7 +348,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     if nfroz == 0:
         return fcivec
 
-    assert(norb < 63)
+    assert (norb < 63)
 
     strs = cistring.gen_strings4orblist(range(norb), neleca)
     na = len(strs)

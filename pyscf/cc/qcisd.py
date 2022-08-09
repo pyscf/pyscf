@@ -87,7 +87,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
 
 
 def update_amps(mycc, t1, t2, eris):
-    assert(isinstance(eris, _ChemistsERIs))
+    assert (isinstance(eris, _ChemistsERIs))
 
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -400,8 +400,8 @@ class QCISD(CCSD):
     def kernel(self, t1=None, t2=None, eris=None):
         return self.qcisd(t1, t2, eris)
     def qcisd(self, t1=None, t2=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

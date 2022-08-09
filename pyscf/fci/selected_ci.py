@@ -585,7 +585,7 @@ def trans_rdm1s(cibra_strs, ciket_strs, norb, nelec, link_index=None):
     '''
     cibra, nelec, ci_strs = _unpack(cibra_strs, nelec)
     ciket, nelec1, ci_strs1 = _unpack(ciket_strs, nelec)
-    assert(all(ci_strs[0] == ci_strs1[0]) and
+    assert (all(ci_strs[0] == ci_strs1[0]) and
            all(ci_strs[1] == ci_strs1[1]))
     if link_index is None:
         cd_indexa = cre_des_linkstr(ci_strs[0], norb, nelec[0])
@@ -753,7 +753,7 @@ class SelectedCI(direct_spin1.FCISolver):
         if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
-            assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
+            assert (civec_strs.size == len(self._strs[0])*len(self._strs[1]))
             civec_strs = _as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index)
 

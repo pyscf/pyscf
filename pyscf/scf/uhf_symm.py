@@ -195,7 +195,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         return uhf.canonicalize(mf, mo_coeff, mo_occ, fock)
 
     mo_occ = numpy.asarray(mo_occ)
-    assert(mo_occ.ndim == 2)
+    assert (mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_hcore() + mf.get_veff(mf.mol, dm)
@@ -403,8 +403,8 @@ class SymAdaptedUHF(uhf.UHF):
         nelec = self.nelec
         neleca_float = nelec[0] - neleca_fix
         nelecb_float = nelec[1] - nelecb_fix
-        assert(neleca_float >= 0)
-        assert(nelecb_float >= 0)
+        assert (neleca_float >= 0)
+        assert (nelecb_float >= 0)
         if len(idx_ea_left) > 0:
             idx_ea_left = numpy.hstack(idx_ea_left)
             ea_left = mo_energy[0][idx_ea_left]
@@ -521,7 +521,7 @@ class HF1e(UHF):
     scf = uhf._hf1e_scf
 
 
-del(WITH_META_LOWDIN)
+del (WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

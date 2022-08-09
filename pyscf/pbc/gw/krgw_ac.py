@@ -321,7 +321,7 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
 
                     if gw.fc:
                         # apply head correction
-                        assert(kn == km)
+                        assert (kn == km)
                         sigma[k][:norbs_occ] += -Del_00 * g0_occ[kn][orbs][:norbs_occ] /np.pi
                         sigma[k][norbs_occ:] += -Del_00 * g0_vir[kn][orbs][norbs_occ:] /np.pi
 
@@ -691,16 +691,16 @@ if __name__ == '__main__':
     nocc = gw.nocc
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][nocc-1]-0.62045797))<1e-5)
-    assert((abs(gw.mo_energy[0][nocc]-0.96574324))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc-1]-0.52639137))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc]-1.07513258))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc-1]-0.62045797))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc]-0.96574324))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc-1]-0.52639137))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc]-1.07513258))<1e-5)
 
     # with finite size corrections
     gw.fc = True
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocc+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][nocc-1]-0.54277092))<1e-5)
-    assert((abs(gw.mo_energy[0][nocc]-0.80148537))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc-1]-0.45073793))<1e-5)
-    assert((abs(gw.mo_energy[1][nocc]-0.92910108))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc-1]-0.54277092))<1e-5)
+    assert ((abs(gw.mo_energy[0][nocc]-0.80148537))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc-1]-0.45073793))<1e-5)
+    assert ((abs(gw.mo_energy[1][nocc]-0.92910108))<1e-5)

@@ -102,7 +102,7 @@ class KnownValues(unittest.TestCase):
         mcol_lda = dft.UKS(mol).set(xc='lda,', collinear='mcol')
         mcol_lda._numint.spin_samples = 6
         mcol_lda.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mcol_lda.TDDFT(), -0.6154532929747091, 0.49991930461632084)
+        self._check_against_ab_ks(mcol_lda.TDDFT(), -0.6154532929747091, 0.49991930461632084, places=5)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_gga_ab_ks(self):

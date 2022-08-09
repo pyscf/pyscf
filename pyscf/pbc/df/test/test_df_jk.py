@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         j_ref = 48.283789539266174  # rsjk result
         k_ref = 32.30441176447805   # rsjk result
-        self.assertAlmostEqual(ej1, j_ref, 4)
+        self.assertAlmostEqual(ej1, j_ref, 2)
         self.assertAlmostEqual(ek1, k_ref, 2)
         self.assertAlmostEqual(ej1, 48.283745538383684, 8)
         self.assertAlmostEqual(ek1, 32.30260871417842 , 8)

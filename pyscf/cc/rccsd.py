@@ -42,7 +42,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
-    assert(isinstance(eris, ccsd._ChemistsERIs))
+    assert (isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]

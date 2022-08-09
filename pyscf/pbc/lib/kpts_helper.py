@@ -148,11 +148,11 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
         True
     '''
     # Checking to make sure bounds of idx1 and idx2 are O.K.
-    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
+    assert (idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
+    assert (idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
            'This function does not support the swapping of the last k-point index '
            '(This k-point is implicitly not indexed due to conservation of momentum '
            'between k-points.).')

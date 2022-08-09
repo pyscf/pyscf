@@ -166,8 +166,8 @@ class QCISD(rccsd.RCCSD):
     def kernel(self, t1=None, t2=None, eris=None):
         return self.qcisd(t1, t2, eris)
     def qcisd(self, t1=None, t2=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

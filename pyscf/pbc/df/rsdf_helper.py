@@ -691,7 +691,7 @@ def _get_3c2e_Rcuts(bas_lst_or_mol, auxbas_lst_or_auxmol, dijs_lst, omega,
     return Rcuts
 def _get_atom_Rcuts_3c(Rcuts, dijs_lst, bas_exps, bas_loc, auxbas_loc):
     natm = len(bas_loc) - 1
-    assert(len(auxbas_loc) == natm+1)
+    assert (len(auxbas_loc) == natm+1)
     bas_loc_inv = np.concatenate([[i]*(bas_loc[i+1]-bas_loc[i])
                                   for i in range(natm)])
     nbas = bas_loc[-1]
@@ -869,7 +869,7 @@ def intor_j2c(cell, omega, precision=None, kpts=None, hermi=1, shls_slice=None,
     intor = "int2c2e"
     intor, comp = mol_gto.moleintor._get_intor_and_comp(
                                             cell._add_suffix(intor), None)
-    assert(comp == 1)
+    assert (comp == 1)
 
 # prescreening data
     if precision is None: precision = cell.precision
@@ -1037,9 +1037,9 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = np.zeros((1,2,3))
@@ -1070,7 +1070,7 @@ def _aux_e2_nospltbas(cell, auxcell_or_auxbasis, omega, erifile,
     aosym_ks2 &= aosym[:2] == 's2'
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
@@ -1186,7 +1186,7 @@ def wrap_int3c_nospltbas(cell, auxcell, omega, shlpr_mask, prescreening_data,
         bvk_nimgs = Ls_.shape[0]
 
     if gamma_point(kptij_lst):
-        assert(aosym[:2] == "s2")
+        assert (aosym[:2] == "s2")
         kk_type = 'g'
         dtype = np.double
         nkpts = nkptij = 1
