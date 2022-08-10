@@ -54,7 +54,10 @@ def get_pp_loc_part2(mol):
         if fakecell.nbas > 0:
             v = _aux_e2(mol, fakecell, intors[cn], aosym='s2', comp=1)
             buf += numpy.einsum('...i->...', v)
-    vpp_loc = lib.unpack_tril(buf)
+    if numpy.isscalar(buf):
+        vpp_loc =  buf
+    else:
+        vpp_loc = lib.unpack_tril(buf)
     return vpp_loc
 
 def get_pp_loc(mol):
