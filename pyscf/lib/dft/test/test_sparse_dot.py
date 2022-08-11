@@ -27,6 +27,7 @@ class KnownValues(unittest.TestCase):
         mask[:80 ,40:] = 0
         nbins = 20
         s_index = _make_screen_index(ao, ao_loc, mask, nbins)
+        pair_mask = np.ones((nbas, nbas), dtype=np.uint8)
         ao = _fill_zero_blocks(ao, ao_loc, mask)
         ref = ao.dot(dm)
         ref = _fill_zero_blocks(ref, ao_loc, mask)
@@ -37,6 +38,7 @@ class KnownValues(unittest.TestCase):
             dm.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nao), ctypes.c_int(ngrids), ctypes.c_int(nbas),
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
         vm = _fill_zero_blocks(vm, ao_loc, mask)
         self.assertAlmostEqual(abs(ref*ao - vm*ao).max(), 0, 24)
@@ -63,6 +65,7 @@ class KnownValues(unittest.TestCase):
         ao = _fill_zero_blocks(ao, ao_loc, mask)
         ref = ao.dot(dm)
         ref = _fill_zero_blocks(ref, ao_loc, mask)
+        pair_mask = np.ones((nbas, nbas), dtype=np.uint8)
 
         libdft.VXCdot_ao_dm_sparse(
             vm.ctypes.data_as(ctypes.c_void_p),
@@ -70,6 +73,7 @@ class KnownValues(unittest.TestCase):
             dm.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nao), ctypes.c_int(ngrids), ctypes.c_int(nbas),
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
         vm = _fill_zero_blocks(vm, ao_loc, mask)
         self.assertAlmostEqual(abs(ref*ao - vm*ao).max(), 0, 24)
@@ -143,6 +147,7 @@ class KnownValues(unittest.TestCase):
         mask[:80 ,40:] = 0
         nbins = 20
         s_index = _make_screen_index(bra, ao_loc, mask, nbins)
+        pair_mask = np.ones((nbas, nbas), dtype=np.uint8)
         bra = _fill_zero_blocks(bra, ao_loc, mask)
         ket = bra
         ref = bra.T.dot(ket)
@@ -156,6 +161,7 @@ class KnownValues(unittest.TestCase):
             ctypes.c_int(nao), ctypes.c_int(ngrids),
             ctypes.c_int(nbas), ctypes.c_int(0),
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
         self.assertAlmostEqual(abs(ref - out).max(), 0, 24)
 
@@ -172,6 +178,7 @@ class KnownValues(unittest.TestCase):
         mask = np.asarray(np.random.rand(nrow, nbas) < .5).astype(np.uint8)
         nbins = 20
         s_index = _make_screen_index(bra, ao_loc, mask, nbins)
+        pair_mask = np.ones((nbas, nbas), dtype=np.uint8)
         bra = _fill_zero_blocks(bra, ao_loc, mask)
         ket = bra
         ref = bra.T.dot(ket)
@@ -185,6 +192,7 @@ class KnownValues(unittest.TestCase):
             ctypes.c_int(nao), ctypes.c_int(ngrids),
             ctypes.c_int(nbas), ctypes.c_int(0),
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
         self.assertAlmostEqual(abs(ref - out).max(), 0, 15)
 
@@ -205,6 +213,7 @@ class KnownValues(unittest.TestCase):
         mask[:80 ,40:] = 0
         nbins = 20
         s_index = _make_screen_index(bra, ao_loc, mask, nbins)
+        pair_mask = np.ones((nbas, nbas), dtype=np.uint8)
         bra = _fill_zero_blocks(bra, ao_loc, mask)
         ket = bra
         ref = (bra.T*wv).dot(ket)
@@ -218,6 +227,7 @@ class KnownValues(unittest.TestCase):
             ctypes.c_int(nao), ctypes.c_int(ngrids),
             ctypes.c_int(nbas), ctypes.c_int(0),
             ctypes.c_int(nbins), s_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
             ao_loc.ctypes.data_as(ctypes.c_void_p))
         self.assertAlmostEqual(abs(ref - out).max(), 0, 24)
 

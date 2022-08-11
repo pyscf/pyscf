@@ -21,10 +21,11 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
+from pyscf import __config__
 
 BLKSIZE = 56  # must be equal to lib/gto/grid_ao_drv.h
-NBINS = 80
-CUTOFF = 1e-15
+NBINS = 100
+CUTOFF = getattr(__config__, 'eval_gto_cutoff', 1e-15)
 
 libcgto = lib.load_library('libcgto')
 

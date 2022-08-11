@@ -32,6 +32,7 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         double scale = -nbins / log(MIN(cutoff, .1));
+        nbins = MIN(127, nbins);
 #pragma omp parallel
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
@@ -87,7 +88,7 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                         if (si <= 0) {
                                 screen_index[ib*nbas+bas_id] = 0;
                         } else {
-                                screen_index[ib*nbas+bas_id] = (int8_t)(si + 1);
+                                screen_index[ib*nbas+bas_id] = (uint8_t)(si + 1);
                         }
                 }
         }

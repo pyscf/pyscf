@@ -630,8 +630,10 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
      [ 3.  6.]]
     '''
     if inplace:
+        assert isinstance(a, numpy.ndarray)
         out = a
     else:
+        a = numpy.asarray(a)
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
     if (not a.flags.c_contiguous

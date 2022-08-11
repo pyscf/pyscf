@@ -639,7 +639,6 @@ def alias(fn, alias_name=None):
         alias_name = name
 
     _locals = {}
-    co = fn.__code__
     sig = inspect.signature(fn)
     var_args = []
     for k, v in sig.parameters.items():
@@ -647,11 +646,12 @@ def alias(fn, alias_name=None):
             var_args.append(str(v))
         else:
             var_args.append(k)
-    txt = f'''def {alias_name}{sig}:
-    return self.{name}({", ".join(var_args[1:])})'''
+    txt = f'''def {alias_name}({", ".join(var_args)}):
+    return {var_args[0]}.{name}({", ".join(var_args[1:])})'''
     exec(txt, fn.__globals__, _locals)
     new_fn = _locals[alias_name]
 
+    new_fn.__defaults__ = fn.__defaults__
     new_fn.__module__ = fn.__module__
     new_fn.__doc__ = fn.__doc__
     new_fn.__annotations__ = fn.__annotations__
@@ -659,23 +659,22 @@ def alias(fn, alias_name=None):
 
 def module_method(fn, absences=None):
     '''
-    The statement "fn1 = module_method(fn, absences=['a','b'])"
+    The statement "fn1 = module_method(fn, absences=['a'])"
     in a class is equivalent to define the following method in the class:
 
     .. code-block:: python
-        def fn1(self, ..., a=None, b=None, ...):
+        def fn1(self, ..., a=None, b, ...):
             if a is None: a = self.a
-            if b is None: b = self.b
             return fn(..., a, b, ...)
 
     If absences are not specified, all position arguments will be assigned in
     terms of the corresponding attributes of self, i.e.
 
     .. code-block:: python
-        def fn1(self, a, b, ...):
+        def fn1(self, a=None, b=None):
             if a is None: a = self.a
             if b is None: b = self.b
-            return fn(a, b, ...)
+            return fn(a, b)
     '''
     _locals = {}
     name = fn.__name__
@@ -690,24 +689,28 @@ def module_method(fn, absences=None):
             if absences is None and v.default == v.empty:  # positional argument
                 body.append(f'    if {k} is None: {k} = self.{k}')
 
-    txt = [f'def {name}(self, {", ".join(var_args)}):'] + body
-    if absences is not None:
-        for k in absences:
-            assert k in var_args, f'Unknown argument {k}'
-            txt.append(f'    if {k} is None: {k} = self.{k}')
-
-    txt.append(f'    return {name}({", ".join(var_args)})')
-    exec('\n'.join(txt), fn.__globals__, _locals)
-    new_fn = _locals[name]
-
     fn_defaults = fn.__defaults__
     nargs = fn.__code__.co_argcount
     if fn_defaults is None:
-        new_fn.__defaults__ = (None,) * nargs
+        fn_defaults = [None] * nargs
     else:
-        new_fn.__defaults__ = (None,) * (nargs-len(fn_defaults)) + fn_defaults
+        fn_defaults = [None] * (nargs-len(fn_defaults)) + list(fn_defaults)
 
+    if absences is not None:
+        var_index = {key: i for i, key in enumerate(var_args)}
+        for k in absences:
+            assert k in var_index, f'Unknown argument {k}'
+            body.append(f'    if {k} is None: {k} = self.{k}')
+            fn_defaults[var_index[k]] = None
+
+    body = '\n'.join(body)
+    txt = f'''def {name}(self, {", ".join(var_args)}):
+{body}
+    return {name}({", ".join(var_args)})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[name]
     new_fn.__module__ = fn.__module__
+    new_fn.__defaults__ = tuple(fn_defaults)
     new_fn.__doc__ = fn.__doc__
     new_fn.__annotations__ = fn.__annotations__
     return new_fn

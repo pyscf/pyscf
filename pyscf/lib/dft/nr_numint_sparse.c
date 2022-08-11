@@ -21,6 +21,7 @@
 #include <assert.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
+#include "cint.h"
 #include "vhf/fblas.h"
 
 #define ALIGNMENT       8
@@ -37,12 +38,12 @@ int CVHFshls_block_partition(int *block_loc, int *shls_slice, int *ao_loc,
 
 static void _dot_ao_dm_l1(double *out, double *ao, double *dm,
                           int nao, size_t ngrids, int nbas, int ig0, int ig1,
-                          int ish0, int ish1, int jsh0, int jsh1,
-                          int nbins, uint8_t *screen_index, int *ao_loc)
+                          int ish0, int ish1, int jsh0, int jsh1, int nbins,
+                          uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
         size_t Nao = nao;
         int ig, ish, jsh, i0, i1, i, j, box_id, n;
-        uint8_t si_i, si_j;  // be careful with overflow
+        uint8_t si_i, si_j, nbins_i;  // be careful with overflow
         size_t i_addr, j_addr;
         double dm_val;
         double s8[UNROLL_SIZE];
@@ -53,6 +54,11 @@ static void _dot_ao_dm_l1(double *out, double *ao, double *dm,
                 for (jsh = jsh0; jsh < jsh1; jsh++) {
                         si_j = screen_index[box_id * nbas + jsh];
                         if (si_j != 0) {
+                                if (nbins > si_j) {
+                                        nbins_i = nbins - si_j;
+                                } else {
+                                        nbins_i = 1;
+                                }
                                 for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
                                         dm_j = dm + j;
                                         j_addr = j * ngrids + ig;
@@ -61,7 +67,8 @@ static void _dot_ao_dm_l1(double *out, double *ao, double *dm,
                                         }
                                         for (ish = ish0; ish < ish1; ish++) {
                                                 si_i = screen_index[box_id * nbas + ish];
-                                                if (si_i != 0 && si_i + si_j >= nbins) {
+                                                if (si_i >= nbins_i &&
+                                                    pair_mask[ish*nbas+jsh]) {
 i0 = ao_loc[ish];
 i1 = ao_loc[ish+1];
 switch (i1 - i0) {
@@ -142,13 +149,13 @@ default:
 }
 
 static void _dot_ao_dm_frac(double *out, double *ao, double *dm,
-                            int nao, size_t ngrids, int nbas, int ig0,
-                            int nbins, uint8_t *screen_index, int *ao_loc)
+                            int nao, size_t ngrids, int nbas, int ig0, int nbins,
+                            uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
         size_t Nao = nao;
         int ngrids_rest = ngrids - ig0;
         int ish, jsh, i0, i1, i, j, n;
-        uint8_t si_i, si_j;
+        uint8_t si_i, si_j, nbins_i;
         size_t i_addr, j_addr;
         double dm_val;
         double s8[UNROLL_SIZE];
@@ -158,6 +165,11 @@ static void _dot_ao_dm_frac(double *out, double *ao, double *dm,
         for (jsh = 0; jsh < nbas; jsh++) {
                 si_j = screen_index[box_id * nbas + jsh];
                 if (si_j != 0) {
+                        if (nbins > si_j) {
+                                nbins_i = nbins - si_j;
+                        } else {
+                                nbins_i = 1;
+                        }
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
                                 dm_j = dm + j;
                                 j_addr = j * ngrids + ig0;
@@ -166,7 +178,7 @@ static void _dot_ao_dm_frac(double *out, double *ao, double *dm,
                                 }
                                 for (ish = 0; ish < nbas; ish++) {
                                         si_i = screen_index[box_id * nbas + ish];
-                                        if (si_i != 0 && si_i + si_j >= nbins) {
+                                        if (si_i >= nbins_i && pair_mask[ish*nbas+jsh]) {
                                                 i0 = ao_loc[ish];
                                                 i1 = ao_loc[ish+1];
                                                 for (i = i0; i < i1; i++) {
@@ -212,10 +224,9 @@ next_l1_box:
 }
 
 
-/* out[j,ngrids] = sum_i ao[i,ngrids] * dm[nocc,i] */
 void VXCdot_ao_dm_sparse(double *out, double *ao, double *dm,
                          int nao, int ngrids, int nbas, int nbins,
-                         uint8_t *screen_index, int *ao_loc)
+                         uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
         size_t Ngrids = ngrids;
         int shls_slice[2] = {0, nbas};
@@ -248,7 +259,7 @@ void VXCdot_ao_dm_sparse(double *out, double *ao, double *dm,
                                                 if (mask_l1[ig_box2 * nbox_l1 + ib]) {
 _dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
               box_l1_loc[ib], box_l1_loc[ib+1], jsh0, jsh1,
-              nbins, screen_index, ao_loc);
+              nbins, screen_index, pair_mask, ao_loc);
                                                 }
                                         }
                                 }
@@ -277,7 +288,7 @@ _dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
                                                 if (mask_l1[ig_box2 * nbox_l1 + ib]) {
 _dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
               box_l1_loc[ib], box_l1_loc[ib+1], jsh0, jsh1,
-              nbins, screen_index, ao_loc);
+              nbins, screen_index, pair_mask, ao_loc);
                                                 }
                                         }
                                 }
@@ -286,8 +297,8 @@ _dot_ao_dm_l1(out, ao, dm, nao, ngrids, nbas, ig0, ig1,
 }
         }
         if (ngrids_align_down < ngrids) {
-                _dot_ao_dm_frac(out, ao, dm, nao, ngrids, nbas,
-                                ngrids_align_down, nbins, screen_index, ao_loc);
+                _dot_ao_dm_frac(out, ao, dm, nao, ngrids, nbas, ngrids_align_down,
+                                nbins, screen_index, pair_mask, ao_loc);
         }
         free(box_l1_loc);
         free(mask_l1);
@@ -297,10 +308,10 @@ static void _dot_aow_ao_l1(double *out, double *bra, double *ket, double *wv,
                            int nao, size_t ngrids, int nbas, int ig0, int ig1,
                            int ish0, int ish1, int jsh0, int jsh1, int nj,
                            int ioff, int joff, int nbins, uint8_t *screen_index,
-                           int *ao_loc)
+                           uint8_t *pair_mask, int *ao_loc)
 {
         int ish, jsh, i0, i1, j0, j1, i, j, ij, n;
-        uint8_t si_i0, si_i1, si_j0, si_j1, si_ij0, si_ij1;
+        uint8_t si_i0, si_i1, si_j0, si_j1, nbins_j0, nbins_j1;
         size_t i_addr, j_addr;
         double braw[BOXSIZE1_M];
         double s8[ALIGNMENT];
@@ -308,14 +319,24 @@ static void _dot_aow_ao_l1(double *out, double *bra, double *ket, double *wv,
         int gblk0 = ig0 / BLKSIZE;
 
         for (ish = ish0; ish < ish1; ish++) {
-                i0 = ao_loc[ish];
-                i1 = ao_loc[ish+1];
                 si_i0 = screen_index[(gblk0+0) * nbas + ish];
                 si_i1 = screen_index[(gblk0+1) * nbas + ish];
                 i_pattern = (si_i0 != 0) | ((si_i1 != 0) << 1);
                 if (!i_pattern) {
                         goto next_i;
                 }
+                if (nbins > si_i0) {
+                        nbins_j0 = nbins - si_i0;
+                } else {
+                        nbins_j0 = 1;
+                }
+                if (nbins > si_i1) {
+                        nbins_j1 = nbins - si_i1;
+                } else {
+                        nbins_j1 = 1;
+                }
+                i0 = ao_loc[ish];
+                i1 = ao_loc[ish+1];
                 for (i = i0; i < i1; i++) {
                         i_addr = i * ngrids + ig0;
                         switch (i_pattern) {
@@ -363,19 +384,19 @@ static void _dot_aow_ao_l1(double *out, double *bra, double *ket, double *wv,
                         }
 
                         for (jsh = jsh0; jsh < jsh1; jsh++) {
-                                j0 = ao_loc[jsh];
-                                j1 = ao_loc[jsh+1];
-                                ij = (i - ioff) * nj - joff;
+                                if (!pair_mask[ish*nbas+jsh]) {
+                                        goto next_j;
+                                }
                                 si_j0 = screen_index[(gblk0+0) * nbas + jsh];
                                 si_j1 = screen_index[(gblk0+1) * nbas + jsh];
-                                si_ij0 = si_i0 + si_j0;
-                                si_ij1 = si_i1 + si_j1;
-                                j_pattern = (si_j0 != 0) | ((si_j1 != 0) << 1);
-                                j_pattern &= (si_ij0 > nbins) | ((si_ij1 > nbins) << 1);
+                                j_pattern = (si_j0 >= nbins_j0) | ((si_j1 >= nbins_j1) << 1);
                                 switch (j_pattern & i_pattern) {
                                 case 0 :
                                         goto next_j;
                                 case 1 :
+                                        j0 = ao_loc[jsh];
+                                        j1 = ao_loc[jsh+1];
+                                        ij = (i - ioff) * nj - joff;
                                         for (j = j0; j < j1; j++) {
                                                 j_addr = j * ngrids + ig0;
                                                 for (n = 0; n < ALIGNMENT; n++) {
@@ -392,6 +413,9 @@ static void _dot_aow_ao_l1(double *out, double *bra, double *ket, double *wv,
                                         }
                                         break;
                                 case 2 :
+                                        j0 = ao_loc[jsh];
+                                        j1 = ao_loc[jsh+1];
+                                        ij = (i - ioff) * nj - joff;
                                         for (j = j0; j < j1; j++) {
                                                 j_addr = j * ngrids + ig0;
                                                 for (n = 0; n < ALIGNMENT; n++) {
@@ -408,6 +432,9 @@ static void _dot_aow_ao_l1(double *out, double *bra, double *ket, double *wv,
                                         }
                                         break;
                                 case 3 :
+                                        j0 = ao_loc[jsh];
+                                        j1 = ao_loc[jsh+1];
+                                        ij = (i - ioff) * nj - joff;
                                         for (j = j0; j < j1; j++) {
                                                 j_addr = j * ngrids + ig0;
                                                 for (n = 0; n < ALIGNMENT; n++) {
@@ -441,11 +468,11 @@ static void _dot_aow_ao_frac(double *out, double *bra, double *ket, double *wv,
                              int nao, size_t ngrids, int nbas, int ig0,
                              int ish0, int ish1, int jsh0, int jsh1, int nj,
                              int ioff, int joff, int nbins, uint8_t *screen_index,
-                             int *ao_loc)
+                             uint8_t *pair_mask, int *ao_loc)
 {
         int ish, jsh, i0, i1, j0, j1, i, j, ij, k, n, ig, gblk0;
         int ng1, ng1_aligned, ng1_rest;
-        uint8_t si_i, si_j;
+        uint8_t si_i, si_j, nbins_j;
         size_t i_addr, j_addr;
         double braw[BLKSIZE];
         double s8[ALIGNMENT];
@@ -455,10 +482,15 @@ static void _dot_aow_ao_frac(double *out, double *bra, double *ket, double *wv,
                 ng1 = MIN(BLKSIZE, ngrids - ig);
                 ng1_aligned = ng1 & (-(uint32_t)ALIGNMENT);
                 for (ish = ish0; ish < ish1; ish++) {
-                        i0 = ao_loc[ish];
-                        i1 = ao_loc[ish+1];
                         si_i = screen_index[gblk0 * nbas + ish];
                         if (si_i != 0) {
+                                if (nbins > si_i) {
+                                        nbins_j = nbins - si_i;
+                                } else {
+                                        nbins_j = 1;
+                                }
+                                i0 = ao_loc[ish];
+                                i1 = ao_loc[ish+1];
                                 for (i = i0; i < i1; i++) {
 i_addr = i * ngrids + ig;
 for (k = 0; k < ng1_aligned; k+=ALIGNMENT) {
@@ -467,11 +499,11 @@ for (n = 0; n < ALIGNMENT; n++) {
 } }
 
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        j0 = ao_loc[jsh];
-        j1 = ao_loc[jsh+1];
-        ij = (i - ioff) * nj - joff;
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_i != 0 && si_i + si_j > nbins) {
+        if (si_j >= nbins_j && pair_mask[ish+nbas+jsh]) {
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ig;
                         for (n = 0; n < ALIGNMENT; n++) {
@@ -494,10 +526,15 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                 if (ng1_aligned < ng1) {
                         ng1_rest = ng1 - ng1_aligned;
                         for (ish = ish0; ish < ish1; ish++) {
-                                i0 = ao_loc[ish];
-                                i1 = ao_loc[ish+1];
                                 si_i = screen_index[gblk0 * nbas + ish];
                                 if (si_i != 0) {
+                                        if (nbins > si_i) {
+                                                nbins_j = nbins - si_i;
+                                        } else {
+                                                nbins_j = 1;
+                                        }
+                                        i0 = ao_loc[ish];
+                                        i1 = ao_loc[ish+1];
                                         for (i = i0; i < i1; i++) {
 i_addr = i * ngrids + ng1_aligned;
 for (k = 0; k < ng1_rest; k++) {
@@ -505,11 +542,11 @@ for (k = 0; k < ng1_rest; k++) {
 }
 
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        j0 = ao_loc[jsh];
-        j1 = ao_loc[jsh+1];
-        ij = (i - ioff) * nj - joff;
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_j != 0 && si_i + si_j > nbins) {
+        if (si_j >= nbins_j && pair_mask[ish*nbas+jsh]) {
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ng1_aligned;
                         s8[0] = 0.;
@@ -566,7 +603,7 @@ void VXCdot_aow_ao_dense(double *out, double *bra, double *ket, double *wv,
 /* vv[nao,nao] = bra[i,nao] * ket[i,nao] */
 void VXCdot_aow_ao_sparse(double *out, double *bra, double *ket, double *wv,
                           int nao, int ngrids, int nbas, int hermi, int nbins,
-                          uint8_t *screen_index, int *ao_loc)
+                          uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
         assert(ngrids & 0xfffffffffff8 == ngrids);
         size_t Nao = nao;
@@ -617,13 +654,15 @@ void VXCdot_aow_ao_sparse(double *out, double *bra, double *ket, double *wv,
                         if (mask_l1[ig_box2 * nbox_l1 + jb] &&
                             mask_l1[ig_box2 * nbox_l1 + ib]) {
 _dot_aow_ao_l1(outbuf, bra, ket, wv, nao, ngrids, nbas, ig0, ig1,
-               ish0, ish1, jsh0, jsh1, nj, i0, j0, nbins, screen_index, ao_loc);
+               ish0, ish1, jsh0, jsh1, nj, i0, j0, nbins, screen_index,
+               pair_mask, ao_loc);
                         }
                 }
                 if (ngrids_align_down < ngrids) {
                         _dot_aow_ao_frac(outbuf, bra, ket, wv, nao, ngrids, nbas,
                                          ngrids_align_down, ish0, ish1, jsh0, jsh1,
-                                         nj, i0, j0, nbins, screen_index, ao_loc);
+                                         nj, i0, j0, nbins, screen_index,
+                                         pair_mask, ao_loc);
                 }
 
                 for (i = 0; i < ni; i++) {
@@ -650,38 +689,48 @@ static void _dot_ao_ao_l1(double *out, double *bra, double *ket,
                           int nao, size_t ngrids, int nbas, int ig0, int ig1,
                           int ish0, int ish1, int jsh0, int jsh1, int nj,
                           int ioff, int joff, int nbins, uint8_t *screen_index,
-                          int *ao_loc)
+                          uint8_t *pair_mask, int *ao_loc)
 {
         int ish, jsh, i0, i1, j0, j1, i, j, ij, n;
-        uint8_t si_i0, si_i1, si_j0, si_j1, si_ij0, si_ij1;
+        uint8_t si_i0, si_i1, si_j0, si_j1, nbins_j0, nbins_j1;
         size_t i_addr, j_addr;
         double s8[ALIGNMENT];
         int i_pattern, j_pattern;
         int gblk0 = ig0 / BLKSIZE;
 
         for (ish = ish0; ish < ish1; ish++) {
-                i0 = ao_loc[ish];
-                i1 = ao_loc[ish+1];
                 si_i0 = screen_index[(gblk0+0) * nbas + ish];
                 si_i1 = screen_index[(gblk0+1) * nbas + ish];
                 i_pattern = (si_i0 != 0) | ((si_i1 != 0) << 1);
                 if (i_pattern) {
+                        if (nbins > si_i0) {
+                                nbins_j0 = nbins - si_i0;
+                        } else {
+                                nbins_j0 = 1;
+                        }
+                        if (nbins > si_i1) {
+                                nbins_j1 = nbins - si_i1;
+                        } else {
+                                nbins_j1 = 1;
+                        }
+                        i0 = ao_loc[ish];
+                        i1 = ao_loc[ish+1];
                         for (i = i0; i < i1; i++) {
                                 i_addr = i * ngrids + ig0;
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        j0 = ao_loc[jsh];
-        j1 = ao_loc[jsh+1];
-        ij = (i - ioff) * nj - joff;
+        if (!pair_mask[ish*nbas+jsh]) {
+                goto next_j;
+        }
         si_j0 = screen_index[(gblk0+0) * nbas + jsh];
         si_j1 = screen_index[(gblk0+1) * nbas + jsh];
-        si_ij0 = si_i0 + si_j0;
-        si_ij1 = si_i1 + si_j1;
-        j_pattern = (si_j0 != 0) | ((si_j1 != 0) << 1);
-        j_pattern &= (si_ij0 > nbins) | ((si_ij1 > nbins) << 1);
+        j_pattern = (si_j0 >= nbins_j0) | ((si_j1 >= nbins_j1) << 1);
         switch (j_pattern & i_pattern) {
         case 0 :
                 goto next_j;
         case 1 :
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ig0;
                         for (n = 0; n < ALIGNMENT; n++) {
@@ -698,6 +747,9 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                 }
                 break;
         case 2 :
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ig0;
                         for (n = 0; n < ALIGNMENT; n++) {
@@ -714,6 +766,9 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                 }
                 break;
         case 3 :
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ig0;
                         for (n = 0; n < ALIGNMENT; n++) {
@@ -747,11 +802,11 @@ static void _dot_ao_ao_frac(double *out, double *bra, double *ket,
                             int nao, size_t ngrids, int nbas, int ig0,
                             int ish0, int ish1, int jsh0, int jsh1, int nj,
                             int ioff, int joff, int nbins, uint8_t *screen_index,
-                            int *ao_loc)
+                            uint8_t *pair_mask, int *ao_loc)
 {
         int ish, jsh, i0, i1, j0, j1, i, j, ij, k, n, ig, gblk0;
         int ng1, ng1_aligned, ng1_rest;
-        uint8_t si_i, si_j;
+        uint8_t si_i, si_j, nbins_j;
         size_t i_addr, j_addr;
         double s8[ALIGNMENT];
 
@@ -760,18 +815,23 @@ static void _dot_ao_ao_frac(double *out, double *bra, double *ket,
                 ng1 = MIN(BLKSIZE, ngrids - ig);
                 ng1_aligned = ng1 & (-(uint32_t)ALIGNMENT);
                 for (ish = ish0; ish < ish1; ish++) {
-                        i0 = ao_loc[ish];
-                        i1 = ao_loc[ish+1];
                         si_i = screen_index[gblk0 * nbas + ish];
                         if (si_i != 0) {
+                                if (nbins > si_i) {
+                                        nbins_j = nbins - si_i;
+                                } else {
+                                        nbins_j = 1;
+                                }
+                                i0 = ao_loc[ish];
+                                i1 = ao_loc[ish+1];
                                 for (i = i0; i < i1; i++) {
 i_addr = i * ngrids + ig;
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        j0 = ao_loc[jsh];
-        j1 = ao_loc[jsh+1];
-        ij = (i - ioff) * nj - joff;
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_i != 0 && si_i + si_j > nbins) {
+        if (si_j >= nbins_j && pair_mask[ish*nbas+jsh]) {
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ig;
                         for (n = 0; n < ALIGNMENT; n++) {
@@ -794,18 +854,23 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
                 if (ng1_aligned < ng1) {
                         ng1_rest = ng1 - ng1_aligned;
                         for (ish = ish0; ish < ish1; ish++) {
-                                i0 = ao_loc[ish];
-                                i1 = ao_loc[ish+1];
                                 si_i = screen_index[gblk0 * nbas + ish];
                                 if (si_i != 0) {
+                                        if (nbins > si_i) {
+                                                nbins_j = nbins - si_i;
+                                        } else {
+                                                nbins_j = 1;
+                                        }
+                                        i0 = ao_loc[ish];
+                                        i1 = ao_loc[ish+1];
                                         for (i = i0; i < i1; i++) {
 i_addr = i * ngrids + ng1_aligned;
 for (jsh = jsh0; jsh < jsh1; jsh++) {
-        j0 = ao_loc[jsh];
-        j1 = ao_loc[jsh+1];
-        ij = (i - ioff) * nj - joff;
         si_j = screen_index[gblk0 * nbas + jsh];
-        if (si_j != 0 && si_i + si_j > nbins) {
+        if (si_j >= nbins_j && pair_mask[ish*nbas+jsh]) {
+                j0 = ao_loc[jsh];
+                j1 = ao_loc[jsh+1];
+                ij = (i - ioff) * nj - joff;
                 for (j = j0; j < j1; j++) {
                         j_addr = j * ngrids + ng1_aligned;
                         s8[0] = 0.;
@@ -826,7 +891,7 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
 /* out = bra.T.dot(ket) */
 void VXCdot_ao_ao_sparse(double *out, double *bra, double *ket, double *wv,
                          int nao, int ngrids, int nbas, int hermi, int nbins,
-                         uint8_t *screen_index, int *ao_loc)
+                         uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {
         assert(ngrids & 0xfffffffffff8 == ngrids);
         size_t Nao = nao;
@@ -878,13 +943,15 @@ void VXCdot_ao_ao_sparse(double *out, double *bra, double *ket, double *wv,
                         if (mask_l1[ig_box2 * nbox_l1 + jb] &&
                             mask_l1[ig_box2 * nbox_l1 + ib]) {
 _dot_ao_ao_l1(outbuf, bra, ket, nao, ngrids, nbas, ig0, ig1,
-              ish0, ish1, jsh0, jsh1, nj, i0, j0, nbins, screen_index, ao_loc);
+              ish0, ish1, jsh0, jsh1, nj, i0, j0, nbins, screen_index,
+              pair_mask, ao_loc);
                         }
                 }
                 if (ngrids_align_down < ngrids) {
                         _dot_ao_ao_frac(outbuf, bra, ket, nao, ngrids, nbas,
                                         ngrids_align_down, ish0, ish1, jsh0, jsh1,
-                                        nj, i0, j0, nbins, screen_index, ao_loc);
+                                        nj, i0, j0, nbins, screen_index,
+                                        pair_mask, ao_loc);
                 }
 
                 for (i = 0; i < ni; i++) {
