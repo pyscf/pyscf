@@ -1866,6 +1866,26 @@ def condense_to_shell(mol, mat, compressor='max'):
         abstract = lib.condense(compressor, mat, ao_loc)
     return abstract
 
+def get_overlap_cond(mol, shls_slice=None):
+    '''Overlap magnitudes measured by -log(overlap) between two shells
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+    Returns:
+        2D mask array of shape (nbas,nbas)
+    '''
+    nbas = mol.nbas
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas)
+    cond = numpy.zeros((nbas, nbas))
+    moleintor.libcgto.GTOoverlap_cond(
+        cond.ctypes.data_as(ctypes.c_void_p), (ctypes.c_int * 4)(*shls_slice),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    return cond
+
 
 def tostring(mol, format='raw'):
     '''Convert molecular geometry to a string of the required format.
@@ -3431,6 +3451,7 @@ class Mole(lib.StreamObject):
     aoslice_2c_by_atom = offset_2c_by_atom = offset_2c_by_atom
 
     condense_to_shell = condense_to_shell
+    get_overlap_cond = get_overlap_cond
 
     to_uncontracted_cartesian_basis = to_uncontracted_cartesian_basis
 

@@ -364,7 +364,7 @@ def get_partition(mol, atom_grids_tab,
 gen_partition = get_partition
 
 def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None,
-              cutoff=None):
+              cutoff=CUTOFF):
     '''Mask to indicate whether a shell is ignorable on grids. See also the
     function gto.eval_gto.make_screen_index
 
@@ -388,8 +388,6 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None,
         2D mask array of shape (N,nbas), where N is the number of grids, nbas
         is the number of shells.
     '''
-    if cutoff is None:
-        cutoff = CUTOFF
     return make_screen_index(mol, coords, shls_slice, cutoff)
 
 def arg_group_grids(mol, coords, box_size=GROUP_BOX_SIZE):

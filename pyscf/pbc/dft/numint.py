@@ -999,7 +999,7 @@ class NumInt(numint.NumInt):
             ao_k1 = ao_k2 = None
 
     def eval_rho1(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-                  with_lapl=True, cutoff=CUTOFF, grids=None, verbose=None):
+                  with_lapl=True, cutoff=None, ao_cutoff=None, verbose=None):
         return eval_rho(cell, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
 
     eval_ao = staticmethod(eval_ao)

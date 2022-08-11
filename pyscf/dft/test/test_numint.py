@@ -76,7 +76,10 @@ def tearDownModule():
     h2o.stdout.close()
     del mol, mf, h4, mf_h4, mol1, h2o
 
-def _fake_sparse_enough(mask):
+def _not_sparse(mask):
+    return False
+
+def _sparse(mask):
     return True
 
 def _fill_zero_blocks(mat, ao_loc, mask):
@@ -113,9 +116,10 @@ class KnownValues(unittest.TestCase):
         ao_loc = mol.ao_loc_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
+        pair_mask = mol.get_overlap_cond() < -numpy.log(numint.CUTOFF)
         res0 = lib.dot(ao, dm)
         res1 = dft.numint._dot_ao_dm_sparse(
-            ao, dm, non0tab, dft.gen_grid.NBINS, ao_loc=ao_loc)
+            ao, dm, dft.gen_grid.NBINS, non0tab, pair_mask, ao_loc=ao_loc)
         res0 = _fill_zero_blocks(res0, ao_loc, non0tab)
         res1 = _fill_zero_blocks(res1, ao_loc, non0tab)
         rho0 = dft.numint._contract_rho(res0, ao)
@@ -297,10 +301,11 @@ class KnownValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint.NumInt()
         grids = dft.Grids(mol1)
-        v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=0, hermi=0)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(lib.fp(v), -7.571122737701957, 8)
 
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(lib.fp(v), -7.571122737701957, 8)
 
@@ -310,9 +315,10 @@ class KnownValues(unittest.TestCase):
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=0, hermi=0)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=0, hermi=0)
         self.assertAlmostEqual(lib.fp(v), -3.0008266036125315, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=0, hermi=0)
         self.assertAlmostEqual(lib.fp(v), -3.0008266036125315, 8)
 
@@ -327,9 +333,10 @@ class KnownValues(unittest.TestCase):
         v = ni.nr_fxc(mol1, grids, '', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(abs(v).max(), 0, 9)
 
-        v = dft.numint.nr_fxc(mol1, grids, 'm06l,', dm0, dms)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = dft.numint.nr_fxc(mol1, grids, 'm06l,', dm0, dms)
         self.assertAlmostEqual(lib.fp(v), -11.138947264441164, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = dft.numint.nr_fxc(mol1, grids, 'm06l,', dm0, dms)
         self.assertAlmostEqual(lib.fp(v), -11.138947264441164, 8)
 
@@ -351,9 +358,10 @@ class KnownValues(unittest.TestCase):
         grids = dft.Grids(mol1)
         rvf = ni.cache_xc_kernel(mol1, grids, 'B88,', [mo_coeff,mo_coeff],
                                  [mo_occ*.5]*2, spin=1)
-        v = ni.nr_rks_fxc_st(mol1, grids, 'B88,', dm0, dms, singlet=True)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_rks_fxc_st(mol1, grids, 'B88,', dm0, dms, singlet=True)
         self.assertAlmostEqual(lib.fp(v), -7.571122737701957*2, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_rks_fxc_st(mol1, grids, 'B88,', dm0, dms, singlet=True)
         self.assertAlmostEqual(lib.fp(v), -7.571122737701957*2, 8)
         v1 = ni.nr_rks_fxc_st(mol1, grids, 'B88,', dm0, dms, singlet=True,
@@ -367,35 +375,38 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(v1), -7.571122737701957*2, 8)
 
-        rvf = ni.cache_xc_kernel(mol1, grids, 'LDA,', [mo_coeff,mo_coeff],
-                                 [mo_occ*.5]*2, spin=1)
-        v = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=True)
-        v1 = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=True,
-                              rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            rvf = ni.cache_xc_kernel(mol1, grids, 'LDA,', [mo_coeff,mo_coeff],
+                                     [mo_occ*.5]*2, spin=1)
+            v = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=True)
+            v1 = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=True,
+                                  rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(v1), -3.0008266036125315*2, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v1 = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=True,
                                   rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(lib.fp(v1), -3.0008266036125315*2, 8)
 
-        v = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=False)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=False)
         self.assertAlmostEqual(lib.fp(v), -3.0008266036125315*2, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=False)
         self.assertAlmostEqual(lib.fp(v), -3.0008266036125315*2, 8)
         v1 = ni.nr_rks_fxc_st(mol1, grids, 'LDA,', dm0, dms[0], singlet=False,
                               rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_rks_fxc_st(mol1, grids, 'm06l,', dm0, dms, singlet=True)
-        rvf = ni.cache_xc_kernel(mol1, grids, 'm06l,', [mo_coeff,mo_coeff],
-                                 [mo_occ*.5]*2, spin=1)
-        v1 = ni.nr_rks_fxc_st(mol1, grids, 'm06l,', dm0, dms, singlet=True,
-                              rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_rks_fxc_st(mol1, grids, 'm06l,', dm0, dms, singlet=True)
+            rvf = ni.cache_xc_kernel(mol1, grids, 'm06l,', [mo_coeff,mo_coeff],
+                                     [mo_occ*.5]*2, spin=1)
+            v1 = ni.nr_rks_fxc_st(mol1, grids, 'm06l,', dm0, dms, singlet=True,
+                                  rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(v1), -11.138947264441164*2, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v1 = ni.nr_rks_fxc_st(mol1, grids, 'm06l,', dm0, dms, singlet=True,
                                   rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(lib.fp(v1), -11.138947264441164*2, 8)
@@ -419,9 +430,10 @@ class KnownValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint.NumInt()
         grids = dft.Grids(mol1)
-        v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=1)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=1)
         self.assertAlmostEqual(lib.fp(v), -10.316735149305348, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_fxc(mol1, grids, 'B88,', dm0, dms, spin=1)
         self.assertAlmostEqual(lib.fp(v), -10.316735149305348, 8)
         # test cache_kernel
@@ -430,9 +442,10 @@ class KnownValues(unittest.TestCase):
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=1)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=1)
         self.assertAlmostEqual(lib.fp(v), -5.646254460347009, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_fxc(mol1, grids, 'LDA,', dm0, dms[0], spin=1)
         self.assertAlmostEqual(lib.fp(v), -5.646254460347009, 8)
         # test cache_kernel
@@ -441,9 +454,10 @@ class KnownValues(unittest.TestCase):
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_fxc(mol1, grids, 'm06l', dm0, dms[0], spin=1)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            v = ni.nr_fxc(mol1, grids, 'm06l', dm0, dms[0], spin=1)
         self.assertAlmostEqual(lib.fp(v), -7.004513546383883, 8)
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             v = ni.nr_fxc(mol1, grids, 'm06l', dm0, dms[0], spin=1)
         self.assertAlmostEqual(lib.fp(v), -7.004513546383883, 8)
         # test cache_kernel
@@ -532,12 +546,13 @@ class KnownValues(unittest.TestCase):
 
         mf.xc = 'WB97XD'
         mf.omega = 0.9
-        rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+        with lib.temporary_env(numint, _sparse_enough=_not_sparse):
+            rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
         self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
         self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
 
-        with lib.temporary_env(numint, _sparse_enough=_fake_sparse_enough):
+        with lib.temporary_env(numint, _sparse_enough=_sparse):
             rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
         self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)

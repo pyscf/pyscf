@@ -212,7 +212,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho, weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = aow = None
+            rho = vxc = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
@@ -233,7 +233,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = wv = None
+            rho = vxc = wv = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -259,7 +259,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = wv = None
+            rho = vxc = wv = None
 
     # - sign because nabla_X = -nabla_x
     return excsum, -vmat

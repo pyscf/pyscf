@@ -535,7 +535,15 @@ class NumInt2C(numint._NumIntMixin):
     collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
     collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
+    make_mask = staticmethod(numint.make_mask)
+    eval_ao = staticmethod(numint.eval_ao)
     eval_rho = staticmethod(eval_rho)
+
+    def eval_rho1(self, mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
+                  with_lapl=True, cutoff=None, ao_cutoff=None, pair_mask=None,
+                  verbose=None):
+        return self.eval_rho(mol, ao, dm, screen_index, xctype, hermi,
+                             with_lapl, verbose=verbose)
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
@@ -678,7 +686,7 @@ class NumInt2C(numint._NumIntMixin):
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
 
-    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False):
+    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
             #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff

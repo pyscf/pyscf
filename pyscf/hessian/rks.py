@@ -254,7 +254,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
             contract_(vmat[4], ao, [XYZ,YYZ,YZZ], wv, mask)
             contract_(vmat[5], ao, [XZZ,YZZ,ZZZ], wv, mask)
 
-            aow = [numint._scale_ao(ao[i], wv[5]) for i in range(1, 4)]
+            aow = [numint._scale_ao(ao[i], wv[4]) for i in range(1, 4)]
             for i, j in enumerate([XXX, XXY, XXZ, XYY, XYZ, XZZ]):
                 vmat[i] += numint._dot_ao_ao(mol, ao[j], aow[0], mask, shls_slice, ao_loc)
             for i, j in enumerate([XXY, XYY, XYZ, YYY, YYZ, YZZ]):
