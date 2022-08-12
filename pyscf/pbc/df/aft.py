@@ -140,7 +140,8 @@ def get_pp_loc_part1(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
         if cell.dimension > 0:
-            ke_guess = estimate_ke_cutoff(cell, cell.precision)
+            precision = getattr(cell, 'precision_vnuc', False) or cell.precision
+            ke_guess = estimate_ke_cutoff(cell, precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             if numpy.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
@@ -157,7 +158,8 @@ def get_pp_loc_part1(mydf, kpts=None):
 
     else:
         if cell.dimension > 0:
-            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
+            precision = getattr(cell, 'precision_vnuc', False) or cell.precision
+            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             if numpy.any(mesh < mesh_guess*.8):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
