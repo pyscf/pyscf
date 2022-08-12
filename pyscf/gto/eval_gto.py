@@ -26,8 +26,8 @@ BLKSIZE = 104  # must be equal to lib/gto/grid_ao_drv.h
 
 libcgto = lib.load_library('libcgto')
 
-def eval_gto(mol, eval_name, coords,
-             comp=None, shls_slice=None, non0tab=None, ao_loc=None, out=None):
+def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
+             ao_loc=None, cutoff=None, out=None):
     r'''Evaluate AO function value on the given grids,
 
     Args:
@@ -72,6 +72,9 @@ def eval_gto(mol, eval_name, coords,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`dft.gen_grid.make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
 
@@ -116,15 +119,16 @@ def eval_gto(mol, eval_name, coords,
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
                              dtype=numpy.uint8)
 
-    drv = getattr(libcgto, eval_name)
-    drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        ao.ctypes.data_as(ctypes.c_void_p),
-        coords.ctypes.data_as(ctypes.c_void_p),
-        non0tab.ctypes.data_as(ctypes.c_void_p),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+    with mol.with_integral_screen(cutoff):
+        drv = getattr(libcgto, eval_name)
+        drv(ctypes.c_int(ngrids),
+            (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+            ao.ctypes.data_as(ctypes.c_void_p),
+            coords.ctypes.data_as(ctypes.c_void_p),
+            non0tab.ctypes.data_as(ctypes.c_void_p),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
 
     ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:

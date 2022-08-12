@@ -695,7 +695,7 @@ def overwrite_mro(obj, mro):
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
-    del(HackMRO.mro)
+    del (HackMRO.mro)
     return obj
 
 def izip(*args):

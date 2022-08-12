@@ -48,12 +48,12 @@ class KnownValues(unittest.TestCase):
     def test_ump2(self):
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
-        self.assertAlmostEqual(emp2, -0.16575150552336643, 9)
+        self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.16575150552336643, 9)
+        self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
 
     def test_ump2_dm(self):
         pt = mp.MP2(mf)
@@ -89,7 +89,7 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eriab, dm2[1])
         e1+= numpy.einsum('ijkl,ijkl', eribb, dm2[2]) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
         vhf = mf.get_veff(mol, mf.make_rdm1())
         h1a = reduce(numpy.dot, (mo_a.T, hcore+vhf[0], mo_a))
@@ -98,7 +98,7 @@ class KnownValues(unittest.TestCase):
         dm1[1][numpy.diag_indices(noccb)] -= 1
         e = numpy.einsum('pq,qp', h1a, dm1[0])
         e+= numpy.einsum('pq,qp', h1b, dm1[1])
-        self.assertAlmostEqual(e, -emp2, 9)
+        self.assertAlmostEqual(e, -emp2, 8)
 
     def test_ump2_contract_eri_dm(self):
         pt = mp.MP2(mf)
@@ -122,13 +122,13 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
         e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
     def test_ump2_frozen(self):
         pt = mp.MP2(mf)
         pt.frozen = [1]
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.11202141654451162, 9)
+        self.assertAlmostEqual(pt.emp2, -0.11202141654451162, 8)
 
     def test_ump2_outcore_frozen(self):
         pt = mp.MP2(mf)
@@ -136,30 +136,30 @@ class KnownValues(unittest.TestCase):
         pt.nmo = (12, 11)
         pt.frozen = [[4,5],[2,3]]
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.033400699456971966, 9)
+        self.assertAlmostEqual(e, -0.033400699456971966, 8)
 
         pt = mp.MP2(mf)
         pt.nmo = (12, 11)
         pt.nocc = (4, 2)
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.033400699456971966, 9)
+        self.assertAlmostEqual(e, -0.033400699456971966, 8)
 
     def test_ump2_with_df(self):
         pt = mp.ump2.UMP2(mf.density_fit('weigend'))
         pt.frozen = [1]
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.11264162733420097, 9)
+        self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
         #pt = mp.dfump2.DFUMP2(mf.density_fit('weigend'))
         #pt.frozen = [1]
         #e = pt.kernel()[0]
-        #self.assertAlmostEqual(e, -0.11264162733420097, 9)
+        #self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
         #pt = mp.dfump2.DFUMP2(mf)
         #pt.frozen = [1]
         #pt.with_df = mf.density_fit('weigend').with_df
         #e = pt.kernel()[0]
-        #self.assertAlmostEqual(e, -0.11264162733420097, 9)
+        #self.assertAlmostEqual(e, -0.11264162733420097, 8)
 
     def test_ump2_ao2mo_ovov(self):
         pt = mp.UMP2(mf)
@@ -177,9 +177,9 @@ class KnownValues(unittest.TestCase):
         ovov_ref = ao2mo.general(mf._eri, (orboa,orbva,orboa,orbva))
         ovOV_ref = ao2mo.general(mf._eri, (orboa,orbva,orbob,orbvb))
         OVOV_ref = ao2mo.general(mf._eri, (orbob,orbvb,orbob,orbvb))
-        self.assertAlmostEqual(numpy.linalg.norm(ovov_ref-ovov), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(ovOV_ref-ovOV), 0, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(OVOV_ref-OVOV), 0, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ovov_ref-ovov), 0, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(ovOV_ref-ovOV), 0, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(OVOV_ref-OVOV), 0, 8)
 
     def test_ump2_with_ao2mofn(self):
         pt = mp.ump2.UMP2(mf)
@@ -189,7 +189,7 @@ class KnownValues(unittest.TestCase):
         e1 = pt.kernel()[0]
         pt = mp.ump2.UMP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
-        self.assertAlmostEqual(e1, e2, 9)
+        self.assertAlmostEqual(e1, e2, 8)
 
     def test_rdm_complex(self):
         mol = gto.M()
@@ -256,11 +256,11 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eri_bb, dm2[2]) * .5
         self.assertAlmostEqual(e1, pt.e_tot, 12)
 
-        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(1,0,3,2).conj()).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(2,3,0,1)       ).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[1]-dm2[1].transpose(1,0,3,2).conj()).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(1,0,3,2).conj()).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(2,3,0,1)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(1,0,3,2).conj()).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(2,3,0,1)       ).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2[1]-dm2[1].transpose(1,0,3,2).conj()).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(1,0,3,2).conj()).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(2,3,0,1)       ).max(), 0, 8)
 
     def test_non_canonical_mp2(self):
         mf = scf.UHF(mol).run(max_cycle=1)

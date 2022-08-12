@@ -200,7 +200,7 @@ class GHF(ghf.GHF):
                 nelec_fix += n
                 rest_idx[ir_idx] = False
         nelec_float = mol.nelectron - nelec_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
             occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
@@ -292,7 +292,7 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     else:
         nao = mo_coeff.shape[0] // 2
         if isinstance(s, numpy.ndarray):
-            assert(s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
+            assert (s.size == nao**2 or numpy.allclose(s[:nao,:nao], s[nao:,nao:]))
             s = s[:nao,:nao]
         mo_a = mo_coeff[:nao].copy()
         mo_b = mo_coeff[nao:]

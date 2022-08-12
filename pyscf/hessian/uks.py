@@ -701,9 +701,9 @@ if __name__ == '__main__':
     n3 = mol.natm * 3
     hobj = mf.Hessian()
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
-    print(lib.finger(e2) - -0.42286407986042956)
-    print(lib.finger(e2) - -0.45453541215680582)
-    print(lib.finger(e2) - -0.41385170026016327)
+    print(lib.fp(e2) - -0.42286407986042956)
+    print(lib.fp(e2) - -0.45453541215680582)
+    print(lib.fp(e2) - -0.41385170026016327)
 
     mol.spin = 2
     mf = dft.UKS(mol)

@@ -271,6 +271,7 @@ class KnownValues(unittest.TestCase):
         ref = ft_ao.ft_aopair_kpts(cell, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase, kptjs=kpts)
         aopair = ft_ao.ft_aopair_kpts(cell, Gv, b=b, gxyz=gxyz, Gvbase=Gvbase,
                                       kptjs=kpts, bvk_kmesh=bvk_kmesh)
+        #FIXME: error seems too big
         self.assertAlmostEqual(abs(ref - aopair).max(), 0, 8)
         self.assertAlmostEqual(lib.fp(aopair), (-5.735639500461687-12.425151458809875j), 8)
 

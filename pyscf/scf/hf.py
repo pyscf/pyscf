@@ -542,7 +542,7 @@ def _init_guess_huckel_orbitals(mol):
     nocc = 0
     for ia in range(mol.natm):
         for iorb in range(len(at_occ[ia])):
-            if(at_occ[ia][iorb]>0.0):
+            if (at_occ[ia][iorb]>0.0):
                 nocc=nocc+1
 
     # Number of basis functions
@@ -576,7 +576,7 @@ def _init_guess_huckel_orbitals(mol):
         aend = aoslice[ia, 3]
 
         for iorb in range(len(at_occ[ia])):
-            if(at_occ[ia][iorb]>0.0):
+            if (at_occ[ia][iorb]>0.0):
                 if mol.cart:
                     orb_C[abeg:aend,iocc] = numpy.dot(at_c[ia][:,iorb], atcart2sph[ia].T)
                 else:
@@ -2127,7 +2127,7 @@ def _hf1e_scf(mf, *args):
     return mf.e_tot
 
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

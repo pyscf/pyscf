@@ -108,8 +108,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
-    assert(mo_energy_kpts[0][0].ndim == 1)
-    assert(mo_occ_kpts[0][0].ndim == 1)
+    assert (mo_energy_kpts[0][0].ndim == 1)
+    assert (mo_occ_kpts[0][0].ndim == 1)
 
     nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
     noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
@@ -622,7 +622,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         from pyscf.pbc.grad import kuhf
         return kuhf.Gradients(self)
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

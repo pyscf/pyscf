@@ -12,9 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Authors: Qiming Sun <osirpt.sun@gmail.com>
+#          Chia-Nan Yeh <yehcanon@gmail.com>
+#
 
 '''
-spin-free X2C correction for extended systems (experimental feature)
+One-electron spin-free X2C approximation for extended systems
 '''
 
 
@@ -37,7 +41,7 @@ from pyscf import __config__
 
 def sfx2c1e(mf):
     '''Spin-free X2C.
-    For the given SCF object, update the hcore constructor.
+    For the given SCF object, it updates the hcore constructor.
 
     Args:
         mf : an SCF object
@@ -58,7 +62,10 @@ def sfx2c1e(mf):
     '''
     if isinstance(mf, x2c._X2C_SCF):
         if mf.with_x2c is None:
-            return mf.__class__(mf)
+            mf.with_x2c = SpinFreeX2CHelper(mf.mol)
+            return mf
+        elif not isinstance(mf.with_x2c, SpinFreeX2CHelper):
+            raise NotImplementedError
         else:
             return mf
 
@@ -67,6 +74,7 @@ def sfx2c1e(mf):
         doc = ''
     else:
         doc = mf_class.__doc__
+
     class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
         __doc__ = doc + '''
         Attributes for spin-free X2C:
@@ -74,7 +82,7 @@ def sfx2c1e(mf):
         '''
         def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
-            self.with_x2c = SpinFreeX2C(mf.mol)
+            self.with_x2c = SpinFreeX2CHelper(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, cell=None, kpts=None, kpt=None):
@@ -98,14 +106,23 @@ def sfx2c1e(mf):
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
-    return SFX2C1E_SCF(mf)
+        def dump_flags(self, verbose=None):
+            mf_class.dump_flags(self, verbose)
+            if self.with_x2c:
+                self.with_x2c.dump_flags(verbose)
+            return self
+
+    with_x2c = SpinFreeX2CHelper(mf.mol)
+    return mf.view(SFX2C1E_SCF).add_keys(with_x2c=with_x2c)
 
 sfx2c = sfx2c1e
 
-class X2C(x2c.X2C):
+class PBCX2CHelper(x2c.X2C):
 
     exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
-    approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'atom1e')
+    # 1e: X2C1e, atom1e: X2C1e with one-center approximation
+    approx = getattr(__config__, 'pbc_x2c_X2C_approx', '1e')
+    # By default, uncontracted cell.basis is used to construct the modified Dirac equation.
     xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
@@ -113,18 +130,22 @@ class X2C(x2c.X2C):
         self.cell = cell
         x2c.X2C.__init__(self, cell)
 
-class SpinFreeX2C(X2C):
+class SpinFreeX2CHelper(PBCX2CHelper):
+    '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
+    '''
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
         if kpts is None:
             kpts_lst = numpy.zeros((1,3))
         else:
             kpts_lst = numpy.reshape(kpts, (-1,3))
-
+        # By default, we use uncontracted cell.basis plus additional steep orbital for modified Dirac equation.
         xcell, contr_coeff = self.get_xmol(cell)
-        with_df = aft.AFTDF(xcell)
+        from pyscf.pbc.df import df
+        with_df = df.DF(xcell)
+
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
@@ -144,25 +165,33 @@ class SpinFreeX2C(X2C):
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
-            raise NotImplementedError
+            w = get_pnucp(with_df, kpts_lst)
 
         t = xcell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
         s = xcell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts_lst)
-        v = with_df.get_nuc(kpts_lst)
-        #w = get_pnucp(with_df, kpts_lst)
+        if cell.pseudo:
+            raise NotImplementedError
+        else:
+            v = lib.asarray(with_df.get_nuc(kpts_lst))
         if self.basis is not None:
             s22 = s
             s21 = pbcgto.intor_cross('int1e_ovlp', xcell, cell, kpts=kpts_lst)
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
-            # The treatment of pnucp local part has huge effects to hcore
-            #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
-            #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
-            h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+            if 'ATOM' in self.approx.upper():
+                # The treatment of pnucp local part has huge effects to hcore
+                #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
+                #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
+            else:
+                xk = x2c._x2c1e_xmatrix(t[k], v[k], w[k], s[k], c)
+                h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], xk, c)
+
             if self.basis is not None:
-                c = lib.cho_solve(s22[k], s21[k])
-                h1 = reduce(numpy.dot, (c.T, h1, c))
+                # If cell = xcell, U = identity matrix
+                U = lib.cho_solve(s22[k], s21[k])
+                h1 = reduce(numpy.dot, (U.T, h1, U))
             if self.xuncontract and contr_coeff is not None:
                 h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
             h1_kpts.append(h1)
@@ -175,7 +204,7 @@ class SpinFreeX2C(X2C):
         if cell is None: cell = self.cell
         xcell, contr_coeff = self.get_xmol(cell)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         if 'ATOM' in self.approx.upper():
             atom_slices = xcell.offset_nr_by_atom()
             nao = xcell.nao_nr()
@@ -194,12 +223,18 @@ class SpinFreeX2C(X2C):
             raise NotImplementedError
         return x
 
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
+        log.info('\n')
+        log.info('******** %s ********', self.__class__)
+        log.info('approx = %s', self.approx)
+        log.info('xuncontract = %d', self.xuncontract)
+        if self.basis is not None:
+            log.info('basis for X matrix = %s', self.basis)
+        return self
 
-# Use Ewald-like technique to compute spVsp.
-# spVsp may not be divergent because the numerator spsp and the denominator
-# in Coulomb kernel 4pi/G^2 are likely cancelled.  Even a real space lattice
-# sum can converge to a finite value, it's difficult to accurately converge
-# this value, i.e., large number of images in lattice summation is required.
+
+# Use Ewald-like technique to compute spVsp without the G=0 contribution.
 def get_pnucp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
@@ -223,8 +258,6 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)

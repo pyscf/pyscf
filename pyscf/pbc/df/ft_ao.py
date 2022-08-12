@@ -124,7 +124,7 @@ def ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
 #       f_ji(G) = \int f_ji exp(-iGr) = \int f_ij^* exp(-iGr) = [f_ij(-G)]^*
 # hermi operation needs reordering the axis-0.  It is inefficient.
     if aosym == 's1hermi': # Symmetry for Gamma point
-        assert(is_zero(q) and is_zero(kptjs) and ni == nj)
+        assert (is_zero(q) and is_zero(kptjs) and ni == nj)
     elif aosym == 's2':
         i0 = ao_loc[shls_slice[0]]
         i1 = ao_loc[shls_slice[1]]

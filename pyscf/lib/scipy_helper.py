@@ -33,7 +33,7 @@ except ImportError:
 else:
     def _pivoted_cholesky_wrapper(A, tol, lower):
         N = A.shape[0]
-        assert(A.shape == (N, N))
+        assert (A.shape == (N, N))
         L, piv, rank, info = _dpstrf(A, tol=tol, lower=lower)
         if info < 0:
             raise RuntimeError('Pivoted Cholesky factorization failed.')
@@ -82,7 +82,7 @@ def pivoted_cholesky_python(A, tol=-1.0, lower=False):
         the factor, the permutation vector, the rank
     '''
     N = A.shape[0]
-    assert(A.shape == (N, N))
+    assert (A.shape == (N, N))
 
     D = numpy.diag(A).copy()
     if tol < 0:

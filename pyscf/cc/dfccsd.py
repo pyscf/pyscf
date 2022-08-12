@@ -44,7 +44,7 @@ class RCCSD(ccsd.CCSD):
         return _make_df_eris(self, mo_coeff)
 
     def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
-        assert(not self.direct)
+        assert (not self.direct)
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
@@ -116,7 +116,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
-        assert(not direct)
+        assert (not direct)
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):

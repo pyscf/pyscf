@@ -19,6 +19,7 @@ omit = */dmrgscf/*
     */pbc/mpicc/*
     */pbc/mpitools/*
     */gen_*_param.py
+    *slow*
 disable_warnings = include-ignored
 
 [report]

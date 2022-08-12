@@ -115,7 +115,7 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
     from pyscf.df.outcore import _guess_shell_ranges
-    assert(comp == 1)
+    assert (comp == 1)
     t0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if auxmol is None:
@@ -202,7 +202,7 @@ def cholesky_eri_debug(mol, auxbasis='weigend+etb', auxmol=None,
     Returns:
         2D array of (naux,nao*(nao+1)/2) in C-contiguous
     '''
-    assert(comp == 1)
+    assert (comp == 1)
     t0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
     if auxmol is None:

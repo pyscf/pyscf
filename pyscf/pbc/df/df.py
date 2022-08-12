@@ -370,7 +370,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cR = j3cI = None
 
         for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
+            del (fswap['j3c-junk/%d'%ji])
 
     # Wrapped around boundary and symmetry between k and -k can be used
     # explicitly for the metric integrals.  We consider this symmetry
@@ -779,7 +779,7 @@ class GDF(aft.AFTDF):
             blksize = self.blockdim
         for LpqR, LpqI, sign in self.sr_loop(compact=True, blksize=blksize):
             # LpqI should be 0 for gamma point DF
-            # assert(numpy.linalg.norm(LpqI) < 1e-12)
+            # assert (numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
 
     def get_naoaux(self):

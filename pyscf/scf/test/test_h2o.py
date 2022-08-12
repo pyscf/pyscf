@@ -381,7 +381,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(scf.GHF(sym_mol_u), scf.ghf_symm.GHF))
         self.assertTrue(isinstance(scf.GHF(sym_mol_r1), scf.ghf_symm.HF1e))
 
-        self.assertTrue(isinstance(scf.X2C(mol_r), x2c.x2c.UHF))
+        #self.assertTrue(isinstance(scf.X2C(mol_r), x2c.x2c.RHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_r)), scf.rhf.RHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_u)), scf.uhf.UHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_r1)), scf.rohf.ROHF))

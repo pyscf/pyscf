@@ -43,7 +43,7 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert(mo_coeff[0].dtype == numpy.double)
+    assert (mo_coeff[0].dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff[0].shape
@@ -703,7 +703,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    assert(mo_coeff[0].dtype == numpy.double)
+    assert (mo_coeff[0].dtype == numpy.double)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff[0].shape
@@ -864,4 +864,4 @@ RPA = TDUHF = TDHF
 scf.uhf.UHF.TDA = lib.class_as_method(TDA)
 scf.uhf.UHF.TDHF = lib.class_as_method(TDHF)
 
-del(OUTPUT_THRESHOLD)
+del (OUTPUT_THRESHOLD)

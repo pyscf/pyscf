@@ -2677,7 +2677,7 @@ def rand_cc_t1_t2(mf, seed=1):
     return mycc, eris, t1, t2
 
 def enforce_symm_2p_spin(r1, r2, orbspin, excitation):
-    assert(excitation in ['ip', 'ea'])
+    assert (excitation in ['ip', 'ea'])
     if excitation == 'ip':
         nocc, nvir = r2.shape[1:]
     elif excitation == 'ea':

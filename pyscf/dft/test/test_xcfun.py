@@ -41,7 +41,7 @@ def tearDownModule():
     global mol, mf, ao, rho
     del mol, mf, ao, rho
 
-def finger(a):
+def fp(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
@@ -152,19 +152,19 @@ class KnownValues(unittest.TestCase):
 
     def test_lda(self):
         e,v,f,k = dft.xcfun.eval_xc('lda,', rho[0][:3], deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0]), -1.1414693830969338, 8)
-        self.assertAlmostEqual(lib.finger(k[0]),  4.1402447248393921, 8)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0]), -1.1414693830969338, 8)
+        self.assertAlmostEqual(lib.fp(k[0]),  4.1402447248393921, 8)
 
         e,v,f,k = dft.xcfun.eval_xc('lda,', [rho[0][:3]*.5]*2, spin=1, deriv=3)
-        self.assertAlmostEqual(lib.finger(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(v[0].T[1]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[0]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 7)
-        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[0]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(v[0].T[1]), -0.6294083390180697, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[0]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(f[0].T[2]), -1.1414693830969338*2, 8)
+        self.assertAlmostEqual(lib.fp(k[0].T[0]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.fp(k[0].T[3]),  4.1402447248393921*4, 7)
 
     def test_lyp(self):
         e,v,f = dft.xcfun.eval_xc(',LYP', rho, deriv=3)[:3]
@@ -186,12 +186,12 @@ class KnownValues(unittest.TestCase):
         rho =(numpy.array([1.    , 1., 0., 0.]).reshape(-1,1),
               numpy.array([    .8, 1., 0., 0.]).reshape(-1,1))
         e,v,f = dft.xcfun.eval_xc('b88,', rho, spin=1, deriv=3)[:3]
-        self.assertAlmostEqual(lib.finger(e)   ,-0.9061911523772116   , 9)
-        self.assertAlmostEqual(lib.finger(v[0]),-1.8531364353196298   , 9)
-        self.assertAlmostEqual(lib.finger(v[1]),-0.0018308066137967724, 9)
-        self.assertAlmostEqual(lib.finger(f[0]),-0.21602284426026866  , 9)
-        self.assertAlmostEqual(lib.finger(f[1]), 0.0072053520662545617, 9)
-        self.assertAlmostEqual(lib.finger(f[2]), 0.0002275350850255538, 9)
+        self.assertAlmostEqual(lib.fp(e)   ,-0.9061911523772116   , 9)
+        self.assertAlmostEqual(lib.fp(v[0]),-1.8531364353196298   , 9)
+        self.assertAlmostEqual(lib.fp(v[1]),-0.0018308066137967724, 9)
+        self.assertAlmostEqual(lib.fp(f[0]),-0.21602284426026866  , 9)
+        self.assertAlmostEqual(lib.fp(f[1]), 0.0072053520662545617, 9)
+        self.assertAlmostEqual(lib.fp(f[2]), 0.0002275350850255538, 9)
 
     def test_m05x(self):
         rho =(numpy.array([1., 1., 0., 0., 0., 0.165 ]).reshape(-1,1),

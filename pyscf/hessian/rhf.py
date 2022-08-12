@@ -604,7 +604,7 @@ if __name__ == '__main__':
     n3 = mol.natm * 3
     hobj = mf.Hessian()
     e2 = hobj.kernel().transpose(0,2,1,3).reshape(n3,n3)
-    print(lib.finger(e2) - -0.50693144355876429)
+    print(lib.fp(e2) - -0.50693144355876429)
     #from hessian import rhf_o0
     #e2ref = rhf_o0.Hessian(mf).kernel().transpose(0,2,1,3).reshape(n3,n3)
     #print numpy.linalg.norm(e2-e2ref)

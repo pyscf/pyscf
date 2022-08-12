@@ -53,9 +53,9 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -101,7 +101,7 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
         return erifile
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
@@ -177,9 +177,9 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -206,7 +206,7 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     aosym_ks2 &= aosym[:2] == 's2'
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
