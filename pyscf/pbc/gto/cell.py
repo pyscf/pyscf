@@ -703,7 +703,7 @@ def get_ewald_params(cell, precision=None, mesh=None):
             The Ewald 'eta' and 'cut' parameters.
     '''
     if precision is None:
-        precision = cell.precision
+        precision = getattr(cell, 'precision_ewald', cell.precision)
     if cell.natm == 0:
         return 0, 0
     elif (cell.dimension < 2 or
