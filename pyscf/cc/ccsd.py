@@ -48,6 +48,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
+        t1 = numpy.zeros_like(t1)
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
@@ -67,6 +68,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
+        t1new = numpy.zeros_like(t1)
+        print("t1", t1)
+        print("t1new", t1new)
+        print("t2", t2)
+        print("t2new", t2new)
         if callback is not None:
             callback(locals())
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
@@ -239,19 +245,31 @@ def update_amps(mycc, t1, t2, eris):
                 tmp = None
 
         wVOov += eris_voov
-        eris_VOov = -.5 * eris_voov.transpose(0,2,1,3)
-        eris_VOov += eris_voov
-        eris_voov = None
-        def update_wVOov(q0, q1, tau):
-            wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
+        eris_VOov = -.5 * eris_voov.copy().transpose(0,2,1,3)
+        if not mycc.dcsd:
+            eris_VOov += eris_voov
+            eris_voov = None
+            def update_wVOov(q0, q1, tau):
+                wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
+        else:
+            def update_wVOov(q0, q1, tau, tau_dcsd):
+                wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_voov, tau)
+                wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau_dcsd)
         with lib.call_in_background(update_wVOov, sync=not mycc.async_io) as update_wVOov:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
                 tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
                 tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
-                #:wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
-                update_wVOov(q0, q1, tau)
-                tau = None
+                if mycc.dcsd:
+                    tau_dcsd = -numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
+                    update_wVOov(q0, q1, tau, tau_dcsd)
+                    tau = tau_dcsd = None
+                else:
+                    #:wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
+                    update_wVOov(q0, q1, tau)
+                    tau = None
+        if mycc.dcsd:
+            eris_voov = None
         def update_t2(q0, q1, theta):
             # This adds ring terms "quadratic" in t2. They are used by DCSD.
             t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
@@ -305,7 +323,7 @@ def update_amps(mycc, t1, t2, eris):
         t2new[i,i] /= lib.direct_sum('a,b->ab', eia[i], eia[i])
 
     time0 = log.timer_debug1('update t1 t2', *time0)
-    return t1new, t2new
+    return numpy.zeros_like(t1), t2new
 
 
 def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):

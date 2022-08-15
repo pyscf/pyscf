@@ -41,6 +41,7 @@ BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
+    t1 = np.zeros_like(t1)
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
     assert (isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
@@ -140,7 +141,7 @@ def update_amps(cc, t1, t2, eris):
     t1new /= eia
     t2new /= eijab
 
-    return t1new, t2new
+    return np.zeros_like(t1), t2new
 
 
 def energy(cc, t1=None, t2=None, eris=None):
