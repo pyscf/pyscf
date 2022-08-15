@@ -65,7 +65,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     else:
         adiis = None
 
-    iterinfo = common.IterationInfo()
+    mycc.iterinfo.cycle = 0
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         if callback is not None:
@@ -83,15 +83,15 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         t1new = t2new = None
         t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
+        mycc.iterinfo.cycle += 1
         log.info('cycle = %d  E_corr(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)
         if abs(eccsd-eold) < tol and normt < tolnormt:
-            iterinfo.converged = True
-            iterinfo.cycle = istep + 1
+            mycc.iterinfo.converged = True
             break
     log.timer('CCSD', *cput0)
-    return iterinfo, eccsd, t1, t2
+    return mycc.iterinfo.converged, eccsd, t1, t2
 
 
 def update_amps(mycc, t1, t2, eris):
@@ -1098,7 +1098,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self.e_hf is None:
             self.e_hf = self._scf.e_tot
 
-        self.iterinfo, self.e_corr, self.t1, self.t2 = \
+        _, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose, callback=self.callback)
