@@ -577,7 +577,7 @@ class Grids(lib.StreamObject):
 
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
-        return self.build(mol, with_non0tab)
+        return self.build(mol, with_non0tab=with_non0tab)
 
     def reset(self, mol=None):
         '''Reset mol and clean up relevant attributes for scanner mode'''

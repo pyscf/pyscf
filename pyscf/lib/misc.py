@@ -697,11 +697,13 @@ def module_method(fn, absences=None):
         fn_defaults = [None] * (nargs-len(fn_defaults)) + list(fn_defaults)
 
     if absences is not None:
-        var_index = {key: i for i, key in enumerate(var_args)}
         for k in absences:
-            assert k in var_index, f'Unknown argument {k}'
+            try:
+                idx = var_args.index(k)
+            except ValueError:
+                raise ValueError(f'Unknown argument {k}')
             body.append(f'    if {k} is None: {k} = self.{k}')
-            fn_defaults[var_index[k]] = None
+            fn_defaults[idx] = None
 
     body = '\n'.join(body)
     txt = f'''def {name}(self, {", ".join(var_args)}):

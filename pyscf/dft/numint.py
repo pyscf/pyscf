@@ -230,8 +230,8 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
 def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
               with_lapl=True, cutoff=None, ao_cutoff=CUTOFF, pair_mask=None,
               verbose=None):
-    r'''Calculate the electron density for LDA functional, and the density
-    derivatives for GGA and MGGA functionals.
+    r'''Calculate the electron density for LDA and the density derivatives for
+    GGA and MGGA with sparsity information.
 
     Args:
         mol : an instance of :class:`Mole`
@@ -274,10 +274,12 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
 
     xctype = xctype.upper()
     if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
+        ngrids = ao.shape[0]
     else:
-        ngrids, nao = ao[0].shape
+        ngrids = ao.shape[1]
 
+    if cutoff is None:
+        cutoff = CUTOFF
     cutoff = min(cutoff, .1)
     nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(ao_cutoff))
 
@@ -298,10 +300,10 @@ def eval_rho1(mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
         if hermi:
             rho[1:4] *= 2  # *2 for + einsum('pi,ij,pj->p', ao[i], dm, ao[0])
         else:
+            dm = lib.transpose(dm)
+            c0 = _dot_ao_dm_sparse(ao[0], dm, nbins, screen_index, pair_mask, ao_loc)
             for i in range(1, 4):
-                c1 = _dot_ao_dm_sparse(mol, ao[i], dm, nbins, screen_index,
-                                       pair_mask, ao_loc)
-                rho[i] += _contract_rho_sparse(c1, ao[0], screen_index, ao_loc)
+                rho[i] += _contract_rho_sparse(c0, ao[i], screen_index, ao_loc)
     else: # meta-GGA
         if with_lapl:
             if MGGA_DENSITY_LAPL:
@@ -820,8 +822,9 @@ def _tau_dot(mol, bra, ket, wv, mask, shls_slice, ao_loc):
     return mat
 
 def _sparse_enough(screen_index):
-    # TODO: find the best turnover threshold
-    return numpy.count_nonzero(screen_index) < screen_index.size * .5
+    # TODO: improve the turnover threshold
+    threshold = 0.5
+    return numpy.count_nonzero(screen_index) < screen_index.size * threshold
 
 def _dot_ao_ao_dense(ao1, ao2, wv, out=None):
     '''Returns bra.T.dot(ket) while sparsity is explicitly considered.
@@ -863,23 +866,30 @@ def _dot_ao_ao_sparse(ao1, ao2, wv, nbins, screen_index, pair_mask, ao_loc,
         out = numpy.zeros((nao, nao), dtype=ao1.dtype)
 
     if wv is None:
-        fn = libdft.VXCdot_ao_ao_sparse
-        wv_ptr = lib.c_null_ptr()
+        libdft.VXCdot_ao_ao_sparse(
+            out.ctypes.data_as(ctypes.c_void_p),
+            ao1.ctypes.data_as(ctypes.c_void_p),
+            ao2.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao), ctypes.c_int(ngrids),
+            ctypes.c_int(nbas), ctypes.c_int(hermi),
+            ctypes.c_int(nbins), screen_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p))
     else:
         assert wv.dtype == numpy.double
-        fn = libdft.VXCdot_aow_ao_sparse
-        wv_ptr = wv.ctypes.data_as(ctypes.c_void_p)
-    fn(out.ctypes.data_as(ctypes.c_void_p),
-       ao1.ctypes.data_as(ctypes.c_void_p),
-       ao2.ctypes.data_as(ctypes.c_void_p), wv_ptr,
-       ctypes.c_int(nao), ctypes.c_int(ngrids),
-       ctypes.c_int(nbas), ctypes.c_int(hermi),
-       ctypes.c_int(nbins), screen_index.ctypes.data_as(ctypes.c_void_p),
-       pair_mask.ctypes.data_as(ctypes.c_void_p),
-       ao_loc.ctypes.data_as(ctypes.c_void_p))
+        libdft.VXCdot_aow_ao_sparse(
+            out.ctypes.data_as(ctypes.c_void_p),
+            ao1.ctypes.data_as(ctypes.c_void_p),
+            ao2.ctypes.data_as(ctypes.c_void_p),
+            wv.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nao), ctypes.c_int(ngrids),
+            ctypes.c_int(nbas), ctypes.c_int(hermi),
+            ctypes.c_int(nbins), screen_index.ctypes.data_as(ctypes.c_void_p),
+            pair_mask.ctypes.data_as(ctypes.c_void_p),
+            ao_loc.ctypes.data_as(ctypes.c_void_p))
     return out
 
-def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc, out=None):
+def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc):
     '''Returns numpy.dot(ao, dm) while sparsity is explicitly considered.
     Note the return may be different to _dot_ao_dm. After contracting to another
     ao matrix, (numpy.dot(ao, dm)*ao).sum(axis=1), their value can be matched up
@@ -890,16 +900,10 @@ def _dot_ao_dm_sparse(ao, dm, nbins, screen_index, pair_mask, ao_loc, out=None):
 
     assert ao.flags.f_contiguous
     assert ao.dtype == dm.dtype == numpy.double
-    if screen_index is None:
-        return lib.ddot(dm.T, ao.T).T
-
     ngrids, nao = ao.shape
     nbas = screen_index.shape[1]
     dm = numpy.asarray(dm, order='C')
-    if out is None:
-        out = _empty_aligned((nao, ngrids)).T
-    else:
-        out = numpy.ndarray((ngrids, nao), buffer=out, order='F')
+    out = _empty_aligned((nao, ngrids)).T
 
     fn = libdft.VXCdot_ao_dm_sparse
     fn(out.ctypes.data_as(ctypes.c_void_p),
@@ -1124,7 +1128,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     >>> nelec, exc, vxc = ni.nr_rks(mol, grids, 'lda,vwn', dm)
     '''
     xctype = ni._xc_type(xc_code)
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, grids=grids)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     ao_loc = mol.ao_loc_nr()
     cutoff = grids.cutoff * 1e2
     nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
@@ -1282,8 +1286,8 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
-    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, grids=grids)[:2]
-    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, grids=grids)[0]
+    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, False, grids)[:2]
+    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, False, grids)[0]
 
     nelec = numpy.zeros((2,nset))
     excsum = numpy.zeros(nset)
@@ -1439,9 +1443,9 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         raise NotImplementedError('complex density matrix')
 
     xctype = ni._xc_type(xc_code)
-    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, grids=grids)
+    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     if rho0 is None and (xctype != 'LDA' or fxc is None):
-        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1, grids=grids)[0]
+        make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1, False, grids)[0]
     else:
         make_rho0 = None
 
@@ -1538,7 +1542,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
     if fxc is None:
         fxc = ni.cache_xc_kernel1(mol, grids, xc_code, [dm0*.5]*2, 1, max_memory)[2]
 
-    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms_alpha, hermi=0, grids=grids)
+    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms_alpha, 0, False, grids)
     def block_loop(ao_deriv):
         p1 = 0
         for ao, mask, weight, coords \
@@ -1791,11 +1795,11 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     xctype = ni._xc_type(xc_code)
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
-    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, grids=grids)[:2]
-    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, grids=grids)[0]
+    make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, False, grids)[:2]
+    make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, False, grids)[0]
 
     if rho0 is None and (xctype != 'LDA' or fxc is None):
-        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1, grids=grids)[0]
+        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1, False, grids)[0]
     else:
         make_rho0 = None
 
@@ -2675,7 +2679,7 @@ def cache_xc_kernel1(ni, mol, grids, xc_code, dm, spin=0, max_memory=2000):
 def get_rho(ni, mol, dm, grids, max_memory=2000):
     '''Density in real space
     '''
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1, grids=grids)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1, False, grids)
     assert nset == 1
     rho = numpy.empty(grids.weights.size)
     p1 = 0
@@ -2684,6 +2688,46 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
+
+def _block_loop(ni, mol, grids, nao=None, deriv=0, max_memory=2000,
+                non0tab=None, blksize=None, buf=None):
+    '''Define this macro to loop over grids by blocks.
+    '''
+    if grids.coords is None:
+        grids.build(with_non0tab=True)
+    if nao is None:
+        nao = mol.nao
+    ngrids = grids.coords.shape[0]
+    comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+    # NOTE to index grids.non0tab, the blksize needs to be an integer
+    # multiplier of BLKSIZE
+    if blksize is None:
+        blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))*BLKSIZE
+        blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+
+    if non0tab is None and mol is grids.mol:
+        non0tab = grids.non0tab
+    if non0tab is None:
+        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
+                              dtype=numpy.uint8)
+        non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
+    screen_index = non0tab
+
+    if buf is None:
+        buf = _empty_aligned(comp * blksize * nao)
+    for ip0, ip1 in lib.prange(0, ngrids, blksize):
+        coords = grids.coords[ip0:ip1]
+        weight = grids.weights[ip0:ip1]
+        mask = screen_index[ip0//BLKSIZE:]
+        # TODO: pass grids.cutoff to eval_ao
+        ao = ni.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
+                        cutoff=grids.cutoff, out=buf)
+        if not _sparse_enough(mask):
+            # Unset mask for dense AO tensor. It determines which eval_rho
+            # to be called in make_rho
+            mask = None
+        yield ao, mask, weight, coords
+
 
 class _NumIntMixin(lib.StreamObject):
     libxc = libxc
@@ -2800,6 +2844,7 @@ class _NumIntMixin(lib.StreamObject):
             hyb = self.hybrid_coeff(xc_code, spin)
         return omega, alpha, hyb
 
+
 class NumInt(_NumIntMixin):
     '''Numerical integration methods for non-relativistic RKS and UKS'''
 
@@ -2843,46 +2888,9 @@ class NumInt(_NumIntMixin):
     eval_rho2 = staticmethod(eval_rho2)
     get_rho = get_rho
 
-    def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
-                   non0tab=None, blksize=None, buf=None):
-        '''Define this macro to loop over grids by blocks.
-        '''
-        if grids.coords is None:
-            grids.build(with_non0tab=True)
-        if nao is None:
-            nao = mol.nao
-        ngrids = grids.coords.shape[0]
-        comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-        # NOTE to index grids.non0tab, the blksize needs to be an integer
-        # multiplier of BLKSIZE
-        if blksize is None:
-            blksize = int(max_memory*1e6/((comp+1)*nao*8*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+    block_loop = _block_loop
 
-        if non0tab is None and mol is grids.mol:
-            non0tab = grids.non0tab
-        if non0tab is None:
-            non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,mol.nbas),
-                                  dtype=numpy.uint8)
-            non0tab[:] = NBINS + 1  # Corresponding to AO value ~= 1
-        screen_index = non0tab
-
-        if buf is None:
-            buf = _empty_aligned(comp * blksize * nao)
-        for ip0, ip1 in lib.prange(0, ngrids, blksize):
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
-            mask = screen_index[ip0//BLKSIZE:]
-            # TODO: pass grids.cutoff to eval_ao
-            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=mask,
-                              cutoff=grids.cutoff, out=buf)
-            if not _sparse_enough(mask):
-                # Unset mask for dense AO tensor. It determines which eval_rho
-                # to be called in make_rho
-                mask = None
-            yield ao, mask, weight, coords
-
-    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
+    def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
             #TODO: test whether dm.mo_coeff matching dm
             mo_coeff = dms.mo_coeff

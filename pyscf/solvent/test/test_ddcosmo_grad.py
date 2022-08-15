@@ -908,7 +908,7 @@ class KnownValues(unittest.TestCase):
             fi = ddcosmo.make_fi(pcm, r_vdw)
             ui = 1 - fi
             ui[ui<0] = 0
-            pcm.grids = grids = dft.gen_grid.Grids(mol).run(level=0)
+            pcm.grids = grids = ddcosmo.Grids(mol).run(level=0)
             coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
             ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
             cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
@@ -925,7 +925,7 @@ class KnownValues(unittest.TestCase):
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
-        pcm.grids = grids = dft.gen_grid.Grids(mol0).run(level=0)
+        pcm.grids = grids = ddcosmo.Grids(mol0).run(level=0)
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
@@ -961,7 +961,7 @@ class KnownValues(unittest.TestCase):
             fi = ddcosmo.make_fi(pcm, r_vdw)
             ui = 1 - fi
             ui[ui<0] = 0
-            pcm.grids = grids = dft.gen_grid.Grids(mol).run(level=0)
+            pcm.grids = grids = ddcosmo.Grids(mol).run(level=0)
             coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
             ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
             cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)
@@ -978,7 +978,7 @@ class KnownValues(unittest.TestCase):
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
-        pcm.grids = grids = dft.gen_grid.Grids(mol0).run(level=0)
+        pcm.grids = grids = ddcosmo.Grids(mol0).run(level=0)
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
         cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, pcm.lmax)

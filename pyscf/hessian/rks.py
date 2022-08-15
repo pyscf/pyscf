@@ -267,27 +267,27 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
                  2,4,5]]
     return vmat.reshape(3,3,nao,nao)
 
-def _make_dR_rho1(ao, ao_dm0, atm_id, aoslices, xctype='GGA'):
+def _make_dR_rho1(ao, ao_dm0, atm_id, aoslices, xctype):
     p0, p1 = aoslices[atm_id][2:]
     ngrids = ao[0].shape[0]
     if xctype == 'GGA':
         rho1 = numpy.zeros((3,4,ngrids))
     elif xctype == 'MGGA':
-        rho1 = numpy.zeros((3,6,ngrids))
+        rho1 = numpy.zeros((3,5,ngrids))
         ao_dm0_x = ao_dm0[1][:,p0:p1]
         ao_dm0_y = ao_dm0[2][:,p0:p1]
         ao_dm0_z = ao_dm0[3][:,p0:p1]
         # (d_X \nabla mu) dot \nalba nu DM_{mu,nu}
-        rho1[0,5] += numpy.einsum('pi,pi->p', ao[XX,:,p0:p1], ao_dm0_x)
-        rho1[0,5] += numpy.einsum('pi,pi->p', ao[XY,:,p0:p1], ao_dm0_y)
-        rho1[0,5] += numpy.einsum('pi,pi->p', ao[XZ,:,p0:p1], ao_dm0_z)
-        rho1[1,5] += numpy.einsum('pi,pi->p', ao[YX,:,p0:p1], ao_dm0_x)
-        rho1[1,5] += numpy.einsum('pi,pi->p', ao[YY,:,p0:p1], ao_dm0_y)
-        rho1[1,5] += numpy.einsum('pi,pi->p', ao[YZ,:,p0:p1], ao_dm0_z)
-        rho1[2,5] += numpy.einsum('pi,pi->p', ao[ZX,:,p0:p1], ao_dm0_x)
-        rho1[2,5] += numpy.einsum('pi,pi->p', ao[ZY,:,p0:p1], ao_dm0_y)
-        rho1[2,5] += numpy.einsum('pi,pi->p', ao[ZZ,:,p0:p1], ao_dm0_z)
-        rho1[:,5] *= .5
+        rho1[0,4] += numpy.einsum('pi,pi->p', ao[XX,:,p0:p1], ao_dm0_x)
+        rho1[0,4] += numpy.einsum('pi,pi->p', ao[XY,:,p0:p1], ao_dm0_y)
+        rho1[0,4] += numpy.einsum('pi,pi->p', ao[XZ,:,p0:p1], ao_dm0_z)
+        rho1[1,4] += numpy.einsum('pi,pi->p', ao[YX,:,p0:p1], ao_dm0_x)
+        rho1[1,4] += numpy.einsum('pi,pi->p', ao[YY,:,p0:p1], ao_dm0_y)
+        rho1[1,4] += numpy.einsum('pi,pi->p', ao[YZ,:,p0:p1], ao_dm0_z)
+        rho1[2,4] += numpy.einsum('pi,pi->p', ao[ZX,:,p0:p1], ao_dm0_x)
+        rho1[2,4] += numpy.einsum('pi,pi->p', ao[ZY,:,p0:p1], ao_dm0_y)
+        rho1[2,4] += numpy.einsum('pi,pi->p', ao[ZZ,:,p0:p1], ao_dm0_z)
+        rho1[:,4] *= .5
     else:
         raise RuntimeError
 
@@ -384,7 +384,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc) for i in range(4)]
             wf = weight * fxc
             for ia in range(mol.natm):
-                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices, xctype)
                 wv = numpy.einsum('xyg,sxg->syg', wf, dR_rho1)
                 wv[:,0] *= .5
                 for i in range(3):
@@ -504,7 +504,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                       for i in range(4)]
             wf = weight * fxc
             for ia in range(mol.natm):
-                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices, xctype)
                 wv = numpy.einsum('xyg,sxg->syg', wf, dR_rho1)
                 wv[:,0] *= .5
                 aow = [numint._scale_ao(ao[:4], wv[i,:4]) for i in range(3)]
@@ -528,7 +528,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc) for i in range(4)]
             wf = weight * fxc
             for ia in range(mol.natm):
-                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                dR_rho1 = _make_dR_rho1(ao, ao_dm0, ia, aoslices, xctype)
                 wv = numpy.einsum('xyg,sxg->syg', wf, dR_rho1)
                 wv[:,0] *= .5
                 wv[:,4] *= .25

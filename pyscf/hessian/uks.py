@@ -362,8 +362,8 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
                 # *2 for \nabla|ket> in rho1
                 rho1a = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0a[:,p0:p1]) * 2
                 rho1b = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0b[:,p0:p1]) * 2
-                wv  = wf[0] * rho1a
-                wv += wf[1] * rho1b
+                wv  = wf[0,:,None] * rho1a
+                wv += wf[1,:,None] * rho1b
                 # aow ~ rho1 ~ d/dR1
                 aow = numpy.einsum('pi,xp->xpi', ao[0], wv[0])
                 rks_hess._d1d2_dot_(vmata[ia], mol, ao[1:4], aow, mask, ao_loc, False)
@@ -394,11 +394,11 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc) for i in range(4)]
             wf = weight * fxc
             for ia in range(mol.natm):
-                dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
-                dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices)
+                dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices, xctype)
+                dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices, xctype)
                 wv  = numpy.einsum('xbyg,sxg->bsyg', wf[0], dR_rho1a)
                 wv += numpy.einsum('xbyg,sxg->bsyg', wf[1], dR_rho1b)
-                wv[:,0] *= .5
+                wv[:,:,0] *= .5
                 wva, wvb = wv
 
                 aow = rks_grad._make_dR_dao_w(ao, wva[0])
@@ -462,8 +462,8 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
                 dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices, xctype)
                 wv  = numpy.einsum('xbyg,sxg->bsyg', wf[0], dR_rho1a)
                 wv += numpy.einsum('xbyg,sxg->bsyg', wf[1], dR_rho1b)
-                wv[:,0] *= .5
-                wv[:,4] *= .5
+                wv[:,:,0] *= .5
+                wv[:,:,4] *= .5
                 wva, wvb = wv
 
                 aow = rks_grad._make_dR_dao_w(ao, wva[0])
@@ -545,8 +545,8 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 # First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
                 rho1a = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0a[:,p0:p1])
                 rho1b = numpy.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0b[:,p0:p1])
-                wv  = wf[0] * rho1a
-                wv += wf[1] * rho1b
+                wv  = wf[0,:,None] * rho1a
+                wv += wf[1,:,None] * rho1b
                 aow = numpy.einsum('pi,xp->xpi', ao[0], wv[0])
                 aow[:,:,p0:p1] += aow1a[:,:,p0:p1]
                 rks_grad._d1_dot_(vmata[ia], mol, aow, ao[0], mask, ao_loc, True)
@@ -577,11 +577,11 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc) for i in range(4)]
             wf = weight * fxc
             for ia in range(mol.natm):
-                dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices)
-                dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices)
+                dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices, xctype)
+                dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices, xctype)
                 wv  = numpy.einsum('xbyg,sxg->bsyg', wf[0], dR_rho1a)
                 wv += numpy.einsum('xbyg,sxg->bsyg', wf[1], dR_rho1b)
-                wv[:,0] *= .5
+                wv[:,:,0] *= .5
                 wva, wvb = wv
 
                 aow = [numint._scale_ao(ao[:4], wva[i,:4]) for i in range(3)]
@@ -619,13 +619,14 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
 
             ao_dm0a = [numint._dot_ao_dm(mol, ao[i], dm0a, mask, shls_slice, ao_loc) for i in range(4)]
             ao_dm0b = [numint._dot_ao_dm(mol, ao[i], dm0b, mask, shls_slice, ao_loc) for i in range(4)]
+            wf = weight * fxc
             for ia in range(mol.natm):
                 dR_rho1a = rks_hess._make_dR_rho1(ao, ao_dm0a, ia, aoslices, xctype)
                 dR_rho1b = rks_hess._make_dR_rho1(ao, ao_dm0b, ia, aoslices, xctype)
                 wv  = numpy.einsum('xbyg,sxg->bsyg', wf[0], dR_rho1a)
                 wv += numpy.einsum('xbyg,sxg->bsyg', wf[1], dR_rho1b)
-                wv[:,0] *= .5
-                wv[:,4] *= .25
+                wv[:,:,0] *= .5
+                wv[:,:,4] *= .25
                 wva, wvb = wv
 
                 aow = [numint._scale_ao(ao[:4], wva[i,:4]) for i in range(3)]

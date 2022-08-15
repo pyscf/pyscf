@@ -686,6 +686,8 @@ class NumInt2C(numint._NumIntMixin):
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
 
+    block_loop = numint._block_loop
+
     def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=False, grids=None):
         if getattr(dms, 'mo_coeff', None) is not None:
             #TODO: test whether dm.mo_coeff matching dm

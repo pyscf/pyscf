@@ -748,7 +748,7 @@ class RNumInt(numint._NumIntMixin):
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao = self.eval_ao(mol, coords, deriv=deriv, with_s=with_s,
-                              non0tab=non0, cutoff=self.cutoff, out=buf)
+                              non0tab=non0, cutoff=grids.cutoff, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False, grids=None):
