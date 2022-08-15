@@ -63,7 +63,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).run()
         mycc = ccsd.CCSD(mf)
         mycc.kernel(dcsd=True)
-        self.assertAlmostEqual(mycc.e_tot, -76.12243091165958, 7)
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
     
     def test_roccsd(self):
         mf = scf.ROHF(mol).run()

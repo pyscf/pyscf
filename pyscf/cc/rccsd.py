@@ -41,7 +41,6 @@ BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
 MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
-    t1 = np.zeros_like(t1)
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
     assert (isinstance(eris, ccsd._ChemistsERIs))
     nocc, nvir = t1.shape
@@ -117,12 +116,20 @@ def update_amps(cc, t1, t2, eris):
         Lvv[np.diag_indices(nvir)] -= mo_e_v
 
         Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
+        if cc.dcsd:
+            Woooo_dcsd = imd.cc_Woooo(t1, t2, eris, False)
         Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
         Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
 
-        tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
-        t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
+        if not cc.dcsd:
+            tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
+            t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
+        else:
+            t2new += lib.einsum('klij,klab->ijab', Woooo, t2)
+            tau = np.einsum('ia,jb->ijab', t1, t1)
+            t2new += lib.einsum('klij,klab->ijab', Woooo_dcsd, tau)
+            tau += t2
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
         tmp = lib.einsum('ac,ijcb->ijab', Lvv, t2)
         t2new += (tmp + tmp.transpose(1,0,3,2))
@@ -141,7 +148,7 @@ def update_amps(cc, t1, t2, eris):
     t1new /= eia
     t2new /= eijab
 
-    return np.zeros_like(t1), t2new
+    return t1new, t2new
 
 
 def energy(cc, t1=None, t2=None, eris=None):

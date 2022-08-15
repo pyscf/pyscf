@@ -48,7 +48,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
         eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
-        t1 = numpy.zeros_like(t1)
     elif t2 is None:
         t2 = mycc.get_init_guess(eris)[1]
 
@@ -68,11 +67,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = mycc.update_amps(t1, t2, eris)
-        t1new = numpy.zeros_like(t1)
-        print("t1", t1)
-        print("t1new", t1new)
-        print("t2", t2)
-        print("t2new", t2new)
         if callback is not None:
             callback(locals())
         tmpvec = mycc.amplitudes_to_vector(t1new, t2new)
@@ -323,7 +317,7 @@ def update_amps(mycc, t1, t2, eris):
         t2new[i,i] /= lib.direct_sum('a,b->ab', eia[i], eia[i])
 
     time0 = log.timer_debug1('update t1 t2', *time0)
-    return numpy.zeros_like(t1), t2new
+    return t1new, t2new
 
 
 def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
