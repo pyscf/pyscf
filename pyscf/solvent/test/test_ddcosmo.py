@@ -83,7 +83,7 @@ def make_L(pcmobj, r_vdw, lebedev_order, lmax, eta=0.1):
     return L.reshape(natm*nlm,natm*nlm)
 
 def make_psi(mol, dm, r_vdw, lmax):
-    grids = dft.gen_grid.Grids(mol)
+    grids = ddcosmo.Grids(mol)
     atom_grids_tab = grids.gen_atomic_grids(mol)
     grids.build()
 
@@ -113,7 +113,7 @@ def make_psi(mol, dm, r_vdw, lmax):
 
 def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
     mol = pcm.mol
-    grids = dft.gen_grid.Grids(mol)
+    grids = ddcosmo.Grids(mol)
     atom_grids_tab = grids.gen_atomic_grids(mol)
     grids.build()
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(lebedev_order)
@@ -351,7 +351,7 @@ class KnownValues(unittest.TestCase):
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
-        grids = dft.gen_grid.Grids(mol).build()
+        grids = ddcosmo.Grids(mol).build()
         pcm.grids = grids
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
@@ -387,7 +387,7 @@ class KnownValues(unittest.TestCase):
         fi = ddcosmo.make_fi(pcm, r_vdw)
         ui = 1 - fi
         ui[ui<0] = 0
-        grids = dft.gen_grid.Grids(mol).run(level=0)
+        grids = ddcosmo.Grids(mol).run(level=0)
         pcm.grids = grids
         coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
         ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
@@ -505,4 +505,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for ddcosmo")
     unittest.main()
-

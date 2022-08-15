@@ -422,18 +422,18 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
     '''Use the elements of the lower triangular part to fill the upper triangular part.
 
     Kwargs:
-        filltriu : int
+        hermi : int
 
             | 1 (default) return a hermitian matrix
             | 2           return an anti-hermitian matrix
 
     Examples:
 
-    >>> unpack_row(numpy.arange(9.).reshape(3,3), 1)
+    >>> hermi_triu(numpy.arange(9.).reshape(3,3), 1)
     [[ 0.  3.  6.]
      [ 3.  4.  7.]
      [ 6.  7.  8.]]
-    >>> unpack_row(numpy.arange(9.).reshape(3,3), 2)
+    >>> hermi_triu(numpy.arange(9.).reshape(3,3), 2)
     [[ 0. -3. -6.]
      [ 3.  4. -7.]
      [ 6.  7.  8.]]

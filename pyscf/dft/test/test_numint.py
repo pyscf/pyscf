@@ -558,21 +558,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
         self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
 
-        #mf.xc = 'camb3lyp'
-        #mf.omega = 0.9
-        #rho1, vxc1, fxc1 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+        if hasattr(dft, 'xcfun'):
+            mf.xc = 'camb3lyp'
+            mf.omega = 0.9
+            rho1, vxc1, fxc1 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
 
-        #mf.xc = 'camb3lyp'
-        #mf._numint.libxc = dft.xcfun
-        #mf.omega = 0.9
-        #rho2, vxc2, fxc2 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
+            mf.xc = 'camb3lyp'
+            mf._numint.libxc = dft.xcfun
+            mf.omega = 0.9
+            rho2, vxc2, fxc2 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
 
-        #self.assertAlmostEqual(abs(rho1 - rho2).max(), 0, 4)
-        #self.assertAlmostEqual(abs(vxc1[0] - vxc2[0]), 0, 4)
-        #self.assertAlmostEqual(abs(vxc1[1] - vxc2[1]), 0, 4)
-        #self.assertAlmostEqual(abs(fxc1[0] - fxc2[0]), 0, 4)
-        #self.assertAlmostEqual(abs(fxc1[1] - fxc2[1]), 0, 0)
-        #self.assertAlmostEqual(abs(fxc1[2] - fxc2[2]), 0, 0)
+            self.assertAlmostEqual(abs(fxc1 - fxc2).max(), 0, 4)
 
 if __name__ == "__main__":
     print("Test numint")

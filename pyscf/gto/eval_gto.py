@@ -143,7 +143,8 @@ def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
             ao = ao[0]
     return ao
 
-def make_screen_index(mol, coords, shls_slice=None, cutoff=CUTOFF):
+def make_screen_index(mol, coords, shls_slice=None, cutoff=CUTOFF,
+                      blksize=BLKSIZE):
     '''Screen index indicates how important a shell is on grid. The shell is
     ignorable if its screen index is 0. Screen index ~= nbins + log(ao)
 
@@ -176,16 +177,18 @@ def make_screen_index(mol, coords, shls_slice=None, cutoff=CUTOFF):
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
-    nbas = shls_slice[1] - shls_slice[0]
+    sh0, sh1 = shls_slice
+    nbas = sh1 - sh0
 
-    s_index = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
+    s_index = numpy.empty(((ngrids+blksize-1)//blksize, nbas),
                           dtype=numpy.uint8)
     libcgto.GTO_screen_index(
         s_index.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(NBINS), ctypes.c_double(cutoff),
-        coords.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(ngrids),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids), ctypes.c_int(blksize),
         mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
-        mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        mol._bas[sh0:].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         mol._env.ctypes.data_as(ctypes.c_void_p))
     return s_index
 

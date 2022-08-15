@@ -889,7 +889,7 @@ for (jsh = jsh0; jsh < jsh1; jsh++) {
 }
 
 /* out = bra.T.dot(ket) */
-void VXCdot_ao_ao_sparse(double *out, double *bra, double *ket, double *wv,
+void VXCdot_ao_ao_sparse(double *out, double *bra, double *ket,
                          int nao, int ngrids, int nbas, int hermi, int nbins,
                          uint8_t *screen_index, uint8_t *pair_mask, int *ao_loc)
 {

@@ -493,11 +493,11 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_by_1e(self):
         dm = mf.get_init_guess(key='1e')
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 9)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
 
         dm = kmf.get_init_guess(key='1e')
         self.assertEqual(dm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 9)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
 
     def test_init_guess_by_atom(self):
         with lib.temporary_env(cell, dimension=1):

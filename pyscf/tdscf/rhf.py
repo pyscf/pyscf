@@ -154,7 +154,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
         xctype = ni._xc_type(mf.xc)
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1)[0]
+        make_rho = ni._gen_rho_evaluator(mol, dm0, hermi=1, with_lapl=False)[0]
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, mf.max_memory*.8-mem_now)
 
@@ -163,13 +163,13 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[2]
-                frr = fxc[0]
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
+                wfxc = fxc[0,0] * weight
 
                 rho_o = lib.einsum('rp,pi->ri', ao, orbo)
                 rho_v = lib.einsum('rp,pi->ri', ao, orbv)
                 rho_ov = numpy.einsum('ri,ra->ria', rho_o, rho_v)
-                w_ov = numpy.einsum('ria,r->ria', rho_ov, weight*frr)
+                w_ov = numpy.einsum('ria,r->ria', rho_ov, wfxc)
                 iajb = lib.einsum('ria,rjb->iajb', rho_ov, w_ov) * 2
                 a += iajb
                 b += iajb
@@ -179,8 +179,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=0)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
@@ -202,8 +201,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, mf.grids, nao, ao_deriv, max_memory):
                 rho = make_rho(0, ao, mask, xctype)
-                vxc, fxc = ni.eval_xc(mf.xc, rho, 0, deriv=2)[1:3]
-                fxc = xc_deriv.transform_fxc(rho, vxc, fxc, xctype, spin=0)
+                fxc = ni.eval_xc_eff(mf.xc, rho, deriv=2, xctype=xctype)[2]
                 wfxc = fxc * weight
                 rho_o = lib.einsum('xrp,pi->xri', ao, orbo)
                 rho_v = lib.einsum('xrp,pi->xri', ao, orbv)
