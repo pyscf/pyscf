@@ -363,8 +363,8 @@ def get_partition(mol, atom_grids_tab,
     return coords_all, weights_all
 gen_partition = get_partition
 
-def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None,
-              cutoff=CUTOFF):
+def make_mask(mol, coords, relativity=0, shls_slice=None, cutoff=CUTOFF,
+              verbose=None):
     '''Mask to indicate whether a shell is ignorable on grids. See also the
     function gto.eval_gto.make_screen_index
 
@@ -546,7 +546,7 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None, with_non0tab=False, **kwargs):
+    def build(self, mol=None, with_non0tab=False, sort_grids=True, **kwargs):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -555,9 +555,10 @@ class Grids(lib.StreamObject):
         self.coords, self.weights = self.get_partition(
             mol, atom_grids_tab, self.radii_adjust, self.atomic_radii, self.becke_scheme)
 
-        idx = arg_group_grids(mol, self.coords)
-        self.coords = self.coords[idx]
-        self.weights = self.weights[idx]
+        if sort_grids:
+            idx = arg_group_grids(mol, self.coords)
+            self.coords = self.coords[idx]
+            self.weights = self.weights[idx]
 
         if self.alignment:
             padding = _padding_size(self.size, self.alignment)

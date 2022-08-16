@@ -568,7 +568,7 @@ class KnownValues(unittest.TestCase):
             mf.omega = 0.9
             rho2, vxc2, fxc2 = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
 
-            self.assertAlmostEqual(abs(fxc1 - fxc2).max(), 0, 4)
+            self.assertAlmostEqual(abs(fxc1*rho1[0] - fxc2*rho2[0]).max(), 0, 4)
 
 if __name__ == "__main__":
     print("Test numint")

@@ -37,9 +37,9 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
 {
         const int nblk = (ngrids+blksize-1) / blksize;
         int i, j;
-        int np, nc, atm_id, ng0, ng1, dg;
+        int np, nc, l, atm_id, ng0, ng1, dg;
         size_t bas_id, ib;
-        double min_exp, log_coeff, maxc, arr, arr_min, si;
+        double min_exp, log_coeff, maxc, arr, arr_min, rr_min, r2sup, si;
         double dx, dy, dz, atom_x, atom_y, atom_z;
         double *p_exp, *pcoeff, *ratm;
         double *coordx = coords;
@@ -50,6 +50,7 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF+bas_id*BAS_SLOTS];
                 nc = bas[NCTR_OF +bas_id*BAS_SLOTS];
+                l = bas[ANG_OF+bas_id*BAS_SLOTS];
                 p_exp = env + bas[PTR_EXP+bas_id*BAS_SLOTS];
                 pcoeff = env + bas[PTR_COEFF+bas_id*BAS_SLOTS];
                 atm_id = bas[ATOM_OF+bas_id*BAS_SLOTS];
@@ -67,6 +68,13 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                         }
                 }
                 log_coeff = log(maxc);
+                if (l > 0) {
+                        r2sup = l / (2. * min_exp);
+                        arr_min = min_exp * r2sup - .5 * log(r2sup) * l - log_coeff;
+                } else {
+                        r2sup = 0.;
+                        arr_min = -log_coeff;
+                }
 
                 for (ib = 0; ib < nblk; ib++) {
                         ng0 = ib * blksize;
@@ -79,12 +87,19 @@ void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
                                 dz = coordz[ng0+i] - atom_z;
                                 rr[i] = dx*dx + dy*dy + dz*dz;
                         }
-                        arr_min = 1e9;
+                        rr_min = 1e9;
                         for (i = 0; i < dg; i++) {
-                                arr = min_exp * rr[i] - log_coeff;
-                                arr_min = MIN(arr_min, arr);
+                                rr_min = MIN(rr_min, rr[i]);
                         }
-                        si = nbins - arr_min * scale;
+                        if (l == 0) {
+                                arr = min_exp * rr_min - log_coeff;
+                        } else if (rr_min < r2sup) {
+                                arr = arr_min;
+                        } else {
+                                arr = min_exp * rr_min - .5 * log(rr_min) * l
+                                        - log_coeff;
+                        }
+                        si = nbins - arr * scale;
                         if (si <= 0) {
                                 screen_index[ib*nbas+bas_id] = 0;
                         } else {

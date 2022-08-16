@@ -127,8 +127,8 @@ class KnownValues(unittest.TestCase):
         grid.build()
         coords = grid.coords*10.
         non0 = gen_grid.make_mask(h2o, coords)
-        self.assertEqual(non0.sum(), 6325)
-        self.assertAlmostEqual(lib.fp(non0), -76.69622526441744, 9)
+        self.assertEqual((non0>0).sum(), 123)
+        self.assertAlmostEqual(lib.fp(non0), -83.54934301013405, 9)
 
     def test_overwriting_grids_attribute(self):
         g = gen_grid.Grids(h2o).run()

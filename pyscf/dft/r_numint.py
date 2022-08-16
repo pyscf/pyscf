@@ -752,8 +752,8 @@ class RNumInt(numint._NumIntMixin):
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False, grids=None):
-        dms = numpy.asarray(dms)
-        if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+        dms = numpy.asarray(dms, order='C')
+        if dms.ndim == 2:
             dms = dms[numpy.newaxis]
         ndms, nao = dms.shape[:2]
         def make_rho(idm, ao, non0tab, xctype):
