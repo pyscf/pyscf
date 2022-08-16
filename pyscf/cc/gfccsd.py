@@ -469,6 +469,22 @@ def contract_ket_hole(gfccsd, eom, t1, t2, v, orb):
         return np.dot(v, b)
 
 
+def build_ket_hole(gfccsd, eom, t1, t2, orb):
+    r"""Build \bar{a}^\dagger_p |\Psi>.
+    """
+
+    nocc, nvir = t1.shape
+
+    if orb < nocc:
+        b1 = np.eye(nocc)[orb]
+        b2 = np.zeros((nocc, nocc, nvir))
+    else:
+        b1 = t1[:, orb-nocc]
+        b2 = t2[:, :, orb-nocc]
+
+    return eom.amplitudes_to_vector(b1, b2)
+
+
 def build_bra_hole(gfccsd, eom, t1, t2, l1, l2, orb):
     """Get the first- and second-order contributions to the left-hand
     transformed vector for a given orbital for the hole part of the
@@ -512,6 +528,22 @@ def contract_ket_part(gfccsd, eom, t1, t2, v, orb):
         return np.dot(v, b)
     else:
         return -v[orb-nocc]
+
+
+def build_ket_hole(gfccsd, eom, t1, t2, orb):
+    r"""Build \bar{a}_p |\Psi>.
+    """
+
+    nocc, nvir = t1.shape
+
+    if orb < nocc:
+        b1 = t1[orb]
+        b2 = t2[orb]
+    else:
+        b1 = -np.eye(nvir)[orb-nocc]
+        b2 = np.zeros((nocc, nvir, nvir))
+
+    return eom.amplitudes_to_vector(b1, b2)
 
 
 def build_bra_part(gfccsd, eom, t1, t2, l1, l2, orb):
