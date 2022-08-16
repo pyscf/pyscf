@@ -530,7 +530,7 @@ def contract_ket_part(gfccsd, eom, t1, t2, v, orb):
         return -v[orb-nocc]
 
 
-def build_ket_hole(gfccsd, eom, t1, t2, orb):
+def build_ket_part(gfccsd, eom, t1, t2, orb):
     r"""Build \bar{a}_p |\Psi>.
     """
 
