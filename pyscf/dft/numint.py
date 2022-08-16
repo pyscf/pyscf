@@ -34,7 +34,7 @@ except (ImportError, OSError):
         warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
         raise
 
-from pyscf.dft.gen_grid import make_mask, BLKSIZE, NBINS, CUTOFF
+from pyscf.dft.gen_grid import BLKSIZE, NBINS, CUTOFF, make_mask
 from pyscf.dft import xc_deriv
 from pyscf import __config__
 
@@ -1444,7 +1444,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     xctype = ni._xc_type(xc_code)
     make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
-    if rho0 is None and (xctype != 'LDA' or fxc is None):
+    if fxc is None and rho0 is None:
         make_rho0 = ni._gen_rho_evaluator(mol, dm0, 1, False, grids)[0]
     else:
         make_rho0 = None
@@ -1531,80 +1531,17 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
 
     Ref. CPL, 256, 454
     '''
-    if isinstance(dms_alpha, numpy.ndarray):
-        dtype = dms_alpha.dtype
-    else:
-        dtype = numpy.result_type(*dms_alpha)
-    if dtype != numpy.double:
-        raise NotImplementedError
-
-    xctype = ni._xc_type(xc_code)
     if fxc is None:
-        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, [dm0*.5]*2, 1, max_memory)[2]
-
-    make_rho1, nset, nao = ni._gen_rho_evaluator(mol, dms_alpha, 0, False, grids)
-    def block_loop(ao_deriv):
-        p1 = 0
-        for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            p0, p1 = p1, p1 + weight.size
-            if singlet:
-                _fxc = fxc[0,:,0,:,p0:p1] + fxc[0,:,1,:,p0:p1]
-            else:
-                _fxc = fxc[0,:,0,:,p0:p1] - fxc[0,:,1,:,p0:p1]
-            for i in range(nset):
-                rho1 = make_rho1(i, ao, mask, xctype)  # rho1 needs to be real
-                if xctype == 'LDA':
-                    wv = weight * rho1 * _fxc[0]
-                else:
-                    wv = numpy.einsum('xg,xyg,g->yg', rho1, _fxc, weight)
-                yield i, ao, mask, wv
-
-    ao_loc = mol.ao_loc_nr()
-    cutoff = grids.cutoff * 1e2
-    nbins = NBINS * 2 - int(NBINS * numpy.log(cutoff) / numpy.log(grids.cutoff))
-    pair_mask = mol.get_overlap_cond() < -numpy.log(ni.cutoff)
-    vmat = numpy.zeros((nset,nao,nao), dtype=dtype)
-    aow = None
-    if xctype == 'LDA':
-        hermi = 1
-        ao_deriv = 0
-        for i, ao, mask, wv in block_loop(ao_deriv):
-            _dot_ao_ao_sparse(ao, ao, wv[0], nbins, mask, pair_mask, ao_loc,
-                              hermi, vmat[i])
-
-    elif xctype == 'GGA':
-        ao_deriv = 1
-        for i, ao, mask, wv in block_loop(ao_deriv):
-            wv[0] *= .5  # *.5 for v+v.conj().T
-            aow = _scale_ao_sparse(ao, wv, mask, ao_loc, out=aow)
-            _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
-                              hermi=0, out=vmat[i])
-
-        # For real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies real fxc_jb
-        # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
-        vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-
-    elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
-
-    elif xctype == 'MGGA':
-        assert not MGGA_DENSITY_LAPL
-        ao_deriv = 1
-        v1 = numpy.zeros_like(vmat)
-        for i, ao, mask, wv in block_loop(ao_deriv):
-            wv[0] *= .5  # *.5 for v+v.conj().T
-            wv[4] *= .5  # *.25 for 1/2 in tau and v+v.conj().T
-            aow = _scale_ao_sparse(ao, wv[:4], mask, ao_loc, out=aow)
-            _dot_ao_ao_sparse(ao[0], aow, None, nbins, mask, pair_mask, ao_loc,
-                              hermi=0, out=vmat[i])
-            _tau_dot_sparse(ao, ao, wv[4], nbins, mask, pair_mask, ao_loc, out=v1[i])
-        vmat = lib.hermi_sum(vmat, axes=(0,2,1))
-        vmat += v1
-
-    if isinstance(dms_alpha, numpy.ndarray) and dms_alpha.ndim == 2:
-        vmat = vmat[0]
-    return vmat
+        if dm0.ndim == 2:
+            dm0 = [dm0*.5] * 2
+        fxc = ni.cache_xc_kernel1(mol, grids, xc_code, dm0, spin=1,
+                                  max_memory=max_memory)[2]
+    if singlet:
+        fxc = fxc[0,:,0] + fxc[0,:,1]
+    else:
+        fxc = fxc[0,:,0] - fxc[0,:,1]
+    return ni.nr_rks_fxc(mol, grids, xc_code, dm0, dms_alpha, hermi=0, fxc=fxc,
+                         max_memory=max_memory)
 
 def _rks_gga_wv0(rho, vxc, weight):
     vrho, vgamma = vxc[:2]
@@ -1798,7 +1735,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     make_rhoa, nset = ni._gen_rho_evaluator(mol, dma, hermi, False, grids)[:2]
     make_rhob       = ni._gen_rho_evaluator(mol, dmb, hermi, False, grids)[0]
 
-    if rho0 is None and (xctype != 'LDA' or fxc is None):
+    if fxc is None and rho0 is None:
         make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1, False, grids)[0]
     else:
         make_rho0 = None

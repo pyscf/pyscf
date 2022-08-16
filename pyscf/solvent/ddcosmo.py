@@ -870,16 +870,11 @@ class DDCOSMO(lib.StreamObject):
 class Grids(gen_grid.Grids):
     '''DFT grids without sorting grids'''
 
+    alignment = 0
+
     def build(self, mol=None, *args, **kwargs):
-        if mol is None: mol = self.mol
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-        atom_grids_tab = self.gen_atomic_grids(
-            mol, self.atom_grid, self.radi_method, self.level, self.prune, **kwargs)
-        self.coords, self.weights = self.get_partition(
-            mol, atom_grids_tab, self.radii_adjust, self.atomic_radii, self.becke_scheme)
-        logger.info(self, 'tot grids = %d', len(self.weights))
-        return self
+        assert self.alignment == 0
+        return super().build(mol, with_non0tab=False, sort_grids=False)
 
 
 if __name__ == '__main__':
