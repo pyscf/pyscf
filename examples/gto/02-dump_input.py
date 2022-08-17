@@ -8,12 +8,12 @@ from pyscf import gto
 '''
 Mute input dumping
 
-Input file is dump at the beginning of the output by default.  Siwtch it off
-by setting dump_input=False.  Also the command line arguments can be ignored
+Input file is dump at the beginning of the output by default. Switch it off
+by setting dump_input=False. Also the command line arguments can be ignored
 if parse_arg=False.
 
 dump_input and parse_arg are the first two arguments of the Mole.build
-function.  They can be turned off by short notation .build(0, 0).  This trick
+function. They can be turned off by short notation .build(0, 0). This trick
 can be found many places in the package.
 '''
 
@@ -25,4 +25,3 @@ mol = gto.M(
 )
 
 mol.build(0, 0)
-
