@@ -25,6 +25,7 @@
 
 // 1k grids per block
 #define GRIDS_BLOCK     512
+#define ALIGNMENT       8
 
 void VXCgen_grid(double *out, double *coords, double *atm_coords,
                  double *radii_table, int natm, int ngrids)
@@ -44,11 +45,12 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
 
 #pragma omp parallel private(i, j, dx, dy, dz)
 {
-        double *grid_dist = malloc(sizeof(double) * natm*GRIDS_BLOCK);
-        double *buf = malloc(sizeof(double) * natm*GRIDS_BLOCK);
-        double *g = malloc(sizeof(double) * GRIDS_BLOCK);
+        double *_buf = malloc(sizeof(double) * ((natm*2+1)*GRIDS_BLOCK + ALIGNMENT));
+        double *buf = (double *)((uintptr_t)(_buf + ALIGNMENT - 1) & (-(uintptr_t)(ALIGNMENT*8)));
+        double *g = buf + natm * GRIDS_BLOCK;
+        double *grid_dist = g + GRIDS_BLOCK;
         size_t ig0, n, ngs;
-        double fac;
+        double fac, s;
 #pragma omp for nowait schedule(static)
         for (ig0 = 0; ig0 < Ngrids; ig0 += GRIDS_BLOCK) {
                 ngs = MIN(Ngrids-ig0, GRIDS_BLOCK);
@@ -76,18 +78,14 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                                         g[n] += fac * (1 - g[n]*g[n]);
                                 }
                         }
+#pragma GCC ivdep
                         for (n = 0; n < ngs; n++) {
-                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                        }
-                        for (n = 0; n < ngs; n++) {
-                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                        }
-                        for (n = 0; n < ngs; n++) {
-                                g[n] = ((3 - g[n]*g[n]) * g[n] * .5) * .5;
-                        }
-                        for (n = 0; n < ngs; n++) {
-                                buf[i*GRIDS_BLOCK+n] *= .5 - g[n];
-                                buf[j*GRIDS_BLOCK+n] *= .5 + g[n];
+                                s = g[n];
+                                s = (3 - s*s) * s * .5;
+                                s = (3 - s*s) * s * .5;
+                                s = ((3 - s*s) * s * .5) * .5;
+                                buf[i*GRIDS_BLOCK+n] *= .5 - s;
+                                buf[j*GRIDS_BLOCK+n] *= .5 + s;
                         }
                 } }
 
@@ -97,9 +95,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                         }
                 }
         }
-        free(g);
-        free(buf);
-        free(grid_dist);
+        free(_buf);
 }
         free(atom_dist);
 }
