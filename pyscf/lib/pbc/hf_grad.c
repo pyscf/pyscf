@@ -27,9 +27,11 @@ void contract_vhf_dm(double* out, double* vhf, double* dm,
 #pragma omp parallel
 {
     size_t ij, ish, jsh, p0, q0;
-    int ni, nj, i, ic, iatm;
-    NeighborList *nl0 = *neighbor_list;
-    NeighborPair *np0_ij;
+    int ni, nj, i, ic, iatm, nimgs=1;
+    NeighborList *nl0=NULL;
+    if (neighbor_list != NULL) {
+        nl0 = *neighbor_list;
+    }
     double *pvhf, *pdm;
 
     int thread_id = omp_get_thread_num();
@@ -46,8 +48,10 @@ void contract_vhf_dm(double* out, double* vhf, double* dm,
         ish = ij / njsh + ish0;
         jsh = ij % njsh + jsh0;
 
-        np0_ij = (nl0->pairs)[ish*nbas + jsh];
-        if (np0_ij->nimgs > 0) { // this shell pair has contribution
+        if (nl0 != NULL) {
+            nimgs = ((nl0->pairs)[ish*nbas + jsh])->nimgs;
+        }
+        if (nimgs > 0) { // this shell pair has contribution
             p0 = ao_loc[ish] - ao_loc[ish0];
             q0 = ao_loc[jsh] - ao_loc[jsh0];
             ni = ao_loc[ish+1] - ao_loc[ish];

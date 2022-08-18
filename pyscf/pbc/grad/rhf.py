@@ -1,11 +1,13 @@
 import ctypes
 import numpy as np
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as mol_rhf
 from pyscf.grad.rhf import _write
 from pyscf.pbc.gto.pseudo import pp_int
 
+SCREEN_VHF_DM_CONTRA = getattr(__config__, 'pbc_rhf_grad_screen_vhf_dm_contract', True)
 libpbc = lib.load_library('libpbc')
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, kpt=np.zeros(3)):
@@ -60,7 +62,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None, 
     return de
 
 
-def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None):
+def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None, screen=SCREEN_VHF_DM_CONTRA):
     from pyscf.gto.mole import ao_loc_nr, ATOM_OF
     from pyscf.pbc.gto import build_neighbor_list_for_shlpairs, free_neighbor_list
 
@@ -77,7 +79,10 @@ def _contract_vhf_dm(mf_grad, vhf, dm, comp=3, atmlst=None):
     vhf = np.asarray(vhf, order="C")
     dm = np.asarray(dm, order="C")
 
-    neighbor_list = build_neighbor_list_for_shlpairs(mol)
+    if screen:
+        neighbor_list = build_neighbor_list_for_shlpairs(mol)
+    else:
+        neighbor_list = lib.c_null_ptr()
     func = getattr(libpbc, "contract_vhf_dm", None)
     try:
         func(de.ctypes.data_as(ctypes.c_void_p),
