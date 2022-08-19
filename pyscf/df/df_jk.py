@@ -26,6 +26,8 @@ from pyscf import scf
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
+DEBUG = False
+
 libri = lib.load_library('libri')
 
 def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
@@ -64,7 +66,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
     '''
     from pyscf import df
     from pyscf.scf import dhf
-    assert(isinstance(mf, scf.hf.SCF))
+    assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
         if isinstance(mf, dhf.UHF):
@@ -88,7 +90,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
             mf.only_dfj = only_dfj
         return mf
 
-    class DFHF(_DFHF, mf_class):
+    class DensityFitting(_DFHF, mf_class):
         __doc__ = '''
         Density fitting SCF class
 
@@ -143,7 +145,7 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
         def auxbasis(self):
             return getattr(self.with_df, 'auxbasis', None)
 
-    return DFHF(mf, with_df, only_dfj)
+    return DensityFitting(mf, with_df, only_dfj)
 
 # 1. A tag to label the derived SCF class
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
@@ -151,12 +153,12 @@ class _DFHF(object):
     def nuc_grad_method(self):
         from pyscf.df.grad import rhf, uhf, rks, uks
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
             else:
                 return uhf.Gradients(self)
         elif isinstance(self, scf.rhf.RHF):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Gradients(self)
             else:
                 return rhf.Gradients(self)
@@ -168,12 +170,12 @@ class _DFHF(object):
     def Hessian(self):
         from pyscf.df.hessian import rhf, uhf, rks, uks
         if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Hessian(self)
             else:
                 return uhf.Hessian(self)
         elif isinstance(self, scf.rhf.RHF):
-            if getattr(self, 'xc', None):
+            if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Hessian(self)
             else:
                 return rhf.Hessian(self)
@@ -200,7 +202,7 @@ class _DFHF(object):
 
 
 def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
-    assert(with_j or with_k)
+    assert (with_j or with_k)
     if (not with_k and not dfobj.mol.incore_anyway and
         # 3-center integral tensor is not initialized
         dfobj._cderi is None):
@@ -242,7 +244,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
             mo_coeff = numpy.vstack((mo_coeff, mo_coeff))
             mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
             mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
-            assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
+            assert (mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
             mo_occ = numpy.vstack((mo_occa, mo_occb))
 
         orbo = []
@@ -256,7 +258,7 @@ def get_jk(dfobj, dm, hermi=1, with_j=True, with_k=True, direct_scf_tol=1e-13):
         buf = numpy.empty((blksize*nao,nao))
         for eri1 in dfobj.loop(blksize):
             naux, nao_pair = eri1.shape
-            assert(nao_pair == nao*(nao+1)//2)
+            assert (nao_pair == nao*(nao+1)//2)
             if with_j:
                 rho = numpy.einsum('ix,px->ip', dmtril, eri1)
                 vj += numpy.einsum('ip,px->ix', rho, eri1)
@@ -413,6 +415,11 @@ def r_get_jk(dfobj, dms, hermi=1, with_j=True, with_k=True):
     tao = mol.tmap()
     ao_loc = mol.ao_loc_2c()
     n2c = ao_loc[-1]
+
+    if hermi == 0 and DEBUG:
+        # J matrix is symmetrized in this function which is only true for
+        # density matrix with time reversal symmetry
+        scf.dhf._ensure_time_reversal_symmetry(mol, dms)
 
     def fjk(dm):
         dm = numpy.asarray(dm, dtype=numpy.complex128)

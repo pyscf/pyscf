@@ -25,14 +25,16 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import df
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
 
 def tearDownModule():
     global mol
@@ -99,27 +101,29 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((2,nao,nao))
         dfobj = df.DF(mol)
         vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.finger(vj), -181.5033531437091, 4)
-        self.assertAlmostEqual(lib.finger(vk), -37.78854217974532, 4)
+        self.assertAlmostEqual(lib.fp(vj), -181.5033531437091, 4)
+        self.assertAlmostEqual(lib.fp(vk), -37.78854217974532, 4)
 
         vj1, vk1 = scf.hf.get_jk(mol, dm, hermi=0, omega=1.1)
         self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
         self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
 
     def test_rsh_df4c_get_jk(self):
-        nao = mol.nao_nr() * 4
-        numpy.random.seed(1)
-        dm = numpy.random.random((2,nao,nao)) + 0j
-        dfobj = df.DF4C(mol)
-        vj, vk = dfobj.get_jk(dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(lib.finger(vj), 4.4552047176479235+50.015369284963256j, 4)
-        self.assertAlmostEqual(lib.finger(vk), 27.562574245800487+11.439296646723120j, 4)
+        with lib.temporary_env(lib.param, LIGHT_SPEED=1):
+            nao = mol.nao_nr() * 4
+            numpy.random.seed(1)
+            dm = numpy.random.random((2,nao,nao)) + numpy.random.random((2,nao,nao))*1j
+            dm[0] += scf.dhf.time_reversal_matrix(mol, dm[0])
+            dm[1] += scf.dhf.time_reversal_matrix(mol, dm[1])
+            dfobj = df.DF4C(mol)
+            vj, vk = dfobj.get_jk(dm, hermi=0, omega=0.9)
+            self.assertAlmostEqual(lib.fp(vj), 1364.9807926997748+215.73363929678885j, 4)
+            self.assertAlmostEqual(lib.fp(vk), 159.03611112342566+687.9032914356833j , 4)
 
-        vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=1.1)
-        self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
-        self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
+            vj1, vk1 = scf.dhf.get_jk(mol, dm, hermi=0, omega=0.9)
+            self.assertAlmostEqual(abs(vj-vj1).max(), 0, 2)
+            self.assertAlmostEqual(abs(vk-vk1).max(), 0, 2)
 
 if __name__ == "__main__":
     print("Full Tests for df")
     unittest.main()
-

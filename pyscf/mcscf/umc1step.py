@@ -489,7 +489,8 @@ class UCASSCF(ucasci.UCASCI):
 
         log = logger.new_logger(self, verbose)
 
-        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log,
+                                             envs=envs)
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 

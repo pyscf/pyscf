@@ -249,7 +249,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cR = j3cI = None
 
         for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
+            del (fswap['j3c-junk/%d'%ji])
 
     # Wrapped around boundary and symmetry between k and -k can be used
     # explicitly for the metric integrals.  We consider this symmetry
@@ -324,7 +324,7 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
         mesh[cell.dimension:] = cell.mesh[cell.dimension:]
     return _round_off_to_odd_mesh(mesh)
-del(VALENCE_EXP)
+del (VALENCE_EXP)
 
 
 class MDF(df.DF):

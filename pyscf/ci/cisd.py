@@ -170,7 +170,7 @@ def contract(myci, civec, eris):
     nocc = myci.nocc
     nmo = myci.nmo
     nvir = nmo - nocc
-    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
 
     t2 = myci._add_vvvv(c2, eris, t2sym='jiba')
     t2 *= .5  # due to t2+t2.transpose(1,0,3,2) in the end
@@ -243,11 +243,12 @@ def contract(myci, civec, eris):
 def amplitudes_to_cisdvec(c0, c1, c2):
     return numpy.hstack((c0, c1.ravel(), c2.ravel()))
 
-def cisdvec_to_amplitudes(civec, nmo, nocc):
+def cisdvec_to_amplitudes(civec, nmo, nocc, copy=True):
     nvir = nmo - nocc
     c0 = civec[0]
-    c1 = civec[1:nocc*nvir+1].reshape(nocc,nvir)
-    c2 = civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir)
+    cp = lambda x: (x.copy() if copy else x)
+    c1 = cp(civec[1:nocc*nvir+1].reshape(nocc,nvir))
+    c2 = cp(civec[nocc*nvir+1:].reshape(nocc,nocc,nvir,nvir))
     return c0, c1, c2
 
 def dot(v1, v2, nmo, nocc):
@@ -310,7 +311,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-        assert(neleca == nelecb)
+        assert (neleca == nelecb)
 
     frozen_mask = numpy.zeros(norb, dtype=bool)
     if frozen is None:
@@ -325,7 +326,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     nocc = numpy.count_nonzero(~frozen_mask[:neleca])
     nmo = norb - nfroz
     nvir = nmo - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc, copy=False)
     t1addr, t1sign = tn_addrs_signs(nmo, nocc, 1)
 
     na = cistring.num_strings(nmo, nocc)
@@ -347,7 +348,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     if nfroz == 0:
         return fcivec
 
-    assert(norb < 63)
+    assert (norb < 63)
 
     strs = cistring.gen_strings4orblist(range(norb), neleca)
     na = len(strs)
@@ -414,8 +415,8 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
 
     nvir = nmo - nocc
     nov = nocc * nvir
-    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, nmo, nocc)
-    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, nmo, nocc)
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, nmo, nocc, copy=False)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, nmo, nocc, copy=False)
 
 # Sort the ket orbitals to make the orbitals in bra one-one mapt to orbitals
 # in ket.
@@ -595,7 +596,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
                                ao_repr=ao_repr)
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
-    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
     dvo = c0.conj() * c1.T
     dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2) * 2
     dvo -= numpy.einsum('jb,ijba->ai', c1.conj(), c2)
@@ -621,7 +622,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     nmo = myci.nmo
     nvir = nmo - nocc
     nvir_pair = nvir * (nvir+1) // 2
-    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
+    c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc, copy=False)
 
     h5fobj['dovov'] = (2*c0*c2.conj().transpose(0,2,1,3) -
                        c0*c2.conj().transpose(1,2,0,3))
@@ -712,8 +713,8 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     '''
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
-    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
-    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc, copy=False)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc, copy=False)
 
     dvo = c0bra.conj() * c1ket.T
     dvo += numpy.einsum('jb,ijab->ai', c1bra.conj(), c2ket) * 2
@@ -855,12 +856,15 @@ class CISD(lib.StreamObject):
     async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        if 'dft' in str(mf.__module__):
+        from pyscf.scf import hf
+        if isinstance(mf, hf.KohnShamDFT):
             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
                                'CISD calculation should be initialized with HF object.\n'
                                'DFT object can be converted to HF object with '
                                'the code below:\n'
                                '    mf_hf = scf.RHF(mol)\n'
+                               '    if getattr(mf_dft, "with_x2c", False):\n'
+                               '        mf_hf = mf_hf.x2c()\n'
                                '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -1108,10 +1112,10 @@ class CISD(lib.StreamObject):
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
 
-    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None):
+    def cisdvec_to_amplitudes(self, civec, nmo=None, nocc=None, copy=True):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
-        return cisdvec_to_amplitudes(civec, nmo, nocc)
+        return cisdvec_to_amplitudes(civec, nmo, nocc, copy=copy)
 
     def density_fit(self):
         raise NotImplementedError

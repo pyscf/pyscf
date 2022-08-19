@@ -21,19 +21,15 @@ add_library(fci SHARED
 add_dependencies(fci np_helper)
 
 set_target_properties(fci PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(fci np_helper ${BLAS_LIBRARIES})
+target_link_libraries(fci np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 
 add_library(mcscf SHARED
   nevpt_contract.c)
 add_dependencies(mcscf fci np_helper)
 
 set_target_properties(mcscf PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(mcscf fci cvhf ao2mo np_helper ${BLAS_LIBRARIES})
+target_link_libraries(mcscf fci cvhf ao2mo np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})

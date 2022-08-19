@@ -110,7 +110,7 @@ class SelectedCI(selected_ci_symm.SelectedCI):
         if getattr(civec_strs, '_strs', None) is not None:
             self._strs = civec_strs._strs
         else:
-            assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
+            assert (civec_strs.size == len(self._strs[0])*len(self._strs[1]))
             civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index, orbsym)
 

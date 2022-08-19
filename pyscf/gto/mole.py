@@ -178,7 +178,7 @@ def cart2sph(l, c_tensor=None, normalized=None):
         else:
             return c_tensor * 0.488602511902919921
     else:
-        assert(l <= 12)
+        assert l <= 15
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
@@ -203,8 +203,8 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
         l = kappa
         nd = l * 2
     else:
-        assert(l is not None)
-        assert(l <= 12)
+        assert (l is not None)
+        assert (l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
     c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex128)
@@ -251,8 +251,8 @@ def sph2spinor_kappa(kappa, l=None):
         ua = ua[:,:l*2]
         ub = ub[:,:l*2]
     else:
-        assert(l is not None)
-        assert(l <= 12)
+        assert (l is not None)
+        assert (l <= 12)
     return ua, ub
 
 def sph2spinor_l(l):
@@ -348,7 +348,7 @@ def format_atom(atoms, origin=0, axes=None,
                 sys.stderr.write('\nFailed to parse geometry file  %s\n\n' % atoms)
                 raise
 
-        atoms = str(atoms.replace(';','\n').replace(',',' ').replace('\t',' '))
+        atoms = atoms.replace(';','\n').replace(',',' ').replace('\t',' ')
         fmt_atoms = []
         for dat in atoms.split('\n'):
             dat = dat.strip()
@@ -1076,7 +1076,7 @@ def dumps(mol):
     moldic = dict(mol.__dict__)
     for k in exclude_keys:
         if k in moldic:
-            del(moldic[k])
+            del (moldic[k])
     for k in nparray_keys:
         if isinstance(moldic[k], numpy.ndarray):
             moldic[k] = moldic[k].tolist()
@@ -1341,7 +1341,7 @@ def time_reversal_map(mol):
 
 CHECK_GEOM = getattr(__config__, 'gto_mole_check_geom', True)
 
-def energy_nuc(mol, charges=None, coords=None):
+def classical_coulomb_energy(mol, charges=None, coords=None):
     '''Compute nuclear repulsion energy (AU) or static Coulomb energy
 
     Returns
@@ -1353,11 +1353,20 @@ def energy_nuc(mol, charges=None, coords=None):
     rr = inter_distance(mol, coords)
     rr[numpy.diag_indices_from(rr)] = 1e200
     if CHECK_GEOM and numpy.any(rr < 1e-5):
+        raise_err = False
         for atm_idx in numpy.argwhere(rr<1e-5):
-            logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
-        raise RuntimeError('Ill geometry')
+            # Only raise error if atoms with charge != 0 have the same coordinates
+            if charges[atm_idx[0]] * charges[atm_idx[1]] != 0:
+                logger.warn(mol, 'Atoms %s have the same coordinates', atm_idx)
+                raise_err = True
+            # At least one of the atoms is a ghost atom; suppress divide by 0 warning
+            else:
+                rr[atm_idx[0], atm_idx[1]] = 1e200
+        if raise_err: raise RuntimeError('Ill geometry')
     e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+energy_nuc = classical_coulomb_energy
 
 def inter_distance(mol, coords=None):
     '''
@@ -2142,6 +2151,9 @@ class Mole(lib.StreamObject):
         # contents of _pseudo.
         self._pseudo = {}
 
+        # Some methods modify ._env. These method are executed in the context
+        # _TemporaryMoleContext which is protected by the _ctx_lock.
+        self._ctx_lock = None
         keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
         self._keys = set(self.__dict__.keys()).union(keys)
         self.__dict__.update(kwargs)
@@ -2158,7 +2170,7 @@ class Mole(lib.StreamObject):
         ne = self.nelectron
         nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
-        assert(nalpha >= 0 and nbeta >= 0)
+        assert (nalpha >= 0 and nbeta >= 0)
         if nalpha + nbeta != ne:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
@@ -2208,8 +2220,8 @@ class Mole(lib.StreamObject):
         '''To support accessing methods (mol.HF, mol.KS, mol.CCSD, mol.CASSCF, ...)
         from Mole object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Mole object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Mole object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -2372,7 +2384,7 @@ class Mole(lib.StreamObject):
             default_basis = self.basis['default']
             _basis = dict(((a, default_basis) for a in uniq_atoms))
             _basis.update(self.basis)
-            del(_basis['default'])
+            del (_basis['default'])
         else:
             _basis = self.basis
         self._basis = self.format_basis(_basis)
@@ -2388,7 +2400,7 @@ class Mole(lib.StreamObject):
                 _ecp = dict(((a, default_ecp)
                              for a in uniq_atoms if not is_ghost_atom(a)))
                 _ecp.update(self.ecp)
-                del(_ecp['default'])
+                del (_ecp['default'])
             else:
                 _ecp = self.ecp
             self._ecp = self.format_ecp(_ecp)
@@ -2413,10 +2425,11 @@ class Mole(lib.StreamObject):
         if dump_input and not self._built and self.verbose > logger.NOTE:
             self.dump_input()
 
-        logger.debug3(self, 'arg.atm = %s', str(self._atm))
-        logger.debug3(self, 'arg.bas = %s', str(self._bas))
-        logger.debug3(self, 'arg.env = %s', str(self._env))
-        logger.debug3(self, 'ecpbas  = %s', str(self._ecpbas))
+        if self.verbose >= logger.DEBUG3:
+            logger.debug3(self, 'arg.atm = %s', self._atm)
+            logger.debug3(self, 'arg.bas = %s', self._bas)
+            logger.debug3(self, 'arg.env = %s', self._env)
+            logger.debug3(self, 'ecpbas  = %s', self._ecpbas)
 
         self._built = True
         return self
@@ -2432,31 +2445,42 @@ class Mole(lib.StreamObject):
 
         if isinstance(self.symmetry, (str, unicode)):
             self.symmetry = str(symm.std_symb(self.symmetry))
-            try:
-                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                        self.symmetry)
-            except PointGroupSymmetryError:
-                raise PointGroupSymmetryError(
-                    'Unable to identify input symmetry %s. Try symmetry="%s"' %
-                    (self.symmetry, self.topgroup))
+            groupname = None
+            if abs(axes - np.eye(3)).max() < symm.TOLERANCE:
+                if symm.check_symm(self.symmetry, self._atom, self._basis):
+                    # Try to use original axes (issue #1209)
+                    groupname = self.symmetry
+                    axes = np.eye(3)
+                else:
+                    logger.warn(self, 'Unable to to identify input symmetry using original axes.\n'
+                                'Different symmetry axes will be used.')
+            if groupname is None:
+                try:
+                    groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                       self.symmetry)
+                except PointGroupSymmetryError as e:
+                    raise PointGroupSymmetryError(
+                        'Unable to identify input symmetry %s. Try symmetry="%s"' %
+                        (self.symmetry, self.topgroup)) from e
         else:
-            self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
-                                                    self.symmetry_subgroup)
+            groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                               self.symmetry_subgroup)
         self._symm_orig = orig
         self._symm_axes = axes
 
-        if self.cart and self.groupname in ('Dooh', 'Coov', 'SO3'):
-            if self.groupname == 'Coov':
-                self.groupname, lgroup = 'C2v', self.groupname
+        if self.cart and groupname in ('Dooh', 'Coov', 'SO3'):
+            if groupname == 'Coov':
+                groupname, lgroup = 'C2v', groupname
             else:
-                self.groupname, lgroup = 'D2h', self.groupname
+                groupname, lgroup = 'D2h', groupname
             logger.warn(self, 'This version does not support symmetry %s '
                         'for cartesian GTO basis. Its subgroup %s is used',
-                        lgroup, self.groupname)
+                        lgroup, groupname)
+        self.groupname = groupname
 
         self.symm_orb, self.irrep_id = \
-                symm.symm_adapted_basis(self, self.groupname, orig, axes)
-        self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
+                symm.symm_adapted_basis(self, groupname, orig, axes)
+        self.irrep_name = [symm.irrep_id2name(groupname, ir)
                            for ir in self.irrep_id]
         return self
 
@@ -2621,6 +2645,10 @@ class Mole(lib.StreamObject):
                 else:
                     logger.info(self, 'point group symmetry = %s, use subgroup %s',
                                 self.topgroup, self.groupname)
+                logger.info(self, "symmetry origin: %s", self._symm_orig)
+                logger.info(self, "symmetry axis x: %s", self._symm_axes[0])
+                logger.info(self, "symmetry axis y: %s", self._symm_axes[1])
+                logger.info(self, "symmetry axis z: %s", self._symm_axes[2])
                 for ir in range(self.symm_orb.__len__()):
                     logger.info(self, 'num. orbitals of irrep %s = %d',
                                 self.irrep_name[ir], self.symm_orb[ir].shape[1])
@@ -2653,7 +2681,7 @@ class Mole(lib.StreamObject):
     set_common_origin_ = set_common_orig  # for backward compatibility
 
     def with_common_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired common origin.
+        '''Return a temporary mol context which has the rquired common origin.
         The required common origin has no effects out of the temporary context.
         See also :func:`mol.set_common_origin`
 
@@ -2682,7 +2710,7 @@ class Mole(lib.StreamObject):
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
 
     def with_rinv_origin(self, coord):
-        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        '''Return a temporary mol context which has the rquired origin of 1/r
         operator.  The required origin has no effects out of the temporary
         context.  See also :func:`mol.set_rinv_origin`
 
@@ -2717,7 +2745,7 @@ class Mole(lib.StreamObject):
     omega = omega.setter(set_range_coulomb)
 
     def with_range_coulomb(self, omega):
-        '''Retuen a temporary mol context which sets the required parameter
+        '''Return a temporary mol context which sets the required parameter
         omega for range-separated Coulomb operator.
         If omega = None, return the context for regular Coulomb integrals.
         See also :func:`mol.set_range_coulomb`
@@ -2731,13 +2759,13 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def with_long_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for long-range part of
+        '''Return a temporary mol context for long-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(abs(omega))
 
     def with_short_range_coulomb(self, omega):
-        '''Retuen a temporary mol context for short-range part of
+        '''Return a temporary mol context for short-range part of
         range-separated Coulomb operator.
         '''
         return self.with_range_coulomb(-abs(omega))
@@ -2778,7 +2806,7 @@ class Mole(lib.StreamObject):
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
 
     def with_rinv_zeta(self, zeta):
-        '''Retuen a temporary mol context which has the rquired Gaussian charge
+        '''Return a temporary mol context which has the rquired Gaussian charge
         distribution placed at "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
         See also :func:`mol.set_rinv_zeta`
 
@@ -2791,7 +2819,7 @@ class Mole(lib.StreamObject):
         return self._TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def with_rinv_at_nucleus(self, atm_id):
-        '''Retuen a temporary mol context in which the rinv operator (1/r) is
+        '''Return a temporary mol context in which the rinv operator (1/r) is
         treated like the Coulomb potential of a Gaussian charge distribution
         rho(r) = Norm * exp(-zeta * r^2) at the place of the input atm_id.
 
@@ -2817,11 +2845,16 @@ class Mole(lib.StreamObject):
     with_rinv_as_nucleus = with_rinv_at_nucleus  # For backward compatibility
 
     def with_integral_screen(self, threshold):
-        '''Retuen a temporary mol context which has the rquired integral
+        '''Return a temporary mol context which has the rquired integral
         screen threshold
         '''
+        if threshold is None:
+            # This calls the default cutoff settings in cint library
+            expcutoff = 0
+        else:
+            expcutoff = abs(numpy.log(threshold))
         expcutoff0 = self._env[PTR_EXPCUTOFF]
-        expcutoff = abs(numpy.log(threshold))
+
         def set_cutoff(cut):
             self._env[PTR_EXPCUTOFF] = cut
         return self._TemporaryMoleContext(set_cutoff, (expcutoff,), (expcutoff0,))
@@ -3280,7 +3313,7 @@ class Mole(lib.StreamObject):
         bas = self._bas
         env = self._env
         if 'ECP' in intor:
-            assert(self._ecp is not None)
+            assert (self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
             env[AS_ECPBAS_OFFSET] = len(self._bas)
             env[AS_NECPBAS] = len(self._ecpbas)
@@ -3365,7 +3398,7 @@ class Mole(lib.StreamObject):
     def intor_by_shell(self, intor, shells, comp=None, grids=None):
         intor = self._add_suffix(intor)
         if 'ECP' in intor:
-            assert(self._ecp is not None)
+            assert (self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
             self._env[AS_ECPBAS_OFFSET] = len(self._bas)
             self._env[AS_NECPBAS] = len(self._ecpbas)
@@ -3521,18 +3554,18 @@ class Mole(lib.StreamObject):
         '''Almost every method depends on the Mole environment. Ensure the
         modification in temporary environment being thread safe
         '''
-        haslock = hasattr(self, '_lock')
-        if not haslock:
-            self._lock = threading.RLock()
+        haslock = self._ctx_lock
+        if haslock is None:
+            self._ctx_lock = threading.RLock()
 
-        with self._lock:
+        with self._ctx_lock:
             method(*args)
             try:
                 yield
             finally:
                 method(*args_bak)
-                if not haslock:
-                    del self._lock
+                if haslock is None:
+                    self._ctx_lock = None
 
 def _parse_nuc_mod(str_or_int_or_fn):
     nucmod = NUC_POINT
@@ -3607,7 +3640,7 @@ def from_zmatrix(atomstr):
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1
                 ang   = float(vals[3])/180*numpy.pi
-                assert(ang >= 0)
+                assert (ang >= 0)
                 v1 = coord[anga] - coord[bonda]
                 if not numpy.allclose(v1[:2], 0):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
@@ -3626,7 +3659,7 @@ def from_zmatrix(atomstr):
                 bond  = float(vals[1])
                 anga  = int(vals[2]) - 1
                 ang   = float(vals[3])/180*numpy.pi
-                assert(ang >= 0 and ang <= numpy.pi)
+                assert (ang >= 0 and ang <= numpy.pi)
                 v1 = coord[anga] - coord[bonda]
                 v1 /= numpy.linalg.norm(v1)
                 if ang < 1e-7:
@@ -3767,4 +3800,4 @@ def fakemol_for_charges(coords, expnt=1e16):
     fakemol._built = True
     return fakemol
 
-del(BASE)
+del (BASE)

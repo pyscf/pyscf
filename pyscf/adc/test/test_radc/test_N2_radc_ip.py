@@ -22,22 +22,24 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-r = 1.098
-mol = gto.Mole()
-mol.atom = [
-    ['N', ( 0., 0.    , -r/2   )],
-    ['N', ( 0., 0.    ,  r/2)],]
-mol.basis = {'N':'aug-cc-pvdz'}
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
-myadc = adc.ADC(mf)
+def setUpModule():
+    global mol, mf, myadc
+    r = 1.098
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', ( 0., 0.    , -r/2   )],
+        ['N', ( 0., 0.    ,  r/2)],]
+    mol.basis = {'N':'aug-cc-pvdz'}
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 

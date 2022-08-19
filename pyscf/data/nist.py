@@ -47,3 +47,4 @@ AUEFG = 9.71736235660e21        # V/m^2 https://physics.nist.gov/cgi-bin/cuu/Val
 AU2TESLA = HBAR/(BOHR_SI**2 * E_CHARGE)
 BOLTZMANN = 1.38064852e-23      # J/K https://physics.nist.gov/cgi-bin/cuu/Value?k
 HARTREE2WAVENUMBER = 1e-2 * HARTREE2J / (LIGHT_SPEED_SI * PLANCK) # 2.194746313702e5
+AMU2AU = ATOMIC_MASS/E_MASS

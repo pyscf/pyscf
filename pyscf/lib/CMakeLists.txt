@@ -46,6 +46,15 @@ if (BUILD_MARCH_NATIVE)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
     endif()
   endif()
+else()
+  if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    include(CheckCCompilerFlag)
+    CHECK_C_COMPILER_FLAG("-msse3" COMPILER_SUPPORTS_SSE3)
+    if(COMPILER_SUPPORTS_SSE3)
+      # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+    endif()
+  endif()
 endif()
 
 
@@ -82,11 +91,14 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
+option(ENABLE_OPENMP "Compiling C extensions with openmp" ON)
+set(OPENMP_C_PROPERTIES "")
+if(ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    set(HAVE_OPENMP 1)
+    set(OPENMP_C_PROPERTIES OpenMP::OpenMP_C)
+  endif()
 endif()
 
 #find_package(PythonInterp REQUIRED)
@@ -140,12 +152,21 @@ set(CXX_LINK_TEMPLATE "<CMAKE_CXX_COMPILER> <CMAKE_SHARED_LIBRARY_CXX_FLAGS> <LA
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 option(WITH_F12 "Compling F12 integrals" ON)
+option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian integral evaluation" OFF)
+
 if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+  set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
+  if (USE_QCINT)
+    set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
+    if(NOT BUILD_MARCH_NATIVE)
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+    endif()
+  endif()
+
   ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
-    # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
-    GIT_TAG v5.1.0
+    GIT_REPOSITORY ${LIBCINT_GIT}
+    GIT_TAG v5.1.3
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_CACHE_ARGS

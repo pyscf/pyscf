@@ -21,17 +21,19 @@ from pyscf import dft
 from pyscf.dft import gen_grid
 from pyscf.dft import radi
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
+def setUpModule():
+    global h2o
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2o.basis = {"H": '6-31g',
-             "O": '6-31g',}
-h2o.build()
+    h2o.basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    h2o.build()
 
 def tearDownModule():
     global h2o
@@ -84,7 +86,7 @@ class KnownValues(unittest.TestCase):
 
         grid.radi_method = radi.becke
         grid.build(with_non0tab=False)
-        self.assertAlmostEqual(lib.fp(grid.weights), 2486249.209827192, 7)
+        self.assertAlmostEqual(lib.fp(grid.weights), 2486249.209827192, 6)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)

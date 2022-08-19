@@ -320,10 +320,10 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # Rotate CI according to the unitary coefficients ucas if applicable
     fcivec = None
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
-        if isinstance(ci, numpy.ndarray):
+        if isinstance(ci, (fci.FCIvector, fci.SCIvector, numpy.ndarray)):
             fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
         elif (isinstance(ci, (list, tuple)) and
-              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+              all(isinstance(x[0], (fci.FCIvector, fci.SCIvector, numpy.ndarray)) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
     elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
@@ -393,7 +393,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE,
-                 with_meta_lowdin=WITH_META_LOWDIN):
+                 with_meta_lowdin=WITH_META_LOWDIN, stav_dm1=False):
     '''Canonicalized CASCI/CASSCF orbitals of effecitive Fock matrix and
     update CI coefficients accordingly.
 
@@ -436,6 +436,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             canonicalized orbitals of state-average effective Fock matrix.
             To canonicalize the orbitals for one particular state, you can
             assign the density matrix of that state to the kwarg casdm1.
+        stav_dm1 (bool): Use state-average 1-particle density matrix for
+            computing Fock matrices and natural orbitals
 
     Returns:
         A tuple, (natural orbitals, CI coefficients, orbital energies)
@@ -448,10 +450,21 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if ci is None: ci = mc.ci
     if casdm1 is None:
         if (isinstance(ci, (list, tuple, RANGE_TYPE)) and
-            not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
-            log.warn('Mulitple states found in CASCI solver. First state is '
-                     'used to compute the natural orbitals in active space.')
-            casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
+            if stav_dm1:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'Use state-average 1RDM  to compute the Fock matrix'
+                         ' and natural orbitals in the active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+                for root in range(1, len(ci)):
+                    casdm1 += mc.fcisolver.make_rdm1(ci[root], mc.ncas,
+                                                     mc.nelecas)
+                casdm1 /= len(ci)
+            else:
+                log.warn('Mulitple states found in CASCI solver. '
+                         'First state is used to compute the Fock matrix'
+                         ' and natural orbitals in active space.')
+                casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
 
@@ -517,8 +530,26 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, ci, mo_energy
 
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''CASCI solver
+
+    Args:
+        casci: CASCI or CASSCF object
+
+        mo_coeff : ndarray
+            orbitals to construct active space Hamiltonian
+        ci0 : ndarray or custom types
+            FCI sovler initial guess. For external FCI-like solvers, it can be
+            overloaded different data type. For example, in the state-average
+            FCI solver, ci0 is a list of ndarray. In other solvers such as
+            DMRGCI solver, SHCI solver, ci0 are custom types.
+
+    kwargs:
+        envs: dict
+            The variable envs is created (for PR 807) to passes MCSCF runtime
+            environment variables to SHCI solver. For solvers which do not
+            need this parameter, a kwargs should be created in kernel method
+            and "envs" pop in kernel function
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
@@ -734,7 +765,7 @@ class CASCI(lib.StreamObject):
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
+                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-12)
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
         self.fcisolver.conv_tol = getattr(__config__,
@@ -942,14 +973,23 @@ To enable the solvent model for CASCI, the following code needs to be called
         log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             if isinstance(self.e_cas, (float, numpy.number)):
-                ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-                log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         self.e_tot, self.e_cas, ss[0])
+                try:
+                    ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
+                    log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                             self.e_tot, self.e_cas, ss[0])
+                except NotImplementedError:
+                    log.note('CASCI E = %.15g  E(CI) = %.15g',
+                             self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                             i, self.e_tot[i], e, ss[0])
+                    try:
+                        ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                                 i, self.e_tot[i], e, ss[0])
+                    except NotImplementedError:
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                                 i, self.e_tot[i], e)
+
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
                 log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
@@ -998,12 +1038,12 @@ To enable the solvent model for CASCI, the following code needs to be called
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average_(self, weights=(0.5,0.5)):
-        addons.state_average_(self, weights)
+    def state_average_(self, weights=(0.5,0.5), wfnsym=None):
+        addons.state_average_(self, weights, wfnsym)
         return self
     @lib.with_doc(addons.state_average.__doc__)
-    def state_average(self, weights=(0.5,0.5)):
-        return addons.state_average(self, weights)
+    def state_average(self, weights=(0.5,0.5), wfnsym=None):
+        return addons.state_average(self, weights, wfnsym)
 
     @lib.with_doc(addons.state_specific_.__doc__)
     def state_specific_(self, state=1):
@@ -1081,7 +1121,7 @@ To enable the solvent model for CASCI, the following code needs to be called
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
+del (WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':

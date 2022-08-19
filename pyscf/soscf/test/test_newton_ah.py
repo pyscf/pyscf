@@ -24,71 +24,73 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
-h2o_z0 = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g')
+def setUpModule():
+    global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
+    h2o_z0 = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g')
 
-h2o_z1 = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,)
+    h2o_z1 = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,)
 
-h2o_z0_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    symmetry = 1,
-    basis = '6-31g')
+    h2o_z0_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        symmetry = 1,
+        basis = '6-31g')
 
-h2o_z1_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,
-    symmetry = 1,)
+    h2o_z1_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,
+        symmetry = 1,)
 
-h4_z0_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''C 0 0 0
-    H  1  1  1
-    H -1 -1  1
-    H -1  1 -1
-    H  1 -1 -1''',
-    basis = '6-31g',
-    symmetry = 1,)
+    h4_z0_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''C 0 0 0
+        H  1  1  1
+        H -1 -1  1
+        H -1  1 -1
+        H  1 -1 -1''',
+        basis = '6-31g',
+        symmetry = 1,)
 
-h4_z1_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''C 0 0 0
-    H  1  1  1
-    H -1 -1  1
-    H -1  1 -1
-    H  1 -1 -1''',
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,
-    symmetry = 1,)
+    h4_z1_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''C 0 0 0
+        H  1  1  1
+        H -1 -1  1
+        H -1  1 -1
+        H  1 -1 -1''',
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,
+        symmetry = 1,)
 
 def tearDownModule():
     global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s

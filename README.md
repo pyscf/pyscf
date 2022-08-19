@@ -16,6 +16,18 @@ Python-based Simulations of Chemistry Framework
 * [Features](../master/FEATURES)
 
 
+## Announcement
+
+### PySCF annual developer's meeting
+
+The PySCF meeting will take place July 28-29 2022 in Pasadena. Please see the following website for the schedule.
+https://sites.google.com/view/1stannualpyscfdevmtg/
+Although the meeting will be optimized for the in-person experience, there is a Zoom link available at the above website.
+
+best wishes,
+
+The PySCF board
+
 Installation
 ------------
 

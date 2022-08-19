@@ -17,58 +17,60 @@ import unittest
 import numpy
 from pyscf import gto, lib
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None#"out_h2o"
-mol.atom = [
-    ["C", (-0.65830719,  0.61123287, -0.00800148)],
-    ["C1", ( 0.73685281,  0.61123287, -0.00800148)],
-    ["C2", ( 1.43439081,  1.81898387, -0.00800148)],
-    ["C3", ( 0.73673681,  3.02749287, -0.00920048)],
-    ["C4", (-0.65808819,  3.02741487, -0.00967948)],
-    ["C5", (-1.35568919,  1.81920887, -0.00868348)],
-    ["H", (-1.20806619, -0.34108413, -0.00755148)],
-    ["H", ( 1.28636081, -0.34128013, -0.00668648)],
-    ["H", ( 2.53407081,  1.81906387, -0.00736748)],
-    ["H", ( 1.28693681,  3.97963587, -0.00925948)],
-    ["H", (-1.20821019,  3.97969587, -0.01063248)],
-    ["H", (-2.45529319,  1.81939187, -0.00886348)],]
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None#"out_h2o"
+    mol.atom = [
+        ["C", (-0.65830719,  0.61123287, -0.00800148)],
+        ["C1", ( 0.73685281,  0.61123287, -0.00800148)],
+        ["C2", ( 1.43439081,  1.81898387, -0.00800148)],
+        ["C3", ( 0.73673681,  3.02749287, -0.00920048)],
+        ["C4", (-0.65808819,  3.02741487, -0.00967948)],
+        ["C5", (-1.35568919,  1.81920887, -0.00868348)],
+        ["H", (-1.20806619, -0.34108413, -0.00755148)],
+        ["H", ( 1.28636081, -0.34128013, -0.00668648)],
+        ["H", ( 2.53407081,  1.81906387, -0.00736748)],
+        ["H", ( 1.28693681,  3.97963587, -0.00925948)],
+        ["H", (-1.20821019,  3.97969587, -0.01063248)],
+        ["H", (-2.45529319,  1.81939187, -0.00886348)],]
 
-mol.basis = {'H': 'cc-pvdz',
-             'C1': 'CC PVDZ',
-             'C2': 'CC PVDZ',
-             'C3': 'cc-pVDZ',
-             'C4': gto.basis.parse('''
+    mol.basis = {'H': 'cc-pvdz',
+                 'C1': 'CC PVDZ',
+                 'C2': 'CC PVDZ',
+                 'C3': 'cc-pVDZ',
+                 'C4': gto.basis.parse('''
 #BASIS SET: (9s,4p,1d) -> [3s,2p,1d]
-C    S
-   6665.0000000              0.0006920             -0.0001460        
-   1000.0000000              0.0053290             -0.0011540        
-    228.0000000              0.0270770             -0.0057250        
-     64.7100000              0.1017180             -0.0233120        
-     21.0600000              0.2747400             -0.0639550        
-      7.4950000              0.4485640             -0.1499810        
-      2.7970000              0.2850740             -0.1272620        
-      0.5215000              0.0152040              0.5445290        
-C    S
-      0.1596000              1.0000000        
-C    P
-      9.4390000              0.0381090        
-      2.0020000              0.2094800        
-      0.5456000              0.5085570        
-C    P
-      0.1517000              1.0000000        
-C    D
-      0.5500000              1.0000000        '''),
-             'C': 'CC PVDZ',}
-mol.ecp = {'C1': 'LANL2DZ'}
-mol.build()
+    C    S
+       6665.0000000              0.0006920             -0.0001460
+       1000.0000000              0.0053290             -0.0011540
+        228.0000000              0.0270770             -0.0057250
+         64.7100000              0.1017180             -0.0233120
+         21.0600000              0.2747400             -0.0639550
+          7.4950000              0.4485640             -0.1499810
+          2.7970000              0.2850740             -0.1272620
+          0.5215000              0.0152040              0.5445290
+    C    S
+          0.1596000              1.0000000
+    C    P
+          9.4390000              0.0381090
+          2.0020000              0.2094800
+          0.5456000              0.5085570
+    C    P
+          0.1517000              1.0000000
+    C    D
+          0.5500000              1.0000000        '''),
+                 'C': 'CC PVDZ',}
+    mol.ecp = {'C1': 'LANL2DZ'}
+    mol.build()
 
 def tearDownModule():
     global mol
     del mol
 
 
-def finger(mat):
+def fp(mat):
     return abs(mat).sum()
 
 
@@ -87,28 +89,28 @@ class KnownValues(unittest.TestCase):
             ip += di
         s = mol.intor('int1e_ipovlp_sph', comp=3)
         self.assertTrue(numpy.allclose(s,s0))
-        self.assertAlmostEqual(finger(s), 960.67081839920604, 11)
+        self.assertAlmostEqual(fp(s), 960.67081839920604, 11)
 
     def test_intor_nr0(self):
         s = mol.intor('int1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
+        self.assertAlmostEqual(fp(s), 622.29059965181796, 11)
 
     def test_intor_nr1(self):
         s = mol.intor_symmetric('int1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
+        self.assertAlmostEqual(fp(s), 622.29059965181796, 11)
 
     def test_intor_nr2(self):
         s = mol.intor_asymmetric('int1e_ovlp_sph')
-        self.assertAlmostEqual(finger(s), 622.29059965181796, 11)
+        self.assertAlmostEqual(fp(s), 622.29059965181796, 11)
 
     def test_intor_nr_cross(self):
         shls_slice = (0, mol.nbas//4, mol.nbas//4, mol.nbas)
         s = mol.intor('int1e_ovlp_sph', shls_slice=shls_slice)
-        self.assertAlmostEqual(finger(s), 99.38188078749701, 11)
+        self.assertAlmostEqual(fp(s), 99.38188078749701, 11)
 
     def test_intor_r(self):
         s = mol.intor('int1e_ovlp_spinor')
-        self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
+        self.assertAlmostEqual(fp(s), 1592.2297864313475, 11)
 
     def test_intor_r1(self):
         s0 = mol.intor('int1e_ovlp_spinor')
@@ -117,11 +119,11 @@ class KnownValues(unittest.TestCase):
 
     def test_intor_r2(self):
         s = mol.intor_asymmetric('int1e_ovlp_spinor')
-        self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
+        self.assertAlmostEqual(fp(s), 1592.2297864313475, 11)
 
     def test_intor_r_comp(self):
         s = mol.intor('int1e_ipkin_spinor')
-        self.assertAlmostEqual(finger(s), 4409.86758420756, 10)
+        self.assertAlmostEqual(fp(s), 4409.86758420756, 10)
         s1 = mol.intor_asymmetric('int1e_ipkin_spinor')
         self.assertTrue(numpy.allclose(s1,s))
 
@@ -285,32 +287,33 @@ class KnownValues(unittest.TestCase):
 
         eri1 = mol.intor('int3c2e_ip1_sph', comp=3, shls_slice=(2,5,4,9,0,mol.nbas))
         self.assertEqual(eri1.shape, (3,5,9,nao))
-        self.assertAlmostEqual(finger(eri1), 642.70512922279079, 11)
+        self.assertAlmostEqual(fp(eri1), 642.70512922279079, 11)
 
         eri1 = mol.intor('int3c2e_spinor')
         self.assertEqual(eri1.shape, (nao*2,nao*2,nao))
-        self.assertAlmostEqual(finger(eri1), 9462.9659834308495, 11)
+        self.assertAlmostEqual(fp(eri1), 9462.9659834308495, 11)
 
 #        eri1 = mol.intor('int3c2e_spinor_ssc')
 #        self.assertEqual(eri1.shape, (nao*2,nao*2,20))
-#        self.assertAlmostEqual(finger(eri1), 1227.1971656655824, 11)
+#        self.assertAlmostEqual(fp(eri1), 1227.1971656655824, 11)
 
     def test_nr_s8(self):
         mol = gto.M(atom="He 0 0 0; Ne 3 0 0", basis='ccpvdz')
         eri0 = mol.intor('int2e_sph', aosym='s8')
-        self.assertAlmostEqual(lib.finger(eri0), -10.685918926843847, 9)
+        self.assertAlmostEqual(lib.fp(eri0), -10.685918926843847, 9)
 
-    def test_nr_s8_skip(self):
-        eri1 = mol.intor('int2e_yp_sph', aosym=8)
-        self.assertAlmostEqual(lib.finger(eri1), -10.685918926843847, 9)
-        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+    # FIXME
+    #def test_nr_s8_skip(self):
+    #    eri1 = mol.intor('int2e_yp_sph', aosym=8)
+    #    self.assertAlmostEqual(lib.fp(eri1), -10.685918926843847, 9)
+    #    self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
 
     def test_unknonw(self):
         self.assertRaises(KeyError, mol.intor, 'int4c3e')
 
     def test_nr_2c2e(self):
         mat = mol.intor('int2c2e')
-        self.assertAlmostEqual(lib.finger(mat), -460.83033192375615, 9)
+        self.assertAlmostEqual(lib.fp(mat), -460.83033192375615, 9)
 
 
 if __name__ == "__main__":

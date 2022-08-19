@@ -15,21 +15,28 @@
 import unittest
 import numpy
 from pyscf.pbc import gto, scf
-cell = gto.M(atom='''
-C 4.826006352031   3.412501814582   8.358888185226
-C 0.689429478862   0.487500259226   1.194126883604
-             ''',
-a='''
-4.136576868, 0.000000000, 2.388253772
-1.378858962, 3.900002074, 2.388253772
-0.000000000, 0.000000000, 4.776507525
-             ''',
-unit='B',
-precision=1e-14,
-basis='gth-tzv2p',
-pseudo='gth-lda',
-mesh=[15]*3,
-verbose=0)
+
+def setUpModule():
+    global cell
+    cell = gto.M(atom='''
+    C 4.826006352031   3.412501814582   8.358888185226
+    C 0.689429478862   0.487500259226   1.194126883604
+                 ''',
+    a='''
+    4.136576868, 0.000000000, 2.388253772
+    1.378858962, 3.900002074, 2.388253772
+    0.000000000, 0.000000000, 4.776507525
+                 ''',
+    unit='B',
+    precision=1e-14,
+    basis='gth-tzv2p',
+    pseudo='gth-lda',
+    mesh=[15]*3,
+    verbose=0)
+
+def tearDownModule():
+    global cell
+    del cell
 
 class KnownValues(unittest.TestCase):
     def test_rcut(self):

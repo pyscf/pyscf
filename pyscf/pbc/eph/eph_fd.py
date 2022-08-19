@@ -26,7 +26,7 @@ from pyscf.data.nist import MP_ME
 
 def copy_mf(mf, cell):
     mf1 = mf.__class__(cell)
-    if hasattr(mf, 'xc'):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         mf1.xc = mf.xc
     mf1.kpts = mf.kpts
     mf1.exxdiv = getattr(mf, 'exxdiv', None)

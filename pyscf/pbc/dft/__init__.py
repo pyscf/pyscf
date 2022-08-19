@@ -16,18 +16,23 @@ from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
 from pyscf.pbc.dft import roks
+from pyscf.pbc.dft import gks
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft import kroks
+from pyscf.pbc.dft import kgks
 from pyscf.pbc.dft import krkspu
 from pyscf.pbc.dft import kukspu
+from pyscf.pbc.dft.rks import KohnShamDFT
 
 UKS = uks.UKS
 ROKS = roks.ROKS
+GKS = gks.GKS
 
 KRKS = krks.KRKS
 KUKS = kuks.KUKS
 KROKS = kroks.KROKS
+KGKS = kgks.KGKS
 
 KRKSpU = krkspu.KRKSpU
 KUKSpU = kukspu.KUKSpU

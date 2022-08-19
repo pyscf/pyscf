@@ -129,14 +129,14 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
             lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym ^ ir], bidx[ir])
-    return ci1new.reshape(fcivec_shape)
+    return ci1new.reshape(fcivec_shape).view(direct_spin1.FCIvector)
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            ecore=0, **kwargs):
-    assert(len(orbsym) == norb)
+    assert (len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
@@ -210,7 +210,7 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
         addrb = addr % nb
         if airreps[addra] ^ birreps[addrb] == wfnsym:
             x[addr] = 1
-            ci0.append(x)
+            ci0.append(x.view(direct_spin1.FCIvector))
             iroot += 1
             if iroot >= nroots:
                 break

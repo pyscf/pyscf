@@ -23,7 +23,7 @@ Non-relativistic analytical nuclear gradients for restricted Kohn Sham with kpoi
 from pyscf.pbc.grad import krhf as rhf_grad
 from pyscf.grad import rks as rks_grad
 import numpy as np
-from pyscf.pbc.dft import numint
+from pyscf.dft import numint
 from pyscf import lib
 from pyscf.lib import logger
 

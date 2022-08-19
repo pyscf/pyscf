@@ -24,18 +24,20 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf import lib
 
-hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
-with h5py.File(hfile, 'r') as f:
-    h1 = lib.unpack_tril(f['h1'][:])
-    h2 = f['h2'][:]
+def setUpModule():
+    global h1, h2, c0, ci0, norb, nelec, e0
+    hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
+    with h5py.File(hfile, 'r') as f:
+        h1 = lib.unpack_tril(f['h1'][:])
+        h2 = f['h2'][:]
 
-norb = 10
-nelec = (5,5)
-na = fci.cistring.num_strings(norb, nelec[0])
-c0 = numpy.zeros((na,na))
-c0[0,0] = 1
-c0[-1,-1] = 1e-4
-e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
+    norb = 10
+    nelec = (5,5)
+    na = fci.cistring.num_strings(norb, nelec[0])
+    c0 = numpy.zeros((na,na))
+    c0[0,0] = 1
+    c0[-1,-1] = 1e-4
+    e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
 def tearDownModule():
@@ -122,8 +124,8 @@ class KnownValues(unittest.TestCase):
         ci0 /= numpy.linalg.norm(ci0)
         dm2baab = fci.spin_op.make_rdm2_baab(ci0, norb, nelec)
         dm2abba = fci.spin_op.make_rdm2_abba(ci0, norb, nelec)
-        self.assertAlmostEqual(lib.finger(dm2baab), -0.04113790921902272, 12)
-        self.assertAlmostEqual(lib.finger(dm2abba), -0.10910630874863614, 12)
+        self.assertAlmostEqual(lib.fp(dm2baab), -0.04113790921902272, 12)
+        self.assertAlmostEqual(lib.fp(dm2abba), -0.10910630874863614, 12)
 
         dm2ab = fci.direct_spin1.make_rdm12s(ci0, norb, nelec)[1][1]
         self.assertAlmostEqual(abs(dm2baab - -dm2ab.transpose(2,1,0,3)).max(), 0, 12)

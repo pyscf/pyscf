@@ -72,11 +72,7 @@ LEBEDEV_ORDER = {
     125: 5294,
     131: 5810
 }
-LEBEDEV_NGRID = numpy.asarray((
-    1   , 6   , 14  , 26  , 38  , 50  , 74  , 86  , 110 , 146 ,
-    170 , 194 , 230 , 266 , 302 , 350 , 434 , 590 , 770 , 974 ,
-    1202, 1454, 1730, 2030, 2354, 2702, 3074, 3470, 3890, 4334,
-    4802, 5294, 5810))
+LEBEDEV_NGRID = numpy.array(list(LEBEDEV_ORDER.values()))
 
 # SG0
 # S. Chien and P. Gill,  J. Comput. Chem. 27 (2006) 730-739.
@@ -351,7 +347,8 @@ def get_partition(mol, atom_grids_tab,
     return coords_all, weights_all
 gen_partition = get_partition
 
-def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
+def make_mask(mol, coords, relativity=0, shls_slice=None, cutoff=None,
+              verbose=None):
     '''Mask to indicate whether a shell is zero on grid
 
     Args:
@@ -367,6 +364,9 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
             (shl_start, shl_end).
             If given, only part of AOs (shl_start <= shell_id < shl_end) are
             evaluated.  By default, all shells defined in mol will be evaluated.
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         verbose : int or object of :class:`Logger`
             No effects.
 
@@ -382,16 +382,16 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
 
     non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                           dtype=numpy.uint8)
-    libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
-                           coords.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(ngrids),
-                           mol._atm.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(mol.natm),
-                           mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(nbas),
-                           mol._env.ctypes.data_as(ctypes.c_void_p))
+    with mol.with_integral_screen(cutoff):
+        bas = mol._bas[shls_slice[0]:]
+        libdft.VXCnr_ao_screen(
+            non0tab.ctypes.data_as(ctypes.c_void_p),
+            coords.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(ngrids),
+            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            mol._env.ctypes.data_as(ctypes.c_void_p))
     return non0tab
-
 
 
 class Grids(lib.StreamObject):
@@ -581,10 +581,10 @@ class Grids(lib.StreamObject):
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, mol=None, coords=None, relativity=0, shls_slice=None,
-                  verbose=None):
+                  cutoff=None, verbose=None):
         if mol is None: mol = self.mol
         if coords is None: coords = self.coords
-        return make_mask(mol, coords, relativity, shls_slice, verbose)
+        return make_mask(mol, coords, relativity, shls_slice, cutoff, verbose)
 
 
 def _default_rad(nuc, level=3):

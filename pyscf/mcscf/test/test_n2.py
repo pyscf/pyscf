@@ -19,31 +19,33 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-9
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-9
+    m.scf()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-9
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-9
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym
@@ -180,4 +182,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for N2")
     unittest.main()
-

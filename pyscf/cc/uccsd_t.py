@@ -115,7 +115,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = log.timer_debug1('contract_bbb', *cpu1)
 
     # Cache t2abT in t2ab to reduce memory footprint
-    assert(t2ab.flags.c_contiguous)
+    assert (t2ab.flags.c_contiguous)
     t2abT = lib.transpose(t2ab.copy().reshape(nocca*noccb,nvira*nvirb), out=t2ab)
     t2abT = t2abT.reshape(nvira,nvirb,nocca,noccb)
     # baa

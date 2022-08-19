@@ -23,36 +23,38 @@ from pyscf.pbc.df import df, aug_etb, FFTDF
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, mf0, kmdf, kpts
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''He    3.    2.       3.
-               He    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.max_memory = 1000
-cell.build(0,0)
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.max_memory = 1000
+    cell.build(0,0)
 
-mf0 = pscf.RHF(cell)
-mf0.exxdiv = 'vcut_sph'
+    mf0 = pscf.RHF(cell)
+    mf0.exxdiv = 'vcut_sph'
 
 
-numpy.random.seed(1)
-kpts = numpy.random.random((5,3))
-kpts[0] = 0
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpts[4] *= 1e-5
+    numpy.random.seed(1)
+    kpts = numpy.random.random((5,3))
+    kpts[0] = 0
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpts[4] *= 1e-5
 
-kmdf = df.DF(cell)
-kmdf.linear_dep_threshold = 1e-7
-kmdf.auxbasis = 'weigend'
-kmdf.kpts = kpts
-# Note mesh is not dense enough. It breaks the conjugation symmetry between
-# the k-points k and -k
-kmdf.mesh = (6,)*3
+    kmdf = df.DF(cell)
+    kmdf.linear_dep_threshold = 1e-7
+    kmdf.auxbasis = 'weigend'
+    kmdf.kpts = kpts
+    # Note mesh is not dense enough. It breaks the conjugation symmetry between
+    # the k-points k and -k
+    kmdf.mesh = (6,)*3
 
 def tearDownModule():
     global cell, mf0, kmdf

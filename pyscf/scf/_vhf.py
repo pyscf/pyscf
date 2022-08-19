@@ -45,6 +45,7 @@ class VHFOpt(object):
             self._cintopt = make_cintopt(mol._atm, mol._bas, mol._env, intor)
 
         self._dmcondname = dmcondname
+        self._qcondname = qcondname
         natm = ctypes.c_int(mol.natm)
         nbas = ctypes.c_int(mol.nbas)
         libcvhf.CVHFinit_optimizer(ctypes.byref(self._this),
@@ -213,9 +214,9 @@ class _CVHFOpt(ctypes.Structure):
 # hermi = 2 : anti-hermitian
 ################################################
 def incore(eri, dms, hermi=0, with_j=True, with_k=True):
-    assert(eri.dtype == numpy.double)
+    assert (eri.dtype == numpy.double)
     eri = numpy.asarray(eri, order='C')
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
 
@@ -307,7 +308,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
     natm = ctypes.c_int(c_atm.shape[0])
     nbas = ctypes.c_int(c_bas.shape[0])
 
-    dms = numpy.asarray(dms, order='C')
+    dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
     nao = dms_shape[-1]
     dms = dms.reshape(-1,nao,nao)
@@ -383,7 +384,7 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
 def direct_mapdm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                  shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -395,7 +396,7 @@ def direct_mapdm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -467,7 +468,7 @@ def direct_mapdm(intor, aosym, jkdescript,
 def direct_bindm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                  shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -479,13 +480,13 @@ def direct_bindm(intor, aosym, jkdescript,
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = dms[numpy.newaxis,:,:]
     n_dm = len(dms)
-    dms = [numpy.asarray(dm, order='C') for dm in dms]
+    dms = [numpy.asarray(dm, order='C', dtype=numpy.double) for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
         jkdescripts = jkdescript
     njk = len(jkdescripts)
-    assert(njk == n_dm)
+    assert (njk == n_dm)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -553,7 +554,7 @@ def int2e_sph(atm, bas, env, cart=False):  # pragma: no cover
 def rdirect_mapdm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -622,7 +623,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 def rdirect_bindm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -632,14 +633,16 @@ def rdirect_bindm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        dms = dms[numpy.newaxis,:,:]
+        dms = dms[numpy.newaxis]
     n_dm = len(dms)
     nao = dms[0].shape[0]
     dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
         jkdescript = (jkdescript,)
     njk = len(jkdescript)
-    assert(njk == n_dm)
+    # for SSLL integrals, njk can be less than n_dm, extra dms are required by
+    # set_dm function to get dm_cond
+    assert njk == n_dm or njk*4 == n_dm*3
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -664,8 +667,8 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     unpackas = _INTUNPACKMAP_R[aosym]
     descr_sym = [x.split('->') for x in jkdescript]
-    fjk = (ctypes.c_void_p*(n_dm))()
-    dm1 = (ctypes.c_void_p*(n_dm))()
+    fjk = (ctypes.c_void_p*(njk))()
+    dm1 = (ctypes.c_void_p*(njk))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
         f1 = _fpointer('CVHFr%s_%s_%s'%(unpackas, dmsym, vsym))
         dm1[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
@@ -674,7 +677,7 @@ def rdirect_bindm(intor, aosym, jkdescript,
 
     fdrv(cintor, fdot, fjk, dm1,
          vjk.ctypes.data_as(ctypes.c_void_p),
-         ctypes.c_int(n_dm), ctypes.c_int(ncomp),
+         ctypes.c_int(njk), ctypes.c_int(ncomp),
          (ctypes.c_int*8)(*shls_slice),
          ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cvhfopt,
          c_atm.ctypes.data_as(ctypes.c_void_p), natm,

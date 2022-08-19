@@ -23,37 +23,39 @@ from pyscf import dft
 from pyscf import fci
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-basis = '631g',
-spin = 2,
-)
-m = scf.UHF(mol)
-m.conv_tol = 1e-10
-m.scf()
-mc = mcscf.UCASCI(m, 5, (4,2)).run()
+def setUpModule():
+    global mol, m, mc, molsym, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+    basis = '631g',
+    spin = 2,
+    )
+    m = scf.UHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
+    mc = mcscf.UCASCI(m, 5, (4,2)).run()
 
-b = 1.4
-molsym = gto.M(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-basis = '631g',
-spin = 2,
-symmetry = True,
-)
-msym = scf.UHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    b = 1.4
+    molsym = gto.M(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+    basis = '631g',
+    spin = 2,
+    symmetry = True,
+    )
+    msym = scf.UHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
 def tearDownModule():
     global mol, m, mc, molsym, msym
@@ -111,11 +113,11 @@ class KnownValues(unittest.TestCase):
 
     def test_make_rdm1(self):
         dm1 = mc.make_rdm1()
-        self.assertAlmostEqual(lib.finger(dm1), -5.0290089869374492, 5)
+        self.assertAlmostEqual(lib.fp(dm1), -5.0290089869374492, 5)
         dm1 = mc.analyze(with_meta_lowdin=False)
-        self.assertAlmostEqual(lib.finger(dm1[0]), -5.7326112327013377, 5)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 0.70360224576388797, 5)
-        self.assertAlmostEqual(lib.finger(dm1[0]+dm1[1]), -5.0290089869374492, 5)
+        self.assertAlmostEqual(lib.fp(dm1[0]), -5.7326112327013377, 5)
+        self.assertAlmostEqual(lib.fp(dm1[1]), 0.70360224576388797, 5)
+        self.assertAlmostEqual(lib.fp(dm1[0]+dm1[1]), -5.0290089869374492, 5)
 
     def test_multi_roots_spin_square(self):
         mc = mcscf.UCASCI(m, 5, (4,2))
@@ -132,9 +134,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(s1[1], 3.004067259278958, 7)
 
         dm1 = mc.analyze()
-        self.assertAlmostEqual(lib.finger(dm1[0]), -5.7326112327013377, 5)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 0.70360224576388797, 5)
-        self.assertAlmostEqual(lib.finger(dm1[0]+dm1[1]), -5.0290089869374492, 5)
+        self.assertAlmostEqual(lib.fp(dm1[0]), -5.7326112327013377, 5)
+        self.assertAlmostEqual(lib.fp(dm1[1]), 0.70360224576388797, 5)
+        self.assertAlmostEqual(lib.fp(dm1[0]+dm1[1]), -5.0290089869374492, 5)
 
     #TODO:
     #def test_cas_natorb(self):

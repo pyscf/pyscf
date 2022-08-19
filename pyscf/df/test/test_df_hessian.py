@@ -26,14 +26,16 @@ from pyscf import ao2mo
 from pyscf import df
 from pyscf import hessian
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = '6-31g',
-)
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = '6-31g',
+    )
 
 def tearDownModule():
     global mol
@@ -42,16 +44,25 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_rhf_hess(self):
-        gref = scf.RHF(mol).run().Hessian().kernel()
-        g1 = scf.RHF(mol).density_fit().run().Hessian().kernel()
-        self.assertAlmostEqual(abs(gref - g1).max(), 0, 3)
+        href = scf.RHF(mol).run().Hessian().kernel()
+        h1 = scf.RHF(mol).density_fit().run().Hessian().kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+
+    def test_rks_hess(self):
+        href = mol.RKS.run(xc='b3lyp').Hessian().kernel()
+        h1 = mol.RKS.density_fit().run(xc='b3lyp').Hessian().kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+
+    def test_uhf_hess(self):
+        href = scf.UHF(mol).run().Hessian().kernel()
+        h1 = scf.UHF(mol).density_fit().run().Hessian().kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
 
     def test_uks_hess(self):
-        gref = mol.UKS.run(xc='b3lyp').Hessian().kernel()
-        g1 = mol.UKS.density_fit().run(xc='b3lyp').Hessian().kernel()
-        self.assertAlmostEqual(abs(gref - g1).max(), 0, 3)
-#
+        href = mol.UKS.run(xc='b3lyp').Hessian().kernel()
+        h1 = mol.UKS.density_fit().run(xc='b3lyp').Hessian().kernel()
+        self.assertAlmostEqual(abs(href - h1).max(), 0, 3)
+
 if __name__ == "__main__":
     print("Full Tests for df.hessian")
     unittest.main()
-

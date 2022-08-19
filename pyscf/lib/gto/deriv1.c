@@ -28,7 +28,8 @@
 double CINTcommon_fac_sp(int l);
 
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids,
+                     double fac, double expcutoff)
 {
         size_t i, j, k;
         double arr, maxc, eprim;
@@ -58,7 +59,7 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < EXPCUTOFF) {
+                if (arr-logcoeff[j] < expcutoff) {
                         not0 = 1;
                         eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {
@@ -209,7 +210,8 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 }
 
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids,
+                     double fac, double expcutoff)
 {
         size_t i, j, k;
         double arr, maxc, eprim;
@@ -248,7 +250,7 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < EXPCUTOFF) {
+                if (arr-logcoeff[j] < expcutoff) {
                         not0 = 1;
                         eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {
@@ -546,7 +548,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
 }
 
 void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
-                 double *ao, double *coord, char *non0table,
+                 double *ao, double *coord, uint8_t *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -555,7 +557,7 @@ void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
-                double *ao, double *coord, char *non0table,
+                double *ao, double *coord, uint8_t *non0table,
                 int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -564,7 +566,7 @@ void GTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
-                   double complex *ao, double *coord, char *non0table,
+                   double complex *ao, double *coord, uint8_t *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
@@ -575,7 +577,7 @@ void GTOval_spinor(int ngrids, int *shls_slice, int *ao_loc,
 }
 
 void GTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
-                    double *ao, double *coord, char *non0table,
+                    double *ao, double *coord, uint8_t *non0table,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
@@ -584,7 +586,7 @@ void GTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
-                   double *ao, double *coord, char *non0table,
+                   double *ao, double *coord, uint8_t *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
@@ -593,7 +595,7 @@ void GTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 void GTOval_ip_spinor(int ngrids, int *shls_slice, int *ao_loc,
-                      double complex *ao, double *coord, char *non0table,
+                      double complex *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
