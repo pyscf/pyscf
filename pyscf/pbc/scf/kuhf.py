@@ -328,8 +328,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
         def makedm(mos, occs):
             moa, mob = mos
-            mos =([fproj(mo, None) for mo in moa],
-                  [fproj(mo, None) for mo in mob])
+            mos = (fproj(moa, kpts), fproj(mob, kpts))
             return make_rdm1(mos, occs)
     else:
         def makedm(mos, occs):
@@ -357,7 +356,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the cell.
 
     Args:
          cell : an instance of :class:`Cell`
@@ -408,7 +407,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def dump_flags(self, verbose=None):
         khf.KSCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 

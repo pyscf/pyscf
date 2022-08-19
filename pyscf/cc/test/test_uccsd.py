@@ -191,6 +191,9 @@ class KnownValues(unittest.TestCase):
         ucc1.frozen = 1
         self.assertEqual(ucc1.nmo, (12,12))
         self.assertEqual(ucc1.nocc, (4,4))
+        ucc1.set_frozen()
+        self.assertEqual(ucc1.nmo, (12,12))
+        self.assertEqual(ucc1.nocc, (4,4))
         ucc1.frozen = [0,1]
         self.assertEqual(ucc1.nmo, (11,11))
         self.assertEqual(ucc1.nocc, (3,3))
@@ -431,6 +434,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2[0]-myucc.t2[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(t2[1]-myucc.t2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 12)
+
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.UHF(mol).apply(cc.UCCSD)
+        nelec = (3, 3)
+        nocc = nelec
+        nmo = (5, 5)
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        vec = numpy.zeros(mycc.vector_size())
+        vec_orig = vec.copy()
+        t1, t2 = mycc.vector_to_amplitudes(vec)
+        t1a, t1b = t1
+        t2aa, t2ab, t2bb = t2
+        t1a[:] = 1
+        t1b[:] = 1
+        t2aa[:] = 1
+        t2ab[:] = 1
+        t2bb[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
     def test_vector_size(self):
         self.assertEqual(myucc.vector_size(), 2240)
@@ -708,4 +731,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for UCCSD")
     unittest.main()
-

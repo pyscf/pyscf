@@ -155,6 +155,7 @@ class RADC(lib.StreamObject):
         self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
+        self.ncvs = 1
 
         self.E = None
         self.U = None
@@ -276,6 +277,9 @@ class RADC(lib.StreamObject):
         elif(self.method_type == "ip"):
             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
+        elif(self.method_type == "ip-cvs"):
+            e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
@@ -299,6 +303,12 @@ class RADC(lib.StreamObject):
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 
+    def ip_cvs_adc(self, nroots=1, guess=None, eris=None):
+        from pyscf.adc import radc_ip_cvs
+        adc_es = radc_ip.RADCIPCVS(self)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
+
     def density_fit(self, auxbasis=None, with_df = None):
         if with_df is None:
             self.with_df = df.DF(self._scf.mol)
@@ -319,6 +329,8 @@ class RADC(lib.StreamObject):
     def compute_dyson_mo(self):
         return self._adc_es.compute_dyson_mo()
 
+    def get_opdm(self):
+        return self._adc_es.get_opdm()
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -339,7 +351,7 @@ if __name__ == '__main__':
 
     myadc = adc.ADC(mf)
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
-    print(ecorr -  -0.3220169236051954)
+    print(ecorr - -0.32201692360512324)
 
     myadcip = RADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)

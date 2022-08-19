@@ -32,6 +32,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import khf
+from pyscf.pbc.scf import addons
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft import rks as mol_ks
@@ -89,7 +90,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
+        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
                                         kpt, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -185,6 +186,48 @@ class KohnShamDFT(mol_ks.KohnShamDFT):
         pbchf.SCF.reset(self, mol)
         self.grids.reset(mol)
         return self
+
+    def to_rks(self, xc=None):
+        '''Convert the input mean-field object to a RKS/ROKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = addons.convert_to_rhf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc or not isinstance(self, RKS):
+            mf.converged = False
+        return mf
+
+    def to_uks(self, xc=None):
+        '''Convert the input mean-field object to a UKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = addons.convert_to_uhf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
+        return mf
+
+    def to_gks(self, xc=None):
+        '''Convert the input mean-field object to a GKS object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        mf = addons.convert_to_ghf(self)
+        if xc is not None:
+            mf.xc = xc
+        if xc != self.xc:
+            mf.converged = False
+        return mf
 
 # Update the KohnShamDFT label in pbc.scf.hf module
 pbchf.KohnShamDFT = KohnShamDFT

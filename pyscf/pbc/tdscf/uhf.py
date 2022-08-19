@@ -28,6 +28,9 @@ class TDA(uhf.TDA):
                 return vind(x)
         return vindp, hdiag
 
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
         raise NotImplementedError
 
@@ -41,6 +44,9 @@ class TDHF(uhf.TDHF):
             with lib.temporary_env(mf, exxdiv=None):
                 return vind(x)
         return vindp, hdiag
+
+    def get_ab(self, mf=None):
+        raise NotImplementedError
 
     def nuc_grad_method(self):
         raise NotImplementedError

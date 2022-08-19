@@ -49,6 +49,7 @@ from pyscf.dft import gen_grid as grid
 from pyscf.dft import radi
 from pyscf.dft import numint
 from pyscf.df import density_fit
+from pyscf.dft.rks import KohnShamDFT
 from pyscf.dft.gen_grid import sg1_prune, nwchem_prune, treutler_prune, \
         stratmann, original_becke, Grids
 from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
@@ -103,3 +104,15 @@ def DKS(mol, xc='LDA,VWN'):
         return dks.RDKS(mol, xc=xc)
     else:
         return dks.UDKS(mol, xc=xc)
+
+UDKS = dks.UDKS
+RDKS = dks.RDKS
+
+def X2C(mol, *args):
+    '''X2C Kohn-Sham'''
+    from pyscf.scf import dhf
+    from pyscf.x2c import dft
+    if dhf.zquatev and mol.spin == 0:
+        return dft.RKS(mol, *args)
+    else:
+        return dft.UKS(mol, *args)

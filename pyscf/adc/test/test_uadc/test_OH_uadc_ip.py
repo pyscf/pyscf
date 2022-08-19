@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -35,7 +35,7 @@ def setUpModule():
     mol.symmetry = False
     mol.spin  = 1
     mol.build()
-    mf = scf.UHF(mol)
+    mf = scf.UHF(mol).density_fit()
     mf.conv_tol = 1e-12
     mf.kernel()
     myadc = adc.ADC(mf)

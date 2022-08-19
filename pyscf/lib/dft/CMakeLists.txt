@@ -14,7 +14,7 @@
 
 add_library(dft SHARED 
   CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
-  numint_uniform_grid.c
+  numint_uniform_grid.c xc_deriv.c
   )
 add_dependencies(dft cgto cvhf np_helper)
 

@@ -87,7 +87,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     E_U *= weight
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
-    vxc = lib.tag_array(vxc, E_U=E_U)
+    vxc = lib.tag_array(vxc, E_U=E_U.real)
     return vxc
 
 def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):

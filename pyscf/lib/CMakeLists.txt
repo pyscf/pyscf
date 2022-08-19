@@ -166,7 +166,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
 
   ExternalProject_Add(libcint
     GIT_REPOSITORY ${LIBCINT_GIT}
-    GIT_TAG v5.1.0
+    GIT_TAG v5.1.3
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_CACHE_ARGS

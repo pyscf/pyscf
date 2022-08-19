@@ -239,7 +239,7 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
     ao_loc = mol.ao_loc_nr()
 
     # dmvo ~ reduce(numpy.dot, (orbv, Xai, orbo.T))
-    dmvo = (dmvo + dmvo.T) * .5 # because K_{ia,jb} == K_{ia,jb}
+    dmvo = (dmvo + dmvo.T) * .5 # because K_{ia,jb} == K_{ia,bj}
 
     f1vo = numpy.zeros((4,nao,nao))  # 0th-order, d/dx, d/dy, d/dz
     deriv = 2
@@ -271,10 +271,10 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
                 wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
-                rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, xctype)
+                rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, xctype, hermi=1)
                 lda_sum_(f1vo, ao, wfxc * rho1, mask)
                 if dmoo is not None:
-                    rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, xctype)
+                    rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, xctype, hermi=1)
                     lda_sum_(f1oo, ao, wfxc * rho2, mask)
                 if with_vxc:
                     lda_sum_(v1ao, ao, vxc[0] * weight, mask)
@@ -299,12 +299,12 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype)
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype) * 2  # *2 for alpha + beta
+                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype, hermi=1) * 2  # *2 for alpha + beta
                 wv = numint._rks_gga_wv1(rho, rho1, vxc, fxc, weight)
                 gga_sum_(f1vo, ao, wv, mask)
 
                 if dmoo is not None:
-                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype) * 2
+                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype, hermi=1) * 2
                     wv = numint._rks_gga_wv1(rho, rho2, vxc, fxc, weight)
                     gga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:
@@ -340,12 +340,12 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype)
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype) * 2  # *2 for alpha + beta
+                rho1 = ni.eval_rho(mol, ao, dmvo, mask, xctype, hermi=1) * 2  # *2 for alpha + beta
                 wv = numint._rks_mgga_wv1(rho, rho1, vxc, fxc, weight)
                 mgga_sum_(f1vo, ao, wv, mask)
 
                 if dmoo is not None:
-                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype) * 2
+                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, xctype, hermi=1) * 2
                     wv = numint._rks_mgga_wv1(rho, rho2, vxc, fxc, weight)
                     mgga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:

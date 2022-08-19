@@ -19,11 +19,12 @@
 import unittest
 import numpy as np
 
+from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import dft as pdft
 
 class KnownValues(unittest.TestCase):
-    def test_KRKSpU(self):
+    def test_KRKSpU_high_cost(self):
         cell = pgto.Cell()
         cell.unit = 'A'
         cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
@@ -34,6 +35,7 @@ class KnownValues(unittest.TestCase):
         cell.basis = 'gth-dzvp'
         cell.pseudo = 'gth-pade'
         cell.verbose = 7
+        cell.output = '/dev/null'
         cell.build()
         kmesh = [2, 1, 1]
         kpts = cell.make_kpts(kmesh, wrap_around=True)
@@ -45,6 +47,31 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-10
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -10.694460059491741, 8)
+
+    def test_get_veff(self):
+        cell = pgto.Cell()
+        cell.unit = 'A'
+        cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+
+        cell.basis = 'gth-dzvp'
+        cell.pseudo = 'gth-pade'
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.build()
+        kmesh = [2, 1, 1]
+        kpts = cell.make_kpts(kmesh, wrap_around=True)
+        U_idx = ["1 C 2p"]
+        U_val = [5.0]
+
+        mf = pdft.KRKSpU(cell, kpts, U_idx=U_idx, U_val=U_val, C_ao_lo='minao',
+                         minao_ref='gth-szv')
+        dm = mf.get_init_guess(cell, 'minao')
+        vxc = mf.get_veff(cell, dm)
+        self.assertAlmostEqual(vxc.E_U, 0.07587726255165786, 11)
+        self.assertAlmostEqual(lib.fp(vxc), 12.77643098220399, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.krkspu")

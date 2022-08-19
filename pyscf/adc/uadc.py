@@ -162,6 +162,7 @@ class UADC(lib.StreamObject):
         self.U = None
         self.P = None
         self.X = (None,)
+        self.ncvs = 1
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
                     'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
@@ -280,6 +281,8 @@ class UADC(lib.StreamObject):
         elif(self.method_type == "ip"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
+        elif(self.method_type == "ip-cvs"):
+            e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
 
@@ -304,6 +307,12 @@ class UADC(lib.StreamObject):
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 
+    def ip_cvs_adc(self, nroots=1, guess=None, eris=None):
+        from pyscf.adc import uadc_ip_cvs
+        adc_es = uadc_ip_cvs.UADCIPCVS(self)
+        e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
+        return e_exc, v_exc, spec_fac, x, adc_es
+
     def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
             self.with_df = df.DF(self._scf.mol)
@@ -324,6 +333,8 @@ class UADC(lib.StreamObject):
     def compute_dyson_mo(self):
         return self._adc_es.compute_dyson_mo()
 
+    def get_opdm(self):
+        return self._adc_es.get_opdm()
 
 if __name__ == '__main__':
     from pyscf import scf

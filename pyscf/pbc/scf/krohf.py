@@ -290,7 +290,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
 
     def dump_flags(self, verbose=None):
         khf.KSCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 

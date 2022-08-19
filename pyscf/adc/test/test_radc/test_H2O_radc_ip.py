@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 import math
 from pyscf import gto
 from pyscf import scf
