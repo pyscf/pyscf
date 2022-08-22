@@ -22,23 +22,25 @@ from pyscf import cc
 from pyscf.cc import ccsd_t
 from pyscf.cc import gccsd, gccsd_t
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -.757 , .587)],
-    [1 , (0. ,  .757 , .587)]]
-mol.symmetry = True
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.basis = 'ccpvdz'
-mol.build()
-rhf = scf.RHF(mol)
-rhf.conv_tol = 1e-14
-rhf.scf()
+def setUpModule():
+    global mol, rhf, mcc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -.757 , .587)],
+        [1 , (0. ,  .757 , .587)]]
+    mol.symmetry = True
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.basis = 'ccpvdz'
+    mol.build()
+    rhf = scf.RHF(mol)
+    rhf.conv_tol = 1e-14
+    rhf.scf()
 
-mcc = cc.CCSD(rhf)
-mcc.conv_tol = 1e-14
-mcc.ccsd()
+    mcc = cc.CCSD(rhf)
+    mcc.conv_tol = 1e-14
+    mcc.ccsd()
 
 def tearDownModule():
     global mol, rhf, mcc

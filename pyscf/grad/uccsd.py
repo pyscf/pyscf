@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import uccsd_rdm
+from pyscf.ao2mo import _ao2mo
 from pyscf.scf import ucphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
@@ -323,8 +324,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     nvira_pair = nvira * (nvira+1) //2
     nvirb_pair = nvirb * (nvirb+1) //2
 
-    fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
-    ftrans = _ccsd.libcc.AO2MOtranse2_nr_s1
+    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+    ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s1
     fmm = _ccsd.libcc.CCmmm_transpose_sum
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     def _trans(vin, mo_coeff, orbs_slice, out=None):
@@ -493,64 +494,3 @@ Grad = Gradients
 
 from pyscf.cc import uccsd
 uccsd.UCCSD.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf.cc import uccsd
-
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g',
-        spin = 2,
-    )
-    mf = scf.UHF(mol).run()
-    mycc = uccsd.UCCSD(mf).run()
-    g1 = mycc.Gradients().kernel()
-# O    -0.0000000000    -0.0000000000     0.1474630318
-# H     0.0000000000     0.1118073694    -0.0737315159
-# H     0.0000000000    -0.1118073694    -0.0737315159
-    print(lib.finger(g1) - -0.22892718069135981)
-
-    myccs = mycc.as_scanner()
-    mol.atom[0] = ["O" , (0., 0., 0.001)]
-    mol.build(0, 0)
-    e1 = myccs(mol)
-    mol.atom[0] = ["O" , (0., 0.,-0.001)]
-    mol.build(0, 0)
-    e2 = myccs(mol)
-    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
-
-    print('-----------------------------------')
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g',
-        spin = 2,
-    )
-    mf = scf.UHF(mol).run()
-    mycc = uccsd.UCCSD(mf)
-    mycc.frozen = [0,1,10,11,12]
-    mycc.max_memory = 1
-    mycc.kernel()
-    g1 = Gradients(mycc).kernel()
-# O    -0.0000000000    -0.0000000000     0.1544815572
-# H     0.0000000000     0.1146948540    -0.0772407786
-# H     0.0000000000    -0.1146948540    -0.0772407786
-    print(lib.finger(g1) - -0.23639703218041083)
-
-    myccs = mycc.as_scanner()
-    mol.atom[0] = ["O" , (0., 0., 0.001)]
-    mol.build(0, 0)
-    e1 = myccs(mol)
-    mol.atom[0] = ["O" , (0., 0.,-0.001)]
-    mol.build(0, 0)
-    e2 = myccs(mol)
-    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
-

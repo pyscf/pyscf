@@ -132,7 +132,10 @@ def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
             for l, n in enumerate(numpy.ceil(ns).astype(int)):
                 if n > 0:
                     etb.append((l, n, emin_by_l[l], beta))
-            newbasis[symb] = gto.expand_etbs(etb)
+            if etb:
+                newbasis[symb] = gto.expand_etbs(etb)
+            else:
+                raise RuntimeError(f'Failed to generate even-tempered auxbasis for {symb}')
 
     return newbasis
 
@@ -151,7 +154,7 @@ def make_auxbasis(mol, mp2fit=False):
         default_basis = mol.basis['default']
         _basis = dict(((a, default_basis) for a in uniq_atoms))
         _basis.update(mol.basis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = mol._basis
 
@@ -210,7 +213,7 @@ def make_auxmol(mol, auxbasis=None):
         uniq_atoms = set([a[0] for a in mol._atom])
         _basis = dict(((a, auxbasis['default']) for a in uniq_atoms))
         _basis.update(auxbasis)
-        del(_basis['default'])
+        del (_basis['default'])
     else:
         _basis = auxbasis
     pmol._basis = pmol.format_basis(_basis)
@@ -222,4 +225,4 @@ def make_auxmol(mol, auxbasis=None):
                  pmol.nbas, pmol.nao_nr())
     return pmol
 
-del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)
+del (DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

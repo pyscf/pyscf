@@ -56,7 +56,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     fcivec = numpy.asarray(fcivec, order='C')
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
-    assert(fcivec.size == na**2)
+    assert (fcivec.size == na**2)
     ci1 = numpy.empty_like(fcivec)
     f1e_tril = lib.pack_tril(f1e)
     libfci.FCIcontract_1e_spin0(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -66,7 +66,8 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
+    ci1 = lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
+    return ci1.view(direct_spin1.FCIvector)
 
 # Note eri is NOT the 2e hamiltonian matrix, the 2e hamiltonian is
 # h2e = eri_{pq,rs} p^+ q r^+ s
@@ -85,7 +86,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     eri *= .5
     link_index = _unpack(norb, nelec, link_index)
     na, nlink = link_index.shape[:2]
-    assert(fcivec.size == na**2)
+    assert (fcivec.size == na**2)
     ci1 = numpy.empty((na,na))
 
     libfci.FCIcontract_2e_spin0(eri.ctypes.data_as(ctypes.c_void_p),
@@ -95,7 +96,8 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlink),
                                 link_index.ctypes.data_as(ctypes.c_void_p))
 # no *.5 because FCIcontract_2e_spin0 only compute half of the contraction
-    return lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
+    ci1 = lib.transpose_sum(ci1, inplace=True).reshape(fcivec.shape)
+    return ci1.view(direct_spin1.FCIvector)
 
 absorb_h1e = direct_spin1.absorb_h1e
 
@@ -156,7 +158,7 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         link_index = cistring.gen_linkstr_index(range(norb), neleca)
     rdm1a = rdm.make_rdm1('FCItrans_rdm1a', cibra, ciket,
                           norb, nelec, link_index)
@@ -209,7 +211,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
             x[addra,addrb] = 1
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-        ci0.append(x.ravel())
+        ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     # Add noise
     ci0[0][0 ] += 1e-5
@@ -232,8 +234,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
         max_memory = fci.max_memory - lib.current_memory()[0]
     log = logger.new_logger(fci, verbose)
 
-    assert(fci.spin is None or fci.spin == 0)
-    assert(0 <= numpy.sum(nelec) <= norb*2)
+    assert (fci.spin is None or fci.spin == 0)
+    assert (0 <= numpy.sum(nelec) <= norb*2)
 
     link_index = _unpack(norb, nelec, link_index)
     h1e = numpy.ascontiguousarray(h1e)
@@ -258,13 +260,14 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             # The degenerated wfn can break symmetry.  The davidson iteration with proper
             # initial guess doesn't have this issue
             if na*na == 1:
-                return pw[0]+ecore, pv[:,0].reshape(1,1)
+                return pw[0]+ecore, pv[:,0].reshape(1,1).view(direct_spin1.FCIvector)
             elif nroots > 1:
                 civec = numpy.empty((nroots,na*na))
                 civec[:,addr] = pv[:,:nroots].T
                 civec = civec.reshape(nroots,na,na)
                 try:
-                    return pw[:nroots]+ecore, [_check_(ci) for ci in civec]
+                    return (pw[:nroots]+ecore,
+                            [_check_(ci).view(direct_spin1.FCIvector) for ci in civec])
                 except ValueError:
                     pass
             elif abs(pw[0]-pw[1]) > 1e-12:
@@ -278,7 +281,8 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                 # spin problems.  The 'ground state' of psapce vector may have different spin
                 # state to the true ground state.
                 try:
-                    return pw[0]+ecore, _check_(civec.reshape(na,na))
+                    return (pw[0]+ecore,
+                            _check_(civec.reshape(na,na)).view(direct_spin1.FCIvector))
                 except ValueError:
                     pass
     except NotImplementedError:
@@ -328,9 +332,10 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                        max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
     if nroots > 1:
-        return e+ecore, [_check_(ci.reshape(na,na)) for ci in c]
+        return (e+ecore,
+                [_check_(ci.reshape(na,na)).view(direct_spin1.FCIvector) for ci in c])
     else:
-        return e+ecore, _check_(c.reshape(na,na))
+        return e+ecore, _check_(c.reshape(na,na)).view(direct_spin1.FCIvector)
 
 def _check_(c):
     c = lib.transpose_sum(c, inplace=True)
@@ -400,7 +405,7 @@ class FCISolver(direct_spin1.FCISolver):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         if tril:
             link_index = cistring.gen_linkstr_index_trilidx(range(norb), neleca)
         else:
@@ -416,7 +421,7 @@ def _unpack(norb, nelec, link_index):
             neleca = nelec//2
         else:
             neleca, nelecb = nelec
-            assert(neleca == nelecb)
+            assert (neleca == nelecb)
         return cistring.gen_linkstr_index_trilidx(range(norb), neleca)
     else:
         return link_index

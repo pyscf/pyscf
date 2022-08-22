@@ -18,56 +18,51 @@
 from pyscf import scf
 from pyscf.tdscf import rhf
 from pyscf.tdscf import uhf
+from pyscf.tdscf import ghf
+from pyscf.tdscf import dhf
 from pyscf.tdscf.rhf import TDRHF
 from pyscf.tdscf.uhf import TDUHF
+from pyscf.tdscf.ghf import TDGHF
 
 try:
-    from pyscf import dft
+    from pyscf.dft import KohnShamDFT
     from pyscf.tdscf import rks
     from pyscf.tdscf import uks
+    from pyscf.tdscf import gks
+    from pyscf.tdscf import dks
     from pyscf.tdscf.rks import TDRKS
     from pyscf.tdscf.uks import TDUKS
+    from pyscf.tdscf.gks import TDGKS
 except (ImportError, IOError):
     pass
 
 
 def TDHF(mf):
-    if getattr(mf, 'xc', None):
+    if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)  # To remove newton decoration
-        return uhf.TDHF(mf)
-    else:
-        mf = scf.addons.convert_to_rhf(mf)
-        return rhf.TDHF(mf)
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        # Is it correct to call TDUHF for ROHF?
+        mf = mf.to_uhf()
+    return mf.TDHF()
 
 def TDA(mf):
-    if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
-        if isinstance(mf, dft.rks.KohnShamDFT):
-            return uks.TDA(mf)
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        if isinstance(mf, KohnShamDFT):
+            mf = mf.to_uks()
         else:
-            return uhf.TDA(mf)
-    else:
-        mf = scf.addons.convert_to_rhf(mf)
-        if isinstance(mf, dft.rks.KohnShamDFT):
-            return rks.TDA(mf)
-        else:
-            return rhf.TDA(mf)
+            mf = mf.to_uhf()
+    return mf.TDA()
 
 def TDDFT(mf):
-    if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
-        if isinstance(mf, dft.rks.KohnShamDFT):
-            return uks.tddft(mf)
-        else:
-            return uhf.TDHF(mf)
+    if isinstance(mf, KohnShamDFT):
+        mf = mf.remove_soscf()
+        if isinstance(mf, scf.rohf.ROHF):
+            mf = mf.to_uks()
+        return mf.TDDFT()
     else:
-        mf = scf.addons.convert_to_rhf(mf)
-        if isinstance(mf, dft.rks.KohnShamDFT):
-            return rks.tddft(mf)
-        else:
-            return rhf.TDHF(mf)
+        return TDHF(mf)
 
 TD = TDDFT
 
@@ -76,13 +71,19 @@ def RPA(mf):
     return TDDFT(mf)
 
 def dRPA(mf):
-    if isinstance(mf, scf.uhf.UHF):
-        return uks.dRPA(mf)
-    else:
-        return rks.dRPA(mf)
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        if isinstance(mf, KohnShamDFT):
+            mf = mf.to_uks()
+        else:
+            mf = mf.to_uhf()
+    return mf.dRPA()
 
 def dTDA(mf):
-    if isinstance(mf, scf.uhf.UHF):
-        return uks.dTDA(mf)
-    else:
-        return rks.dTDA(mf)
+    mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        if isinstance(mf, KohnShamDFT):
+            mf = mf.to_uks()
+        else:
+            mf = mf.to_uhf()
+    return mf.dTDA()

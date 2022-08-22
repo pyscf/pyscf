@@ -18,15 +18,17 @@ import numpy
 from pyscf import gto, scf, lib
 from pyscf import grad
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
-mol.basis = '6-31g'
-mol.build()
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
+    mol.basis = '6-31g'
+    mol.build()
 
 def tearDownModule():
     global mol
@@ -34,22 +36,53 @@ def tearDownModule():
     del mol
 
 class KnownValues(unittest.TestCase):
+    def test_rhf_grad_one_atom(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [['He', (0.,0.,0.)], ]
+        mol.basis = {'He': 'ccpvdz'}
+        mol.build()
+        method = scf.RHF(mol)
+        method.scf()
+        g1 = method.Gradients().grad()
+        self.assertAlmostEqual(lib.fp(g1), 0, 9)
+
     def test_rhf_grad(self):
         g_scan = scf.RHF(mol).nuc_grad_method().as_scanner()
         g = g_scan(mol)[1]
-        self.assertAlmostEqual(lib.finger(g), 0.0055116240804341972, 9)
+        self.assertAlmostEqual(lib.fp(g), 0.0055116240804341972, 7)
 
         mfs = g_scan.base.as_scanner()
         e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
-        self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
+
+    def test_x2c_rhf_grad(self):
+        h2o = gto.Mole()
+        h2o.verbose = 0
+        h2o.atom = [
+            ['O' , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
+        h2o.basis = {'H': '631g',
+                     'O': '631g',}
+        h2o.symmetry = True
+        h2o.build()
+        mf = scf.RHF(h2o).x2c()
+        mf.conv_tol = 1e-14
+        e0 = mf.scf()
+        g1 = mf.Gradients().grad()
+#[[ 0   0               -2.40286232e-02]
+# [ 0   4.27908498e-03   1.20143116e-02]
+# [ 0  -4.27908498e-03   1.20143116e-02]]
+        self.assertAlmostEqual(lib.fp(g1), 0.0056364301689991346, 6)
 
     def test_finite_diff_x2c_rhf_grad(self):
         mf = scf.RHF(mol).x2c()
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         g = grad.RHF(mf).kernel()
-        self.assertAlmostEqual(lib.finger(g), 0.0056363502746766807, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.0056363502746766807, 6)
 
         mf_scanner = mf.as_scanner()
         pmol = mol.copy()
@@ -74,7 +107,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         g = grad.RHF(mf).kernel(atmlst=range(mol.natm))
-        self.assertAlmostEqual(lib.finger(g), 0.0055115512502467556, 6)
+        self.assertAlmostEqual(lib.fp(g), 0.0055115512502467556, 6)
 
         mf_scanner = mf.as_scanner()
         pmol = mol.copy()
@@ -100,12 +133,38 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol)
         g_scan = mf.nuc_grad_method().as_scanner().as_scanner()
         g = g_scan(mol.atom)[1]
-        self.assertAlmostEqual(lib.finger(g), -0.012310573162997052, 9)
+        self.assertAlmostEqual(lib.fp(g), -0.012310573162997052, 7)
 
         mfs = mf.as_scanner()
         e1 = mfs(mol.set_geom_('Cu 0 0 -0.001; H 0 0 1.5'))
         e2 = mfs(mol.set_geom_('Cu 0 0  0.001; H 0 0 1.5'))
         self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 6)
+
+    def test_grad_with_symmetry(self):
+        h2o = gto.Mole()
+        h2o.verbose = 0
+        h2o.atom = [
+            ['O' , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
+        h2o.basis = {'H': '631g',
+                     'O': '631g',}
+        h2o.symmetry = True
+        h2o.build()
+        mf = scf.RHF(h2o)
+        mf.conv_tol = 1e-14
+        e0 = mf.scf()
+        g1 = mf.Gradients().grad()
+#[[ 0   0               -2.41134256e-02]
+# [ 0   4.39690522e-03   1.20567128e-02]
+# [ 0  -4.39690522e-03   1.20567128e-02]]
+        self.assertAlmostEqual(lib.fp(g1), 0.0055115512502467556, 6)
+
+        mol = gto.M (atom = 'H 0 0 0; H 0 0 1', basis='sto-3g', symmetry=True, verbose=0)
+        ref = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
+        mol = gto.M (atom = 'H 0 0 0; H 1 0 0', basis='sto-3g', symmetry=True, verbose=0)
+        g_x = scf.RHF (mol).run ().nuc_grad_method ().kernel ()
+        self.assertAlmostEqual(abs(ref[:,2] - g_x[:,0]).max(), 0, 9)
 
 
 if __name__ == "__main__":

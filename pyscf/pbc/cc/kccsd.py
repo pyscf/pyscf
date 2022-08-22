@@ -497,9 +497,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     for k in range(nkpts):
         kpt_nocc = nocc_per_kpt[k]
         kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
-                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
-                                              numpy.ones(kpt_nvir, dtype=numpy.bool)))
+        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=bool),
+                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=bool),
+                                              numpy.ones(kpt_nvir, dtype=bool)))
         padded_moidx.append(kpt_padded_moidx)
 
     eris.mo_coeff = []

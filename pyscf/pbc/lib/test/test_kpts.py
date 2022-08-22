@@ -20,13 +20,15 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.lib import kpts_helper
 from pyscf import lib
 
-cell = pbcgto.Cell()
-cell.atom = 'He 0 0 0'
-cell.a = '''0.      1.7834  1.7834
-            1.7834  0.      1.7834
-            1.7834  1.7834  0.    '''
-cell.verbose = 0
-cell.build()
+def setUpModule():
+    global cell
+    cell = pbcgto.Cell()
+    cell.atom = 'He 0 0 0'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+    cell.verbose = 0
+    cell.build()
 
 def tearDownModule():
     global cell

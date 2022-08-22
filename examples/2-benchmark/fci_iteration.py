@@ -1,17 +1,9 @@
-import os
 import time
 import numpy as np
-from pyscf import gto, scf, lib, fci
+from pyscf import fci
+from benchmarking_utils import setup_logger, get_cpu_timings
 
-log = lib.logger.Logger(verbose=5)
-with open('/proc/cpuinfo') as f:
-    for line in f:
-        if 'model name' in line:
-            log.note(line[:-1])
-            break
-with open('/proc/meminfo') as f:
-    log.note(f.readline()[:-1])
-log.note('OMP_NUM_THREADS=%s\n', os.environ.get('OMP_NUM_THREADS', None))
+log = setup_logger()
 
 for norb in (12, 14, 16, 18):
     nelec = (norb//2, norb//2)
@@ -26,7 +18,7 @@ for norb in (12, 14, 16, 18):
     ci0 *= 1/np.linalg.norm(ci0)
 
     link = fci.cistring.gen_linkstr_index(range(norb), nelec[0], tril=True)
-    cpu0 = time.clock(), time.time()
+    cpu0 = get_cpu_timings()
     fci.direct_spin0.contract_2e(h2, ci0, norb, nelec, link)
     cpu0 = log.timer('FCI-spin0-solver (%do, %de)' % (norb, sum(nelec)), *cpu0)
     fci.direct_spin1.contract_2e(h2, ci0, norb, nelec, (link, link))

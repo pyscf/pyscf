@@ -500,7 +500,7 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
         # Interpret priority keyword
         nocc = ncore + ncas
         if isinstance (priority, str):
-            ridx = numpy.zeros ((2, nmo_init), dtype=numpy.bool)
+            ridx = numpy.zeros ((2, nmo_init), dtype=bool)
             ridx[0,:ncore] = ridx[1,ncore:nocc] = True
             if priority.lower () == 'active': ridx = ridx[::-1,:]
             elif not priority.lower () == 'core':
@@ -508,13 +508,13 @@ def project_init_guess (casscf, mo_init, prev_mol=None, priority=None, use_hf_co
             # Edge case: ncore == 0 or ncas == 0 -> remove zero rows from ridx
             ridx = ridx[ridx.sum (1).astype (bool)]
         else:
-            ridx = numpy.zeros ((len (priority), nmo), dtype=numpy.bool_)
+            ridx = numpy.zeros ((len (priority), nmo), dtype=bool)
             for row, idx in zip (ridx, priority):
                 try:
                     row[idx] = True
                 except IndexError:
                     raise RuntimeError ("Invalid priority keyword: index array cannot address shape (*,nmo_init)")
-            ridx_counts = ridx.astype (numpy.integer).sum (0)
+            ridx_counts = ridx.astype (int).sum (0)
             if numpy.any (ridx_counts > 1):
                 raise RuntimeError ("Invalid priority keyword: index array has repeated elements")
         incl = numpy.any (ridx, axis=0)
@@ -732,11 +732,11 @@ def _make_rdm12_on_mo(casdm1, casdm2, ncore, ncas, nmo):
         dm2[i,ncore:nocc,ncore:nocc,i] = dm2[ncore:nocc,i,i,ncore:nocc] = -casdm1
     return dm1, dm2
 
-# on AO representation
+# In AO representation
 def make_rdm12(casscf, mo_coeff=None, ci=None):
     if ci is None: ci = casscf.ci
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
-    assert(not _is_uhf_mo(mo_coeff))
+    assert (not _is_uhf_mo(mo_coeff))
     nelecas = casscf.nelecas
     ncas = casscf.ncas
     ncore = casscf.ncore
@@ -855,9 +855,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
     used as intermediates for calculations of the gradient of a single root in the context
     of the SA-CASSCF method; see: Mol. Phys. 99, 103 (2001).
     '''
-    assert(abs(sum(weights)-1) < 1e-3)
+    assert (abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     has_spin_square = getattr(casscf.fcisolver, 'spin_square', None)
+    if wfnsym is None:
+        wfnsym = casscf.fcisolver.wfnsym
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, fcibase):
@@ -888,7 +890,7 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
 
             # call fcibase_class.kernel function because the attribute orbsym
             # is available in self but undefined in fcibase object
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                         wfnsym=self.wfnsym, **kwargs)
             self.e_states = e
 
@@ -906,11 +908,11 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             try:
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
-                                                   ci0, nroots=self.nroots,
+                                                   ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
             except AttributeError:
-                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)
             return numpy.einsum('i,i->', e, self.weights), c
@@ -1055,12 +1057,8 @@ def _state_average_mcscf_solver(casscf, fcisolver):
             return self
 
         def nuc_grad_method (self, state=None):
-            from pyscf.mcscf import mc1step
-            if isinstance (self, mc1step.CASSCF):
-                # If no state ever gets passed, the below should default to the
-                # gradient of the state-average energy
-                from pyscf.grad import sacasscf as sacasscf_grad
-                return sacasscf_grad.Gradients (self, state=state)
+            if callable (getattr (self, '_state_average_nuc_grad_method', None)):
+                return self._state_average_nuc_grad_method (state=state)
             else: # Avoid messing up state-average CASCI
                 return self._base_class.nuc_grad_method (self)
 
@@ -1068,9 +1066,9 @@ def _state_average_mcscf_solver(casscf, fcisolver):
 
     return StateAverageMCSCF(casscf)
 
-def state_average_(casscf, weights=(0.5,0.5)):
+def state_average_(casscf, weights=(0.5,0.5), wfnsym=None):
     ''' Inplace version of state_average '''
-    sacasscf = state_average (casscf, weights)
+    sacasscf = state_average (casscf, weights, wfnsym)
     casscf.__class__ = sacasscf.__class__
     casscf.__dict__.update (sacasscf.__dict__)
     return casscf
@@ -1093,6 +1091,8 @@ def state_specific_(casscf, state=1, wfnsym=None):
                         '    mc.state_specific_()\n' %
                         (casscf.fcisolver, fcibase_class.__base__.__module__,
                          fcibase_class.__base__.__name__))
+    if wfnsym is None:
+        wfnsym = casscf.fcisolver.wfnsym
 
     class FakeCISolver(fcibase_class, StateSpecificFCISolver):
         def __init__(self):
@@ -1103,7 +1103,7 @@ def state_specific_(casscf, state=1, wfnsym=None):
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
                 ci0 = self._civec
-            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+            e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                         nroots=self.nroots, wfnsym=self.wfnsym,
                                         **kwargs)
             if state == 0:
@@ -1125,11 +1125,11 @@ def state_specific_(casscf, state=1, wfnsym=None):
                 ci0 = self._civec
             try:
                 e, c = fcibase_class.approx_kernel(self, h1, h2, norb, nelec,
-                                                   ci0, nroots=self.nroots,
+                                                   ci0=ci0, nroots=self.nroots,
                                                    wfnsym=self.wfnsym,
                                                    **kwargs)
             except AttributeError:
-                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
+                e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0=ci0,
                                             nroots=self.nroots,
                                             wfnsym=self.wfnsym, **kwargs)
             if state == 0:
@@ -1165,7 +1165,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
     '''
     fcibase_class = fcisolvers[0].__class__
     nroots = sum(solver.nroots for solver in fcisolvers)
-    assert(nroots == len(weights))
+    assert (nroots == len(weights))
     has_spin_square = all(getattr(solver, 'spin_square', None)
                           for solver in fcisolvers)
     has_large_ci = all(getattr(solver, 'large_ci', None)
@@ -1262,7 +1262,7 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             cs = []
             for solver, my_args, my_kwargs in self._loop_solver(_state_args (ci0)):
                 c0 = my_args[0]
-                e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
+                e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                      orbsym=self.orbsym, verbose=log, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
@@ -1290,10 +1290,10 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             for ix, (solver, my_args, my_kwargs) in enumerate (self._loop_solver(_state_args (ci0))):
                 c0 = my_args[0]
                 try:
-                    e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
+                    e, c = solver.approx_kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                                 orbsym=self.orbsym, **kwargs)
                 except AttributeError:
-                    e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), c0,
+                    e, c = solver.kernel(h1, h2, norb, self._get_nelec(solver, nelec), ci0=c0,
                                          orbsym=self.orbsym, **kwargs)
                 if solver.nroots == 1:
                     es.append(e)
@@ -1411,7 +1411,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     return casscf
 
 
-del(BASE, MAP2HF_TOL)
+del (BASE, MAP2HF_TOL)
 
 
 if __name__ == '__main__':

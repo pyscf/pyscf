@@ -37,6 +37,10 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     if mo_coeff is None: mo_coeff = ephobj.base.mo_coeff
     if mo_occ is None: mo_occ = ephobj.base.mo_occ
 
+    # chkfile is used to pass first orbitals from hessian methods to eph methods
+    # TODO: Remove the dependence to chfile and return first orbitals from a function
+    assert ephobj.chkfile is not None, 'chkfile is requred to save first order orbitals'
+
     de = ephobj.hess_elec(mo_energy, mo_coeff, mo_occ)
     ephobj.de = de + ephobj.hess_nuc(ephobj.mol)
 
@@ -45,7 +49,8 @@ def kernel(ephobj, mo_energy=None, mo_coeff=None, mo_occ=None, mo_rep=False):
     ephobj.eph = ephobj.get_eph(ephobj.chkfile, omega, vec, mo_rep)
     return ephobj.eph, ephobj.omega
 
-def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
+def solve_hmat(mol, hmat, cutoff_frequency=CUTOFF_FREQUENCY,
+               keep_imag_frequency=KEEP_IMAG_FREQUENCY):
     log = logger.new_logger(mol, mol.verbose)
     mass = mol.atom_mass_list() * MP_ME
     natom = len(mass)

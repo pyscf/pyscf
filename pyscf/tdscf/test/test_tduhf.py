@@ -16,25 +16,28 @@
 
 import unittest
 from pyscf import lib, gto, scf, tdscf
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol.basis = '631g'
-mol.build()
-mf = scf.UHF(mol).run()
 
-mol1 = gto.Mole()
-mol1.verbose = 7
-mol1.output = '/dev/null'
-mol1.atom = [
-    ['H' , (0. , 0. , .917)],
-    ['F' , (0. , 0. , 0.)], ]
-mol1.basis = '631g'
-mol1.spin = 2
-mol1.build()
-mf1 = scf.UHF(mol1).run()
+def setUpModule():
+    global mol, mol1, mf, mf1
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.UHF(mol).run()
+
+    mol1 = gto.Mole()
+    mol1.verbose = 7
+    mol1.output = '/dev/null'
+    mol1.atom = [
+        ['H' , (0. , 0. , .917)],
+        ['F' , (0. , 0. , 0.)], ]
+    mol1.basis = '631g'
+    mol1.spin = 2
+    mol1.build()
+    mf1 = scf.UHF(mol1).run()
 
 def tearDownModule():
     global mol, mol1, mf, mf1
@@ -47,7 +50,7 @@ class KnownValues(unittest.TestCase):
         td.nstates = 5
         e = td.kernel()[0]
         ref = [11.01748568, 11.01748568, 11.90277134, 11.90277134, 13.16955369]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf(self):
         td = mf.TDHF()
@@ -55,7 +58,7 @@ class KnownValues(unittest.TestCase):
         td.singlet = False
         e = td.kernel()[0]
         ref = [10.89192986, 10.89192986, 11.83487865, 11.83487865, 12.6344099]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tda_triplet(self):
         td = mf1.TDA()

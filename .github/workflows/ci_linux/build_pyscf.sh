@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+
+set -e
+
 cd ./pyscf/lib
-curl -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.0-deps.tar.gz?raw=true" | tar xzf -
+curl -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.1a-deps.tar.gz?raw=true" | tar xzf -
 rm deps/include/cint*
 rm deps/lib/libcint*
 mkdir build; cd build

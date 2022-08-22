@@ -56,7 +56,7 @@ def make_intermediates(mycc, t1, t2, eris):
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
     w = numpy.einsum('ijae,kceb->ijkabc', t2aa, numpy.asarray(eris.get_ovvv()).conj())
-    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo.conj()))
+    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.ovov).conj(), t1a)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2aa, fvo) * .5
 
@@ -65,7 +65,7 @@ def make_intermediates(mycc, t1, t2, eris):
                               numpy.asarray(eris.ovov)) / eia * .25
     wvd = r6(p6(w * 2 + v)) / d3
     l2_t  = numpy.einsum('ijkabc,kceb->ijae', wvd, numpy.asarray(eris.get_ovvv()).conj())
-    l2_t -= numpy.einsum('ijkabc,iajm->mkbc', wvd, numpy.asarray(eris.ovoo.conj()))
+    l2_t -= numpy.einsum('ijkabc,iajm->mkbc', wvd, numpy.asarray(eris.ovoo).conj())
     l2_t = l2_t + l2_t.transpose(1,0,3,2)
     l2_t += numpy.einsum('ijkabc,ai->jkbc', rw, fvo)
     imds.l2aa_t = l2_t.conj() / lib.direct_sum('ia+jb->ijab', eia, eia) * .5
@@ -73,7 +73,7 @@ def make_intermediates(mycc, t1, t2, eris):
     # bbb
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eIA, eIA)
     w = numpy.einsum('ijae,kceb->ijkabc', t2bb, numpy.asarray(eris.get_OVVV()).conj())
-    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO.conj()))
+    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO).conj())
     v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1b)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2bb, fVO) * .5
 
@@ -82,7 +82,7 @@ def make_intermediates(mycc, t1, t2, eris):
                               numpy.asarray(eris.OVOV)) / eIA * .25
     wvd = r6(p6(w * 2 + v)) / d3
     l2_t  = numpy.einsum('ijkabc,kceb->ijae', wvd, numpy.asarray(eris.get_OVVV()).conj())
-    l2_t -= numpy.einsum('ijkabc,iajm->mkbc', wvd, numpy.asarray(eris.OVOO.conj()))
+    l2_t -= numpy.einsum('ijkabc,iajm->mkbc', wvd, numpy.asarray(eris.OVOO).conj())
     l2_t = l2_t + l2_t.transpose(1,0,3,2)
     l2_t += numpy.einsum('ijkabc,ai->jkbc', rw, fVO)
     imds.l2bb_t = l2_t.conj() / lib.direct_sum('ia+jb->ijab', eIA, eIA) * .5

@@ -154,6 +154,9 @@ def transform_integrals_outcore(myadc):
         avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
         chnk_size = calculate_chunk_size(myadc)
 
+        # Cache vvvv data in an unlinked h5 temporary file.
+        h5cache_vvvv = eris._h5cache_vvvv = lib.H5TmpFile()
+
         for p in range(0,vir.shape[1],chnk_size):
 
             if chnk_size < vir.shape[1] :
@@ -161,17 +164,16 @@ def transform_integrals_outcore(myadc):
             else:
                 orb_slice = vir[:, p:]
 
-            _, tmp = tempfile.mkstemp()
-            ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), tmp,
-                                  max_memory=avail_mem, ioblk_size=100, compact=False)
-            vvvv = read_dataset(tmp,'eri_mo')
+            with lib.H5TmpFile() as tmpf:
+                ao2mo.outcore.general(mol, (orb_slice, vir, vir, vir), tmpf,
+                                      max_memory=avail_mem, ioblk_size=100, compact=False)
+                vvvv = tmpf['eri_mo'][:]
             vvvv = vvvv.reshape(orb_slice.shape[1], vir.shape[1], vir.shape[1], vir.shape[1])
             vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
-
-            vvvv_p = write_dataset(vvvv)
-            del vvvv
+            vvvv_p = h5cache_vvvv.create_dataset(str(p), data=vvvv)
             eris.vvvv.append(vvvv_p)
-            cput3 = log.timer_debug1('transforming vvvv', *cput3)
+            vvvv = None
+        cput3 = log.timer_debug1('transforming vvvv', *cput3)
 
     log.timer('ADC integral transformation', *cput0)
 
@@ -242,19 +244,6 @@ def calculate_chunk_size(myadc):
         chnk_size = 1
 
     return chnk_size
-
-
-def read_dataset(h5file, dataname):
-    f5 = h5py.File(h5file, 'r')
-    data = f5[dataname][:]
-    f5.close()
-    return data
-
-
-def write_dataset(data):
-    _, fname = tempfile.mkstemp()
-    f = h5py.File(fname, mode='w')
-    return f.create_dataset('data', data=data)
 
 
 def unpack_eri_1(eri, norb):

@@ -280,7 +280,7 @@ def map_with_prefetch(func, *iterables):
         import imp
         global_import_lock = imp.lock_held()
 
-    if global_import_lock:
+    if not ASYNC_IO or global_import_lock:
         for task in zip(*iterables):
             yield func(*task)
 
@@ -576,6 +576,13 @@ class StreamObject(object):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def add_keys(self, **kwargs):
+        '''Add or update attributes of the object and register these attributes in ._keys'''
+        if kwargs:
+            self.__dict__.update(**kwargs)
+            self._keys = self._keys.union(kwargs.keys())
+        return self
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
@@ -660,7 +667,7 @@ def alias(fn, alias_name=None):
 
 def class_as_method(cls):
     '''
-    The statement "fn1 = alias(Class)" is equivalent to:
+    The statement "fn1 = class_as_method(Class)" is equivalent to:
 
     .. code-block:: python
         def fn1(self, *args, **kwargs):
@@ -671,6 +678,14 @@ def class_as_method(cls):
     fn.__doc__ = cls.__doc__
     fn.__name__ = cls.__name__
     fn.__module__ = cls.__module__
+    return fn
+
+def invalid_method(name):
+    '''
+    The statement "fn1 = invalid_method(name)" can de-register a method
+    '''
+    def fn(obj, *args, **kwargs):
+        raise NotImplementedError(f'Method {name} invalid or not implemented')
     return fn
 
 def overwrite_mro(obj, mro):
@@ -689,7 +704,7 @@ def overwrite_mro(obj, mro):
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
-    del(HackMRO.mro)
+    del (HackMRO.mro)
     return obj
 
 def izip(*args):

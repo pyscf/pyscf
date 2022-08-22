@@ -19,40 +19,42 @@ import pyscf.pbc
 from pyscf import ao2mo, gto
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.df import df
+from pyscf.pbc.df import df, aug_etb, FFTDF
 #from mpi4pyscf.pbc.df import df
 pyscf.pbc.DEBUG = False
 
-L = 5.
-n = 11
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, mf0, kmdf, kpts
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''He    3.    2.       3.
-               He    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.max_memory = 1000
-cell.build(0,0)
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.max_memory = 1000
+    cell.build(0,0)
 
-mf0 = pscf.RHF(cell)
-mf0.exxdiv = 'vcut_sph'
+    mf0 = pscf.RHF(cell)
+    mf0.exxdiv = 'vcut_sph'
 
 
-numpy.random.seed(1)
-kpts = numpy.random.random((5,3))
-kpts[0] = 0
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-kpts[4] *= 1e-5
+    numpy.random.seed(1)
+    kpts = numpy.random.random((5,3))
+    kpts[0] = 0
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    kpts[4] *= 1e-5
 
-kmdf = df.DF(cell)
-kmdf.linear_dep_threshold = 1e-7
-kmdf.auxbasis = 'weigend'
-kmdf.kpts = kpts
-# Note mesh is not dense enough. It breaks the conjugation symmetry between
-# the k-points k and -k
-kmdf.mesh = (6,)*3
+    kmdf = df.DF(cell)
+    kmdf.linear_dep_threshold = 1e-7
+    kmdf.auxbasis = 'weigend'
+    kmdf.kpts = kpts
+    # Note mesh is not dense enough. It breaks the conjugation symmetry between
+    # the k-points k and -k
+    kmdf.mesh = (6,)*3
 
 def tearDownModule():
     global cell, mf0, kmdf
@@ -146,6 +148,27 @@ class KnownValues(unittest.TestCase):
             cs1 = auxcell1._env[ptr1:ptr1+nprim*nc]
             self.assertAlmostEqual(abs(es - es1).max(), 0, 15)
             self.assertAlmostEqual(abs(cs - cs1).max(), 0, 15)
+
+    # issue #1117
+    def test_cell_with_cart(self):
+        cell = pgto.M(
+            atom='Li 0 0 0; H 2 2 2',
+            a=(numpy.ones([3, 3]) - numpy.eye(3)) * 2,
+            cart=True,
+            basis={'H': '''
+H   S
+0.5    1''',
+                   'Li': '''
+Li  S
+0.8    1
+0.4    1
+Li  P
+0.8    1
+0.4    1'''})
+
+        eri0 = FFTDF(cell).get_eri()
+        eri1 = df.GDF(cell).set(auxbasis=aug_etb(cell)).get_eri()
+        self.assertAlmostEqual(abs(eri1-eri0).max(), 0, 2)
 
 
 if __name__ == '__main__':

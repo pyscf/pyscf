@@ -25,20 +25,22 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.scf import dhf
 
-mol = gto.Mole()
-mol.build(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = {"H": '6-31g',
-             "O": '6-31g',}
-)
-molsym = mol.copy()
-molsym.symmetry = True
-molsym.build(0, 0)
+def setUpModule():
+    global mol, molsym
+    mol = gto.Mole()
+    mol.build(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    )
+    molsym = mol.copy()
+    molsym.symmetry = True
+    molsym.build(0, 0)
 
 def tearDownModule():
     global mol, molsym
@@ -349,37 +351,37 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(scf.RHF(mol_r1), scf.rohf.ROHF))
         self.assertTrue(isinstance(scf.UHF(mol_r), scf.uhf.UHF))
         self.assertTrue(isinstance(scf.UHF(mol_u), scf.uhf.UHF))
-        self.assertTrue(isinstance(scf.UHF(mol_r1), scf.uhf.UHF))
+        self.assertTrue(isinstance(scf.UHF(mol_r1), scf.uhf.HF1e))
         self.assertTrue(isinstance(scf.ROHF(mol_r), scf.rohf.ROHF))
         self.assertTrue(isinstance(scf.ROHF(mol_u), scf.rohf.ROHF))
-        self.assertTrue(isinstance(scf.ROHF(mol_r1), scf.rohf.ROHF))
+        self.assertTrue(isinstance(scf.ROHF(mol_r1), scf.rohf.HF1e))
         self.assertTrue(isinstance(scf.HF(mol_r), scf.hf.RHF))
         self.assertTrue(isinstance(scf.HF(mol_u), scf.uhf.UHF))
-        self.assertTrue(isinstance(scf.HF(mol_r1), scf.rohf.ROHF))
+        self.assertTrue(isinstance(scf.HF(mol_r1), scf.rohf.HF1e))
         self.assertTrue(isinstance(scf.GHF(mol_r), scf.ghf.GHF))
         self.assertTrue(isinstance(scf.GHF(mol_u), scf.ghf.GHF))
-        self.assertTrue(isinstance(scf.GHF(mol_r1), scf.ghf.GHF))
+        self.assertTrue(isinstance(scf.GHF(mol_r1), scf.ghf.HF1e))
         #TODO: self.assertTrue(isinstance(scf.DHF(mol_r), scf.dhf.RHF))
         self.assertTrue(isinstance(scf.DHF(mol_u), scf.dhf.UHF))
         self.assertTrue(isinstance(scf.DHF(mol_r1), scf.dhf.HF1e))
 
         self.assertTrue(isinstance(scf.RHF(sym_mol_r), scf.hf_symm.RHF))
         self.assertTrue(isinstance(scf.RHF(sym_mol_u), scf.hf_symm.ROHF))
-        self.assertTrue(isinstance(scf.RHF(sym_mol_r1), scf.hf_symm.ROHF))
+        self.assertTrue(isinstance(scf.RHF(sym_mol_r1), scf.hf_symm.HF1e))
         self.assertTrue(isinstance(scf.UHF(sym_mol_r), scf.uhf_symm.UHF))
         self.assertTrue(isinstance(scf.UHF(sym_mol_u), scf.uhf_symm.UHF))
-        self.assertTrue(isinstance(scf.UHF(sym_mol_r1), scf.uhf_symm.UHF))
+        self.assertTrue(isinstance(scf.UHF(sym_mol_r1), scf.uhf_symm.HF1e))
         self.assertTrue(isinstance(scf.ROHF(sym_mol_r), scf.hf_symm.ROHF))
         self.assertTrue(isinstance(scf.ROHF(sym_mol_u), scf.hf_symm.ROHF))
-        self.assertTrue(isinstance(scf.ROHF(sym_mol_r1), scf.hf_symm.ROHF))
+        self.assertTrue(isinstance(scf.ROHF(sym_mol_r1), scf.hf_symm.HF1e))
         self.assertTrue(isinstance(scf.HF(sym_mol_r), scf.hf_symm.RHF))
         self.assertTrue(isinstance(scf.HF(sym_mol_u), scf.uhf_symm.UHF))
         self.assertTrue(isinstance(scf.HF(sym_mol_r1), scf.hf_symm.ROHF))
         self.assertTrue(isinstance(scf.GHF(sym_mol_r), scf.ghf_symm.GHF))
         self.assertTrue(isinstance(scf.GHF(sym_mol_u), scf.ghf_symm.GHF))
-        self.assertTrue(isinstance(scf.GHF(sym_mol_r1), scf.ghf_symm.GHF))
+        self.assertTrue(isinstance(scf.GHF(sym_mol_r1), scf.ghf_symm.HF1e))
 
-        self.assertTrue(isinstance(scf.X2C(mol_r), x2c.x2c.UHF))
+        #self.assertTrue(isinstance(scf.X2C(mol_r), x2c.x2c.RHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_r)), scf.rhf.RHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_u)), scf.uhf.UHF))
         self.assertTrue(isinstance(scf.sfx2c1e(scf.HF(mol_r1)), scf.rohf.ROHF))

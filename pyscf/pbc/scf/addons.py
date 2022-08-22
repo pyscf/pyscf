@@ -48,7 +48,7 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
     else:
-        assert(len(kpts) == len(mo1))
+        assert (len(kpts) == len(mo1))
         return [scipy.linalg.solve(s22[k], s21[k].dot(mo1[k]), sym_pos=True)
                 for k, kpt in enumerate(kpts)]
 
@@ -222,7 +222,7 @@ def canonical_occ_(mf, nelec=None):
     but can accelerate convergence.
     '''
     from pyscf.pbc.scf import kuhf
-    assert(isinstance(mf, kuhf.KUHF))
+    assert (isinstance(mf, kuhf.KUHF))
 
     def get_occ(mo_energy_kpts=None, mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
@@ -288,11 +288,11 @@ def convert_to_uhf(mf, out=None):
             # It is needed to compute JK matrix in all pbc SCF objects
             out = mol_addons._object_without_soscf(mf, known_cls, remove_df=False)
     else:
-        assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
+        assert (isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
         if isinstance(mf, scf.khf.KSCF):
-            assert(isinstance(out, scf.khf.KSCF))
+            assert (isinstance(out, scf.khf.KSCF))
         else:
-            assert(not isinstance(out, scf.khf.KSCF))
+            assert (not isinstance(out, scf.khf.KSCF))
 
     out = mol_addons.convert_to_uhf(mf, out, False)
     # Manually update .with_df because this attribute may not be passed to the
@@ -313,11 +313,11 @@ def convert_to_rhf(mf, out=None):
         nelec = mf.nelec
 
     if out is not None:
-        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
+        assert (isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
         if isinstance(mf, scf.khf.KSCF):
-            assert(isinstance(out, scf.khf.KSCF))
+            assert (isinstance(out, scf.khf.KSCF))
         else:
-            assert(not isinstance(out, scf.khf.KSCF))
+            assert (not isinstance(out, scf.khf.KSCF))
 
     elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
         if getattr(mf, '_scf', None):
@@ -371,11 +371,11 @@ def convert_to_ghf(mf, out=None):
     from pyscf.pbc import scf
 
     if out is not None:
-        assert(isinstance(out, (scf.ghf.GHF, scf.kghf.KGHF)))
+        assert (isinstance(out, (scf.ghf.GHF, scf.kghf.KGHF)))
         if isinstance(mf, scf.khf.KSCF):
-            assert(isinstance(out, scf.khf.KSCF))
+            assert (isinstance(out, scf.khf.KSCF))
         else:
-            assert(not isinstance(out, scf.khf.KSCF))
+            assert (not isinstance(out, scf.khf.KSCF))
 
     if isinstance(mf, scf.ghf.GHF):
         if out is None:
@@ -470,7 +470,7 @@ def convert_to_khf(mf, out=None):
         out.__dict__.update(mf.__dict__)
         return out
 
-del(SMEARING_METHOD)
+del (SMEARING_METHOD)
 
 
 if __name__ == '__main__':

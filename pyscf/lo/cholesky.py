@@ -42,7 +42,7 @@ def cholesky_mos(mo_coeff):
     Returns:
         the localized MOs
     '''
-    assert(mo_coeff.ndim == 2)
+    assert (mo_coeff.ndim == 2)
     nao, nmo = mo_coeff.shape
 
     # Factorization of a density matrix-like quantity.

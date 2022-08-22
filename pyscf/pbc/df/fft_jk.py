@@ -65,7 +65,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
             ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
             for i in range(nset):
-                rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA')
+                rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA').real
             ao = ao_ks = None
 
         for i in range(nset):
@@ -129,7 +129,7 @@ def get_j_e1_kpts(mydf, dm_kpts, kpts=np.zeros((1,3)), kpts_band=None):
         for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
             ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
             for i in range(nset):
-                rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA')
+                rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA').real
             ao = ao_ks = None
 
         for i in range(nset):

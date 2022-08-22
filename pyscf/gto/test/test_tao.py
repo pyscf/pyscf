@@ -16,26 +16,6 @@
 import numpy
 from pyscf import gto
 
-mol = gto.Mole()
-mol.atom = [
-    ['N', (0.,0.,0.)],
-    ['H', (0.,1.,1.)],
-    ['H', (1.,0.,1.)],
-    ['H', (1.,1.,0.)], ]
-mol.basis = {
-    "N": [(0, 0, (15, 1)), ],
-    "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
-          (1, 0, (1, 1)), (2, 0, (.8, 1)), ]}
-mol.basis['N'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
-                                            (1, 3, 2, 1.8),
-                                            (2, 2, 1, 1.8),)))
-
-mol.verbose = 0
-mol.output = None
-mol.build()
-
-tao = mol.time_reversal_map()
-
 # . . . /
 # . . ./
 #     /. .
@@ -76,7 +56,27 @@ def rotatesub1(smat, i0, j0, tao):
         rmat[:,::2] = -rmat[:,::2]
     return rmat
 
-if __name__ == '__main__':
+def test_tao():
+    mol = gto.Mole()
+    mol.atom = [
+        ['N', (0.,0.,0.)],
+        ['H', (0.,1.,1.)],
+        ['H', (1.,0.,1.)],
+        ['H', (1.,1.,0.)], ]
+    mol.basis = {
+        "N": [(0, 0, (15, 1)), ],
+        "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
+              (1, 0, (1, 1)), (2, 0, (.8, 1)), ]}
+    mol.basis['N'].extend(gto.mole.expand_etbs(((0, 4, 1, 1.8),
+                                                (1, 3, 2, 1.8),
+                                                (2, 2, 1, 1.8),)))
+
+    mol.verbose = 0
+    mol.output = None
+    mol.build()
+
+    tao = mol.time_reversal_map()
+
     ao_loc = mol.ao_loc_2c()
     s = mol.intor('cint1e_spnucsp')
     for ish in range(mol.nbas):
@@ -89,10 +89,7 @@ if __name__ == '__main__':
             dd = abs(s[j0:j1,i0:i1]-rmat).sum()
             assert(numpy.allclose(rmat,
                                   rotatesub1(s[i0:i1,j0:j1], i0, j0, tao)))
-            if dd > 1e-12:
-                print(ish, jsh, dd)
-                assert(0)
-    print('pass')
+            assert dd < 1e-12, f'{ish}, {jsh}, {dd}'
 
     nao = mol.nao_2c()
     j = 0
@@ -107,4 +104,5 @@ if __name__ == '__main__':
         j += 1
         idx1.append(abs(tao[idx1[-1]]))
 
-    print(all(numpy.array(idx0[:j-1]) == numpy.array(idx1[:j-1])))
+    assert all(numpy.array(idx0[:j-1]) == numpy.array(idx1[:j-1]))
+    print('pass')

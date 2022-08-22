@@ -29,6 +29,7 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
+from pyscf.ao2mo import _ao2mo
 from pyscf.scf import cphf
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
@@ -319,8 +320,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     nao_pair = nao * (nao+1) // 2
     nvir_pair = nvir * (nvir+1) //2
 
-    fdrv = getattr(_ccsd.libcc, 'AO2MOnr_e2_drv')
-    ftrans = _ccsd.libcc.AO2MOtranse2_nr_s1
+    fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv
+    ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s1
     fmm = _ccsd.libcc.CCmmm_transpose_sum
     pao_loc = ctypes.POINTER(ctypes.c_void_p)()
     def _trans(vin, orbs_slice, out=None):
@@ -456,81 +457,3 @@ class Gradients(rhf_grad.GradientsMixin):
 Grad = Gradients
 
 ccsd.CCSD.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol).run()
-    mycc = ccsd.CCSD(mf).run()
-    g1 = mycc.Gradients().kernel()
-#[[ 0   0                1.00950925e-02]
-# [ 0   2.28063426e-02  -5.04754623e-03]
-# [ 0  -2.28063426e-02  -5.04754623e-03]]
-    print(lib.finger(g1) - -0.036999389889460096)
-
-    mcs = mycc.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
-
-    print('-----------------------------------')
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol).run()
-    mycc = ccsd.CCSD(mf)
-    mycc.frozen = [0,1,10,11,12]
-    mycc.max_memory = 1
-    mycc.kernel()
-    g1 = Gradients(mycc).kernel()
-#[[ -7.81105940e-17   3.81840540e-15   1.20415540e-02]
-# [  1.73095055e-16  -7.94568837e-02  -6.02077699e-03]
-# [ -9.49844615e-17   7.94568837e-02  -6.02077699e-03]]
-    print(lib.finger(g1) - 0.10599632044533455)
-
-    mcs = mycc.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
-
-    mol = gto.M(
-        atom = 'H 0 0 0; H 0 0 1.76',
-        basis = '631g',
-        unit='Bohr')
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-    mycc = ccsd.CCSD(mf)
-    mycc.conv_tol = 1e-10
-    mycc.conv_tol_normt = 1e-10
-    mycc.kernel()
-    g1 = Gradients(mycc).kernel()
-#[[ 0.          0.         -0.07080036]
-# [ 0.          0.          0.07080036]]

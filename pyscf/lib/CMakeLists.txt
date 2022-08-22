@@ -16,7 +16,7 @@ cmake_minimum_required (VERSION 3.5)
 project (pyscf)
 
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+  set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
 endif()
 #set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
@@ -44,6 +44,15 @@ if (BUILD_MARCH_NATIVE)
       message("Add CFLAGS -march=native -ftree-vectorize")
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -funroll-loops -ftree-vectorize")
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
+    endif()
+  endif()
+else()
+  if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    include(CheckCCompilerFlag)
+    CHECK_C_COMPILER_FLAG("-msse3" COMPILER_SUPPORTS_SSE3)
+    if(COMPILER_SUPPORTS_SSE3)
+      # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
     endif()
   endif()
 endif()
@@ -114,11 +123,14 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
+option(ENABLE_OPENMP "Compiling C extensions with openmp" ON)
+set(OPENMP_C_PROPERTIES "")
+if(ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    set(HAVE_OPENMP 1)
+    set(OPENMP_C_PROPERTIES OpenMP::OpenMP_C)
+  endif()
 endif()
 
 #find_package(PythonInterp REQUIRED)
@@ -152,8 +164,8 @@ else ()
   set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib:\$ORIGIN/deps/lib64")
 endif ()
 
-option(ENABLE_FFTW "Using fftw3" ON)
-option(BUILD_FFTW "Building fftw3" ON)
+option(ENABLE_FFTW "Using fftw3" OFF)
+option(BUILD_FFTW "Building fftw3" OFF)
 
 add_subdirectory(np_helper)
 add_subdirectory(gto)
@@ -175,25 +187,42 @@ set(CXX_LINK_TEMPLATE "<CMAKE_CXX_COMPILER> <CMAKE_SHARED_LIBRARY_CXX_FLAGS> <LA
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
 option(WITH_F12 "Compling F12 integrals" ON)
+option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian integral evaluation" OFF)
+
 if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+  set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
+  set(LIBCINT_GIT_TAG v5.1.3)
+  if (USE_QCINT)
+    set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
+    if(NOT BUILD_MARCH_NATIVE)
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+    endif()
+  endif()
+
+  if (NOT ${CUSTOM_CINT_GIT} STREQUAL "")
+    message(STATUS "Using custom libcint github repo: ${CUSTOM_CINT_GIT}")
+    set(LIBCINT_GIT ${CUSTOM_CINT_GIT})
+  endif()
+  if (NOT ${CUSTOM_CINT_GIT_TAG} STREQUAL "")
+    message(STATUS "Using custom libcint github tag: ${CUSTOM_CINT_GIT_TAG}")
+    set(LIBCINT_GIT_TAG ${CUSTOM_CINT_GIT_TAG})
+  endif()
+
   ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/fishjojo/libcint.git
-    GIT_TAG dev
-    # GIT_REPOSITORY https://github.com/sunqm/libcint.git # libcint is a portable, cross-platform implementation
-    # GIT_REPOSITORY https://github.com/sunqm/qcint.git # qcint is an optimized implementation for x86-64 architecture
-    # GIT_TAG v4.4.6
+    GIT_REPOSITORY ${LIBCINT_GIT}
+    GIT_TAG ${LIBCINT_GIT_TAG}
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_CACHE_ARGS 
-        -DWITH_F12:STRING=${WITH_F12} 
+    CMAKE_CACHE_ARGS
+        -DWITH_F12:STRING=${WITH_F12}
         -DWITH_RANGE_COULOMB:STRING=1
-        -DWITH_FORTRAN:STRING=0 
-        -DWITH_CINT2_INTERFACE:STRING=0 
+        -DWITH_FORTRAN:STRING=0
+        -DWITH_CINT2_INTERFACE:STRING=0
         -DMIN_EXPCUTOFF:STRING=20
         -DKEEP_GOING:STRING=1
         -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-        -DCMAKE_INSTALL_LIBDIR:PATH=lib 
+        -DCMAKE_INSTALL_LIBDIR:PATH=lib
         -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
         -DBLAS_LIBRARIES:STRING=${BLAS_LIBRARIES}
         -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
@@ -210,7 +239,7 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 option(ENABLE_LIBXSMM "Using libxsmm" OFF)
-option(BUILD_LIBXSMM "Building libxsmm" ON)
+option(BUILD_LIBXSMM "Building libxsmm" OFF)
 if(APPLE)
     set(ENABLE_LIBXSMM OFF)
 endif()
@@ -224,7 +253,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL https://gitlab.com/libxc/libxc/-/archive/5.1.7/libxc-5.1.7.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/5.2.0/libxc-5.2.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
@@ -232,6 +261,7 @@ if(ENABLE_LIBXC AND BUILD_LIBXC)
             -DCMAKE_INSTALL_LIBDIR:PATH=lib
             -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
             -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+            -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
   )
   add_dependencies(xc_itrf libxc)
   add_dependencies(dft libxc)

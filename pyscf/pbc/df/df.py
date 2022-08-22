@@ -196,7 +196,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = mydf.weighted_coulG(kpt, False, mesh)
@@ -278,7 +278,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = fuse(mydf.auxbar(fused_cell))
+                vbar = mydf.auxbar(fused_cell)
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -370,7 +370,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cR = j3cI = None
 
         for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
+            del (fswap['j3c-junk/%d'%ji])
 
     # Wrapped around boundary and symmetry between k and -k can be used
     # explicitly for the metric integrals.  We consider this symmetry
@@ -779,7 +779,7 @@ class GDF(aft.AFTDF):
             blksize = self.blockdim
         for LpqR, LpqI, sign in self.sr_loop(compact=True, blksize=blksize):
             # LpqI should be 0 for gamma point DF
-            # assert(numpy.linalg.norm(LpqI) < 1e-12)
+            # assert (numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
 
     def get_naoaux(self):

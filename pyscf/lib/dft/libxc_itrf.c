@@ -1,11 +1,11 @@
 /* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -76,11 +76,7 @@ static void _eval_xc_lda(xc_func_type *func_x, int spin, int np,
                 if (kxc != NULL) {
                         pkxc = kxc + iblk * blk_size * seg[3];
                 }
-#if XC_MAJOR_VERSION >= 5
                 xc_lda_exc_vxc_fxc_kxc(func_x, blk_size, prho, pex, pvxc, pfxc, pkxc);
-#else
-                xc_lda(func_x, blk_size, prho, pex, pvxc, pfxc, pkxc);
-#endif
         }
 
 #pragma omp single
@@ -98,11 +94,7 @@ static void _eval_xc_lda(xc_func_type *func_x, int spin, int np,
                 if (kxc != NULL) {
                         pkxc = kxc + nblk * blk_size * seg[3];
                 }
-#if XC_MAJOR_VERSION >= 5
                 xc_lda_exc_vxc_fxc_kxc(func_x, np_res, prho, pex, pvxc, pfxc, pkxc);
-#else
-                xc_lda(func_x, np_res, prho, pex, pvxc, pfxc, pkxc);
-#endif
         }
 } // omp single
 } // omp parallel
@@ -128,8 +120,8 @@ static void _eval_xc_gga(xc_func_type *func_x, int spin, int np,
         double *v3sigma3    = NULL;
 
         if (spin == XC_POLARIZED) {
-                rho = malloc(sizeof(double) * np*2);
-                sigma = malloc(sizeof(double) * np*3);
+                rho = malloc(sizeof(double) * np * 5);
+                sigma = rho + np * 2;
                 gxu = rho_u + np;
                 gyu = rho_u + np * 2;
                 gzu = rho_u + np * 3;
@@ -227,18 +219,9 @@ static void _eval_xc_gga(xc_func_type *func_x, int spin, int np,
                     pv3rhosigma2 = v3rhosigma2 + iblk * blk_size * kseg[2];
                     pv3sigma3 = v3sigma3 + iblk * blk_size * kseg[3];
                 }
-#if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
-                xc_gga(func_x, blk_size, prho, psigma, pex,
-                       pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2);
-#elif XC_MAJOR_VERSION < 5
-                xc_gga(func_x, blk_size, prho, psigma, pex,
-                       pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2,
-                       pkxc, pv3rho2sigma, pv3rhosigma2, pv3sigma3);
-#else
                 xc_gga_exc_vxc_fxc_kxc(func_x, blk_size, prho, psigma, pex,
                        pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2,
                        pkxc, pv3rho2sigma, pv3rhosigma2, pv3sigma3);
-#endif
         }
 
 
@@ -264,26 +247,18 @@ static void _eval_xc_gga(xc_func_type *func_x, int spin, int np,
                     pv3rhosigma2 = v3rhosigma2 + nblk * blk_size * kseg[2];
                     pv3sigma3 = v3sigma3 + nblk * blk_size * kseg[3];
                 }
-#if (XC_MAJOR_VERSION == 2 && XC_MINOR_VERSION < 2)
-                xc_gga(func_x, np_res, prho, psigma, pex,
-                       pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2);
-#elif XC_MAJOR_VERSION < 5
-                xc_gga(func_x, np_res, prho, psigma, pex,
-                       pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2,
-                       pkxc, pv3rho2sigma, pv3rhosigma2, pv3sigma3);
-#else
                 xc_gga_exc_vxc_fxc_kxc(func_x, np_res, prho, psigma, pex,
                        pvxc, pvsigma, pfxc, pv2rhosigma, pv2sigma2,
                        pkxc, pv3rho2sigma, pv3rhosigma2, pv3sigma3);
-#endif
         }
 } // omp single
 } // omp parallel
 
         if (spin == XC_POLARIZED) {
                 free(rho);
+        } else {
+                free(sigma);
         }
-        free(sigma);
 }
 
 
@@ -295,12 +270,46 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
         double *rho, *sigma, *lapl, *tau;
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd;
         double *lapl_u, *lapl_d, *tau_u, *tau_d;
+        double *vrho   = NULL;
+        double *vsigma = NULL;
+        double *vlapl  = NULL;
+        double *vtau   = NULL;
+        double *v2rho2      = NULL;
+        double *v2rhosigma  = NULL;
+        double *v2sigma2    = NULL;
+        double *v2lapl2     = NULL;
+        double *v2tau2      = NULL;
+        double *v2rholapl   = NULL;
+        double *v2rhotau    = NULL;
+        double *v2sigmalapl = NULL;
+        double *v2sigmatau  = NULL;
+        double *v2lapltau   = NULL;
+        double *v3rho3         = NULL;
+        double *v3rho2sigma    = NULL;
+        double *v3rhosigma2    = NULL;
+        double *v3sigma3       = NULL;
+        double *v3rho2lapl     = NULL;
+        double *v3rho2tau      = NULL;
+        double *v3rhosigmalapl = NULL;
+        double *v3rhosigmatau  = NULL;
+        double *v3rholapl2     = NULL;
+        double *v3rholapltau   = NULL;
+        double *v3rhotau2      = NULL;
+        double *v3sigma2lapl   = NULL;
+        double *v3sigma2tau    = NULL;
+        double *v3sigmalapl2   = NULL;
+        double *v3sigmalapltau = NULL;
+        double *v3sigmatau2    = NULL;
+        double *v3lapl3        = NULL;
+        double *v3lapl2tau     = NULL;
+        double *v3lapltau2     = NULL;
+        double *v3tau3         = NULL;
 
         if (spin == XC_POLARIZED) {
-                rho = malloc(sizeof(double) * np*2);
-                sigma = malloc(sizeof(double) * np*3);
-                lapl = malloc(sizeof(double) * np*2);
-                tau = malloc(sizeof(double) * np*2);
+                rho = malloc(sizeof(double) * np * 9);
+                sigma = rho + np * 2;
+                lapl = sigma + np * 3;
+                tau = lapl + np * 2;
                 gxu = rho_u + np;
                 gyu = rho_u + np * 2;
                 gzu = rho_u + np * 3;
@@ -314,13 +323,15 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
                 for (i = 0; i < np; i++) {
                         rho[i*2+0] = rho_u[i];
                         rho[i*2+1] = rho_d[i];
-                        sigma[i*3+0] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
-                        sigma[i*3+1] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
-                        sigma[i*3+2] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
                         lapl[i*2+0] = lapl_u[i];
                         lapl[i*2+1] = lapl_d[i];
                         tau[i*2+0] = tau_u[i];
                         tau[i*2+1] = tau_d[i];
+                }
+                for (i = 0; i < np; i++) {
+                        sigma[i*3+0] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                        sigma[i*3+1] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
+                        sigma[i*3+2] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
                 }
         } else {
                 rho = rho_u;
@@ -345,32 +356,65 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
         // v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau
         const int fseg0[] = {1,1,1,1,1,1,1,1,1,1};
         const int fseg1[] = {3,6,6,3,3,4,4,4,6,6};
+        //v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
+        //v3rho2lapl, v3rho2tau, v3rhosigmalapl, v3rhosigmatau, v3rholapl2, v3rholapltau, v3rhotau2,
+        //v3sigma2lapl, v3sigma2tau, v3sigmalapl2, v3sigmalapltau, v3sigmatau2,
+        //v3lapl3, v3lapl2tau, v3lapltau2, v3tau3
+        const int kseg0[] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+        const int kseg1[] = {4,9,12,10,6,6,12,12,6,8,6,12,12,9,12,9,4,6,6,4};
 
-        const int *seg, *vseg, *fseg;
+        const int *seg, *vseg, *fseg, kseg;
         if (spin == XC_POLARIZED) {
                 seg = seg1;
                 vseg = vseg1;
                 fseg = fseg1;
+                kseg = kseg1;
         } else {
                 seg = seg0;
                 vseg = vseg0;
                 fseg = fseg0;
+                kseg = kseg0;
         }
 
-        const int nv = 4;
-        const int nf = 10;
-        double *v[nv], *f[nf];
         if (vxc != NULL) {
-                v[0] = vxc;
-                for (i = 0; i < nv-1; i++) {
-                    v[i+1] = v[i] + np * vseg[i];
-                }
+                vrho = vxc;
+                vsigma = vxc + np * vseg[0];
+                vlapl = vsigma + np * vseg[1];
+                vtau = vlapl + np * vseg[2];
         }
         if (fxc != NULL) {
-                f[0] = fxc;
-                for (i = 0; i < nf-1; i++) {
-                    f[i+1] = f[i] + np * fseg[i];
-                }
+                v2rho2      = fxc;
+                v2rhosigma  = v2rho2      + np * fseg[0];
+                v2sigma2    = v2rhosigma  + np * fseg[1];
+                v2lapl2     = v2sigma2    + np * fseg[2];
+                v2tau2      = v2lapl2     + np * fseg[3];
+                v2rholapl   = v2tau2      + np * fseg[4];
+                v2rhotau    = v2rholapl   + np * fseg[5];
+                v2lapltau   = v2rhotau    + np * fseg[6];
+                v2sigmalapl = v2lapltau   + np * fseg[7];
+                v2sigmatau  = v2sigmalapl + np * fseg[8];
+        }
+        if (kxc != NULL) {
+                v3rho3         = kxc;
+                v3rho2sigma    = v3rho3         + np * kseg[0];
+                v3rhosigma2    = v3rho2sigma    + np * kseg[1];
+                v3sigma3       = v3rhosigma2    + np * kseg[2];
+                v3rho2lapl     = v3sigma3       + np * kseg[3];
+                v3rho2tau      = v3rho2lapl     + np * kseg[4];
+                v3rhosigmalapl = v3rho2tau      + np * kseg[5];
+                v3rhosigmatau  = v3rhosigmalapl + np * kseg[6];
+                v3rholapl2     = v3rhosigmatau  + np * kseg[7];
+                v3rholapltau   = v3rholapl2     + np * kseg[8];
+                v3rhotau2      = v3rholapltau   + np * kseg[9];
+                v3sigma2lapl   = v3rhotau2      + np * kseg[10];
+                v3sigma2tau    = v3sigma2lapl   + np * kseg[11];
+                v3sigmalapl2   = v3sigma2tau    + np * kseg[12];
+                v3sigmalapltau = v3sigmalapl2   + np * kseg[13];
+                v3sigmatau2    = v3sigmalapltau + np * kseg[14];
+                v3lapl3        = v3sigmatau2    + np * kseg[15];
+                v3lapl2tau     = v3lapl3        + np * kseg[16];
+                v3lapltau2     = v3lapl2tau     + np * kseg[17];
+                v3tau3         = v3lapltau2     + np * kseg[18];
         }
 
 #pragma omp parallel private(i)
@@ -381,9 +425,13 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
 
         int iblk;
         double *prho, *psigma, *plapl, *ptau, *pex;
-        double *pv[nv], *pf[nf];
-        for (i = 0; i < nv; i++) {pv[i] = NULL;}
-        for (i = 0; i < nf; i++) {pf[i] = NULL;}
+        double *pvrho, *pvsigma, *pvlapl, *pvtau;
+        double *pv2rho2, *pv2rhosigma, *pv2sigma2, *pv2lapl2, *pv2tau2;
+        double *pv2rholapl, *pv2rhotau, *pv2sigmalapl, *pv2sigmatau, *pv2lapltau;
+        double *pv3rho3, *pv3rho2sigma, *pv3rhosigma2, *pv3sigma3, *pv3rho2lapl;
+        double *pv3rho2tau, *pv3rhosigmalapl, *pv3rhosigmatau, *pv3rholapl2;
+        double *pv3rholapltau, *pv3rhotau2, *pv3sigma2lapl, *pv3sigma2tau, *pv3sigmalapl2;
+        double *pv3sigmalapltau, *pv3sigmatau2, *pv3lapl3, *pv3lapl2tau, *pv3lapltau2, *pv3tau3;
         #pragma omp for schedule(static)
         for (iblk = 0; iblk < nblk; iblk++) {
                 prho = rho + iblk * blk_size * seg[0];
@@ -392,26 +440,54 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
                 ptau = tau + iblk * blk_size * seg[3];
                 pex = ex + iblk * blk_size;
                 if (vxc != NULL) {
-                        for (i = 0; i < nv; i++) {
-                                pv[i] = v[i] + iblk * blk_size * vseg[i];
-                        } 
+                        pvrho = vrho + iblk * blk_size * vseg[0];
+                        pvsigma = vsigma + iblk * blk_size * vseg[1];
+                        pvlapl = vlapl + iblk * blk_size * vseg[2];
+                        pvtau = vtau + iblk * blk_size * vseg[3];
                 }
                 if (fxc != NULL) {
-                        for (i = 0; i < nf; i++) {
-                                pf[i] = f[i] + iblk * blk_size * fseg[i];
-                        }
+                        pv2rho2 = v2rho2 + iblk * blk_size * fseg[0];
+                        pv2rhosigma = v2rhosigma + iblk * blk_size * fseg[1];
+                        pv2sigma2 = v2sigma2 + iblk * blk_size * fseg[2];
+                        pv2lapl2 = v2lapl2 + iblk * blk_size * fseg[3];
+                        pv2tau2 = v2tau2 + iblk * blk_size * fseg[4];
+                        pv2rholapl = v2rholapl + iblk * blk_size * fseg[5];
+                        pv2rhotau = v2rhotau + iblk * blk_size * fseg[6];
+                        pv2sigmalapl = v2sigmalapl + iblk * blk_size * fseg[7];
+                        pv2sigmatau = v2sigmatau + iblk * blk_size * fseg[8];
+                        pv2lapltau = v2lapltau + iblk * blk_size * fseg[9];
                 }
-#if XC_MAJOR_VERSION >=5
-                xc_mgga_exc_vxc_fxc(func_x, blk_size, prho, psigma, plapl, ptau, pex,
-                        pv[0], pv[1], pv[2], pv[3],
-                        pf[0], pf[1], pf[2], pf[3], pf[4], pf[5],
-                        pf[6], pf[7], pf[8], pf[9]);
-#else
-                xc_mgga(func_x, blk_size, prho, psigma, plapl, ptau, pex,
-                        pv[0], pv[1], pv[2], pv[3],
-                        pf[0], pf[1], pf[2], pf[3], pf[4], pf[5],
-                        pf[6], pf[7], pf[8], pf[9]);
-#endif
+                if (kxc != NULL) {
+                        pv3rho3 = v3rho3 + iblk * blk_size * kseg[0];
+                        pv3rho2sigma = v3rho2sigma + iblk * blk_size * kseg[1];
+                        pv3rhosigma2 = v3rhosigma2 + iblk * blk_size * kseg[2];
+                        pv3sigma3 = v3sigma3 + iblk * blk_size * kseg[3];
+                        pv3rho2lapl = v3rho2lapl + iblk * blk_size * kseg[4];
+                        pv3rho2tau = v3rho2tau + iblk * blk_size * kseg[5];
+                        pv3rhosigmalapl = v3rhosigmalapl + iblk * blk_size * kseg[6];
+                        pv3rhosigmatau = v3rhosigmatau + iblk * blk_size * kseg[7];
+                        pv3rholapl2 = v3rholapl2 + iblk * blk_size * kseg[8];
+                        pv3rholapltau = v3rholapltau + iblk * blk_size * kseg[9];
+                        pv3rhotau2 = v3rhotau2 + iblk * blk_size * kseg[10];
+                        pv3sigma2lapl = v3sigma2lapl + iblk * blk_size * kseg[11];
+                        pv3sigma2tau = v3sigma2tau + iblk * blk_size * kseg[12];
+                        pv3sigmalapl2 = v3sigmalapl2 + iblk * blk_size * kseg[13];
+                        pv3sigmalapltau = v3sigmalapltau + iblk * blk_size * kseg[14];
+                        pv3sigmatau2 = v3sigmatau2 + iblk * blk_size * kseg[15];
+                        pv3lapl3 = v3lapl3 + iblk * blk_size * kseg[16];
+                        pv3lapl2tau = v3lapl2tau + iblk * blk_size * kseg[17];
+                        pv3lapltau2 = v3lapltau2 + iblk * blk_size * kseg[18];
+                        pv3tau3 = v3tau3 + iblk * blk_size * kseg[19];
+                }
+                xc_mgga_exc_vxc_fxc_kxc(func_x, blk_size, prho, psigma, plapl, ptau, pex,
+                                pvrho, pvsigma, pvlapl, pvtau,
+                                pv2rho2, pv2rhosigma, pv2rholapl, pv2rhotau, pv2sigma2,
+                                pv2sigmalapl, pv2sigmatau, pv2lapl2, pv2lapltau, pv2tau2,
+                                pv3rho3, pv3rho2sigma, pv3rho2lapl, pv3rho2tau, pv3rhosigma2,
+                                pv3rhosigmalapl, pv3rhosigmatau, pv3rholapl2, pv3rholapltau,
+                                pv3rhotau2, pv3sigma3, pv3sigma2lapl, pv3sigma2tau,
+                                pv3sigmalapl2, pv3sigmalapltau, pv3sigmatau2, pv3lapl3,
+                                pv3lapl2tau, pv3lapltau2, pv3tau3);
         }
 
 #pragma omp single
@@ -424,38 +500,67 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
                 ptau = tau + nblk * blk_size * seg[3];
                 pex = ex + nblk * blk_size;
                 if (vxc != NULL) {
-                        for (i = 0; i < nv; i++) {
-                                pv[i] = v[i] + nblk * blk_size * vseg[i];
-                        }
+                        pvrho = vrho + nblk * blk_size * vseg[0];
+                        pvsigma = vsigma + nblk * blk_size * vseg[1];
+                        pvlapl = vlapl + nblk * blk_size * vseg[2];
+                        pvtau = vtau + nblk * blk_size * vseg[3];
                 }
                 if (fxc != NULL) {
-                        for (i = 0; i < nf; i++) {
-                                pf[i] = f[i] + nblk * blk_size * fseg[i];
-                        }
+                        pv2rho2 = v2rho2 + nblk * blk_size * fseg[0];
+                        pv2rhosigma = v2rhosigma + nblk * blk_size * fseg[1];
+                        pv2sigma2 = v2sigma2 + nblk * blk_size * fseg[2];
+                        pv2lapl2 = v2lapl2 + nblk * blk_size * fseg[3];
+                        pv2tau2 = v2tau2 + nblk * blk_size * fseg[4];
+                        pv2rholapl = v2rholapl + nblk * blk_size * fseg[5];
+                        pv2rhotau = v2rhotau + nblk * blk_size * fseg[6];
+                        pv2sigmalapl = v2sigmalapl + nblk * blk_size * fseg[7];
+                        pv2sigmatau = v2sigmatau + nblk * blk_size * fseg[8];
+                        pv2lapltau = v2lapltau + nblk * blk_size * fseg[9];
                 }
-#if XC_MAJOR_VERSION >=5
-                xc_mgga_exc_vxc_fxc(func_x, np_res, prho, psigma, plapl, ptau, pex,
-                        pv[0], pv[1], pv[2], pv[3],
-                        pf[0], pf[1], pf[2], pf[3], pf[4], pf[5],
-                        pf[6], pf[7], pf[8], pf[9]);
-#else
-                xc_mgga(func_x, np_res, prho, psigma, plapl, ptau, pex,
-                        pv[0], pv[1], pv[2], pv[3],
-                        pf[0], pf[1], pf[2], pf[3], pf[4], pf[5],
-                        pf[6], pf[7], pf[8], pf[9]);
-#endif
+                if (kxc != NULL) {
+                        pv3rho3 = v3rho3 + nblk * blk_size * kseg[0];
+                        pv3rho2sigma = v3rho2sigma + nblk * blk_size * kseg[1];
+                        pv3rhosigma2 = v3rhosigma2 + nblk * blk_size * kseg[2];
+                        pv3sigma3 = v3sigma3 + nblk * blk_size * kseg[3];
+                        pv3rho2lapl = v3rho2lapl + nblk * blk_size * kseg[4];
+                        pv3rho2tau = v3rho2tau + nblk * blk_size * kseg[5];
+                        pv3rhosigmalapl = v3rhosigmalapl + nblk * blk_size * kseg[6];
+                        pv3rhosigmatau = v3rhosigmatau + nblk * blk_size * kseg[7];
+                        pv3rholapl2 = v3rholapl2 + nblk * blk_size * kseg[8];
+                        pv3rholapltau = v3rholapltau + nblk * blk_size * kseg[9];
+                        pv3rhotau2 = v3rhotau2 + nblk * blk_size * kseg[10];
+                        pv3sigma2lapl = v3sigma2lapl + nblk * blk_size * kseg[11];
+                        pv3sigma2tau = v3sigma2tau + nblk * blk_size * kseg[12];
+                        pv3sigmalapl2 = v3sigmalapl2 + nblk * blk_size * kseg[13];
+                        pv3sigmalapltau = v3sigmalapltau + nblk * blk_size * kseg[14];
+                        pv3sigmatau2 = v3sigmatau2 + nblk * blk_size * kseg[15];
+                        pv3lapl3 = v3lapl3 + nblk * blk_size * kseg[16];
+                        pv3lapl2tau = v3lapl2tau + nblk * blk_size * kseg[17];
+                        pv3lapltau2 = v3lapltau2 + nblk * blk_size * kseg[18];
+                        pv3tau3 = v3tau3 + nblk * blk_size * kseg[19];
+                }
+                xc_mgga_exc_vxc_fxc_kxc(func_x, np_res, prho, psigma, plapl, ptau, pex,
+                                pvrho, pvsigma, pvlapl, pvtau,
+                                pv2rho2, pv2rhosigma, pv2rholapl, pv2rhotau, pv2sigma2,
+                                pv2sigmalapl, pv2sigmatau, pv2lapl2, pv2lapltau, pv2tau2,
+                                pv3rho3, pv3rho2sigma, pv3rho2lapl, pv3rho2tau, pv3rhosigma2,
+                                pv3rhosigmalapl, pv3rhosigmatau, pv3rholapl2, pv3rholapltau,
+                                pv3rhotau2, pv3sigma3, pv3sigma2lapl, pv3sigma2tau,
+                                pv3sigmalapl2, pv3sigmalapltau, pv3sigmatau2, pv3lapl3,
+                                pv3lapl2tau, pv3lapltau2, pv3tau3);
         }
 } // omp single
 } // omp parallel
 
         if (spin == XC_POLARIZED) {
                 free(rho);
-                free(lapl);
-                free(tau);
+        } else {
+                free(sigma);
         }
-        free(sigma);
 }
 
+// TODO: register python signal
+#define raise_error     return
 
 /* Extracted from comments of libxc:gga.c
 
@@ -535,7 +640,7 @@ static void _eval_xc(xc_func_type *func_x, int spin, int np,
         default:
                 fprintf(stderr, "functional %d '%s' is not implmented\n",
                         func_x->info->number, func_x->info->name);
-                exit(1);
+                raise_error;
         }
 }
 
@@ -545,7 +650,7 @@ int LIBXC_is_lda(int xc_id)
         int lda;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -566,7 +671,7 @@ int LIBXC_is_gga(int xc_id)
         int gga;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -590,7 +695,7 @@ int LIBXC_is_meta_gga(int xc_id)
         int mgga;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         switch(func.info->family)
         {
@@ -614,7 +719,7 @@ int LIBXC_needs_laplacian(int xc_id)
         int lapl;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
         lapl = func.info->flags & XC_FLAGS_NEEDS_LAPLACIAN ? 1 : 0;
         xc_func_end(&func);
@@ -627,7 +732,7 @@ int LIBXC_is_hybrid(int xc_id)
         int hyb;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 
 #if XC_MAJOR_VERSION < 6
@@ -657,7 +762,7 @@ double LIBXC_hybrid_coeff(int xc_id)
         double factor;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error 0.0;
         }
 
 #if XC_MAJOR_VERSION < 6
@@ -680,7 +785,7 @@ double LIBXC_hybrid_coeff(int xc_id)
         else
           factor = 0.0;
 #endif
-        
+
         xc_func_end(&func);
         return factor;
 }
@@ -690,7 +795,7 @@ void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error;
         }
         XC(nlc_coef)(&func, &nlc_pars[0], &nlc_pars[1]);
         xc_func_end(&func);
@@ -701,7 +806,7 @@ void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error;
         }
         rsh_pars[0] = 0.0;
         rsh_pars[1] = 0.0;
@@ -723,7 +828,7 @@ int LIBXC_is_cam_rsh(int xc_id) {
         xc_func_type func;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 #if XC_MAJOR_VERSION < 6
         int is_cam = func.info->flags & XC_FLAGS_HYB_CAM;
@@ -749,7 +854,7 @@ int LIBXC_xc_type(int fn_id)
         xc_func_type func;
         if (xc_func_init(&func, fn_id, 1) != 0) {
                 fprintf(stderr, "XC functional %d not found\n", fn_id);
-                exit(1);
+                raise_error -1;
         }
         int type = func.info->family;
         xc_func_end(&func);
@@ -777,7 +882,7 @@ int LIBXC_input_length(int nfn, int *fn_id, double *fac, int spin)
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
-                        exit(1);
+                        raise_error -1;
                 }
                 if (spin == XC_POLARIZED) {
                         switch (func.info->family) {
@@ -841,20 +946,21 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
                      double *fbuf, double *kbuf, double fac,
                      int np, int ndst, int nvar, int spin, int type)
 {
-        const int seg0 [] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-        // LDA             |  |
-        // GGA             |     |
-        // MGGA            |           |
-        const int vseg1[] = {2, 3, 2, 2};
-        // LDA             |  |
-        // GGA             |        |
-        // MGGA            |                             |
-        const int fseg1[] = {3, 6, 6, 3, 3, 4, 4, 4, 6, 6};
-        // LDA             |  |
-        // GGA             |           |
-        const int kseg1[] = {4, 9,12,10};
+        int seg0 [] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+        // LDA         |  |
+        // GGA         |     |
+        // MGGA        |        |
+        int vseg1[] = {2, 3, 2, 2};
+        // LDA         |  |
+        // GGA         |        |
+        // MGGA        |                          |
+        int fseg1[] = {3, 6, 6, 3, 3, 4, 4, 4, 6, 6};
+        // LDA         |  |
+        // GGA         |        |
+        // MGGA        |                                                        |
+        int kseg1[] = {4, 9,12,10, 6, 6,12,12, 6, 8, 6,12,12, 9,12, 9, 4, 6, 6, 4};
         int vsegtot, fsegtot, ksegtot;
-        const int *vseg, *fseg, *kseg;
+        int *vseg, *fseg, *kseg;
         if (spin == XC_POLARIZED) {
                 vseg = vseg1;
                 fseg = fseg1;
@@ -880,7 +986,7 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
 #endif
                 vsegtot = 4;
                 fsegtot = 10;
-                ksegtot = 0;  // not supported
+                ksegtot = 20;  // not supported
                 break;
         default: //case XC_FAMILY_LDA:
                 vsegtot = 1;
@@ -923,7 +1029,8 @@ static void merge_xc(double *dst, double *ebuf, double *vbuf,
 // omega is the range separation parameter mu in xcfun
 void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                    int spin, int deriv, int np,
-                   double *rho_u, double *rho_d, double *output)
+                   double *rho_u, double *rho_d, double *output,
+                   double dens_threshold)
 {
         assert(deriv <= 3);
         int nvar = LIBXC_input_length(nfn, fn_id, fac, spin);
@@ -943,10 +1050,15 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 vbuf = malloc(sizeof(double) * np*9);
         }
         if (deriv > 1) {
-                fbuf = malloc(sizeof(double) * np*48);
+                fbuf = malloc(sizeof(double) * np*45);
         }
-        if (deriv > 2) {  // *220 if mgga kxc available
-                kbuf = malloc(sizeof(double) * np*35);
+        if (deriv > 2) {
+                if (spin == XC_POLARIZED) {  // spin-unresctricted MGGA
+                        // FIXME *220 in xcfun
+                        kbuf = malloc(sizeof(double) * np*165);
+                } else {  // spin-resctricted MGGA
+                        kbuf = malloc(sizeof(double) * np*20);
+                }
         }
 
         int i, j;
@@ -955,7 +1067,10 @@ void LIBXC_eval_xc(int nfn, int *fn_id, double *fac, double *omega,
                 if (xc_func_init(&func, fn_id[i], spin) != 0) {
                         fprintf(stderr, "XC functional %d not found\n",
                                 fn_id[i]);
-                        exit(1);
+                        raise_error;
+                }
+                if (dens_threshold > 0) {
+                        xc_func_set_dens_threshold(&func, dens_threshold);
                 }
 
                 // set the range-separated parameter
@@ -1021,7 +1136,7 @@ int LIBXC_max_deriv_order(int xc_id)
         int ord;
         if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
                 fprintf(stderr, "XC functional %d not found\n", xc_id);
-                exit(1);
+                raise_error -1;
         }
 
         if (func.info->flags & XC_FLAGS_HAVE_LXC) {

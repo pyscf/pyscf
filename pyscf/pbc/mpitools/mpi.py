@@ -251,7 +251,7 @@ def alltoall(sendbuf, split_recvbuf=False):
         sdispls[sdispls>sendbuf.size] = sendbuf.size
         scounts = numpy.append(sdispls[1:]-sdispls[:-1], sendbuf.size-sdispls[-1])
     else:
-        assert(len(sendbuf) == pool.size)
+        assert (len(sendbuf) == pool.size)
         mpi_dtype = comm.bcast(sendbuf[0].dtype.char)
         sendbuf = [numpy.asarray(x, mpi_dtype).ravel() for x in sendbuf]
         scounts = numpy.asarray([x.size for x in sendbuf])

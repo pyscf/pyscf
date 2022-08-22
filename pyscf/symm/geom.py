@@ -405,8 +405,8 @@ def symm_ops(gpname, axes=None):
     return opdic
 
 def symm_identical_atoms(gpname, atoms):
-    ''' Requires '''
-    from pyscf import gto
+    '''Symmetry identical atoms'''
+    # from pyscf import gto
     # Dooh Coov for linear molecule
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -450,9 +450,19 @@ def symm_identical_atoms(gpname, atoms):
     eql_atom_ids = [list(sorted(set(i))) for i in eql_atom_ids]
     return eql_atom_ids
 
-def check_given_symm(gpname, atoms, basis=None):
-    # more strict than symm_identical_atoms, we required not only the coordinates
-    # match, but also the symbols and basis functions
+def check_symm(gpname, atoms, basis=None):
+    '''
+    Check whether the declared symmetry (gpname) exists in the system
+
+    If basis is specified, this function checks also the basis functions have
+    the required symmetry.
+
+    Args:
+        gpname: str
+            point group name
+        atoms: list
+            [[symbol, [x, y, z]], [symbol, [x, y, z]], ...]
+    '''
 
     #FIXME: compare the basis set when basis is given
     if gpname == 'Dooh':
@@ -481,6 +491,8 @@ def check_given_symm(gpname, atoms, basis=None):
             if not numpy.allclose(coords0, newc[idx], atol=TOLERANCE):
                 return False
     return True
+
+check_given_symm = check_symm
 
 def shift_atom(atoms, orig, axis):
     c = numpy.array([a[1] for a in atoms])
@@ -712,7 +724,7 @@ def _search_i_group(rawsys):
 
     zaxis = c5_axes[0]
     cos = numpy.dot(c5_axes, zaxis)
-    assert(numpy.all((abs(cos[1:]+1/numpy.sqrt(5)) < TOLERANCE) |
+    assert (numpy.all((abs(cos[1:]+1/numpy.sqrt(5)) < TOLERANCE) |
                      (abs(cos[1:]-1/numpy.sqrt(5)) < TOLERANCE)))
 
     if rawsys.has_icenter():
@@ -733,7 +745,7 @@ def _search_ot_group(rawsys):
                if n == 4 and rawsys.has_rotation(c4, 4)]
 
     if len(c4_axes) > 0:  # T group
-        assert(len(c4_axes) > 1)
+        assert (len(c4_axes) > 1)
         if rawsys.has_icenter():
             gpname = 'Oh'
         else:
@@ -747,7 +759,7 @@ def _search_ot_group(rawsys):
             return None, None
 
         cos = numpy.dot(c3_axes, c3_axes[0])
-        assert(numpy.all((abs(cos[1:]+1./3) < TOLERANCE) |
+        assert (numpy.all((abs(cos[1:]+1./3) < TOLERANCE) |
                          (abs(cos[1:]-1./3) < TOLERANCE)))
 
         if rawsys.has_icenter():

@@ -7,25 +7,27 @@ from pyscf import lib
 from pyscf.pbc import gto, dft, scf, df
 from pyscf.pbc.gw import kugw_ac
 
-cell = gto.Cell()
-cell.build(
-    unit = 'B',
-    a = [[ 0.,          6.74027466,  6.74027466],
-         [ 6.74027466,  0.,          6.74027466],
-         [ 6.74027466,  6.74027466,  0.        ]],
-    atom = '''H 0 0 0
-              H 1.68506866 1.68506866 1.68506866
-              H 3.37013733 3.37013733 3.37013733''',
-    basis = 'gth-dzvp',
-    pseudo = 'gth-pade',
-    verbose = 7,
-    output = '/dev/null',
-    charge = 0,
-    spin = None)
-cell.spin = 3
-kpts = cell.make_kpts([3,1,1], scaled_center=[0,0,0])
-kmf = scf.KUHF(cell, kpts, exxdiv=None).density_fit()
-kmf.run()
+def setUpModule():
+    global cell, kmf, kpts
+    cell = gto.Cell()
+    cell.build(
+        unit = 'B',
+        a = [[ 0.,          6.74027466,  6.74027466],
+             [ 6.74027466,  0.,          6.74027466],
+             [ 6.74027466,  6.74027466,  0.        ]],
+        atom = '''H 0 0 0
+                  H 1.68506866 1.68506866 1.68506866
+                  H 3.37013733 3.37013733 3.37013733''',
+        basis = 'gth-dzvp',
+        pseudo = 'gth-pade',
+        verbose = 7,
+        output = '/dev/null',
+        charge = 0,
+        spin = None)
+    cell.spin = 3
+    kpts = cell.make_kpts([3,1,1], scaled_center=[0,0,0])
+    kmf = scf.KUHF(cell, kpts, exxdiv=None).density_fit()
+    kmf.run()
 
 def tearDownModule():
     global cell, kmf

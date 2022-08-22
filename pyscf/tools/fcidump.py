@@ -84,7 +84,7 @@ def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
         eri = ao2mo.restore(8, eri, nmo)
 
     if eri.ndim == 2: # 4-fold symmetry
-        assert(eri.size == npair**2)
+        assert (eri.size == npair**2)
         ij = 0
         for i in range(nmo):
             for j in range(0, i+1):
@@ -96,7 +96,7 @@ def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
                         kl += 1
                 ij += 1
     else:  # 8-fold symmetry
-        assert(eri.size == npair*(npair+1)//2)
+        assert (eri.size == npair*(npair+1)//2)
         ij = 0
         ijkl = 0
         for i in range(nmo):

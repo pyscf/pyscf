@@ -31,7 +31,7 @@ class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
-        assert(self.mol.symmetry)
+        assert (self.mol.symmetry)
         fcisolver = self.fcisolver
         if isinstance(fcisolver, fci.direct_spin0.FCISolver):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
@@ -108,7 +108,8 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
     if (not getattr(active_orbsym, '__len__', None)) or len(active_orbsym) == 0:
         mc.fcisolver.orbsym = orbsym[ncore:nocc]
-    log.debug('Active space irreps %s', str(mc.fcisolver.orbsym))
+    log.info('Symmetries of active orbitals: %s',
+             ' '.join([symm.irrep_id2name(mc.mol.groupname, irrep) for irrep in mc.fcisolver.orbsym]))
 
     wfnsym = 0
     if getattr(mc.fcisolver, 'wfnsym', None) is not None:

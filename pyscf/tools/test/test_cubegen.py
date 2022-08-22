@@ -19,14 +19,16 @@ import tempfile
 from pyscf import lib, gto, scf
 from pyscf.tools import cubegen
 
-mol = gto.Mole()
-mol.atom = '''
-O 0.00000000,  0.000000,  0.119748
-H 0.00000000,  0.761561, -0.478993
-H 0.00000000, -0.761561, -0.478993 '''
-mol.verbose = 0
-mol.build()
-mf = scf.RHF(mol).run()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.atom = '''
+    O 0.00000000,  0.000000,  0.119748
+    H 0.00000000,  0.761561, -0.478993
+    H 0.00000000, -0.761561, -0.478993 '''
+    mol.verbose = 0
+    mol.build()
+    mf = scf.RHF(mol).run()
 
 def tearDownModule():
     global mol, mf

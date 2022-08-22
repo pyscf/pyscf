@@ -23,23 +23,25 @@ from pyscf import cc
 from pyscf.cc import uccsd_t
 from pyscf.cc import gccsd_t
 
-mol = gto.Mole()
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -.757 , .587)],
-    [1 , (0. ,  .757 , .587)]]
-mol.spin = 2
-mol.basis = '3-21g'
-mol.symmetry = 'C2v'
-mol.build()
-mol1 = copy.copy(mol)
-mol1.symmetry = False
+def setUpModule():
+    global mol, mol1, mf, myucc, mygcc
+    mol = gto.Mole()
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -.757 , .587)],
+        [1 , (0. ,  .757 , .587)]]
+    mol.spin = 2
+    mol.basis = '3-21g'
+    mol.symmetry = 'C2v'
+    mol.build()
+    mol1 = copy.copy(mol)
+    mol1.symmetry = False
 
-mf = scf.UHF(mol1).run(conv_tol=1e-14)
-myucc = cc.UCCSD(mf).run()
-mygcc = cc.GCCSD(mf).run()
+    mf = scf.UHF(mol1).run(conv_tol=1e-14)
+    myucc = cc.UCCSD(mf).run()
+    mygcc = cc.GCCSD(mf).run()
 
 def tearDownModule():
     global mol, mol1, mf, myucc, mygcc
@@ -76,7 +78,7 @@ class KnownValues(unittest.TestCase):
         t2 = mycc.spatial2spin((t2aa, t2ab, t2bb))
         eris = mycc.ao2mo()
         e3a = gccsd_t.kernel(mycc, eris, t1, t2)
-        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
+        self.assertAlmostEqual(e3a, 9877.2780859693339, 5)
 
     def test_gccsd_t_complex(self):
         nocc, nvir = 4, 6

@@ -26,6 +26,7 @@ from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
+from pyscf.adc.radc import _create_t2_h5cache
 from pyscf import __config__
 from pyscf import df
 
@@ -134,8 +135,9 @@ def compute_amplitudes(myadc, eris):
     D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
 
     t2_1_a = v2e_oovv/D2_a
+    h5cache_t2 = _create_t2_h5cache()
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1_a = radc_ao2mo.write_dataset(t2_1_a)
+        t2_1_a = h5cache_t2.create_dataset('t2_1_a', data=t2_1_a)
 
     del v2e_oovv
     del D2_a
@@ -151,7 +153,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_1_b = v2e_OOVV/D2_b
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1_b = radc_ao2mo.write_dataset(t2_1_b)
+        t2_1_b = h5cache_t2.create_dataset('t2_1_b', data=t2_1_b)
     del v2e_OOVV
     del D2_b
 
@@ -165,7 +167,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_1_ab = v2e_oOvV/D2_ab
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1_ab = radc_ao2mo.write_dataset(t2_1_ab)
+        t2_1_ab = h5cache_t2.create_dataset('t2_1_ab', data=t2_1_ab)
     del v2e_oOvV
     del D2_ab
 
@@ -288,7 +290,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv_a = contract_ladder_antisym(myadc,t2_1_a[:], eris.Lvv)
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv_a = radc_ao2mo.write_dataset(t2_1_vvvv_a)
+            t2_1_vvvv_a = h5cache_t2.create_dataset('t2_1_vvvv_a', data=t2_1_vvvv_a)
 
         t2_2_a = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a))
         t2_2_a[:,:,ab_ind_a[0],ab_ind_a[1]] = t2_1_vvvv_a[:]
@@ -318,7 +320,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv_b = contract_ladder_antisym(myadc,t2_1_b[:],eris.LVV)
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv_b = radc_ao2mo.write_dataset(t2_1_vvvv_b)
+            t2_1_vvvv_b = h5cache_t2.create_dataset('t2_1_vvvv_b', data=t2_1_vvvv_b)
 
         t2_2_b = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b))
         t2_2_b[:,:,ab_ind_b[0],ab_ind_b[1]] = t2_1_vvvv_b[:]
@@ -346,7 +348,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv_ab = contract_ladder(myadc,t2_1_ab[:],(eris.Lvv,eris.LVV))
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv_ab = radc_ao2mo.write_dataset(t2_1_vvvv_ab)
+            t2_1_vvvv_ab = h5cache_t2.create_dataset('t2_1_vvvv_ab', data=t2_1_vvvv_ab)
 
         t2_2_ab = t2_1_vvvv_ab[:].copy()
 
@@ -364,21 +366,21 @@ def compute_amplitudes(myadc, eris):
         D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
         t2_2_a = t2_2_a/D2_a
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_a = radc_ao2mo.write_dataset(t2_2_a)
+            t2_2_a = h5cache_t2.create_dataset('t2_2_a', data=t2_2_a)
         del D2_a
 
         D2_b = d_ij_b.reshape(-1,1) - d_ab_b.reshape(-1)
         D2_b = D2_b.reshape((nocc_b,nocc_b,nvir_b,nvir_b))
         t2_2_b = t2_2_b/D2_b
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_b = radc_ao2mo.write_dataset(t2_2_b)
+            t2_2_b = h5cache_t2.create_dataset('t2_2_b', data=t2_2_b)
         del D2_b
 
         D2_ab = d_ij_ab.reshape(-1,1) - d_ab_ab.reshape(-1)
         D2_ab = D2_ab.reshape((nocc_a,nocc_b,nvir_a,nvir_b))
         t2_2_ab = t2_2_ab/D2_ab
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2_ab = radc_ao2mo.write_dataset(t2_2_ab)
+            t2_2_ab = h5cache_t2.create_dataset('t2_2_ab', data=t2_2_ab)
         del D2_ab
 
     cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
@@ -909,8 +911,8 @@ class UADC(lib.StreamObject):
         return self
 
     def kernel_gs(self):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -950,8 +952,8 @@ class UADC(lib.StreamObject):
         return self.e_corr, self.t1, self.t2
 
     def kernel(self, nroots=1, guess=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -989,10 +991,10 @@ class UADC(lib.StreamObject):
         self._finalize()
 
         self.method_type = self.method_type.lower()
-        if(self.method_type == "ea"):
+        if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif(self.method_type == "ip"):
+        elif (self.method_type == "ip"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
         else:
@@ -1148,7 +1150,7 @@ def get_imds_ea(adc, eris=None):
     cput0 = log.timer_debug1("Completed M_ab second-order terms ADC(2) calculation", *cput0)
 
     #Third-order terms
-    if(method =='adc(3)'):
+    if (method =='adc(3)'):
 
         eris_oovv = eris.oovv
         eris_OOVV = eris.OOVV
@@ -3695,7 +3697,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*lib.einsum('lkc,lkac->a',t2_1_ab[:,:,(orb-nocc_a),:], t2_1_ab, optimize = True)
 ######## ADC(3) 2p-1h  part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -3763,7 +3765,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######### ADC(3) 2p-1h part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_ab = adc.t2[1][1][:]
             t2_2_b = adc.t2[1][2][:]
@@ -3778,7 +3780,7 @@ def ea_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######### ADC(2) 1p part  ############################################
 
-        if(method=='adc(3)'):
+        if (method=='adc(3)'):
 
             t1_3_a, t1_3_b = adc.t1[1]
 
@@ -3883,7 +3885,7 @@ def ip_compute_trans_moments(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-        if(method=='adc(2)-x'or method=='adc(3)'):
+        if (method=='adc(2)-x'or method=='adc(3)'):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]

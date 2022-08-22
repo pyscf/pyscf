@@ -33,9 +33,11 @@ class PBCOpt(object):
 
     def init_rcut_cond(self, cell, precision=None):
         if precision is None: precision = cell.precision
-        #rcut = numpy.array([cell.bas_rcut(ib, precision)
-        #                    for ib in range(cell.nbas)])
-        rcut = cell.rcut_by_shells(precision)
+        if cell.rcut_by_shell_radius:
+            rcut = cell.rcut_by_shells(precision)
+        else:
+            rcut = numpy.array([cell.bas_rcut(ib, precision)
+                                for ib in range(cell.nbas)])
         natm = ctypes.c_int(cell._atm.shape[0])
         nbas = ctypes.c_int(cell._bas.shape[0])
         libpbc.PBCset_rcut_cond(self._this,

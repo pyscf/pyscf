@@ -22,23 +22,25 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-mol = gto.Mole()
-mol.atom = [
-    ['P', ( 0., 0.    , 0.)],]
-mol.basis = {'P':'aug-cc-pvqz'}
-mol.verbose = 0
-mol.spin = 3
-mol.build()
+def setUpModule():
+    global mol, mf, myadc
+    mol = gto.Mole()
+    mol.atom = [
+        ['P', ( 0., 0.    , 0.)],]
+    mol.basis = {'P':'aug-cc-pvqz'}
+    mol.verbose = 0
+    mol.spin = 3
+    mol.build()
 
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-12
-mf.irrep_nelec = {'A1g':(3,3),'E1ux':(2,1),'E1uy':(2,1),'A1u':(2,1)}
-mf.kernel()
-myadc = adc.ADC(mf)
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-12
+    mf.irrep_nelec = {'A1g':(3,3),'E1ux':(2,1),'E1uy':(2,1),'A1u':(2,1)}
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 
@@ -46,7 +48,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
-        myadcip = adc.uadc.UADCIP(myadc) 
+        myadcip = adc.uadc.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.38713687643570405, 6)
@@ -62,7 +64,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
-        myadcip = adc.uadc.UADCIP(myadc) 
+        myadcip = adc.uadc.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3751918934459225, 6)
@@ -73,12 +75,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9197702110961219,  6)
         self.assertAlmostEqual(p[2], 0.9197702110961211,  6)
 
-    def test_ip_adc3(self):
+    def test_ip_adc3_high_cost(self):
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295970712, 6)
 
-        myadcip = adc.uadc.UADCIP(myadc) 
+        myadcip = adc.uadc.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3839911922956251, 6)
@@ -88,7 +90,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9232360195076491, 6)
         self.assertAlmostEqual(p[1], 0.9232360195076498, 6)
         self.assertAlmostEqual(p[2], 0.9232360195076497, 6)
-      
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell atom")
     unittest.main()

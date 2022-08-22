@@ -129,9 +129,9 @@ def dump(chkfile, key, value):
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
             if key in fh5:
-                del(fh5[key])
+                del (fh5[key])
             elif key + '__from_list__' in fh5:
-                del(fh5[key+'__from_list__'])
+                del (fh5[key+'__from_list__'])
             save_as_group(key, value, fh5)
     else:
         with h5py.File(chkfile, 'w') as fh5:
@@ -172,7 +172,7 @@ def load_mol(chkfile):
             moldic = eval(fh5['mol'][()])
             for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
-                    del(moldic[key])
+                    del (moldic[key])
             mol.build(False, False, **moldic)
     return mol
 

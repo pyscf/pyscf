@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <complex.h>
 #include <assert.h>
 #include "config.h"
@@ -170,7 +171,7 @@ static void _ft_fill_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)()
 static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                       void (*fsort)(), double complex *out,
                       int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
-                      int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                      int ish, int jsh, int *cell_loc_bvk, int8_t *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -242,7 +243,7 @@ static void _ft_bvk_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 static void _ft_bvk_nk1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                         void (*fsort)(), double complex *out,
                         int nkpts, int comp, int nimgs, int bvk_nimgs, int blksize,
-                        int ish, int jsh, int *cell_loc_bvk, char *ovlp_mask,
+                        int ish, int jsh, int *cell_loc_bvk, int8_t *ovlp_mask,
                         double complex *buf, double *env_loc, double *Ls,
                         double complex *expkL, int *shls_slice, int *ao_loc,
                         double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -518,7 +519,7 @@ void PBC_ft_fill_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 void PBC_ft_bvk_ks1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                     double complex *out, int nkpts, int comp, int nimgs,
                     int bvk_nimgs, int blksize, int ish, int jsh,
-                    int *cell_loc_bvk, char *ovlp_mask,
+                    int *cell_loc_bvk, int8_t *ovlp_mask,
                     double complex *buf, double *env_loc, double *Ls,
                     double complex *expkL, int *shls_slice, int *ao_loc,
                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -534,7 +535,7 @@ void PBC_ft_bvk_ks1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                     double complex *out, int nkpts, int comp, int nimgs,
                     int bvk_nimgs, int blksize, int ish, int jsh,
-                    int *cell_loc_bvk, char *ovlp_mask,
+                    int *cell_loc_bvk, int8_t *ovlp_mask,
                     double complex *buf, double *env_loc, double *Ls,
                     double complex *expkL, int *shls_slice, int *ao_loc,
                     double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -560,7 +561,7 @@ void PBC_ft_bvk_ks2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 void PBC_ft_bvk_nk1s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                       double complex *out, int nkpts, int comp, int nimgs,
                       int bvk_nimgs, int blksize, int ish, int jsh,
-                      int *cell_loc_bvk, char *ovlp_mask,
+                      int *cell_loc_bvk, int8_t *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -576,7 +577,7 @@ void PBC_ft_bvk_nk1s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
 void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                            double complex *out, int nkpts, int comp, int nimgs,
                            int bvk_nimgs, int blksize, int ish, int jsh,
-                           int *cell_loc_bvk, char *ovlp_mask,
+                           int *cell_loc_bvk, int8_t *ovlp_mask,
                            double complex *buf, double *env_loc, double *Ls,
                            double complex *expkL, int *shls_slice, int *ao_loc,
                            double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -596,7 +597,7 @@ void PBC_ft_bvk_nk1s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)
 void PBC_ft_bvk_nk1s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                       double complex *out, int nkpts, int comp, int nimgs,
                       int bvk_nimgs, int blksize, int ish, int jsh,
-                      int *cell_loc_bvk, char *ovlp_mask,
+                      int *cell_loc_bvk, int8_t *ovlp_mask,
                       double complex *buf, double *env_loc, double *Ls,
                       double complex *expkL, int *shls_slice, int *ao_loc,
                       double *sGv, double *b, int *sgxyz, int *gs, int nGv,
@@ -699,6 +700,10 @@ void PBC_ft_latsum_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + IMGBLK;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
+        if (buf == NULL) {
+                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_latsum_drv\n",
+                        sizeof(double complex)*count*INTBUFMAX*comp+400);
+        }
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
@@ -721,7 +726,7 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
                     double complex *out, int nkpts, int comp, int nimgs,
                     int bvk_nimgs, double *Ls, double complex *expkL,
                     int *shls_slice, int *ao_loc,
-                    int *cell_loc_bvk, char *ovlp_mask,
+                    int *cell_loc_bvk, int8_t *ovlp_mask,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -752,6 +757,10 @@ void PBC_ft_bvk_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         NPdcopy(env_loc, env, nenv);
         size_t count = nkpts + bvk_nimgs;
         double complex *buf = malloc(sizeof(double complex)*count*INTBUFMAX*comp+400);
+        if (buf == NULL) {
+                fprintf(stderr, "buf = malloc(%zu) falied in PBC_ft_bvk_drv\n",
+                        sizeof(double complex)*count*INTBUFMAX*comp+400);
+        }
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;

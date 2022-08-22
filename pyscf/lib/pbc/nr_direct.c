@@ -623,7 +623,7 @@ void PBCVHF_contract_jk_s2kl(double *jk, double *dms, double *buf,
  */
 void PBCVHF_direct_drv(void (*fdot)(), double *out, double *dms,
                        int n_dm, int nkpts, int nbands, int nbasp,
-                       char *ovlp_mask, int *bvk_cell_id,
+                       int8_t *ovlp_mask, int *bvk_cell_id,
                        int *cell0_shl_id, int *images_loc,
                        int *shls_slice, int *bvk_ao_loc,
                        int *dm_translation, CINTOpt *cintopt, CVHFOpt *vhfopt,
@@ -709,7 +709,7 @@ void PBCVHFsetnr_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
 {
         /* This memory is released in void CVHFdel_optimizer, Don't know
          * why valgrind raises memory leak here */
-        if (opt->q_cond) {
+        if (opt->q_cond != NULL) {
                 free(opt->q_cond);
         }
         // nbas in the input arguments may different to opt->nbas.

@@ -21,21 +21,23 @@ from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc import dft
 
-L = 2
-cell = gto.Cell()
-cell.unit = 'B'
-cell.a = np.diag([L,L,L])
-cell.mesh = np.array([11]*3)
-cell.atom = [['He', (L/2.,L/2.,L/2.)]]
-cell.basis = { 'He': [[0, (1.0, 1.0)]] }
-cell.build()
+def setUpModule():
+    global cell, kmf, mycc, eris
+    L = 2
+    cell = gto.Cell()
+    cell.unit = 'B'
+    cell.a = np.diag([L,L,L])
+    cell.mesh = np.array([11]*3)
+    cell.atom = [['He', (L/2.,L/2.,L/2.)]]
+    cell.basis = { 'He': [[0, (1.0, 1.0)]] }
+    cell.build()
 
 
 def tearDownModule():
     global cell
     del cell
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_band(self):
         mf = scf.RHF(cell).run()
         kpts = cell.make_kpts([5,1,1])
@@ -69,4 +71,3 @@ class KnowValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for kpt-bands")
     unittest.main()
-

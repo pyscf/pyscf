@@ -51,7 +51,7 @@ def cc_tau1(cc,t1,t2,eris,feri2=None):
     tau2_Oovv = feri2['tau2_Oovv']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -178,7 +178,7 @@ def cc_Woooo(cc,t1,t2,eris,feri2=None):
     Woooo_rev = feri2['Woooo_rev']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -224,7 +224,7 @@ def cc_Wvvvv(cc,t1,t2,eris,feri2=None):
     Wvvvv = feri2['Wvvvv']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -269,7 +269,7 @@ def cc_Wvoov(cc,t1,t2,eris,feri2=None):
     WvOov     = feri2['WvOov']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -327,7 +327,7 @@ def cc_Wvovo(cc,t1,t2,eris,feri2=None):
     WvOVo = feri2['WvOVo']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -382,7 +382,7 @@ def cc_Wovov(cc,t1,t2,eris,feri2=None):
     WOvov = feri2['WOvov']
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -446,7 +446,7 @@ def Wooov(cc,t1,t2,eris,fint=None):
     ooov_tmp = np.empty(ooov_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -494,7 +494,7 @@ def Wvovv(cc,t1,t2,eris,fint=None):
     vovv_tmp = np.empty(vovv_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -541,7 +541,7 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -604,7 +604,7 @@ def W2ovvo(cc,t1,t2,eris,fint=None):
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -659,7 +659,7 @@ def Wovvo(cc,t1,t2,eris,fint=None):
     # Adaptive blocking ends here
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -699,7 +699,7 @@ def W1ovov(cc,t1,t2,eris,fint=None):
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -749,7 +749,7 @@ def W2ovov(cc,t1,t2,eris,fint=None):
     ovov_tmp = np.empty(ovov_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -796,7 +796,7 @@ def Wovov(cc,t1,t2,eris,fint=None):
     # Adaptive blocking ends here
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -838,7 +838,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
     # Adaptive blocking ends here
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -883,7 +883,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
     oooo_tmp = np.empty(oooo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -942,7 +942,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
     oooo_tmp = np.empty(oooo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1002,7 +1002,7 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
     print(BLKSIZE)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1080,7 +1080,7 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
     vvvo_tmp = np.empty(vvvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1174,7 +1174,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
     vvvo_tmp = np.empty(vvvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1287,7 +1287,7 @@ def Wovoo(cc,t1,t2,eris,fint=None):
     ovoo_tmp = np.empty(ovoo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1371,7 +1371,7 @@ def W1voov(cc,t1,t2,eris,fint=None):
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1434,7 +1434,7 @@ def W2voov(cc,t1,t2,eris,fint=None):
     ovvo_tmp = np.empty(ovvo_tmp_size,dtype=t2.dtype)
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1489,7 +1489,7 @@ def Wvoov(cc,t1,t2,eris,fint=None):
     # Adaptive blocking ends here
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break
@@ -1531,7 +1531,7 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
     # Adaptive blocking ends here
 
     good2go = True
-    while(good2go):
+    while (good2go):
         good2go, data = loader.slave_set()
         if good2go is False:
             break

@@ -20,23 +20,25 @@ from pyscf import scf
 from pyscf import lib
 
 
-mol = gto.M(atom='''
-H 0. 0. 0.
-H 8. 0. 0.
-''', basis='ccpvqz')
-numpy.random.seed(1)
-r = numpy.random.random((100,3)) * 2
+def setUpModule():
+    global mol, mol1, r, r1
+    mol = gto.M(atom='''
+    H 0. 0. 0.
+    H 8. 0. 0.
+    ''', basis='ccpvqz')
+    numpy.random.seed(1)
+    r = numpy.random.random((100,3)) * 2
 
-mol1 = gto.M(atom='''
-H 0. 0. 0.
-H 8. 0. 0.
-''', basis=[[0, (1, 1)],
-            [1, (.9, 1)],
-            [2, (.8, 1)],
-            [3, (.6, 1)],
-            [4, (.5, 1)],
-            [5, (.4, 1)]])
-r1 = r[:70]
+    mol1 = gto.M(atom='''
+    H 0. 0. 0.
+    H 8. 0. 0.
+    ''', basis=[[0, (1, 1)],
+                [1, (.9, 1)],
+                [2, (.8, 1)],
+                [3, (.6, 1)],
+                [4, (.5, 1)],
+                [5, (.4, 1)]])
+    r1 = r[:70]
 
 def tearDownModule():
     global mol, mol1, r, r1
