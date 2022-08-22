@@ -22,7 +22,7 @@ from pyscf.cc import gccsd
 from pyscf.pbc import mp
 
 class RCCSD(rccsd.RCCSD):
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(self._scf)
         if mbpt2:
@@ -31,7 +31,7 @@ class RCCSD(rccsd.RCCSD):
             nocc, nvir = self.t2.shape[1:3]
             self.t1 = numpy.zeros((nocc,nvir))
             return self.e_corr, self.t1, self.t2
-        return rccsd.RCCSD.ccsd(self, t1, t2, eris)
+        return rccsd.RCCSD.ccsd(self, t1, t2, eris, dcsd=dcsd)
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc import tools
@@ -59,7 +59,7 @@ class RCCSD(rccsd.RCCSD):
         return eris
 
 class UCCSD(uccsd.UCCSD):
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(self._scf)
         if mbpt2:
@@ -70,7 +70,7 @@ class UCCSD(uccsd.UCCSD):
             nvira, nvirb = nmoa-nocca, nmob-noccb
             self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
-        return uccsd.UCCSD.ccsd(self, t1, t2, eris)
+        return uccsd.UCCSD.ccsd(self, t1, t2, eris, dcsd=dcsd)
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc import tools

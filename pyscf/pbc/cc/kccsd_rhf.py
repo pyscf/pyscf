@@ -72,8 +72,8 @@ def update_amps(cc, t1, t2, eris):
     Foo = imdk.cc_Foo(t1, t2, eris, kconserv)
     Fvv = imdk.cc_Fvv(t1, t2, eris, kconserv)
     Fov = imdk.cc_Fov(t1, t2, eris, kconserv)
-    Loo = imdk.Loo(t1, t2, eris, kconserv)
-    Lvv = imdk.Lvv(t1, t2, eris, kconserv)
+    Loo = imdk.Loo(t1, t2, eris, kconserv, dcsd=cc.dcsd)
+    Lvv = imdk.Lvv(t1, t2, eris, kconserv, dcsd=cc.dcsd)
 
     # Move energy terms to the other side
     for k in range(nkpts):
@@ -131,11 +131,21 @@ def update_amps(cc, t1, t2, eris):
 
     mem_now = lib.current_memory()[0]
     if (nocc ** 4 * nkpts ** 3) * 16 / 1e6 + mem_now < cc.max_memory * .9:
-        Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv)
+        if cc.dcsd:
+            Woooo_not2 = imdk.cc_Woooo(t1, t2, eris, kconserv, not2=True)
+            Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv)
+        else:
+            Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv)
     else:
         fimd = lib.H5TmpFile()
-        Woooo = fimd.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
-        Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo)
+        if cc.dcsd:
+            Woooo_not2 = fimd.create_dataset('oooonot2', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
+            Woooo_not2 = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo, not2=True)
+            Woooo = fimd.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
+            Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo)
+        else:
+            Woooo = fimd.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
+            Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
@@ -144,12 +154,21 @@ def update_amps(cc, t1, t2, eris):
         t2new_tmp = np.zeros((nocc, nocc, nvir, nvir), dtype=t2.dtype)
         for kl in range(nkpts):
             kk = kconserv[kj, kl, ki]
-            tau_term = t2[kk, kl, ka].copy()
-            if kl == kb and kk == ka:
-                tau_term += einsum('ic,jd->ijcd', t1[ka], t1[kb])
-            t2new_tmp += 0.5 * einsum('klij,klab->ijab', Woooo[kk, kl, ki], tau_term)
+            if cc.dcsd:
+                t2new_tmp += 0.5 * einsum('klij,klab->ijab', Woooo_not2[kk, kl, ki], t2[kk, kl, ka])
+                tau_term = np.zeros_like(t2[kk,kl,ka])
+                if kl == kb and kk ==ka:
+                    tau_term += einsum('ic,jd->ijcd', t1[ka], t1[kb])
+                t2new_tmp += 0.5 * einsum('klij,klab->ijab', Woooo[kk, kl, ki], tau_term)
+            else:
+                tau_term = t2[kk, kl, ka].copy()
+                if kl == kb and kk == ka:
+                    tau_term += einsum('ic,jd->ijcd', t1[ka], t1[kb])
+                t2new_tmp += 0.5 * einsum('klij,klab->ijab', Woooo[kk, kl, ki], tau_term) # t2 t2 ladder terms included.
         t2new[ki, kj, ka] += t2new_tmp
         t2new[kj, ki, kb] += t2new_tmp.transpose(1, 0, 3, 2)
+    if cc.dcsd:
+        Woooo_not2 = None
     Woooo = None
     fimd = None
     time1 = log.timer_debug1('t2 oooo', *time1)
@@ -161,8 +180,8 @@ def update_amps(cc, t1, t2, eris):
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
 
-        t2new_tmp = einsum('ac,ijcb->ijab', Lvv[ka], t2[ki, kj, ka])
-        t2new_tmp += einsum('ki,kjab->ijab', -Loo[ki], t2[ki, kj, ka])
+        t2new_tmp = einsum('ac,ijcb->ijab', Lvv[ka], t2[ki, kj, ka]) # t2 t2 mosaic terms
+        t2new_tmp += einsum('ki,kjab->ijab', -Loo[ki], t2[ki, kj, ka]) # t2 t2 mosaic terms
 
         kc = kconserv[ka, ki, kb]
         tmp2 = np.asarray(eris.vovv[kc, ki, kb]).transpose(3, 2, 1, 0).conj() \
@@ -178,15 +197,16 @@ def update_amps(cc, t1, t2, eris):
 
     mem_now = lib.current_memory()[0]
     if (nocc ** 2 * nvir ** 2 * nkpts ** 3) * 16 / 1e6 * 2 + mem_now < cc.max_memory * .9:
-        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv)
-        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv)
+        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv, dcsd=cc.dcsd)
+        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv, not2=cc.dcsd)
     else:
         fimd = lib.H5TmpFile()
         Wvoov = fimd.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), t1.dtype.char)
         Wvovo = fimd.create_dataset('vovo', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nocc), t1.dtype.char)
-        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv, Wvoov)
-        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv, Wvovo)
+        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv, Wvoov, dcsd=cc.dcsd)
+        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv, Wvovo, not2=cc.dcsd)
 
+    # t2 t2 (x)ring terms in here:
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
         t2new_tmp = np.zeros((nocc, nocc, nvir, nvir), dtype=t2.dtype)
@@ -598,10 +618,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     energy = energy
     update_amps = update_amps
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
-        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2, dcsd=dcsd)
 
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
         '''Ground-state CCSD.
 
         Kwargs:
@@ -620,6 +640,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
 
+        self.dcsd = dcsd
         self.converged, self.e_corr, self.t1, self.t2 = \
             kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                    tol=self.conv_tol, tolnormt=self.conv_tol_normt,
