@@ -51,54 +51,55 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_cvs_adc2(self):
         myadc.method = "adc(2)"
+        myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc)
-        myadcipcvs.ncvs = 2 
+        myadcipcvs.ncvs = 1 
         e,v,p,x = myadcipcvs.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 1.24594491971009, 6)
-        self.assertAlmostEqual(e[1], 2.01526618206678, 6)
-        self.assertAlmostEqual(e[2], 2.01526618206678, 6)
+        self.assertAlmostEqual(e[0], 19.83739019952255, 6)
 
-        self.assertAlmostEqual(p[0], 1.84037247020310, 6)
+        self.assertAlmostEqual(p[0], 1.54937962073732, 6)
 
     def test_ip_adc2x(self):
+        myadc.max_memory = 20
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
         myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc) 
-        myadcipcvs.ncvs = 2 
+        myadcipcvs.ncvs = 1 
         e,v,p,x = myadcipcvs.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 1.25429227131560, 6)
-        self.assertAlmostEqual(e[1], 1.87866984329999, 6)
-        self.assertAlmostEqual(e[2], 2.05831184399952, 6)
+        self.assertAlmostEqual(e[0], 19.86256087818720, 6)
+        self.assertAlmostEqual(e[1], 21.24443090401234, 6)
+        self.assertAlmostEqual(e[2], 21.27391652329249, 6)
 
-        self.assertAlmostEqual(p[0], 1.85960783676888, 6)
-        self.assertAlmostEqual(p[1], 0.00015320770133, 6)
-        self.assertAlmostEqual(p[2], 0.00155303935225, 6)
+        self.assertAlmostEqual(p[0], 1.57448682772367, 6)
+        self.assertAlmostEqual(p[1], 0.00000138285407, 6)
+        self.assertAlmostEqual(p[2], 0.00000284749463, 6)
 
 
     def test_ip_adc3(self):
+        myadc.max_memory = 20
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
         myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc) 
-        myadcipcvs.ncvs = 2 
+        myadcipcvs.ncvs = 1 
         e,v,p,x = myadcipcvs.kernel(nroots=3)
         myadcipcvs.analyze()
 
-        self.assertAlmostEqual(e[0], 1.29106869251018, 6)
-        self.assertAlmostEqual(e[1], 1.87866984316241, 6)
-        self.assertAlmostEqual(e[2], 2.05831184411966, 6)
+        self.assertAlmostEqual(e[0], 20.09352653091772, 6)
+        self.assertAlmostEqual(e[1], 21.24443090413907, 6)
+        self.assertAlmostEqual(e[2], 21.27391652292367, 6)
 
-        self.assertAlmostEqual(p[0], 1.88980676253502, 6)
-        self.assertAlmostEqual(p[1], 0.00015320770095, 6)
-        self.assertAlmostEqual(p[2], 0.00155303935704, 6)
+        self.assertAlmostEqual(p[0], 1.66994015437000, 6)
+        self.assertAlmostEqual(p[1], 0.00000138285406, 6)
+        self.assertAlmostEqual(p[2], 0.00000284749466, 6)
       
 if __name__ == "__main__":
     print("IP-CVS calculations for different ADC methods for water molecule")

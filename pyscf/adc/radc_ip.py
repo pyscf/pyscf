@@ -773,7 +773,7 @@ def compute_dyson_mo(myadc):
 
     return dyson_mo
 
-def get_opdm(adc):
+def make_rdm1(adc):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -781,16 +781,16 @@ def get_opdm(adc):
     nroots = adc.U.shape[1]
     U = adc.renormalize_eigenvectors(nroots)
 
-    tuple_opdm = ()
+    list_rdm1 = []
 
     for i in range(U.shape[1]): 
-        opdm = get_opdm_eigenvectors(adc, U[:,i], U[:,i])
-        tuple_opdm += (opdm,)
+        rdm1 = make_rdm1_eigenvectors(adc, U[:,i], U[:,i])
+        list_rdm1.append(rdm1)
 
     cput0 = log.timer_debug1("completed OPDM calculation", *cput0)
-    return tuple_opdm
+    return list_rdm1
 
-def get_opdm_eigenvectors(adc, L, R):
+def make_rdm1_eigenvectors(adc, L, R):
     
     L = np.array(L).ravel() 
     R = np.array(R).ravel()
@@ -812,7 +812,7 @@ def get_opdm_eigenvectors(adc, L, R):
     s2 = f1
     f2 = s2 + n_doubles
     
-    opdm  = np.zeros((nmo,nmo))
+    rdm1  = np.zeros((nmo,nmo))
     kd_oc = np.identity(nocc)
 
     L1 = L[s1:f1]
@@ -824,60 +824,60 @@ def get_opdm_eigenvectors(adc, L, R):
     R2 = R2.reshape(nvir,nocc,nocc)
 
 #####G^000#### block- ij
-    opdm[:nocc,:nocc] =  2*np.einsum('ij,m,m->ij',kd_oc,L1,R1,optimize=True) 
-    opdm[:nocc,:nocc] -= np.einsum('i,j->ij',L1,R1,optimize=True)
+    rdm1[:nocc,:nocc] =  2*np.einsum('ij,m,m->ij',kd_oc,L1,R1,optimize=True) 
+    rdm1[:nocc,:nocc] -= np.einsum('i,j->ij',L1,R1,optimize=True)
 
-    opdm[:nocc,:nocc] += 4*np.einsum('ij,etu,etu->ij',kd_oc,L2,R2,optimize=True) 
-    opdm[:nocc,:nocc] -= np.einsum('ij,etu,eut->ij',kd_oc,L2,R2,optimize=True) 
-    opdm[:nocc,:nocc] -= np.einsum('ij,eut,etu->ij',kd_oc,L2,R2,optimize=True) 
-    opdm[:nocc,:nocc] -= 4*np.einsum('eti,etj->ij',L2,R2,optimize=True)
-    opdm[:nocc,:nocc] += np.einsum('eti,ejt->ij',L2,R2,optimize=True)
-    opdm[:nocc,:nocc] += np.einsum('eit,etj->ij',L2,R2,optimize=True)
+    rdm1[:nocc,:nocc] += 4*np.einsum('ij,etu,etu->ij',kd_oc,L2,R2,optimize=True) 
+    rdm1[:nocc,:nocc] -= np.einsum('ij,etu,eut->ij',kd_oc,L2,R2,optimize=True) 
+    rdm1[:nocc,:nocc] -= np.einsum('ij,eut,etu->ij',kd_oc,L2,R2,optimize=True) 
+    rdm1[:nocc,:nocc] -= 4*np.einsum('eti,etj->ij',L2,R2,optimize=True)
+    rdm1[:nocc,:nocc] += np.einsum('eti,ejt->ij',L2,R2,optimize=True)
+    rdm1[:nocc,:nocc] += np.einsum('eit,etj->ij',L2,R2,optimize=True)
 
-    opdm[:nocc,:nocc] -= 2*np.einsum('g,g,hjcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[:nocc,:nocc] += 2*np.einsum('g,g,jhcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[:nocc,:nocc] -= 2*np.einsum('g,g,jhcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True) 
-    opdm[:nocc,:nocc] += 2*np.einsum('g,h,jgcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True)  
-    opdm[:nocc,:nocc] -= np.einsum('g,h,gjcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True)  
+    rdm1[:nocc,:nocc] -= 2*np.einsum('g,g,hjcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[:nocc,:nocc] += 2*np.einsum('g,g,jhcd,hicd->ij', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[:nocc,:nocc] -= 2*np.einsum('g,g,jhcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True) 
+    rdm1[:nocc,:nocc] += 2*np.einsum('g,h,jgcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True)  
+    rdm1[:nocc,:nocc] -= np.einsum('g,h,gjcd,ihcd->ij', L1,R1,t2_1,t2_1,optimize=True)  
     temp_ij = np.einsum('g,j,ghcd,ihcd->ij',L1,R1,t2_1,t2_1,optimize=True)
     temp_ij -= 0.25*np.einsum('g,j,hgcd,ihcd->ij',L1,R1,t2_1,t2_1,optimize=True)
     temp_ij -= 0.25*np.einsum('g,j,ghcd,hicd->ij',L1,R1,t2_1,t2_1,optimize=True)
-    opdm[:nocc,:nocc] += temp_ij
-    opdm[:nocc,:nocc] += temp_ij.T
+    rdm1[:nocc,:nocc] += temp_ij
+    rdm1[:nocc,:nocc] += temp_ij.T
 
 ########## block- ab
-    opdm[nocc:,nocc:] = np.einsum('atu,btu->ab', L2,R2,optimize=True)
-    opdm[nocc:,nocc:] -= 0.5*np.einsum('aut,btu->ab', L2,R2,optimize=True)
-    opdm[nocc:,nocc:] -= 0.5*np.einsum('atu,but->ab', L2,R2,optimize=True)
-    opdm[nocc:,nocc:] += np.einsum('atu,btu->ab', L2,R2,optimize=True)
+    rdm1[nocc:,nocc:] = np.einsum('atu,btu->ab', L2,R2,optimize=True)
+    rdm1[nocc:,nocc:] -= 0.5*np.einsum('aut,btu->ab', L2,R2,optimize=True)
+    rdm1[nocc:,nocc:] -= 0.5*np.einsum('atu,but->ab', L2,R2,optimize=True)
+    rdm1[nocc:,nocc:] += np.einsum('atu,btu->ab', L2,R2,optimize=True)
 
-    opdm[nocc:,nocc:] += 4*np.einsum('g,g,hmbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[nocc:,nocc:] -= np.einsum('g,g,mhbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[nocc:,nocc:] -= np.einsum('g,g,hmbc,mhac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[nocc:,nocc:] -= 4*np.einsum('g,h,hmbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[nocc:,nocc:] += np.einsum('g,h,mhbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
-    opdm[nocc:,nocc:] += np.einsum('g,h,hmbc,mgac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] += 4*np.einsum('g,g,hmbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] -= np.einsum('g,g,mhbc,hmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] -= np.einsum('g,g,hmbc,mhac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] -= 4*np.einsum('g,h,hmbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] += np.einsum('g,h,mhbc,gmac->ab', L1,R1,t2_1,t2_1,optimize=True)
+    rdm1[nocc:,nocc:] += np.einsum('g,h,hmbc,mgac->ab', L1,R1,t2_1,t2_1,optimize=True)
 
 ########### block- ia
-    opdm[:nocc,nocc:] = -np.einsum('n,ani->ia', R1,L2,optimize=True)
-    opdm[:nocc,nocc:] += 2*np.einsum('n,ain->ia', R1,L2,optimize=True)
+    rdm1[:nocc,nocc:] = -np.einsum('n,ani->ia', R1,L2,optimize=True)
+    rdm1[:nocc,nocc:] += 2*np.einsum('n,ain->ia', R1,L2,optimize=True)
 
-    opdm[:nocc,nocc:] -= 2*np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True) 
-    opdm[:nocc,nocc:] += np.einsum('g,cgh,hiac->ia', L1,R2,t2_1,optimize=True) 
-    opdm[:nocc,nocc:] += 4*np.einsum('g,chg,ihac->ia', L1,R2,t2_1,optimize=True) 
-    opdm[:nocc,nocc:] -= np.einsum('g,chg,hiac->ia', L1,R2,t2_1,optimize=True) 
-    opdm[:nocc,nocc:] -= np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True) 
-    opdm[:nocc,nocc:] += np.einsum('i,cgh,ghac->ia', L1,R2,t2_1,optimize=True)
-    opdm[:nocc,nocc:] -= 2*np.einsum('i,chg,ghac->ia', L1,R2,t2_1,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True) 
+    rdm1[:nocc,nocc:] += np.einsum('g,cgh,hiac->ia', L1,R2,t2_1,optimize=True) 
+    rdm1[:nocc,nocc:] += 4*np.einsum('g,chg,ihac->ia', L1,R2,t2_1,optimize=True) 
+    rdm1[:nocc,nocc:] -= np.einsum('g,chg,hiac->ia', L1,R2,t2_1,optimize=True) 
+    rdm1[:nocc,nocc:] -= np.einsum('g,cgh,ihac->ia', L1,R2,t2_1,optimize=True) 
+    rdm1[:nocc,nocc:] += np.einsum('i,cgh,ghac->ia', L1,R2,t2_1,optimize=True)
+    rdm1[:nocc,nocc:] -= 2*np.einsum('i,chg,ghac->ia', L1,R2,t2_1,optimize=True)
 
-    opdm[:nocc,nocc:] += np.einsum('g,g,ia->ia', L1,R1,t1_2,optimize=True) 
-    opdm[:nocc,nocc:] += np.einsum('g,g,ia->ia', L1,R1,t1_2,optimize=True) 
-    opdm[:nocc,nocc:] -= np.einsum('g,i,ga->ia', R1,L1,t1_2,optimize=True)
+    rdm1[:nocc,nocc:] += np.einsum('g,g,ia->ia', L1,R1,t1_2,optimize=True) 
+    rdm1[:nocc,nocc:] += np.einsum('g,g,ia->ia', L1,R1,t1_2,optimize=True) 
+    rdm1[:nocc,nocc:] -= np.einsum('g,i,ga->ia', R1,L1,t1_2,optimize=True)
 
 ############ block- ai
-    opdm[nocc:,:nocc] = opdm[:nocc,nocc:].T
+    rdm1[nocc:,:nocc] = rdm1[:nocc,nocc:].T
     
-    return opdm
+    return rdm1
 
 class RADCIP(radc.RADC):
     '''restricted ADC for IP energies and spectroscopic amplitudes
@@ -965,7 +965,7 @@ class RADCIP(radc.RADC):
     analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
-    get_opdm = get_opdm
+    make_rdm1 = make_rdm1
 
     def get_init_guess(self, nroots=1, diag=None, ascending = True):
         if diag is None :

@@ -35,7 +35,7 @@ def setUpModule():
     mol.symmetry = False
     mol.spin  = 1
     mol.build()
-    mf = scf.UHF(mol).density_fit()
+    mf = scf.UHF(mol)
     mf.conv_tol = 1e-12
     mf.kernel()
     myadc = adc.ADC(mf)

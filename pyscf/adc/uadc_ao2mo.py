@@ -73,7 +73,7 @@ def transform_integrals_incore(myadc):
     eris.OOvv = ao2mo.general(myadc._scf._eri, (occ_b, occ_b, vir_a, vir_a), compact=False).reshape(nocc_b, nocc_b, nvir_a, nvir_a).copy()  # noqa: E501
     eris.OVvo = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, occ_a), compact=False).reshape(nocc_b, nvir_b, nvir_a, nocc_a).copy()  # noqa: E501
     eris.OVvv = ao2mo.general(myadc._scf._eri, (occ_b, vir_b, vir_a, vir_a), compact=True).reshape(nocc_b, nvir_b, -1).copy()  # noqa: E501
-    eris.CEee = ao2mo.general(myadc._scf._eri, (cvs_a, vir_b, vir_a, vir_a), compact=True).reshape(ncvs, nvir_b, -1).copy()  # noqa: E501
+    eris.CEee = ao2mo.general(myadc._scf._eri, (cvs_b, vir_b, vir_a, vir_a), compact=True).reshape(ncvs, nvir_b, -1).copy()  # noqa: E501
 
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
 
@@ -120,6 +120,7 @@ def transform_integrals_outcore(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
+    ncvs = myadc.ncvs
 
     nvpair_a = nvir_a * (nvir_a+1) // 2
     nvpair_b = nvir_b * (nvir_b+1) // 2
@@ -363,10 +364,10 @@ def transform_integrals_df(myadc):
     eris.LOV = np.empty((naux,nocc_b,nvir_b))
     eris.Lvv = np.empty((naux,nvir_a,nvir_a))
     eris.LVV = np.empty((naux,nvir_b,nvir_b))
-    eris.L_ce = np.empty((naux,ncvs,nvir_a))
-    eris.L_CE = np.empty((naux,ncvs,nvir_b))
-    eris.L_EE = eris.LVV
-    eris.L_ee = eris.Lvv
+    eris.Lce = np.empty((naux,ncvs,nvir_a))
+    eris.LCE = np.empty((naux,ncvs,nvir_b))
+    eris.LEE = eris.LVV
+    eris.Lee = eris.Lvv
     ijslice = (0, nmo_a, 0, nmo_a)
     Lpq = None
     p1 = 0
@@ -378,8 +379,8 @@ def transform_integrals_df(myadc):
         Loo[p0:p1] = Lpq[:,:nocc_a,:nocc_a]
         eris.Lov[p0:p1] = Lpq[:,:nocc_a,nocc_a:]
         Lvo[p0:p1] = Lpq[:,nocc_a:,:nocc_a]
-        eris.L_ee[p0:p1] = eris.Lvv[p0:p1] = Lpq[:,nocc_a:,nocc_a:]
-        eris.L_ce[p0:p1] = Lpq[:,:ncvs,nocc_a: ]
+        eris.Lee[p0:p1] = eris.Lvv[p0:p1] = Lpq[:,nocc_a:,nocc_a:]
+        eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc_a: ]
 
 
     ijslice = (0, nmo_b, 0, nmo_b)
@@ -392,8 +393,8 @@ def transform_integrals_df(myadc):
         LOO[p0:p1] = Lpq[:,:nocc_b,:nocc_b]
         eris.LOV[p0:p1] = Lpq[:,:nocc_b,nocc_b:]
         LVO[p0:p1] = Lpq[:,nocc_b:,:nocc_b]
-        eris.L_EE[p0:p1] = eris.LVV[p0:p1] = Lpq[:,nocc_b:,nocc_b:]
-        eris.L_CE[p0:p1] = Lpq[:,:ncvs,nocc_b: ]
+        eris.LEE[p0:p1] = eris.LVV[p0:p1] = Lpq[:,nocc_b:,nocc_b:]
+        eris.LCE[p0:p1] = Lpq[:,:ncvs,nocc_b: ]
         
 
     Loo = Loo.reshape(naux,nocc_a*nocc_a)
@@ -403,8 +404,8 @@ def transform_integrals_df(myadc):
     eris.LOV = eris.LOV.reshape(naux,nocc_b*nvir_b)
     LVO = LVO.reshape(naux,nocc_b*nvir_b)
 
-    eris.L_ee_p = Lvv_p = lib.pack_tril(eris.Lvv)
-    eris.L_EE_p = LVV_p = lib.pack_tril(eris.LVV)
+    eris.Lee_p = Lvv_p = lib.pack_tril(eris.Lvv)
+    eris.LEE_p = LVV_p = lib.pack_tril(eris.LVV)
 
     eris.vvvv_p = None
     eris.VVVV_p = None

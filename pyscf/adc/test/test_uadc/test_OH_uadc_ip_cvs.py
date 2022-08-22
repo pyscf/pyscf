@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -47,69 +47,62 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
- 
-        myadc.method_type = "ip-cvs"
-        myadc.ncvs = 2 
-        e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr
-
-        self.assertAlmostEqual(e_corr, -0.16402828164387906, 6)
-
-        self.assertAlmostEqual(e[0], 0.4342864327917968, 6)
-        self.assertAlmostEqual(e[1], 0.47343844767816784, 6)
-        self.assertAlmostEqual(e[2], 0.5805631452815511, 6)
-
-        self.assertAlmostEqual(p[0], 0.9066975034860368, 6)
-        self.assertAlmostEqual(p[1], 0.8987660491377468, 6)
-        self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
-
-    def test_ip_adc2x(self):
   
-        myadc.method_type = "ip-cvs"
-        myadc.method = "adc(2)-x"
-        myadc.ncvs = 2 
+        myadc.method = "adc(2)"
+        myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.16402828164387906, 6)
 
-        e,v,p,x = myadc.kernel(nroots=3)
+        myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
+        myadcipcvs.ncvs = 1 
+        e,v,p,x = myadcipcvs.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.4389083582117278, 6)
-        self.assertAlmostEqual(e[1], 0.45720829251439343, 6)
-        self.assertAlmostEqual(e[2], 0.5588942056812034, 6)
+        self.assertAlmostEqual(e[0], 19.94886897889140, 6)
+        self.assertAlmostEqual(e[1], 20.00065270524671, 6)
+        self.assertAlmostEqual(e[2], 21.15964585685805, 6)
 
-        self.assertAlmostEqual(p[0], 0.9169548953028459, 6)
-        self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
-        self.assertAlmostEqual(p[2], 0.212879313736106, 6)
+        self.assertAlmostEqual(p[0], 0.77673935197461, 6)
+        self.assertAlmostEqual(p[1], 0.77815919145219, 6)
+        self.assertAlmostEqual(p[2], 0.00000004371982, 6)
+
+    def test_ip_adc2x(self):
+  
+        myadc.method = "adc(2)-x"
+        myadc.method_type = "ip"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.16402828164387906, 6)
+
+        myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
+        myadcipcvs.ncvs = 1 
+        e,v,p,x = myadcipcvs.kernel(nroots=3)
+
+        self.assertAlmostEqual(e[0], 19.97858926911032, 6)
+        self.assertAlmostEqual(e[1], 20.02485253967649, 6)
+        self.assertAlmostEqual(e[2], 20.51382057069969, 6)
+
+        self.assertAlmostEqual(p[0], 0.79694705687688, 6)
+        self.assertAlmostEqual(p[1], 0.78942190965820, 6)
+        self.assertAlmostEqual(p[2], 0.00825541597069, 6)
 
     def test_ip_adc3(self):
-  
+ 
         myadc.method = "adc(3)"
-        myadc.ncvs = 2 
+        myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072194, 6)
 
-        myadc.method_type = "ip-cvs"
-        e,v,p,x = myadc.kernel(nroots=3)
-        myadc.analyze()
+        myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
+        myadcipcvs.ncvs = 1 
+        e,v,p,x = myadcipcvs.kernel(nroots=3)
 
-        self.assertAlmostEqual(e[0], 0.4794423247368058, 6)
-        self.assertAlmostEqual(e[1], 0.4872370596653387, 6)
-        self.assertAlmostEqual(e[2], 0.5726961805214643, 6)
+        self.assertAlmostEqual(e[0], 20.19831674615190, 6)
+        self.assertAlmostEqual(e[1], 20.23682912597306, 6)
+        self.assertAlmostEqual(e[2], 20.51828465422586, 6)
 
-        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
-        self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
-        self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
+        self.assertAlmostEqual(p[0], 0.83426641906575, 6)
+        self.assertAlmostEqual(p[1], 0.80657545189575, 6)
+        self.assertAlmostEqual(p[2], 0.02836825280158, 6)
       
-    def test_ip_adc3_oneroot(self):
-  
-        myadc.method = "adc(3)"
-        e,v,p,x = myadc.kernel()
-        myadc.ncvs = 2 
-
-        self.assertAlmostEqual(e[0], 0.4794423247368058, 6)
-
-        self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
-
 if __name__ == "__main__":
-    print("IP-CVS calculations for different ADC methods for open-shell molecule")
+    print("IP calculations for different ADC methods for open-shell molecule")
     unittest.main()

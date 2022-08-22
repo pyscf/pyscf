@@ -489,6 +489,9 @@ def matvec(adc, M_ij=None, eris=None):
 
                eris_ovoo = eris.ovoo
                t2_1 = adc.t2[0]
+               t2_1_ccee = t2_1[:ncvs,:ncvs,:,:]
+               t2_1_cvee = t2_1[:ncvs,ncvs:,:,:]
+               t2_1_vcee = t2_1[ncvs:,:ncvs,:,:]
 
 ################ ADC(3) i - kja block and ajk - i ############################
 
@@ -501,19 +504,19 @@ def matvec(adc, M_ij=None, eris=None):
 
                temp_1_ecc = lib.einsum('ijbc,aij->abc',t2_1[:ncvs,:ncvs,:,:], r2_ecc, optimize=True)
                temp_ecc = 0.25 * temp_1_ecc
-               temp_ecc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1[:ncvs,:ncvs,:,:], r2_ecc, optimize=True)
-               temp_ecc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1[:ncvs,:ncvs,:,:], r2_ecc, optimize=True)
-               temp_ecc += 0.25 * lib.einsum('jibc,aji->abc',t2_1[:ncvs,:ncvs,:,:], r2_ecc, optimize=True)
-               temp_1_ecv = lib.einsum('ijbc,aij->abc',t2_1[:ncvs,ncvs:,:,:], r2_ecv, optimize=True)
+               temp_ecc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
+               temp_ecc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
+               temp_ecc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
+               temp_1_ecv = lib.einsum('ijbc,aij->abc',t2_1_cvee, r2_ecv, optimize=True)
                temp_ecv = 0.25 * temp_1_ecv
-               temp_ecv -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1[ncvs:,:ncvs,:,:], r2_ecv, optimize=True)
-               temp_ecv -= 0.25 * lib.einsum('jibc,aij->abc',t2_1[ncvs:,:ncvs,:,:], r2_ecv, optimize=True)
-               temp_ecv += 0.25 * lib.einsum('jibc,aji->abc',t2_1[:ncvs,ncvs:,:,:], r2_ecv, optimize=True)
-               temp_1_evc = lib.einsum('ijbc,aij->abc',t2_1[ncvs:,:ncvs,:,:], r2_evc, optimize=True)
+               temp_ecv -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_vcee, r2_ecv, optimize=True)
+               temp_ecv -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_vcee, r2_ecv, optimize=True)
+               temp_ecv += 0.25 * lib.einsum('jibc,aji->abc',t2_1_cvee, r2_ecv, optimize=True)
+               temp_1_evc = lib.einsum('ijbc,aij->abc',t2_1_vcee, r2_evc, optimize=True)
                temp_evc = 0.25 * temp_1_evc
-               temp_evc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1[:ncvs,ncvs:,:,:], r2_evc, optimize=True)
-               temp_evc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1[:ncvs,ncvs:,:,:], r2_evc, optimize=True)
-               temp_evc += 0.25 * lib.einsum('jibc,aji->abc',t2_1[ncvs:,:ncvs,:,:], r2_evc, optimize=True)
+               temp_evc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_cvee, r2_evc, optimize=True)
+               temp_evc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_cvee, r2_evc, optimize=True)
+               temp_evc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_vcee, r2_evc, optimize=True)
 
                if isinstance(eris.ovvv, type(None)):
                    chnk_size = radc_ao2mo.calculate_chunk_size(adc)
@@ -524,10 +527,10 @@ def matvec(adc, M_ij=None, eris=None):
                temp_doubles = np.zeros((nvir,nvir,nvir))
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_eccc = dfadc.get_ovvv_df(adc, eris.L_ce, eris.L_ee, p, chnk_size).reshape(-1,nvir,nvir,nvir)
+                       eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                    else:
-                       eris_eccc = radc_ao2mo.unpack_eri_1(eris.eccc, nvir)
-
+                       eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
+                   eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
                    del eris_ovvv
                    k = eris_ceee.shape[0]
 
@@ -790,76 +793,76 @@ def get_trans_moments_orbital(adc, orb):
     return T
 
 
-def analyze_eigenvector(adc):
-
-    nocc = adc._nocc
-    nvir = adc._nvir
-
-    n_singles = nocc
-    evec_print_tol = adc.evec_print_tol
-    U = adc.U
-
-    logger.info(adc, "Number of occupied orbitals = %d", nocc)
-    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
-    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
-
-    for I in range(U.shape[1]):
-        U1 = U[:n_singles,I]
-        U2 = U[n_singles:,I].reshape(nvir,nocc,nocc)
-        U1dotU1 = np.dot(U1, U1)
-        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-
-        U_sq = U[:,I].copy()**2
-        ind_idx = np.argsort(-U_sq)
-        U_sq = U_sq[ind_idx]
-        U_sorted = U[ind_idx,I].copy()
-
-        U_sorted = U_sorted[U_sq > evec_print_tol**2]
-        ind_idx = ind_idx[U_sq > evec_print_tol**2]
-
-        singles_idx = []
-        doubles_idx = []
-        singles_val = []
-        doubles_val = []
-        iter_num = 0
-
-        for orb_idx in ind_idx:
-
-            if orb_idx < n_singles:
-                i_idx = orb_idx + 1
-                singles_idx.append(i_idx)
-                singles_val.append(U_sorted[iter_num])
-
-            if orb_idx >= n_singles:
-                aij_idx = orb_idx - n_singles
-                ij_rem = aij_idx % (nocc*nocc)
-                a_idx = aij_idx//(nocc*nocc)
-                i_idx = ij_rem//nocc
-                j_idx = ij_rem % nocc
-                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_idx + 1))
-                doubles_val.append(U_sorted[iter_num])
-
-            iter_num += 1
-
-        logger.info(adc, '%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
-                    adc.method ,I, U1dotU1, U2dotU2)
-
-        if singles_val:
-            logger.info(adc, "\n1h block: ")
-            logger.info(adc, "     i     U(i)")
-            logger.info(adc, "------------------")
-            for idx, print_singles in enumerate(singles_idx):
-                logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
-
-        if doubles_val:
-            logger.info(adc, "\n2h1p block: ")
-            logger.info(adc, "     i     j     a     U(i,j,a)")
-            logger.info(adc, "-------------------------------")
-            for idx, print_doubles in enumerate(doubles_idx):
-                logger.info(adc, '  %4d  %4d  %4d     %7.4f',
-                            print_doubles[1], print_doubles[2], print_doubles[0], doubles_val[idx])
-
-        logger.info(adc, "\n*************************************************************\n")
+#def analyze_eigenvector(adc):
+#
+#    nocc = adc._nocc
+#    nvir = adc._nvir
+#
+#    n_singles = nocc
+#    evec_print_tol = adc.evec_print_tol
+#    U = adc.U
+#
+#    logger.info(adc, "Number of occupied orbitals = %d", nocc)
+#    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
+#    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
+#
+#    for I in range(U.shape[1]):
+#        U1 = U[:n_singles,I]
+#        U2 = U[n_singles:,I].reshape(nvir,nocc,nocc)
+#        U1dotU1 = np.dot(U1, U1)
+#        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
+#
+#        U_sq = U[:,I].copy()**2
+#        ind_idx = np.argsort(-U_sq)
+#        U_sq = U_sq[ind_idx]
+#        U_sorted = U[ind_idx,I].copy()
+#
+#        U_sorted = U_sorted[U_sq > evec_print_tol**2]
+#        ind_idx = ind_idx[U_sq > evec_print_tol**2]
+#
+#        singles_idx = []
+#        doubles_idx = []
+#        singles_val = []
+#        doubles_val = []
+#        iter_num = 0
+#
+#        for orb_idx in ind_idx:
+#
+#            if orb_idx < n_singles:
+#                i_idx = orb_idx + 1
+#                singles_idx.append(i_idx)
+#                singles_val.append(U_sorted[iter_num])
+#
+#            if orb_idx >= n_singles:
+#                aij_idx = orb_idx - n_singles
+#                ij_rem = aij_idx % (nocc*nocc)
+#                a_idx = aij_idx//(nocc*nocc)
+#                i_idx = ij_rem//nocc
+#                j_idx = ij_rem % nocc
+#                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_idx + 1))
+#                doubles_val.append(U_sorted[iter_num])
+#
+#            iter_num += 1
+#
+#        logger.info(adc, '%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
+#                    adc.method ,I, U1dotU1, U2dotU2)
+#
+#        if singles_val:
+#            logger.info(adc, "\n1h block: ")
+#            logger.info(adc, "     i     U(i)")
+#            logger.info(adc, "------------------")
+#            for idx, print_singles in enumerate(singles_idx):
+#                logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
+#
+#        if doubles_val:
+#            logger.info(adc, "\n2h1p block: ")
+#            logger.info(adc, "     i     j     a     U(i,j,a)")
+#            logger.info(adc, "-------------------------------")
+#            for idx, print_doubles in enumerate(doubles_idx):
+#                logger.info(adc, '  %4d  %4d  %4d     %7.4f',
+#                            print_doubles[1], print_doubles[2], print_doubles[0], doubles_val[idx])
+#
+#        logger.info(adc, "\n*************************************************************\n")
 
 
 def analyze_spec_factor(adc):
@@ -1070,7 +1073,7 @@ class RADCIPCVS(radc.RADC):
     renormalize_eigenvectors = renormalize_eigenvectors
     get_properties = get_properties
     analyze_spec_factor = analyze_spec_factor
-    analyze_eigenvector = analyze_eigenvector
+    #analyze_eigenvector = analyze_eigenvector
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
 

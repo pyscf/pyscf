@@ -61,9 +61,9 @@ def get_imds(adc, eris=None):
     if eris is None:
         eris = adc.transform_integrals()
 
-    eris_ovov = eris.ovvo.transpose(0,1,3,2)
-    eris_OVOV = eris.OVVO.transpose(0,1,3,2)
-    eris_ovOV = eris.OVvo.transpose(3,2,0,1)
+    eris_ovov = np.array(eris.ovvo).transpose(0,1,3,2)
+    eris_OVOV = np.array(eris.OVVO).transpose(0,1,3,2)
+    eris_ovOV = np.array(eris.OVvo).transpose(3,2,0,1)
     eris_ceoe = eris_ovov[:ncvs,:,:,:].copy() 
     eris_CEOE = eris_OVOV[:ncvs,:,:,:].copy() 
     eris_ceOE = eris_ovOV[:ncvs,:,:,:].copy()
@@ -634,9 +634,10 @@ def matvec(adc, M_ij=None, eris=None):
     M_ij_a, M_ij_b = M_ij
 
     def sigma_(r):
+ 
         cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(adc.stdout, adc.verbose)
- 
+
         s = np.zeros((dim))
 
         r_a = r[s_a:f_a]
@@ -750,28 +751,28 @@ def matvec(adc, M_ij=None, eris=None):
 
         if (method == "adc(2)-x" or method == "adc(3)"):
 
-               eris_ovov = eris.ovvo.transpose(0,1,3,2)
-               eris_OVOV = eris.OVVO.transpose(0,1,3,2)
-               eris_OVov = eris.OVvo.transpose(0,1,3,2)
+               eris_ovov = np.array(eris.ovvo).transpose(0,1,3,2)
+               eris_OVOV = np.array(eris.OVVO).transpose(0,1,3,2)
+               eris_OVov = np.array(eris.OVvo).transpose(0,1,3,2)
 
-               eris_cccc = eris.oooo[:ncvs,:ncvs,:ncvs,:ncvs] 
-               eris_cccv = eris.oooo[:ncvs,:ncvs,:ncvs,ncvs:]
-               eris_ccvv = eris.oooo[:ncvs,:ncvs,ncvs:,ncvs:]
-               eris_CCCC = eris.OOOO[:ncvs,:ncvs,:ncvs,:ncvs]
-               eris_CCCV = eris.OOOO[:ncvs,:ncvs,:ncvs,ncvs:]
-               eris_CCVV = eris.OOOO[:ncvs,:ncvs,ncvs:,ncvs:]
-               eris_ccCC = eris.ooOO[:ncvs,:ncvs,:ncvs,:ncvs]
-               eris_ccCV = eris.ooOO[:ncvs,:ncvs,:ncvs,ncvs:]
-               eris_vvCC = eris.ooOO[ncvs:,ncvs:,:ncvs,:ncvs]
-               eris_ccVV = eris.ooOO[:ncvs,:ncvs,ncvs:,ncvs:]
-               eris_ccee = eris.oovv[:ncvs,:ncvs,:,:]
-               eris_vvee = eris.oovv[ncvs:,ncvs:,:,:]
-               eris_CCEE = eris.OOVV[:ncvs,:ncvs,:,:]
-               eris_VVEE = eris.OOVV[ncvs:,ncvs:,:,:]
-               eris_ccEE = eris.ooVV[:ncvs,:ncvs,:,:]
-               eris_vvEE = eris.ooVV[ncvs:,ncvs:,:,:]
-               eris_CCee = eris.OOvv[:ncvs,:ncvs,:,:]
-               eris_VVee = eris.OOvv[ncvs:,ncvs:,:,:]
+               eris_cccc = eris.oooo[:ncvs,:ncvs,:ncvs,:ncvs].copy() 
+               eris_cccv = eris.oooo[:ncvs,:ncvs,:ncvs,ncvs:].copy()
+               eris_ccvv = eris.oooo[:ncvs,:ncvs,ncvs:,ncvs:].copy()
+               eris_CCCC = eris.OOOO[:ncvs,:ncvs,:ncvs,:ncvs].copy()
+               eris_CCCV = eris.OOOO[:ncvs,:ncvs,:ncvs,ncvs:].copy()
+               eris_CCVV = eris.OOOO[:ncvs,:ncvs,ncvs:,ncvs:].copy()
+               eris_ccCC = eris.ooOO[:ncvs,:ncvs,:ncvs,:ncvs].copy()
+               eris_ccCV = eris.ooOO[:ncvs,:ncvs,:ncvs,ncvs:].copy()
+               eris_vvCC = eris.ooOO[ncvs:,ncvs:,:ncvs,:ncvs].copy()
+               eris_ccVV = eris.ooOO[:ncvs,:ncvs,ncvs:,ncvs:].copy()
+               eris_ccee = eris.oovv[:ncvs,:ncvs,:,:].copy() 
+               eris_vvee = eris.oovv[ncvs:,ncvs:,:,:].copy()
+               eris_CCEE = eris.OOVV[:ncvs,:ncvs,:,:].copy()
+               eris_VVEE = eris.OOVV[ncvs:,ncvs:,:,:].copy()
+               eris_ccEE = eris.ooVV[:ncvs,:ncvs,:,:].copy()
+               eris_vvEE = eris.ooVV[ncvs:,ncvs:,:,:].copy()
+               eris_CCee = eris.OOvv[:ncvs,:ncvs,:,:].copy()
+               eris_VVee = eris.OOvv[ncvs:,ncvs:,:,:].copy()
 
                eris_cvcv = eris.oooo[:ncvs,ncvs:,:ncvs,ncvs:].copy()   
                eris_CVCV = eris.OOOO[:ncvs,ncvs:,:ncvs,ncvs:].copy()  
@@ -1075,10 +1076,11 @@ def matvec(adc, M_ij=None, eris=None):
                temp_1_ecv = lib.einsum('Pqbc,aPq->abc',t2_1_a_cvee,r_aaa_ecv, optimize=True)
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ceee = dfadc.get_ceee_spin_df(adc, eris.L_ce_t, eris.L_ee_t, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                       eris_ceee = dfadc.get_ovvv_spin_df(adc, eris.Lce, eris.Lee, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
                    else :       
-                       eris_ceee = radc_ao2mo.unpack_eri_1(eris.ceee, nvir_a)
-                   k = eris_ceee.shape[0]
+                       eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
+                       eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
+                   k = eris_ovvv.shape[0]
                    temp_singles[a:a+k] += 0.5*lib.einsum('abc,Icab->I',temp_1_ecc, eris_ceee, optimize=True)
                    temp_singles[a:a+k] -= 0.5*lib.einsum('abc,Ibac->I',temp_1_ecc, eris_ceee, optimize=True)
                    temp_singles[a:a+k] += 0.5*lib.einsum('abc,Icab->I',temp_1_ecv, eris_ceee, optimize=True)
@@ -1188,9 +1190,10 @@ def matvec(adc, M_ij=None, eris=None):
                temp_1_ecv = lib.einsum('Pqbc,aPq->abc',t2_1_b_cvee,r_bbb_ecv, optimize=True)
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_CEEE = dfadc.get_ceee_spin_df(adc, eris.L_CE_t, eris.L_EE_t, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                       eris_CEEE = dfadc.get_ovvv_spin_df(adc, eris.LCE, eris.LEE, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
                    else :
-                       eris_CEEE = radc_ao2mo.unpack_eri_1(eris.CEEE, nvir_b)
+                       eris_OVVV = radc_ao2mo.unpack_eri_1(eris.OVVV, nvir_b)
+                       eris_CEEE = eris_OVVV[:ncvs,:,:,:].copy()
                    k = eris_CEEE.shape[0]
                    temp_singles[a:a+k] += 0.5*lib.einsum('abc,Icab->I',temp_1_ecc, eris_CEEE, optimize=True)
                    temp_singles[a:a+k] -= 0.5*lib.einsum('abc,Ibac->I',temp_1_ecc, eris_CEEE, optimize=True)
@@ -1283,9 +1286,10 @@ def matvec(adc, M_ij=None, eris=None):
                temp_2 = np.zeros((nvir_a, nvir_b, nvir_b))
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ceEE = dfadc.get_ceee_spin_df(adc, eris.L_ce_t, eris.L_EE_t, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                       eris_ceEE = dfadc.get_ovvv_spin_df(adc, eris.Lce, eris.LEE, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
                    else :
-                       eris_ceEE = radc_ao2mo.unpack_eri_1(eris.ceEE, nvir_b)
+                       eris_ovVV = radc_ao2mo.unpack_eri_1(eris.ovVV, nvir_b)
+                       eris_ceEE = eris_ovVV[:ncvs,:,:,:].copy()
                    k = eris_ceEE.shape[0]
 
                    s[s_a:f_a][a:a+k] += lib.einsum('abc,Icab->I',temp_1_ecc, eris_ceEE, optimize=True)
@@ -1316,9 +1320,10 @@ def matvec(adc, M_ij=None, eris=None):
                temp_2 = np.zeros((nvir_a, nvir_b, nvir_a))
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_CEee = dfadc.get_ceee_spin_df(adc, eris.L_CE_t, eris.L_ee_t, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                       eris_CEee = dfadc.get_ovvv_spin_df(adc, eris.LCE, eris.Lee, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
                    else :
-                       eris_CEee = radc_ao2mo.unpack_eri_1(eris.CEee, nvir_a)
+                       eris_OVvv = radc_ao2mo.unpack_eri_1(eris.OVvv, nvir_a)
+                       eris_CEee = eris_OVvv[:ncvs,:,:,:].copy()
                    k = eris_CEee.shape[0]
                    s[s_b:f_b][a:a+k] += lib.einsum('abc,Icab->I',temp_1_ecc, eris_CEee, optimize=True)
                    s[s_b:f_b][a:a+k] += lib.einsum('abc,Icab->I',temp_1_ecv, eris_CEee, optimize=True)
@@ -1507,7 +1512,6 @@ def matvec(adc, M_ij=None, eris=None):
                
         cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         s *= -1.0
-
         return s
 
     return sigma_

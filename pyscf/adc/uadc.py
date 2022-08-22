@@ -281,7 +281,7 @@ class UADC(lib.StreamObject):
         elif(self.method_type == "ip"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif(self.method_type == "ip-cvs"):
+        elif(self.method_type == "ip" and self.ncvs > 0):
             e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
@@ -333,8 +333,8 @@ class UADC(lib.StreamObject):
     def compute_dyson_mo(self):
         return self._adc_es.compute_dyson_mo()
 
-    def get_opdm(self):
-        return self._adc_es.get_opdm()
+    def make_rdm1(self):
+        return self._adc_es.make_rdm1()
 
 if __name__ == '__main__':
     from pyscf import scf
