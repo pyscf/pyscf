@@ -53,7 +53,7 @@ def make_rho_core(cell, mesh=None, precision=None, atm_id=None):
 def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    from . multigrid import _get_j_pass2
+    from .multigrid import _get_j_pass2
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -78,7 +78,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
 
     # from get_jvloc_G0 function
     #vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
-    vpp = _get_j_pass2(mydf, vpplocG, kpts_lst)[0]
+    vpp = _get_j_pass2(mydf, vpplocG, kpts=kpts_lst)[0]
     vpp2 = pp_int.get_pp_loc_part2(cell, kpts_lst)
     for k, kpt in enumerate(kpts_lst):
         vpp[k] += vpp2[k]

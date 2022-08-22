@@ -88,7 +88,6 @@ typedef struct {
 // They should not be used in this function.
 } CINTEnvVars;
 #endif
-#endif
 
 typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
                              double complex fac, double *Gv, double *b,

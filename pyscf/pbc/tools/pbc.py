@@ -25,7 +25,7 @@ from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
 libpbc = lib.load_library('libpbc')
-FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'FFTW')
+FFT_ENGINE = getattr(__config__, 'pbc_tools_pbc_fft_engine', 'BLAS')
 
 def _fftn_blas(f, mesh):
     Gx = np.fft.fftfreq(mesh[0])
@@ -792,7 +792,7 @@ def gradient_by_fdiff(cell, f, mesh=None):
     return df.reshape(3,-1)
 
 def laplacian_gs(f_gs, Gv):
-    '''
+    r'''
     Compute the G-space components of :math:`\Delta f(r)`
     given :math:`f(G)` and :math:`G`,
     which is equivalent to einsum('np,p->np', f_gs, -G2)
@@ -806,7 +806,7 @@ def laplacian_gs(f_gs, Gv):
     return out
 
 def laplacian_by_fft(f, Gv, mesh):
-    '''
+    r'''
     Compute :math:`\Delta f(r)` by FFT.
     '''
     ng, dim = Gv.shape

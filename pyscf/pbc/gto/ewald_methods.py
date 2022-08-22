@@ -54,7 +54,7 @@ def bspline(u, ng, n=4, deriv=0):
     b = np.exp(2*np.pi*1j*(n-1)*m/ng)
     tmp = 0
     for k in range(n-1):
-        tmp += _bspline(k+1, n) * np.exp(2*np.pi*1j*m*k/ng) 
+        tmp += _bspline(k+1, n) * np.exp(2*np.pi*1j*m*k/ng)
     b /= tmp
     if n % 2 > 0 and ng % 2 == 0 :
         b[ng//2] = 0
@@ -80,7 +80,7 @@ def _get_ewald_direct(cell, ew_eta=None, ew_cut=None):
         Lall.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_double(ew_eta), ctypes.c_double(ew_cut),
         ctypes.c_int(natm), ctypes.c_int(nL))
-    return ewovrl[0] 
+    return ewovrl[0]
 
 def _get_ewald_direct_nuc_grad(cell, ew_eta=None, ew_cut=None):
     if ew_eta is None:
@@ -214,7 +214,7 @@ def particle_mesh_ewald_nuc_grad(cell, ew_eta=None, ew_cut=None,
 
     ng = np.prod(mesh)
     bK = b * mesh[:,None]
-    grad_rec = np.zeros_like(grad_dir) 
+    grad_rec = np.zeros_like(grad_dir)
     for ia in range(len(chargs)):
         mask = np.ix_(idx[ia], idy[ia], idz[ia])
         dQ_s = np.einsum('x,y,z->xyz', dMx_s[ia], My_s[ia], Mz_s[ia])

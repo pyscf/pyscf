@@ -363,7 +363,7 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
         const int kseg0[] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
         const int kseg1[] = {4,9,12,10,6,6,12,12,6,8,6,12,12,9,12,9,4,6,6,4};
 
-        const int *seg, *vseg, *fseg, kseg;
+        const int *seg, *vseg, *fseg, *kseg;
         if (spin == XC_POLARIZED) {
                 seg = seg1;
                 vseg = vseg1;
@@ -425,13 +425,41 @@ static void _eval_xc_mgga(xc_func_type *func_x, int spin, int np,
 
         int iblk;
         double *prho, *psigma, *plapl, *ptau, *pex;
-        double *pvrho, *pvsigma, *pvlapl, *pvtau;
-        double *pv2rho2, *pv2rhosigma, *pv2sigma2, *pv2lapl2, *pv2tau2;
-        double *pv2rholapl, *pv2rhotau, *pv2sigmalapl, *pv2sigmatau, *pv2lapltau;
-        double *pv3rho3, *pv3rho2sigma, *pv3rhosigma2, *pv3sigma3, *pv3rho2lapl;
-        double *pv3rho2tau, *pv3rhosigmalapl, *pv3rhosigmatau, *pv3rholapl2;
-        double *pv3rholapltau, *pv3rhotau2, *pv3sigma2lapl, *pv3sigma2tau, *pv3sigmalapl2;
-        double *pv3sigmalapltau, *pv3sigmatau2, *pv3lapl3, *pv3lapl2tau, *pv3lapltau2, *pv3tau3;
+        double *pvrho   = NULL;
+        double *pvsigma = NULL;
+        double *pvlapl  = NULL;
+        double *pvtau   = NULL;
+        double *pv2rho2      = NULL;
+        double *pv2rhosigma  = NULL;
+        double *pv2sigma2    = NULL;
+        double *pv2lapl2     = NULL;
+        double *pv2tau2      = NULL;
+        double *pv2rholapl   = NULL;
+        double *pv2rhotau    = NULL;
+        double *pv2sigmalapl = NULL;
+        double *pv2sigmatau  = NULL;
+        double *pv2lapltau   = NULL;
+        double *pv3rho3         = NULL;
+        double *pv3rho2sigma    = NULL;
+        double *pv3rhosigma2    = NULL;
+        double *pv3sigma3       = NULL;
+        double *pv3rho2lapl     = NULL;
+        double *pv3rho2tau      = NULL;
+        double *pv3rhosigmalapl = NULL;
+        double *pv3rhosigmatau  = NULL;
+        double *pv3rholapl2     = NULL;
+        double *pv3rholapltau   = NULL;
+        double *pv3rhotau2      = NULL;
+        double *pv3sigma2lapl   = NULL;
+        double *pv3sigma2tau    = NULL;
+        double *pv3sigmalapl2   = NULL;
+        double *pv3sigmalapltau = NULL;
+        double *pv3sigmatau2    = NULL;
+        double *pv3lapl3        = NULL;
+        double *pv3lapl2tau     = NULL;
+        double *pv3lapltau2     = NULL;
+        double *pv3tau3         = NULL;
+
         #pragma omp for schedule(static)
         for (iblk = 0; iblk < nblk; iblk++) {
                 prho = rho + iblk * blk_size * seg[0];

@@ -1,6 +1,7 @@
 import ctypes
 import numpy as np
 from pyscf import lib
+from pyscf.lib import logger
 
 libpbc = lib.load_library('libpbc')
 

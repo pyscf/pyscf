@@ -23,13 +23,11 @@ add_dependencies(dft cgto cvhf np_helper pbc)
 set_target_properties(dft PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(dft cvhf cgto cint np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
-
 if(ENABLE_LIBXSMM)
   add_definitions(-DHAVE_LIBXSMM)
-  target_link_libraries(dft cvhf cgto cint pbc np_helper xsmm ${BLAS_LIBRARIES})
+  target_link_libraries(dft cvhf cgto cint np_helper pbc xsmm ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 else()
-  target_link_libraries(dft cvhf cgto cint pbc np_helper ${BLAS_LIBRARIES})
+  target_link_libraries(dft cvhf cgto cint np_helper pbc ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 endif()
 
 if(ENABLE_LIBXC)
@@ -45,4 +43,3 @@ set_target_properties(xcfun_itrf PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 target_link_libraries(xcfun_itrf xcfun ${OPENMP_C_PROPERTIES})
 endif()
-

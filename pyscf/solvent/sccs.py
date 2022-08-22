@@ -117,7 +117,6 @@ def _pgd(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
         #alpha = lib.vdot(v, r) / lib.vdot(v,Av)
         #alpha = lib.vdot(r,Av) / lib.vdot(Av,Av)
         alpha = mixing_factor
-        
         r = lib.subtract(r, lib.multiply(alpha, Av), out=r)
         phi_tot = lib.add(phi_tot, lib.multiply(alpha, v), out=phi_tot)
 
@@ -269,7 +268,8 @@ def _mgpgd(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
             error, _ = v_cycle(error, r_sub, r_sub, meshes, ilevel+1)
 
             # Prolongation and Correction
-            phi_tot = lib.add(phi_tot, lib.multiply(mixing_factor, tools.prolong_by_fft(error, mesh, submesh)), out=phi_tot)
+            tmp = lib.multiply(mixing_factor, tools.prolong_by_fft(error, mesh, submesh))
+            phi_tot = lib.add(phi_tot, tmp, out=phi_tot)
             r = residual(phi_tot, rhs, mesh, aux_data)
 
         # Post-Smoothing
@@ -349,6 +349,7 @@ def _pcg(sccs, rho_solute, eps, coulG=None, Gv=None, mesh=None,
 
     fac1 = fac * numpy.sqrt(lib.vdot(rho_solute, rho_solute))
     invs_sqrt_eps = lib.reciprocal(sqrt_eps)
+    vr = vr_old = None
     for i in range(max_cycle):
         r_norm = numpy.sqrt(lib.vdot(r,r)) / fac1
         logger.info(sccs, 'cycle= %d  res= %4.3g', i, r_norm)
@@ -480,7 +481,7 @@ def kernel(sccs, rho_elec, rho_core=None, method="mixing",
 
     Gv = []
     coulG = []
-    log_eps1 = []    
+    log_eps1 = []
     for i, submesh in enumerate(meshes):
         Gv.append(cell.get_Gv(mesh=submesh))
         coulG.append(tools.get_coulG(cell, mesh=submesh))

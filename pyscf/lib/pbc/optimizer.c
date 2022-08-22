@@ -50,7 +50,6 @@ void PBCdel_optimizer(PBCOpt **opt)
         *opt = NULL;
 }
 
-
 int PBCnoscreen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
 {
         return 1;
@@ -69,9 +68,24 @@ int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
         rirj[0] = ri[0] - rj[0];
         rirj[1] = ri[1] - rj[1];
         rirj[2] = ri[2] - rj[2];
-        //double rr = SQUARE(rirj);
+        double rr = SQUARE(rirj);
+        return (rr < opt->rrcut[ish] || rr < opt->rrcut[jsh]);
+}
+
+int PBCrcut_screen_dist(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
+{
+        if (opt == NULL) {
+                return 1; // no screen
+        }
+        const int ish = shls[0];
+        const int jsh = shls[1];
+        const double *ri = env + atm[bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS+PTR_COORD];
+        const double *rj = env + atm[bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS+PTR_COORD];
+        double rirj[3];
+        rirj[0] = ri[0] - rj[0];
+        rirj[1] = ri[1] - rj[1];
+        rirj[2] = ri[2] - rj[2];
         double r = sqrt(SQUARE(rirj));
-        //return (rr < opt->rrcut[ish] || rr < opt->rrcut[jsh]);
         return r < opt->rcut[ish] + opt->rcut[jsh];
 }
 
@@ -81,12 +95,26 @@ void PBCset_rcut_cond(PBCOpt *opt, double *rcut,
         if (opt->rrcut != NULL) {
                 free(opt->rrcut);
         }
-        opt->rcut = (double *)malloc(sizeof(double) * nbas);
+        opt->rrcut = (double *)malloc(sizeof(double) * nbas);
         opt->fprescreen = &PBCrcut_screen;
 
         int i;
         for (i = 0; i < nbas; i++) {
-        //        opt->rrcut[i] = rcut[i] * rcut[i];
+                opt->rrcut[i] = rcut[i] * rcut[i];
+        }
+}
+
+void PBCset_rcut_cond_dist(PBCOpt *opt, double *rcut,
+                           int *atm, int natm, int *bas, int nbas, double *env)
+{
+        if (opt->rcut != NULL) {
+                free(opt->rcut);
+        }
+        opt->rcut = (double *)malloc(sizeof(double) * nbas);
+        opt->fprescreen = &PBCrcut_screen_dist;
+
+        int i;
+        for (i = 0; i < nbas; i++) {
                 opt->rcut[i] = rcut[i];
         }
 }

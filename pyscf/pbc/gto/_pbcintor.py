@@ -35,16 +35,19 @@ class PBCOpt(object):
         if precision is None: precision = cell.precision
         if cell.rcut_by_shell_radius:
             rcut = cell.rcut_by_shells(precision)
+            fn_set_rcut_cond = getattr(libpbc, 'PBCset_rcut_cond_dist')
         else:
             rcut = numpy.array([cell.bas_rcut(ib, precision)
                                 for ib in range(cell.nbas)])
+            fn_set_rcut_cond = getattr(libpbc, 'PBCset_rcut_cond')
+
         natm = ctypes.c_int(cell._atm.shape[0])
         nbas = ctypes.c_int(cell._bas.shape[0])
-        libpbc.PBCset_rcut_cond(self._this,
-                                rcut.ctypes.data_as(ctypes.c_void_p),
-                                cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                                cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
-                                cell._env.ctypes.data_as(ctypes.c_void_p))
+        fn_set_rcut_cond(self._this,
+                         rcut.ctypes.data_as(ctypes.c_void_p),
+                         cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
+                         cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                         cell._env.ctypes.data_as(ctypes.c_void_p))
         return self
 
     def del_rcut_cond(self):
@@ -59,5 +62,5 @@ class PBCOpt(object):
 
 class _CPBCOpt(ctypes.Structure):
     _fields_ = [('rrcut', ctypes.c_void_p),
+                ('rcut', ctypes.c_void_p),
                 ('fprescreen', ctypes.c_void_p)]
-

@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
-#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 '''Multigrid to compute DFT integrals'''

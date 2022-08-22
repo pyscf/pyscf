@@ -8,7 +8,7 @@ rm deps/include/cint*
 rm deps/lib/libcint*
 mkdir build; cd build
 #cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF ..
-cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF ..
+cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DCUSTOM_CINT_GIT=https://github.com/fishjojo/libcint.git -DCUSTOM_CINT_GIT_TAG=dev ..
 make -j4
 cd ..
 rm -Rf build
