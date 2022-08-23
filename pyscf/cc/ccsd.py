@@ -44,7 +44,8 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
            tolnormt=1e-6, verbose=None, callback=None):
     log = logger.new_logger(mycc, verbose)
-    if eris is None: eris = mycc.ao2mo(mycc.mo_coeff)
+    if eris is None:
+        eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
@@ -1040,7 +1041,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.init_amps(eris)[1:]
     def init_amps(self, eris=None):
         time0 = logger.process_clock(), logger.perf_counter()
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
         e_hf = self.e_hf
         if e_hf is None: e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         mo_e = eris.mo_energy

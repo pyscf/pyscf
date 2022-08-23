@@ -1007,8 +1007,7 @@ class CISD(lib.StreamObject):
             MP2 energy and initial guess(es) for CISD coefficients.
 
         '''
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
         mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
