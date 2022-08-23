@@ -1009,7 +1009,6 @@ class CISD(lib.StreamObject):
         '''
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         nocc = self.nocc
         mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])

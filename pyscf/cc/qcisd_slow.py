@@ -173,6 +173,8 @@ class QCISD(rccsd.RCCSD):
             self.check_sanity()
         self.dump_flags()
 
+        self.e_hf = self.get_e_hf()
+
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
 

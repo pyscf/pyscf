@@ -39,7 +39,6 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
-        mp.e_hf = mp.get_e_hf(mo_coeff=mo_coeff)
 
     if mo_energy is None:
         mo_energy = eris.mo_energy

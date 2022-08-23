@@ -44,9 +44,7 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
            tolnormt=1e-6, verbose=None, callback=None):
     log = logger.new_logger(mycc, verbose)
-    if eris is None:
-        eris = mycc.ao2mo(mycc.mo_coeff)
-        mycc.e_hf = mycc.get_e_hf(mo_coeff=mycc.mo_coeff)
+    if eris is None: eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
@@ -701,9 +699,7 @@ def energy(mycc, t1=None, t2=None, eris=None):
     '''CCSD correlation energy'''
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
-    if eris is None:
-        eris = mycc.ao2mo()
-        mycc.e_hf = mycc.get_e_hf()
+    if eris is None: eris = mycc.ao2mo()
 
     nocc, nvir = t1.shape
     fock = eris.fock
@@ -1044,9 +1040,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.init_amps(eris)[1:]
     def init_amps(self, eris=None):
         time0 = logger.process_clock(), logger.perf_counter()
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        e_hf = self.e_hf
+        if e_hf is None: e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         mo_e = eris.mo_energy
         nocc = self.nocc
         nvir = mo_e.size - nocc
@@ -1066,7 +1062,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.emp2 = emp2.real
 
         logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
-                    self.e_hf + self.emp2, self.emp2)
+                    e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -1127,9 +1123,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import ccsd_t
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return ccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,

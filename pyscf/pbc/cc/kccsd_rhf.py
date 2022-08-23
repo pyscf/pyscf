@@ -626,9 +626,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         from pyscf.pbc.cc import kccsd_t_rhf
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf()
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return kccsd_t_rhf.kernel(self, eris, t1, t2, self.verbose)
 
     def ipccsd(self, nroots=1, left=False, koopmans=False, guess=None,

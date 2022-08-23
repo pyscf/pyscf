@@ -393,7 +393,6 @@ class GCCSD(gccsd.GCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, **kwargs):
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf()
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if getattr(eris, 'orbspin', None) is not None:
             self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
@@ -421,7 +420,6 @@ class GCCSD(gccsd.GCCSD):
         if t2 is None: t2 = self.t2
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-            self.e_hf = self.get_e_hf()
         return kccsd_t.kernel(self, eris, t1, t2, self.verbose)
 
     def amplitudes_to_vector(self, t1, t2):
