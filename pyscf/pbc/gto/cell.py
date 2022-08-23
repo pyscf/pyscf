@@ -904,7 +904,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.natm == 0:
         return 0
 
-    if cell.dimension == 3:
+    if cell.dimension == 3 and cell.use_particle_mesh_ewald:
         from pyscf.pbc.gto import ewald_methods
         return ewald_methods.particle_mesh_ewald(cell, ew_eta, ew_cut)
 
@@ -1204,6 +1204,9 @@ class Cell(mole.Mole):
             If True, radius cutoff is determined by shell radius;
             otherwise, it is determined by overlap integral.
             Default value is False;
+        use_particle_mesh_ewald : bool
+            If True, use particle mesh ewald to compute nuclear repulsion.
+            Default value is False, meaning using classical ewald summation.
 
     (See other attributes in :class:`Mole`)
 
@@ -1233,6 +1236,7 @@ class Cell(mole.Mole):
         #       its energy.
         self.low_dim_ft_type = None
         self.rcut_by_shell_radius = False
+        self.use_particle_mesh_ewald = False
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -1356,7 +1360,8 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               pseudo=None, basis=None, h=None, dimension=None, rcut= None,
-              ecp=None, low_dim_ft_type=None, rcut_by_shell_radius=None, *args, **kwargs):
+              ecp=None, low_dim_ft_type=None, rcut_by_shell_radius=None,
+              use_particle_mesh_ewald=None, *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
         you need call this function to refresh the internal data of Cell.
@@ -1408,6 +1413,7 @@ class Cell(mole.Mole):
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
         if rcut_by_shell_radius is not None: self.rcut_by_shell_radius = rcut_by_shell_radius
+        if use_particle_mesh_ewald is not None: self.use_particle_mesh_ewald = use_particle_mesh_ewald
 
         if 'unit' in kwargs:
             self.unit = kwargs['unit']

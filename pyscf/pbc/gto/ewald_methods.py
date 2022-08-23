@@ -1,6 +1,25 @@
+#!/usr/bin/env python
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Xing Zhang <zhangxing.nju@gmail.com>
+#
+
 import ctypes
 import numpy as np
 import scipy
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import mole
@@ -9,7 +28,7 @@ from pyscf.pbc.gto.cell import _cut_mesh_for_ewald
 
 libpbc = lib.load_library('libpbc')
 
-INTERPOLATION_ORDER = 10
+INTERPOLATION_ORDER = getattr(__config__, 'pyscf_pbc_ewald_bspline_order', 10)
 
 def _bspline(u, n=4):
     fac = 1. / scipy.special.factorial(n-1)
@@ -244,6 +263,9 @@ def ewald_nuc_grad(cell, ew_eta=None, ew_cut=None):
         ew_eta = cell.get_ewald_params()[0]
     if ew_cut is None:
         ew_cut = cell.get_ewald_params()[1]
+
+    if cell.dimension == 3 and cell.use_particle_mesh_ewald:
+        return particle_mesh_ewald_nuc_grad(cell, ew_eta=ew_eta, ew_cut=ew_cut)
 
     grad_dir = _get_ewald_direct_nuc_grad(cell, ew_eta, ew_cut)
     grad_rec = np.zeros_like(grad_dir, order="C")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -1126,6 +1126,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
 def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
                kpts_band=None, verbose=None):
+    raise NotImplementedError
     if kpts is None: kpts = mydf.kpts
     #log = logger.new_logger(mydf, verbose)
     cell = mydf.cell

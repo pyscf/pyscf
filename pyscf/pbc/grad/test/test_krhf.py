@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import unittest
+from pyscf import lib
+from pyscf.pbc import scf, gto, grad
 import numpy as np
 
 def setUpModule():
@@ -40,11 +42,6 @@ def tearDownModule():
     cell.stdout.close()
     del cell
 
-def tearDownModule():
-    global cell, a, kpts, disp
-    cell.stdout.close()
-    del cell, a, kpts, disp
-
 
 class KnownValues(unittest.TestCase):
     def test_krhf_grad(self):
@@ -53,15 +50,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(g), -0.9017171774435333, 6)
 
         mfs = g_scan.base.as_scanner()
-        e1 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [.5*a, .5*a, .5*a + 0.01 + disp/2.0]]])
-        e2 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [.5*a, .5*a, .5*a + 0.01 - disp/2.0]]])
-        self.assertAlmostEqual(g[1,2], (e1-e2)/disp, 7)
-
-    def test_grad_nuc(self):
-        gnuc = grad.krhf.grad_nuc(cell)
-        gref = np.asarray([[0, 0, -8.75413236e-03],
-                           [0, 0, 8.75413236e-03]])
-        self.assertAlmostEqual(abs(gnuc-gref).max(), 0, 9)
+        e1 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391+disp/2.0]]])
+        e2 = mfs([['C', [0.0, 0.0, 0.0]], ['C', [1.685068664391,1.685068664391,1.685068664391-disp/2.0]]])
+        self.assertAlmostEqual(g[1,2], (e1-e2)/disp, 6)
 
 if __name__ == "__main__":
     print("Full Tests for KRHF Gradients")
