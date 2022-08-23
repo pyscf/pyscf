@@ -212,7 +212,8 @@ static void _sort_kks1(double *outR, double *outI, double *bufkkR, double *bufkk
         size_t naoj = jp1 - jp0;
         size_t naok = kp1 - kp0;
         size_t nao2 = naoi * naoj;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
+        size_t n3c = nao3 * comp;
         size_t off;
         double *pbufR, *pbufI;
 
@@ -231,8 +232,8 @@ static void _sort_kks1(double *outR, double *outI, double *bufkkR, double *bufkk
                                 }
                         }
                 } }
-                outR += n3c;
-                outI += n3c;
+                outR += nao3;
+                outI += nao3;
                 bufkkR += KKdij * dk;
                 bufkkI += KKdij * dk;
         }
@@ -275,7 +276,8 @@ static void _sort_kks2(double *outR, double *outI, double *bufkkR, double *bufkk
         size_t ijoff = (size_t)ip0 * (ip0 + 1) / 2;
         size_t nao2 = (size_t)ip1 * (ip1 + 1) / 2 - ijoff;
         size_t naok = kp1 - kp0;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
+        size_t n3c = nao3 * comp;
         size_t off;
         double *pbufR, *pbufI;
 
@@ -295,8 +297,8 @@ static void _sort_kks2(double *outR, double *outI, double *bufkkR, double *bufkk
                                         }
                                 }
                         } }
-                        outR += n3c;
-                        outI += n3c;
+                        outR += nao3;
+                        outI += nao3;
                         bufkkR += KKdij * dk;
                         bufkkI += KKdij * dk;
                 }
@@ -316,8 +318,8 @@ static void _sort_kks2(double *outR, double *outI, double *bufkkR, double *bufkk
                                         }
                                 }
                         } }
-                        outR += n3c;
-                        outI += n3c;
+                        outR += nao3;
+                        outI += nao3;
                         bufkkR += KKdij * dk;
                         bufkkI += KKdij * dk;
                 }
@@ -457,7 +459,8 @@ static void _sort_ks1(double *outR, double *outI, double *bufkR, double *bufkI,
         size_t naoj = jp1 - jp0;
         size_t naok = kp1 - kp0;
         size_t nao2 = naoi * naoj;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
+        size_t n3c = nao3 * comp;
         size_t off;
         double *pbufR, *pbufI;
 
@@ -475,8 +478,8 @@ static void _sort_ks1(double *outR, double *outI, double *bufkR, double *bufkI,
                                 }
                         }
                 } }
-                outR += n3c;
-                outI += n3c;
+                outR += nao3;
+                outI += nao3;
                 bufkR += Kdij * dk;
                 bufkI += Kdij * dk;
         }
@@ -516,7 +519,8 @@ static void _sort_ks2(double *outR, double *outI, double *bufkR, double *bufkI,
         size_t ijoff = (size_t)ip0 * (ip0 + 1) / 2;
         size_t nao2 = (size_t)ip1 * (ip1 + 1) / 2 - ijoff;
         size_t naok = kp1 - kp0;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
+        size_t n3c = nao3 * comp;
         size_t off;
         double *pbufR, *pbufI;
 
@@ -535,8 +539,8 @@ static void _sort_ks2(double *outR, double *outI, double *bufkR, double *bufkI,
                                         }
                                 }
                         } }
-                        outR += n3c;
-                        outI += n3c;
+                        outR += nao3;
+                        outI += nao3;
                         bufkR += Kdij * dk;
                         bufkI += Kdij * dk;
                 }
@@ -555,8 +559,8 @@ static void _sort_ks2(double *outR, double *outI, double *bufkR, double *bufkI,
                                         }
                                 }
                         } }
-                        outR += n3c;
-                        outI += n3c;
+                        outR += nao3;
+                        outI += nao3;
                         bufkR += Kdij * dk;
                         bufkI += Kdij * dk;
                 }
@@ -624,8 +628,10 @@ static void _fill_k(int (*intor)(), FPtrSort fsort,
 
                         for (i = 0; i < d3c; i++) {
                         for (k = 0; k < nkpts; k++) {
-                                bufkR[i*nkpts+k] += bufLkR[i*nkpts+k] * expLkR[iL*nkpts+k] + bufLkI[i*nkpts+k] * expLkI[iL*nkpts+k];
-                                bufkI[i*nkpts+k] += bufLkI[i*nkpts+k] * expLkR[iL*nkpts+k] - bufLkR[i*nkpts+k] * expLkI[iL*nkpts+k];
+                                bufkR[i*nkpts+k] += bufLkR[i*nkpts+k] * expLkR[iL*nkpts+k]
+                                                  + bufLkI[i*nkpts+k] * expLkI[iL*nkpts+k];
+                                bufkI[i*nkpts+k] += bufLkI[i*nkpts+k] * expLkR[iL*nkpts+k]
+                                                  - bufLkR[i*nkpts+k] * expLkI[iL*nkpts+k];
                         } }
                         empty = 0;
                 }
@@ -690,7 +696,7 @@ static void _sort_gs1(double *outR, double *outI, double *bufR, double *bufI,
         size_t naoj = jp1 - jp0;
         size_t naok = kp1 - kp0;
         size_t nao2 = naoi * naoj;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
         size_t off;
 
         for (ic = 0; ic < comp; ic++) {
@@ -701,7 +707,7 @@ static void _sort_gs1(double *outR, double *outI, double *bufR, double *bufI,
                                 outR[off+k] = bufR[n+k*dij];
                         }
                 } }
-                outR += n3c;
+                outR += nao3;
                 bufR += dijk;
         }
 }
@@ -740,7 +746,7 @@ static void _sort_gs2(double *outR, double *outI, double *bufR, double *bufI,
         size_t ijoff = (size_t)ip0 * (ip0 + 1) / 2;
         size_t nao2 = (size_t)ip1 * (ip1 + 1) / 2 - ijoff;
         size_t naok = kp1 - kp0;
-        size_t n3c = nao2 * naok;
+        size_t nao3 = nao2 * naok;
         size_t off;
 
         if (i0 > j0) {
@@ -752,7 +758,7 @@ static void _sort_gs2(double *outR, double *outI, double *bufR, double *bufI,
                                         outR[off+k] = bufR[k*dij+n];
                                 }
                         } }
-                        outR += n3c;
+                        outR += nao3;
                         bufR += dijk;
                 }
         } else {
@@ -765,7 +771,7 @@ static void _sort_gs2(double *outR, double *outI, double *bufR, double *bufI,
                                         outR[off+k] = bufR[k*dij+n];
                                 }
                         } }
-                        outR += n3c;
+                        outR += nao3;
                         bufR += dijk;
                 }
         }

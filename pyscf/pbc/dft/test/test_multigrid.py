@@ -120,7 +120,7 @@ class KnownValues(unittest.TestCase):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, kpts=kpts)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 8)
-        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
 
     def test_multigrid_kuks(self):
         mf = dft.KUKS(cell_he)
@@ -197,8 +197,8 @@ class KnownValues(unittest.TestCase):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
         n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, hermi=1, kpts=kpts, with_j=True)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 8)
-        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
-        self.assertAlmostEqual(lib.fp(ref), -0.05697304864467462+0.6990367789096609j, 9)
+        self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 7)
+        self.assertAlmostEqual(lib.fp(ref), -0.05697304864467462+0.6990367789096609j, 8)
 
     def test_eval_rhoG_orth_kpts(self):
         numpy.random.seed(9)
