@@ -266,9 +266,6 @@ class KMP2_stagger(kmp2.KMP2):
         if flag_submesh is True:
             #   Choice 1: Use two staggered submeshes of mf.kpts of half size along each dimension
             if np.any( nks % 2) :
-                print(
-                    'The k-point mesh in the input mf has odd size in certain dimension.',
-                    'Cannot use its submeshes for staggered mesh calculation!')
                 log = logger.Logger(self.stdout, self.verbose)
                 log.warn(
                     'The k-point mesh in the input mf has odd size in certain dimension. \n'
