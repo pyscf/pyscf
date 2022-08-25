@@ -162,7 +162,7 @@ class UADC(lib.StreamObject):
         self.U = None
         self.P = None
         self.X = (None,)
-        self.ncvs = 1
+        self.ncvs = None
 
         keys = set(('tol_residual','conv_tol', 'e_corr', 'method',
                     'method_type', 'mo_coeff', 'mol', 'mo_energy_b',
@@ -279,10 +279,11 @@ class UADC(lib.StreamObject):
             e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
 
-        elif(self.method_type == "ip" and self.ncvs > 0):
-            e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+            if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
+                e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+            else:
+                e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
 

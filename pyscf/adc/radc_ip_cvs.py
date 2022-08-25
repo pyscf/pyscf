@@ -489,10 +489,10 @@ def matvec(adc, M_ij=None, eris=None):
 
                eris_ovoo = eris.ovoo
                t2_1 = adc.t2[0]
-               t2_1_ccee = t2_1[:ncvs,:ncvs,:,:]
-               t2_1_cvee = t2_1[:ncvs,ncvs:,:,:]
-               t2_1_vcee = t2_1[ncvs:,:ncvs,:,:]
-
+               t2_1_ccee = t2_1[:ncvs,:ncvs,:,:].copy() 
+               t2_1_cvee = t2_1[:ncvs,ncvs:,:,:].copy()
+               t2_1_vcee = t2_1[ncvs:,:ncvs,:,:].copy()
+               del t2_1
 ################ ADC(3) i - kja block and ajk - i ############################
 
                eris_oecc = eris_ovoo[:,:,:ncvs,:ncvs].copy() 
@@ -502,7 +502,7 @@ def matvec(adc, M_ij=None, eris=None):
                eris_ceco = eris_ovoo[:ncvs,:,:ncvs,:].copy()
                eris_cevo = eris_ovoo[:ncvs,:,ncvs:,:].copy()
 
-               temp_1_ecc = lib.einsum('ijbc,aij->abc',t2_1[:ncvs,:ncvs,:,:], r2_ecc, optimize=True)
+               temp_1_ecc = lib.einsum('ijbc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
                temp_ecc = 0.25 * temp_1_ecc
                temp_ecc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
                temp_ecc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
@@ -527,11 +527,11 @@ def matvec(adc, M_ij=None, eris=None):
                temp_doubles = np.zeros((nvir,nvir,nvir))
                for p in range(0,ncvs,chnk_size):
                    if getattr(adc, 'with_df', None):
-                       eris_ovvv = dfadc.get_ovvv_df(adc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir,nvir,nvir)
+                       eris_ceee = dfadc.get_ovvv_df(adc, eris.Lce, eris.Lee, p, chnk_size).reshape(-1,nvir,nvir,nvir)
                    else:
                        eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
-                   eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
-                   del eris_ovvv
+                       eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
+                       del eris_ovvv
                    k = eris_ceee.shape[0]
 
                    temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_ecc, eris_ceee, optimize=True)
@@ -545,9 +545,9 @@ def matvec(adc, M_ij=None, eris=None):
                    temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_1_evc, eris_ceee, optimize=True)
                    temp_doubles = lib.einsum('i,icab->cba',r1[a:a+k],eris_ceee,optimize=True)
                    s[s1:f1] += temp_singles
-                   s[s2_ecc:f2_ecc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1[:ncvs,:ncvs,:,:], optimize=True).reshape(-1)
-                   s[s2_ecv:f2_ecv] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1[ncvs:,:ncvs,:,:], optimize=True).reshape(-1)
-                   s[s2_evc:f2_evc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1[:ncvs,ncvs:,:,:], optimize=True).reshape(-1)
+                   s[s2_ecc:f2_ecc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_ccee, optimize=True).reshape(-1)
+                   s[s2_ecv:f2_ecv] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_vcee, optimize=True).reshape(-1)
+                   s[s2_evc:f2_evc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_cvee, optimize=True).reshape(-1)
                    del eris_ceee, temp_singles, temp_doubles
                    a += k
 
@@ -559,10 +559,12 @@ def matvec(adc, M_ij=None, eris=None):
                temp_1_v_b  = -lib.einsum('I,Ibkl->kbl',r1,eris_cevo, optimize=True)
                temp_1_v = temp_1_v_a + temp_1_v_b
 
+               t2_1 = adc.t2[0]
                t2_1_coee = t2_1[:ncvs,:,:,:].copy() 
                t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
                t2_1_voee = t2_1[ncvs:,:,:,:].copy()
                t2_1_ovee = t2_1[:,ncvs:,:,:].copy()
+               del t2_1
 
                temp_ecc  = lib.einsum('Kbl,lJba->aJK',temp_1_c,t2_1_ocee,optimize=True)
                temp_ecc += lib.einsum('Kbl,Jlab->aJK',temp_1_c_a,t2_1_coee,optimize=True)
@@ -603,15 +605,15 @@ def matvec(adc, M_ij=None, eris=None):
 
                del temp_a, temp_b, temp_c, temp_d, temp_ecc, temp_1_ecc, temp_2_ecc, temp_3_ecc, temp_4_ecc
 
-               temp_a = lib.einsum('Jlab,aJk->blk',t2_1[:ncvs,:,:,:],r2_ecv,optimize=True)
-               temp_b = -lib.einsum('lJab,aJk->blk',t2_1[:,:ncvs,:,:],r2_ecv,optimize=True)
-               temp_c = -lib.einsum('Jlab,akJ->blk',t2_1[:ncvs,:,:,:],r2_evc,optimize=True)
-               temp_d = lib.einsum('lJab,akJ->blk',t2_1[:,:ncvs,:,:],r2_evc,optimize=True)
+               temp_a = lib.einsum('Jlab,aJk->blk',t2_1_coee,r2_ecv,optimize=True)
+               temp_b = -lib.einsum('lJab,aJk->blk',t2_1_ocee,r2_ecv,optimize=True)
+               temp_c = -lib.einsum('Jlab,akJ->blk',t2_1_coee,r2_evc,optimize=True)
+               temp_d = lib.einsum('lJab,akJ->blk',t2_1_ocee,r2_evc,optimize=True)
                temp_ecv = temp_a + temp_b + temp_c + temp_d
                temp_1_ecv = -temp_a - temp_b
                temp_2_ecv = -temp_a
                temp_3_ecv = -temp_a - temp_c
-               temp_4_ecv = -lib.einsum('klba,aJk->blJ',t2_1[ncvs:,:,:,:],r2_ecv,optimize=True)
+               temp_4_ecv = -lib.einsum('klba,aJk->blJ',t2_1_voee,r2_ecv,optimize=True)
 
                s[s1:f1] += lib.einsum('blk,lbIk->I',temp_ecv,eris_oecv,optimize=True)
                s[s1:f1] -= lib.einsum('blk,Ibkl->I',temp_ecv,eris_cevo,optimize=True)
@@ -631,7 +633,7 @@ def matvec(adc, M_ij=None, eris=None):
                temp_1_evc = -temp_c - temp_d
                temp_2_evc = -temp_c
                temp_3_evc = -temp_a - temp_c
-               temp_4_evc = -lib.einsum('Klba,ajK->blj',t2_1[:ncvs,:,:,:],r2_evc,optimize=True)
+               temp_4_evc = -lib.einsum('Klba,ajK->blj',t2_1_coee,r2_evc,optimize=True)
 
                s[s1:f1] += lib.einsum('blK,lbIK->I',temp_evc,eris_oecc,optimize=True)
                s[s1:f1] -= lib.einsum('blK,IbKl->I',temp_evc,eris_ceco,optimize=True)
@@ -792,7 +794,7 @@ def get_trans_moments_orbital(adc, orb):
     T[s2_evc:f2_evc] += T_aaa_evc_asym.reshape(-1)
     return T
 
-
+#TODO: Implement analyze_eigenvector function for IP-CVS-RADC  
 #def analyze_eigenvector(adc):
 #
 #    nocc = adc._nocc

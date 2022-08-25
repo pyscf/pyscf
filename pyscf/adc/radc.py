@@ -155,7 +155,7 @@ class RADC(lib.StreamObject):
         self.approx_trans_moments = False
         self.evec_print_tol = 0.1
         self.spec_factor_print_tol = 0.1
-        self.ncvs = 1
+        self.ncvs = None
 
         self.E = None
         self.U = None
@@ -275,11 +275,10 @@ class RADC(lib.StreamObject):
             e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):
-            e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
-
-        elif(self.method_type == "ip" and self.ncvs > 0):
-            e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
-
+            if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
+                e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+            else:
+                e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
@@ -305,7 +304,7 @@ class RADC(lib.StreamObject):
 
     def ip_cvs_adc(self, nroots=1, guess=None, eris=None):
         from pyscf.adc import radc_ip_cvs
-        adc_es = radc_ip.RADCIPCVS(self)
+        adc_es = radc_ip_cvs.RADCIPCVS(self)
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 

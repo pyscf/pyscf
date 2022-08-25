@@ -22,7 +22,6 @@ from pyscf import lib
 from pyscf.lib import logger
 import h5py
 import tempfile
-import sys
 
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
@@ -32,8 +31,6 @@ def transform_integrals_incore(myadc):
 
     occ = myadc.mo_coeff[:,:myadc._nocc]
     vir = myadc.mo_coeff[:,myadc._nocc:]
-    ncvs = myadc.ncvs
-    cvs = occ[:,:ncvs]
 
     nocc = occ.shape[1]
     nvir = vir.shape[1]
@@ -45,7 +42,6 @@ def transform_integrals_incore(myadc):
     eris.oovv = ao2mo.general(myadc._scf._eri, (occ, occ, vir, vir), compact=False).reshape(nocc, nocc, nvir, nvir).copy()  # noqa: E501
     eris.ovvo = ao2mo.general(myadc._scf._eri, (occ, vir, vir, occ), compact=False).reshape(nocc, nvir, nvir, nocc).copy()  # noqa: E501
     eris.ovvv = ao2mo.general(myadc._scf._eri, (occ, vir, vir, vir), compact=True).reshape(nocc, nvir, -1).copy()  # noqa: E501
-    eris.ceee = ao2mo.general(myadc._scf._eri, (cvs, vir, vir, vir), compact=True).reshape(ncvs, nvir, -1).copy()  # noqa: E501
 
     if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
         eris.vvvv = ao2mo.general(myadc._scf._eri, (vir, vir, vir, vir), compact=False).reshape(nvir, nvir, nvir, nvir)
@@ -70,7 +66,6 @@ def transform_integrals_outcore(myadc):
     occ = myadc.mo_coeff[:,:myadc._nocc]
     vir = myadc.mo_coeff[:,myadc._nocc:]
 
-    ncvs = myadc.ncvs
     nocc = occ.shape[1]
     nvir = vir.shape[1]
     nvpair = nvir * (nvir+1) // 2
@@ -83,7 +78,6 @@ def transform_integrals_outcore(myadc):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
-    eris.ceee = eris.feri1.create_dataset('ceee', (ncvs,nvir,nvpair), 'f8')
 
     def save_occ_frac(p0, p1, eri):
         eri = eri.reshape(p1-p0,nocc,nmo,nmo)
@@ -97,10 +91,10 @@ def transform_integrals_outcore(myadc):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    def save_vir_frac_ceee(p0, p1, eri):
-        eri = eri.reshape(p1-p0,ncvs,nmo,nmo)
-        eee = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*ncvs,nvir,nvir))
-        eris.ceee[:,p0:p1] = eee.reshape(p1-p0,ncvs,nvpair).transpose(1,0,2)
+    #def save_vir_frac_ceee(p0, p1, eri):
+    #    eri = eri.reshape(p1-p0,ncvs,nmo,nmo)
+    #    eee = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*ncvs,nvir,nvir))
+    #    eris.ceee[:,p0:p1] = eee.reshape(p1-p0,ncvs,nvpair).transpose(1,0,2)
             
 
     cput1 = logger.process_clock(), logger.perf_counter()
@@ -151,12 +145,11 @@ def transform_integrals_outcore(myadc):
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
            
-            #if myadc.method_type == 'ip-cvs':
-            if myadc.method_type == 'ip' and myadc.ncvs > 0: 
-                nrow_cvs = (p1 - p0) * ncvs
-                dat_cvs = ao2mo._ao2mo.nr_e2(buf[:nrow_cvs], mo_coeff, (0,nmo,0,nmo),
-                                         's4', 's1', out=outbuf, ao_loc=ao_loc)
-                save_vir_frac_ceee(p0, p1, dat_cvs)
+            #if myadc.method_type == 'ip' and myadc.ncvs > 0: 
+            #    nrow_cvs = (p1 - p0) * ncvs
+            #    dat_cvs = ao2mo._ao2mo.nr_e2(buf[:nrow_cvs], mo_coeff, (0,nmo,0,nmo),
+            #                             's4', 's1', out=outbuf, ao_loc=ao_loc)
+            #    save_vir_frac_ceee(p0, p1, dat_cvs)
 
             cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
@@ -201,7 +194,6 @@ def transform_integrals_df(myadc):
     log = logger.Logger(myadc.stdout, myadc.verbose)
 
     mo_coeff = np.asarray(myadc.mo_coeff, order='F')
-    ncvs = myadc.ncvs
     nocc = myadc._nocc
     nao, nmo = mo_coeff.shape
     nvir = myadc._nmo - myadc._nocc
@@ -211,14 +203,15 @@ def transform_integrals_df(myadc):
     eris.vvvv = None
     eris.ovvv = None
     eris.ceee = None
-    ncvs = myadc.ncvs
 
     Loo = np.empty((naux,nocc,nocc))
     Lvo = np.empty((naux,nvir,nocc))
     eris.Lvv = np.empty((naux,nvir,nvir))
-    eris.Lee = eris.Lvv
     eris.Lov = np.empty((naux,nocc,nvir))
-    eris.Lce = np.empty((naux,ncvs,nvir))
+    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        ncvs = myadc.ncvs
+        eris.Lce = np.empty((naux,ncvs,nvir))
+        eris.Lee = eris.Lvv
 
     ijslice = (0, nmo, 0, nmo)
     Lpq = None
@@ -231,15 +224,20 @@ def transform_integrals_df(myadc):
         #Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         eris.Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
-        eris.Lvv[p0:p1] = eris.Lee[p0:p1] = Lpq[:,nocc:,nocc:]
-        eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
-       
+        eris.Lvv[p0:p1] = Lpq[:,nocc:,nocc:]
+        if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+            ncvs = myadc.ncvs
+            eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
+            eris.Lee[p0:p1] = eris.Lvv[p0:p1]
 
     Loo = Loo.reshape(naux,nocc*nocc)
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
     eris.Lvv = eris.Lvv.reshape(naux,nvir*nvir)
-    eris.Lee = eris.Lvv
+    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        ncvs = myadc.ncvs
+        eris.Lee = eris.Lvv
+        eris.Lce = eris.Lce.reshape(naux,myadc.ncvs*nvir)
 
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')

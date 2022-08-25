@@ -19,7 +19,6 @@ def get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
 
     ''' Returns approximate ovvv integrals used in restricted implementation'''
 
-    #nocc = myadc._nocc
     nvir = myadc._nvir
     naux = myadc.with_df.get_naoaux()
 
