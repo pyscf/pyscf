@@ -475,7 +475,6 @@ class _ChemistsERIs(mp2._ChemistsERIs):
                               mp._scf.mo_energy[1][mo_idx[1]])
             self.fock = (numpy.diag(self.mo_energy[0]),
                          numpy.diag(self.mo_energy[1]))
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
@@ -483,7 +482,6 @@ class _ChemistsERIs(mp2._ChemistsERIs):
             focka = mo_a.conj().T.dot(fockao[0]).dot(mo_a)
             fockb = mo_b.conj().T.dot(fockao[1]).dot(mo_b)
             self.fock = (focka, fockb)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             nocca, noccb = self.nocc = mp.nocc
             self.mo_energy = (focka.diagonal().real, fockb.diagonal().real)
         return self
