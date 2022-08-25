@@ -183,14 +183,33 @@ def update_amps(mycc, t1, t2, eris):
         fov[:,p0:p1] -= numpy.einsum('kc,akic->ia', t1, eris_voov)
 
         tau  = numpy.einsum('ia,jb->ijab', t1[:,p0:p1]*.5, t1)
-        tau += t2[:,:,p0:p1]
+        if mycc.dcsd:
+            # This adds mosaic terms "quadratic" in t2. They are multiplied
+            # by 0.5 in DCSD.
+            tau += 0.5*t2[:,:,p0:p1]
+            tau_dcsd = 0.5*t2.copy()[:,:,p0:p1]
+            theta_dcsd = tau_dcsd.copy().transpose(1,0,2,3) * 2
+            theta_dcsd -= tau_dcsd
+            fvv_dcsd = -lib.einsum('cjia,cjib->ab', theta_dcsd.transpose(2,1,0,3), eris_voov)
+            foo_dcsd = lib.einsum('aikb,kjab->ij', eris_voov, theta_dcsd)
+            tau_dcsd = theta_dcsd = None
+        else:
+            tau += t2[:,:,p0:p1]
         theta  = tau.transpose(1,0,2,3) * 2
         theta -= tau
         fvv -= lib.einsum('cjia,cjib->ab', theta.transpose(2,1,0,3), eris_voov)
         foo += lib.einsum('aikb,kjab->ij', eris_voov, theta)
         tau = theta = None
 
-        tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
+        if mycc.dcsd:
+            # The t2 is removed since it eventually is part of a ladder term
+            # "quadratic" in t2, not used in DCSD. The other terms the missing
+            # t2 otherwise is part of have to be added later.
+            # The t2 part is split of woooo and is now in woooo_dcsd.
+            tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
+            woooo_dcsd = lib.einsum('ijab,aklb->ijkl', t2[:,:,p0:p1], eris_voov)
+        else:
+            tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         woooo += lib.einsum('ijab,aklb->ijkl', tau, eris_voov)
         tau = None
 
@@ -198,8 +217,11 @@ def update_amps(mycc, t1, t2, eris):
             wVooV[:] += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
         with lib.call_in_background(update_wVooV, sync=not mycc.async_io) as update_wVooV:
             for q0, q1 in lib.prange(0, nvir, blksize):
-                tau  = t2[:,:,q0:q1] * .5
-                tau += numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
+                tau = numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
+                if not mycc.dcsd:
+                    # This adds xring and some more "exchange-like" ring terms
+                    # "quadratic" in t2. They are not used in DCSD.
+                    tau += t2[:,:,q0:q1] * .5
                 #:wVooV += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
                 update_wVooV(q0, q1, tau)
         tau = update_wVooV = None
@@ -231,6 +253,7 @@ def update_amps(mycc, t1, t2, eris):
                 update_wVOov(q0, q1, tau)
                 tau = None
         def update_t2(q0, q1, theta):
+            # This adds ring terms "quadratic" in t2. They are used by DCSD.
             t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
         with lib.call_in_background(update_t2, sync=not mycc.async_io) as update_t2:
             for q0, q1 in lib.prange(0, nvir, blksize):
@@ -249,6 +272,12 @@ def update_amps(mycc, t1, t2, eris):
         t1new -= lib.einsum('jbki,kjba->ia', eris.ovoo[:,p0:p1], theta)
 
         tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
+        if mycc.dcsd:
+            # For DCSD, woooo_dcsd contains the t2 term in woooo (which was split
+            # off woooo in DCSD). This t2 term, now in woooo_dcsd, should not
+            # be multiplied with another t2 containing term, as ladder terms are
+            # not present in DCSD.
+            t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo_dcsd, tau)
         tau += t2[:,:,p0:p1]
         t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo, tau)
         theta = tau = None
@@ -259,6 +288,9 @@ def update_amps(mycc, t1, t2, eris):
     t2new -= lib.einsum('ki,kjab->ijab', ft_ij, t2)
 
     eia = mo_e_o[:,None] - mo_e_v
+    if mycc.dcsd:
+        fvv += fvv_dcsd
+        foo += foo_dcsd
     t1new += numpy.einsum('ib,ab->ia', t1, fvv)
     t1new -= numpy.einsum('ja,ji->ia', t1, foo)
     t1new /= eia
@@ -1072,9 +1104,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     _add_vvvv = _add_vvvv
     update_amps = update_amps
 
-    def kernel(self, t1=None, t2=None, eris=None):
-        return self.ccsd(t1, t2, eris)
-    def ccsd(self, t1=None, t2=None, eris=None):
+    def kernel(self, t1=None, t2=None, eris=None, dcsd=False):
+        return self.ccsd(t1, t2, eris, dcsd)
+    def ccsd(self, t1=None, t2=None, eris=None, dcsd=False):
         assert (self.mo_coeff is not None)
         assert (self.mo_occ is not None)
 
@@ -1087,6 +1119,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
 
+        self.dcsd = dcsd
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
