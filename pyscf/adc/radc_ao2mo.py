@@ -138,7 +138,7 @@ def transform_integrals_outcore(myadc):
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
-
+           
             cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
     cput1 = log.timer_debug1('transforming oppp', *cput1)
@@ -190,11 +190,16 @@ def transform_integrals_df(myadc):
     eris = lambda: None
     eris.vvvv = None
     eris.ovvv = None
+    eris.ceee = None
 
     Loo = np.empty((naux,nocc,nocc))
     Lvo = np.empty((naux,nvir,nocc))
     eris.Lvv = np.empty((naux,nvir,nvir))
     eris.Lov = np.empty((naux,nocc,nvir))
+    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        ncvs = myadc.ncvs
+        eris.Lce = np.empty((naux,ncvs,nvir))
+        eris.Lee = eris.Lvv
 
     ijslice = (0, nmo, 0, nmo)
     Lpq = None
@@ -208,11 +213,19 @@ def transform_integrals_df(myadc):
         eris.Lov[p0:p1] = Lpq[:,:nocc,nocc:]
         Lvo[p0:p1] = Lpq[:,nocc:,:nocc]
         eris.Lvv[p0:p1] = Lpq[:,nocc:,nocc:]
+        if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+            ncvs = myadc.ncvs
+            eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
+            eris.Lee = eris.Lvv
 
     Loo = Loo.reshape(naux,nocc*nocc)
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
     Lvo = Lvo.reshape(naux,nocc*nvir)
     eris.Lvv = eris.Lvv.reshape(naux,nvir*nvir)
+    if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
+        ncvs = myadc.ncvs
+        eris.Lee = eris.Lvv
+        eris.Lce = eris.Lce.reshape(naux,myadc.ncvs*nvir)
 
     eris.feri1 = lib.H5TmpFile()
     eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')

@@ -30,8 +30,10 @@ from pyscf.adc import radc
 from pyscf.adc import radc_amplitudes
 from pyscf.adc import uadc_amplitudes
 from pyscf.adc import radc_ip
+from pyscf.adc import radc_ip_cvs
 from pyscf.adc import radc_ea
 from pyscf.adc import uadc_ip
+from pyscf.adc import uadc_ip_cvs
 from pyscf.adc import uadc_ea
 
 
