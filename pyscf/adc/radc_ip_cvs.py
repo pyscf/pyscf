@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Samragni Banerjee <samragnibanerjee4@gmail.com>
+# Author: Abdelrahman Ahmed <abdelrahman.maa.ahmed@gmail.com>
 #         Alexander Sokolov <alexander.y.sokolov@gmail.com>
 #
 
@@ -221,8 +221,6 @@ def get_imds(adc, eris=None):
 
 def get_diag(adc,M_ij=None,eris=None):
    
-    log = logger.Logger(adc.stdout, adc.verbose)
-
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -273,45 +271,7 @@ def get_diag(adc,M_ij=None,eris=None):
     diag[s2_ecv:f2_ecv] = D_aij[:,:ncvs,ncvs:].reshape(-1)
     diag[s2_evc:f2_evc] = D_aij[:,ncvs:,:ncvs].reshape(-1)
     
-#    ###### Additional terms for the preconditioner ####
-#    if (method == "adc(2)-x" or method == "adc(3)"):
-#
-#        if eris is None:
-#            eris = adc.transform_integrals()
-#
-#        if isinstance(eris.vvvv, np.ndarray):
-#
-#            eris_oooo = eris.oooo
-#            eris_oovv = eris.oovv
-#            eris_ovvo = eris.ovvo
-#
-#            eris_oooo_p = np.ascontiguousarray(eris_oooo.transpose(0,2,1,3))
-#            eris_oooo_p = eris_oooo_p.reshape(nocc*nocc, nocc*nocc)
-#  
-#            temp = np.zeros((nvir, eris_oooo_p.shape[0]))
-#            temp[:] += np.diag(eris_oooo_p)
-#            diag[s2:f2] += -temp.reshape(-1)
-#
-#            eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
-#            eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
-#
-#            temp = np.zeros((nocc, nocc, nvir))
-#            temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
-#            temp = np.ascontiguousarray(temp.transpose(2,1,0))
-#            diag[s2:f2] += temp.reshape(-1)
-#
-#            eris_ovov_p = np.ascontiguousarray(eris_oovv.transpose(0,2,1,3)) 
-#            eris_ovov_p = eris_ovov_p.reshape(nocc*nvir, nocc*nvir)
-#
-#            temp = np.zeros((nocc, nocc, nvir))
-#            temp[:] += np.diagonal(eris_ovov_p).reshape(nocc, nvir)
-#            temp = np.ascontiguousarray(temp.transpose(2,0,1))
-#            diag[s2:f2] += temp.reshape(-1)
-#        else :
-#            raise Exception("Precond not available for out-of-core and density-fitted algo")
-
     diag = -diag
-    log.timer_debug1("Completed ea_diag calculation")
 
     return diag
 
@@ -793,79 +753,6 @@ def get_trans_moments_orbital(adc, orb):
     T[s2_ecv:f2_ecv] += T_aaa_ecv_asym.reshape(-1)
     T[s2_evc:f2_evc] += T_aaa_evc_asym.reshape(-1)
     return T
-
-#TODO: Implement analyze_eigenvector function for IP-CVS-RADC  
-#def analyze_eigenvector(adc):
-#
-#    nocc = adc._nocc
-#    nvir = adc._nvir
-#
-#    n_singles = nocc
-#    evec_print_tol = adc.evec_print_tol
-#    U = adc.U
-#
-#    logger.info(adc, "Number of occupied orbitals = %d", nocc)
-#    logger.info(adc, "Number of virtual orbitals =  %d", nvir)
-#    logger.info(adc, "Print eigenvector elements > %f\n", evec_print_tol)
-#
-#    for I in range(U.shape[1]):
-#        U1 = U[:n_singles,I]
-#        U2 = U[n_singles:,I].reshape(nvir,nocc,nocc)
-#        U1dotU1 = np.dot(U1, U1)
-#        U2dotU2 =  2.*np.dot(U2.ravel(), U2.ravel()) - np.dot(U2.ravel(), U2.transpose(0,2,1).ravel())
-#
-#        U_sq = U[:,I].copy()**2
-#        ind_idx = np.argsort(-U_sq)
-#        U_sq = U_sq[ind_idx]
-#        U_sorted = U[ind_idx,I].copy()
-#
-#        U_sorted = U_sorted[U_sq > evec_print_tol**2]
-#        ind_idx = ind_idx[U_sq > evec_print_tol**2]
-#
-#        singles_idx = []
-#        doubles_idx = []
-#        singles_val = []
-#        doubles_val = []
-#        iter_num = 0
-#
-#        for orb_idx in ind_idx:
-#
-#            if orb_idx < n_singles:
-#                i_idx = orb_idx + 1
-#                singles_idx.append(i_idx)
-#                singles_val.append(U_sorted[iter_num])
-#
-#            if orb_idx >= n_singles:
-#                aij_idx = orb_idx - n_singles
-#                ij_rem = aij_idx % (nocc*nocc)
-#                a_idx = aij_idx//(nocc*nocc)
-#                i_idx = ij_rem//nocc
-#                j_idx = ij_rem % nocc
-#                doubles_idx.append((a_idx + 1 + n_singles, i_idx + 1, j_idx + 1))
-#                doubles_val.append(U_sorted[iter_num])
-#
-#            iter_num += 1
-#
-#        logger.info(adc, '%s | root %d | norm(1h)  = %6.4f | norm(2h1p) = %6.4f ',
-#                    adc.method ,I, U1dotU1, U2dotU2)
-#
-#        if singles_val:
-#            logger.info(adc, "\n1h block: ")
-#            logger.info(adc, "     i     U(i)")
-#            logger.info(adc, "------------------")
-#            for idx, print_singles in enumerate(singles_idx):
-#                logger.info(adc, '  %4d   %7.4f', print_singles, singles_val[idx])
-#
-#        if doubles_val:
-#            logger.info(adc, "\n2h1p block: ")
-#            logger.info(adc, "     i     j     a     U(i,j,a)")
-#            logger.info(adc, "-------------------------------")
-#            for idx, print_doubles in enumerate(doubles_idx):
-#                logger.info(adc, '  %4d  %4d  %4d     %7.4f',
-#                            print_doubles[1], print_doubles[2], print_doubles[0], doubles_val[idx])
-#
-#        logger.info(adc, "\n*************************************************************\n")
-
 
 def analyze_spec_factor(adc):
 

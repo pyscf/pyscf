@@ -91,7 +91,6 @@ class KnownValues(unittest.TestCase):
         myadcipcvs = adc.radc_ip_cvs.RADCIPCVS(myadc) 
         myadcipcvs.ncvs = 1 
         e,v,p,x = myadcipcvs.kernel(nroots=3)
-        myadcipcvs.analyze()
 
         self.assertAlmostEqual(e[0], 20.09352653091772, 6)
         self.assertAlmostEqual(e[1], 21.24443090413907, 6)

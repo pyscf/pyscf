@@ -91,12 +91,6 @@ def transform_integrals_outcore(myadc):
         vvv = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*nocc,nvir,nvir))
         eris.ovvv[:,p0:p1] = vvv.reshape(p1-p0,nocc,nvpair).transpose(1,0,2)
 
-    #def save_vir_frac_ceee(p0, p1, eri):
-    #    eri = eri.reshape(p1-p0,ncvs,nmo,nmo)
-    #    eee = lib.pack_tril(eri[:,:,nocc:,nocc:].reshape((p1-p0)*ncvs,nvir,nvir))
-    #    eris.ceee[:,p0:p1] = eee.reshape(p1-p0,ncvs,nvpair).transpose(1,0,2)
-            
-
     cput1 = logger.process_clock(), logger.perf_counter()
     fswap = lib.H5TmpFile()
     max_memory = myadc.max_memory-lib.current_memory()[0]
@@ -145,12 +139,6 @@ def transform_integrals_outcore(myadc):
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
            
-            #if myadc.method_type == 'ip' and myadc.ncvs > 0: 
-            #    nrow_cvs = (p1 - p0) * ncvs
-            #    dat_cvs = ao2mo._ao2mo.nr_e2(buf[:nrow_cvs], mo_coeff, (0,nmo,0,nmo),
-            #                             's4', 's1', out=outbuf, ao_loc=ao_loc)
-            #    save_vir_frac_ceee(p0, p1, dat_cvs)
-
             cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
     cput1 = log.timer_debug1('transforming oppp', *cput1)
@@ -228,7 +216,7 @@ def transform_integrals_df(myadc):
         if not isinstance(myadc.ncvs, type(None)) and myadc.ncvs > 0:
             ncvs = myadc.ncvs
             eris.Lce[p0:p1] = Lpq[:,:ncvs,nocc:]
-            eris.Lee[p0:p1] = eris.Lvv[p0:p1]
+            eris.Lee = eris.Lvv
 
     Loo = Loo.reshape(naux,nocc*nocc)
     eris.Lov = eris.Lov.reshape(naux,nocc*nvir)
