@@ -29,7 +29,7 @@ from pyscf.pbc.lib.kpts_helper import member, is_zero
 
 
 def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
-            non0tab=None, out=None, verbose=None):
+            non0tab=None, cutoff=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
     Args:
@@ -61,12 +61,13 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=
 
     '''
     ao_kpts = eval_ao_kpts(cell, coords, numpy.reshape(kpt, (-1,3)), deriv,
-                           relativity, shls_slice, non0tab, out, verbose)
+                           relativity, shls_slice, non0tab, cutoff, out, verbose)
     return ao_kpts[0]
 
 
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
-                 shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                 shls_slice=None, non0tab=None, cutoff=None, out=None,
+                 verbose=None, **kwargs):
     '''
     Returns:
         ao_kpts: (nkpts, [comp], ngrids, nao) ndarray
@@ -86,8 +87,8 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         feval = 'GTOval_cart_deriv%d' % deriv
     else:
         feval = 'GTOval_sph_deriv%d' % deriv
-    return cell.pbc_eval_gto(feval, coords, comp, kpts,
-                             shls_slice=shls_slice, non0tab=non0tab, out=out)
+    return cell.pbc_eval_gto(feval, coords, comp, kpts, shls_slice=shls_slice,
+                             non0tab=non0tab, cutoff=cutoff, out=out)
 
 
 def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, with_lapl=True,
@@ -694,11 +695,11 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 vmat[i] += ni._vxc_mat(cell, ao_k1, wv, mask, xctype,
                                        shls_slice, ao_loc, hermi)
 
+        vmat = numpy.stack(vmat)
         # For only real orbitals, K_{ia,bj} = K_{ia,jb}. It simplifies
         # [(\nabla mu) nu + mu (\nabla nu)] * fxc_jb = ((\nabla mu) nu f_jb) + h.c.
         if hermi == 1:
             vmat = vmat + vmat.conj().swapaxes(-2,-1)
-        vmat = numpy.stack(vmat)
         if nset == 1:
             vmat = vmat.reshape(dms_alpha.shape)
     else:
@@ -898,10 +899,8 @@ class NumInt(numint.NumInt):
     '''Generalization of pyscf's NumInt class for a single k-point shift and
     periodic images.
     '''
-    def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
-                shls_slice=None, non0tab=None, out=None, verbose=None):
-        return eval_ao(cell, coords, kpt, deriv, relativity, shls_slice,
-                       non0tab, out, verbose)
+
+    eval_ao = staticmethod(eval_ao)
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell, coords, relativity=0, shls_slice=None,
@@ -1015,11 +1014,13 @@ class NumInt(numint.NumInt):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
+            ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0,
+                                 cutoff=self.cutoff)
             if abs(kpt1-kpt2).sum() < 1e-9:
                 ao_k1 = ao_k2
             else:
-                ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv)
+                ao_k1 = self.eval_ao(cell, coords, kpt1, deriv=deriv,
+                                     cutoff=self.cutoff)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
@@ -1042,10 +1043,7 @@ class KNumInt(numint.NumInt):
         numint.NumInt.__init__(self)
         self.kpts = numpy.reshape(kpts, (-1,3))
 
-    def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
-                shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
-        return eval_ao_kpts(cell, coords, kpts, deriv,
-                            relativity, shls_slice, non0tab, out, verbose)
+    eval_ao = staticmethod(eval_ao_kpts)
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell, coords, relativity=0, shls_slice=None,
@@ -1181,9 +1179,11 @@ class KNumInt(numint.NumInt):
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
+            ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv,
+                                         non0tab=non0, cutoff=self.cutoff)
             if kpts_band is not None:
-                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
+                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv,
+                                     non0tab=non0, cutoff=self.cutoff)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 

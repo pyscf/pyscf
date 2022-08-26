@@ -45,6 +45,19 @@ mf.kernel()
 td = tdscf.TDA(mf)
 td.kernel()
 
+#
+# Gamma-point RKS
+#
+ks = scf.RKS(cell)
+ks.run()
+
+td = tdscf.KTDDFT(ks)
+td.nstates = 5
+td.verbose = 5
+print(td.kernel()[0] * 27.2114)
+print(td.oscillator_strength())
+
+
 # TODO:
 #kpt = cell.get_abs_kpts([0.25, 0.25, 0.25])
 #mf = scf.RHF(cell, kpt=kpt)

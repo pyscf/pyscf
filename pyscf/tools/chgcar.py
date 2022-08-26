@@ -200,8 +200,8 @@ class CHGCAR(cubegen.Cube):
 
     def write(self, field, fname, comment=None):
         """  Result: .vasp file with the field in the file fname.  """
-        assert(field.ndim == 3)
-        assert(field.shape == (self.nx, self.ny, self.nz))
+        assert (field.ndim == 3)
+        assert (field.shape == (self.nx, self.ny, self.nz))
         if comment is None:
             comment = 'VASP file: Electron density in real space (e/Bohr^3)  '
 

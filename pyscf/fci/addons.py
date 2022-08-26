@@ -33,7 +33,7 @@ def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    assert(ci.shape == (na, nb))
+    assert (ci.shape == (na, nb))
     addra, addrb = numpy.where(abs(ci) > tol)
     if addra.size == 0:
         # No large CI coefficient > tol, search for the largest coefficient
@@ -115,9 +115,9 @@ def symm_initguess(norb, nelec, orbsym, wfnsym=0, irrep_nelec=None):
     neleca_left = neleca - stra.sum()
     nelecb_left = nelecb - strb.sum()
     spin = neleca_left - nelecb_left
-    assert(neleca_left >= 0)
-    assert(nelecb_left >= 0)
-    assert(spin >= 0)
+    assert (neleca_left >= 0)
+    assert (nelecb_left >= 0)
+    assert (spin >= 0)
 
 ########################
 # pass 2: search pattern
@@ -598,10 +598,10 @@ def det_overlap(string1, string2, norb, s=None):
         else:
             nelec = bin(string1).count('1')
         if isinstance(string2, str):
-            assert(string2.count('1') == nelec)
+            assert (string2.count('1') == nelec)
             string2 = int(string2, 2)
         else:
-            assert(bin(string2).count('1') == nelec)
+            assert (bin(string2).count('1') == nelec)
         idx1 = [i for i in range(norb) if (1 << i & string1)]
         idx2 = [i for i in range(norb) if (1 << i & string2)]
         s1 = lib.take_2d(s, idx1, idx2)
@@ -800,5 +800,5 @@ def _unpack_nelec(nelec, spin=None):
         nelec = neleca, nelecb
     return nelec
 
-del(LARGE_CI_TOL, RETURN_STRS, PENALTY)
+del (LARGE_CI_TOL, RETURN_STRS, PENALTY)
 

@@ -48,11 +48,11 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
     '''
     # mf must be DFT; for HF use xc = 'hf'
     mf = gw._scf
-    assert(isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
+    assert (isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
                            dft.rks_symm.ROKS, dft.uks_symm.UKS)))
-    assert(gw.frozen == 0 or gw.frozen is None)
+    assert (gw.frozen == 0 or gw.frozen is None)
 
     if eris is None:
         eris = gw.ao2mo(mo_coeff)

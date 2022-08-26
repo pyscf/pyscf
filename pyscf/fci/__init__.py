@@ -43,14 +43,14 @@ from pyscf.fci import spin_op
 from pyscf.fci.cistring import num_strings
 from pyscf.fci.rdm import reorder_rdm
 from pyscf.fci.spin_op import spin_square
-from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond
+from pyscf.fci.direct_spin1 import make_pspace_precond, make_diag_precond, FCIvector
 from pyscf.fci import direct_nosym
 from pyscf.fci import selected_ci
 select_ci = selected_ci  # for backward compatibility
 from pyscf.fci import selected_ci_spin0
 from pyscf.fci import selected_ci_symm
 from pyscf.fci import selected_ci_spin0_symm
-from pyscf.fci.selected_ci import SelectedCI, SCI
+from pyscf.fci.selected_ci import SelectedCI, SCI, SCIvector
 
 def solver(mol=None, singlet=False, symm=None):
     if mol and symm is None:

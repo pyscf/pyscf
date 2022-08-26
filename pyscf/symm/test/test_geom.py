@@ -838,7 +838,7 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
         atoms = [
             ['Fe'  , ( 0.0,   0.0,   0.0)],
@@ -848,7 +848,7 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
         atoms = [
             ['Fe'  , ( 0.0,   0.0,   0.0)],
@@ -858,7 +858,7 @@ H   2.041481  -0.080642  -0.024174''')
             ['O'   , ( 0.0,   1.3,   0.0)],]
         l, orig, axes = geom.detect_symm(atoms)
         self.assertEqual(l, 'C2v')
-        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5)
+        self.assertAlmostEqual(axes[2,0]*axes[2,1], -.5, 9)
 
     def test_sort_coords(self):
         c = numpy.random.random((5,3))

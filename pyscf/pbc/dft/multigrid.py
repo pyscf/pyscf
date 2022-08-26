@@ -64,7 +64,7 @@ IMAG_TOL = 1e-9
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
              xctype='LDA', kpts=None, mesh=None, offset=None, submesh=None):
-    assert(all(cell._bas[:,NPRIM_OF] == 1))
+    assert (all(cell._bas[:,NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
@@ -86,7 +86,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     if mesh is None:
         mesh = cell.mesh
     weights = numpy.asarray(weights, order='C')
-    assert(weights.dtype == numpy.double)
+    assert (weights.dtype == numpy.double)
     xctype = xctype.upper()
     n_mat = None
     if xctype == 'LDA':
@@ -186,7 +186,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         ignore_image :
             The output density is assumed to be real if ignore_imag=True.
     '''
-    assert(all(cell._bas[:,NPRIM_OF] == 1))
+    assert (all(cell._bas[:,NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
@@ -195,13 +195,13 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         shls_slice = (0, cell.nbas, 0, cell.nbas)
     i0, i1, j0, j1 = shls_slice
     if hermi == 1:
-        assert(i0 == j0 and i1 == j1)
+        assert (i0 == j0 and i1 == j1)
     j0 += cell.nbas
     j1 += cell.nbas
     naoi = ao_loc[i1] - ao_loc[i0]
     naoj = ao_loc[j1] - ao_loc[j0]
     dm = numpy.asarray(dm, order='C')
-    assert(dm.shape[-2:] == (naoi, naoj))
+    assert (dm.shape[-2:] == (naoi, naoj))
 
     if cell.dimension > 0:
         Ls = numpy.asarray(cell.get_lattice_Ls(), order='C')
@@ -499,7 +499,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         mydf.tasks = tasks = multi_grids_tasks(cell, mydf.mesh, log)
         log.debug('Multigrid ntasks %s', len(tasks))
 
-    assert(deriv < 2)
+    assert (deriv < 2)
     #hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
     gga_high_order = False
     if deriv == 0:
@@ -1443,7 +1443,7 @@ def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
 def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
     '''
-    #assert(isinstance(mf, dft.krks.KRKS))
+    #assert (isinstance(mf, dft.krks.KRKS))
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
@@ -1474,7 +1474,7 @@ def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
 def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
     '''
-    #assert(isinstance(mf, dft.kuks.KUKS))
+    #assert (isinstance(mf, dft.kuks.KUKS))
     if getattr(mf, 'kpts', None) is not None:
         kpts = mf.kpts
     else:
@@ -1879,7 +1879,7 @@ def _takebak_4d(out, a, indices):
         else:
             idx = numpy.asarray(s, dtype=numpy.int32)
             idx[idx < 0] += out_shape[i]
-        assert(len(idx) == a_shape[i])
+        assert (len(idx) == a_shape[i])
         ranges.append(idx)
     idx = ranges[0][:,None] * out_shape[1] + ranges[1]
     idy = ranges[2][:,None] * out_shape[3] + ranges[3]

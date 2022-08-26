@@ -60,21 +60,21 @@ class KnownValues(unittest.TestCase):
 
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
-        self.assertAlmostEqual(emp2, -0.204019967288338, 9)
-        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 9)
+        self.assertAlmostEqual(emp2, -0.204019967288338, 8)
+        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
-        self.assertAlmostEqual(emp2, -0.204019967288338, 9)
-        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 9)
+        self.assertAlmostEqual(emp2, -0.204019967288338, 8)
+        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 8)
 
     def test_mp2_outcore(self):
         pt = mp.mp2.MP2(mf)
         pt.max_memory = .01
         e, t2 = pt.kernel()
-        self.assertAlmostEqual(e, -0.20401996728747132, 9)
-        self.assertAlmostEqual(numpy.linalg.norm(t2), 0.19379397642098622, 9)
+        self.assertAlmostEqual(e, -0.20401996728747132, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(t2), 0.19379397642098622, 8)
 
     def test_mp2_dm(self):
         nocc = mol.nelectron//2
@@ -118,7 +118,7 @@ class KnownValues(unittest.TestCase):
         dm2ref = dm2ref[ ::2, ::2, ::2, ::2] + dm2ref[1::2,1::2,1::2,1::2] \
                + dm2ref[ ::2, ::2,1::2,1::2] + dm2ref[1::2,1::2, ::2, ::2]
         eris = ao2mo.restore(1, ao2mo.full(mf._eri, mf.mo_coeff), mf.mo_coeff.shape[1])
-        self.assertAlmostEqual(numpy.einsum('iajb,iajb', eris, dm2ref)*.5, emp2, 9)
+        self.assertAlmostEqual(numpy.einsum('iajb,iajb', eris, dm2ref)*.5, emp2, 8)
 
     def test_mp2_contract_eri_dm(self):
         nocc = mol.nelectron//2
@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ji', h1, rdm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, rdm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
         pt.frozen = 2
         pt.max_memory = 1
@@ -148,7 +148,7 @@ class KnownValues(unittest.TestCase):
         e1 = numpy.einsum('ij,ji', h1, rdm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, rdm2) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, pt.e_tot, 9)
+        self.assertAlmostEqual(e1, pt.e_tot, 8)
 
     def test_mp2_with_df(self):
         nocc = mol.nelectron//2
@@ -164,37 +164,37 @@ class KnownValues(unittest.TestCase):
         t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
         t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
         e, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
-        self.assertAlmostEqual(e, -0.20425449198334983, 9)
-        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 9)
+        self.assertAlmostEqual(e, -0.20425449198334983, 8)
+        self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 8)
 
         pt = mp.MP2(mf.density_fit('weigend'))
         pt.frozen = [1]
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.14708846352674113, 9)
+        self.assertAlmostEqual(e, -0.14708846352674113, 8)
 
         pt = mp.dfmp2.DFMP2(mf.density_fit('weigend'))
         e = pt.kernel(mf.mo_energy, mf.mo_coeff)[0]
-        self.assertAlmostEqual(e, -0.20425449198334983, 9)
+        self.assertAlmostEqual(e, -0.20425449198334983, 8)
 
         pt.frozen = [1]
         e = pt.kernel()[0]
-        self.assertAlmostEqual(e, -0.14708846352674113, 9)
+        self.assertAlmostEqual(e, -0.14708846352674113, 8)
 
         pt = mp.dfmp2.DFMP2(mf)
         pt.frozen = [1]
         pt.with_df = mf.density_fit('weigend').with_df
         e = pt.kernel()[0]
-        self.assertAlmostEqual(e, -0.14708846352674113, 9)
+        self.assertAlmostEqual(e, -0.14708846352674113, 8)
 
 
     def test_mp2_frozen(self):
         pt = mp.mp2.MP2(mf)
         pt.frozen = [0]
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 9)
+        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 8)
         pt.set_frozen()
         pt.kernel(with_t2=False)
-        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 9)
+        self.assertAlmostEqual(pt.emp2, -0.20168270592254167, 8)
 
     def test_mp2_outcore_frozen(self):
         pt = mp.mp2.MP2(mf)
@@ -202,13 +202,13 @@ class KnownValues(unittest.TestCase):
         pt.nmo = 12
         pt.frozen = [4]
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.080686724178583275, 9)
+        self.assertAlmostEqual(e, -0.080686724178583275, 8)
 
         pt = mp.mp2.MP2(mf)
         pt.nmo = 12
         pt.nocc = 4
         e = pt.kernel(with_t2=False)[0]
-        self.assertAlmostEqual(e, -0.080686724178583275, 9)
+        self.assertAlmostEqual(e, -0.080686724178583275, 8)
 
     def test_mp2_ao2mo_ovov(self):
         pt = mp.mp2.MP2(mf)
@@ -218,7 +218,7 @@ class KnownValues(unittest.TestCase):
         h5dat = mp.mp2._ao2mo_ovov(pt, orbo, orbv, ftmp, 1)
         ovov = numpy.asarray(h5dat)
         ovov_ref = ao2mo.general(mf._eri, (orbo,orbv,orbo,orbv))
-        self.assertAlmostEqual(numpy.linalg.norm(ovov_ref-ovov), 0, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(ovov_ref-ovov), 0, 8)
 
     def test_mp2_with_ao2mofn(self):
         pt = mp.mp2.MP2(mf)
@@ -228,7 +228,7 @@ class KnownValues(unittest.TestCase):
         e1 = pt.kernel()[0]
         pt = mp.mp2.MP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
-        self.assertAlmostEqual(e1, e2, 9)
+        self.assertAlmostEqual(e1, e2, 8)
 
     def test_rdm_complex(self):
         mol = gto.M()
@@ -250,9 +250,10 @@ class KnownValues(unittest.TestCase):
         mo_energy = numpy.arange(nmo)
         mo_occ = numpy.zeros(nmo)
         mo_occ[:nocc] = 2
-        dm = numpy.diag(mo_occ)
-        vhf = numpy.einsum('ijkl,lk->ij', eri, dm)
-        vhf-= numpy.einsum('ijkl,jk->il', eri, dm) * .5
+        mf.make_rdm1 = lambda *args: numpy.diag(mo_occ)
+        dm = mf.make_rdm1()
+        mf.get_veff = lambda *args: numpy.einsum('ijkl,lk->ij', eri, dm) - numpy.einsum('ijkl,jk->il', eri, dm) * .5
+        vhf = mf.get_veff()
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)
@@ -271,9 +272,9 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         self.assertAlmostEqual(e1, pt.e_tot, 12)
 
-        #self.assertAlmostEqual(abs(numpy.einsum('ijkk->ji', dm2)/(nocc*2-1) - dm1).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
+        #self.assertAlmostEqual(abs(numpy.einsum('ijkk->ji', dm2)/(nocc*2-1) - dm1).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 8)
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 8)
 
     def test_init_mp2(self):
         mf0 = mf
@@ -288,7 +289,7 @@ class KnownValues(unittest.TestCase):
     def test_mp2_scanner(self):
         pt_scanner = mp.MP2(mf).as_scanner()
         e = pt_scanner(mol)
-        self.assertAlmostEqual(e, mf.e_tot-0.204019967288338, 9)
+        self.assertAlmostEqual(e, mf.e_tot-0.204019967288338, 8)
 
     def test_reset(self):
         mol1 = gto.M(atom='C')

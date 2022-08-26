@@ -28,6 +28,8 @@ from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
+import h5py
+import tempfile
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -69,8 +71,9 @@ def compute_amplitudes(myadc, eris):
     D1 = D1.reshape((nocc,nvir))
 
     t2_1 = v2e_oovv/D2
+    h5cache_t2 = _create_t2_h5cache()
     if not isinstance(eris.oooo, np.ndarray):
-        t2_1 = radc_ao2mo.write_dataset(t2_1)
+        t2_1 = h5cache_t2.create_dataset('t2_1', data=t2_1)
 
     del v2e_oovv
     del D2
@@ -134,7 +137,7 @@ def compute_amplitudes(myadc, eris):
             t2_1_vvvv = contract_ladder(myadc,t2_1[:],eris.Lvv)
 
         if not isinstance(eris.oooo, np.ndarray):
-            t2_1_vvvv = radc_ao2mo.write_dataset(t2_1_vvvv)
+            t2_1_vvvv = h5cache_t2.create_dataset('t2_1_vvvv', data=t2_1_vvvv)
 
         t2_2 = t2_1_vvvv[:].copy()
 
@@ -153,7 +156,7 @@ def compute_amplitudes(myadc, eris):
 
         t2_2 = t2_2/D2
         if not isinstance(eris.oooo, np.ndarray):
-            t2_2 = radc_ao2mo.write_dataset(t2_2)
+            t2_2 = h5cache_t2.create_dataset('t2_2', data=t2_2)
         del D2
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
@@ -504,3 +507,14 @@ def contract_ladder(myadc,t_amp,vvvv):
     t = np.ascontiguousarray(t.transpose(2,0,1)).reshape(nocc, nocc, nvir, nvir)
 
     return t
+
+
+def _create_t2_h5cache():
+    '''Create an unclosed and unlinked h5 temporary file to cache t2 data so as
+    to pass t2 between iterations. This is not a good practice though. Use this
+    as a temporary workaround before figuring out a better solution to handle
+    big t2 amplitudes.
+    '''
+    tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+    return h5py.File(tmpfile.name, 'w')
+

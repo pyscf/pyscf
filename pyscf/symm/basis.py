@@ -490,8 +490,8 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
 
 def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
-    assert(gpname in ('Dooh', 'Coov'))
-    assert(not mol.cart)
+    assert (gpname in ('Dooh', 'Coov'))
+    assert (not mol.cart)
 
     if coordinates is None:
         coordinates = numpy.eye(3)

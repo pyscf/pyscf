@@ -213,7 +213,7 @@ def dumps(cell):
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
         if k in celldic:
-            del(celldic[k])
+            del (celldic[k])
     for k in celldic:
         if isinstance(celldic[k], np.ndarray):
             celldic[k] = celldic[k].tolist()
@@ -780,8 +780,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
-    # See also Eq. (32) of ewald.pdf at
-    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
+
     mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
@@ -1133,8 +1132,8 @@ class Cell(mole.Mole):
         '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
         from Cell object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Cell object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -1268,7 +1267,7 @@ class Cell(mole.Mole):
                 default_pseudo = self.pseudo['default']
                 _pseudo = dict(((a, default_pseudo) for a in uniq_atoms))
                 _pseudo.update(self.pseudo)
-                del(_pseudo['default'])
+                del (_pseudo['default'])
             else:
                 _pseudo = self.pseudo
             self._pseudo = self.format_pseudo(_pseudo)
@@ -1538,11 +1537,11 @@ class Cell(mole.Mole):
         '''  # noqa: E501
         a = self.lattice_vectors()
         if self.dimension == 1:
-            assert(abs(np.dot(a[0], a[1])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[1])) < 1e-9 and
                    abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         elif self.dimension == 2:
-            assert(abs(np.dot(a[0], a[2])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         b = np.linalg.inv(a.T)
         return norm_to * b
@@ -1639,22 +1638,18 @@ class Cell(mole.Mole):
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
                            shls_slice, **kwargs)
 
-    @lib.with_doc(pbc_eval_gto.__doc__)
-    def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                     shls_slice=None, non0tab=None, ao_loc=None, out=None):
-        return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
-                            shls_slice, non0tab, ao_loc, out)
-    pbc_eval_ao = pbc_eval_gto
+    pbc_eval_ao = pbc_eval_gto = pbc_eval_gto
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                 shls_slice=None, non0tab=None, ao_loc=None, out=None):
+                 shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
+                 out=None):
         if eval_name[:3] == 'PBC':
             return self.pbc_eval_gto(eval_name, coords, comp, kpts, kpt,
-                                     shls_slice, non0tab, ao_loc, out)
+                                     shls_slice, non0tab, ao_loc, cutoff, out)
         else:
             return mole.eval_gto(self, eval_name, coords, comp,
-                                 shls_slice, non0tab, ao_loc, out)
+                                 shls_slice, non0tab, ao_loc, cutoff, out)
     eval_ao = eval_gto
 
     def from_ase(self, ase_atom):
@@ -1692,4 +1687,4 @@ class Cell(mole.Mole):
               **kwargs):
         raise NotImplementedError
 
-del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)
+del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

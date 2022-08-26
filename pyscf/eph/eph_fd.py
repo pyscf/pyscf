@@ -139,7 +139,7 @@ if __name__ == '__main__':
     grad = mf.nuc_grad_method().kernel()
     print("Force on the atoms/au:")
     print(grad)
-    assert(abs(grad).max()<1e-5)
+    assert (abs(grad).max()<1e-5)
 
     mat, omega = kernel(mf)
     matmo, _ = kernel(mf, mo_rep=True)

@@ -133,7 +133,7 @@ def fft(f, mesh):
         return np.zeros_like(f)
 
     f3d = f.reshape(-1, *mesh)
-    assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
+    assert (f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = _fftn_wrapper(f3d)
     ngrids = np.prod(mesh)
     if f.ndim == 1 or (f.ndim == 3 and f.size == ngrids):
@@ -164,7 +164,7 @@ def ifft(g, mesh):
         return np.zeros_like(g)
 
     g3d = g.reshape(-1, *mesh)
-    assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
+    assert (g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = _ifftn_wrapper(g3d)
     ngrids = np.prod(mesh)
     if g.ndim == 1 or (g.ndim == 3 and g.size == ngrids):
@@ -243,7 +243,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # answers to agree
         b = cell.reciprocal_vectors()
         box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
+        assert (all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
         reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
         on_edge = reduced_coords.astype(int)
         if cell.dimension >= 1:
@@ -280,7 +280,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             raise NotImplementedError
 
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
-        assert(cell.dimension == 3)
+        assert (cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']

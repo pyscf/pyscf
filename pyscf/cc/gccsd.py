@@ -34,7 +34,7 @@ einsum = lib.einsum
 # This is unrestricted (U)CCSD in spin-orbital form.
 
 def update_amps(cc, t1, t2, eris):
-    assert(isinstance(eris, _PhysicistsERIs))
+    assert (isinstance(eris, _PhysicistsERIs))
     nocc, nvir = t1.shape
     fock = eris.fock
 
@@ -117,7 +117,7 @@ class GCCSD(ccsd.CCSD):
     conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert(isinstance(mf, scf.ghf.GHF))
+        assert (isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def init_amps(self, eris=None):
@@ -321,7 +321,6 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
 
         self.oooo = None
@@ -352,7 +351,7 @@ class _PhysicistsERIs:
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         self.nocc = mycc.nocc
         self.mol = mycc.mol
 
@@ -371,7 +370,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     if callable(ao2mofn):
         eri = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
     else:
-        assert(eris.mo_coeff.dtype == np.double)
+        assert (eris.mo_coeff.dtype == np.double)
         mo_a = eris.mo_coeff[:nao//2]
         mo_b = eris.mo_coeff[nao//2:]
         orbspin = eris.orbspin
@@ -415,7 +414,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nocc = eris.nocc
     nao, nmo = eris.mo_coeff.shape
     nvir = nmo - nocc
-    assert(eris.mo_coeff.dtype == np.double)
+    assert (eris.mo_coeff.dtype == np.double)
     mo_a = eris.mo_coeff[:nao//2]
     mo_b = eris.mo_coeff[nao//2:]
     orbspin = eris.orbspin

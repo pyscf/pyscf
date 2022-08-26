@@ -15,13 +15,13 @@
 #
 
 import tempfile
-from pyscf import dft, gto
+from pyscf import dft, gto, lib
 from pyscf.eph import eph_fd, rks
 import numpy as np
 import unittest
 
 def setUpModule():
-    global mol
+    global mol, mf
     mol = gto.M()
     mol.atom = '''O 0.000000000000 0.000000002577 0.868557119905
                   H 0.000000000000 -1.456050381698 2.152719488376
@@ -32,22 +32,28 @@ def setUpModule():
     mol.verbose=4
     mol.output = '/dev/null'
     mol.build()
+    mf = dft.RKS(mol)
+    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.grids.level = 3
+    mf.xc = 'b3lyp'
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-9
+    mf.kernel()
 
 def tearDownModule():
-    global mol
+    global mol, mf
     mol.stdout.close()
-    del mol
+    del mol, mf
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_rks_eph(self):
-        mf = dft.RKS(mol)
-        mf.chkfile = tempfile.NamedTemporaryFile().name
-        mf.grids.level = 3
-        mf.xc = 'b3lyp'
-        mf.conv_tol = 1e-14
-        mf.conv_tol_grad = 1e-9
-        mf.kernel()
+    def test_rks_eph(self):
+        myeph = rks.EPH(mf)
+        eph, _ = myeph.kernel()
+        self.assertAlmostEqual(lib.fp(abs(eph)), -0.1678876280387445, 6)
+        omega, mode = myeph.get_mode()
+        self.assertAlmostEqual(lib.fp(omega), 0.022542218158399716, 6)
 
+    def test_finite_diff_rks_eph_high_cost(self):
         grad = mf.nuc_grad_method().kernel()
         self.assertTrue(abs(grad).max()<1e-5)
         mat, omega = eph_fd.kernel(mf)
@@ -63,5 +69,5 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(min(abs(ephmo[i]-matmo[i]).max(), abs(ephmo[i]+matmo[i]).max())<1e-5)
 
 if __name__ == '__main__':
-    print("Full Tests for RKS")
+    print("Full Tests for EPH-RKS")
     unittest.main()

@@ -118,11 +118,11 @@ class KnownValues(unittest.TestCase):
 #        eris = mycc.ao2mo()
 #        imds = make_intermediates(mycc, t1, t2, eris)
 #        l1new, l2new = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-#        print(lib.finger(l1new[0]) --104.55975252585894)
-#        print(lib.finger(l1new[1]) --241.12677819375281)
-#        print(lib.finger(l2new[0]) --0.4957533529669417)
-#        print(lib.finger(l2new[1]) - 15.46423057451851 )
-#        print(lib.finger(l2new[2]) - 5.8430776663704407)
+#        print(lib.fp(l1new[0]) --104.55975252585894)
+#        print(lib.fp(l1new[1]) --241.12677819375281)
+#        print(lib.fp(l2new[0]) --0.4957533529669417)
+#        print(lib.fp(l2new[1]) - 15.46423057451851 )
+#        print(lib.fp(l2new[2]) - 5.8430776663704407)
 
         nocca, noccb = mol.nelec
         mo_a = mf.mo_coeff[0] + numpy.sin(mf.mo_coeff[0]) * .01j

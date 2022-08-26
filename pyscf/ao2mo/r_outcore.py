@@ -75,11 +75,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         if h5py.is_hdf5(erifile):
             feri = h5py.File(erifile, 'a')
             if dataname in feri:
-                del(feri[dataname])
+                del (feri[dataname])
         else:
             feri = h5py.File(erifile, 'w')
     else:
-        assert(isinstance(erifile, h5py.Group))
+        assert (isinstance(erifile, h5py.Group))
         feri = erifile
 
     if comp == 1:
@@ -307,7 +307,7 @@ def _count_naopair(mol, nao):
             nao_pair += di * dj
     return nao_pair
 
-del(MAX_MEMORY)
+del (MAX_MEMORY)
 
 
 if __name__ == '__main__':

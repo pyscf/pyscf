@@ -77,7 +77,7 @@ class X2CHelperMixin(lib.StreamObject):
 
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
         s = xmol.intor_symmetric('int1e_ovlp_spinor')
         t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
         v = xmol.intor_symmetric('int1e_nuc_spinor')
@@ -230,7 +230,7 @@ class X2CHelperMixin(lib.StreamObject):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
@@ -289,7 +289,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
 
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         t = _block_diag(xmol.intor_symmetric('int1e_kin'))
         v = _block_diag(xmol.intor_symmetric('int1e_nuc'))
@@ -361,7 +361,7 @@ class SpinOrbitalX2CHelper(X2CHelperMixin):
         else:
             xmol = mol
         c = lib.param.LIGHT_SPEED
-        assert('1E' in self.approx.upper())
+        assert ('1E' in self.approx.upper())
 
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
@@ -826,7 +826,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
             continue
 
         lmax = mol._bas[ib0:ib1,mole.ANG_OF].max()
-        assert(all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
+        assert (all(mol._bas[ib0:ib1, mole.KAPPA_OF] == 0))
         # TODO: loop based on kappa
         for l in range(lmax+1):
             bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,mole.ANG_OF] == l)[0]
@@ -881,12 +881,16 @@ def _invsqrt(a, tol=1e-14):
     return numpy.dot(v[:,idx]/numpy.sqrt(e[idx]), v[:,idx].T.conj())
 
 def _get_hcore_fw(t, v, w, s, x, c):
+    # s1 = s + (1/2c^2)(X^{\dag}*T*X)
     s1 = s + reduce(numpy.dot, (x.T.conj(), t, x)) * (.5/c**2)
+    # tx = T * X
     tx = numpy.dot(t, x)
+    # h1 = (v + T*X + V^{\dag}*T^{\dag} - (X^{\dag} * T * X) + (X^{\dag} * W * X)*(1/4c^2)
     h1 =(v + tx + tx.T.conj() - numpy.dot(x.T.conj(), tx) +
          reduce(numpy.dot, (x.T.conj(), w, x)) * (.25/c**2))
-
+    # R = S^{-1/2} * (S^{-1/2}\tilde{S}S^{-1/2})^{-1/2} * S^{1/2}
     r = _get_r(s, s1)
+    # H1 = R^{\dag} * H1 * R
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
     return h1
 

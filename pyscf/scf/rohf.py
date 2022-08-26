@@ -481,4 +481,4 @@ class HF1e(ROHF):
     scf = hf._hf1e_scf
 
 
-del(WITH_META_LOWDIN)
+del (WITH_META_LOWDIN)
