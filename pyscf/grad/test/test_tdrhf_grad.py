@@ -138,9 +138,13 @@ class KnownValues(unittest.TestCase):
         g1ref = tda_kernel(td.nuc_grad_method(), td.xy[2]) + mf.nuc_grad_method().kernel()
 
         tdg = td.nuc_grad_method().as_scanner()
+#[[ 0  0  -2.67023832e-01]
+# [ 0  0   2.67023832e-01]]
+        self.assertAlmostEqual(lib.fp(tdg.kernel(td.xy[0])), 0.18686561181358813, 6)
+
         g1 = tdg(mol.atom_coords(), state=3)[1]
-        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 7)
-        self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 8)
+        self.assertAlmostEqual(abs(g1-g1ref).max(), 0, 6)
+        self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 7)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
@@ -153,6 +157,10 @@ class KnownValues(unittest.TestCase):
     def test_tda_triplet(self):
         td = tdscf.TDA(mf).run(singlet=False, nstates=3)
         tdg = td.nuc_grad_method()
+# [[ 0  0  -2.81048403e-01]
+#  [ 0  0   2.81048403e-01]]
+        self.assertAlmostEqual(lib.fp(tdg.kernel(state=1)), 0.19667995802487931, 6)
+
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.47296513687621511, 8)
 
@@ -161,9 +169,13 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
-    def test_tdhf(self):
+    def test_tdhf_singlet(self):
         td = tdscf.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
+# [[ 0  0  -2.71041021e-01]
+#  [ 0  0   2.71041021e-01]]
+        self.assertAlmostEqual(lib.fp(tdg.kernel(state=1)), 0.18967687762609461, 6)
+
         g1 = tdg.kernel(td.xy[2])
         self.assertAlmostEqual(g1[0,2], -0.25240005833657309, 6)
 
@@ -172,10 +184,25 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 6)
 
+    def test_tdhf_triplet(self):
+        td = tdscf.TDDFT(mf).run(singlet=False, nstates=3)
+        tdg = td.nuc_grad_method()
+# [[ 0  0  -2.86250870e-01]
+#  [ 0  0   2.86250870e-01]]
+        self.assertAlmostEqual(lib.fp(tdg.kernel(state=1)), 0.20032088639558535, 6)
+
+        g1 = tdg.kernel(td.xy[2])
+        self.assertAlmostEqual(g1[0,2], -0.5408133995976914, 6)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
+
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().TDA().run(nstates=1).Gradients().kernel(state=1)
-        self.assertAlmostEqual(lib.finger(g), -0.07887074405221786, 7)
+        self.assertAlmostEqual(lib.fp(g), -0.07887074405221786, 7)
 
 
 if __name__ == "__main__":

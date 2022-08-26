@@ -33,7 +33,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
@@ -71,7 +71,7 @@ def energy(mp, t2, eris):
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''
-    #assert(isinstance(eris, _PhysicistsERIs))
+    #assert (isinstance(eris, _PhysicistsERIs))
     nocc, nvir = t2.shape[1:3]
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]
@@ -176,7 +176,7 @@ def make_rdm2(mp, t2=None, ao_repr=False):
 
 class GMP2(mp2.MP2):
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
-        assert(isinstance(mf, scf.ghf.GHF))
+        assert (isinstance(mf, scf.ghf.GHF))
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def ao2mo(self, mo_coeff=None):
@@ -228,7 +228,6 @@ class _PhysicistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
         self.oovv = None
 
@@ -257,13 +256,11 @@ class _PhysicistsERIs:
         if mp_mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             self.mo_energy = mp._scf.mo_energy[mo_idx]
             self.fock = numpy.diag(self.mo_energy)
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mp_mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
 
 def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
@@ -314,7 +311,7 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     nocc = mp.nocc
     nao, nmo = eris.mo_coeff.shape
     nvir = nmo - nocc
-    assert(eris.mo_coeff.dtype == numpy.double)
+    assert (eris.mo_coeff.dtype == numpy.double)
     orboa = eris.mo_coeff[:nao//2,:nocc]
     orbob = eris.mo_coeff[nao//2:,:nocc]
     orbva = eris.mo_coeff[:nao//2,nocc:]
@@ -371,7 +368,7 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     cput0 = log.timer_debug1('transforming oovv', *cput0)
     return eris
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

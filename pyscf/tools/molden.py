@@ -55,7 +55,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                 logger.warn(mol, str(e))
     if ene is None:
         ene = numpy.arange(nmo)
-    assert(spin == 'Alpha' or spin == 'Beta')
+    assert (spin == 'Alpha' or spin == 'Beta')
     if occ is None:
         occ = numpy.zeros(nmo)
         neleca, nelecb = mol.nelec

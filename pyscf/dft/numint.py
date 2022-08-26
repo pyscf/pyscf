@@ -50,7 +50,7 @@ SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
 MGGA_DENSITY_LAPL = False
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
-            non0tab=None, out=None, verbose=None):
+            non0tab=None, cutoff=None, out=None, verbose=None):
     '''Evaluate AO function value on the given grids.
 
     Args:
@@ -75,6 +75,9 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
         verbose : int or object of :class:`Logger`
@@ -108,7 +111,8 @@ def eval_ao(mol, coords, deriv=0, shls_slice=None,
         feval = 'GTOval_cart_deriv%d' % deriv
     else:
         feval = 'GTOval_sph_deriv%d' % deriv
-    return mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
+    return mol.eval_gto(feval, coords, comp, shls_slice, non0tab,
+                        cutoff=cutoff, out=out)
 
 def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
              with_lapl=True, verbose=None):
@@ -197,7 +201,7 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
 
         rho[tau_idx] = 0
         for i in range(1, 4):
-            c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
+            c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
             #:rho[tau_idx] += numpy.einsum('pi,pi->p', c1, ao[i])
             rho[tau_idx] += _contract_rho(ao[i], c1)
 
@@ -533,7 +537,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
         #aow += numpy.einsum('pi,p->pi', ao[0], .5*weight*vrho)
         vrho, vsigma = vxc[:2]
         if spin == 0:
-            assert(vsigma is not None and rho.ndim==2)
+            assert (vsigma is not None and rho.ndim==2)
             wv = _rks_gga_wv0(rho, vxc, weight)
         else:
             rho_a, rho_b = rho
@@ -813,7 +817,7 @@ def nr_sap_vxc(ni, mol, grids, max_memory=2000, verbose=None):
     atom_charges = mol.atom_charges()
     eps = numpy.finfo(float).eps
 
-    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+    for ao, mask, weight, coords in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
         aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
         vxc = numpy.ndarray(coords.shape[0], buffer=vxcw)
         vxc.fill(0.0)
@@ -894,7 +898,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     def block_loop(ao_deriv):
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             for i in range(nset):
                 rho = make_rho(i, ao, mask, xctype)
                 exc, vxc = ni.eval_xc(xc_code, rho, spin=0,
@@ -933,7 +937,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         vvweight=numpy.empty([nset,0])
         vvcoords=numpy.empty([nset,0,3])
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rhotmp = numpy.empty([0,4,weight.size])
             weighttmp = numpy.empty([0,weight.size])
             coordstmp = numpy.empty([0,weight.size,3])
@@ -949,7 +953,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             vvcoords=numpy.concatenate((vvcoords,coordstmp),axis=1)
             rhotmp = weighttmp = coordstmp = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             for i in range(nset):
                 rho = make_rho(i, ao, mask, 'GGA')
@@ -1049,7 +1053,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
     def block_loop(ao_deriv):
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             for i in range(nset):
                 rho_a = make_rhoa(i, ao, mask, xctype)
                 rho_b = make_rhob(i, ao, mask, xctype)
@@ -1196,7 +1200,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         p1 = 0
         _rho0 = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is not None:
                 if xctype == 'LDA':
@@ -1301,7 +1305,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if fxc is None:
                 if rho0 is None:
@@ -1332,7 +1336,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is None:
                 rhoa = make_rho0a(0, ao, mask, xctype)
@@ -1388,7 +1392,7 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
         aow = None
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is None:
                 rhoa = make_rho0a(0, ao, mask, xctype)
@@ -1643,7 +1647,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
         p1 = 0
         rho0a = rho0b = None
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             p0, p1 = p1, p1 + weight.size
             if rho0 is not None:
                 if xctype == 'LDA':
@@ -2469,7 +2473,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=0,
         rhoa = []
         rhob = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
             rhoa.append(ni.eval_rho2(mol, ao, mo_coeff[0], mo_occ[0], mask, xctype))
             rhob.append(ni.eval_rho2(mol, ao, mo_coeff[1], mo_occ[1], mask, xctype))
         rho = (numpy.hstack(rhoa), numpy.hstack(rhob))
@@ -2481,24 +2485,24 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
-    assert(nset == 1)
+    assert (nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao, mask, weight, coords \
-            in ni.block_loop(mol, grids, nao, 0, max_memory):
+            in ni.block_loop(mol, grids, nao, 0, max_memory=max_memory):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao, mask, 'LDA')
     return rho
 
 class _NumIntMixin(lib.StreamObject):
     libxc = libxc
+    cutoff = None  # cutoff for small AO values
 
-    @lib.with_doc(eval_ao.__doc__)
-    def eval_ao(self, mol, coords, deriv=0, shls_slice=None,
-                non0tab=None, out=None, verbose=None):
-        return eval_ao(mol, coords, deriv, shls_slice, non0tab, out, verbose)
-
+    eval_ao = staticmethod(eval_ao)
     get_rho = get_rho
+
+    def __init__(self):
+        self.omega = None  # RSH paramter
 
     def block_loop(self, mol, grids, nao=None, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None):
@@ -2526,7 +2530,8 @@ class _NumIntMixin(lib.StreamObject):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0, out=buf)
+            ao = self.eval_ao(mol, coords, deriv=deriv, non0tab=non0,
+                              cutoff=self.cutoff, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=0, with_lapl=True):
@@ -2651,8 +2656,8 @@ class _NumIntMixin(lib.StreamObject):
                 = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
                 = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
-        SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
-        LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+        SR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+        LR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
         alpha = c_LR
         beta = c_SR - c_LR
         '''
@@ -2668,9 +2673,6 @@ class _NumIntMixin(lib.StreamObject):
 
 class NumInt(_NumIntMixin):
     '''Numerical integration methods for non-relativistic RKS and UKS'''
-
-    def __init__(self):
-        self.omega = None  # RSH paramter
 
     @lib.with_doc(nr_vxc.__doc__)
     def nr_vxc(self, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
@@ -2703,6 +2705,7 @@ class NumInt(_NumIntMixin):
     nr_sap_vxc = nr_sap_vxc
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
+    nr_rks_fxc_st = nr_rks_fxc_st
     cache_xc_kernel  = cache_xc_kernel
 
     @lib.with_doc(make_mask.__doc__)

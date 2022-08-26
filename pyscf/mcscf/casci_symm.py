@@ -31,7 +31,7 @@ class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
 
-        assert(self.mol.symmetry)
+        assert (self.mol.symmetry)
         fcisolver = self.fcisolver
         if isinstance(fcisolver, fci.direct_spin0.FCISolver):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)

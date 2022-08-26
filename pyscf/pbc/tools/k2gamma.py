@@ -121,7 +121,7 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     E_g = E_g[E_sort_idx]
     C_gamma = C_gamma[:,E_sort_idx]
     s = scell.pbc_intor('int1e_ovlp')
-    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+    assert (abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
                - np.eye(Nmo*Nk)).max() < 1e-5)
 
     # For degenerated MOs, the transformed orbitals in super cell may not be
@@ -134,14 +134,14 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
             shift = min(E_g[degen_mask]) - .1
             f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
                        C_gamma[:,degen_mask].conj().T)
-            assert(abs(f.imag).max() < 1e-4)
+            assert (abs(f.imag).max() < 1e-4)
 
             e, na_orb = scipy.linalg.eigh(f.real, s, type=2)
             C_gamma = C_gamma.real
             C_gamma[:,degen_mask] = na_orb[:, e>1e-7]
         else:
             f = np.dot(C_gamma * E_g, C_gamma.conj().T)
-            assert(abs(f.imag).max() < 1e-4)
+            assert (abs(f.imag).max() < 1e-4)
             e, C_gamma = scipy.linalg.eigh(f.real, s, type=2)
 
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
@@ -212,7 +212,7 @@ def to_supercell_mo_integrals(kmf, mo_ints):
     scell, E_g, C_gamma, mo_phase = mo_k2gamma(cell, e_k, mo_k, kpts)
 
     scell_ints = lib.einsum('xui,xuv,xvj->ij', mo_phase.conj(), mo_ints, mo_phase)
-    assert(abs(scell_ints.imag).max() < 1e-7)
+    assert (abs(scell_ints.imag).max() < 1e-7)
     return scell_ints.real
 
 

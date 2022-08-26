@@ -238,7 +238,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     # and the compensating function.  0D, 1D, 2D do not have vbar.
     if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
                                          'int3c2e_cart'):
-        assert(comp == 1)
+        assert (comp == 1)
         charge = -cell.atom_charges()
 
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
@@ -405,7 +405,7 @@ class AFTDF(lib.StreamObject):
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
         if aosym == 's2':
-            assert(shls_slice[2] == 0)
+            assert (shls_slice[2] == 0)
             i0 = ao_loc[shls_slice[0]]
             i1 = ao_loc[shls_slice[1]]
             nij = i1*(i1+1)//2 - i0*(i0+1)//2
@@ -457,7 +457,7 @@ class AFTDF(lib.StreamObject):
         if mesh is None:
             mesh = self.mesh
         if kpts is None:
-            assert(is_zero(q))
+            assert (is_zero(q))
             kpts = self.kpts
         kpts = numpy.asarray(kpts)
         nkpts = len(kpts)
@@ -471,7 +471,7 @@ class AFTDF(lib.StreamObject):
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
         if aosym == 's2':
-            assert(shls_slice[2] == 0)
+            assert (shls_slice[2] == 0)
             i0 = ao_loc[shls_slice[0]]
             i1 = ao_loc[shls_slice[1]]
             nij = i1*(i1+1)//2 - i0*(i0+1)//2
@@ -628,7 +628,7 @@ def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
         return rsh_df.get_jk(dm, hermi, kpts, kpts_band, with_j, with_k,
                              omega=None, exxdiv=exxdiv)
 
-del(CUTOFF, PRECISION)
+del (CUTOFF, PRECISION)
 
 
 if __name__ == '__main__':

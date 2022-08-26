@@ -195,8 +195,8 @@ class UADC(lib.StreamObject):
         return self
 
     def kernel_gs(self):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -236,8 +236,8 @@ class UADC(lib.StreamObject):
         return self.e_corr, self.t1, self.t2
 
     def kernel(self, nroots=1, guess=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
@@ -275,7 +275,7 @@ class UADC(lib.StreamObject):
         self._finalize()
 
         self.method_type = self.method_type.lower()
-        if(self.method_type == "ea"):
+        if (self.method_type == "ea"):
             e_exc, v_exc, spec_fac, X, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris)
 
         elif(self.method_type == "ip"):

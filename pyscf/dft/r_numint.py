@@ -31,16 +31,17 @@ from pyscf import __config__
 
 
 def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
-            non0tab=None, out=None, verbose=None):
+            non0tab=None, cutoff=None, out=None, verbose=None):
     '''Evaluates the value of 2-component or 4-component j-adapted basis on grids.
     '''
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     feval = 'GTOval_spinor_deriv%d' % deriv
     if not with_s:
         # aoLa, aoLb = aoL
-        ao = aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab, out=out)
+        ao = aoL = mol.eval_gto(feval, coords, comp, shls_slice, non0tab,
+                                cutoff=cutoff, out=out)
     else:
-        assert(deriv <= 1)  # only GTOval_ipsp_spinor
+        assert (deriv <= 1)  # only GTOval_ipsp_spinor
         ngrids = coords.shape[0]
         nao = mol.nao_2c()
         ao = numpy.ndarray((4,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
@@ -54,7 +55,7 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
             comp = (n+1)*(n+2)//2
             p0, p1 = p1, p1 + comp
             aoSa[p0:p1], aoSb[p0:p1] = mol.eval_gto(
-                feval_gto[n], coords, comp, shls_slice, non0tab)
+                feval_gto[n], coords, comp, shls_slice, non0tab, cutoff=cutoff)
 
         if deriv == 0:
             ao = ao[:,0]
@@ -701,9 +702,6 @@ class RNumInt(numint._NumIntMixin):
     collinear_thrd = getattr(__config__, 'dft_numint_RnumInt_collinear_thrd', 0.99)
     collinear_samples = getattr(__config__, 'dft_numint_RnumInt_collinear_samples', 200)
 
-    def __init__(self):
-        self.omega = None  # RSH paramter
-
     get_rho = get_rho
     cache_xc_kernel = cache_xc_kernel
     get_vxc = r_vxc = r_vxc
@@ -711,10 +709,7 @@ class RNumInt(numint._NumIntMixin):
 
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
-
-    def eval_ao(self, mol, coords, deriv=0, with_s=True, shls_slice=None,
-                non0tab=None, out=None, verbose=None):
-        return eval_ao(mol, coords, deriv, with_s, shls_slice, non0tab, out, verbose)
+    eval_ao = staticmethod(eval_ao)
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
@@ -751,7 +746,7 @@ class RNumInt(numint._NumIntMixin):
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao = self.eval_ao(mol, coords, deriv=deriv, with_s=with_s,
-                              non0tab=non0, out=buf)
+                              non0tab=non0, cutoff=self.cutoff, out=buf)
             yield ao, non0, weight, coords
 
     def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False):

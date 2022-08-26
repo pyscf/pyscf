@@ -31,7 +31,7 @@ from pyscf.grad import ccsd as ccsd_grad
 def grad_elec(cigrad, civec=None, eris=None, atmlst=None, verbose=logger.INFO):
     myci = cigrad.base
     if civec is None: civec = myci.ci
-    assert(not isinstance(civec, (list, tuple)))
+    assert (not isinstance(civec, (list, tuple)))
     nocc = myci.nocc
     nmo = myci.nmo
     d1 = cisd._gamma1_intermediates(myci, civec, nmo, nocc)
@@ -194,85 +194,3 @@ class Gradients(rhf_grad.GradientsMixin):
 Grad = Gradients
 
 cisd.CISD.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol)
-    ehf = mf.scf()
-
-    myci = cisd.CISD(mf)
-    myci.kernel()
-    g1 = myci.Gradients().kernel()
-# O     0.0000000000    -0.0000000000     0.0065498854
-# H    -0.0000000000     0.0208760610    -0.0032749427
-# H    -0.0000000000    -0.0208760610    -0.0032749427
-    print(lib.finger(g1) - -0.032562200777204092)
-
-    mcs = myci.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
-
-    print('-----------------------------------')
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol)
-    ehf = mf.scf()
-
-    myci = cisd.CISD(mf)
-    myci.frozen = [0,1,10,11,12]
-    myci.max_memory = 1
-    myci.kernel()
-    g1 = Gradients(myci).kernel()
-# O    -0.0000000000     0.0000000000     0.0106763547
-# H     0.0000000000    -0.0763194988    -0.0053381773
-# H     0.0000000000     0.0763194988    -0.0053381773
-    print(lib.finger(g1) - 0.1022427304650084)
-
-    mcs = myci.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
-
-    mol = gto.M(
-        atom = 'H 0 0 0; H 0 0 1.76',
-        basis = '631g',
-        unit='Bohr')
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-    myci = cisd.CISD(mf)
-    myci.conv_tol = 1e-10
-    myci.kernel()
-    g1 = Gradients(myci).kernel()
-#[[ 0.          0.         -0.07080036]
-# [ 0.          0.          0.07080036]]

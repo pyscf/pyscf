@@ -28,7 +28,8 @@
 double CINTcommon_fac_sp(int l);
 
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids,
+                     double fac, double expcutoff)
 {
         size_t i, j, k;
         double arr, maxc, eprim;
@@ -58,7 +59,7 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < EXPCUTOFF) {
+                if (arr-logcoeff[j] < expcutoff) {
                         not0 = 1;
                         eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {
@@ -209,7 +210,8 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 }
 
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, size_t ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids,
+                     double fac, double expcutoff)
 {
         size_t i, j, k;
         double arr, maxc, eprim;
@@ -248,7 +250,7 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
         for (i = 0; i < ngrids; i++) {
                 arr = alpha[j] * rr[i];
-                if (arr-logcoeff[j] < EXPCUTOFF) {
+                if (arr-logcoeff[j] < expcutoff) {
                         not0 = 1;
                         eprim = exp(-arr) * fac;
                         for (k = 0; k < nctr; k++) {

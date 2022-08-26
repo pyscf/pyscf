@@ -34,7 +34,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:      eris = mp.ao2mo(mo_coeff)
     if mo_energy is None: mo_energy = eris.mo_energy
@@ -139,7 +139,7 @@ scf.hf.RHF.DFMP2 = lib.class_as_method(DFMP2)
 scf.rohf.ROHF.DFMP2 = None
 scf.uhf.UHF.DFMP2 = None
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

@@ -36,6 +36,12 @@ void VXCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
         double logcoeff[NPRIMAX];
         double dr[3];
         double *p_exp, *pcoeff, *ratm;
+        double expcutoff;
+        if (env[PTR_EXPCUTOFF] == 0) {
+                expcutoff = EXPCUTOFF;
+        } else {
+                expcutoff = env[PTR_EXPCUTOFF];
+        }
 
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
@@ -61,7 +67,7 @@ void VXCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
                                 rr = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
                                 for (j = 0; j < np; j++) {
                                         arr = p_exp[j] * rr;
-                                        if (arr-logcoeff[j] < EXPCUTOFF) {
+                                        if (arr-logcoeff[j] < expcutoff) {
                                                 non0table[ib*nbas+bas_id] = 1;
                                                 goto next_blk;
                                         }

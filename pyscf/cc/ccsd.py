@@ -32,7 +32,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, get_e_hf, _mo_without_core
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
@@ -95,7 +95,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
 def update_amps(mycc, t1, t2, eris):
     if mycc.cc2:
         raise NotImplementedError
-    assert(isinstance(eris, _ChemistsERIs))
+    assert (isinstance(eris, _ChemistsERIs))
 
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(mycc.stdout, mycc.verbose)
@@ -422,7 +422,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
             tmp = lib.transpose(tmp.reshape(nocc2,nvir,nvir), axes=(0,2,1), out=buf)
             Ht2tril -= tmp.reshape(nocc2,nvir,nvir)
     else:
-        assert(not with_ovvv)
+        assert (not with_ovvv)
         Ht2tril = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
     return Ht2tril
 
@@ -455,7 +455,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
         buf = buf.reshape(nocc**2,nao,nao)
         Ht2 = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
     else:
-        assert(not with_ovvv)
+        assert (not with_ovvv)
         Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
 
     return Ht2.reshape(t2.shape)
@@ -483,7 +483,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
         vvvv : None or integral object
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
-    assert(t2.dtype == numpy.double)
+    assert (t2.dtype == numpy.double)
     if t2.size == 0:
         return numpy.zeros_like(t2)
 
@@ -515,7 +515,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     max_memory = max(MEMORYMIN, mycc.max_memory - lib.current_memory()[0])
     if vvvv is None:   # AO-direct CCSD
         ao_loc = mol.ao_loc_nr()
-        assert(nvira == nvirb == ao_loc[-1])
+        assert (nvira == nvirb == ao_loc[-1])
 
         intor = mol._add_suffix('int2e')
         ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
@@ -607,7 +607,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''
     # vvvv == None means AO-direct CCSD. It should redirect to
     # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
-    assert(vvvv is not None)
+    assert (vvvv is not None)
 
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mycc, verbose)
@@ -979,7 +979,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     @property
     def e_tot(self):
-        return (self.e_hf or self._scf.e_tot) + self.e_corr
+        return self.e_hf + self.e_corr
 
     @property
     def nocc(self):
@@ -1004,6 +1004,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_e_hf = get_e_hf
 
     def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import cc
@@ -1042,6 +1043,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         time0 = logger.process_clock(), logger.perf_counter()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
+        e_hf = self.e_hf
+        if e_hf is None: e_hf = self.get_e_hf(mo_coeff=self.mo_coeff)
         mo_e = eris.mo_energy
         nocc = self.nocc
         nvir = mo_e.size - nocc
@@ -1060,8 +1063,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
         self.emp2 = emp2.real
 
-        e_hf = self.e_hf or eris.e_hf
-
         logger.info(self, 'Init t2, MP2 energy = %.15g  E_corr(MP2) %.15g',
                     e_hf + self.emp2, self.emp2)
         logger.timer(self, 'init mp2', *time0)
@@ -1074,19 +1075,17 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def kernel(self, t1=None, t2=None, eris=None):
         return self.ccsd(t1, t2, eris)
     def ccsd(self, t1=None, t2=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
 
+        self.e_hf = self.get_e_hf()
+
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
@@ -1321,7 +1320,6 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
 
         self.oooo = None
         self.ovoo = None
@@ -1341,7 +1339,7 @@ class _ChemistsERIs:
         vhf = mycc._scf.get_veff(mycc.mol, dm)
         fockao = mycc._scf.get_fock(vhf=vhf, dm=dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 

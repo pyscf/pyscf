@@ -458,8 +458,8 @@ def _new(shape, dtype, out):
     if out is None: # Incore:
         out = np.empty(shape, dtype=dtype)
     else:
-        assert(out.shape == shape)
-        assert(out.dtype == dtype)
+        assert (out.shape == shape)
+        assert (out.dtype == dtype)
     return out
 
 def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
@@ -678,7 +678,7 @@ def _add_pt2(pt2, nkpts, kconserv, kpt_indices, orb_indices, val):
         val (ndarray):
             Values to be added to pt2.
     '''
-    assert(len(orb_indices) == 4)
+    assert (len(orb_indices) == 4)
     ki, kj, ka = kpt_indices
     kb = kconserv[ki,ka,kj]
     idxi, idxj, idxa, idxb = [slice(None, None)

@@ -123,8 +123,8 @@ def convert_to_uccsd(mycc):
 
     mf = scf.addons.convert_to_uhf(mycc._scf)
     ucc = uccsd.UCCSD(mf)
-    assert(mycc._nocc is None)
-    assert(mycc._nmo is None)
+    assert (mycc._nocc is None)
+    assert (mycc._nmo is None)
     ucc.__dict__.update(mycc.__dict__)
     ucc._scf = mf
     ucc.mo_coeff = mf.mo_coeff
@@ -142,8 +142,8 @@ def convert_to_gccsd(mycc):
 
     mf = scf.addons.convert_to_ghf(mycc._scf)
     gcc = gccsd.GCCSD(mf)
-    assert(mycc._nocc is None)
-    assert(mycc._nmo is None)
+    assert (mycc._nocc is None)
+    assert (mycc._nmo is None)
     gcc.__dict__.update(mycc.__dict__)
     gcc._scf = mf
     gcc.mo_coeff = mf.mo_coeff
