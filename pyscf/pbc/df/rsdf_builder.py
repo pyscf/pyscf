@@ -57,6 +57,20 @@ class _RSGDFBuilder(_Int3cBuilder):
     '''
     Use the range-separated algorithm to build Gaussian density fitting 3-center tensor
     '''
+
+    # In real-space 3c2e integrals exclude smooth-smooth block (*|DD)
+    fft_dd_block = True
+    # In real-space 3c2e integrals exclude smooth auxiliary basis (D|**)
+    exclude_d_aux = True
+    # If both exclude_d_aux and fft_dd_block are enabled,
+    # evaluate only the (C|CC), (C|CD), (C|DC) blocks.
+
+    # set True to force calculating j2c^(-1/2) using eigenvalue
+    # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
+    # first, and ED is called only if CD fails.
+    j2c_eig_always = False
+    linear_dep_threshold = LINEAR_DEP_THR
+
     def __init__(self, cell, auxcell, kpts=np.zeros((1,3))):
         self.mesh = None
         if cell.omega != 0:
@@ -67,20 +81,14 @@ class _RSGDFBuilder(_Int3cBuilder):
             self.omega = None
         self.rs_auxcell = None
 
-        # In real-space 3c2e integrals exclude smooth-smooth block (*|DD)
-        self.exclude_dd_block = cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
-        # In real-space 3c2e integrals exclude smooth auxiliary basis (D|**)
-        self.exclude_d_aux = True
-        # If both self.exclude_d_aux and self.exclude_dd_block are enabled,
-        # evaluate only the (C|CC), (C|CD), (C|DC) blocks.
-
-        # set True to force calculating j2c^(-1/2) using eigenvalue
-        # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
-        # first, and ED is called only if CD fails.
-        self.j2c_eig_always = False
-        self.linear_dep_threshold = LINEAR_DEP_THR
-
+        cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
         _Int3cBuilder.__init__(self, cell, auxcell, kpts)
+
+    @property
+    def exclude_dd_block(self):
+        cell = self.cell
+        return (self.fft_dd_block and
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum')
 
     def has_long_range(self):
         '''Whether to add the long-range part computed with AFT integrals'''
@@ -546,7 +554,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                 else:
                     for k, k_conj in kpt_ij_pairs:
                         kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                        if k_conj is None:
+                        if k_conj is None or k == k_conj:
                             for ij_idx in kpt_ij_idx:
                                 merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
                                 merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)
@@ -890,11 +898,16 @@ class _RSGDFBuilder(_Int3cBuilder):
                 # Find ki's and kj's that satisfy k_aux = kj - ki
                 log.debug1('Cholesky decomposition for j2c at kpt %s %s',
                            k, scaled_uniq_kpts[k])
-                cd_j2c = self.decompose_j2c(h5swap[f'j2c/{j2c_idx}'])
+                j2c = h5swap[f'j2c/{j2c_idx}']
+                if k == k_conj:
+                    # DF metric for self-conjugated k-point should be real
+                    j2c = np.asarray(j2c).real
+                cd_j2c = self.decompose_j2c(j2c)
+                j2c = None
                 kpt_ij_idx = np.where(uniq_inverse == k)[0]
                 yield uniq_kpts[k], kpt_ij_idx, cd_j2c
 
-                if k_conj is None:
+                if k_conj is None or k == k_conj:
                     continue
 
                 # Swap ki, kj for the conjugated case

@@ -57,15 +57,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.fuse: callable = None
         self.rs_fused_cell = None
 
-        # set True to force calculating j2c^(-1/2) using eigenvalue
-        # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
-        # first, and ED is called only if CD fails.
-        self.j2c_eig_always = False
-        self.linear_dep_threshold = rsdf_builder.LINEAR_DEP_THR
-
-        # In real-space 3c2e integrals exclude smooth-smooth block (*|DD)
-        self.exclude_dd_block = cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
-
         _Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
     def has_long_range(self):
@@ -106,6 +97,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             self.ke_cutoff = ke_cutoff.min()
 
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
+
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
 
@@ -297,7 +289,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
                 else:
                     for k, k_conj in kpt_ij_pairs:
                         kpt_ij_idx = np.where(uniq_inverse == k)[0]
-                        if k_conj is None:
+                        if k_conj is None or k == k_conj:
                             for ij_idx in kpt_ij_idx:
                                 merge_dd(outR[ij_idx], fswap[f'{dataname}R-dd/{ij_idx}'], shls_slice)
                                 merge_dd(outI[ij_idx], fswap[f'{dataname}I-dd/{ij_idx}'], shls_slice)

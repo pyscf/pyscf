@@ -272,16 +272,12 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
         if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union).set(
-                eta=self.eta,
-                mesh=self.mesh,
-                linear_dep_threshold=self.linear_dep_threshold,
-            )
+            dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
         else:
-            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union).set(
-                mesh=self.mesh,
-                linear_dep_threshold=self.linear_dep_threshold,
-            )
+            dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
+        dfbuilder.eta = self.eta
+        dfbuilder.mesh = self.mesh
+        dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         dfbuilder.make_j3c(cderi_file, j_only=self._j_only)
 
     def has_kpts(self, kpts):

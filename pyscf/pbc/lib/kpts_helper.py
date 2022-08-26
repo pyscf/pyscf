@@ -97,7 +97,13 @@ def unique_with_wrap_around(cell, kpts):
     return uniq_kpts, uniq_index, uniq_inverse
 
 def group_by_conj_pairs(cell, kpts, wrap_around=True):
-    '''Find all conjugation k-point pairs in the input kpts'''
+    '''Find all conjugation k-point pairs in the input kpts.
+    This function lables three types of conjugation.
+    1. self-conjugated. The two index in idx_pairs have the same value.
+    2. conjugated to the k-point within the input kpts. The indices of conjugated
+    k-points are held in idx_pairs.
+    3. conjugated to the k-point not inside the input kpts. The record is (index, None).
+    '''
     if wrap_around:
         scaled = cell.get_scaled_kpts(kpts)
         scaled = np.modf(scaled)[0]
@@ -114,7 +120,7 @@ def group_by_conj_pairs(cell, kpts, wrap_around=True):
     scaled = scaled.round(5)
     scaled_conj = scaled_conj.round(5)
     self_conj_mask = abs(scaled - scaled_conj).max(axis=1) < KPT_DIFF_TOL
-    idx_pairs = [(k, None) for k in np.where(self_conj_mask)[0]]
+    idx_pairs = [(k, k) for k in np.where(self_conj_mask)[0]]
 
     seen = self_conj_mask
     for k, (skpt, skpt_conj) in enumerate(zip(scaled, scaled_conj)):
