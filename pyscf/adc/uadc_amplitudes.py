@@ -26,7 +26,7 @@ from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf.adc.radc import _create_t2_h5cache
+from pyscf.adc.radc_amplitudes import _create_t2_h5cache 
 from pyscf import __config__
 from pyscf import df
 

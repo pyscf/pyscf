@@ -508,7 +508,6 @@ def contract_ladder(myadc,t_amp,vvvv):
 
     return t
 
-
 def _create_t2_h5cache():
     '''Create an unclosed and unlinked h5 temporary file to cache t2 data so as
     to pass t2 between iterations. This is not a good practice though. Use this
