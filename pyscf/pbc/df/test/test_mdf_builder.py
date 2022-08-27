@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
             v2 = ao2mo.restore(1, v2, cell.nao).reshape(v1.shape)
             self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 9)
@@ -231,19 +231,19 @@ class KnownValues(unittest.TestCase):
             v2 = ao2mo.restore(1, v2, cell.nao).reshape(v1.shape)
             self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = True
+            dfbuilder.fft_dd_block = True
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = True
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
@@ -320,7 +320,7 @@ class KnownValues(unittest.TestCase):
             v2 = ao2mo.restore(1, v2, cell_lr.nao).reshape(v1.shape)
             self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 9)
@@ -439,7 +439,7 @@ class KnownValues(unittest.TestCase):
             v2 = ao2mo.restore(1, v2, cell_sr.nao).reshape(v1.shape)
             self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.014857466177913803, 8)
@@ -558,19 +558,19 @@ class KnownValues(unittest.TestCase):
             v2 = ao2mo.restore(1, v2, cell_sr.nao).reshape(v1.shape)
             self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = True
+            dfbuilder.fft_dd_block = True
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.014857466177913803, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = True
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.014857466177913803, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])

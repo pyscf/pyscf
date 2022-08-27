@@ -709,7 +709,7 @@ class RangeSeparatedJKBuilder(object):
             log.debug1('ft_ao_pair for kpt = %s', kpt)
             log.debug2('ft_ao_pair for kpti_idx = %s', kpti_idx)
             log.debug2('ft_ao_pair for kptj_idx = %s', kptj_idx)
-            swap_2e = k_conj is not None
+            swap_2e = k_conj is not None and k != k_conj
 
             coulG = self.weighted_coulG(kpt, exxdiv, mesh)
             coulG_SR = self.weighted_coulG_SR(kpt, False, mesh)

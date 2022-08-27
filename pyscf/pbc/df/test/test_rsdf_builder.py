@@ -123,21 +123,21 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(v1 - lib.unpack_tril(v2).reshape(v1.shape)).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = True
+            dfbuilder.fft_dd_block = True
             dfbuilder.exclude_d_aux = False
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.5094843470069796, 8)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = True
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.5094843470069796, 8)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = False
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)
@@ -293,21 +293,21 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(v1 - lib.unpack_tril(v2).reshape(v1.shape)).max(), 0, 9)
 
-            dfbuilder.exclude_dd_block = True
+            dfbuilder.fft_dd_block = True
             dfbuilder.exclude_d_aux = False
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.9647178286189275, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = True
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.9647178286189275, 7)
 
-            dfbuilder.exclude_dd_block = False
+            dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = False
             dfbuilder.build()
             dfbuilder.make_j3c(tmpf.name)

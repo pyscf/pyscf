@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
             cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
         pairs = kpts_helper.group_by_conj_pairs(cell, ukpts)[0]
         self.assertEqual(
-            pairs, [(0, None), (2, None), (1, 3), (4, 8), (5, 11), (6, 10), (7, 9)])
+            pairs, [(0, 0), (2, 2), (1, 3), (4, 8), (5, 11), (6, 10), (7, 9)])
         for i, j in pairs:
             if j is not None:
                 idx = np.where(uniq_inv == i)[0] // nkpts
