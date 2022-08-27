@@ -28,6 +28,8 @@ from pyscf.adc import dfadc
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
+import h5py
+import tempfile
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):

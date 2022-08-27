@@ -29,8 +29,6 @@ from pyscf.adc import radc_amplitudes
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
-import h5py
-import tempfile
 
 
 # Excited-state kernel
