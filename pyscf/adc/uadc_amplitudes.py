@@ -26,7 +26,7 @@ from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf.adc.radc import _create_t2_h5cache
+from pyscf.adc import radc
 from pyscf import __config__
 from pyscf import df
 
@@ -83,7 +83,7 @@ def compute_amplitudes(myadc, eris):
     D2_a = D2_a.reshape((nocc_a,nocc_a,nvir_a,nvir_a))
 
     t2_1_a = v2e_oovv/D2_a
-    h5cache_t2 = _create_t2_h5cache()
+    h5cache_t2 = radc._create_t2_h5cache()
     if not isinstance(eris.oooo, np.ndarray):
         t2_1_a = h5cache_t2.create_dataset('t2_1_a', data=t2_1_a)
 

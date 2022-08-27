@@ -25,11 +25,10 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
+from pyscf.adc import radc
 from pyscf import __config__
 from pyscf import df
 from pyscf import symm
-import h5py
-import tempfile
 
 
 def compute_amplitudes_energy(myadc, eris, verbose=None):
@@ -71,7 +70,7 @@ def compute_amplitudes(myadc, eris):
     D1 = D1.reshape((nocc,nvir))
 
     t2_1 = v2e_oovv/D2
-    h5cache_t2 = _create_t2_h5cache()
+    h5cache_t2 = radc._create_t2_h5cache()
     if not isinstance(eris.oooo, np.ndarray):
         t2_1 = h5cache_t2.create_dataset('t2_1', data=t2_1)
 
@@ -509,12 +508,4 @@ def contract_ladder(myadc,t_amp,vvvv):
     return t
 
 
-def _create_t2_h5cache():
-    '''Create an unclosed and unlinked h5 temporary file to cache t2 data so as
-    to pass t2 between iterations. This is not a good practice though. Use this
-    as a temporary workaround before figuring out a better solution to handle
-    big t2 amplitudes.
-    '''
-    tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    return h5py.File(tmpfile.name, 'w')
 
