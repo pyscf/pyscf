@@ -333,15 +333,6 @@ class RADC(lib.StreamObject):
     def make_rdm1(self):
         return self._adc_es.make_rdm1()
 
-def _create_t2_h5cache():
-    '''Create an unclosed and unlinked h5 temporary file to cache t2 data so as
-    to pass t2 between iterations. This is not a good practice though. Use this
-    as a temporary workaround before figuring out a better solution to handle
-    big t2 amplitudes.
-    '''
-    tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    return h5py.File(tmpfile.name, 'w')
-
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
