@@ -443,6 +443,9 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
                             cell.dimension, mesh_guess[cell.dimension:])
         return self
 
+    def build(self):
+        return self.check_sanity()
+
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
     # post-HF code, get_jk was often called with an incomplete DM (e.g. the

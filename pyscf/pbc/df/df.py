@@ -127,6 +127,10 @@ make_auxcell = make_modrho_basis
 class GDF(lib.StreamObject, aft.AFTDFMixin):
     '''Gaussian density fitting
     '''
+    # Call _CCGDFBuilder if applicable. _CCGDFBuilder is slower than
+    # _RSGDFBuilder but numerically more close to previous versions
+    _prefer_ccdf = False
+
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
         self.cell = cell
         self.stdout = cell.stdout
@@ -147,9 +151,6 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         # this parameter was set to 0.2 in v1.5.1 or older and was changed to
         # 0 since v1.5.2.
         self.exp_to_discard = cell.exp_to_discard
-
-        # tends to call _CCGDFBuilder if applicable
-        self._prefer_ccdf = False
 
         # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG

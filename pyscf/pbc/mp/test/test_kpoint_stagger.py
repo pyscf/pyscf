@@ -62,7 +62,7 @@ def build_h2_gdf_cell():
     cell.unit = 'B'
     cell.basis = [[0, [1.0, 1]],]
     cell.pseudo = 'gth-pade'
-    cell.verbose = 4
+    cell.verbose = 5
     cell.output = '/dev/null'
     cell.build()
     return cell
@@ -110,29 +110,29 @@ def run_kcell_complex_gdf(cell, nk):
     return emf, emp2_sub.e_corr, emp2_ext.e_corr
 
 class KnownValues(unittest.TestCase):
-    def test_222_h2_fftdf(self):
+    def test_222_h2_fftdf_high_cost(self):
         cell = build_h2_fftdf_cell()
         nk = [2,2,2]
         emf, emp2_sub, emp2_ext = run_kcell_fftdf(cell,nk)
-        self.assertAlmostEqual(emf, -1.1097111706856706, 9)
-        self.assertAlmostEqual(emp2_sub, -0.016715452146525603, 9)
-        self.assertAlmostEqual(emp2_ext, -0.01449245927191392, 9)
+        self.assertAlmostEqual(emf, -1.1097111706856706, 7)
+        self.assertAlmostEqual(emp2_sub, -0.016715452146525603, 7)
+        self.assertAlmostEqual(emp2_ext, -0.01449245927191392, 7)
 
         emf, emp2_sub, emp2_ext = run_kcell_complex_fftdf(cell,nk)
-        self.assertAlmostEqual(emp2_sub, -0.016715452146525596, 9)
-        self.assertAlmostEqual(emp2_ext, -0.014492459271913925, 9)
+        self.assertAlmostEqual(emp2_sub, -0.016715452146525596, 7)
+        self.assertAlmostEqual(emp2_ext, -0.014492459271913925, 7)
 
     def test_222_h2_gdf(self):
         cell = build_h2_gdf_cell()
         nk = [2,2,2]
         emf, emp2_sub, emp2_ext = run_kcell_gdf(cell,nk)
-        self.assertAlmostEqual(emf, -0.40854731697431584, 9)
-        self.assertAlmostEqual(emp2_sub, -0.04014371773827328, 9)
-        self.assertAlmostEqual(emp2_ext, -0.04043697990545155, 9)
+        self.assertAlmostEqual(emf, -0.40854731697431584, 7)
+        self.assertAlmostEqual(emp2_sub, -0.04014371773827328, 7)
+        self.assertAlmostEqual(emp2_ext, -0.04043697990545155, 7)
 
         emf, emp2_sub, emp2_ext = run_kcell_complex_gdf(cell,nk)
-        self.assertAlmostEqual(emp2_sub, -0.04014371773827323, 9)
-        self.assertAlmostEqual(emp2_ext, -0.040436979905451524, 9)
+        self.assertAlmostEqual(emp2_sub, -0.04014371773827323, 7)
+        self.assertAlmostEqual(emp2_ext, -0.040436979905451524, 7)
 
     def test_222_diamond_frozen_high_cost(self):
         cell = pbcgto.Cell()
@@ -162,20 +162,19 @@ class KnownValues(unittest.TestCase):
         emp2_sub = KMP2_stagger(kmf, flag_submesh=True, frozen=[0,1,2]).run()
         emp2_ext = KMP2_stagger(kmf, flag_submesh=False, frozen=[0,1,2]).run()
 
-        self.assertAlmostEqual(emp2_sub.e_corr, -0.0254955913664726, 9)
-        self.assertAlmostEqual(emp2_ext.e_corr, -0.0126977970896905, 9)
+        self.assertAlmostEqual(emp2_sub.e_corr, -0.0254955913664726, 7)
+        self.assertAlmostEqual(emp2_ext.e_corr, -0.0126977970896905, 7)
 
         #   GDF-based calculation
-        kmf = pbcscf.KRHF(cell, abs_kpts)
-        gdf = df.GDF(cell, abs_kpts).build()
-        kmf.with_df = gdf
+        kmf = pbcscf.KRHF(cell, abs_kpts).density_fit()
+        kmf.with_df._prefer_ccdf = True
         kmf.conv_tol = 1e-12
         kmf.scf()
         emp2_sub = KMP2_stagger(kmf, flag_submesh=True, frozen=[0,1,2]).run()
         emp2_ext = KMP2_stagger(kmf, flag_submesh=False, frozen=[0,1,2]).run()
 
-        self.assertAlmostEqual(emp2_sub.e_corr, -0.0252835750365586, 9)
-        self.assertAlmostEqual(emp2_ext.e_corr, -0.0126846178079962, 9)
+        self.assertAlmostEqual(emp2_sub.e_corr, -0.0252835750365586, 7)
+        self.assertAlmostEqual(emp2_ext.e_corr, -0.0126846178079962, 7)
 
 if __name__ == '__main__':
     print("Staggered KMP2 energy calculation test")
