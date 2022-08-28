@@ -37,7 +37,6 @@ def setUpModule():
                verbose = 0,
                basis='sto3g')
     cell1 = gto.Cell()
-    cell1.precision = 1e-12
     cell1.atom = '''
     He   1.3    .2       .3
     He    .1    .1      1.1 '''
