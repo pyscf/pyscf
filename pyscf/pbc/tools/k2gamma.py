@@ -30,6 +30,7 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 from pyscf.pbc import tools
+from pyscf.pbc.lib.kpts import KPoints
 
 
 def kpts_to_kmesh(cell, kpts):
@@ -50,7 +51,7 @@ def translation_vectors_for_kmesh(cell, kmesh):
     R_rel_b = np.arange(kmesh[1])
     R_rel_c = np.arange(kmesh[2])
     R_vec_rel = lib.cartesian_prod((R_rel_a, R_rel_b, R_rel_c))
-    R_vec_abs = np.einsum('nu, uv -> nv', R_vec_rel, latt_vec)
+    R_vec_abs = np.dot(R_vec_rel, latt_vec)
     return R_vec_abs
 
 def get_phase(cell, kpts, kmesh=None):
@@ -63,7 +64,7 @@ def get_phase(cell, kpts, kmesh=None):
     R_vec_abs = translation_vectors_for_kmesh(cell, kmesh)
 
     NR = len(R_vec_abs)
-    phase = np.exp(1j*np.einsum('Ru, ku -> Rk', R_vec_abs, kpts))
+    phase = np.exp(1j*np.dot(R_vec_abs, kpts.T))
     phase /= np.sqrt(NR)  # normalization in supercell
 
     # R_rel_mesh has to be construct exactly same to the Ts in super_cell function
@@ -163,18 +164,31 @@ def k2gamma(kmf, kmesh=None):
     '''
     from pyscf.pbc import scf
     def transform(mo_energy, mo_coeff, mo_occ):
+        if isinstance(kmf.kpts, KPoints):
+            kpts = kmf.kpts.kpts
+        else:
+            kpts = kmf.kpts
         scell, E_g, C_gamma = mo_k2gamma(kmf.cell, mo_energy, mo_coeff,
-                                         kmf.kpts, kmesh)[:3]
+                                         kpts, kmesh)[:3]
         E_sort_idx = np.argsort(np.hstack(mo_energy))
         mo_occ = np.hstack(mo_occ)[E_sort_idx]
         return scell, E_g, C_gamma, mo_occ
 
+    if isinstance(kmf.kpts, KPoints):
+        mo_coeff = kmf.kpts.transform_mo_coeff(kmf.mo_coeff)
+        mo_energy = kmf.kpts.transform_mo_energy(kmf.mo_energy)
+        mo_occ = kmf.kpts.transform_mo_occ(kmf.mo_occ)
+    else:
+        mo_coeff = kmf.mo_coeff
+        mo_energy = kmf.mo_energy
+        mo_occ = kmf.mo_occ
+
     if isinstance(kmf, scf.khf.KRHF):
-        scell, E_g, C_gamma, mo_occ = transform(kmf.mo_energy, kmf.mo_coeff, kmf.mo_occ)
+        scell, E_g, C_gamma, mo_occ = transform(mo_energy, mo_coeff, mo_occ)
         mf = scf.RHF(scell)
     elif isinstance(kmf, scf.kuhf.KUHF):
-        scell, Ea, Ca, occ_a = transform(kmf.mo_energy[0], kmf.mo_coeff[0], kmf.mo_occ[0])
-        scell, Eb, Cb, occ_b = transform(kmf.mo_energy[1], kmf.mo_coeff[1], kmf.mo_occ[1])
+        scell, Ea, Ca, occ_a = transform(mo_energy[0], mo_coeff[0], mo_occ[0])
+        scell, Eb, Cb, occ_b = transform(mo_energy[1], mo_coeff[1], mo_occ[1])
         mf = scf.UHF(scell)
         E_g = [Ea, Eb]
         C_gamma = [Ca, Cb]

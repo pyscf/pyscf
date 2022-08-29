@@ -565,6 +565,8 @@ class GDF(aft.AFTDF):
             kband_uniq = numpy.zeros((0,3))
         else:
             kband_uniq = [k for k in self.kpts_band if len(member(k, kpts))==0]
+            if len(kband_uniq) == 0:
+                kband_uniq = numpy.zeros((0,3))
         if j_only is None:
             j_only = self._j_only
         if j_only:

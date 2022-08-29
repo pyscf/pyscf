@@ -15,7 +15,7 @@
 import unittest
 import numpy as np
 from pyscf import lib
-from pyscf.pbc import gto, scf
+from pyscf.pbc import gto, scf, tools
 from pyscf.pbc.tools import k2gamma
 
 def setUpModule():
@@ -55,6 +55,30 @@ class KnownValues(unittest.TestCase):
         popa, popb = k2gamma.k2gamma(mf).mulliken_meta()[0]
         self.assertAlmostEqual(lib.finger(popa), 0.8007278745, 7)
         self.assertAlmostEqual(lib.finger(popb), 0.8007278745, 7)
+
+    def test_k2gamma_ksymm(self):
+        cell = gto.Cell()
+        cell.atom = '''
+            He 0.  0. 0.
+        '''
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.a = np.eye(3) * 2.
+        cell.build()
+
+        kmesh = [2,2,1]
+        kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
+        kmf = scf.KRKS(cell, kpts).density_fit()
+        kmf.kernel()
+        c_g_ao = k2gamma.k2gamma(kmf).mo_coeff
+
+        scell = tools.super_cell(cell, kmesh)
+        mf_sc = scf.RKS(scell).density_fit()
+        s = mf_sc.get_ovlp()
+        mf_sc.run()
+        sc_mo = mf_sc.mo_coeff
+
+        one = np.linalg.det(c_g_ao.T.conj().dot(s).dot(sc_mo))
+        self.assertAlmostEqual(abs(one), 1., 9)
 
     def test_double_translation_indices(self):
         idx2 = k2gamma.translation_map(2)

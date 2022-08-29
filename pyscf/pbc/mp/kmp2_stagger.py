@@ -299,12 +299,12 @@ class KMP2_stagger(kmp2.KMP2):
             kpts_vir = mf.kpts
             kpts_occ = kpts_vir + half_shift
             kpts = np.concatenate( (kpts_occ, kpts_vir), axis=0)
-            if isinstance(mf, scf.KRHF):
+            if isinstance(mf, scf.khf.KRHF):
                 with lib.temporary_env(mf, exxdiv='vcut_sph', with_df=df.FFTDF(mf.cell, mf.kpts)):
                     mo_energy, mo_coeff = mf.get_bands( kpts )
                     mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
 
-            elif isinstance(mf, dft.KRKS):
+            elif isinstance(mf, dft.krks.KRKS):
                 with lib.temporary_env(mf, with_df=df.FFTDF(mf.cell, mf.kpts)):
                     mo_energy, mo_coeff = mf.get_bands( kpts )
                     mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
@@ -314,7 +314,7 @@ class KMP2_stagger(kmp2.KMP2):
             self.mo_coeff = mo_coeff
             self.mo_occ = mo_occ
 
-        if isinstance(self._scf.with_df, df.GDF):
+        if isinstance(self._scf.with_df, df.df.GDF):
             self.with_df_ints = True
         else:
             self.with_df_ints = False

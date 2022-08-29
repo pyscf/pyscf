@@ -180,7 +180,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     if (exxdiv == 'ewald' and
         (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
-        _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
+        _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 

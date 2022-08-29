@@ -15,6 +15,7 @@
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #         James McClain <jdmcclain47@gmail.com>
+#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 
@@ -707,11 +708,19 @@ class KMP2(mp2.MP2):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.kpts = mf.kpts
-        self.mo_energy = mf.mo_energy
-        self.nkpts = len(self.kpts)
-        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
+        if hasattr(self.kpts, "kpts"):
+            self.nkpts = self.kpts.nkpts
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts.kpts)
+            #padding has to be after transformation
+            self.mo_energy = self.kpts.transform_mo_energy(mf.mo_energy)
+            self.mo_coeff = self.kpts.transform_mo_coeff(mo_coeff)
+            self.mo_occ = self.kpts.transform_mo_occ(mo_occ)
+        else:
+            self.nkpts = len(self.kpts)
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
+            self.mo_energy = mf.mo_energy
+            self.mo_coeff = mo_coeff
+            self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
         self.e_hf = None
