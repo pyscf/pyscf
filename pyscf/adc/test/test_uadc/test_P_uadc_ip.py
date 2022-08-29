@@ -48,11 +48,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
-<<<<<<< HEAD
         myadcip = adc.uadc_ip.UADCIP(myadc) 
-=======
-        myadcip = adc.uadc.UADCIP(myadc)
->>>>>>> 16887846a6b30bde495ebf69905de2576f4a3f4a
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.38713687643570405, 6)
@@ -68,11 +64,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.1413215269244437, 6)
 
-<<<<<<< HEAD
         myadcip = adc.uadc_ip.UADCIP(myadc) 
-=======
-        myadcip = adc.uadc.UADCIP(myadc)
->>>>>>> 16887846a6b30bde495ebf69905de2576f4a3f4a
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3751918934459225, 6)
@@ -88,11 +80,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15600026295970712, 6)
 
-<<<<<<< HEAD
         myadcip = adc.uadc_ip.UADCIP(myadc) 
-=======
-        myadcip = adc.uadc.UADCIP(myadc)
->>>>>>> 16887846a6b30bde495ebf69905de2576f4a3f4a
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.3839911922956251, 6)
