@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[4], 0.00000000000000, 6)
         self.assertAlmostEqual(p[5], 0.00000000000000, 6)
 
-    def test_ip_adc3(self):
+    def test_ip_adc3_high_cost(self):
          
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
