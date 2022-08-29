@@ -730,8 +730,8 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
         #atom guess should have the correct electron number
-        if key != 'atom':
-            dm = normalize_dm_(self, dm, s1e)
+        #if key != 'atom':
+        dm = normalize_dm_(self, dm, s1e)
         return dm
 
     def init_guess_by_1e(self, cell=None):

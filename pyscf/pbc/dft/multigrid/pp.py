@@ -329,6 +329,7 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=numpy.zeros((1,3)), atm_id=None, precis
 
     b = numpy.asarray(numpy.linalg.inv(a.T), order='C', dtype=float)
     mesh = numpy.asarray(mydf.mesh, order='C', dtype=numpy.int32)
+    ngrids = numpy.prod(mesh)
     comp = 3
     grad = numpy.zeros((len(atm),comp), order="C", dtype=float)
     drv = getattr(libdft, 'int_gauss_charge_v_rs', None)
@@ -337,21 +338,24 @@ def vpploc_part1_nuc_grad(mydf, dm, kpts=numpy.zeros((1,3)), atm_id=None, precis
         rhoG = _eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=0)
     else:
         rhoG = mydf.rhoG
+    rhoG = rhoG[...,0,:]
+    rhoG = rhoG.reshape(-1,ngrids)
+    if rhoG.shape[0] == 2: #unrestricted
+        rhoG = rhoG[0] + rhoG[1]
+    else:
+        assert rhoG.shape[0] == 1
+        rhoG = rhoG[0]
 
-    ngrids = numpy.prod(mesh)
     if mydf.sccs:
         weight = cell.vol / ngrids
         rho_pol = lib.multiply(weight, mydf.sccs.rho_pol)
         rho_pol_gs = tools.fft(rho_pol, mesh).reshape(-1,ngrids)
-        rhoG[:,0] += rho_pol_gs
+        rhoG += rho_pol_gs
 
     coulG = tools.get_coulG(cell, mesh=mesh)
-    #vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG).reshape(-1,ngrids)
-    vG = numpy.empty_like(rhoG[:,0], dtype=numpy.result_type(rhoG[:,0], coulG))
-    for i, rhoG_i in enumerate(rhoG[:,0]):
-        vG[i] = lib.multiply(rhoG_i, coulG, out=vG[i])
+    vG = lib.multiply(rhoG, coulG)
 
-    v_rs = numpy.asarray(tools.ifft(vG, mesh).reshape(-1,ngrids).real, order="C")
+    v_rs = numpy.asarray(tools.ifft(vG, mesh).real, order="C")
     try:
         drv(getattr(libdft, eval_fn),
             grad.ctypes.data_as(ctypes.c_void_p),
