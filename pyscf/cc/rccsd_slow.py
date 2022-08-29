@@ -100,7 +100,7 @@ def update_amps(cc, t1, t2, eris):
         Lvv -= np.diag(np.diag(fvv))
         Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
         if cc.dcsd:
-            Woooo_dcsd = imd.cc_Woooo(t1, t2, eris, False)
+            Woooo_witht2 = imd.cc_Woooo(t1, t2, eris, False)
         Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
         Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
@@ -110,7 +110,7 @@ def update_amps(cc, t1, t2, eris):
         else:
             t2new += lib.einsum('klij,klab->ijab', Woooo, t2) # contains t2 t2 ladder, removed for dcsd
             tau = np.einsum('ia,jb->ijab', t1, t1)
-            t2new += lib.einsum('klij,klab->ijab', Woooo_dcsd, tau)
+            t2new += lib.einsum('klij,klab->ijab', Woooo_witht2, tau)
             tau += t2
         t2new += einsum('abcd,ijcd->ijab', Wvvvv, tau)
         tmp = einsum('ac,ijcb->ijab', Lvv, t2) # contains t2 t2 mosaic, multiplied by 0.5

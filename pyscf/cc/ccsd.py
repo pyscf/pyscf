@@ -187,12 +187,12 @@ def update_amps(mycc, t1, t2, eris):
             # This adds mosaic terms "quadratic" in t2. They are multiplied
             # by 0.5 in DCSD.
             tau += 0.5*t2[:,:,p0:p1]
-            tau_dcsd = 0.5*t2.copy()[:,:,p0:p1]
-            theta_dcsd = tau_dcsd.copy().transpose(1,0,2,3) * 2
-            theta_dcsd -= tau_dcsd
-            fvv_dcsd = -lib.einsum('cjia,cjib->ab', theta_dcsd.transpose(2,1,0,3), eris_voov)
-            foo_dcsd = lib.einsum('aikb,kjab->ij', eris_voov, theta_dcsd)
-            tau_dcsd = theta_dcsd = None
+            tau_t2 = 0.5*t2.copy()[:,:,p0:p1]
+            theta_t2 = tau_t2.copy().transpose(1,0,2,3) * 2
+            theta_t2 -= tau_t2
+            fvv_t2 = -lib.einsum('cjia,cjib->ab', theta_t2.transpose(2,1,0,3), eris_voov)
+            foo_t2 = lib.einsum('aikb,kjab->ij', eris_voov, theta_t2)
+            tau_t2 = theta_t2 = None
         else:
             tau += t2[:,:,p0:p1]
         theta  = tau.transpose(1,0,2,3) * 2
@@ -205,9 +205,9 @@ def update_amps(mycc, t1, t2, eris):
             # The t2 is removed since it eventually is part of a ladder term
             # "quadratic" in t2, not used in DCSD. The other terms the missing
             # t2 otherwise is part of have to be added later.
-            # The t2 part is split of woooo and is now in woooo_dcsd.
+            # The t2 part is split of woooo and is now in woooo_t2.
             tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
-            woooo_dcsd = lib.einsum('ijab,aklb->ijkl', t2[:,:,p0:p1], eris_voov)
+            woooo_t2 = lib.einsum('ijab,aklb->ijkl', t2[:,:,p0:p1], eris_voov)
         else:
             tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         woooo += lib.einsum('ijab,aklb->ijkl', tau, eris_voov)
@@ -246,18 +246,18 @@ def update_amps(mycc, t1, t2, eris):
             def update_wVOov(q0, q1, tau):
                 wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
         else:
-            def update_wVOov(q0, q1, tau, tau_dcsd):
+            def update_wVOov(q0, q1, tau, tau_not2):
                 wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_voov, tau)
-                wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau_dcsd)
+                wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau_not2)
         with lib.call_in_background(update_wVOov, sync=not mycc.async_io) as update_wVOov:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
                 tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
                 tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
                 if mycc.dcsd:
-                    tau_dcsd = -numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
-                    update_wVOov(q0, q1, tau, tau_dcsd)
-                    tau = tau_dcsd = None
+                    tau_not2 = -numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
+                    update_wVOov(q0, q1, tau, tau_not2)
+                    tau = tau_not2 = None
                 else:
                     #:wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
                     update_wVOov(q0, q1, tau)
@@ -285,11 +285,11 @@ def update_amps(mycc, t1, t2, eris):
 
         tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         if mycc.dcsd:
-            # For DCSD, woooo_dcsd contains the t2 term in woooo (which was split
-            # off woooo in DCSD). This t2 term, now in woooo_dcsd, should not
+            # For DCSD, woooo_t2 contains the t2 term in woooo (which was split
+            # off woooo in DCSD). This t2 term, now in woooo_t2, should not
             # be multiplied with another t2 containing term, as ladder terms are
             # not present in DCSD.
-            t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo_dcsd, tau)
+            t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo_t2, tau)
         tau += t2[:,:,p0:p1]
         t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo, tau)
         theta = tau = None
@@ -301,8 +301,8 @@ def update_amps(mycc, t1, t2, eris):
 
     eia = mo_e_o[:,None] - mo_e_v
     if mycc.dcsd:
-        fvv += fvv_dcsd
-        foo += foo_dcsd
+        fvv += fvv_t2
+        foo += foo_t2
     t1new += numpy.einsum('ib,ab->ia', t1, fvv)
     t1new -= numpy.einsum('ja,ji->ia', t1, foo)
     t1new /= eia

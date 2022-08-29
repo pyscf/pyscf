@@ -117,7 +117,7 @@ def update_amps(cc, t1, t2, eris):
 
         Woooo = imd.cc_Woooo(t1, t2, eris, cc.dcsd)
         if cc.dcsd:
-            Woooo_dcsd = imd.cc_Woooo(t1, t2, eris, False)
+            Woooo_witht2 = imd.cc_Woooo(t1, t2, eris, False)
         Wvoov = imd.cc_Wvoov(t1, t2, eris, cc.dcsd)
         Wvovo = imd.cc_Wvovo(t1, t2, eris, cc.dcsd)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
@@ -128,7 +128,7 @@ def update_amps(cc, t1, t2, eris):
         else:
             t2new += lib.einsum('klij,klab->ijab', Woooo, t2)
             tau = np.einsum('ia,jb->ijab', t1, t1)
-            t2new += lib.einsum('klij,klab->ijab', Woooo_dcsd, tau)
+            t2new += lib.einsum('klij,klab->ijab', Woooo_witht2, tau)
             tau += t2
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
         tmp = lib.einsum('ac,ijcb->ijab', Lvv, t2)
