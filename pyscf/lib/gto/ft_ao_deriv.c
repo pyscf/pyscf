@@ -28,7 +28,7 @@ void GTO_ft_nabla1i(double complex *f, double complex *g, int li, int lj,
                     double *Gv, size_t NGv, CINTEnvVars *envs)
 {
         const int dj = envs->g_stride_j;
-        const double ai2 = -2 * envs->ai;
+        const double ai2 = -2 * envs->ai[0];
         const size_t g_size = envs->g_size * NGv;
         double complex *gx = g;
         double complex *gy = g + g_size;
@@ -64,7 +64,7 @@ void GTO_ft_nabla1j(double complex *f, double complex *g, int li, int lj,
                     double *Gv, size_t NGv, CINTEnvVars *envs)
 {
         const int dj = envs->g_stride_j;
-        const double aj2 = -2 * envs->aj;
+        const double aj2 = -2 * envs->aj[0];
         const size_t g_size = envs->g_size * NGv;
         double complex *gx = g;
         double complex *gy = g + g_size;

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -44,7 +44,7 @@ class RCCSD(ccsd.CCSD):
         return _make_df_eris(self, mo_coeff)
 
     def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
-        assert(not self.direct)
+        assert (not self.direct)
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
@@ -56,7 +56,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     _dgemm = lib.numpy_helper._dgemm
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mol, verbose)
 
     naux = vvL.shape[-1]
@@ -116,7 +116,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
     def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
-        assert(not direct)
+        assert (not direct)
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):

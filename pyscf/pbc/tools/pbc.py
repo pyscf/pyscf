@@ -19,6 +19,7 @@ import numpy as np
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.gto import ATM_SLOTS, BAS_SLOTS, ATOM_OF, PTR_COORD
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3  # noqa
 from pyscf import __config__
 
@@ -132,7 +133,7 @@ def fft(f, mesh):
         return np.zeros_like(f)
 
     f3d = f.reshape(-1, *mesh)
-    assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
+    assert (f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = _fftn_wrapper(f3d)
     ngrids = np.prod(mesh)
     if f.ndim == 1 or (f.ndim == 3 and f.size == ngrids):
@@ -163,7 +164,7 @@ def ifft(g, mesh):
         return np.zeros_like(g)
 
     g3d = g.reshape(-1, *mesh)
-    assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
+    assert (g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = _ifftn_wrapper(g3d)
     ngrids = np.prod(mesh)
     if g.ndim == 1 or (g.ndim == 3 and g.size == ngrids):
@@ -189,7 +190,7 @@ def ifftk(g, mesh, expikr):
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, **kwargs):
+              wrap_around=True, omega=None, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -204,13 +205,21 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             The Coulomb kernel.
         mesh : (3,) ndarray of ints (= nx,ny,nz)
             The number G-vectors along each direction.
-
+        omega : float
+            Enable Coulomb kernel erf(|omega|*r12)/r12 if omega > 0
+            and erfc(|omega|*r12)/r12 if omega < 0.
+            Note this parameter is slightly different to setting cell.omega
+            for the treatment of exxdiv (at G0).  cell.omega affects Ewald
+            probe charge at G0. It is used mostly with RSH functional for
+            the long-range part of HF exchange. This parameter is used by
+            real-space JK builder which requires Ewald probe charge to be
+            computed with regular Coulomb interaction (1/r12) while the rest
+            coulG is scaled as long-range Coulomb kernel.
     '''
     exxdiv = exx
     if isinstance(exx, str):
         exxdiv = exx
     elif exx and mf is not None:
-# sys.stderr.write('pass exxdiv directly')
         exxdiv = mf.exxdiv
 
     if mesh is None:
@@ -234,7 +243,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # answers to agree
         b = cell.reciprocal_vectors()
         box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
+        assert (all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
         reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
         on_edge = reduced_coords.astype(int)
         if cell.dimension >= 1:
@@ -271,7 +280,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             raise NotImplementedError
 
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
-        assert(cell.dimension == 3)
+        assert (cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
@@ -351,9 +360,17 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     coulG[equal2boundary] = 0
 
-    # Scale the coulG kernel for attenuated Coulomb integrals. cell.omega is
-    # often set by DFT code when RSH functionals are used.
-    if cell.omega != 0:
+    # Scale the coulG kernel for attenuated Coulomb integrals.
+    # * omega is used by RealSpaceJKBuilder which requires ewald probe charge
+    # being evaluated with regular Coulomb interaction (1/r12).
+    # * cell.omega, which affects the ewald probe charge, is often set by
+    # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
+    if omega is not None:
+        if omega > 0:
+            coulG *= np.exp(-.25/omega**2 * absG2)
+        else:
+            coulG *= (1 - np.exp(-.25/omega**2 * absG2))
+    elif cell.omega != 0:
         coulG *= np.exp(-.25/cell.omega**2 * absG2)
 
     return coulG
@@ -444,7 +461,7 @@ def madelung(cell, kpts):
         Gv, Gvbase, weights = ecell.get_Gv_weights(ecell.mesh)
         coulG = get_coulG(ecell, Gv=Gv)
         ZSI = np.einsum("i,ij->j", ecell.atom_charges(), ecell.get_SI(Gv))
-        return -np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
+        return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 
 
 def get_monkhorst_pack_size(cell, kpts):
@@ -463,9 +480,17 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     if nimgs is None:
         if rcut is None:
             rcut = cell.rcut
-# plus 1 image in rcut to handle the case atoms within the adjacent cells are
-# close to each other
-        nimgs = np.ceil(rcut*heights_inv + 1.1).astype(int)
+        # For atoms outside the cell, distance between certain basis of nearby
+        # images may be smaller than rcut threshold even the corresponding Ls is
+        # larger than rcut. The boundary penalty ensures that Ls would be able to
+        # cover the basis that sitting out of the cell.
+        # See issue https://github.com/pyscf/pyscf/issues/1017
+        boundary_penalty = 0
+        scaled_atom_coords = cell.atom_coords().dot(b.T)
+        if len(scaled_atom_coords) > 0:
+            boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
+                                       abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
+        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
     else:
         rcut = max((np.asarray(nimgs))/heights_inv)
 
@@ -478,19 +503,40 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     elif dimension == 2:
         nimgs = [nimgs[0], nimgs[1], 0]
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
-                             np.arange(-nimgs[1],nimgs[1]+1),
-                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
+                             np.arange(-nimgs[1], nimgs[1]+1),
+                             np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    if not discard:
-        return Ls
-    idx = np.zeros(len(Ls), dtype=bool)
-    for ax in (-a[0], 0, a[0]):
-        for ay in (-a[1], 0, a[1]):
-            for az in (-a[2], 0, a[2]):
-                idx |= lib.norm(Ls+(ax+ay+az), axis=1) < rcut
-    Ls = Ls[idx]
+    if discard:
+        Ls = _discard_edge_images(cell, Ls, rcut)
     return np.asarray(Ls, order='C')
+
+def _discard_edge_images(cell, Ls, rcut):
+    '''
+    Discard images if no basis in the image would contribute to lattice sum.
+    '''
+    if rcut <= 0:
+        return np.zeros((1, 3))
+
+    a = cell.lattice_vectors()
+    scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
+    atom_boundary_max = scaled_atom_coords.max(axis=0)
+    atom_boundary_min = scaled_atom_coords.min(axis=0)
+    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
+    # images are converged.
+    ovlp_penalty = atom_boundary_max - atom_boundary_min
+    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
+    # of the primitive cell converged
+    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
+    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
+    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
+    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
+    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
+    # cell0 (Ls == 0) should always be included.
+    Ls_mask[len(Ls)//2] = True
+    return Ls[Ls_mask]
 
 
 def super_cell(cell, ncopy):
@@ -505,7 +551,6 @@ def super_cell(cell, ncopy):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    supcell = cell.copy()
     a = cell.lattice_vectors()
     #:supcell.atom = []
     #:for Lx in range(ncopy[0]):
@@ -519,17 +564,12 @@ def super_cell(cell, ncopy):
                              np.arange(ncopy[1]),
                              np.arange(ncopy[2])))
     Ls = np.dot(Ts, a)
-    symbs = [atom[0] for atom in cell._atom] * len(Ls)
-    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
-    supcell.unit = 'B'
+    supcell = cell.copy()
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
     supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
                              ncopy[1]*cell.mesh[1],
                              ncopy[2]*cell.mesh[2]])
-    supcell.build(False, False, verbose=0)
-    supcell.verbose = cell.verbose
-    return supcell
+    return _build_supcell_(supcell, cell, Ls)
 
 
 def cell_plus_imgs(cell, nimgs):
@@ -544,19 +584,44 @@ def cell_plus_imgs(cell, nimgs):
     Returns:
         supcell : instance of :class:`Cell`
     '''
-    supcell = cell.copy()
     a = cell.lattice_vectors()
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0],nimgs[0]+1),
-                             np.arange(-nimgs[1],nimgs[1]+1),
-                             np.arange(-nimgs[2],nimgs[2]+1)))
+    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
+                             np.arange(-nimgs[1], nimgs[1]+1),
+                             np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    symbs = [atom[0] for atom in cell._atom] * len(Ls)
-    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
-    supcell.atom = list(zip(symbs, coords.reshape(-1,3)))
-    supcell.unit = 'B'
+    supcell = cell.copy()
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
-    supcell.build(False, False, verbose=0)
-    supcell.verbose = cell.verbose
+    supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
+                             (nimgs[1]*2+1)*cell.mesh[1],
+                             (nimgs[2]*2+1)*cell.mesh[2]])
+    return _build_supcell_(supcell, cell, Ls)
+
+def _build_supcell_(supcell, cell, Ls):
+    '''
+    Construct supcell ._env directly without calling supcell.build() method.
+    This reserves the basis contraction coefficients defined in cell
+    '''
+    nimgs = len(Ls)
+    symbs = [atom[0] for atom in cell._atom] * nimgs
+    coords = Ls.reshape(-1,1,3) + cell.atom_coords()
+    supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
+    supcell.unit = 'B'
+
+    # Do not call supcell.build() since it may normalize the basis contraction
+    # coefficients
+    _env = np.append(cell._env, coords.ravel())
+    _atm = np.repeat(cell._atm[None,:,:], nimgs, axis=0)
+    _atm = _atm.reshape(-1, ATM_SLOTS)
+    # Point to the corrdinates appended to _env
+    _atm[:,PTR_COORD] = cell._env.size + np.arange(nimgs * cell.natm) * 3
+
+    _bas = np.repeat(cell._bas[None,:,:], nimgs, axis=0)
+    # For atom pointers in each image, shift natm*image_id
+    _bas[:,:,ATOM_OF] += np.arange(nimgs)[:,None] * cell.natm
+
+    supcell._atm = np.asarray(_atm, dtype=np.int32)
+    supcell._bas = np.asarray(_bas.reshape(-1, BAS_SLOTS), dtype=np.int32)
+    supcell._env = _env
     return supcell
 
 
@@ -568,7 +633,7 @@ def cutoff_to_mesh(a, cutoff):
 
     Args:
         a : (3,3) ndarray
-            The real-space unit cell lattice vectors. Each row represents a
+            The real-space cell lattice vectors. Each row represents a
             lattice vector.
         cutoff : float
             KE energy cutoff in a.u.

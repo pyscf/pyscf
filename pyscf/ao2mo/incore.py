@@ -127,7 +127,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
                           mo_coeffs[0].conj(), mo_coeffs[1],
                           mo_coeffs[2].conj(), mo_coeffs[3])
 
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
 # transform e1
@@ -187,7 +187,7 @@ def half_e1(eri_ao, mo_coeffs, compact=True):
     >>> print(eri1.shape)
     (55, 28)
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     eri_ao = numpy.asarray(eri_ao, order='C')
@@ -271,11 +271,11 @@ if __name__ == '__main__':
     mol.build()
     rhf = scf.RHF(mol)
     rhf.scf()
-    import time
-    print(time.clock())
+
+    print(logger.process_clock())
     eri0 = full(rhf._eri, rhf.mo_coeff)
     print(abs(eri0).sum()-5384.460843787659) # should = 0
     eri0 = general(rhf._eri, (rhf.mo_coeff,)*4)
     print(abs(eri0).sum()-5384.460843787659)
-    print(time.clock())
+    print(logger.process_clock())
 

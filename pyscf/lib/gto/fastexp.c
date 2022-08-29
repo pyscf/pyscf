@@ -54,8 +54,6 @@ typedef union {
     unsigned short s[4];
 } ieee754;
 
-static const double MAXLOG =  7.08396418532264106224E2;     /* log 2**1022 */
-static const double MINLOG = -7.08396418532264106224E2;     /* log 2**-1022 */
 static const double LOG2E  =  1.4426950408889634073599;     /* 1/log(2) */
 //static const double INFINITY = 1.79769313486231570815E308;
 static const double C1 = 6.93145751953125E-1;

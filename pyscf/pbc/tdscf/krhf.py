@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf.lib import linalg_helper
 from pyscf.lib import logger
 from pyscf.tdscf import rhf
 from pyscf.pbc.scf import _response_functions  # noqa
@@ -30,17 +31,13 @@ from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
-#FIXME: numerically unstable with small mesh?
-#TODO: Add a warning message for small mesh.
-
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
         from pyscf.pbc import scf
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         rhf.TDA.__init__(self, mf)
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
@@ -59,10 +56,6 @@ class TDA(rhf.TDA):
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         e_ia = _get_e_ia(mo_energy, mo_occ)
-        # FIXME: hdiag corresponds to the orbital energy with the exxdiv
-        # correction. The integrals in A, B matrices do not have the
-        # contribution from the exxdiv. Should the exchange correction be
-        # removed from hdiag?
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
 
         mem_now = lib.current_memory()[0]
@@ -91,6 +84,9 @@ class TDA(rhf.TDA):
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
 
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
 
@@ -98,12 +94,17 @@ class TDA(rhf.TDA):
         mo_occ = mf.mo_occ
         e_ia = numpy.hstack([x.ravel() for x in _get_e_ia(mo_energy, mo_occ)])
 
+        e_ia_max = e_ia.max()
         nov = e_ia.size
-        nroot = min(nstates, nov)
-        x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(e_ia.ravel())
-        for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+        nstates = min(nstates, nov)
+        e_threshold = min(e_ia_max, e_ia[numpy.argsort(e_ia)[nstates-1]])
+        # Handle degeneracy, include all degenerated states in initial guess
+        e_threshold += 1e-6
+
+        idx = numpy.where(e_ia <= e_threshold)[0]
+        x0 = numpy.zeros((idx.size, nov))
+        for i, j in enumerate(idx):
+            x0[i, j] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None):
@@ -115,13 +116,21 @@ class TDA(rhf.TDA):
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
+            return w[idx], v[:,idx], idx
+
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=self.nstates, lindep=self.lindep,
-                              max_space=self.max_space,
+                              max_space=self.max_space, pick=pickeig,
+                              fill_heff=purify_krlyov_heff(precision, 0, log),
                               verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
@@ -151,7 +160,7 @@ class TDHF(TDA):
         e_ia = _get_e_ia(mo_energy, mo_occ)
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
-        hdiag = numpy.hstack((hdiag, hdiag))
+        hdiag = numpy.hstack((hdiag, -hdiag))
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -192,7 +201,7 @@ class TDHF(TDA):
     def init_guess(self, mf, nstates=None):
         x0 = TDA.init_guess(self, mf, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.hstack((x0,y0))
+        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -215,14 +224,19 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+                                  (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
+
+        log = logger.Logger(self.stdout, self.verbose)
+        precision = self.cell.precision * 1e-2
+        hermi = 0
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
+                                    fill_heff=purify_krlyov_heff(precision, hermi, log),
                                     verbose=self.verbose)
         mo_occ = self._scf.mo_occ
         self.e = w
@@ -257,6 +271,22 @@ def _unpack(vo, mo_occ):
         z.append(vo[p0:p1].reshape(no,nv))
     return z
 
+def purify_krlyov_heff(precision, hermi, log):
+    def fill_heff(heff, xs, ax, xt, axt, dot):
+        if hermi == 1:
+            heff = linalg_helper._fill_heff_hermitian(heff, xs, ax, xt, axt, dot)
+        else:
+            heff = linalg_helper._fill_heff(heff, xs, ax, xt, axt, dot)
+        space = len(axt)
+        # TODO: PBC integrals has larger errors than molecule systems.
+        # purify the effective Hamiltonian with symmetry and other
+        # possible conditions.
+        if abs(heff[:space,:space].imag).max() < precision:
+            log.debug('Remove imaginary part of the Krylov space effective Hamiltonian')
+            heff[:space,:space].imag = 0
+        return heff
+    return fill_heff
+
 
 from pyscf.pbc import scf
 scf.khf.KRHF.TDA  = lib.class_as_method(KTDA)
@@ -272,7 +302,7 @@ if __name__ == '__main__':
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
-    C  0.          0.          0.        
+    C  0.          0.          0.
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''
@@ -291,31 +321,31 @@ if __name__ == '__main__':
     #mf.with_df._cderi = 'eri3d-mdf.h5'
     #mf.with_df.build(with_j3c=False)
     mf.run()
-#mesh=9  -8.65192427146353
-#mesh=12 -8.65192352289817
-#mesh=15 -8.6519235231529
-#MDF mesh=5 -8.6519301815144
+    #mesh=9  -8.65192427146353
+    #mesh=12 -8.65192352289817
+    #mesh=15 -8.6519235231529
+    #MDF mesh=5 -8.6519301815144
 
     td = TDA(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
-#mesh=12 [ 6.00253282  6.09317929  6.34799109]
-#mesh=15 [ 6.00253396  6.09317949  6.34799109]
-#MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
+    #mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
+    #mesh=12 [ 6.00253282  6.09317929  6.34799109]
+    #mesh=15 [ 6.00253396  6.09317949  6.34799109]
+    #MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
 
-#    from pyscf.pbc import tools
-#    scell = tools.super_cell(cell, [2,1,1])
-#    mf = scf.RHF(scell).run()
-#    td = rhf.TDA(mf)
-#    td.verbose = 5
-#    print(td.kernel()[0] * 27.2114)
+    #from pyscf.pbc import tools
+    #scell = tools.super_cell(cell, [2,1,1])
+    #mf = scf.RHF(scell).run()
+    #td = rhf.TDA(mf)
+    #td.verbose = 5
+    #print(td.kernel()[0] * 27.2114)
 
     td = TDHF(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#mesh=9  [ 6.03860914  6.21664545  8.20305225]
-#mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
-#mesh=15 [ 6.03861321  6.03861324  6.21675868]
-#MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
+    #mesh=9  [ 6.03860914  6.21664545  8.20305225]
+    #mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
+    #mesh=15 [ 6.03861321  6.03861324  6.21675868]
+    #MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
 

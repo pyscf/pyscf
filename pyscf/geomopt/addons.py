@@ -33,7 +33,7 @@ def as_pyscf_method(mol, scan_function):
     >>> m = as_pyscf_method(mol, scan_fn)
     >>> pyscf.geomopt.berny_solver.kernel(m)
     '''
-    from pyscf.grad.rhf import GradientsBasics
+    from pyscf.grad.rhf import GradientsMixin
     class OmniGrad(lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
@@ -45,7 +45,7 @@ def as_pyscf_method(mol, scan_function):
         def converged(self):
             return True
 
-    class Gradients(GradientsBasics):
+    class Gradients(GradientsMixin):
         def as_scanner(self):
             return OmniGrad(self)
 
@@ -62,7 +62,7 @@ def as_pyscf_method(mol, scan_function):
 def dump_mol_geometry(mol, new_coords, log=None):
     '''Dump the molecular geometry (new_coords) and the displacement wrt old
     geometry.
-    
+
     Args:
         new_coords (ndarray) : Cartesian coordinates in Angstrom
     '''

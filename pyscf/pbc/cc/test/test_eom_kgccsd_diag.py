@@ -14,23 +14,25 @@ from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd as kccsd
 import pyscf.pbc.cc.eom_kccsd_ghf as kccsd_ghf
 
-cell = pbcgto.Cell()
-cell.atom = '''
-He 0.000000000000   0.000000000000   0.000000000000
-He 1.685068664391   1.685068664391   1.685068664391
-'''
-cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
-cell.a = '''
-0.000000000, 3.370137329, 3.370137329
-3.370137329, 0.000000000, 3.370137329
-3.370137329, 3.370137329, 0.000000000'''
-cell.unit = 'B'
-#cell.verbose = 7
-#cell.output = '/dev/null'
-cell.build()
+def setUpModule():
+    global cell, KGCCSD_TEST_NMP, KGCCSD_TEST_THRESHOLD
+    cell = pbcgto.Cell()
+    cell.atom = '''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    #cell.verbose = 7
+    #cell.output = '/dev/null'
+    cell.build()
 
-KGCCSD_TEST_NMP = [1,1,2]
-KGCCSD_TEST_THRESHOLD = 1e-8
+    KGCCSD_TEST_NMP = [1,1,2]
+    KGCCSD_TEST_THRESHOLD = 1e-8
 
 def tearDownModule():
     global cell, KGCCSD_TEST_NMP, KGCCSD_TEST_THRESHOLD

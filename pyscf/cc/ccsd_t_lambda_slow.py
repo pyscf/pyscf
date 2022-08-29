@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,10 +57,10 @@ def make_intermediates(mycc, t1, t2, eris):
                 - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
                 - 2 * w.transpose(0,1,2,4,3,5))
 
-    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
-      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
-    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
-      + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
+    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2) -
+        numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
+    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1) +
+        numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
     w = p6(w)
     v = p6(v)
 

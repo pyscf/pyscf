@@ -122,9 +122,9 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
             s = mol.intor_symmetric('int1e_ovlp')
 
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
-    nbf = mol.nao_nr()
+    nao = mol.nao_nr()
     pre_nao = pre_nao.astype(s.dtype)
-    cnao = numpy.empty((nbf,nbf), dtype=s.dtype)
+    cnao = numpy.empty((nao,nao), dtype=s.dtype)
 
     if core_lst:
         c = pre_nao[:,core_lst].copy()
@@ -147,7 +147,7 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         c -= reduce(lib.dot, (c1, c1.conj().T, s, c))
         s1 = reduce(lib.dot, (c.conj().T, s, c))
         cnao[:,rydbg_lst] = lib.dot(c, orth.lowdin(s1))
-    snorm = numpy.linalg.norm(reduce(lib.dot, (cnao.conj().T, s, cnao)) - numpy.eye(nbf))
+    snorm = numpy.linalg.norm(reduce(lib.dot, (cnao.conj().T, s, cnao)) - numpy.eye(nao))
     if snorm > 1e-9:
         logger.warn(mol, 'Weak orthogonality for localized orbitals %s', snorm)
     return cnao

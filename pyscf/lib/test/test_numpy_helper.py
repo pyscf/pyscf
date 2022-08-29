@@ -80,7 +80,13 @@ class KnownValues(unittest.TestCase):
 
         numpy.random.seed(1)
         a = numpy.random.random((5050,20))
-        self.assertAlmostEqual(lib.finger(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
+        self.assertAlmostEqual(lib.fp(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
+
+        a = numpy.zeros((5, 0))
+        self.assertEqual(lib.unpack_tril(a, axis=-1).shape, (5, 0, 0))
+
+        a = numpy.zeros((0, 5))
+        self.assertEqual(lib.unpack_tril(a, axis=0).shape, (0, 0, 5))
 
     def test_unpack_tril_integer(self):
         a = lib.unpack_tril(numpy.arange(6, dtype=numpy.int32))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -90,9 +90,9 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
         mo.append(numpy.dot(mo_coeff[k], scipy.linalg.expm(dr)))
     return mo
 
-def _gen_hop_rhf_external(mf, verbose=None):
 #FIXME: numerically unstable with small mesh?
 #TODO: Add a warning message for small mesh.
+def _gen_hop_rhf_external(mf, verbose=None):
     from pyscf.pbc.scf.newton_ah import _unpack
     cell = mf.cell
 
@@ -286,7 +286,7 @@ if __name__ == '__main__':
     cell = gto.Cell()
     cell.unit = 'B'
     cell.atom = '''
-    C  0.          0.          0.        
+    C  0.          0.          0.
     C  1.68506879  1.68506879  1.68506879
     '''
     cell.a = '''

@@ -16,7 +16,8 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
+import copy
 import ctypes
 from functools import reduce
 import numpy
@@ -66,6 +67,15 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             with_df.stdout = casscf.stdout
             with_df.verbose = casscf.verbose
             with_df.auxbasis = auxbasis
+
+    if isinstance(casscf, _DFCASSCF):
+        if casscf.with_df is None:
+            casscf.with_df = with_df
+        elif getattr(casscf.with_df, 'auxbasis', None) != auxbasis:
+            #logger.warn(casscf, 'DF might have been initialized twice.')
+            casscf = copy.copy(casscf)
+            casscf.with_df = with_df
+        return casscf
 
     class DFCASSCF(_DFCASSCF, casscf_class):
         def __init__(self):
@@ -212,7 +222,7 @@ def approx_hessian(casscf, auxbasis=None, with_df=None):
 
             log = logger.Logger(self.stdout, self.verbose)
             # Add the approximate diagonal term for orbital hessian
-            t1 = t0 = (time.clock(), time.time())
+            t1 = t0 = (logger.process_clock(), logger.perf_counter())
             mo = numpy.asarray(mo_coeff, order='F')
             nao, nmo = mo.shape
             ncore = self.ncore
@@ -273,7 +283,7 @@ class _ERIS(object):
             log.warn('Calculation needs %d MB memory, over CASSCF.max_memory (%d MB) limit',
                      (mem_basic+mem_now)/.9, casscf.max_memory)
 
-        t1 = t0 = (time.clock(), time.time())
+        t1 = t0 = (logger.process_clock(), logger.perf_counter())
         self.feri = lib.H5TmpFile()
         self.ppaa = self.feri.create_dataset('ppaa', (nmo,nmo,ncas,ncas), 'f8')
         self.papa = self.feri.create_dataset('papa', (nmo,ncas,nmo,ncas), 'f8')

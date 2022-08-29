@@ -1,4 +1,4 @@
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import numpy as np
 import scipy.linalg
 
 def davidson_nosymm(matvec,size,nroots,Adiag=None):
-    '''Davidson diagonalization method to solve A c = E c 
+    '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
     '''
 
@@ -147,8 +147,8 @@ class Arnoldi:
         if self.totalIter == 0 or self.deflated == 1: # construct the full block of v^*Av
             for i in range(self.currentSize):
                 for j in range(self.currentSize):
-                   val = np.vdot(self.vlist[i],self.Avlist[j])
-                   self.subH[i,j] = val
+                    val = np.vdot(self.vlist[i],self.Avlist[j])
+                    self.subH[i,j] = val
         else:
             for j in range(self.currentSize):
                 if j <= (self.currentSize-1):
@@ -253,17 +253,22 @@ class Arnoldi:
             #print "deflating..."
             for i in range(self.nEigen):
                 self.sol[:self.currentSize] = self.evecs[:self.currentSize,i]
-                self.constructSolV()            # Finds the "best" eigenvector for this eigenvalue
-                self.Avlist[i] = self.cv.copy() # Puts this guess in self.Avlist rather than self.vlist for now...
-                                                # since this would mess up self.constructSolV()'s solution
+                # Finds the "best" eigenvector for this eigenvalue
+                self.constructSolV()
+                # Puts this guess in self.Avlist rather than self.vlist for now...
+                # since this would mess up self.constructSolV()'s solution
+                self.Avlist[i] = self.cv.copy()
             for i in range(self.nEigen):
-                self.cv = self.Avlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
+                # This is actually the "best" eigenvector v, not A*v (see above)
+                self.cv = self.Avlist[i].copy()
                 self.gramSchmidtCurrentVec(i)
                 self.vlist[i] = self.cv.copy()
 
             for i in range(self.nEigen):
-                self.cv = self.vlist[i].copy() # This is actually the "best" eigenvector v, not A*v (see above)
-                self.hMult()                   # Use current vector cv to create cAv
+                # This is actually the "best" eigenvector v, not A*v (see above)
+                self.cv = self.vlist[i].copy()
+                # Use current vector cv to create cAv
+                self.hMult()
                 self.Avlist[i] = self.cAv.copy()
 
     def constructDeflatedSub(self):

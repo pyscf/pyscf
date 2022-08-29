@@ -14,28 +14,44 @@
 # limitations under the License.
 #
 
-from pyscf import scf, gto
+import tempfile
+from pyscf import scf, gto, lib
 from pyscf.eph import eph_fd, rhf
 import numpy as np
 import unittest
 
-mol = gto.M()
-mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
-            ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
-            ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
+def setUpModule():
+    global mol, mf
+    mol = gto.M()
+    mol.atom = [['O', [0.000000000000,  -0.000000000775,   0.923671924285]],
+                ['H', [-0.000000000000,  -1.432564848017,   2.125164039823]],
+                ['H', [0.000000000000,   1.432564848792,   2.125164035930]]]
 
-mol.unit = 'Bohr'
-mol.basis = 'sto3g'
-mol.verbose=4
-mol.build() # this is a pre-computed relaxed geometry
+    mol.unit = 'Bohr'
+    mol.basis = 'sto3g'
+    mol.verbose=4
+    mol.output = '/dev/null'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.conv_tol = 1e-14
+    mf.conv_tol_grad = 1e-9
+    mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
 
 class KnownValues(unittest.TestCase):
-    def test_finite_diff_rhf_eph(self):
-        mf = scf.RHF(mol)
-        mf.conv_tol = 1e-16
-        mf.conv_tol_grad = 1e-10
-        mf.kernel()
+    def test_rhf_eph(self):
+        myeph = rhf.EPH(mf)
+        eph, _ = myeph.kernel()
+        self.assertAlmostEqual(lib.fp(abs(eph)), -0.14873539046411535, 6)
+        omega, mode = myeph.get_mode()
+        self.assertAlmostEqual(lib.fp(omega), 0.026085354876839845, 6)
 
+    def test_finite_diff_rhf_eph_high_cost(self):
         grad = mf.nuc_grad_method().kernel()
         self.assertTrue(abs(grad).max()<1e-5)
         mat, omega = eph_fd.kernel(mf)
@@ -51,5 +67,5 @@ class KnownValues(unittest.TestCase):
             self.assertTrue(min(abs(ephmo[i]-matmo[i]).max(), abs(ephmo[i]+matmo[i]).max())<1e-5)
 
 if __name__ == '__main__':
-    print("Full Tests for RHF")
+    print("Full Tests for EPH-RHF")
     unittest.main()

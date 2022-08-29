@@ -23,7 +23,6 @@
 #include "cint.h"
 #include "vhf/fblas.h"
 
-#define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
@@ -418,7 +417,7 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
 
         double *buf = cache;
         cache += dij * comp;
-        int has_value;
+        int has_value = 0;
         has_value = ECPscalar_c2s_factory(intor_cart, buf, comp, shls, ecpbas, necpbas,
                                           atm, natm, bas, nbas, env, opt, cache);
         if (has_value) {
@@ -1001,7 +1000,7 @@ int ECPscalar_ignuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int comp = 3;
-        int has_value = _cart_factory(_igv_cart, out, comp+2,
+        int has_value = _cart_factory(_igv_cart, out, comp,
                                       dims, shls, ecpbas, necpbas,
                                       atm, natm, bas, nbas, env, opt, cache);
         return has_value;
@@ -1013,7 +1012,7 @@ int ECPscalar_ignuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
         int comp = 3;
-        int has_value = _sph_factory(_igv_cart, out, comp+2,
+        int has_value = _sph_factory(_igv_cart, out, comp,
                                      dims, shls, ecpbas, necpbas,
                                      atm, natm, bas, nbas, env, opt, cache);
         return has_value;

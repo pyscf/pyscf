@@ -23,38 +23,41 @@ from pyscf import mcscf
 from pyscf import fci
 from pyscf.fci import fci_slow
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None#"out_h2o"
-mol.atom = [
-    ['H', ( 1.,-1.    , 0.   )],
-    ['H', ( 0.,-1.    ,-1.   )],
-    ['H', ( 0.,-0.5   ,-0.   )],
-    ['H', ( 0.,-0.    ,-1.   )],
-    ['H', ( 1.,-0.5   , 0.   )],
-    ['H', ( 0., 1.    , 1.   )],
-]
+def setUpModule():
+    global mol, m, h1e, g2e, ci0, ci1
+    global norb, nelec
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None#"out_h2o"
+    mol.atom = [
+        ['H', ( 1.,-1.    , 0.   )],
+        ['H', ( 0.,-1.    ,-1.   )],
+        ['H', ( 0.,-0.5   ,-0.   )],
+        ['H', ( 0.,-0.    ,-1.   )],
+        ['H', ( 1.,-0.5   , 0.   )],
+        ['H', ( 0., 1.    , 1.   )],
+    ]
 
-mol.basis = {'H': '6-31g'}
-mol.build()
+    mol.basis = {'H': '6-31g'}
+    mol.build()
 
-m = scf.RHF(mol)
-m.conv_tol = 1e-15
-m.conv_tol_grad = 1e-7
-ehf = m.scf()
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-15
+    m.conv_tol_grad = 1e-7
+    ehf = m.scf()
 
-norb = m.mo_coeff.shape[1]
-nelec = mol.nelectron
-h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff)).round(9)
-g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False).round(9)
-na = fci.cistring.num_strings(norb, nelec//2)
-numpy.random.seed(15)
-ci0 = numpy.random.random((na,na))
-ci0 = ci0 + ci0.T
-ci0 /= numpy.linalg.norm(ci0)
-ci1 = numpy.random.random((na,na))
-ci1 = ci1 + ci1.T
-ci1 /= numpy.linalg.norm(ci1)
+    norb = m.mo_coeff.shape[1]
+    nelec = mol.nelectron
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, m.get_hcore(), m.mo_coeff)).round(9)
+    g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False).round(9)
+    na = fci.cistring.num_strings(norb, nelec//2)
+    numpy.random.seed(15)
+    ci0 = numpy.random.random((na,na))
+    ci0 = ci0 + ci0.T
+    ci0 /= numpy.linalg.norm(ci0)
+    ci1 = numpy.random.random((na,na))
+    ci1 = ci1 + ci1.T
+    ci1 /= numpy.linalg.norm(ci1)
 
 def tearDownModule():
     global mol, m, h1e, g2e, ci0, ci1
@@ -65,7 +68,7 @@ class KnownValues(unittest.TestCase):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 9.1191973750140729, 7)
         ci1 = fci.direct_spin0.contract_2e(g2e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_2e(g2e, ci0, norb, nelec)
         self.assertTrue(numpy.allclose(ci1ref, ci1))
@@ -73,9 +76,9 @@ class KnownValues(unittest.TestCase):
 
     def test_kernel(self):
         e, c = fci.direct_spin0.kernel(h1e, g2e, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
         e = fci.direct_spin0.energy(h1e, g2e, c, norb, nelec)
-        self.assertAlmostEqual(e, -9.1491239851241737, 8)
+        self.assertAlmostEqual(e, -9.1491239851241737, 7)
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelec)

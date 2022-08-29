@@ -33,6 +33,7 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import uhf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
 from pyscf import __config__
@@ -67,7 +68,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
         if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+            # TODO: check wave function symmetry
+            log.note('Wave-function symmetry = %s', mol.groupname)
         else:
             log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, wfnsym))
@@ -217,20 +219,21 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
         idx = numpy.argsort(es, kind='mergesort')
-        assert(numpy.allclose(es[idx], esub.round(7)))
+        assert (numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
 
 def so2ao_mo_coeff(so, irrep_mo_coeff):
     '''Transfer the basis of MO coefficients, from spin-adapted basis to AO basis
     '''
-    return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir]) \
+    return numpy.hstack([numpy.dot(so[ir],irrep_mo_coeff[ir])
                          for ir in range(so.__len__())])
 
 def check_irrep_nelec(mol, irrep_nelec, nelec):
     for irname in irrep_nelec:
         if irname not in mol.irrep_name:
-            logger.warn(mol, 'Molecule does not have irrep %s', irname)
+            msg = 'Molecule does not have irrep %s defined in irrep_nelec.' % irname
+            raise ValueError(msg)
 
     float_irname = []
     fix_na = 0
@@ -243,6 +246,9 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                 neleca = irrep_nelec[irname] - nelecb
             else:
                 neleca, nelecb = irrep_nelec[irname]
+            if not (isinstance(neleca, (int, numpy.integer)) and
+                    isinstance(nelecb, (int, numpy.integer))):
+                raise ValueError('irrep_nelec value must be integer')
             norb = mol.symm_orb[i].shape[1]
             if neleca > norb or nelecb > norb:
                 msg =('More electrons than orbitals for irrep %s '
@@ -264,12 +270,11 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
     float_neleca = neleca - fix_na
     float_nelecb = nelecb - fix_nb
     free_norb = sum(free_irrep_norbs)
-    if ((fix_na > neleca) or (fix_nb > nelecb) or
-        (fix_na+nelecb > mol.nelectron) or
-        (fix_nb+neleca > mol.nelectron)):
-        msg =('More electrons defined by irrep_nelec than total num electrons. '
-              'mol.nelectron = %d  irrep_nelec = %s' %
-              (mol.nelectron, irrep_nelec))
+    if fix_na > neleca or fix_nb > nelecb:
+        msg =('More electrons defined by irrep_nelec than total num electrons.\n'
+              f'total num electrons = ({neleca}, {nelecb})\n'
+              f'num electrons defined by irrep_nelec = ({fix_na}, {fix_nb})\n'
+              f'irrep_nelec = {irrep_nelec}')
         raise ValueError(msg)
     else:
         logger.info(mol, 'Freeze %d electrons in irreps %s',
@@ -289,7 +294,8 @@ def check_irrep_nelec(mol, irrep_nelec, nelec):
                     mol.nelectron-fix_ne, ' '.join(float_irname))
     return fix_na, fix_nb, float_irname
 
-#TODO: force E1gx/E1gy ... use the same coefficients
+#TODO: force Dooh, Doov orbitals E1gx/E1gy ... using the same coefficients
+#TODO: force SO3 orbitals p+0,p-1,p+1, ... using the same coefficients
 def eig(mf, h, s):
     '''Solve generalized eigenvalue problem, for each irrep.  The
     eigenvalues and eigenvectors are not sorted to ascending order.
@@ -373,11 +379,8 @@ class SymAdaptedRHF(hf.RHF):
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
-        for irname in self.irrep_nelec:
-            if irname not in self.mol.irrep_name:
-                logger.warn(self, 'No irrep %s', irname)
         if mol.symmetry:
-            check_irrep_nelec(self.mol, self.irrep_nelec, self.mol.nelectron)
+            check_irrep_nelec(mol, self.irrep_nelec, self.mol.nelectron)
         return hf.RHF.build(self, mol)
 
     eig = eig
@@ -396,6 +399,7 @@ class SymAdaptedRHF(hf.RHF):
         ''' We assumed mo_energy are grouped by symmetry irreps, (see function
         self.eig). The orbitals are sorted after SCF.
         '''
+
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
         if not mol.symmetry:
@@ -416,7 +420,7 @@ class SymAdaptedRHF(hf.RHF):
                 nelec_fix += n
                 rest_idx[ir_idx] = False
         nelec_float = mol.nelectron - nelec_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
             occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
@@ -535,10 +539,6 @@ class SymAdaptedROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            for irname in self.irrep_nelec:
-                if irname not in self.mol.irrep_name:
-                    logger.warn(self, 'No irrep %s', irname)
-
             fix_na, fix_nb = check_irrep_nelec(mol, self.irrep_nelec, self.nelec)[:2]
             alpha_open = beta_open = False
             for ne in self.irrep_nelec.values():
@@ -620,7 +620,7 @@ class SymAdaptedROHF(rohf.ROHF):
                 rest_idx[ir_idx] = False
 
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if len(rest_idx) > 0:
             rest_idx = numpy.where(rest_idx)[0]
             nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
@@ -739,17 +739,19 @@ class SymAdaptedROHF(rohf.ROHF):
 
             nirrep = len(mol.irrep_id)
             orbsym = self.get_orbsym(mo_coeff, self.get_ovlp())
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+            irreps = numpy.asarray(mol.irrep_id)
+            ndoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==2], axis=1)
+            nsoccs = numpy.count_nonzero(irreps[:,None] == orbsym[mo_occ==1], axis=1)
+
             wfnsym = 0
-            ndoccs = []
-            nsoccs = []
-            for k,ir in enumerate(mol.irrep_id):
-                ndoccs.append(sum(orbsym_in_d2h[mo_occ==2] == ir))
-                nsoccs.append(sum(orbsym_in_d2h[mo_occ==1] == ir))
-                if nsoccs[k] % 2 == 1:
-                    wfnsym ^= ir
+            # wfn symmetry is determined by the odd number of electrons in each irrep
+            for k in numpy.where(nsoccs % 2 == 1)[0]:
+                ir_in_d2h = mol.irrep_id[k] % 10  # convert to D2h irreps
+                wfnsym ^= ir_in_d2h
+
             if mol.groupname in ('SO3', 'Dooh', 'Coov'):
-                log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+                # TODO: check wave function symmetry
+                log.note('Wave-function symmetry = %s', mol.groupname)
             else:
                 log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))
@@ -877,20 +879,10 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
 
 
 class HF1e(ROHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = hf._hf1e_scf
 
 
-del(WITH_META_LOWDIN)
+del (WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

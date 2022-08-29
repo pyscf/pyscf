@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -230,8 +230,7 @@ def _get_vvvv(eris):
         vvL = np.asarray(eris.vvL)
         nvir = int(np.sqrt(eris.vvL.shape[0]*2))
         return ao2mo.restore(1, lib.dot(vvL, vvL.T), nvir)
-    elif len(eris.vvvv.shape) == 2:  # DO not use .ndim here for h5py library
-                                     # backward compatbility
+    elif eris.vvvv.ndim == 2:
         nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
         return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
     else:

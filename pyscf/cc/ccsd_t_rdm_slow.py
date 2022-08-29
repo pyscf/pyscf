@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,10 +33,10 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
-    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
-      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
-    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
-      + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
+    w = (numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2) -
+         numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
+    v = (numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1) +
+         numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
     w = p6(w)
     v = p6(v)
     wv = w + v * .5
@@ -45,25 +45,26 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     gvv = numpy.einsum('ijkacd,ijkbcd->ab', wv, rw.conj())
 
     if not for_grad:
-# t3 amplitudes in CCSD(T) is computed non-iteratively. The off-diagonal
-# blocks of fock matrix does not contribute to CCSD(T) energy. To make Tr(H,D)
-# consistent to the CCSD(T) total energy, the density matrix off-diagonal
-# parts are excluded.
+        # t3 amplitudes in CCSD(T) is computed non-iteratively. The
+        # off-diagonal blocks of fock matrix does not contribute to CCSD(T)
+        # energy. To make Tr(H,D) consistent to the CCSD(T) total energy, the
+        # density matrix off-diagonal parts are excluded.
         doo[numpy.diag_indices(nocc)] -= goo.diagonal() * .5
         dvv[numpy.diag_indices(nvir)] += gvv.diagonal() * .5
 
     else:
-# The off-diagonal blocks of fock matrix have small contributions to analytical
-# nuclear gradients.
+        # The off-diagonal blocks of fock matrix have small contributions to
+        # analytical nuclear gradients.
         doo -= goo * .5
         dvv += gvv * .5
 
     dvo += numpy.einsum('ijab,ijkabc->ck', t2.conj(), rw) * .5
     return doo, dov, dvo, dvv
 
-# gamma2 intermediates in Chemist's notation
 def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
                           compress_vvvv=False):
+    '''intermediates tensors for gamma2 are sorted in Chemist's notation
+    '''
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
     if eris is None: eris = mycc.ao2mo()
@@ -77,10 +78,10 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
-    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
-      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
-    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
-      + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
+    w = (numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2) -
+         numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
+    v = (numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1) +
+         numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
     w = p6(w)
     v = p6(v)
     rw = r6(w)
@@ -165,7 +166,7 @@ if __name__ == '__main__':
     print(lib.finger(dm1) - 1.289951975176953 )
     print(lib.finger(dm2) - 6.6184784979411164)
     h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-    e3 =(numpy.einsum('ij,ji->', h1, dm1)
-       + numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
+    e3 =(numpy.einsum('ij,ji->', h1, dm1) +
+         numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
     print(e3ref, e3-(mf.e_tot+ecc))
 

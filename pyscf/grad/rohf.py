@@ -20,64 +20,35 @@
 Non-relativistic ROHF analytical nuclear gradients
 '''
 
+import numpy
+from functools import reduce
 from pyscf import lib
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import uhf as uhf_grad
 
+def make_rdm1e(mf_grad, mo_energy, mo_coeff, mo_occ):
+    '''Energy weighted density matrix'''
+    mf = mf_grad.base
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    fock = mf.get_fock(dm=dm)
+    fa, fb = fock.focka, fock.fockb
+    mocc_a = mo_coeff[:,mo_occ>0 ]
+    mocc_b = mo_coeff[:,mo_occ==2]
+    rdm1e_a = reduce(numpy.dot, (mocc_a, mocc_a.conj().T, fa, mocc_a, mocc_a.conj().T))
+    rdm1e_b = reduce(numpy.dot, (mocc_b, mocc_b.conj().T, fb, mocc_b, mocc_b.conj().T))
+    return numpy.array((rdm1e_a, rdm1e_b))
 
-class Gradients(uhf_grad.Gradients):
-    '''Non-relativistic ROHF gradients
+class Gradients(rhf_grad.Gradients):
+    '''Non-relativistic restricted open-shell Hartree-Fock gradients
     '''
-    def __init__(self, mf):
-        uhf_grad.Gradients.__init__(self, scf.addons.convert_to_uhf(mf))
+
+    get_veff = uhf_grad.get_veff
+
+    make_rdm1e = make_rdm1e
+
+    grad_elec = uhf_grad.grad_elec
 
 Grad = Gradients
 
 from pyscf import scf
 scf.rohf.ROHF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.atom = [['He', (0.,0.,0.)], ]
-    mol.basis = {'He': 'ccpvdz'}
-    mol.build()
-    mf = scf.ROHF(mol)
-    mf.scf()
-    g = mf.Gradients()
-    print(g.grad())
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.build()
-    rhf = scf.ROHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
-    print(g.grad())
-#[[ 0   0               -2.41134256e-02]
-# [ 0   4.39690522e-03   1.20567128e-02]
-# [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-    rhf = scf.ROHF(mol)
-    rhf.conv_tol = 1e-14
-    e0 = rhf.scf()
-    g = Gradients(rhf)
-    print(g.grad())
-#[[ 0   0                3.27774948e-03]
-# [ 0   4.31591309e-02  -1.63887474e-03]
-# [ 0  -4.31591309e-02  -1.63887474e-03]]

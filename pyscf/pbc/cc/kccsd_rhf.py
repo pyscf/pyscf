@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import time
+
 from functools import reduce
 import numpy as np
 import h5py
@@ -51,7 +51,7 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time1 = time.clock(), time.time()
+    time0 = time1 = logger.process_clock(), logger.perf_counter()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -253,7 +253,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac
@@ -541,7 +541,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector_to_nested(vec, self.ccsd_vector_desc)
 
     def init_amps(self, eris):
-        time0 = time.clock(), time.time()
+        time0 = logger.process_clock(), logger.perf_counter()
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
@@ -604,10 +604,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf()
         if eris is None:
             # eris = self.ao2mo()
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
+
         if mbpt2:
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
@@ -710,7 +713,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         cell = cc._scf.cell
         kpts = cc.kpts
         nkpts = cc.nkpts
@@ -738,7 +741,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
@@ -772,7 +774,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
-        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
         orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
@@ -791,7 +792,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                                  (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
-                if dtype == np.float: eri_kpt = eri_kpt.real
+                if dtype == np.double: eri_kpt = eri_kpt.real
                 eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                     eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -826,7 +827,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 self.vvvv = None
 
             # <ij|pq>  = (ip|jq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -835,7 +836,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_r = mo_coeff[kr][:, :nocc]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbo_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nocc, nmo).transpose(0, 2, 1, 3)
                         self.dtype = buf_kpt.dtype
                         self.oooo[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
@@ -844,7 +845,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming oopq', *cput1)
 
             # <ia|pq> = (ip|aq)
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -853,7 +854,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbv_r = mo_coeff[kr][:, nocc:]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(0, 2, 1, 3)
                         self.ovov[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
                         # TODO: compute vovv on the fly
@@ -862,7 +863,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
             ## Without k-point symmetry
-            # cput1 = time.clock(), time.time()
+            # cput1 = logger.process_clock(), logger.perf_counter()
             # for kp in range(nkpts):
             #    for kq in range(nkpts):
             #        for kr in range(nkpts):
@@ -875,12 +876,12 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #                orbva_p = orbv_p[:,a].reshape(-1,1)
             #                buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
             #                                 (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
-            #                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+            #                if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
             #                buf_kpt = buf_kpt.reshape((1,nvir,nvir,nvir)).transpose(0,2,1,3)
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
             # cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
-            cput1 = time.clock(), time.time()
+            cput1 = logger.process_clock(), logger.perf_counter()
             mem_now = lib.current_memory()[0]
             if not vvvv_required:
                 _init_df_eris(cc, self)
@@ -895,7 +896,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                      kpts[[ikp,ikq,ikr,iks]], compact=False)
-                    if dtype == np.float: buf_kpt = buf_kpt.real
+                    if dtype == np.double: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
                     for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                         buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -908,7 +909,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
                                          (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
                         self.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
@@ -992,7 +993,7 @@ class _IMDS:
             self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1004,7 +1005,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1030,7 +1031,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1058,7 +1059,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

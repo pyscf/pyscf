@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,17 +47,17 @@ def make_tau(cc, t2, t1, t1p, kconserv, fac=1., out=None):
     for ki in range(nkpts):
         for ka in range(nkpts):
             for kj in range(nkpts):
-                    kb = kconserv[ki,ka,kj]
-                    tmp = numpy.zeros((nocc,nocc,nvir,nvir),dtype=t2.dtype)
-                    if ki == ka and kj == kb:
-                        tmp += einsum('ia,jb->ijab',t1[ki],t1p[kj])
-                    if ki == kb and kj == ka:
-                        tmp -= einsum('ib,ja->ijab',t1[ki],t1p[kj])
-                    if kj == ka and ki == kb:
-                        tmp -= einsum('ja,ib->ijab',t1[kj],t1p[ki])
-                    if kj == kb and ki == ka:
-                        tmp += einsum('jb,ia->ijab',t1[kj],t1p[ki])
-                    tau1[ki,kj,ka] += fac*0.5*tmp
+                kb = kconserv[ki,ka,kj]
+                tmp = numpy.zeros((nocc,nocc,nvir,nvir),dtype=t2.dtype)
+                if ki == ka and kj == kb:
+                    tmp += einsum('ia,jb->ijab',t1[ki],t1p[kj])
+                if ki == kb and kj == ka:
+                    tmp -= einsum('ib,ja->ijab',t1[ki],t1p[kj])
+                if kj == ka and ki == kb:
+                    tmp -= einsum('ja,ib->ijab',t1[kj],t1p[ki])
+                if kj == kb and ki == ka:
+                    tmp += einsum('jb,ia->ijab',t1[kj],t1p[ki])
+                tau1[ki,kj,ka] += fac*0.5*tmp
     return tau1
 
 def cc_Fvv(cc,t1,t2,eris,kconserv):
@@ -241,7 +241,7 @@ def Wvvvv(cc,t1,t2,eris,kconserv):
     tau = make_tau(cc,t2,t1,t1,kconserv)
     Wabef = cc_Wvvvv(cc,t1,t2,eris,kconserv)
     for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
-        kf = kconserv[ka, ke, kb]
+        #kf = kconserv[ka, ke, kb]
         for km in range(nkpts):
             kn = kconserv[ka, km, kb]
             Wabef[ka, kb, ke] += 0.25*einsum('mnab,mnef->abef',tau[km, kn, ka],
@@ -369,7 +369,7 @@ def get_full_t3p2(mycc, t1, t2, eris):
         ret = ret - einsum('jima,mkbc->ijkabc', eris.ooov[kj,ki,km].conj(), t2[km,kk,kb])
         return ret
 
-    fock = eris.fock
+    #fock = eris.fock
     #fov = fock[:, :nocc, nocc:]
     #foo = numpy.array([fock[ikpt, :nocc, :nocc].diagonal() for ikpt in range(nkpts)])
     #fvv = numpy.array([fock[ikpt, nocc:, nocc:].diagonal() for ikpt in range(nkpts)])

@@ -17,7 +17,7 @@
 Relativistic Dirac-Hartree-Fock
 """
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -38,7 +38,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
     n2c = dm0.shape[0] // 2
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -54,17 +54,17 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         h1ao = hcore_deriv(ia)
         de[k] += numpy.einsum('xij,ji->x', h1ao, dm0).real
 # large components
-        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
-        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
+        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
 # small components
         p0 += n2c
         p1 += n2c
-        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
-        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
+        de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1]) +
+                 numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
     log.debug('gradients of electronic part')
     log.debug(str(de))
     return de
@@ -79,7 +79,7 @@ def get_hcore(mol):
     t  = mol.intor('int1e_ipkin_spinor', comp=3)
     vn = mol.intor('int1e_ipnuc_spinor', comp=3)
     wn = mol.intor('int1e_ipspnucsp_spinor', comp=3)
-    h1e = numpy.zeros((3,n4c,n4c), numpy.complex)
+    h1e = numpy.zeros((3,n4c,n4c), numpy.complex128)
     h1e[:,:n2c,:n2c] = vn
     h1e[:,n2c:,:n2c] = t
     h1e[:,:n2c,n2c:] = t
@@ -93,7 +93,7 @@ def get_ovlp(mol):
 
     s  = mol.intor('int1e_ipovlp_spinor', comp=3)
     t  = mol.intor('int1e_ipkin_spinor', comp=3)
-    s1e = numpy.zeros((3,n4c,n4c), numpy.complex)
+    s1e = numpy.zeros((3,n4c,n4c), numpy.complex128)
     s1e[:,:n2c,:n2c] = s
     s1e[:,n2c:,n2c:] = t * (.5/c**2)
     return -s1e
@@ -124,7 +124,7 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
 get_veff = get_coulomb_hf
 
 
-class GradientsBasics(rhf_grad.GradientsBasics):
+class GradientsMixin(rhf_grad.GradientsMixin):
     '''
     Basic nuclear gradient functions for 4C relativistic methods
     '''
@@ -145,7 +145,7 @@ class GradientsBasics(rhf_grad.GradientsBasics):
                 vn = z * mol.intor('int1e_iprinv_spinor', comp=3)
                 wn = z * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
 
-            v = numpy.zeros((3,n4c,n4c), numpy.complex)
+            v = numpy.zeros((3,n4c,n4c), numpy.complex128)
             v[:,:n2c,:n2c] = vn
             v[:,n2c:,n2c:] = wn * (.25/c**2)
             v[:,p0:p1]         += h1[:,p0:p1]
@@ -158,10 +158,10 @@ class GradientsBasics(rhf_grad.GradientsBasics):
         return get_ovlp(mol)
 
 
-class Gradients(GradientsBasics):
+class Gradients(GradientsMixin):
     '''Unrestricted Dirac-Hartree-Fock gradients'''
     def __init__(self, scf_method):
-        GradientsBasics.__init__(self, scf_method)
+        GradientsMixin.__init__(self, scf_method)
         if scf_method.with_ssss:
             self.level = 'SSSS'
         else:
@@ -191,7 +191,7 @@ class Gradients(GradientsBasics):
         return 0
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         if mo_energy is None: mo_energy = self.base.mo_energy
         if mo_coeff is None: mo_coeff = self.base.mo_coeff
         if mo_occ is None: mo_occ = self.base.mo_occ
@@ -224,8 +224,8 @@ scf.dhf.UHF.Gradients = lib.class_as_method(Gradients)
 def _call_vhf1_llll(mol, dm):
     n2c = dm.shape[0] // 2
     dmll = dm[:n2c,:n2c].copy()
-    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
             _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,
@@ -239,8 +239,8 @@ def _call_vhf1(mol, dm):
     dmls = dm[:n2c,n2c:].copy()
     dmsl = dm[n2c:,:n2c].copy()
     dmss = dm[n2c:,n2c:].copy()
-    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
-    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex)
+    vj = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
+    vk = numpy.zeros((3,n2c*2,n2c*2), dtype=numpy.complex128)
     vj[:,:n2c,:n2c], vk[:,:n2c,:n2c] = \
             _vhf.rdirect_mapdm('int2e_ip1_spinor', 's2kl',
                                ('lk->s1ij', 'jk->s1il'), dmll, 3,

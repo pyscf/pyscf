@@ -17,13 +17,12 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
+#include "np_helper/np_helper.h"
 #include "fci.h"
 
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define BLK     48
 #define BUFBASE 96
 
@@ -59,16 +58,14 @@ void NEVPTkern_dfec_dfae(double *gt2, double *eri, double *t2ket,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * norb;
-        const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        int i, m, n;
-        size_t k;
-        double *cp0, *cp1;
-        double *t2t; // E^d_fE^a_e with ae transposed
+        const size_t n4 = nnorb * nnorb;
 
-#pragma omp parallel private(cp0, cp1, t2t, m, n, i, k)
+#pragma omp parallel
 {
-        t2t = malloc(sizeof(double) * n4);
+        double *cp0, *cp1;
+        int i, k, m, n;
+        double *t2t = malloc(sizeof(double) * n4); // E^d_fE^a_e with ae transposed
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 for (i = 0; i < nnorb; i++) {
@@ -97,16 +94,14 @@ void NEVPTkern_aedf_ecdf(double *gt2, double *eri, double *t2ket,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * norb;
-        const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        int i, m, n;
-        size_t k;
-        double *cp0, *cp1;
-        double *t2t;
+        const size_t n4 = nnorb * nnorb;
 
-#pragma omp parallel private(cp0, cp1, t2t, m, n, i, k)
+#pragma omp parallel
 {
-        t2t = malloc(sizeof(double) * n4);
+        int i, k, m, n;
+        double *cp0, *cp1;
+        double *t2t = malloc(sizeof(double) * n4);
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 for (m = 0; m < norb; m++) {
@@ -135,12 +130,12 @@ void NEVPTkern_cedf_aedf(double *gt2, double *eri, double *t2ket,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * norb;
-        const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        size_t k;
-        int blen;
+        const size_t n4 = nnorb * nnorb;
 
-#pragma omp parallel private(k, blen)
+#pragma omp parallel
+{
+        int k, blen;
 #pragma omp for schedule(dynamic, 1)
         for (k = 0; k < bcount; k+=8) {
                 blen = MIN(bcount-k, 8) * norb;
@@ -148,6 +143,7 @@ void NEVPTkern_cedf_aedf(double *gt2, double *eri, double *t2ket,
                        &D1, eri, &n3, t2ket+n4*k, &n3,
                        &D0, gt2+nnorb*k, &norb);
         }
+}
 }
 
 // (df|ea) E^d_f E^e_c|0> = t_ac
@@ -159,17 +155,19 @@ void NEVPTkern_dfea_dfec(double *gt2, double *eri, double *t2ket,
         const double D0 = 0;
         const double D1 = 1;
         const int nnorb = norb * norb;
-        const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        size_t k;
+        const size_t n4 = nnorb * nnorb;
 
-#pragma omp parallel private(k)
+#pragma omp parallel
+{
+        int k;
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < bcount; k++) {
                 dgemm_(&TRANS_N, &TRANS_T, &norb, &norb, &n3,
                        &D1, t2ket+n4*k, &norb, eri, &norb,
                        &D0, gt2+nnorb*k, &norb);
         }
+}
 }
 
 // TODO: NEVPTkern_spin0 stra_id >= strb_id as FCI4pdm_kern_spin0
@@ -181,14 +179,11 @@ void NEVPTkern_sf(void (*contract_kernel)(),
                   _LinkT *clink_indexa, _LinkT *clink_indexb)
 {
         const int nnorb = norb * norb;
-        const int n4 = nnorb * nnorb;
         const int n3 = nnorb * norb;
-        int i, j, k, l, ij;
-        size_t n;
+        const size_t n4 = nnorb * nnorb;
         double *t1ket = malloc(sizeof(double) * nnorb * bcount);
         double *t2ket = malloc(sizeof(double) * n4 * bcount);
         double *gt2 = malloc(sizeof(double) * nnorb * bcount);
-        double *tbra, *pbra, *pt2;
 
         // t2[:,i,j,k,l] = E^i_j E^k_l|ket>
         FCI_t1ci_sf(ci0, t1ket, bcount, stra_id, strb_id,
@@ -198,9 +193,11 @@ void NEVPTkern_sf(void (*contract_kernel)(),
 
         (*contract_kernel)(gt2, eri, t2ket, bcount, norb, na, nb);
 
-#pragma omp parallel private(ij, i, j, k, l, n, tbra, pbra, pt2)
+#pragma omp parallel
 {
-        tbra = malloc(sizeof(double) * nnorb * bcount);
+        int i, j, k, l, n, ij;
+        double *pbra, *pt2;
+        double *tbra = malloc(sizeof(double) * nnorb * bcount);
 #pragma omp for schedule(dynamic, 4)
         for (ij = 0; ij < nnorb; ij++) { // loop ij for (<ket| E^j_i E^l_k)
                 i = ij / norb;
@@ -241,7 +238,7 @@ void NEVPTcontract(void (*kernel)(),
                    int norb, int na, int nb, int nlinka, int nlinkb,
                    int *link_indexa, int *link_indexb)
 {
-        const size_t nnorb = norb * norb;
+        const int nnorb = norb * norb;
         const size_t n4 = nnorb * nnorb;
         int i, j, k, ib, strk, bcount;
         double *pdm2 = malloc(sizeof(double) * n4);
@@ -251,8 +248,8 @@ void NEVPTcontract(void (*kernel)(),
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clinka, link_indexa, norb, na, nlinka);
         FCIcompress_link(clinkb, link_indexb, norb, nb, nlinkb);
-        memset(pdm2, 0, sizeof(double) * n4);
-        memset(rdm3, 0, sizeof(double) * n4 * nnorb);
+        NPdset0(pdm2, n4);
+        NPdset0(rdm3, n4 * nnorb);
 
         for (strk = 0; strk < na; strk++) {
                 for (ib = 0; ib < nb; ib += BUFBASE) {

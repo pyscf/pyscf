@@ -20,16 +20,18 @@ from pyscf import gto
 from pyscf import grad
 from pyscf.grad import dhf
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
-h2o.basis = {"H": '6-31g',
-             "O": '6-31g',}
-h2o.build()
+def setUpModule():
+    global h2o
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
+    h2o.basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    h2o.build()
 
 def tearDownModule():
     global h2o
@@ -42,7 +44,7 @@ class KnownValues(unittest.TestCase):
         with lib.light_speed(30):
             mf = scf.DHF(h2o).run(conv_tol=1e-12)
             g = mf.nuc_grad_method().kernel()
-            self.assertAlmostEqual(lib.finger(g), 0.0074947016737157545, 7)
+            self.assertAlmostEqual(lib.fp(g), 0.0074947016737157545, 6)
 
             ms = mf.as_scanner()
             pmol = h2o.copy()
@@ -58,7 +60,7 @@ class KnownValues(unittest.TestCase):
 #        with lib.light_speed(30):
 #            mf = scf.DHF(h2o).set(with_ssss=False).run()
 #            g = mf.nuc_grad_method().kernel()  # NotImplemented
-#            self.assertAlmostEqual(lib.finger(g), 0.035838032078025273, 7)
+#            self.assertAlmostEqual(lib.fp(g), 0.035838032078025273, 7)
 #
 #            ms = mf.as_scanner()
 #            pmol = h2o.copy()

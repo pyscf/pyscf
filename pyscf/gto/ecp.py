@@ -113,7 +113,7 @@ def so_by_shell(mol, shls):
     mol._env[AS_ECPBAS_OFFSET] = len(mol._bas)
     mol._env[AS_NECPBAS] = len(mol._ecpbas)
     buf = numpy.empty((di,dj), order='F', dtype=numpy.complex128)
-    cache = numpy.empty(buf.size*48)
+    cache = numpy.empty(buf.size*48+100000)
     fn = libecp.ECPso_spinor
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(di, dj),
@@ -140,7 +140,7 @@ def core_configuration(nelec_core):
         92: '5s4p3d2f',
     }
     if nelec_core not in conf_dic:
-        raise RuntimeError('Core configuration for %d core electrons is not available.')
+        raise RuntimeError('Core configuration for %d core electrons is not available.' % nelec_core)
     coreshell = [int(x) for x in conf_dic[nelec_core][::2]]
     return coreshell
 

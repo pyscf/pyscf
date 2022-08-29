@@ -24,71 +24,73 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import dft
 
-h2o_z0 = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g')
+def setUpModule():
+    global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
+    h2o_z0 = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g')
 
-h2o_z1 = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,)
+    h2o_z1 = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,)
 
-h2o_z0_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    symmetry = 1,
-    basis = '6-31g')
+    h2o_z0_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        symmetry = 1,
+        basis = '6-31g')
 
-h2o_z1_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,
-    symmetry = 1,)
+    h2o_z1_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,
+        symmetry = 1,)
 
-h4_z0_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''C 0 0 0
-    H  1  1  1
-    H -1 -1  1
-    H -1  1 -1
-    H  1 -1 -1''',
-    basis = '6-31g',
-    symmetry = 1,)
+    h4_z0_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''C 0 0 0
+        H  1  1  1
+        H -1 -1  1
+        H -1  1 -1
+        H  1 -1 -1''',
+        basis = '6-31g',
+        symmetry = 1,)
 
-h4_z1_s = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''C 0 0 0
-    H  1  1  1
-    H -1 -1  1
-    H -1  1 -1
-    H  1 -1 -1''',
-    basis = '6-31g',
-    charge = 1,
-    spin = 1,
-    symmetry = 1,)
+    h4_z1_s = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''C 0 0 0
+        H  1  1  1
+        H -1 -1  1
+        H -1  1 -1
+        H  1 -1 -1''',
+        basis = '6-31g',
+        charge = 1,
+        spin = 1,
+        symmetry = 1,)
 
 def tearDownModule():
     global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
@@ -336,6 +338,30 @@ class KnownValues(unittest.TestCase):
         mf = mf.newton().run()
         self.assertTrue(mf.converged)
         self.assertAlmostEqual(mf.e_tot, -914.539361470649, 9)
+
+    def test_rohf_so3(self):
+        mol = gto.M(atom='C', basis='ccpvdz', spin=4, symmetry=True)
+        mf = mol.RHF().newton()
+        mf.irrep_nelec = {
+            's+0': (2,1),
+            'p-1': (1,0),
+            'p+0': (1,0),
+            'p+2': (1,0)
+        }
+        mf.max_cycle = 3
+        mf.run()
+        self.assertTrue(mf.converged)
+        self.assertAlmostEqual(mf.e_tot, -37.590682604205696, 9)
+
+        mol = gto.Mole()
+        mol.atom = 'N 0 0 0'
+        mol.spin=3
+        mol.symmetry = True
+        mol.basis = 'ccpvtz'
+        mol.build()
+        mf = mol.ROHF().newton().run()
+        mf.irrep_nelec = {'s+0': 4}
+        self.assertAlmostEqual(mf.e_tot, -54.3973578450836, 9)
 
 
 if __name__ == "__main__":

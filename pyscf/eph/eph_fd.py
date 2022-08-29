@@ -17,18 +17,20 @@
 
 #
 '''
-A hacky implementation of electron-phonon matrix from finite difference
+electron-phonon matrix from finite difference
 '''
 
-from pyscf import scf, dft, gto, hessian
-from pyscf.eph.rhf import solve_hmat
-import numpy as np
-import scipy
-from pyscf.lib import logger
 import copy
+import numpy as np
+from pyscf import scf, dft, gto, hessian
+from pyscf.eph import rhf as rhf_eph
+from pyscf.lib import logger
+from pyscf.data.nist import MP_ME
+
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 
 def run_mfs(mf, mols_a, mols_b):
-    '''perform a set of calculations on given two sets of molecules'''
     nconfigs = len(mols_a)
     dm0 = mf.make_rdm1()
     mflist = []
@@ -46,13 +48,15 @@ def run_mfs(mf, mols_a, mols_b):
         mflist.append((mf1, mf2))
     return mflist
 
-def get_mode(mf):
+def get_mode(mf, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
     hmat = mf.Hessian().kernel()
-    w_new, c_new = solve_hmat(mf.mol, hmat)
+    w_new, c_new = rhf_eph.solve_hmat(mf.mol, hmat, cutoff_frequency, keep_imag_frequency)
     return w_new, c_new
 
 def gen_moles(mol, disp):
-    """From the given equilibrium molecule, generate 3N molecules with a shift on + displacement(mol_a) and - displacement(mol_s) on each Cartesian coordinates"""
+    """From the given equilibrium molecule, generate 3N molecules with a shift
+    on + displacement(mol_a) and - displacement(mol_s) on each Cartesian coordinates
+    """
     coords = mol.atom_coords()
     natoms = len(coords)
     mol_a, mol_s = [],[]
@@ -68,9 +72,6 @@ def gen_moles(mol, disp):
     return mol_a, mol_s
 
 def get_vmat(mf, mfset, disp):
-    '''
-    computing <u|dVxc/dR|v>
-    '''
     vmat=[]
     mygrad = mf.nuc_grad_method()
     ve = mygrad.get_veff() + mygrad.get_hcore() + mf.mol.intor("int1e_ipkin")
@@ -92,19 +93,15 @@ def get_vmat(mf, mfset, disp):
 
     return np.asarray(vmat)
 
-def kernel(mf, disp=1e-5, mo_rep=False):
-    if hasattr(mf, 'xc'): mf.grids.build()
+def kernel(mf, disp=1e-4, mo_rep=False, cutoff_frequency=CUTOFF_FREQUENCY, keep_imag_frequency=KEEP_IMAG_FREQUENCY):
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        mf.grids.build()
     if not mf.converged: mf.kernel()
     RESTRICTED = (mf.mo_coeff.ndim==2)
     mol = mf.mol
-    omega, vec = get_mode(mf)
-    mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    omega, vec = get_mode(mf, cutoff_frequency, keep_imag_frequency)
+    mass = mol.atom_mass_list() * MP_ME
+    vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mols_a, mols_b = gen_moles(mol, disp/2.0) # generate a bunch of molecules with disp/2 on each cartesion coord
     mfset = run_mfs(mf, mols_a, mols_b) # run mean field calculations on all these molecules
     vmat = get_vmat(mf, mfset, disp) # extracting <p|dV|q>/dR
@@ -142,7 +139,7 @@ if __name__ == '__main__':
     grad = mf.nuc_grad_method().kernel()
     print("Force on the atoms/au:")
     print(grad)
-    assert(abs(grad).max()<1e-5)
+    assert (abs(grad).max()<1e-5)
 
     mat, omega = kernel(mf)
     matmo, _ = kernel(mf, mo_rep=True)

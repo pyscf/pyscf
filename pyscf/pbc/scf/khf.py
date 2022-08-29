@@ -26,7 +26,7 @@ See Also:
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy as np
 import scipy.linalg
@@ -40,6 +40,8 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
+from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -58,21 +60,28 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts,
+    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpts,
                        pbcopt=lib.c_null_ptr())
+    s = lib.asarray(s)
+    hermi_error = abs(s - s.conj().transpose(0,2,1)).max()
+    if hermi_error > cell.precision and hermi_error > 1e-12:
+        logger.warn(mf, '%.4g error found in overlap integrals. '
+                    'cell.precision  or  cell.rcut  can be adjusted to '
+                    'improve accuracy.')
+
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
         rmin = max([cell.bas_rcut(ib, prec) for ib in range(cell.nbas)])
         if cell.rcut < rmin:
-            logger.warn(cell, 'Singularity detected in overlap matrix.  '
+            logger.warn(mf, 'Singularity detected in overlap matrix.  '
                         'Integral accuracy may be not enough.\n      '
                         'You can adjust  cell.precision  or  cell.rcut  to '
                         'improve accuracy.  Recommended values are\n      '
                         'cell.precision = %.2g  or smaller.\n      '
                         'cell.rcut = %.4g  or larger.', prec, rmin)
-    return lib.asarray(s)
+    return s
 
 
 def get_hcore(mf, cell=None, kpts=None):
@@ -117,7 +126,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
 
 
 def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None, with_j=True, with_k=True,
-          omega=None, **kwargs):
+           omega=None, **kwargs):
     '''Get the Coulomb (J) and exchange (K) AO matrices at sampled k-points.
 
     Args:
@@ -155,8 +164,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
-        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], \
-                damp_factor) for k, s1e in enumerate(s_kpts)]
+        f_kpts = [mol_hf.damping(s1e, dm_kpts[k] * 0.5, f_kpts[k], damp_factor)
+                  for k, s1e in enumerate(s_kpts)]
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -171,8 +180,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
-    assert(mo_energy_kpts[0].ndim == 1)
-    assert(mo_occ_kpts[0].ndim == 1)
+    assert (mo_energy_kpts[0].ndim == 1)
+    assert (mo_occ_kpts[0].ndim == 1)
 
     # occ array in mo_occ_kpts may have different size. See issue #250
     nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
@@ -306,8 +315,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     log.note("KRHF mulliken_meta")
     dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
-    c = orth.restore_ao_character(cell, pre_orth_method)
-    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
+    orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_method, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 
@@ -352,7 +360,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell (is it well defined)?
+    ''' Dipole moment in the cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
@@ -451,7 +459,7 @@ class KSCF(pbchf.SCF):
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
-    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', True)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
@@ -462,12 +470,15 @@ class KSCF(pbchf.SCF):
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
+        # Range separation JK builder
+        self.rsjk = None
+
         self.exxdiv = exxdiv
         self.kpts = kpts
         self.conv_tol = cell.precision * 10
 
         self.exx_built = False
-        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
+        self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpts(self):
@@ -475,9 +486,12 @@ class KSCF(pbchf.SCF):
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
+
     @kpts.setter
     def kpts(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
 
     @property
     def mo_energy_kpts(self):
@@ -515,6 +529,8 @@ class KSCF(pbchf.SCF):
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
+        if getattr(self, 'smearing_method', None) is not None:
+            logger.info(self, 'Smearing method = %s', self.smearing_method)
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
@@ -531,12 +547,20 @@ class KSCF(pbchf.SCF):
         return self
 
     def build(self, cell=None):
+        if cell is None:
+            cell = self.cell
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
         if 'kpts' in self.__dict__:
             # To handle the attribute kpts loaded from chkfile
             self.kpts = self.__dict__.pop('kpts')
+
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == self.kpts):
+                self.rsjk = self.rsjk.__class__(cell, self.kpts)
+            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -573,11 +597,11 @@ class KSCF(pbchf.SCF):
         nelectron = float(self.cell.tot_electrons(nkpts))
         if abs(ne - nelectron) > 1e-7*nkpts:
             logger.debug(self, 'Big error detected in the electron number '
-                        'of initial guess density matrix (Ne/cell = %g)!\n'
-                        '  This can cause huge error in Fock matrix and '
-                        'lead to instability in SCF for low-dimensional '
-                        'systems.\n  DM is normalized wrt the number '
-                        'of electrons %s', ne/nkpts, nelectron/nkpts)
+                         'of initial guess density matrix (Ne/cell = %g)!\n'
+                         '  This can cause huge error in Fock matrix and '
+                         'lead to instability in SCF for low-dimensional '
+                         'systems.\n  DM is normalized wrt the number '
+                         'of electrons %s', ne/nkpts, nelectron/nkpts)
             dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
@@ -610,9 +634,13 @@ class KSCF(pbchf.SCF):
         if cell is None: cell = self.cell
         if kpts is None: kpts = self.kpts
         if dm_kpts is None: dm_kpts = self.make_rdm1()
-        cpu0 = (time.clock(), time.time())
-        vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
-                                     with_j, with_k, omega, exxdiv=self.exxdiv)
+        cpu0 = (logger.process_clock(), logger.perf_counter())
+        if self.rsjk:
+            vj, vk = self.rsjk.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                      with_j, with_k, omega, self.exxdiv)
+        else:
+            vj, vk = self.with_df.get_jk(dm_kpts, hermi, kpts, kpts_band,
+                                         with_j, with_k, omega, self.exxdiv)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 
@@ -621,8 +649,16 @@ class KSCF(pbchf.SCF):
         '''Hartree-Fock potential matrix for the given density matrix.
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
-        vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
-        return vj - vk * .5
+        if dm_kpts is None:
+            dm_kpts = self.make_rdm1()
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm_kpts - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpts, kpts_band)
+            return vhf_last + vj - vk * .5
+        else:
+            vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+            return vj - vk * .5
 
     def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
                 **kwargs):
@@ -732,9 +768,49 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def rs_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.pbc.df import rsdf_jk
+        return rsdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
+    def jk_method(self, J='FFTDF', K=None):
+        '''
+        Set up the schemes to evaluate Coulomb and exchange matrix
+
+        FFTDF: planewave density fitting using Fast Fourier Transform
+        AFTDF: planewave density fitting using analytic Fourier Transform
+        GDF: Gaussian density fitting
+        MDF: Gaussian and planewave mix density fitting
+        RS: range-separation JK builder
+        RSDF: range-separation density fitting
+        '''
+        if K is None:
+            K = J
+
+        if J != K:
+            raise NotImplementedError('J != K')
+
+        if 'DF' in J or 'DF' in K:
+            if 'DF' in J and 'DF' in K:
+                assert J == K
+            else:
+                df_method = J if 'DF' in J else K
+                self.with_df = getattr(df, df_method)(self.cell, self.kpts)
+
+        if 'RS' in J or 'RS' in K:
+            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk.verbose = self.verbose
+
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpts)
+
+        nuc = self.with_df.__class__.__name__
+        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
+        return self
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
@@ -752,17 +828,17 @@ class KSCF(pbchf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self, mf=None):
         '''Convert the input mean-field object to a KRHF/KROHF/KRKS/KROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self, mf)
 
-    def to_uhf(self, mf):
+    def to_uhf(self, mf=None):
         '''Convert the input mean-field object to a KUHF/KUKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self, mf)
 
-    def to_ghf(self, mf):
+    def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self, mf)
 
     as_scanner = as_scanner
 
@@ -770,9 +846,13 @@ class KSCF(pbchf.SCF):
 class KRHF(KSCF, pbchf.RHF):
     def check_sanity(self):
         cell = self.cell
-        if cell.spin != 0 and len(self.kpts) % 2 != 0:
+        if isinstance(self.kpts, KPoints):
+            nkpts = self.kpts.nkpts
+        else:
+            nkpts = len(self.kpts)
+        if cell.spin != 0 and nkpts % 2 != 0:
             logger.warn(self, 'Problematic nelec %s and number of k-points %d '
-                        'found in KRHF method.', cell.nelec, len(self.kpts))
+                        'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
 
     def convert_from_(self, mf):
@@ -784,7 +864,7 @@ class KRHF(KSCF, pbchf.RHF):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

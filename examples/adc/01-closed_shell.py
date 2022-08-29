@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-IP/EA-ADC calculations for closed-shell N2 for 1 root
+IP/EA-RADC calculations for closed-shell N2 
 '''
 
 from pyscf import gto, scf, adc
@@ -19,21 +19,24 @@ mf.conv_tol = 1e-12
 mf.kernel()
 
 myadc = adc.ADC(mf)
-myadc.kernel()
 
-#IP/EA-ADC(2) for 1 root
-myadc.verbose = 4
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+#IP-RADC(2) for 1 root
+myadc.verbose = 6
+eip,vip,pip,xip = myadc.kernel()
 
-#IP/EA-ADC(2)-x for 1 root
+#EA-RADC(2)-x for 1 root
 myadc.method = "adc(2)-x"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+myadc.method_type = "ea"
+eea,vea,pea,xea = myadc.kernel()
 
-#IP/EA-ADC(3) for 1 root
+#Get EA-RADC(2)-x eigenevector analysis only
+myadc.compute_properties = False
+myadc.analyze()
+
+#EA-RADC(3) for 3 roots and properties
+myadc.compute_properties = True
 myadc.method = "adc(3)"
-myadc.kernel()
-eip,vip,pip = myadc.ip_adc()
-eea,vea,pea = myadc.ea_adc()
+myadc.method_type = "ea"
+eea,vea,pea,xea = myadc.kernel(nroots = 3)
+myadc.analyze()
+

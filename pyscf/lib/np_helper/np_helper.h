@@ -18,7 +18,7 @@
 
 #include <complex.h>
 
-#define BLOCK_DIM    120
+#define BLOCK_DIM    104
 
 #define HERMITIAN    1
 #define ANTIHERMI    2
@@ -55,3 +55,8 @@ void NPomp_dsum_reduce_inplace(double **vec, size_t count);
 void NPomp_dprod_reduce_inplace(double **vec, size_t count);
 void NPomp_zsum_reduce_inplace(double complex **vec, size_t count);
 void NPomp_zprod_reduce_inplace(double complex **vec, size_t count);
+
+void NPdset0(double *p, const size_t n);
+void NPzset0(double complex *p, const size_t n);
+void NPdcopy(double *out, const double *in, const size_t n);
+void NPzcopy(double complex *out, const double complex *in, const size_t n);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import itertools
-import time
+
 import sys
 import numpy as np
 
@@ -41,7 +41,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
     if imds is None: imds = eom.make_imds()
     nmo = eom.nmo
-    t1, t2 = imds.t1, imds.t2
+    t2 = imds.t2
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
 
@@ -106,10 +106,10 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 def lipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2hp operators are of the form s_{kl}^{ d}, i.e. 'ld' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-    assert(eom.partition == None)
+    assert (eom.partition is None)
     if imds is None: imds = eom.make_imds()
 
-    t1, t2 = imds.t1, imds.t2
+    t2 = imds.t2
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
 
@@ -213,12 +213,11 @@ def ipccsd_diag(eom, kshift, imds=None, diag=None):
 
 def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift, imds=None):
     '''For description of arguments, see `ipccsd_star_contract` in `kccsd_ghf.py`.'''
-    assert (eom.partition == None)
+    assert (eom.partition is None)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
-    fock = eris.fock
     nkpts, nocc, nvir = t1.shape
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
@@ -333,7 +332,7 @@ def ipccsd_star_contract(eom, ipccsd_evals, ipccsd_evecs, lipccsd_evecs, kshift,
             rijkab = np.zeros((nkpts,nkpts,nocc,nocc,nocc,nvir,nvir),dtype=dtype)
             eijk = np.zeros((nkpts,nkpts,nocc,nocc,nocc),dtype=mo_e_o.dtype)
             kklist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
-                         [ka,kb,kshift,range(nkpts),range(nkpts)])
+                                               [ka,kb,kshift,range(nkpts),range(nkpts)])
 
             for ki, kj in itertools.product(range(nkpts), repeat=2):
                 kk = kklist[ki,kj]
@@ -431,7 +430,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
     if imds is None: imds = eom.make_imds()
     nmo = eom.nmo
-    t1, t2 = imds.t1, imds.t2
+    t2 = imds.t2
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
 
@@ -507,10 +506,10 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 def leaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2hp operators are of the form s_{ l}^{cd}, i.e. 'ld' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-    assert(eom.partition == None)
+    assert (eom.partition is None)
     if imds is None: imds = eom.make_imds()
 
-    t1, t2 = imds.t1, imds.t2
+    t1 = imds.t1
     nkpts, nocc, nvir = imds.t1.shape
     kconserv = imds.kconserv
 
@@ -616,12 +615,11 @@ def eaccsd_diag(eom, kshift, imds=None, diag=None):
 
 def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift, imds=None):
     '''For descreation of arguments, see `eaccsd_star_contract` in `kccsd_ghf.py`.'''
-    assert (eom.partition == None)
+    assert (eom.partition is None)
     if imds is None:
         imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     eris = imds.eris
-    fock = eris.fock
     nkpts, nocc, nvir = t1.shape
     dtype = np.result_type(t1, t2)
     kconserv = eom.kconserv
@@ -734,7 +732,7 @@ def eaccsd_star_contract(eom, eaccsd_evals, eaccsd_evecs, leaccsd_evecs, kshift,
             rijabc = np.zeros((nkpts,nkpts,nocc,nocc,nvir,nvir,nvir),dtype=dtype)
             eabc = np.zeros((nkpts,nkpts,nvir,nvir,nvir),dtype=dtype)
             kclist = kpts_helper.get_kconserv3(eom._cc._scf.cell, eom._cc.kpts,
-                         [ki,kj,kshift,range(nkpts),range(nkpts)])
+                                               [ki,kj,kshift,range(nkpts),range(nkpts)])
 
             for ka, kb in itertools.product(range(nkpts), repeat=2):
                 kc = kclist[ka,kb]
@@ -860,8 +858,6 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
         r2 = r_{i k_i, j k_j}^{a k_a, b k_b} is a 7-d array whose elements can
             be accessed via r2[k_i, k_j, k_a, i, j, a, b]
     '''
-    cput0 = (time.clock(), time.time())
-    log = logger.Logger(sys.stdout, logger.DEBUG)
     nvir = nmo - nocc
     nov = nocc*nvir
 
@@ -893,8 +889,6 @@ def vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv):
     # r2 indices (old): (k_i, k_a), (k_J), (i, a), (J, B)
     # r2 indices (new): k_i, k_J, k_a, i, J, a, B
     r2 = r2.reshape(nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir).transpose(0,2,1,3,5,4,6)
-
-    log.timer("vector_to_amplitudes_singlet", *cput0)
     return [r1, r2]
 
 
@@ -908,8 +902,6 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
         return: a vector with all r1 elements, and r2 elements whose indices
     satisfy (i k_i a k_a) >= (j k_j b k_b)
     '''
-    cput0 = (time.clock(), time.time())
-    log = logger.Logger(sys.stdout, logger.DEBUG)
     # r1 indices: k_i, i, a
     nkpts, nocc, nvir = np.asarray(r1.shape)[[0, 1, 2]]
     nov = nocc * nvir
@@ -937,7 +929,6 @@ def amplitudes_to_vector_singlet(r1, r2, kconserv):
             offset += nov2
 
     vector = np.hstack((r1.ravel(), vector[:offset]))
-    log.timer("amplitudes_to_vector_singlet", *cput0)
     return vector
 
 
@@ -975,11 +966,11 @@ def eeccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     """Spin-restricted, k-point EOM-EE-CCSD equations for singlet excitation only.
-    
-    This implementation can be checked against the spin-orbital version in 
+
+    This implementation can be checked against the spin-orbital version in
     `eom_kccsd_ghf.eeccsd_matvec()`.
     """
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
 
     if imds is None: imds = eom.make_imds()
@@ -990,7 +981,9 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
     kconserv = imds.kconserv
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
     kconserv_r2 = eom.get_kconserv_ee_r2(kshift)
+    cput1 = (logger.process_clock(), logger.perf_counter())
     r1, r2 = vector_to_amplitudes_singlet(vector, nkpts, nmo, nocc, kconserv_r2)
+    cput1 = log.timer_debug1("vector_to_amplitudes_singlet", *cput1)
 
     # Build antisymmetrized tensors that will be used later
     #   antisymmetrized r2   : rbar_ijab = 2 r_ijab - r_ijba
@@ -1220,7 +1213,9 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
         kf = kconserv[ki, ka, kj]
         Hr2[ki, kj, ka] += einsum('fb,ijaf->ijab', wr1_vv[kf], imds.t2[ki, kj, ka])
 
+    cput1 = log.timer_debug1("contraction", *cput1)
     vector = amplitudes_to_vector_singlet(Hr1, Hr2, kconserv_r2)
+    log.timer_debug1("amplitudes_to_vector_singlet", *cput1)
     log.timer("matvec EOMEE Singlet", *cput0)
     return vector
 
@@ -1228,7 +1223,7 @@ def eeccsd_matvec_singlet(eom, vector, kshift, imds=None, diag=None):
 def eeccsd_diag(eom, kshift=0, imds=None):
     '''Diagonal elements of similarity-transformed Hamiltonian'''
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
+    t1 = imds.t1
     nkpts, nocc, nvir = t1.shape
     kconserv = eom.kconserv
     kconserv_r1 = eom.get_kconserv_ee_r1(kshift)
@@ -1327,7 +1322,7 @@ def eeccsd_cis_approx_slow(eom, kshift, nroots=1, imds=None, **kwargs):
 
     Note that such evaluation has N^3 cost, but error free (because matvec() has been proven correct).
     '''
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(eom.stdout, eom.verbose)
 
     if imds is None: imds = eom.make_imds()
@@ -1518,7 +1513,7 @@ class _IMDS:
             self._fimd = None
 
     def _make_shared_1e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1530,7 +1525,7 @@ class _IMDS:
         log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
 
     def _make_shared_2e(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1556,7 +1551,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1579,7 +1574,7 @@ class _IMDS:
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
     def make_t3p2_ip(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1601,7 +1596,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris
@@ -1612,7 +1607,7 @@ class _IMDS:
             vovv_dest = self._fimd.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), t1.dtype.char)
             vvvo_dest = self._fimd.create_dataset('vvvo', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), t1.dtype.char)
             if eris.vvvv is not None:
-                vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
+                vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)  # noqa: E501
         else:
             vovv_dest = vvvo_dest = vvvv_dest = None
 
@@ -1630,7 +1625,7 @@ class _IMDS:
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
     def make_t3p2_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1647,7 +1642,7 @@ class _IMDS:
         return self
 
     def make_t3p2_ip_ea(self, cc):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = cc.t1, cc.t2, self.eris
         delta_E_tot, pt1, pt2, Wovoo, Wvvvo = \
@@ -1672,7 +1667,7 @@ class _IMDS:
             self._make_shared_2e()
             self._made_shared_2e = True
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
         log = logger.Logger(self.stdout, self.verbose)
 
         t1, t2, eris = self.t1, self.t2, self.eris

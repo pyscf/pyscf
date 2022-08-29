@@ -15,29 +15,32 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import krohf
 
-cell = pgto.Cell()
-cell.atom = '''
-He 0 0 1
-He 1 0 1
-'''
-cell.basis = '321g'
-cell.a = np.eye(3) * 3
-cell.mesh = [8] * 3
-cell.verbose = 7
-cell.output = '/dev/null'
-cell.spin = 2
-cell.build()
+def setUpModule():
+    global cell, mf, kmf, kpts
+    cell = pgto.Cell()
+    cell.atom = '''
+    He 0 0 1
+    He 1 0 1
+    '''
+    cell.basis = '321g'
+    cell.a = np.eye(3) * 3
+    cell.mesh = [8] * 3
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.spin = 2
+    cell.build()
 
-nk = [2, 2, 1]
-kpts = cell.make_kpts(nk, wrap_around=True)
-kmf = pscf.KROHF(cell, kpts).run()
-mf = pscf.ROHF(cell).run()
+    nk = [2, 2, 1]
+    kpts = cell.make_kpts(nk, wrap_around=True)
+    kmf = pscf.KROHF(cell, kpts).run()
+    mf = pscf.ROHF(cell).run()
 
 def tearDownModule():
     global cell, kmf, mf
@@ -71,6 +74,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(1)
         k = np.random.random(3)
         mf = pscf.KROHF(cell, [k], exxdiv='vcut_sph')
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.init_guess = 'hcore'
         mf.max_cycle = 1
         mf.diis = None
@@ -88,10 +92,10 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.6424482249196493, 7)
+        self.assertAlmostEqual(lib.fp(dip), 1.6424482249196493, 7)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.7361493256233677, 7)
+        self.assertAlmostEqual(lib.fp(dip), 0.7361493256233677, 7)
 
     def test_get_init_guess(self):
         cell1 = cell.copy()
@@ -99,11 +103,11 @@ class KnownValues(unittest.TestCase):
         cell1.build(0, 0)
         mf = pscf.ROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
 
         mf = pscf.KROHF(cell1)
         dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.fp(dm), -0.06586028869608128, 8)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
@@ -111,9 +115,9 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         pop, chg = kmf.analyze()
-        self.assertAlmostEqual(lib.finger(pop), 1.1120443320325235, 7)
+        self.assertAlmostEqual(lib.fp(pop), 1.1120443320325235, 7)
         self.assertAlmostEqual(sum(chg), 0, 7)
-        self.assertAlmostEqual(lib.finger(chg), 0.002887875601340767, 7)
+        self.assertAlmostEqual(lib.fp(chg), 0.002887875601340767, 7)
 
     def test_small_system(self):
         # issue #686

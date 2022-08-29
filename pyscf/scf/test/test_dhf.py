@@ -23,30 +23,32 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import lib
 
-mol = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-        O     0    0        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = '631g',
-)
+def setUpModule():
+    global mol, mf, h4
+    mol = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            O     0    0        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = '631g',
+    )
 
-mf = scf.dhf.UHF(mol)
-mf.conv_tol_grad = 1e-5
-mf.kernel()
+    mf = scf.dhf.UHF(mol)
+    mf.conv_tol_grad = 1e-5
+    mf.kernel()
 
-h4 = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-        H     0    0        1
-        H     1    1        0
-        H     0    -0.757   0.587
-        H     0    0.757    0.587''',
-    basis = ('sto3g', [[1,[0.3,1]]]),
-)
+    h4 = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            H     0    0        1
+            H     1    1        0
+            H     0    -0.757   0.587
+            H     0    0.757    0.587''',
+        basis = ('sto3g', [[1,[0.3,1]]]),
+    )
 
 def tearDownModule():
     global mol, mf, h4
@@ -105,8 +107,11 @@ class KnownValues(unittest.TestCase):
             mf = scf.dhf.RHF(mol)
             mf.with_ssss = False
             mf.conv_tol_grad = 1e-5
-            self.assertAlmostEqual(mf.scf(), -76.038524807447857, 8)
-            mol.stdout.close()
+            self.assertAlmostEqual(mf.kernel(), -76.03852477545016, 8)
+
+            mf.ssss_approx = None
+            mf.conv_tol_grad = 1e-5
+            self.assertAlmostEqual(mf.kernel(), -76.03852480744785, 8)
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -125,48 +130,83 @@ class KnownValues(unittest.TestCase):
         n2c = h4.nao_2c()
         n4c = n2c * 2
         c1 = .5 / lib.param.LIGHT_SPEED
-        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
         eri0[:n2c,:n2c,:n2c,:n2c] = h4.intor('int2e_spinor')
         eri0[n2c:,n2c:,:n2c,:n2c] = h4.intor('int2e_spsp1_spinor') * c1**2
         eri0[:n2c,:n2c,n2c:,n2c:] = eri0[n2c:,n2c:,:n2c,:n2c].transpose(2,3,0,1)
         ssss = h4.intor('int2e_spsp1spsp2_spinor') * c1**4
         eri0[n2c:,n2c:,n2c:,n2c:] = ssss
+        eri0bak = eri0.copy()
+
+        # to setup mf.opt
+        mf = h4.DHF().build()
+        mf._coulomb_level = 'SSSS'
 
         numpy.random.seed(1)
         dm = numpy.random.random((2,n4c,n4c))+numpy.random.random((2,n4c,n4c))*1j
         dm = dm + dm.transpose(0,2,1).conj()
         vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
-        vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=1, coulomb_allow='SSSS')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        vj, vk = mf.get_jk(h4, dm[0], hermi=1)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         vj0 = numpy.einsum('ijkl,xlk->xij', ssss, dm[:,n2c:,n2c:])
         vk0 = numpy.einsum('ijkl,xjk->xil', ssss, dm[:,n2c:,n2c:])
-        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=0)
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=1)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         eri0[n2c:,n2c:,n2c:,n2c:] = 0
         vj0 = numpy.einsum('ijkl,xlk->xij', eri0, dm)
         vk0 = numpy.einsum('ijkl,xjk->xil', eri0, dm)
         vj, vk = scf.dhf.get_jk(h4, dm, hermi=1, coulomb_allow='SSLL')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0[n2c:,n2c:,:n2c,:n2c] = 0
+        eri0[:n2c,:n2c,n2c:,n2c:] = 0
+        vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
+        vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
+        vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=1, coulomb_allow='LLLL')
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0 = eri0bak
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,n4c,n4c))+numpy.random.random((2,n4c,n4c))*1j
+        vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
+        vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
+        vj, vk = mf.get_jk(h4, dm[0], hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        vj0 = numpy.einsum('ijkl,xlk->xij', ssss, dm[:,n2c:,n2c:])
+        vk0 = numpy.einsum('ijkl,xjk->xil', ssss, dm[:,n2c:,n2c:])
+        vj, vk = scf.dhf._call_veff_ssss(h4, dm, hermi=0)
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
+
+        eri0[n2c:,n2c:,n2c:,n2c:] = 0
+        vj0 = numpy.einsum('ijkl,xlk->xij', eri0, dm)
+        vk0 = numpy.einsum('ijkl,xjk->xil', eri0, dm)
+        vj, vk = scf.dhf.get_jk(h4, dm, hermi=0, coulomb_allow='SSLL')
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
         eri0[n2c:,n2c:,:n2c,:n2c] = 0
         eri0[:n2c,:n2c,n2c:,n2c:] = 0
         vj0 = numpy.einsum('ijkl,lk->ij', eri0, dm[0])
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm[0])
         vj, vk = scf.dhf.get_jk(h4, dm[0], hermi=0, coulomb_allow='LLLL')
-        self.assertTrue(numpy.allclose(vj0, vj))
-        self.assertTrue(numpy.allclose(vk0, vk))
+        self.assertAlmostEqual(abs(vj0 - vj).max(), 0, 12)
+        self.assertAlmostEqual(abs(vk0 - vk).max(), 0, 12)
 
     def test_get_jk_with_gaunt_breit_high_cost(self):
         n2c = h4.nao_2c()
         n4c = n2c * 2
         c1 = .5 / lib.param.LIGHT_SPEED
-        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+        eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
         eri0[:n2c,:n2c,:n2c,:n2c] = h4.intor('int2e_spinor')
         eri0[n2c:,n2c:,:n2c,:n2c] = h4.intor('int2e_spsp1_spinor') * c1**2
         eri0[:n2c,:n2c,n2c:,n2c:] = eri0[n2c:,n2c:,:n2c,:n2c].transpose(2,3,0,1)
@@ -210,6 +250,20 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = scf.dhf._call_veff_gaunt_breit(h4, dm)
         self.assertTrue(numpy.allclose(vj0, vj1))
         self.assertTrue(numpy.allclose(vk0, vk1))
+
+#    def test_breit(self):
+#        mol = gto.M(atom='Cl',
+#                    basis={'Cl': gto.parse('''
+#                                           Cl  S 5.5    1.0
+#                                           Cl  P 9.053563477       1.0''')},
+#                    charge=9)
+#        mf = mol.DHF().set(with_breit=True)
+#        mf.run()
+#        self.assertTrue(mf.e_tot, -234.888983310961, 8)
+#
+#        mf.with_ssss = False
+#        mf.run()
+#        self.assertTrue(mf.e_tot, -234.888999687936, 8)
 
     def test_breit_high_cost(self):
         erig = _fill_gaunt(h4, h4.intor('int2e_breit_ssp1ssp2_spinor', comp=1))
@@ -260,7 +314,7 @@ def _fill_gaunt(mol, erig):
     idx = abs(tao)-1 # -1 for C indexing convention
     sign_mask = tao<0
 
-    eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
+    eri0 = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex128)
     eri0[:n2c,n2c:,:n2c,n2c:] = erig # ssp1ssp2
 
     eri2 = erig.take(idx,axis=0).take(idx,axis=1) # sps1ssp2
@@ -291,4 +345,3 @@ def _fill_gaunt(mol, erig):
 if __name__ == "__main__":
     print("Full Tests for dhf")
     unittest.main()
-

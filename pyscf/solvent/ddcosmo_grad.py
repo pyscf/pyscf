@@ -30,7 +30,7 @@ http://dx.doi.org/10.1021/ct400280b
 F. Lipparini, G. Scalmani, L. Lagardere, B. Stamm, E. Cances, Y. Maday, J.-P.Piquemal, M. J. Frisch, B. Mennucci
 J. Chem. Phys., 141, 184108 (2014)
 http://dx.doi.org/10.1063/1.4901304
-'''
+'''  # noqa: E501
 
 import numpy
 from pyscf import lib

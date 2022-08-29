@@ -22,34 +22,35 @@ import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
-BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
+BLKSIZE = 104  # must be equal to lib/gto/grid_ao_drv.h
 
 libcgto = lib.load_library('libcgto')
 
-def eval_gto(mol, eval_name, coords,
-             comp=None, shls_slice=None, non0tab=None, ao_loc=None, out=None):
+def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
+             ao_loc=None, cutoff=None, out=None):
     r'''Evaluate AO function value on the given grids,
 
     Args:
         eval_name : str
 
-            ====================  ======  =======================
-            Function              comp    Expression
-            ====================  ======  =======================
-            "GTOval_sph"          1       |AO>
-            "GTOval_ip_sph"       3       nabla |AO>
-            "GTOval_ig_sph"       3       (#C(0 1) g) |AO>
-            "GTOval_ipig_sph"     9       (#C(0 1) nabla g) |AO>
-            "GTOval_cart"         1       |AO>
-            "GTOval_ip_cart"      3       nabla |AO>
-            "GTOval_ig_cart"      3       (#C(0 1) g)|AO>
-            "GTOval_sph_deriv1"   4       GTO value and 1st order GTO values
-            "GTOval_sph_deriv2"   10      All derivatives up to 2nd order
-            "GTOval_sph_deriv3"   20      All derivatives up to 3rd order
-            "GTOval_sph_deriv4"   35      All derivatives up to 4th order
-            "GTOval_sp_spinor"    1       sigma dot p |AO> (spinor basis)
-            "GTOval_ipsp_spinor"  3       nabla sigma dot p |AO> (spinor basis)
-            ====================  ======  =======================
+            ========================  ======  =======================
+            Function                  comp    Expression
+            ========================  ======  =======================
+            "GTOval_sph"              1       |AO>
+            "GTOval_ip_sph"           3       nabla |AO>
+            "GTOval_ig_sph"           3       (#C(0 1) g) |AO>
+            "GTOval_ipig_sph"         9       (#C(0 1) nabla g) |AO>
+            "GTOval_cart"             1       |AO>
+            "GTOval_ip_cart"          3       nabla |AO>
+            "GTOval_ig_cart"          3       (#C(0 1) g)|AO>
+            "GTOval_sph_deriv1"       4       GTO value and 1st order GTO values
+            "GTOval_sph_deriv2"       10      All derivatives up to 2nd order
+            "GTOval_sph_deriv3"       20      All derivatives up to 3rd order
+            "GTOval_sph_deriv4"       35      All derivatives up to 4th order
+            "GTOval_sp_spinor"        1       sigma dot p |AO> (spinor basis)
+            "GTOval_ipsp_spinor"      3       nabla sigma dot p |AO> (spinor basis)
+            "GTOval_ipipsp_spinor"    9       nabla nabla sigma dot p |AO> (spinor basis)
+            ========================  ======  =======================
 
         atm : int32 ndarray
             libcint integral function argument
@@ -71,6 +72,9 @@ def eval_gto(mol, eval_name, coords,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`dft.gen_grid.make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
 
@@ -113,17 +117,18 @@ def eval_gto(mol, eval_name, coords,
 
     if non0tab is None:
         non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
-                             dtype=numpy.int8)
+                             dtype=numpy.uint8)
 
-    drv = getattr(libcgto, eval_name)
-    drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        ao.ctypes.data_as(ctypes.c_void_p),
-        coords.ctypes.data_as(ctypes.c_void_p),
-        non0tab.ctypes.data_as(ctypes.c_void_p),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+    with mol.with_integral_screen(cutoff):
+        drv = getattr(libcgto, eval_name)
+        drv(ctypes.c_int(ngrids),
+            (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
+            ao.ctypes.data_as(ctypes.c_void_p),
+            coords.ctypes.data_as(ctypes.c_void_p),
+            non0tab.ctypes.data_as(ctypes.c_void_p),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
 
     ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:
@@ -154,7 +159,7 @@ def _get_intor_and_comp(mol, eval_name, comp=None):
     return eval_name, comp
 
 _GTO_EVAL_FUNCTIONS = {
-#   Functiona name          : (comp-for-scalar, comp-for-spinor)
+    # Functiona name        : (comp-for-scalar, comp-for-spinor)
     'GTOval'                : (1, 1 ),
     'GTOval_ip'             : (3, 3 ),
     'GTOval_ig'             : (3, 3 ),
@@ -166,6 +171,7 @@ _GTO_EVAL_FUNCTIONS = {
     'GTOval_deriv4'         : (35,35),
     'GTOval_sp'             : (4, 1 ),
     'GTOval_ipsp'           : (12,3 ),
+    'GTOval_ipipsp'         : (36,9 ),
 }
 
 

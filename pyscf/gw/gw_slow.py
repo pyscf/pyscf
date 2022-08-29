@@ -310,9 +310,9 @@ def kernel(imds, orbs=None, linearized=False, eta=1e-3, tol=1e-9, method="fallba
                 try:
                     gw_energies[i_p] = newton(debug, imds.initial_guess(p), tol=tol, maxiter=100)
                 except RuntimeError:
-                    logger.warn(imds.td._scf, "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
-                        min(debug.x), max(debug.x),
-                    ))
+                    logger.warn(imds.td._scf,
+                                "Failed to converge with newton, using bisect on the interval [{:.3e}, {:.3e}]".format(
+                                    min(debug.x), max(debug.x),))
                     gw_energies[i_p] = bisect(debug, min(debug.x), max(debug.x), xtol=tol, maxiter=100)
 
     return gw_energies

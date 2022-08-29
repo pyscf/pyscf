@@ -24,21 +24,23 @@ from pyscf.pbc.df import outcore
 import pyscf.pbc
 #pyscf.pbc.DEBUG = False
 
-cell = pgto.Cell()
-cell.unit = 'B'
-cell.a = numpy.eye(3) * 4.
-cell.mesh = [11]*3
-cell.atom = 'He 0 1 1; He 1 1 0'
-cell.basis = { 'He': [[0, (0.8, 1.0)],
-                      [0, (1.2, 1.0)]] }
-cell.verbose = 0
-cell.build(0, 0)
+def setUpModule():
+    global cell
+    cell = pgto.Cell()
+    cell.unit = 'B'
+    cell.a = numpy.eye(3) * 4.
+    cell.mesh = [11]*3
+    cell.atom = 'He 0 1 1; He 1 1 0'
+    cell.basis = { 'He': [[0, (0.8, 1.0)],
+                          [0, (1.2, 1.0)]] }
+    cell.verbose = 0
+    cell.build(0, 0)
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(w, a.ravel())
+def tearDownModule():
+    global cell
+    del cell
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_aux_e1(self):
         tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)

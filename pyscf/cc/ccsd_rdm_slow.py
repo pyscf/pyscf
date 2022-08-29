@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -71,10 +71,10 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2):
     mOvOv = numpy.einsum('ikca,jkcb->jbia', l2, t2)
     mOVov = numpy.einsum('ikac,jkbc->jbia', l2, theta)
     mOVov -= numpy.einsum('ikca,jkbc->jbia', l2, t2)
-    moo =(numpy.einsum('jdld->jl', mOvOv) * 2
-        + numpy.einsum('jdld->jl', mOVov))
-    mvv =(numpy.einsum('lbld->bd', mOvOv) * 2
-        + numpy.einsum('lbld->bd', mOVov))
+    moo =(numpy.einsum('jdld->jl', mOvOv) * 2 +
+          numpy.einsum('jdld->jl', mOVov))
+    mvv =(numpy.einsum('lbld->bd', mOvOv) * 2 +
+          numpy.einsum('lbld->bd', mOVov))
 
     gvvvv = numpy.einsum('ijab,ijcd->abcd', l2*.5, tau)
 
@@ -165,8 +165,8 @@ if __name__ == '__main__':
     l1 = numpy.random.random((nocc,nvir))
     l2 = numpy.random.random((nocc,nocc,nvir,nvir))
     l2 = l2 + l2.transpose(1,0,3,2)
-    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2
-                - numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
+    h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2 -
+                  numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
 
     eris = lambda:None
     eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
@@ -198,20 +198,20 @@ if __name__ == '__main__':
 
     dm1 = make_rdm1(mcc, t1, t2, l1, l2)
     dm2 = make_rdm2(mcc, t1, t2, l1, l2)
-    e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
-        +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
-        +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
-        +numpy.einsum('icab,icab', dovvv, eris.ovvv)*2
-        +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
-        +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
-        +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
-        +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
-        +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
-        +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
-        +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
-        +fock0[:nocc].trace()*2
-        -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2
-        +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
+    e2 = (numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2 +
+          numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2 +
+          numpy.einsum('jkia,jkia', dooov, eris.ooov)*2 +
+          numpy.einsum('icab,icab', dovvv, eris.ovvv)*2 +
+          numpy.einsum('iajb,iajb', dovov, eris.ovov)*2 +
+          numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2 +
+          numpy.einsum('ijab,ijab', doovv, eris.oovv)*2 +
+          numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2 +
+          numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2 +
+          numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2 +
+          numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2 +
+          fock0[:nocc].trace()*2 -
+          numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2 +
+          numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
     print(e2+794721.197459942)
     print(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
           numpy.einsum('pq,qp', dm1, h1) - e2)

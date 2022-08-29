@@ -19,7 +19,9 @@
 '''
 Analytical electron-phonon matrix for unrestricted kohn sham
 '''
+import time
 import numpy as np
+from pyscf import lib
 from pyscf.hessian import uks as uks_hess
 from pyscf.hessian import rks as rks_hess
 from pyscf.hessian import rhf as rhf_hess
@@ -27,8 +29,10 @@ from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 from pyscf.eph import rhf as rhf_eph
 from pyscf.eph.uhf import uhf_deriv_generator
-import time
-from pyscf import lib
+from pyscf.data.nist import MP_ME
+
+CUTOFF_FREQUENCY = rhf_eph.CUTOFF_FREQUENCY
+KEEP_IMAG_FREQUENCY = rhf_eph.KEEP_IMAG_FREQUENCY
 
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
@@ -58,14 +62,13 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             rhoa = ni.eval_rho2(mol, ao[0], mo_coeff[0], mo_occ[0], mask, xctype)
             rhob = ni.eval_rho2(mol, ao[0], mo_coeff[1], mo_occ[1], mask, xctype)
             vxc, fxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=2)[1:3]
-            vrho = vxc[0]
             u_u, u_d, d_d = fxc[0].T
 
             ao_dm0a = numint._dot_ao_dm(mol, ao[0], dm0a, mask, shls_slice, ao_loc)
             ao_dm0b = numint._dot_ao_dm(mol, ao[0], dm0b, mask, shls_slice, ao_loc)
             for ia in range(mol.natm):
                 p0, p1 = aoslices[ia][2:]
-# First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
+                # First order density = rho1 * 2.  *2 is not applied because + c.c. in the end
                 rho1a = np.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0a[:,p0:p1])
                 rho1b = np.einsum('xpi,pi->xp', ao[1:,:,p0:p1], ao_dm0b[:,p0:p1])
 
@@ -78,7 +81,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
                 wv *= weight
                 aow = np.einsum('pi,xp->xpi', ao[0], wv)
                 rks_grad._d1_dot_(vmatb[ia], mol, aow, ao[0], mask, ao_loc, True)
-            ao_dm0a = ao_dm0b = aow = aow1a = aow1b = None
+            ao_dm0a = ao_dm0b = aow = None
 
         for ia in range(mol.natm):
             vmata[ia] = -vmata[ia] - vmata[ia].transpose(0,2,1)
@@ -191,13 +194,8 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
     vcorea = np.asarray(vcorea).reshape(-1,nao,nao)
     vcoreb = np.asarray(vcoreb).reshape(-1,nao,nao)
 
-    mass = mol.atom_mass_list() * 1836.15
-    nmodes, natoms = len(omega), len(mass)
-    vec = vec.reshape(natoms, 3, nmodes)
-    for i in range(natoms):
-        for j in range(nmodes):
-            vec[i,:,j] /= np.sqrt(2*mass[i]*omega[j])
-    vec = vec.reshape(3*natoms,nmodes)
+    mass = mol.atom_mass_list() * MP_ME
+    vec = rhf_eph._freq_mass_weighted_vec(vec, omega, mass)
     mata = np.einsum('xJ,xuv->Juv', vec, vcorea)
     matb = np.einsum('xJ,xuv->Juv', vec, vcoreb)
     if mo_rep:
@@ -207,9 +205,29 @@ def get_eph(ephobj, mo1, omega, vec, mo_rep):
 
 
 class EPH(uks_hess.Hessian):
-    def __init__(self, scf_method):
+    '''EPH for unrestricted DFT
+
+    Attributes:
+        cutoff_frequency : float or int
+            cutoff frequency in cm-1. Default is 80
+        keep_imag_frequency : bool
+            Whether to keep imaginary frequencies in the output.  Default is False
+
+    Saved results
+
+        omega : numpy.ndarray
+            Vibrational frequencies in au.
+        vec : numpy.ndarray
+            Polarization vectors of the vibration modes
+        eph : numpy.ndarray
+            Electron phonon matrix eph[spin,j,a,b] (j in nmodes, a,b in norbs)
+    '''
+
+    def __init__(self, scf_method, cutoff_frequency=CUTOFF_FREQUENCY,
+                 keep_imag_frequency=KEEP_IMAG_FREQUENCY):
         uks_hess.Hessian.__init__(self, scf_method)
-        self.CUTOFF_FREQUENCY=80
+        self.cutoff_frequency = cutoff_frequency
+        self.keep_imag_frequency = keep_imag_frequency
 
     get_mode = rhf_eph.get_mode
     get_eph = get_eph

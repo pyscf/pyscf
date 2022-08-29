@@ -22,7 +22,7 @@ orbitals)
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -83,12 +83,12 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
              reduce(numpy.dot, (mo_cas[1].T, hcore[1]+corevhf[1], mo_cas[1])))
     return h1eff, energy_core
 
-def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
+def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE, envs=None):
     '''UHF-CASCI solver
     '''
     if mo_coeff is None: mo_coeff = casci.mo_coeff
     log = logger.new_logger(casci, verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start uhf-based CASCI')
 
     ncas = casci.ncas
@@ -120,7 +120,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
-        #assert('UHF' == mf.__class__.__name__)
+        #assert ('UHF' == mf.__class__.__name__)
         if isinstance(mf_or_mol, gto.Mole):
             mf = scf.UHF(mf_or_mol)
         else:
@@ -162,6 +162,7 @@ class UCASCI(casci.CASCI):
     def ncore(self):
         if self._ncore is None:
             ncorelec = self.mol.nelectron - sum(self.nelecas)
+            assert ncorelec >= 0
             if ncorelec % 2:
                 ncore = ((ncorelec+1)//2, (ncorelec-1)//2)
             else:
@@ -174,8 +175,10 @@ class UCASCI(casci.CASCI):
         if x is None:
             self._ncore = x
         elif isinstance(x, (int, numpy.integer)):
+            assert x >= 0
             self._ncore = (x, x)
         else:
+            assert x[0] >= 0 and x[1] >= 0
             self._ncore = (x[0], x[1])
 
     def dump_flags(self, verbose=None):
@@ -193,6 +196,19 @@ class UCASCI(casci.CASCI):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
+        return self
+
+    def check_sanity(self):
+        assert self.ncas > 0
+        ncore = self.ncore
+        nmo = self.mo_coeff[0].shape[1]
+        nvir_alpha = nmo - ncore[0] - self.ncas
+        nvir_beta  = nmo - ncore[1]  - self.ncas
+        assert ncore[0] >= 0 and ncore[1] >= 0
+        assert nvir_alpha >= 0 and nvir_beta >= 0
+        assert sum(ncore) + sum(self.nelecas) == self.mol.nelectron
+        assert 0 <= self.nelecas[0] <= self.ncas
+        assert 0 <= self.nelecas[1] <= self.ncas
         return self
 
     def get_hcore(self, mol=None):
@@ -258,8 +274,7 @@ class UCASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
 
         log = logger.Logger(self.stdout, self.verbose)
@@ -281,13 +296,13 @@ class UCASCI(casci.CASCI):
             ss_core = self._scf.spin_square(mocore, ovlp_ao)
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = fci.spin_op.spin_square(self.ci, self.ncas, self.nelecas,
-                                             mocas, ovlp_ao)
+                                             mocas, ovlp_ao, self.fcisolver)
                 log.note('UCASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                          self.e_tot, self.e_cas, ss[0]+ss_core[0])
             else:
                 for i, e in enumerate(self.e_cas):
                     ss = fci.spin_op.spin_square(self.ci[i], self.ncas, self.nelecas,
-                                                 mocas, ovlp_ao)
+                                                 mocas, ovlp_ao, self.fcisolver)
                     log.note('UCASCI root %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
                              i, self.e_tot[i], e, ss[0]+ss_core[0])
         else:
@@ -431,7 +446,7 @@ class UCASCI(casci.CASCI):
 
 CASCI = UCASCI
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL)
+del (WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':

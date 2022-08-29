@@ -32,6 +32,27 @@ def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
 gamma_point = is_zero
 
+def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
+    '''
+    Round scaled k-points to the first Brillouin zone.
+
+    Args:
+        kpts : (n,3) ndarray
+            Scaled k-points.
+        wrap_around : bool
+            If set to True, k-points are rounded to [-0.5, 0.5), otherwise [0.0, 1.0).
+            Default value is False.
+        tol : float
+            K-points differ less than tol are considered as the same.
+            Default value is 1e-6.
+    '''
+    kpts_round = np.mod(kpts, 1)
+    kpts_round = kpts_round.round(-np.log10(tol).astype(int))
+    kpts_round = np.mod(kpts_round, 1)
+    if wrap_around:
+        kpts_round[kpts_round >= 0.5] -= 1.0
+    return kpts_round
+
 def member(kpt, kpts):
     kpts = np.reshape(kpts, (len(kpts),kpt.size))
     dk = np.einsum('ki->k', abs(kpts-kpt.ravel()))
@@ -39,25 +60,55 @@ def member(kpt, kpts):
 
 def unique(kpts):
     kpts = np.asarray(kpts)
-    nkpts = len(kpts)
-    uniq_kpts = []
-    uniq_index = []
-    uniq_inverse = np.zeros(nkpts, dtype=int)
-    seen = np.zeros(nkpts, dtype=bool)
-    n = 0
-    for i, kpt in enumerate(kpts):
-        if not seen[i]:
-            uniq_kpts.append(kpt)
-            uniq_index.append(i)
-            idx = abs(kpt-kpts).sum(axis=1) < KPT_DIFF_TOL
-            uniq_inverse[idx] = n
-            seen[idx] = True
-            n += 1
-    return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
+    try:
+        digits = int(-np.log10(KPT_DIFF_TOL))
+        uniq_index, uniq_inverse = np.unique(
+            kpts.round(digits), return_index=True, return_inverse=True, axis=0)[1:3]
+        idx = uniq_index.argsort()
+        rank = idx.argsort()
+        return kpts[uniq_index[idx]], uniq_index[idx], rank[uniq_inverse]
+    except TypeError:
+        # Old numpy does not support unique of 2D array
+        nkpts = len(kpts)
+        uniq_kpts = []
+        uniq_index = []
+        uniq_inverse = np.zeros(nkpts, dtype=int)
+        seen = np.zeros(nkpts, dtype=bool)
+        n = 0
+        for i, kpt in enumerate(kpts):
+            if not seen[i]:
+                uniq_kpts.append(kpt)
+                uniq_index.append(i)
+                idx = abs(kpt-kpts).sum(axis=1) < KPT_DIFF_TOL
+                uniq_inverse[idx] = n
+                seen[idx] = True
+                n += 1
+        return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
 
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)
     return itertools.product(range_nkpts, range_nkpts, range_nkpts)
+
+def conj_mapping(cell, kpts):
+    '''Find the mapping index: -kpts = kpts[index]'''
+    scaled_kpts = cell.get_scaled_kpts(kpts).round(5)
+    scaled_kpts = np.modf(scaled_kpts)[0]
+    scaled_kpts[scaled_kpts > .5] -= 1
+    scaled_kpts[scaled_kpts <= -.5] += 1
+    uniq_kpts, index, inverse = unique(scaled_kpts)
+    if len(index) != len(inverse):
+        raise KPointSymmetryError('duplicated k points')
+
+    minus_kpts = -scaled_kpts
+    minus_kpts[minus_kpts == -.5] = .5
+    uniq_m_kpts, m_index, m_inverse = unique(minus_kpts)
+    lex_order = np.lexsort(uniq_kpts.T)
+    m_lex_order = np.lexsort(uniq_m_kpts.T)
+    if abs(uniq_kpts[lex_order] - uniq_m_kpts[m_lex_order]).max() > KPT_DIFF_TOL:
+        raise KPointSymmetryError('k points not symmetric')
+
+    index[lex_order] = m_lex_order
+    return index
 
 def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
@@ -118,11 +169,11 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
         True
     '''
     # Checking to make sure bounds of idx1 and idx2 are O.K.
-    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
+    assert (idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
+    assert (idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
            'This function does not support the swapping of the last k-point index '
            '(This k-point is implicitly not indexed due to conservation of momentum '
            'between k-points.).')
@@ -179,7 +230,7 @@ def get_kconserv3(cell, kpts, kijkab):
                 kconserv[i,j,mask] = c
 
     new_shape = [shape[i] for i, x in enumerate(kijkab)
-                 if not isinstance(x, (int,np.int))]
+                 if not isinstance(x, (int, np.integer))]
     kconserv = kconserv.reshape(new_shape)
     return kconserv
 
@@ -351,3 +402,5 @@ class KptsHelper(lib.StreamObject):
         if operation == 3:
             return np.conj(eri_kpt.transpose(3,2,1,0))
 
+class KPointSymmetryError(RuntimeError):
+    pass

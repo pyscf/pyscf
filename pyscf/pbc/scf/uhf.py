@@ -89,7 +89,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpt=np.zeros(3)):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the cell.
 
     Args:
          cell : an instance of :class:`Cell`
@@ -138,7 +138,7 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
 
     def dump_flags(self, verbose=None):
         pbchf.SCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
@@ -159,8 +159,15 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vhf = vj[0] + vj[1] - vk
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
+            vhf = vj[0] + vj[1] - vk
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vhf = vj[0] + vj[1] - vk
         return vhf
 
     def get_bands(self, kpts_band, cell=None, dm=None, kpt=None):
@@ -245,5 +252,3 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_uhf(mf, self)
         return self
-
-

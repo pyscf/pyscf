@@ -106,6 +106,13 @@
   - CI wavefunction overlap
 
 
+* AGF2
+
+  - Canonical RAGF2, UAGF2
+  - Density-fitting RAGF2, UAGF2 with optional MPI support
+  - General moment self-consistent RAGF2 and UAGF2 via _slow methods
+
+
 * Analytical Nuclear Gradients
 
   - Non-relativistic HF nuclear gradients

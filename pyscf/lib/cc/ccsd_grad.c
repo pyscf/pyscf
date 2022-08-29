@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
@@ -77,16 +76,19 @@ void CCvhfs2kl(double *eri, double *dm, double *vj, double *vk, int ni, int nj)
         const size_t npair = nj*(nj+1)/2;
         int i, j;
         size_t ij, off;
-
-        memset(vj, 0, sizeof(double)*ni*nj);
-        memset(vk, 0, sizeof(double)*ni*nj);
+        for (i = 0; i < ni * nj; i++) {
+                vj[i] = 0;
+                vk[i] = 0;
+        }
 
 #pragma omp parallel private(ij, i, j, off)
         {
                 double *vj_priv = malloc(sizeof(double)*ni*nj);
                 double *vk_priv = malloc(sizeof(double)*ni*nj);
-                memset(vj_priv, 0, sizeof(double)*ni*nj);
-                memset(vk_priv, 0, sizeof(double)*ni*nj);
+                for (i = 0; i < ni * nj; i++) {
+                        vj_priv[i] = 0;
+                        vk_priv[i] = 0;
+                }
 #pragma omp for nowait schedule(dynamic, 4)
                 for (ij = 0; ij < ni*nj; ij++) {
                         i = ij / nj;

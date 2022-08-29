@@ -24,7 +24,7 @@ See Also:
                            systems at a single k-point
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -43,7 +43,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if cell is None: cell = ks.cell
     if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     hybrid = abs(hyb) > 1e-10
@@ -69,7 +69,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, hermi,
                                         kpts, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -127,7 +127,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(rks.KohnShamDFT, kuhf.KUHF):
+class KUKS(kuhf.KUHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
@@ -145,6 +145,7 @@ class KUKS(rks.KohnShamDFT, kuhf.KUHF):
     get_rho = get_rho
 
     density_fit = rks._patch_df_beckegrids(kuhf.KUHF.density_fit)
+    rs_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.rs_density_fit)
     mix_density_fit = rks._patch_df_beckegrids(kuhf.KUHF.mix_density_fit)
     def nuc_grad_method(self):
         from pyscf.pbc.grad import kuks

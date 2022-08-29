@@ -22,16 +22,18 @@ from pyscf import scf
 from pyscf.mp import mp2f12_slow as mp2f12
 from pyscf import mp
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.output = None
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = 'ccpvdz'
-mol.build()
+    mol.basis = 'ccpvdz'
+    mol.build()
 
 def tearDownModule():
     global mol
@@ -53,7 +55,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(s-numpy.eye(c.shape[1])), 0, 8)
 
     # FIXME
-    def test_energy(self):
+    def test_energy_skip(self):
         mol = gto.Mole(atom='Ne', basis='ccpvdz')
         mf = scf.RHF(mol).run()
         auxmol = gto.M(atom=mol.atom,

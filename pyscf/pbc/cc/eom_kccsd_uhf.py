@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2017-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #          Jason Yu
 #
 
-import time
+
 import itertools
 import numpy as np
 
@@ -362,8 +362,6 @@ def ipccsd_diag(eom, kshift, imds=None):
                 Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
 
         for ki, kj in itertools.product(range(nkpts), repeat=2):
-        #for ki in range(nkpts):
-        #    for kj in range(nkpts):
             Hr2aaa[ki, kj] += lib.einsum('iijj->ij', imds.Woooo[ki, ki, kj])[:,:,None]
             Hr2abb[ki, kj] += lib.einsum('iiJJ->iJ', imds.WooOO[ki, ki, kj])[:,:,None]
             Hr2bbb[ki, kj] += lib.einsum('IIJJ->IJ', imds.WOOOO[ki, ki, kj])[:,:,None]
@@ -471,12 +469,12 @@ class EOMIP(eom_kgccsd.EOMIP):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
         guess = []
         if koopmans:
-            idx = np.zeros(nroots, dtype=np.int)
+            idx = np.zeros(nroots, dtype=int)
             tmp_oalpha, tmp_obeta = self.nonzero_opadding[kshift]
             tmp_oalpha = list(tmp_oalpha)
             tmp_obeta = list(tmp_obeta)
@@ -486,7 +484,7 @@ class EOMIP(eom_kgccsd.EOMIP):
                                  (kshift, len(tmp_obeta)+len(tmp_oalpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_oalpha) > 0:
                     idx[total_count] = tmp_oalpha.pop()
                 else:
@@ -530,7 +528,11 @@ class EOMIP(eom_kgccsd.EOMIP):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        return nocca + noccb + nkpts*nocca*(nkpts*nocca-1)*nvira//2 + nkpts**2*noccb*nocca*nvira + nkpts**2*nocca*noccb*nvirb + nkpts*noccb*(nkpts*noccb-1)*nvirb//2
+        return (nocca + noccb +
+                nkpts*nocca*(nkpts*nocca-1)*nvira//2 +
+                nkpts**2*noccb*nocca*nvira +
+                nkpts**2*nocca*noccb*nvirb +
+                nkpts*noccb*(nkpts*noccb-1)*nvirb//2)
 
     def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
@@ -968,14 +970,14 @@ class EOMEA(eom_kgccsd.EOMEA):
 
     def get_init_guess(self, kshift, nroots=1, koopmans=False, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         nroots = min(nroots, size)
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo
-        nvira, nvirb = nmoa-nocca, nmob-noccb
+        nvira = nmoa-nocca
         guess = []
         if koopmans:
-            idx = np.zeros(nroots, dtype=np.int)
+            idx = np.zeros(nroots, dtype=int)
             tmp_valpha, tmp_vbeta = self.nonzero_vpadding[kshift]
             tmp_valpha = list(tmp_valpha)
             tmp_vbeta = list(tmp_vbeta)
@@ -985,7 +987,7 @@ class EOMEA(eom_kgccsd.EOMEA):
                                  (kshift, len(tmp_vbeta)+len(tmp_valpha), nroots))
 
             total_count = 0
-            while(total_count < nroots):
+            while (total_count < nroots):
                 if total_count % 2 == 0 and len(tmp_valpha) > 0:
                     idx[total_count] = tmp_valpha.pop(0)
                 else:
@@ -1019,8 +1021,16 @@ class EOMEA(eom_kgccsd.EOMEA):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
         nkpts = self.nkpts
-        #return nvira + nvirb + nocca*nkpts*nvira*nkpts*nvira + nkpts**2*nocca*nvirb*nvira + nkpts**2*noccb*nvira*nvirb + noccb*nkpts*nvirb*nkpts*nvirb
-        return nvira + nvirb + nocca*nkpts*nvira*(nkpts*nvira-1)//2 + nkpts**2*nocca*nvirb*nvira + nkpts**2*noccb*nvira*nvirb + noccb*nkpts*nvirb*(nkpts*nvirb-1)//2
+        #return (nvira + nvirb +
+        #        nocca*nkpts*nvira*nkpts*nvira +
+        #        nkpts**2*nocca*nvirb*nvira +
+        #        nkpts**2*noccb*nvira*nvirb +
+        #        noccb*nkpts*nvirb*nkpts*nvirb)
+        return (nvira + nvirb +
+                nocca*nkpts*nvira*(nkpts*nvira-1)//2 +
+                nkpts**2*nocca*nvirb*nvira +
+                nkpts**2*noccb*nvira*nvirb +
+                noccb*nkpts*nvirb*(nkpts*nvirb-1)//2)
 
     def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
@@ -1048,7 +1058,7 @@ class _IMDS:
         self.made_ee_imds = False
 
     def _make_shared(self):
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
         self.Foo, self.FOO = kintermediates_uhf.Foo(self._cc, t1, t2, eris)
@@ -1072,14 +1082,14 @@ class _IMDS:
             self._make_shared()
 
         kconserv = self.kconserv
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
         # 0 or 1 virtuals
-        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)
-        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)  # TODO
-        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # TODO
+        self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)  # noqa: E501
+        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(self._cc, t1, t2, eris, kconserv)  # noqa: E501
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # noqa: E501
 
         self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD IP intermediates', *cput0)
@@ -1089,7 +1099,7 @@ class _IMDS:
         if not self._made_shared:
             self._make_shared()
 
-        cput0 = (time.clock(), time.time())
+        cput0 = (logger.process_clock(), logger.perf_counter())
 
         t1, t2, eris = self.t1, self.t2, self.eris
 
@@ -1097,7 +1107,7 @@ class _IMDS:
         #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
         self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)
         if eris.vvvv is not None:
-            self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
+            self.Wvvvv, self.WvvVV, self.WVVVV = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
         else:
             self.Wvvvv = self.WvvVV = self.WVVVV = None
         self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)
@@ -1231,12 +1241,12 @@ if __name__ == '__main__':
     Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2baa, Hr2abb, Hr2bbb = Hr2
-    print('ip Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
-    print('ip Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
-    print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
-    print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
-    print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
-    print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
+    print('ip Hr1a',   abs(lib.fp(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
+    print('ip Hr1b',   abs(lib.fp(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
+    print('ip Hr2aaa', abs(lib.fp(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
+    print('ip Hr2baa', abs(lib.fp(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
+    print('ip Hr2abb', abs(lib.fp(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
+    print('ip Hr2bbb', abs(lib.fp(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
     # EA version
 
     myeom = EOMEA(mycc)
@@ -1257,9 +1267,9 @@ if __name__ == '__main__':
     Hr1a, Hr1b = Hr1
     Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = Hr2
 
-    print('ea Hr1a',  abs(lib.finger(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
-    print('ea Hr1b',  abs(lib.finger(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )
-    print('ea Hr2aaa',abs(lib.finger(Hr2aaa) - (-2.6502079691200251-0.61302655915003545j))  )
-    print('ea Hr2aba',abs(lib.finger(Hr2aba) - (5.5723208649566036-5.4202659143496286j))    )
-    print('ea Hr2bab',abs(lib.finger(Hr2bab) - (-1.2822293707887937+0.3026476580141586j))   )
-    print('ea Hr2bbb',abs(lib.finger(Hr2bbb) - (-4.0202809577487253-0.46985725132191702j))  )
+    print('ea Hr1a',  abs(lib.fp(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
+    print('ea Hr1b',  abs(lib.fp(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )
+    print('ea Hr2aaa',abs(lib.fp(Hr2aaa) - (-2.6502079691200251-0.61302655915003545j))  )
+    print('ea Hr2aba',abs(lib.fp(Hr2aba) - (5.5723208649566036-5.4202659143496286j))    )
+    print('ea Hr2bab',abs(lib.fp(Hr2bab) - (-1.2822293707887937+0.3026476580141586j))   )
+    print('ea Hr2bbb',abs(lib.fp(Hr2bbb) - (-4.0202809577487253-0.46985725132191702j))  )

@@ -156,7 +156,7 @@ def _gen_first_order_quantities(mol, e0, c0, x0, approx='1E'):
     epq[degen_mask] = 1e200
 
     cl0 = c0[:nao,nao:]
-    cs0 = c0[nao:,nao:]
+    # cs0 = c0[nao:,nao:]
     s0 = mol.intor('int1e_ovlp')
     t0 = mol.intor('int1e_kin')
     t0x0 = numpy.dot(t0, x0) * (.5/c**2)
@@ -216,7 +216,7 @@ def _gen_first_order_quantities(mol, e0, c0, x0, approx='1E'):
     return get_first_order
 
 def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
-# See JCP 135, 084114 (2011); DOI:10.1063/1.3624397, Eq (34)
+    # See JCP 135, 084114 (2011); DOI:10.1063/1.3624397, Eq (34)
     w_sqrt, v_s = s0_roots
     w_invsqrt = 1. / w_sqrt
     wr0_sqrt, vr0 = r0_roots

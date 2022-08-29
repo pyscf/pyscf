@@ -26,7 +26,7 @@ pyscf.grad.tduhf
 pyscf.grad.tduks
 '''
 
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -104,7 +104,7 @@ def tdrhf_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     See also function pyscf.grad.tdrhf.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -239,7 +239,7 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     See also function pyscf.grad.tdrks.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -274,7 +274,6 @@ def tdrks_grad_elec(td_grad, x_y, singlet=True, atmlst=None,
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     # dm0 = mf.make_rdm1(mo_coeff, mo_occ), but it is not used when computing
     # fxc since rho0 is passed to fxc function.
-    dm0 = None
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     f1vo, f1oo, vxc1, k1ao = \
@@ -432,7 +431,7 @@ def tduhf_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     See also function pyscf.grad.tduhf.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -632,7 +631,7 @@ def tduks_grad_elec(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.I
     See also function pyscf.grad.tduks.grad_elec
     '''
     log = logger.new_logger(td_grad, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -941,8 +940,8 @@ def _grad_nn(pcmobj, r_vdw, ui, ylm_1sph, cached_pol, L):
 
     v_phi = numpy.zeros((natm, ngrid_1sph))
     for ia in range(natm):
-# Note (-) sign is not applied to atom_charges, because (-) is explicitly
-# included in rhs and L matrix
+        # Note (-) sign is not applied to atom_charges, because (-) is explicitly
+        # included in rhs and L matrix
         d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
         v_phi[ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
     phi0 = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
@@ -1011,8 +1010,8 @@ def _grad_ne(pcmobj, dm, r_vdw, ui, ylm_1sph, cached_pol, L):
 
     v_phi = numpy.zeros((natm, ngrid_1sph))
     for ia in range(natm):
-# Note (-) sign is not applied to atom_charges, because (-) is explicitly
-# included in rhs and L matrix
+        # Note (-) sign is not applied to atom_charges, because (-) is explicitly
+        # included in rhs and L matrix
         d_rs = atom_coords.reshape(-1,1,3) - cav_coords[ia]
         v_phi[ia] = numpy.einsum('z,zp->p', atom_charges, 1./lib.norm(d_rs,axis=2))
     phi0 = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)

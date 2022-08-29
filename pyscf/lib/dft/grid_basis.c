@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include "cint.h"
 #include "config.h"
@@ -26,7 +25,7 @@
 
 #define MAX_THREADS     256
 
-void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
+void VXCnr_ao_screen(uint8_t *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
@@ -37,6 +36,12 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
         double logcoeff[NPRIMAX];
         double dr[3];
         double *p_exp, *pcoeff, *ratm;
+        double expcutoff;
+        if (env[PTR_EXPCUTOFF] == 0) {
+                expcutoff = EXPCUTOFF;
+        } else {
+                expcutoff = env[PTR_EXPCUTOFF];
+        }
 
         for (bas_id = 0; bas_id < nbas; bas_id++) {
                 np = bas[NPRIM_OF];
@@ -62,7 +67,7 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                                 rr = dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2];
                                 for (j = 0; j < np; j++) {
                                         arr = p_exp[j] * rr;
-                                        if (arr-logcoeff[j] < EXPCUTOFF) {
+                                        if (arr-logcoeff[j] < expcutoff) {
                                                 non0table[ib*nbas+bas_id] = 1;
                                                 goto next_blk;
                                         }
@@ -134,8 +139,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
                                 g[n] = (3 - g[n]*g[n]) * g[n] * .5;
                         }
                         for (n = 0; n < ngs; n++) {
-                                g[n] = (3 - g[n]*g[n]) * g[n] * .5;
-                                g[n] *= .5;
+                                g[n] = ((3 - g[n]*g[n]) * g[n] * .5) * .5;
                         }
                         for (n = 0; n < ngs; n++) {
                                 buf[i*GRIDS_BLOCK+n] *= .5 - g[n];

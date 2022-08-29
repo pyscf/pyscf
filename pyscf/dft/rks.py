@@ -20,7 +20,8 @@
 Non-relativistic restricted Kohn-Sham
 '''
 
-import time
+
+import textwrap
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -65,23 +66,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''
     if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
-    t0 = (time.clock(), time.time())
+    ks.initialize_grids(mol, dm)
+
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
-
-    if ks.grids.coords is None:
-        ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
-            # Filter grids the first time setup grids
-            ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc != '':
-        if ks.nlcgrids.coords is None:
-            ks.nlcgrids.build(with_non0tab=True)
-            if ks.small_rho_cutoff > 1e-20 and ground_state:
-                # Filter grids the first time setup grids
-                ks.nlcgrids = prune_small_rho_grids_(ks, mol, dm, ks.nlcgrids)
-            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     ni = ks._numint
     if hermi == 2:  # because rho = 0
@@ -89,8 +78,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
+        if ks.nlc:
+            assert 'VV10' in ks.nlc.upper()
             _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
                                       max_memory=max_memory)
             exc += enlc
@@ -186,7 +175,7 @@ def get_vsap(ks, mol=None):
         matrix Vsap = Vnuc + J + Vxc.
     '''
     if mol is None: mol = ks.mol
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -247,13 +236,15 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji->', h1e, dm)
-    e2 = vhf.ecoul + vhf.exc
-    ks.scf_summary['e1'] = e1.real
-    ks.scf_summary['coul'] = vhf.ecoul.real
-    ks.scf_summary['exc'] = vhf.exc.real
-    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return (e1+e2).real, e2
+    e1 = numpy.einsum('ij,ji->', h1e, dm).real
+    ecoul = vhf.ecoul.real
+    exc = vhf.exc.real
+    e2 = ecoul + exc
+    ks.scf_summary['e1'] = e1
+    ks.scf_summary['coul'] = ecoul
+    ks.scf_summary['exc'] = exc
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, ecoul, exc)
+    return e1+e2, e2
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
@@ -360,14 +351,26 @@ class KohnShamDFT(object):
         self._numint.omega = float(v)
 
     def dump_flags(self, verbose=None):
-        logger.info(self, 'XC functionals = %s', self.xc)
+        log = logger.new_logger(self, verbose)
+        log.info('XC library %s version %s\n    %s',
+                 self._numint.libxc.__name__,
+                 self._numint.libxc.__version__,
+                 self._numint.libxc.__reference__)
+
+        if log.verbose >= logger.INFO:
+            log.info('XC functionals = %s', self.xc)
+            if hasattr(self._numint.libxc, 'xc_reference'):
+                log.info(textwrap.indent('\n'.join(self._numint.libxc.xc_reference(self.xc)), '    '))
+
         if self.nlc!='':
-            logger.info(self, 'NLC functional = %s', self.nlc)
-        logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+            log.info('NLC functional = %s', self.nlc)
+
         self.grids.dump_flags(verbose)
         if self.nlc!='':
-            logger.info(self, '** Following is NLC Grids **')
+            log.info('** Following is NLC Grids **')
             self.nlcgrids.dump_flags(verbose)
+
+        log.info('small_rho_cutoff = %g', self.small_rho_cutoff)
         return self
 
     define_xc_ = define_xc_
@@ -379,8 +382,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.RHF(self.mol)
-        mf.__dict__.update(self.to_rks().__dict__)
+        mf = _update_keys_(scf.RHF(self.mol), self.to_rks())
         mf.converged = False
         return mf
 
@@ -391,8 +393,7 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.UHF(self.mol)
-        mf.__dict__.update(self.to_uks().__dict__)
+        mf = _update_keys_(scf.UHF(self.mol), self.to_uks())
         mf.converged = False
         return mf
 
@@ -403,10 +404,25 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
-        mf = scf.GHF(self.mol)
-        mf.__dict__.update(self.to_gks().__dict__)
+        mf = _update_keys_(scf.GHF(self.mol), self.to_gks())
         mf.converged = False
         return mf
+
+    def to_hf(self):
+        '''Convert the input KS object to the associated HF object.
+
+        Note this conversion only changes the class of the mean-field object.
+        The total energy and wave-function are the same as them in the input
+        mean-field object.
+        '''
+        if isinstance(self, scf.hf.RHF):
+            return self.to_rhf()
+        elif isinstance(self, scf.hf.UHF):
+            return self.to_uhf()
+        elif isinstance(self, scf.hf.GHF):
+            return self.to_ghf()
+        else:
+            raise RuntimeError(f'to_hf does not support {self.__class__}')
 
     def to_rks(self, xc=None):
         '''Convert the input mean-field object to a RKS/ROKS object.
@@ -443,11 +459,14 @@ class KohnShamDFT(object):
         The total energy and wave-function are the same as them in the input
         mean-field object.
         '''
+        from pyscf.dft import numint2c
         mf = scf.addons.convert_to_ghf(self)
         if xc is not None:
             mf.xc = xc
         if xc != self.xc:
             mf.converged = False
+        if not isinstance(mf._numint, numint2c.NumInt2C):
+            mf._numint = numint2c.NumInt2C()
         return mf
 
     def reset(self, mol=None):
@@ -456,6 +475,45 @@ class KohnShamDFT(object):
         self.nlcgrids.reset(mol)
         return self
 
+    def initialize_grids(self, mol=None, dm=None):
+        '''Initialize self.grids the first time call get_veff'''
+        if mol is None: mol = self.mol
+
+        if self.grids.coords is None:
+            t0 = (logger.process_clock(), logger.perf_counter())
+            self.grids.build(with_non0tab=True)
+            if (self.small_rho_cutoff > 1e-20 and
+                # dm.ndim == 2 indicates ground state
+                isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                # Filter grids the first time setup grids
+                self.grids = prune_small_rho_grids_(self, self.mol, dm,
+                                                    self.grids)
+            t0 = logger.timer(self, 'setting up grids', *t0)
+
+        if self.nlc != '':
+            if self.nlcgrids.coords is None:
+                t0 = (logger.process_clock(), logger.perf_counter())
+                self.nlcgrids.build(with_non0tab=True)
+                if (self.small_rho_cutoff > 1e-20 and
+                    # dm.ndim == 2 indicates ground state
+                    isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+                    # Filter grids the first time setup grids
+                    self.nlcgrids = prune_small_rho_grids_(self, self.mol, dm,
+                                                           self.nlcgrids)
+                t0 = logger.timer(self, 'setting up nlc grids', *t0)
+        return self
+
+# Update the KohnShamDFT label in scf.hf module
+hf.KohnShamDFT = KohnShamDFT
+
+def _update_keys_(mf, src):
+    src_keys = src.__dict__
+    res_keys = {key: src_keys[key] for key in mf._keys if key in src_keys}
+    # Avoid to overwrite the target's attribute "_keys". It may not be defined
+    # if the .build() method of src not called
+    res_keys.pop('_keys', None)
+    mf.__dict__.update(res_keys)
+    return mf
 
 def init_guess_by_vsap(mf, mol=None):
     '''Form SAP guess'''
@@ -495,25 +553,3 @@ class RKS(KohnShamDFT, hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf.dft import xcfun
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = RKS(mol)
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405
-
-    m = RKS(mol)
-    m._numint.libxc = xcfun
-    m.xc = 'b88,lyp'
-    print(m.scf())  # -2.8978518405

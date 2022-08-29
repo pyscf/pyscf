@@ -198,8 +198,8 @@ def newton(mf):
     from pyscf.soscf import newton_ah
     from pyscf.pbc import scf as pscf
     if not isinstance(mf, pscf.khf.KSCF):
-# Note for single k-point other than gamma point (mf.kpt != 0) mf object,
-# orbital hessian is approximated by gamma point hessian.
+        # Note for single k-point other than gamma point (mf.kpt != 0) mf object,
+        # orbital hessian is approximated by gamma point hessian.
         return newton_ah.newton(mf)
 
     if isinstance(mf, newton_ah._CIAH_SOSCF):
@@ -229,7 +229,7 @@ def newton(mf):
                 nvir = viridx.sum()
                 nmo = nocc + nvir
                 dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
-                dr[viridx[:,None]&occidx] = dx[p0:p0+nocc*nvir]
+                dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
                 dr = dr - dr.conj().T
                 p0 += nocc * nvir
 
@@ -266,7 +266,7 @@ def newton(mf):
                         nvir = viridx.sum()
                         nmo = nocc + nvir
                         dr = numpy.zeros((nmo,nmo), dtype=dx.dtype)
-                        dr[viridx[:,None]&occidx] = dx[p0:p0+nocc*nvir]
+                        dr[viridx[:,None] & occidx] = dx[p0:p0+nocc*nvir]
                         dr = dr - dr.conj().T
                         p0 += nocc * nvir
                         u1 = newton_ah.expmat(dr)

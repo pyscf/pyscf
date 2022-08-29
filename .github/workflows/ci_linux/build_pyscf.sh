@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
+
+set -e
+
 cd ./pyscf/lib
-curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.7.5-deps.tar.gz | tar xzf -
+curl -L "https://github.com/pyscf/pyscf-build-deps/blob/master/pyscf-2.1-deps.tar.gz?raw=true" | tar xzf -
 mkdir build; cd build
-cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF ..
+cmake -DBUILD_LIBXC=OFF -DBUILD_XCFUN=OFF -DBUILD_LIBCINT=OFF ..
 make -j4
-cd ../../..
+cd ..
+rm -Rf build
+cd ../..

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
+
 import numpy
 import h5py
 from pyscf import gto
@@ -203,20 +203,19 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
-    time_0pass = (time.clock(), time.time())
+    time_0pass = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
-    nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
 
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
-    assert(nao == mol.nao_nr('_cart' in intor))
+    assert (nao == mol.nao_nr('_cart' in intor))
 
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
@@ -241,19 +240,19 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         if h5py.is_hdf5(erifile):
             feri = h5py.File(erifile, 'a')
             if dataname in feri:
-                del(feri[dataname])
+                del (feri[dataname])
         else:
             feri = h5py.File(erifile, 'w')
     else:
-        assert(isinstance(erifile, h5py.Group))
+        assert (isinstance(erifile, h5py.Group))
         feri = erifile
 
     if comp == 1:
-        chunks = (nmoj,nmol)
-        shape = (nij_pair,nkl_pair)
+        chunks = (nmoj, nmol)
+        shape = (nij_pair, nkl_pair)
     else:
-        chunks = (1,nmoj,nmol)
-        shape = (comp,nij_pair,nkl_pair)
+        chunks = (1, nmoj, nmol)
+        shape = (comp, nij_pair, nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
         feri.create_dataset(dataname, shape, 'f8')
@@ -325,10 +324,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
                     async_write(icomp, row0, row1, outbuf)
                     outbuf, buf_write = buf_write, outbuf  # avoid flushing writing buffer
 
-                    ti1 = (time.clock(), time.time())
+                    ti1 = (logger.process_clock(), logger.perf_counter())
                     log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
                                istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
                     ti0 = ti1
+
     fswap = None
     if isinstance(erifile, str):
         feri.close()
@@ -394,11 +394,11 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
-    if any(c.dtype == numpy.complex for c in mo_coeffs):
+    if any(c.dtype == numpy.complex128 for c in mo_coeffs):
         raise NotImplementedError('Integral transformation for complex orbitals')
 
     intor = mol._add_suffix(intor)
-    time0 = (time.clock(), time.time())
+    time0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mol, verbose)
 
     nao = mo_coeffs[0].shape[0]
@@ -774,7 +774,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
         tasks.append((i0, i1, ao_loc[i1]-ao_loc[i0]))
     return tasks
 
-del(MAX_MEMORY)
+del (MAX_MEMORY)
 
 
 if __name__ == '__main__':
@@ -797,18 +797,18 @@ if __name__ == '__main__':
     rhf = scf.RHF(mol)
     rhf.scf()
 
-    print(time.clock())
+    print(logger.process_clock())
     full(mol, rhf.mo_coeff, 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    print(time.clock())
+    print(logger.process_clock())
     eri0 = incore.full(rhf._eri, rhf.mo_coeff)
     feri = h5py.File('h2oeri.h5', 'r')
     print('full', abs(eri0-feri['eri_mo']).sum())
     feri.close()
 
-    print(time.clock())
+    print(logger.process_clock())
     c = rhf.mo_coeff
     general(mol, (c,c,c,c), 'h2oeri.h5', max_memory=10, ioblk_size=5)
-    print(time.clock())
+    print(logger.process_clock())
     feri = h5py.File('h2oeri.h5', 'r')
     print('general', abs(eri0-feri['eri_mo']).sum())
     feri.close()

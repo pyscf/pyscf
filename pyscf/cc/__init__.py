@@ -74,6 +74,7 @@ from pyscf.cc import gccsd
 from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_uccsd
 from pyscf.cc import eom_gccsd
+from pyscf.cc import qcisd
 from pyscf import scf
 
 def CCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
@@ -123,7 +124,9 @@ def UCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UCCSD')
+        # TODO: DF-UCCSD with memory-efficient particle-particle ladder,
+        # similar to dfccsd.RCCSD
+        return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
     else:
         return uccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
 UCCSD.__doc__ = uccsd.UCCSD.__doc__
@@ -142,23 +145,57 @@ def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
 GCCSD.__doc__ = gccsd.GCCSD.__doc__
 
 
+def QCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    if isinstance(mf, scf.uhf.UHF):
+        raise NotImplementedError
+    elif isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError
+    else:
+        return RQCISD(mf, frozen, mo_coeff, mo_occ)
+QCISD.__doc__ = qcisd.QCISD.__doc__
+
+scf.hf.SCF.QCISD = QCISD
+
+def RQCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    import numpy
+    from pyscf import lib
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, scf.uhf.UHF):
+        raise RuntimeError('RQCISD cannot be used with UHF method.')
+    elif isinstance(mf, scf.rohf.ROHF):
+        lib.logger.warn(mf, 'RQCISD method does not support ROHF method. ROHF object '
+                        'is converted to UHF object and UQCISD method is called.')
+        mf = scf.addons.convert_to_uhf(mf)
+        raise NotImplementedError
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+        raise NotImplementedError
+
+    else:
+        return qcisd.QCISD(mf, frozen, mo_coeff, mo_occ)
+RQCISD.__doc__ = qcisd.QCISD.__doc__
+
+
 def FNOCCSD(mf, thresh=1e-6, pct_occ=None, nvir_act=None):
     """Frozen natural orbital CCSD
 
     Attributes:
         thresh : float
-            Threshold on NO occupation numbers.  Default is 1e-6.
+            Threshold on NO occupation numbers. Default is 1e-6 (very conservative).
         pct_occ : float
-            Percentage of total occupation number.  Default is None.  If present, overrides `thresh`.
+            Percentage of total occupation number. Default is None. If present, overrides `thresh`.
+        nvir_act : int
+            Number of virtual NOs to keep. Default is None. If present, overrides `thresh` and `pct_occ`.
     """
-    #from pyscf import mp
-    #pt = mp.MP2(mf).set(verbose=0).run()
-    from pyscf.mp.mp2 import MP2
-    pt = MP2(mf).set(verbose=0).run()
+    from pyscf import mp
+    pt = mp.MP2(mf).set(verbose=0).run()
     frozen, no_coeff = pt.make_fno(thresh=thresh, pct_occ=pct_occ, nvir_act=nvir_act)
-    #pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run() #avoid DF
-    pt_no = MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
-    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff) #avoid DF
+    pt_no = mp.MP2(mf, frozen=frozen, mo_coeff=no_coeff).set(verbose=0).run()
+    mycc = ccsd.CCSD(mf, frozen=frozen, mo_coeff=no_coeff)
     mycc.delta_emp2 = pt.e_corr - pt_no.e_corr
     from pyscf.lib import logger
     def _finalize(self):

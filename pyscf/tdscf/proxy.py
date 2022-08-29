@@ -54,9 +54,8 @@ def molecular_response_ov(vind, space_ov, nocc, nmo, double, log_dest):
     if space_ov.shape not in ((size_full,), (2, size_full)):
         raise ValueError("The 'space_ov' argument should be a 1D array with dimension {size_full:d} or a 2D array with"
                          " dimensions 2x{size_full:d}, found: {actual}".format(
-                            size_full=size_full,
-                            actual=space_ov.shape,
-                            ))
+                             size_full=size_full,
+                             actual=space_ov.shape,))
     ov1, ov2 = space_ov
 
     size = sum(ov2)

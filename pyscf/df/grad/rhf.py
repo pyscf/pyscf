@@ -3,24 +3,24 @@
 # This code was copied from the data generation program of Tencent Alchemy
 # project (https://github.com/tencent-alchemy).
 #
-# 
-# #
-# # Copyright 2019 Tencent America LLC. All Rights Reserved.
-# #
-# # Licensed under the Apache License, Version 2.0 (the "License");
-# # you may not use this file except in compliance with the License.
-# # You may obtain a copy of the License at
-# #
-# #     http://www.apache.org/licenses/LICENSE-2.0
-# #
-# # Unless required by applicable law or agreed to in writing, software
-# # distributed under the License is distributed on an "AS IS" BASIS,
-# # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# # See the License for the specific language governing permissions and
-# # limitations under the License.
-# #
-# # Author: Qiming Sun <osirpt.sun@gmail.com>
-# #
+
+#
+# Copyright 2019 Tencent America LLC. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 
 import numpy
@@ -122,7 +122,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True):
         mo_coeff = numpy.vstack((mo_coeff,mo_coeff))
         mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
         mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
-        assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
+        assert (mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
         mo_occ = numpy.vstack((mo_occa, mo_occb))
 
     mo_coeff = numpy.asarray(mo_coeff).reshape(-1,nao,nmo)

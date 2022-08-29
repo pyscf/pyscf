@@ -1,4 +1,5 @@
 #  Author: Artem Pulkin
+# flake8: noqa
 """
 This and other `proxy` modules implement the time-dependent mean-field procedure using the existing pyscf
 implementations as a black box. The main purpose of these modules is to overcome the existing limitations in pyscf

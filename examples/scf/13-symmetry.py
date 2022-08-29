@@ -8,6 +8,8 @@ from pyscf import scf
 
 '''
 Specify irrep_nelec to control the wave function symmetry
+
+For atomic calculations, see also 31-v_atom_rohf.py
 '''
 
 
@@ -58,3 +60,14 @@ print('E = %.15g  ref = -74.4026583773135' % e)
 mf.irrep_nelec = {'Ag': 4, 'B1u': (2,1), 'B2u': 2, 'B3u': 2,}
 e = mf.kernel()
 print('E = %.15g  ref = -74.8971476600812' % e)
+
+
+#
+# SO3 symmetry
+#
+mol = gto.M(atom='Cr 0 0 0', spin=6, basis='ccpvdz', symmetry=True)
+mf = mol.ROHF().newton()
+mf.irrep_nelec = {'s+0': 7,
+                  'd-2': 1, 'd-1': 1, 'd+0': 1, 'd+1': 1, 'd+2': 1}
+mf.run()
+mf.analyze()

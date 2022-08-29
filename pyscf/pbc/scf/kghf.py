@@ -38,38 +38,56 @@ def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
     if cell is None: cell = mf.cell
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
     if kpts is None: kpts = mf.kpts
-    if kpts_band is None: kpts_band = kpts
     nkpts = len(kpts)
-    nband = len(kpts_band)
+    if kpts_band is None:
+        nband = nkpts
+    else:
+        nband = len(kpts_band)
 
     dm_kpts = np.asarray(dm_kpts)
     nso = dm_kpts.shape[-1]
     nao = nso // 2
     dms = dm_kpts.reshape(-1,nkpts,nso,nso)
-    n_dm = dms.shape[0]
 
     dmaa = dms[:,:,:nao,:nao]
     dmab = dms[:,:,nao:,:nao]
     dmbb = dms[:,:,nao:,nao:]
-    dms = np.vstack((dmaa, dmbb, dmab))
+    if with_k:
+        if hermi:
+            dms = np.stack((dmaa, dmbb, dmab))
+        else:
+            dmba = dms[:,:,nao:,:nao]
+            dms = np.stack((dmaa, dmbb, dmab, dmba))
+        _hermi = 0
+    else:
+        dms = np.stack((dmaa, dmbb))
+        _hermi = 1
+    nblocks, n_dm = dms.shape[:2]
+    dms = dms.reshape(nblocks*n_dm, nkpts, nao, nao)
 
-    j1, k1 = mf.with_df.get_jk(dms, hermi, kpts, kpts_band, with_j, with_k,
+    j1, k1 = mf.with_df.get_jk(dms, _hermi, kpts, kpts_band, with_j, with_k,
                                exxdiv=mf.exxdiv)
-    j1 = j1.reshape(3,n_dm,nband,nao,nao)
-    k1 = k1.reshape(3,n_dm,nband,nao,nao)
 
     vj = vk = None
     if with_j:
+        # j1 = (j1_aa, j1_bb, j1_ab)
+        j1 = j1.reshape(nblocks,n_dm,nband,nao,nao)
         vj = np.zeros((n_dm,nband,nso,nso), j1.dtype)
         vj[:,:,:nao,:nao] = vj[:,:,nao:,nao:] = j1[0] + j1[1]
         vj = _format_jks(vj, dm_kpts, kpts_band, kpts)
 
     if with_k:
+        k1 = k1.reshape(nblocks,n_dm,nband,nao,nao)
         vk = np.zeros((n_dm,nband,nso,nso), k1.dtype)
         vk[:,:,:nao,:nao] = k1[0]
         vk[:,:,nao:,nao:] = k1[1]
         vk[:,:,:nao,nao:] = k1[2]
-        vk[:,:,nao:,:nao] = k1[2].transpose(0,1,3,2).conj()
+        if hermi:
+            # k1 = (k1_aa, k1_bb, k1_ab)
+            vk[:,:,nao:,:nao] = k1[2].conj().transpose(0,1,3,2)
+        else:
+            # k1 = (k1_aa, k1_bb, k1_ab, k1_ba)
+            vk[:,:,nao:,:nao] = k1[3]
         vk = _format_jks(vk, dm_kpts, kpts_band, kpts)
 
     return vj, vk
@@ -191,9 +209,16 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         return self
 
     density_fit = khf.KSCF.density_fit
+    rs_density_fit = khf.KSCF.rs_density_fit
     newton = khf.KSCF.newton
 
-    x2c = None
+    def x2c1e(self):
+        '''X2C with spin-orbit coupling effects in spin-orbital basis'''
+        from pyscf.pbc.x2c.x2c1e import x2c1e_gscf
+        return x2c1e_gscf(self)
+
+    x2c = x2c1e
+    sfx2c1e = khf.KSCF.sfx2c1e
     stability = None
     nuc_grad_method = None
 
@@ -216,3 +241,9 @@ if __name__ == '__main__':
     kpts = cell.make_kpts([2,1,1])
     mf = KGHF(cell, kpts=kpts)
     mf.kernel()
+
+    # x2c1e decoractor to KGHF class.
+    #mf = KGHF(cell, kpts=kpts).x2c1e()
+    # or
+    #mf = KGHF(cell, kpts=kpts).sfx2c1e()
+    #mf.kernel()

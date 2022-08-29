@@ -25,14 +25,16 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import df
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = '6-31g',
-)
+def setUpModule():
+    global mol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = '6-31g',
+    )
 
 def tearDownModule():
     global mol
@@ -44,6 +46,26 @@ class KnownValues(unittest.TestCase):
         gref = scf.RHF(mol).run().nuc_grad_method().kernel()
         g1 = scf.RHF(mol).density_fit().run().nuc_grad_method().kernel()
         self.assertAlmostEqual(abs(gref - g1).max(), 0, 5)
+
+    def test_rks_lda_grad(self):
+        gref = mol.RKS(xc='lda,').run().nuc_grad_method().kernel()
+        g1 = mol.RKS(xc='lda,').density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
+    def test_rks_grad(self):
+        gref = mol.RKS(xc='b3lyp').run().nuc_grad_method().kernel()
+        g1 = mol.RKS(xc='b3lyp').density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
+
+    def test_uhf_grad(self):
+        gref = mol.UHF.run().nuc_grad_method().kernel()
+        g1 = mol.UHF.density_fit().run().nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 5)
+
+    def test_uks_lda_grad(self):
+        gref = mol.UKS.run(xc='lda,').nuc_grad_method().kernel()
+        g1 = mol.UKS.density_fit().run(xc='lda,').nuc_grad_method().kernel()
+        self.assertAlmostEqual(abs(gref - g1).max(), 0, 4)
 
     def test_uks_grad(self):
         gref = mol.UKS.run(xc='b3lyp').nuc_grad_method().kernel()

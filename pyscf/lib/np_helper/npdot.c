@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <complex.h>
 //#include <omp.h>
 #include "config.h"

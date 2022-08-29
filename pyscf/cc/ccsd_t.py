@@ -20,7 +20,7 @@
 RHF-CCSD(T) for real integrals
 '''
 
-import time
+
 import ctypes
 import numpy
 from pyscf import lib
@@ -32,7 +32,7 @@ from pyscf.cc import _ccsd
 
 # JCP 94, 442 (1991); DOI:10.1063/1.460359.  Error in Eq (1), should be [ia] >= [jb] >= [kc]
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
-    cpu1 = cpu0 = (time.clock(), time.time())
+    cpu1 = cpu0 = (logger.process_clock(), logger.perf_counter())
     log = logger.new_logger(mycc, verbose)
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
@@ -67,7 +67,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     o_ir_loc = o_ir_loc.astype(numpy.int32)
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
-    if dtype == numpy.complex:
+    if dtype == numpy.complex128:
         drv = _ccsd.libcc.CCsd_t_zcontract
     else:
         drv = _ccsd.libcc.CCsd_t_contract
@@ -132,7 +132,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     return et
 
 def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
-    cpu1 = (time.clock(), time.time())
+    cpu1 = (logger.process_clock(), logger.perf_counter())
     mol = mycc.mol
     nmo = nocc + nvir
 
@@ -173,7 +173,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     return orbsym
 
 def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
-    assert(t2.flags.c_contiguous)
+    assert (t2.flags.c_contiguous)
     vooo = numpy.asarray(eris.ovoo).transpose(1,0,3,2).conj().copy()
     nocc, nvir = t1.shape
     if mycc.mol.symmetry:

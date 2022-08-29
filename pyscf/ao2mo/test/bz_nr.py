@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pyscf.lib import logger
 from pyscf import scf
 from pyscf import gto
 
@@ -42,10 +43,9 @@ mol.build()
 
 ##############
 # SCF result
-import time
 rhf = scf.RHF(mol)
 print('E_RHF =', rhf.scf())
-print(time.clock())
+print(logger.process_clock())
 
 import os
 import tempfile
@@ -61,7 +61,7 @@ cv = rhf.mo_coeff[:,nocc:]
 ao2mo.outcore.general(mol, (co,cv,co,cv), eritmp, max_memory=100, dataname='mp2_bz')
 f = h5py.File(eritmp, 'r')
 
-print(time.clock())
+print(logger.process_clock())
 eia = rhf.mo_energy[:nocc].reshape(nocc,1) - rhf.mo_energy[nocc:]
 nvir = eia.shape[1]
 emp2 = 0
@@ -79,4 +79,4 @@ print('E_MP2 =', emp2) # -0.80003653259
 f.close()
 os.remove(eritmp)
 
-print(time.clock())
+print(logger.process_clock())

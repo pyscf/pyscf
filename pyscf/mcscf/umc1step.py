@@ -22,7 +22,7 @@ UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
 '''
 
 import sys
-import time
+
 import copy
 from functools import reduce
 import numpy
@@ -237,7 +237,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if verbose is None:
         verbose = casscf.verbose
     log = logger.Logger(casscf.stdout, verbose)
-    cput0 = (time.clock(), time.time())
+    cput0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Start 1-step CASSCF')
 
     mo = mo_coeff
@@ -428,7 +428,7 @@ class UCASSCF(ucasci.UCASCI):
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
         log.info('augmented hessian linear dependence = %g', self.ah_lindep)
-        log.info('augmented hessian level shift = %d', self.ah_level_shift)
+        log.info('augmented hessian level shift = %g', self.ah_level_shift)
         log.info('augmented hessian start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian start_cycle = %d', self.ah_start_cycle)
         log.info('augmented hessian grad_trust_region = %g', self.ah_grad_trust_region)
@@ -453,8 +453,7 @@ class UCASSCF(ucasci.UCASCI):
             self.mo_coeff = mo_coeff
         if callback is None: callback = self.callback
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
 
         self.converged, self.e_tot, self.e_cas, self.ci, self.mo_coeff = \
@@ -490,7 +489,8 @@ class UCASSCF(ucasci.UCASCI):
 
         log = logger.new_logger(self, verbose)
 
-        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log,
+                                             envs=envs)
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_cas)
 

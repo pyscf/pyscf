@@ -16,24 +16,28 @@
 import unittest
 import numpy as np
 import scipy.linalg
+from pyscf import lib
 from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc import dft
 
-L = 2
-cell = gto.Cell()
-cell.unit = 'B'
-cell.a = np.diag([L,L,L])
-cell.mesh = np.array([11]*3)
-cell.atom = [['He', (L/2.,L/2.,L/2.)]]
-cell.basis = { 'He': [[0, (1.0, 1.0)]] }
-cell.build()
+def setUpModule():
+    global cell, kmf, mycc, eris
+    L = 2
+    cell = gto.Cell()
+    cell.unit = 'B'
+    cell.a = np.diag([L,L,L])
+    cell.mesh = np.array([11]*3)
+    cell.atom = [['He', (L/2.,L/2.,L/2.)]]
+    cell.basis = { 'He': [[0, (1.0, 1.0)]] }
+    cell.build()
 
-def finger(a):
-    a = np.asarray(a)
-    return np.dot(a.ravel(), np.cos(np.arange(a.size)))
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell
+    del cell
+
+class KnownValues(unittest.TestCase):
     def test_band(self):
         mf = scf.RHF(cell).run()
         kpts = cell.make_kpts([5,1,1])
@@ -44,7 +48,7 @@ class KnowValues(unittest.TestCase):
             ovlp = mf.get_ovlp(kpt=kpt)
             bands_ref.append(mf.eig(fock, ovlp)[0])
         self.assertAlmostEqual(abs(np.array(bands_ref) - np.array(bands)).max(), 0, 9)
-        self.assertAlmostEqual(finger(bands), -0.69079067047363329, 8)
+        self.assertAlmostEqual(lib.fp(bands), -0.69079067047363329, 8)
 
     def test_band_kscf(self):
         kpts = cell.make_kpts([2,1,1])
@@ -60,11 +64,10 @@ class KnowValues(unittest.TestCase):
             fock = h1[i] + vhf[i]
             bands_ref.append(scipy.linalg.eigh(fock, s1[i])[0])
         self.assertAlmostEqual(abs(np.array(bands_ref) - np.array(bands)).max(), 0, 9)
-        self.assertAlmostEqual(finger(bands), -0.61562245312227049, 8)
+        self.assertAlmostEqual(lib.fp(bands), -0.61562245312227049, 8)
 
 # TODO: test get_bands for hf/uhf with/without DF
 
 if __name__ == '__main__':
     print("Full Tests for kpt-bands")
     unittest.main()
-

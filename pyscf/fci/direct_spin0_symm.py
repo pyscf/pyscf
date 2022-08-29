@@ -68,7 +68,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
     eri = ao2mo.restore(4, eri, norb)
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
-    assert(neleca == nelecb)
+    assert (neleca == nelecb)
     link_indexa = direct_spin0._unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     eri_irs, rank_eri, irrep_eri = direct_spin1_symm.reorder_eri(eri, norb, orbsym)
@@ -89,11 +89,11 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     ci0 = []
     ci1 = []
     for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, aidx[wfnsym^ir].size
+        ma, mb = aidx[ir].size, aidx[wfnsym ^ ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
         if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], aidx[wfnsym^ir], out=ci0[ir])
+            lib.take_2d(fcivec, aidx[ir], aidx[wfnsym ^ ir], out=ci0[ir])
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
     ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
     libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
@@ -103,15 +103,16 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(wfnsym))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym^ir])
-    return lib.transpose_sum(ci1new, inplace=True).reshape(fcivec_shape)
+            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], aidx[wfnsym ^ ir])
+    ci1 = lib.transpose_sum(ci1new, inplace=True).reshape(fcivec_shape)
+    return ci1.view(direct_spin1.FCIvector)
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            ecore=0, **kwargs):
-    assert(len(orbsym) == norb)
+    assert (len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
@@ -156,7 +157,7 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
-    assert(neleca == nelecb)
+    assert (neleca == nelecb)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     airreps = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
     na = nb = len(airreps)
@@ -179,7 +180,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             x[addra,addrb] = 1
         else:
             x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-        ci0.append(x.ravel())
+        ci0.append(x.ravel().view(direct_spin1.FCIvector))
 
     # Add noise
     #ci0[0][0 ] += 1e-5

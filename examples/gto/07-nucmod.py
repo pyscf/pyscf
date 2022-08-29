@@ -13,11 +13,11 @@ from pyscf import gto
 mol = gto.Mole()
 mol.atom = [[8,(0, 0, 0)], ['h',(0, 1, 0)], ['H',(0, 0, 1)]]
 
-# 0 means point nuclear model (default), 1 means Gaussian nuclear model.
+# 0 means point nuclear model (default), 1 or 'G' means Gaussian nuclear model.
 # nuclear model can be set globally
-mol.nucmod = 1
+mol.nucmod = 'G'
 # or specified in a dictionary, like mol.basis
-mol.nucmod = {'O': 1}  # Use gaussian nuclear model for oxygen
+mol.nucmod = {'O': 'G'}  # Use Gaussian nuclear model for oxygen
 
 mol.build()
 
@@ -30,7 +30,7 @@ mol.nucmod = {'O': gto.filatov_nuc_mod, 'H': 0}
 mol.build()
 
 #
-# The default gaussian nuclear model is Dyall's nuclear model
+# The default Gaussian nuclear model is Dyall's nuclear model
 # See L. Visscher and K. Dyall, At. Data Nucl. Data Tables, 67, 207 (1997)
 # If other gaussian nuclear charge distribution are required,
 #    rho(r) = nuc_charge * Norm * exp(-zeta * r^2).

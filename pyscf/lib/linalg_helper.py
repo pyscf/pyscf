@@ -53,7 +53,9 @@ FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', Fa
 
 
 def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
-    '''Solve generalized eigenvalue problem  h v = w s v.
+    '''Solve generalized eigenvalue problem  h v = w s v  in two passes.
+    First diagonalize s to get eigenvectors. Then in the eigenvectors space
+    transform and diagonalize h.
 
     .. note::
         The number of eigenvalues and eigenvectors might be less than the
@@ -74,18 +76,15 @@ def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
         seig is the eigenvalue vector of the metric s.
     '''
     seig, t = scipy.linalg.eigh(s)
-    try:
-        w, v = scipy.linalg.eigh(h, s)
-    except numpy.linalg.LinAlgError:
-        idx = seig >= lindep
-        t = t[:,idx] * (1/numpy.sqrt(seig[idx]))
-        if t.size > 0:
-            heff = reduce(numpy.dot, (t.T.conj(), h, t))
-            w, v = scipy.linalg.eigh(heff)
-            v = numpy.dot(t, v)
-        else:
-            w = numpy.zeros((0,))
-            v = t
+    mask = seig >= lindep
+    t = t[:,mask] * (1/numpy.sqrt(seig[mask]))
+    if t.size > 0:
+        heff = reduce(numpy.dot, (t.T.conj(), h, t))
+        w, v = scipy.linalg.eigh(heff)
+        v = numpy.dot(t, v)
+    else:
+        w = numpy.zeros((0,))
+        v = t
     return w, v, seig
 
 def eigh_by_blocks(h, s=None, labels=None):
@@ -104,8 +103,7 @@ def eigh_by_blocks(h, s=None, labels=None):
         labels : list
 
     Returns:
-        w, v.  w is the eigenvalue vector; v is the eigenfunction array;
-        seig is the eigenvalue vector of the metric s.
+        w, v.  w is the eigenvalue vector; v is the eigenfunction array.
 
     Examples:
 
@@ -163,6 +161,41 @@ def eigh_by_blocks(h, s=None, labels=None):
     es = numpy.hstack(es)
     idx = numpy.argsort(es)
     return es[idx], cs[:,idx]
+
+def _fill_heff_hermitian(heff, xs, ax, xt, axt, dot):
+    nrow = len(axt)
+    row1 = len(ax)
+    row0 = row1 - nrow
+    for ip, i in enumerate(range(row0, row1)):
+        for jp, j in enumerate(range(row0, i)):
+            heff[i,j] = dot(xt[ip].conj(), axt[jp])
+            heff[j,i] = heff[i,j].conj()
+        heff[i,i] = dot(xt[ip].conj(), axt[ip]).real
+
+    for i in range(row0):
+        axi = numpy.asarray(ax[i])
+        for jp, j in enumerate(range(row0, row1)):
+            heff[j,i] = dot(xt[jp].conj(), axi)
+            heff[i,j] = heff[j,i].conj()
+        axi = None
+    return heff
+
+def _fill_heff(heff, xs, ax, xt, axt, dot):
+    nrow = len(axt)
+    row1 = len(ax)
+    row0 = row1 - nrow
+    for ip, i in enumerate(range(row0, row1)):
+        for jp, j in enumerate(range(row0, row1)):
+            heff[i,j] = dot(xt[ip].conj(), axt[jp])
+
+    for i in range(row0):
+        axi = numpy.asarray(ax[i])
+        xi = numpy.asarray(xs[i])
+        for jp, j in enumerate(range(row0, row1)):
+            heff[i,j] = dot(xi.conj(), axt[jp])
+            heff[j,i] = dot(xt[jp].conj(), axi)
+        axi = xi = None
+    return heff
 
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
@@ -255,10 +288,11 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-             dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE, tol_residual=None):
+              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+              dot=numpy.dot, callback=None,
+              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
+              follow_state=FOLLOW_STATE, tol_residual=None,
+              fill_heff=_fill_heff_hermitian):
     r'''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -383,13 +417,20 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
             x0len = len(x0)
-            xt, x0 = _qr(x0, dot, lindep)[0], None
+            xt = _qr(x0, dot, lindep)[0]
             if len(xt) != x0len:
                 log.warn('QR decomposition removed %d vectors.  The davidson may fail.',
                          x0len - len(xt))
                 if callable(pick):
                     log.warn('Check to see if `pick` function %s is providing '
                              'linear dependent vectors', pick.__name__)
+                if len(xt) == 0:
+                    msg = ('No more linearly independent basis were found. '
+                           'Unless loosen the lindep tolerance (current value '
+                           f'{lindep}), the diagonalization solver is not able '
+                           'to find eigenvectors.')
+                    raise LinearDependenceError(msg)
+            x0 = None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
@@ -408,7 +449,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             try:
                 dtype = numpy.result_type(axt[0], xt[0])
             except IndexError:
-                dtype = numpy.result_type(ax[0].dtype, xs[0].dtype)
+                raise LinearDependenceError('No linearly independent basis found '
+                                            'by the diagonalization solver.')
         if heff is None:  # Lazy initilize heff to determine the dtype
             heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
@@ -417,23 +459,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         elast = e
         vlast = v
         conv_last = conv
-        for i in range(space):
-            if head <= i < head+rnow:
-                axi = axt[i-head].conj()
-                for k in range(i-head+1):
-                    heff[i,head+k] = dot(axi, xt[k])
-                    heff[head+k,i] = heff[i,head+k].conj()
-            else:
-                axi = numpy.asarray(ax[i]).conj()
-                for k in range(rnow):
-                    heff[i,head+k] = dot(axi, xt[k])
-                    heff[head+k,i] = heff[i,head+k].conj()
-            axi = None
-        xt = axt = None
 
+        fill_heff(heff, xs, ax, xt, axt, dot)
+        xt = axt = None
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if callable(pick):
             w, v, idx = pick(w, v, nroots, locals())
+            if len(w) == 0:
+                raise RuntimeError(f'Not enough eigenvalues found by {pick}')
+
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
             if elast.size != e.size:
@@ -484,7 +518,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots*1):
+              max_dx_norm/max_dx_last > 3 and space > nroots+2):
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
@@ -533,7 +567,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -734,7 +768,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
                     verbose=logger.WARN, follow_state=FOLLOW_STATE,
-                    tol_residual=None):
+                    tol_residual=None, fill_heff=_fill_heff):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -814,19 +848,15 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         elast = e
         vlast = v
         conv_last = conv
-        for i in range(rnow):
-            for k in range(rnow):
-                heff[head+k,head+i] = dot(xt[k].conj(), axt[i])
-        for i in range(head):
-            axi = numpy.asarray(ax[i])
-            xi = numpy.asarray(xs[i])
-            for k in range(rnow):
-                heff[head+k,i] = dot(xt[k].conj(), axi)
-                heff[i,head+k] = dot(xi.conj(), axt[k])
-            axi = xi = None
 
+        fill_heff(heff, xs, ax, xt, axt, dot)
+        xt = axt = None
         w, v = scipy.linalg.eig(heff[:space,:space])
-        w, v, idx = pick(w, v, nroots, locals())
+        if callable(pick):
+            w, v, idx = pick(w, v, nroots, locals())
+            if len(w) == 0:
+                raise RuntimeError(f'Not enough eigenvalues found by {pick}')
+
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
@@ -877,7 +907,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
-              max_dx_norm/max_dx_last > 3 and space > nroots*3):
+              max_dx_norm/max_dx_last > 3 and space > nroots+4):
             log.debug('davidson %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g  lindep= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide], norm_min)
             log.debug('Large |r| detected, restore to previous x0')
@@ -926,7 +956,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max_dx_norm, e, de[ide], norm_min)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = [conv[k] or (norm < toloose) for k,norm in enumerate(dx_norm)]
             break
 
@@ -951,6 +981,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         warnings.warn('Left eigenvectors from subspace diagonalization method may not be converged')
         w, vl, v = scipy.linalg.eig(heff[:space,:space], left=True)
         e, v, idx = pick(w, v, nroots, locals())
+        if len(e) == 0:
+            raise RuntimeError(f'Not enough eigenvalues found by {pick}')
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
         xl = [x for x in xl]  # nparray -> list
@@ -1025,9 +1057,9 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
-          dot=numpy.dot, callback=None,
-          nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
+           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+           dot=numpy.dot, callback=None,
+           nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
     '''Davidson diagonalization method to solve  A c = e B c.
 
     Args:
@@ -1234,7 +1266,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                   icyc, space, max(dx_norm), e, de[ide], norm)
         if len(xt) == 0:
             log.debug('Linear dependency in trial subspace. |r| for each state %s',
-                     dx_norm)
+                      dx_norm)
             conv = all(norm < toloose for norm in dx_norm)
             break
 
@@ -1324,7 +1356,10 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         x1[i] *= rmat[i,i]
 
     innerprod = [dot(xi.conj(), xi).real for xi in x1]
-    max_innerprod = max(innerprod)
+    if innerprod:
+        max_innerprod = max(innerprod)
+    else:
+        max_innerprod = 0
     if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)
@@ -1451,7 +1486,7 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
 
 
 def cho_solve(a, b, strict_sym_pos=True):
-    '''Solve ax = b, where a is a postive definite hermitian matrix
+    '''Solve ax = b, where a is a positive definite hermitian matrix
 
     Kwargs:
         strict_sym_pos (bool) : Whether to impose the strict positive definition
@@ -1545,6 +1580,10 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
     return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
 
+class LinearDependenceError(RuntimeError):
+    pass
+
+
 class _Xlist(list):
     def __init__(self):
         self.scr_h5 = misc.H5TmpFile()
@@ -1579,9 +1618,9 @@ class _Xlist(list):
 
     def pop(self, index):
         key = self.index.pop(index)
-        del(self.scr_h5[str(key)])
+        del (self.scr_h5[str(key)])
 
-del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
+del (SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':

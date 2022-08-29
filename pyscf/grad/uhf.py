@@ -20,7 +20,7 @@
 Non-relativistic unrestricted Hartree-Fock analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -45,7 +45,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
     vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
@@ -89,7 +89,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
                           rhf_grad.make_rdm1e(mo_energy[1], mo_coeff[1], mo_occ[1])))
 
 
-class Gradients(rhf_grad.Gradients):
+class Gradients(rhf_grad.GradientsMixin):
     '''Non-relativistic unrestricted Hartree-Fock gradients
     '''
     def get_veff(self, mol=None, dm=None):
@@ -109,50 +109,3 @@ Grad = Gradients
 
 from pyscf import scf
 scf.uhf.UHF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.atom = [['He', (0.,0.,0.)], ]
-    mol.basis = {'He': 'ccpvdz'}
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.scf()
-    g = mf.Gradients()
-    print(g.grad())
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
-    print(g.grad())
-#[[ 0   0               -2.41134256e-02]
-# [ 0   4.39690522e-03   1.20567128e-02]
-# [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
-    print(g.grad())
-#[[ 0   0                3.27774948e-03]
-# [ 0   4.31591309e-02  -1.63887474e-03]
-# [ 0  -4.31591309e-02  -1.63887474e-03]]

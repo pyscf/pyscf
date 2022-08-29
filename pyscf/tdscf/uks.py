@@ -16,20 +16,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import time
+
 import numpy
 from pyscf import symm
 from pyscf import lib
-from pyscf import scf
+from pyscf.lib import logger
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
-from pyscf.scf import _response_functions  # noqa
 from pyscf.data import nist
 from pyscf.dft.rks import KohnShamDFT
 from pyscf import __config__
-
-# Low excitation filter to avoid numerical instability
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
 class TDA(uhf.TDA):
@@ -45,15 +41,20 @@ class TDDFT(uhf.TDHF):
 RPA = TDUKS = TDDFT
 
 
-class TDDFTNoHybrid(TDA):
-    ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
+class CasidaTDDFT(TDDFT, TDA):
+    '''Solve the Casida TDDFT formula (A-B)(A+B)(X+Y) = (X+Y)w^2
     '''
-    def get_vind(self, mf):
+
+    init_guess = TDA.init_guess
+
+    def gen_vind(self, mf=None):
+        if mf is None:
+            mf = self._scf
         wfnsym = self.wfnsym
 
         mol = mf.mol
         mo_coeff = mf.mo_coeff
-        assert(mo_coeff[0].dtype == numpy.double)
+        assert mo_coeff[0].dtype == numpy.double
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         nao, nmo = mo_coeff[0].shape
@@ -121,7 +122,7 @@ class TDDFTNoHybrid(TDA):
     def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
             raise RuntimeError('%s cannot be used with hybrid functional'
@@ -132,22 +133,23 @@ class TDDFTNoHybrid(TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
-        log = lib.logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(self.stdout, self.verbose)
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         self.converged, w2, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
+                              max_cycle=self.max_cycle,
                               max_space=self.max_space, pick=pickeig,
                               verbose=log)
 
@@ -169,7 +171,7 @@ class TDDFTNoHybrid(TDA):
         e = []
         xy = []
         for i, z in enumerate(x1):
-            if w2[i] < POSTIVE_EIG_THRESHOLD**2:
+            if w2[i] < self.positive_eig_threshold:
                 continue
             w = numpy.sqrt(w2[i])
             zp = e_ia * z
@@ -192,19 +194,21 @@ class TDDFTNoHybrid(TDA):
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
         log.timer('TDDFT', *cpu0)
-        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
+        self._finalize()
         return self.e, self.xy
 
     def nuc_grad_method(self):
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
+TDDFTNoHybrid = CasidaTDDFT
+
 
 class dRPA(TDDFTNoHybrid):
     def __init__(self, mf):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uks()
         mf.xc = ''
         TDDFTNoHybrid.__init__(self, mf)
 
@@ -214,90 +218,24 @@ class dTDA(TDA):
     def __init__(self, mf):
         if not isinstance(mf, KohnShamDFT):
             raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = mf.to_uks()
         mf.xc = ''
         TDA.__init__(self, mf)
 
 
 def tddft(mf):
-    '''Driver to create TDDFT or TDDFTNoHybrid object'''
+    '''Driver to create TDDFT or CasidaTDDFT object'''
     if mf._numint.libxc.is_hybrid_xc(mf.xc):
         return TDDFT(mf)
     else:
-        return TDDFTNoHybrid(mf)
+        return CasidaTDDFT(mf)
 
 from pyscf import dft
 dft.uks.UKS.TDA           = dft.uks_symm.UKS.TDA           = lib.class_as_method(TDA)
 dft.uks.UKS.TDHF          = dft.uks_symm.UKS.TDHF          = None
 #dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = lib.class_as_method(TDDFT)
 dft.uks.UKS.TDDFTNoHybrid = dft.uks_symm.UKS.TDDFTNoHybrid = lib.class_as_method(TDDFTNoHybrid)
+dft.uks.UKS.CasidaTDDFT   = dft.uks_symm.UKS.CasidaTDDFT   = lib.class_as_method(CasidaTDDFT)
 dft.uks.UKS.TDDFT         = dft.uks_symm.UKS.TDDFT         = tddft
 dft.uks.UKS.dTDA          = dft.uks_symm.UKS.dTDA          = lib.class_as_method(dTDA)
 dft.uks.UKS.dRPA          = dft.uks_symm.UKS.dRPA          = lib.class_as_method(dRPA)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-
-    mol.atom = [
-        ['H' , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.basis = '631g'
-    mol.build()
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda, vwn_rpa'
-    mf.scf()
-    td = mf.TDDFTNoHybrid()
-    #td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.08754011   9.08754011   9.7422721    9.7422721   12.48375928]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'b88,p86'
-    mf.scf()
-    td = mf.TDDFT()
-    td.nstates = 5
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.09321047   9.09321047   9.82203065   9.82203065  12.29842071]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = mf.TDA()
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  9.01393088   9.01393088   9.68872733   9.68872733  12.42444633]
-
-    mol.spin = 2
-    mf = dft.UKS(mol)
-    mf.xc = 'lda, vwn_rpa'
-    mf.scf()
-    td = TDDFTNoHybrid(mf)
-    #td.verbose = 5
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.0765857    3.16823079  15.20150204  18.40379107  21.11477253]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'b88,p86'
-    mf.scf()
-    td = TDDFT(mf)
-    td.nstates = 5
-    #td.verbose = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.05161674   3.57883843  15.0960023   18.33537454  20.76914967]
-
-    mf = dft.UKS(mol)
-    mf.xc = 'lda,vwn'
-    mf.scf()
-    td = TDA(mf)
-    td.nstates = 5
-    print(td.kernel()[0] * 27.2114)
-# [  0.16142061   3.22811366  14.98443928  18.29273507  21.18410081]
-

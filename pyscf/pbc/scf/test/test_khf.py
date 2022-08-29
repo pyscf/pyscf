@@ -18,6 +18,7 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 
 from pyscf import lib
@@ -27,9 +28,6 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc import df
 import pyscf.pbc.tools
-
-def finger(a):
-    return np.dot(np.cos(np.arange(a.size)), a.ravel())
 
 def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
@@ -48,10 +46,12 @@ def make_primitive_cell(mesh):
     cell.build()
     return cell
 
-cell = make_primitive_cell([9]*3)
-kpts = cell.make_kpts([3,1,1])
-kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
-kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+def setUpModule():
+    global cell, kmf, kumf, kpts
+    cell = make_primitive_cell([9]*3)
+    kpts = cell.make_kpts([3,1,1])
+    kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
+    kumf = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph').run(conv_tol=1e-9)
 
 def tearDownModule():
     global cell, kmf, kumf
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         upop, uchg = kumf.analyze()
         self.assertTrue(isinstance(rpop, np.ndarray) and rpop.ndim == 1)
         self.assertAlmostEqual(abs(upop[0]+upop[1]-rpop).max(), 0, 7)
-        self.assertAlmostEqual(lib.finger(rpop), 1.697446, 5)
+        self.assertAlmostEqual(lib.fp(rpop), 1.697446, 5)
 
     def test_kpt_vs_supercell_high_cost(self):
         # For large n, agreement is always achieved
@@ -97,6 +97,7 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf.chkfile = tempfile.NamedTemporaryFile().name
         kmf.conv_tol = 1e-9
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
@@ -132,7 +133,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(1)
         kpts_bands = np.random.random((2,3))
         e = kumf.get_bands(kpts_bands)[0]
-        self.assertAlmostEqual(finger(np.array(e)), -0.0455444, 6)
+        self.assertAlmostEqual(lib.fp(np.array(e)), -0.0455444, 6)
 
     def test_krhf_1d(self):
         L = 4
@@ -144,6 +145,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -166,6 +168,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -188,6 +191,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -210,6 +214,7 @@ class KnownValues(unittest.TestCase):
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
+                   rcut = 7.427535697575829,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
                                     [0, (1.2, 1.0)]
@@ -255,7 +260,7 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.729751581497479, 5)
+        self.assertAlmostEqual(lib.fp(dip), 0.729751581497479, 5)
 
     def test_krhf_vs_rhf(self):
         np.random.seed(1)

@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 //#include <omp.h>
 #include "config.h"
@@ -206,7 +205,7 @@ void CCsd_sort_inplace(double *eri, int nocc, int nvir, int count)
                         }
                 }
                 pout = eri + ic*nmo_pair + nvir_pair + nocc_pair;
-                memcpy(pout, buf, sizeof(double)*nocc*nvir);
+                NPdcopy(pout, buf, nocc*nvir);
         }
         free(buf);
 }

@@ -20,7 +20,7 @@
 MP2 analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from functools import reduce
@@ -34,7 +34,7 @@ from pyscf.ao2mo import _ao2mo
 def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     mp = mp_grad.base
     log = logger.new_logger(mp, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     log.debug('Build mp2 rdm1 intermediates')
     d1 = mp2._gamma1_intermediates(mp, t2)
@@ -102,7 +102,7 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
             dm2buf = None
 # HF part
             for i in range(3):
-                eri1tmp = lib.unpack_tril(eri1[i]).reshape(nf*nao,-1)
+                eri1tmp = lib.unpack_tril(eri1[i].reshape(nf*nao,-1))
                 eri1tmp = eri1tmp.reshape(nf,nao,nao,nao)
                 vhf[i] += numpy.einsum('ijkl,ij->kl', eri1tmp, hf_dm1[ip0:ip1])
                 vhf[i] -= numpy.einsum('ijkl,il->kj', eri1tmp, hf_dm1[ip0:ip1]) * .5
@@ -272,7 +272,7 @@ def _index_frozen_active(frozen_mask, mo_occ):
     VF = numpy.where((~frozen_mask) & (mo_occ==0))[0] # virtual frozen orbitals
     return OA, VA, OF, VF
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
 
     grad_elec = grad_elec
 
@@ -304,80 +304,3 @@ Grad = Gradients
 
 # Inject to RMP2 class
 mp2.MP2.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol).run()
-    mp = mp2.MP2(mf).run()
-    g1 = Gradients(mp).kernel()
-# O    -0.0000000000    -0.0000000000     0.0089211366
-# H     0.0000000000     0.0222745046    -0.0044605683
-# H     0.0000000000    -0.0222745046    -0.0044605683
-    print(lib.finger(g1) - -0.035681171529705444)
-
-    mcs = mp.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
-
-    print('-----------------------------------')
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g'
-    )
-    mf = scf.RHF(mol).run()
-    mp = mp2.MP2(mf)
-    mp.frozen = [0,1,10,11,12]
-    mp.max_memory = 1
-    mp.kernel()
-    g1 = Gradients(mp).kernel()
-# O    -0.0000000000    -0.0000000000     0.0037319667
-# H    -0.0000000000    -0.0897959298    -0.0018659834
-# H     0.0000000000     0.0897959298    -0.0018659834
-    print(lib.finger(g1) - 0.12458103614793946)
-
-    mcs = mp.as_scanner()
-    mol.set_geom_([
-            ["O" , (0. , 0.     , 0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e1 = mcs(mol)
-    mol.set_geom_([
-            ["O" , (0. , 0.     ,-0.001)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]])
-    e2 = mcs(mol)
-    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
-
-    mol = gto.M(
-        atom = 'H 0 0 0; H 0 0 1.76',
-        basis = '631g',
-        unit='Bohr')
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-    mp = mp2.MP2(mf)
-    mp.kernel()
-    g1 = mp.Gradients().kernel()
-# H     0.0000000000     0.0000000000    -0.0800309688
-# H     0.0000000000     0.0000000000     0.0800309688
-

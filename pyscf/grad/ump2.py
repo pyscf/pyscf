@@ -20,7 +20,7 @@
 UMP2 analytical nuclear gradients
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from functools import reduce
@@ -35,7 +35,7 @@ from pyscf.grad import mp2 as mp2_grad
 def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     mp = mp_grad.base
     log = logger.new_logger(mp, verbose)
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
 
     log.debug('Build ump2 rdm1 intermediates')
     d1 = ump2._gamma1_intermediates(mp, t2)
@@ -290,45 +290,3 @@ class Gradients(mp2_grad.Gradients):
 Grad = Gradients
 
 ump2.UMP2.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g',
-        spin = 2,
-    )
-    mf = scf.UHF(mol).run()
-    mp = ump2.UMP2(mf).run()
-    g1 = mp.Gradients().kernel()
-# O     0.0000000000    -0.0000000000     0.1436990190
-# H    -0.0000000000     0.1097329294    -0.0718495095
-# H    -0.0000000000    -0.1097329294    -0.0718495095
-    print(lib.finger(g1) - -0.22418090721297307)
-
-    print('-----------------------------------')
-    mol = gto.M(
-        atom = [
-            ["O" , (0. , 0.     , 0.)],
-            [1   , (0. ,-0.757  , 0.587)],
-            [1   , (0. , 0.757  , 0.587)]],
-        basis = '631g',
-        spin = 2,
-    )
-    mf = scf.UHF(mol).run()
-    mp = ump2.UMP2(mf)
-    mp.frozen = [0,1,10,11,12]
-    mp.max_memory = 1
-    mp.kernel()
-    g1 = Gradients(mp).kernel()
-# O    -0.0000000000    -0.0000000000     0.1454782514
-# H     0.0000000000     0.1092558730    -0.0727391257
-# H    -0.0000000000    -0.1092558730    -0.0727391257
-    print(lib.finger(g1) - -0.22437276158813313)
-

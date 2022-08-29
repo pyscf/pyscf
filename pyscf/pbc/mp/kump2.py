@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ t2 and eris are never stored in full, only a partial
 eri of size (nkpts,nocc,nocc,nvir,nvir)
 '''
 
-import time
+
 import numpy as np
 
 from pyscf import lib
@@ -34,6 +34,9 @@ from pyscf.pbc.mp import kmp2
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import _frozen_sanity_check
 from pyscf.lib.parameters import LARGE_DENOM
+
+def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+    raise NotImplementedError
 
 def padding_k_idx(mp, kind="split"):
     """For a description, see `padding_k_idx` in kmp2.py.
@@ -189,10 +192,12 @@ def get_nocc(mp, per_kpoint=False):
     for spin in [0,1]:
         for i, moocc in enumerate(mp.mo_occ[spin]):
             if np.any(moocc % 1 != 0):
-                raise RuntimeError("Fractional occupation numbers encountered @ kp={:d}: {}. This may have been caused by "
-                                   "smearing of occupation numbers in the mean-field calculation. If so, consider "
-                                   "executing mf.smearing_method = False; mf.mo_occ = mf.get_occ() prior to calling "
-                                   "this".format(i, moocc))
+                raise RuntimeError(
+                    "Fractional occupation numbers encountered @ kp={:d}: {}.  "
+                    "This may have been caused by smearing of occupation numbers "
+                    "in the mean-field calculation. If so, consider executing "
+                    "mf.smearing_method = False; mf.mo_occ = mf.get_occ() prior "
+                    "to calling this".format(i, moocc))
     if mp._nocc is not None:
         return mp._nocc
 
@@ -208,7 +213,7 @@ def get_nocc(mp, per_kpoint=False):
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
         nocc = [0]*2
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             nocc_spin = []
@@ -220,7 +225,7 @@ def get_nocc(mp, per_kpoint=False):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
@@ -241,8 +246,9 @@ def get_nocc(mp, per_kpoint=False):
         raise NotImplementedError('No known conversion for frozen %s' % mp.frozen)
 
     for spin in [0,1]:
-        assert any(np.array(nocc[spin]) > 0), ('Must have occupied orbitals (spin=%d)! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
-               (spin, nocc, mp.frozen, mp.mo_occ))
+        assert any(np.array(nocc[spin]) > 0), (
+            'Must have occupied orbitals (spin=%d)! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
+            (spin, nocc, mp.frozen, mp.mo_occ))
 
     nocca, noccb = nocc
     if not per_kpoint:
@@ -287,14 +293,14 @@ def get_nmo(mp, per_kpoint=False):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             nmo[spin] = [len(mp.mo_occ[spin][ikpt]) - len(mp.frozen[spin]) for ikpt in range(mp.nkpts)]
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
@@ -309,8 +315,9 @@ def get_nmo(mp, per_kpoint=False):
         raise NotImplementedError('No known conversion for frozen %s' % mp.frozen)
 
     for spin in [0,1]:
-        assert all(np.array(nmo[spin]) > 0), ('Must have a positive number of orbitals! (spin=%d)'
-                   '\n\nnmo %s\nfrozen %s\nmo_occ %s' % (spin, nmo, mp.frozen, mp.mo_occ))
+        assert all(np.array(nmo[spin]) > 0), (
+            'Must have a positive number of orbitals! (spin=%d)'
+            '\n\nnmo %s\nfrozen %s\nmo_occ %s' % (spin, nmo, mp.frozen, mp.mo_occ))
 
     nmoa, nmob = nmo
     if not per_kpoint:
@@ -334,10 +341,10 @@ def get_frozen_mask(mp):
         mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
 
     Returns:
-        moidx (list of :obj:`ndarray` of `np.bool`): Boolean mask of orbitals to include.
+        moidx (list of :obj:`ndarray` of `bool`): Boolean mask of orbitals to include.
 
     '''
-    moidx = [[np.ones(x.size, dtype=np.bool) for x in mp.mo_occ[s]] for s in [0,1]]
+    moidx = [[np.ones(x.size, dtype=bool) for x in mp.mo_occ[s]] for s in [0,1]]
 
     if mp.frozen is None:
         pass
@@ -349,7 +356,7 @@ def get_frozen_mask(mp):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             for ikpt, kpt_occ in enumerate(moidx[spin]):
@@ -357,7 +364,7 @@ def get_frozen_mask(mp):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
@@ -377,7 +384,6 @@ def get_frozen_mask(mp):
 def _add_padding(mp, mo_coeff, mo_energy):
     raise NotImplementedError("Implementation needs to be checked first")
     nmo = mp.nmo
-    nocc = mp.nocc
 
     # Check if these are padded mo coefficients and energies
     if not np.all([x.shape[0] == nmo for x in mo_coeff]):

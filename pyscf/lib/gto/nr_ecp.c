@@ -31,7 +31,6 @@
 #define ECP_LMAX        5
 //#define PTR_EXP         5
 //#define PTR_COEFF       6
-#define CART_MAX        128 // ~ lmax = 14
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
@@ -4590,7 +4589,7 @@ static int _offset_cart[] = {0, 1, 4, 10, 20, 35, 56, 84, 120,
  * Obtained by the function below for l = 0..4
  *
 def angular_moment_matrix(l):
-    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex))
+    lz = numpy.diag(numpy.arange(-l, l+1, dtype=numpy.complex128))
     lx = numpy.zeros_like(lz)
     ly = numpy.zeros_like(lz)
     for mi in range(-l, l+1):
@@ -5435,7 +5434,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int d2 = lilc1 * ljlc1;
         int d3 = lilj1 * d2;
         MALLOC_INSTACK(plast, d2);
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, nci*ncj*lilj1);
 
         for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
@@ -5473,7 +5472,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         int level, nrs0, start, step, ijl;
         double wtscale;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < nci*ncj*lilj1; i++) { converged[i] = 0; }
@@ -5559,6 +5558,9 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         return has_value;
 }
 
+/*
+ * Compute integrals < 1j * l U(r) > in Cartesian GTO basis
+ */
 int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                     int *atm, int natm, int *bas, int nbas, double *env,
                     ECPOpt *opt, double *cache)
@@ -5625,7 +5627,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         ljlc1 = lj + ECP_LMAX + 1;
         d2 = lilc1 * ljlc1;
         MALLOC_INSTACK(plast, d2);
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, nci*ncj*lilj1);
 
         double rca[3];
@@ -5687,7 +5689,7 @@ int ECPtype_so_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int level, nrs0, start, step, ijl;
         double wtscale;
         double *prad;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < nci*ncj*lilj1; i++) { converged[i] = 0; }
@@ -5911,7 +5913,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double fac;
         double *rc, *pifac, *pjfac, *pout;
         int has_value = 0;
-        char *converged;
+        int8_t *converged;
         MALLOC_INSTACK(converged, npi*npj);
 
         for (i = 0; i < ngctr; i++) { gctr[i] = 0; }
@@ -5942,7 +5944,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         int level, nrs0, start, step;
         double wtscale;
         double *prad;
-        char all_conv;
+        int all_conv;
         double *rs = rs_gauss_chebyshev2047;
         double *ws = ws_gauss_chebyshev2047;
         for (i = 0; i < npi*npj; i++) { converged[i] = 0; }
@@ -6075,7 +6077,8 @@ int ECPscalar_cache_size(int comp, int *shls,
         size2 += MAX(di1*di1*di1*lilc1, dj1*dj1*dj1*ljlc1) * (ECP_LMAX*2 + 1);
         int size = nfi*nfj*(nci*ncj+2) * comp;
         size += nci*ncj*(li+lj+1)*(li+ECP_LMAX+1)*(lj+ECP_LMAX+1);
-        size += MAX(size1, size2);
+        //size += MAX(size1, size2);  bugs in bufsize estimation, not sure where's the error
+        size += size1 + size2 + 120;
         size += nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1);
         size += npi*npj*d2;
         size += d3;
@@ -6435,7 +6438,7 @@ void ECPdel_optimizer(ECPOpt **opt)
 /*
  * <i| l U(r)|j>
  * H^{SO} integrals in spinor basis can be evaluated
- *      .5 * einsum('sxy,spq,xpi,yqj->ij', pauli_matrix, so_cart, ui.conj(), uj)
+ *      -1j * einsum('sxy,spq,xpi,yqj->ij', .5 * pauli_matrix, so_cart, ui.conj(), uj)
  */
 int ECPso_cart(double *out, int *dims, int *shls, int *atm, int natm,
                int *bas, int nbas, double *env, ECPOpt *opt, double *cache)

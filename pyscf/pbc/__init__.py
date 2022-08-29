@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# If extension plugins are installed in pyscf, search and load the pbc
+# submodule in all plugins if applicable
+if len(__import__('pyscf').__path__) > 1:
+    __path__ = __import__('pkgutil').extend_path(__path__, __name__)
+
 from pyscf.pbc import gto
 from pyscf.pbc import scf
 #from pyscf.pbc import tools

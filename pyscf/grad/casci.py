@@ -24,7 +24,7 @@ J. Comput. Chem., 5, 589
 '''
 
 import sys
-import time
+
 from functools import reduce
 import numpy
 from pyscf import lib
@@ -45,7 +45,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
 
-    time0 = time.clock(), time.time()
+    time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mc_grad, verbose)
     mol = mc_grad.mol
     ncore = mc.ncore
@@ -60,7 +60,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
     neleca, nelecb = mol.nelec
-    assert(neleca == nelecb)
+    assert (neleca == nelecb)
     orbo = mo_coeff[:,:neleca]
     orbv = mo_coeff[:,neleca:]
 
@@ -248,7 +248,7 @@ def as_scanner(mcscf_grad, state=None):
     return CASCI_GradScanner(mcscf_grad)
 
 
-class Gradients(rhf_grad.GradientsBasics):
+class Gradients(rhf_grad.GradientsMixin):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, mc):
         from pyscf.mcscf.addons import StateAverageMCSCFSolver
@@ -256,7 +256,7 @@ class Gradients(rhf_grad.GradientsBasics):
             self.state = None  # not a specific state
         else:
             self.state = 0  # of which the gradients to be computed.
-        rhf_grad.GradientsBasics.__init__(self, mc)
+        rhf_grad.GradientsMixin.__init__(self, mc)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -282,7 +282,7 @@ class Gradients(rhf_grad.GradientsBasics):
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
         if self.state is None:  # state average MCSCF calculations
-            assert(state is None)
+            assert (state is None)
         elif isinstance(ci, (list, tuple, RANGE_TYPE)):
             if state is None:
                 state = self.state
@@ -338,24 +338,3 @@ Grad = Gradients
 
 from pyscf import mcscf
 mcscf.casci.CASCI.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    from pyscf import mcscf
-
-    mol = gto.Mole()
-    mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-    mol.build()
-    mf = scf.RHF(mol).run(conv_tol=1e-14)
-    mc = mcscf.CASCI(mf, 4, 4).run()
-    g1 = mc.Gradients().kernel()
-    print(lib.finger(g1) - -0.066025991364829367)
-
-    mcs = mc.as_scanner()
-    mol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
-    e1 = mcs(mol)
-    mol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
-    e2 = mcs(mol)
-    print(g1[1,2], (e1-e2)/0.002*lib.param.BOHR)

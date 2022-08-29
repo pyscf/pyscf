@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.5)
 project (pyscf)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -31,9 +31,32 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
 endif()
 set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
 
-if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
-  cmake_policy(SET CMP0042 NEW)
+option(BUILD_MARCH_NATIVE "gcc flag -march=native" off)
+if (BUILD_MARCH_NATIVE)
+  include(CheckCCompilerFlag)
+  CHECK_C_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+  if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+      message("Add CFLAGS -march=native -unroll-aggressive")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -unroll-aggressive -ipo")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
+    else()
+      message("Add CFLAGS -march=native -ftree-vectorize")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -funroll-loops -ftree-vectorize")
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-math-errno")
+    endif()
+  endif()
+else()
+  if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    include(CheckCCompilerFlag)
+    CHECK_C_COMPILER_FLAG("-msse3" COMPILER_SUPPORTS_SSE3)
+    if(COMPILER_SUPPORTS_SSE3)
+      # Avoids error "‘SIMDD’ undeclared here (not in a function)" in the qcint two-electron integral interface
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse3")
+    endif()
+  endif()
 endif()
+
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -68,11 +91,14 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
+option(ENABLE_OPENMP "Compiling C extensions with openmp" ON)
+set(OPENMP_C_PROPERTIES "")
+if(ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    set(HAVE_OPENMP 1)
+    set(OPENMP_C_PROPERTIES OpenMP::OpenMP_C)
+  endif()
 endif()
 
 #find_package(PythonInterp REQUIRED)
@@ -81,27 +107,6 @@ endif()
 #  OUTPUT_VARIABLE NUMPY_INCLUDE)
 #include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
-
-include(ExternalProject)
-option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
-option(WITH_F12 "Compling F12 integrals" ON)
-if(BUILD_LIBCINT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
-  ExternalProject_Add(libcint
-    GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v4.0.6
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1
-            -DWITH_FORTRAN=0 -DWITH_CINT2_INTERFACE=0 -DMIN_EXPCUTOFF=20
-            -DKEEP_GOING=1
-            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_INSTALL_LIBDIR:PATH=lib -DBLA_VENDOR=${BLA_VENDOR}
-            -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-            -DBLAS_LIBRARIES=${BLAS_LIBRARIES}
-  )
-endif()
-endif()
 include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/deps/include)
 include_directories(${CMAKE_INSTALL_PREFIX}/include)
@@ -118,7 +123,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 if (WIN32)
   #?
 elseif (APPLE)
-  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
+  set(CMAKE_BUILD_RPATH "@loader_path;@loader_path/deps/lib;@loader_path/deps/lib64")
 else ()
   set(CMAKE_SKIP_BUILD_RPATH  True)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
@@ -131,14 +138,55 @@ add_subdirectory(vhf)
 add_subdirectory(ao2mo)
 add_subdirectory(mcscf)
 add_subdirectory(cc)
-add_subdirectory(icmpspt)
-add_subdirectory(shciscf)
 add_subdirectory(ri)
 #add_subdirectory(localizer)
-add_subdirectory(hci)
 add_subdirectory(pbc)
-add_subdirectory(extras/mbd)
-add_subdirectory(semiempirical)
+add_subdirectory(agf2)
+
+# Overwrite CMAKE_C_CREATE_SHARED_LIBRARY in Modules/CMakeCInformation.cmake
+# to remove the SONAME flag in the so file. The soname information causes
+# dynamic link error when importing libcint library.
+set(C_LINK_TEMPLATE "<CMAKE_C_COMPILER> <CMAKE_SHARED_LIBRARY_C_FLAGS> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> <CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>")
+set(CXX_LINK_TEMPLATE "<CMAKE_CXX_COMPILER> <CMAKE_SHARED_LIBRARY_CXX_FLAGS> <LANGUAGE_COMPILE_FLAGS> <LINK_FLAGS> <CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS> -o <TARGET> <OBJECTS> <LINK_LIBRARIES>")
+
+include(ExternalProject)
+option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
+option(WITH_F12 "Compling F12 integrals" ON)
+option(USE_QCINT "Using the qcint library (optimized for x86-64) for gaussian integral evaluation" OFF)
+
+if(BUILD_LIBCINT)
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
+  set(LIBCINT_GIT https://github.com/sunqm/libcint.git) # libcint is a portable, cross-platform implementation
+  if (USE_QCINT)
+    set(LIBCINT_GIT https://github.com/sunqm/qcint.git) # qcint is an optimized implementation for x86-64 architecture
+    if(NOT BUILD_MARCH_NATIVE)
+      message(WARNING "The BUILD_MARCH_NATIVE option is not specified! qcint may not compile unless you explicitly pass compiler flags that turn on vectorization!")    
+    endif()
+  endif()
+
+  ExternalProject_Add(libcint
+    GIT_REPOSITORY ${LIBCINT_GIT}
+    GIT_TAG v5.1.5
+    PREFIX ${PROJECT_BINARY_DIR}/deps
+    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
+    CMAKE_CACHE_ARGS
+        -DWITH_F12:STRING=${WITH_F12}
+        -DWITH_RANGE_COULOMB:STRING=1
+        -DWITH_FORTRAN:STRING=0
+        -DWITH_CINT2_INTERFACE:STRING=0
+        -DMIN_EXPCUTOFF:STRING=20
+        -DKEEP_GOING:STRING=1
+        -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+        -DCMAKE_INSTALL_LIBDIR:PATH=lib
+        -DCMAKE_C_COMPILER:STRING=${CMAKE_C_COMPILER}
+        -DBLAS_LIBRARIES:STRING=${BLAS_LIBRARIES}
+        -DCMAKE_C_CREATE_SHARED_LIBRARY:STRING=${C_LINK_TEMPLATE}
+        -DBUILD_MARCH_NATIVE:STRING=${BUILD_MARCH_NATIVE}
+  )
+  add_dependencies(cgto libcint)
+  add_dependencies(ao2mo libcint)
+endif()
+endif()
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
@@ -146,61 +194,35 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
+add_subdirectory(dft)
+
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
 #    ENABLE_LIBXC AND BUILD_LIBXC)
 if(ENABLE_LIBXC AND BUILD_LIBXC)
-  if(UNIX AND NOT APPLE)
-    set(LIBM "LIBS=-lm")
-  endif()
-if(APPLE)
   ExternalProject_Add(libxc
-    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
+    #GIT_REPOSITORY https://gitlab.com/libxc/libxc.git
     #GIT_TAG master
-    URL http://www.tddft.org/programs/libxc/down.php?file=4.3.4/libxc-4.3.4.tar.gz
-    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
+    URL https://gitlab.com/libxc/libxc/-/archive/5.2.0/libxc-5.2.0.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    BUILD_IN_SOURCE 1
-    # When Xcode was installed on Mac, CMAKE_C_COMPILER may be set to the
-    # Xcode C compiler, which leads to "stdio.h not found" error. See relevant
-    # discussion in
-    # https://stackoverflow.com/questions/52509602/cant-compile-c-program-on-a-mac-after-upgrade-to-mojave
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
-
-## For git checkout
-#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-#          --enable-shared --disable-static --disable-fortran LIBS=-lm
+    CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
+            -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_INSTALL_LIBDIR:PATH=lib
+            -DENABLE_FORTRAN=0 -DDISABLE_KXC=0 -DDISABLE_LXC=1
+            -DCMAKE_C_CREATE_SHARED_LIBRARY=${C_LINK_TEMPLATE}
+            -DENABLE_XHOST:STRING=${BUILD_MARCH_NATIVE}
   )
-else()
-  ExternalProject_Add(libxc
-    #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
-    #GIT_TAG master
-    #URL http://www.tddft.org/programs/octopus/down.php?file=libxc/4.3.4/libxc-4.3.4.tar.gz
-    #URL https://gitlab.com/libxc/libxc/-/archive/4.3.4/libxc-4.3.4.tar.gz
-    URL http://www.sunqm.net/pyscf/files/src/libxc-4.3.4.tar.gz
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-vxc --enable-fxc --enable-kxc --enable-shared --disable-static --disable-fortran ${LIBM}
-          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-
-## For git checkout
-#    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-#          --enable-shared --disable-static --disable-fortran LIBS=-lm
-#          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-  )
-endif()
+  add_dependencies(xc_itrf libxc)
+  add_dependencies(dft libxc)
 endif() # ENABLE_LIBXC
 
 #if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
 #    ENABLE_XCFUN AND BUILD_XCFUN)
 if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
-    GIT_REPOSITORY https://github.com/sunqm/xcfun.git
-    # copy of v2.1.0, downgrade to cmake 3.5
+    #GIT_REPOSITORY https://github.com/sunqm/xcfun.git
+    GIT_REPOSITORY https://github.com/fishjojo/xcfun.git
+    # copy of v2.1.1, downgrade to cmake 3.5
     GIT_TAG cmake-3.5
     # Range seperated parameters can be set in the python code. This patch to
     # RSH omega is not needed anymore.
@@ -210,34 +232,12 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXCFUN_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DCMAKE_CXX_CREATE_SHARED_LIBRARY=${CXX_LINK_TEMPLATE}
   )
+  add_dependencies(xcfun_itrf libxcfun)
+  add_dependencies(dft libxcfun)
 endif() # ENABLE_XCFUN
-add_subdirectory(dft)
 endif() # DISABLE_DFT
-
-option(ENABLE_TBLIS "Using tblis tensor contraction library" OFF)
-
-if(ENABLE_TBLIS)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/tblis/tblis.h")
-  ExternalProject_Add(libtblis
-    GIT_REPOSITORY https://github.com/devinamatthews/tblis.git
-    GIT_TAG master
-    PREFIX ${PROJECT_BINARY_DIR}/deps
-    INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    #INSTALL_COMMAND "make install && cp <SOURCE_DIR>/src/python/tblis_einsum.py ${PROJECT_SOURCE_DIR}"
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-  )
-endif()
-
-add_library(tblis_einsum SHARED np_helper/as_einsum.cxx)
-set_target_properties(tblis_einsum PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS "-std=c++11")
-target_link_libraries(tblis_einsum tblis)
-# add_dependencies(tblis_einsum libtblis)
-endif() # ENABLE_TBLIS
-
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")

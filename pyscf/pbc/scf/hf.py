@@ -26,7 +26,7 @@ See Also:
 '''
 
 import sys
-import time
+
 import numpy as np
 import h5py
 from pyscf.scf import hf as mol_hf
@@ -40,15 +40,24 @@ from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
+from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
+    # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=0, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
+    s = lib.asarray(s)
+    hermi_error = abs(s - np.rollaxis(s.conj(), -1, -2)).max()
+    if hermi_error > cell.precision and hermi_error > 1e-12:
+        logger.warn(cell, '%.4g error found in overlap integrals. '
+                    'cell.precision  or  cell.rcut  can be adjusted to '
+                    'improve accuracy.')
+
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
@@ -204,7 +213,7 @@ energy_elec = mol_hf.energy_elec
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpt=np.zeros(3), origin=None):
-    ''' Dipole moment in the unit cell (is it well defined)?
+    ''' Dipole moment in the cell (is it well defined)?
 
     Args:
          cell : an instance of :class:`Cell`
@@ -237,7 +246,7 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     if origin is None:
         origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
-    # Move the unit cell to the position around the origin.
+    # Move the cell to the position around the origin.
     def shift_grids(r):
         r_frac = lib.dot(r - origin, b.T)
         # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
@@ -347,10 +356,10 @@ def _search_dipole_gauge_origin(cell, grids, rho, log):
                 break
             log.debug1('iter %d: origin %s', i, origin)
     else:
-    # If the grids are non-cubic grids, regenerating the grids is expensive if
-    # the position or the shape of the unit cell is changed. The position of
-    # the unit cell is not optimized. The gauge origin is set to the nuclear
-    # charge center of the original unit cell.
+        # If the grids are non-cubic grids, regenerating the grids is expensive if
+        # the position or the shape of the unit cell is changed. The position of
+        # the unit cell is not optimized. The gauge origin is set to the nuclear
+        # charge center of the original unit cell.
         pass
 
     return origin
@@ -497,11 +506,14 @@ class SCF(mol_hf.SCF):
         mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
+        # Range separation JK builder
+        self.rsjk = None
+
         self.exxdiv = exxdiv
         self.kpt = kpt
         self.conv_tol = cell.precision * 10
 
-        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
+        self._keys = self._keys.union(['cell', 'exxdiv', 'with_df', 'rsjk'])
 
     @property
     def kpt(self):
@@ -511,12 +523,20 @@ class SCF(mol_hf.SCF):
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self.with_df.kpts = np.reshape(x, (-1,3))
+        self.with_df.kpts = np.reshape(x, (-1, 3))
+        if self.rsjk:
+            self.rsjk.kpts = self.with_df.kpts
 
     def build(self, cell=None):
         if 'kpt' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpt')
+
+        if self.rsjk:
+            if not np.all(self.rsjk.kpts == self.kpt):
+                self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
+            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -542,6 +562,8 @@ class SCF(mol_hf.SCF):
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*cell.nelectron * -.5)
+        if getattr(self, 'smearing_method', None) is not None:
+            logger.info(self, 'Smearing method = %s', self.smearing_method)
         logger.info(self, 'DF object = %s', self.with_df)
         if not getattr(self.with_df, 'build', None):
             # .dump_flags() is called in pbc.df.build function
@@ -590,11 +612,13 @@ class SCF(mol_hf.SCF):
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
 
-        cpu0 = (time.clock(), time.time())
+        cpu0 = (logger.process_clock(), logger.perf_counter())
         dm = np.asarray(dm)
         nao = dm.shape[-1]
 
         if (not omega and kpts_band is None and
+            # TODO: generate AO integrals with rsjk algorithm
+            not self.rsjk and
             (self.exxdiv == 'ewald' or not self.exxdiv) and
             (self._eri is not None or cell.incore_anyway or
              (not self.direct_scf and self._is_mem_enough()))):
@@ -608,10 +632,12 @@ class SCF(mol_hf.SCF):
                 # G=0 is not inculded in the ._eri integrals
                 _ewald_exxdiv_for_G0(self.cell, kpt, dm.reshape(-1,nao,nao),
                                      vk.reshape(-1,nao,nao))
+        elif self.rsjk:
+            vj, vk = self.rsjk.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                      with_j, with_k, omega, exxdiv=self.exxdiv)
         else:
-            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi,
-                                         kpt, kpts_band, with_j, with_k, omega,
-                                         exxdiv=self.exxdiv)
+            vj, vk = self.with_df.get_jk(dm.reshape(-1,nao,nao), hermi, kpt, kpts_band,
+                                         with_j, with_k, omega, exxdiv=self.exxdiv)
 
         if with_j:
             vj = _format_jks(vj, dm, kpts_band)
@@ -648,8 +674,16 @@ class SCF(mol_hf.SCF):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if kpt is None: kpt = self.kpt
-        vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
-        return vj - vk * .5
+        if self.rsjk and self.direct_scf:
+            # Enable direct-SCF for real space JK builder
+            ddm = dm - dm_last
+            vj, vk = self.get_jk(cell, ddm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+            vhf += vhf_last
+        else:
+            vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
+            vhf = vj - vk * .5
+        return vhf
 
     def get_jk_incore(self, cell=None, dm=None, hermi=1, kpt=None, omega=None,
                       **kwargs):
@@ -731,6 +765,10 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import df_jk
         return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
+    def rs_density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.pbc.df import rsdf_jk
+        return rsdf_jk.density_fit(self, auxbasis, with_df=with_df)
+
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
@@ -754,6 +792,54 @@ class SCF(mol_hf.SCF):
 
     def nuc_grad_method(self, *args, **kwargs):
         raise NotImplementedError
+
+    def jk_method(self, J='FFTDF', K=None):
+        '''
+        Set up the schemes to evaluate Coulomb and exchange matrix
+
+        FFTDF: planewave density fitting using Fast Fourier Transform
+        AFTDF: planewave density fitting using analytic Fourier Transform
+        GDF: Gaussian density fitting
+        MDF: Gaussian and planewave mix density fitting
+        RS: range-separation JK builder
+        RSDF: range-separation density fitting
+        '''
+        if K is None:
+            K = J
+
+        if J != K:
+            raise NotImplementedError('J != K')
+
+        if 'DF' in J or 'DF' in K:
+            if 'DF' in J and 'DF' in K:
+                assert J == K
+            else:
+                df_method = J if 'DF' in J else K
+                self.with_df = getattr(df, df_method)(self.cell, self.kpt)
+
+        if 'RS' in J or 'RS' in K:
+            if not gamma_point(self.kpt):
+                raise NotImplementedError('Single k-point must be gamma point')
+            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpt)
+            self.rsjk.verbose = self.verbose
+
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpt)
+
+        nuc = self.with_df.__class__.__name__
+        logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
+        return self
+
+
+class KohnShamDFT:
+    '''A mock DFT base class
+
+    The base class is defined in the pbc.dft.rks module. This class can
+    be used to verify if an SCF object is an pbc-Hartree-Fock method or an
+    pbc-DFT method. It should be overwritten by the actual KohnShamDFT class
+    when loading dft module.
+    '''
 
 
 class RHF(SCF, mol_hf.RHF):
@@ -786,10 +872,10 @@ def normalize_dm_(mf, dm):
         ne = np.einsum('xij,ji->', dm, mf.get_ovlp(cell)).real
     if abs(ne - cell.nelectron).sum() > 1e-7:
         logger.debug(mf, 'Big error detected in the electron number '
-                    'of initial guess density matrix (Ne/cell = %g)!\n'
-                    '  This can cause huge error in Fock matrix and '
-                    'lead to instability in SCF for low-dimensional '
-                    'systems.\n  DM is normalized wrt the number '
-                    'of electrons %s', ne, cell.nelectron)
+                     'of initial guess density matrix (Ne/cell = %g)!\n'
+                     '  This can cause huge error in Fock matrix and '
+                     'lead to instability in SCF for low-dimensional '
+                     'systems.\n  DM is normalized wrt the number '
+                     'of electrons %s', ne, cell.nelectron)
         dm *= cell.nelectron / ne
     return dm

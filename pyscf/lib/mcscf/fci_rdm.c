@@ -17,12 +17,12 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 //#include <omp.h>
 #include "config.h"
 #include "vhf/fblas.h"
 #include "fci.h"
-#define MIN(X,Y)        ((X)<(Y)?(X):(Y))
+#include "np_helper/np_helper.h"
+
 #define CSUMTHR         1e-28
 #define BUFBASE         96
 #define SQRT2           1.4142135623730950488
@@ -112,7 +112,7 @@ double FCIrdm2_0b_t1ci(double *ci0, double *t1,
         double csum = 0;
 
         for (str0 = 0; str0 < bcount; str0++) {
-                memset(t1, 0, sizeof(double) * nnorb);
+                NPdset0(t1, nnorb);
                 for (j = 0; j < nlinkb; j++) {
                         a    = EXTRACT_CRE (tab[j]);
                         i    = EXTRACT_DES (tab[j]);
@@ -183,12 +183,12 @@ static void _transpose_jikl(double *dm2, int norb)
         int i, j;
         double *p0, *p1;
         double *tmp = malloc(sizeof(double)*nnorb*nnorb);
-        memcpy(tmp, dm2, sizeof(double)*nnorb*nnorb);
+        NPdcopy(tmp, dm2, nnorb*nnorb);
         for (i = 0; i < norb; i++) {
                 for (j = 0; j < norb; j++) {
                         p0 = tmp + (j*norb+i) * nnorb;
                         p1 = dm2 + (i*norb+j) * nnorb;
-                        memcpy(p1, p0, sizeof(double)*nnorb);
+                        NPdcopy(p1, p0, nnorb);
                 }
         }
         free(tmp);
@@ -219,8 +219,8 @@ void FCIrdm12_drv(void (*dm12kernel)(),
         const int nnorb = norb * norb;
         int strk, i, j, k, l, ib, blen;
         double *pdm1, *pdm2;
-        memset(rdm1, 0, sizeof(double) * nnorb);
-        memset(rdm2, 0, sizeof(double) * nnorb*nnorb);
+        NPdset0(rdm1, nnorb);
+        NPdset0(rdm2, nnorb*nnorb);
 
         _LinkT *clinka = malloc(sizeof(_LinkT) * nlinka * na);
         _LinkT *clinkb = malloc(sizeof(_LinkT) * nlinkb * nb);
@@ -624,7 +624,7 @@ void FCItrans_rdm1a(double *rdm1, double *bra, double *ket,
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
         FCIcompress_link(clink, link_indexa, norb, na, nlinka);
 
-        memset(rdm1, 0, sizeof(double) * norb*norb);
+        NPdset0(rdm1, norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
                 tab = clink + str0 * nlinka;
@@ -662,7 +662,7 @@ void FCItrans_rdm1b(double *rdm1, double *bra, double *ket,
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clink, link_indexb, norb, nb, nlinkb);
 
-        memset(rdm1, 0, sizeof(double) * norb*norb);
+        NPdset0(rdm1, norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
                 pbra = bra + str0 * nb;
@@ -700,7 +700,7 @@ void FCImake_rdm1a(double *rdm1, double *cibra, double *ciket,
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinka * na);
         FCIcompress_link(clink, link_indexa, norb, na, nlinka);
 
-        memset(rdm1, 0, sizeof(double) * norb*norb);
+        NPdset0(rdm1, norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
                 tab = clink + str0 * nlinka;
@@ -746,7 +746,7 @@ void FCImake_rdm1b(double *rdm1, double *cibra, double *ciket,
         _LinkT *clink = malloc(sizeof(_LinkT) * nlinkb * nb);
         FCIcompress_link(clink, link_indexb, norb, nb, nlinkb);
 
-        memset(rdm1, 0, sizeof(double) * norb*norb);
+        NPdset0(rdm1, norb*norb);
 
         for (str0 = 0; str0 < na; str0++) {
                 pci0 = ci0 + str0 * nb;

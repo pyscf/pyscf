@@ -69,8 +69,8 @@ if __name__ == '__main__':
         vj = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
         vk = numpy.zeros((n2c*2,n2c*2), dtype=dm.dtype)
 
-        rho =(numpy.dot(cderi[0], dm[:n2c,:n2c].T.reshape(-1))
-            + numpy.dot(cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c2**2))
+        rho =(numpy.dot(cderi[0], dm[:n2c,:n2c].T.reshape(-1)) +
+              numpy.dot(cderi[1], dm[n2c:,n2c:].T.reshape(-1)*c2**2))
         vj[:n2c,:n2c] = numpy.dot(rho, cderi[0]).reshape(n2c,n2c)
         vj[n2c:,n2c:] = numpy.dot(rho, cderi[1]).reshape(n2c,n2c) * c2**2
 

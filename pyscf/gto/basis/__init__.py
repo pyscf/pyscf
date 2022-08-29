@@ -38,10 +38,12 @@ ALIAS = {
     'ccpvtz'     : 'cc-pvtz.dat'    ,
     'ccpvqz'     : 'cc-pvqz.dat'    ,
     'ccpv5z'     : 'cc-pv5z.dat'    ,
+    'ccpvdpdz'   : 'cc-pvdpdz.dat'  ,
     'augccpvdz'  : 'aug-cc-pvdz.dat',
     'augccpvtz'  : 'aug-cc-pvtz.dat',
     'augccpvqz'  : 'aug-cc-pvqz.dat',
     'augccpv5z'  : 'aug-cc-pv5z.dat',
+    'augccpvdpdz': 'aug-cc-pvdpdz.dat',
     'ccpvdzdk'   : 'cc-pvdz-dk.dat' ,
     'ccpvtzdk'   : 'cc-pvtz-dk.dat' ,
     'ccpvqzdk'   : 'cc-pvqz-dk.dat' ,
@@ -73,10 +75,13 @@ ALIAS = {
     'augccpv5zjkfit' : 'aug-cc-pv5z-jkfit.dat' ,
     'heavyaugccpvdzjkfit' : 'heavy-aug-cc-pvdz-jkfit.dat',
     'heavyaugccpvtzjkfit' : 'heavy-aug-cc-pvtz-jkfit.dat',
+    'heavyaugccpvdzri' : 'heavy-aug-cc-pvdz-ri.dat',
+    'heavyaugccpvtzri' : 'heavy-aug-cc-pvtz-ri.dat',
     'augccpvdzri'    : 'aug-cc-pvdz-ri.dat'    ,
     'augccpvdzpri'   : 'aug-cc-pvdzp-ri.dat'   ,
     'augccpvqzri'    : 'aug-cc-pvqz-ri.dat'    ,
     'augccpvtzri'    : 'aug-cc-pvtz-ri.dat'    ,
+    'augccpv5zri'    : 'aug-cc-pv5z-ri.dat'    ,
     'ccpvtzdk3'   : 'cc-pVTZ-DK3.dat'   ,
     'ccpvqzdk3'   : 'cc-pVQZ-DK3.dat'   ,
     'augccpvtzdk3': 'aug-cc-pVTZ-DK3.dat',
@@ -332,6 +337,38 @@ ALIAS = {
     'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
     'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
+#spin-orbit ECPs
+    'ecpds10mdfso' : os.path.join('soecp', 'ECPDS10MDFSO.dat'),
+    'ecpds28mdfso' : os.path.join('soecp', 'ECPDS28MDFSO.dat'),
+    'ecpds28mwbso' : os.path.join('soecp', 'ECPDS28MWBSO.dat'),
+    'ecpds46mdfso' : os.path.join('soecp', 'ECPDS46MDFSO.dat'),
+    'ecpds60mdfso' : os.path.join('soecp', 'ECPDS60MDFSO.dat'),
+    'ecpds60mwbso' : os.path.join('soecp', 'ECPDS60MWBSO.dat'),
+    'ecpds78mdfso' : os.path.join('soecp', 'ECPDS78MDFSO.dat'),
+    'ecpds92mdfbso' : os.path.join('soecp', 'ECPDS92MDFBSO.dat'),
+    'ecpds92mdfbqso' : os.path.join('soecp', 'ECPDS92MDFBQSO.dat'),
+# dyall's sets
+    'dyall2zp' : 'dyall-basis.dyall_2zp',
+    'dyall3zp' : 'dyall-basis.dyall_3zp',
+    'dyall4zp' : 'dyall-basis.dyall_4zp',
+    'dyallaae2z' : 'dyall-basis.dyall_aae2z',
+    'dyallaae3z' : 'dyall-basis.dyall_aae3z',
+    'dyallaae4z' : 'dyall-basis.dyall_aae4z',
+    'dyallacv2z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv3z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv4z' : 'dyall-basis.dyall_acv4z',
+    'dyallae2z' : 'dyall-basis.dyall_ae2z',
+    'dyallae3z' : 'dyall-basis.dyall_ae3z',
+    'dyallae4z' : 'dyall-basis.dyall_ae4z',
+    'dyallav2z' : 'dyall-basis.dyall_av2z',
+    'dyallav3z' : 'dyall-basis.dyall_av3z',
+    'dyallav4z' : 'dyall-basis.dyall_av4z',
+    'dyallcv2z' : 'dyall-basis.dyall_cv2z',
+    'dyallcv3z' : 'dyall-basis.dyall_cv3z',
+    'dyallcv4z' : 'dyall-basis.dyall_cv4z',
+    'dyallv2z' : 'dyall-basis.dyall_v2z',
+    'dyallv3z' : 'dyall-basis.dyall_v3z',
+    'dyallv4z' : 'dyall-basis.dyall_v4z',
 }
 
 def _is_pople_basis(basis):
@@ -425,9 +462,11 @@ def _truncate(basis, contr_scheme, symb, split_name):
                                      segm[:][1:]]
                         contr_b.append([l] + save_segm)
                         n_saved += n_save
-            assert n_saved == n_keep, 'Only ' + str(n_saved) +\
-                ' l=' + str(l) + ' functions available for ' +\
-                symb + ' ' + split_name[0] + ', cannot truncate to ' + split_name[1]
+            assert n_saved == n_keep, ("@{} implies {} l={} function(s), but" +
+                                       "only {} in {}:{}").format(split_name[1],
+                                                                  contr_scheme[l],
+                                                                  l, n_saved, symb,
+                                                                  split_name[0])
     return contr_b
 
 optimize_contraction = parse_nwchem.optimize_contraction
@@ -451,22 +490,25 @@ def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     >>> mol.basis = {'O': load('sto-3g', 'C')}
     '''
     symb = ''.join([i for i in symb if i.isalpha()])
+    if '@' in filename_or_basisname:
+        split_name = filename_or_basisname.split('@')
+        assert len(split_name) == 2
+        filename_or_basisname = split_name[0]
+        contr_scheme = _convert_contraction(split_name[1].lower())
+    else:
+        contr_scheme = 'Full'
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
-            return parse_nwchem.load(filename_or_basisname, symb, optimize)
+            b = parse_nwchem.load(filename_or_basisname, symb, optimize)
         except BasisNotFoundError:
             with open(filename_or_basisname, 'r') as fin:
-                return parse_nwchem.parse(fin.read(), symb)
+                b =  parse_nwchem.parse(fin.read(), symb)
+        if contr_scheme != 'Full':
+            b = _truncate(b, contr_scheme, symb, split_name)
+        return b
 
     name = _format_basis_name(filename_or_basisname)
-    if '@' in name:
-        split_name = name.split('@')
-        assert len(split_name) == 2
-        name = split_name[0]
-        contr_scheme = _convert_contraction(split_name[1])
-    else:
-        contr_scheme = 'Full'
 
     if not (name in ALIAS or _is_pople_basis(name)):
         try:
@@ -519,6 +561,7 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)

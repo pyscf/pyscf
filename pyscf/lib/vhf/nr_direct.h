@@ -19,6 +19,8 @@
 #include "cint.h"
 #include "optimizer.h"
 
+#define AO_BLOCK_SIZE   32
+
 #define NOVALUE 0xffffffff
 
 typedef struct {
@@ -46,9 +48,9 @@ typedef struct {
 typedef struct {
         int natm;
         int nbas;
-        const int *atm;
-        const int *bas;
-        const double *env;
+        int *atm;
+        int *bas;
+        double *env;
         int *shls_slice;
         int *ao_loc;  /* size of nbas+1, last element = nao */
         int *tao;     /* time reversal mappings, index start from 1 */
@@ -59,9 +61,9 @@ typedef struct {
 struct _VHFEnvs {
         int natm;
         int nbas;
-        const int *atm;
-        const int *bas;
-        const double *env;
+        int *atm;
+        int *bas;
+        double *env;
         int nao;
         int *ao_loc; // size of nbas+1, last element = nao
         int *tao; // time reversal mappings, index start from 1

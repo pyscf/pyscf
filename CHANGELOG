@@ -1,23 +1,93 @@
-PySCF 1.7.? (2020-?-?)
-----------------------
-* Added
-  - ADC (RADC and UADC)
-  - Analytical nuclear gradients for state-average CASSCF
-
-
-PySCF 1.7.6 (2020-10-03)
+PySCF 2.0.0 (2021-11-01)
 ------------------------
+* Added
+  - Basis selector '@' to load basis from a file
+  - Native version of DF-MP2 for RHF and UHF references
+  - Cholesky orbitals as the initial guess for iterative orbital localization.
+  - FNOCCSD
+  - SCS-DF-MP2
+  - Relaxed RHF-DF-MP2 density
+  - int1e_grids function to compute Coulomb integrals for a list of grids
+  - GDF-KMP2
+  - Custom Hamiltonian for UHF
+  - Natural Orbitals for DFCASCI and DFCASSCF with approximate CI solvers
+  - slow and fast QCISD and QCISD(T) for restricted refs
+* Improved
+  - Pacakge layout, static checks, and code releasement pipeline.
+    Certain features were removed from core modules, including: cornell_shci,
+    dftd3, dmrgscf, doci, fciqmcscf, icmpspt, mbd, Molpro2Pyscf, mpicc, nao,
+    semiempirical, shciscf, tblis, prop/efg, prop/esr, prop/freq, prop/gtensor,
+    prop/hfc, prop/magnetizability, prop/nmr, prop/nsr, prop/polarizability,
+    prop/rotational_gtensor, prop/ssc, prop/zfs
+  - Compatibility improvements for Python 3.6 and newer
+  - Compatibility improvements for h5py 3.0 and newer
+  - Online documentation (https://pyscf.org/user.html)
+  - Upgrade Libxc to 5.1.7
+  - FCIDUMP interface to include ECP scalar contribution
+  - DMRG interface
+  - Ghost atoms in IAO/IBO
+  - PBC-GDF auxiliary basis treatment with nonzero drop_eta
+  - pivoted Cholesky factorization
+  - Support high angular momentum in GTO basis (up to l=15)
+  - Make Exact FF GW root finding more robust, reduce eta
+  - cubegen for arbitrary unit cells
+  - Range of lattice sum for non-orthogonal lattice
+  - krkspu
+  - Number of calls to gc.collect()
+* Fixed
+  - PBC-GDF and PBC-MDF when computing RSH functionals
+  - The edge case for zero beta electrons in SCF
+  - Atomic initial guess if multiple elements have ecp
+  - The ordering of unique points in kpts.unique function
+  - J matrix of AFTDF
+  - kuccsd rdm1
+  - GDF int2c2e integrals for non-symmetric range of lattice sum
+  - Complex-valued symm. adapted basis
+  - NEVPT2 for multistate CI wave function
+
+
+PySCF 1.7.6 (2021-03-28)
+------------------------
+* Added
+  - KMP2 2-particle density matrix
+  - PBC J, K matrices module rsjk (RangeSeparationJKBuilder)
+  - ADC (RADC, UADC, DFADC)
+  - Eigenvector analyzer for IP and EA, RADC and UADC
+  - Analytical nuclear gradients for state-average CASSCF
+  - Support SO3 symmetry
+  - ECP-SOC for GHF/GKS
+  - density fitting GMP2
+  - G0W0 approximations (analytic continuation, contour deformation)
+  - Auxiliary second-order Green's function perturbation theory (AGF2)
+  - Smearing for molecules
+  - Visscher small component correction approximation for DHF
 * Improved
   - Threading safety in Mole temporary context
   - Basis parser to support arithmetic expressions in basis data
+  - dmrgci interface refactored
+  - MP2 gradients performance
+  - Interface of polariazable embedding with integral batching
+  - Electron-phonon Hamiltonian module refactored
+  - Remove memorization of Ewald parameters.
+  - molden dumper refactored
 * Fixed
   - stack overflow in ecp integral code
+  - SCAN functional crashing problem
+  - Ghost atoms for IAOs/IBOs
+  - Fix fractional occupations for case of zero beta electrons
+  - mcscf project_init_guess
+  - Symmetry verification bug when deducting subgroup
+  - Mole.set_geom_ bug
+  - GDF with non-zero drop_eta (for diffused auxiliary basis)
+  - Paddings in KMP2 when remove_linear_dep_ is applied
+  - SC-NEVPT2 Sijr Srsi
+
 
 
 PySCF 1.7.5 (2020-9-27)
 -----------------------
 * Added
-  - Upgrade cint library to v4.0.2
+  - Upgrade cint library to v4
   - Upgrade xcfun library to v2.1.0
   - Kramers' restricted Dirac-Hartree-Fock, X2C, DHF-SOSCF
   - Heavy elements basis in MINAO
@@ -69,7 +139,7 @@ PySCF 1.7.3 (2020-6-10)
 PySCF 1.7.2 (2020-5-13)
 -----------------------
 * Added
-  - pbc.eph
+  - Electron-phonon Hamiltonian under PBC (pbc.eph)
   - State-average CASSCF example
   - Spin density analysis to uhf.analyze()
   - Passing point group and wfnsym to Dice

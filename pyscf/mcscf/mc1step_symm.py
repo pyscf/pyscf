@@ -24,7 +24,7 @@ from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
 from pyscf import fci
-from pyscf.soscf.newton_ah import _force_Ex_Ey_degeneracy_
+from pyscf.soscf.newton_ah import _force_SO3_degeneracy_, _force_Ex_Ey_degeneracy_
 
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
@@ -32,7 +32,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         mc1step.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
 
-        assert(self.mol.symmetry)
+        assert (self.mol.symmetry)
         fcisolver = self.fcisolver
         if isinstance(fcisolver, fci.direct_spin0.FCISolver):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)
@@ -59,8 +59,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         if callback is None: callback = self.callback
         if _kern is None: _kern = mc1step.kernel
 
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
+        self.check_sanity()
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 
@@ -108,13 +107,13 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
 
     def newton(self):
         from pyscf.mcscf import newton_casscf_symm
+        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
         mc1.__dict__.update(self.__dict__)
         mc1.max_cycle_micro = 10
         # MRH, 04/08/2019: enable state-average CASSCF second-order algorithm
-        from pyscf.mcscf.addons import StateAverageMCSCFSolver
         if isinstance (self, StateAverageMCSCFSolver):
-            mc1 = mc1.state_average_(self.weights)
+            mc1 = mc1.state_average_(self.weights, self.wfnsym)
         return mc1
 
 CASSCF = SymAdaptedCASSCF
@@ -125,7 +124,9 @@ def _symmetrize(mat, orbsym, groupname):
     allowed = orbsym.reshape(-1,1) == orbsym
     mat1[allowed] = mat[allowed]
 
-    if groupname in ('Dooh', 'Coov'):
+    if groupname == 'SO3':
+        _force_SO3_degeneracy_(mat1, orbsym)
+    elif groupname in ('Dooh', 'Coov'):
         _force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 

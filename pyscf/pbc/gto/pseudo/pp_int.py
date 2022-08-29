@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,8 +88,8 @@ def get_gth_vlocG_part1(cell, Gv):
             JexpG2 -= fac * numpy.exp(-Gxy*lzd2)
             eta_z1 = (ew_eta**2 * lz + Gxy) / (2.*ew_eta)
             eta_z2 = (ew_eta**2 * lz - Gxy) / (2.*ew_eta)
-            JexpG2 += fac * 0.5*(numpy.exp(-eta_z1**2)*scipy.special.erfcx(eta_z2)
-                               + numpy.exp(-eta_z2**2)*scipy.special.erfcx(eta_z1) )
+            JexpG2 += fac * 0.5*(numpy.exp(-eta_z1**2)*scipy.special.erfcx(eta_z2) +
+                                 numpy.exp(-eta_z2**2)*scipy.special.erfcx(eta_z1))
             vlocG[ia,:] = Zia * JexpG2
 
             JexpG0 = ( - numpy.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 )
@@ -97,9 +97,9 @@ def get_gth_vlocG_part1(cell, Gv):
                        - numpy.sqrt(numpy.pi)*lz/ew_eta * numpy.exp( - (ew_eta*lzd2)**2 ) )
             vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2 + Zia*JexpG0
     else:
-        raise NotImplementedError('Low dimension ft_type ',
-            cell.low_dim_ft_type, ' not implemented for dimension ',
-            cell.dimension)
+        raise NotImplementedError('Low dimension ft_type %s'
+                                  ' not implemented for dimension %d' %
+                                  (cell.low_dim_ft_type, cell.dimension))
     return vlocG
 
 # part2 Vnuc - Vloc
@@ -257,13 +257,15 @@ def fake_cell_vnl(cell):
         symb = cell.atom_symbol(ia)
         if symb in cell._pseudo:
             pp = cell._pseudo[symb]
-            nproj_types = pp[4]
+            # nproj_types = pp[4]
             for l, (rl, nl, hl) in enumerate(pp[5:]):
                 if nl > 0:
                     alpha = .5 / rl**2
                     norm = gto.gto_norm(l, alpha)
                     fake_env.append([alpha, norm])
                     fake_bas.append([ia, l, 1, 1, 0, ptr, ptr+1, 0])
+
+#
 # Function p_i^l (PRB, 58, 3641 Eq 3) is (r^{2(i-1)})^2 square normalized to 1.
 # But here the fake basis is square normalized to 1.  A factor ~ p_i^l / p_1^l
 # is attached to h^l_ij (for i>1,j>1) so that (factor * fake-basis * r^{2(i-1)})
@@ -271,6 +273,7 @@ def fake_cell_vnl(cell):
 #       r_l^{l+(4-1)/2} sqrt(Gamma(l+(4-1)/2))      sqrt(Gamma(l+3/2))
 #     ------------------------------------------ = ----------------------------------
 #      r_l^{l+(4i-1)/2} sqrt(Gamma(l+(4i-1)/2))     sqrt(Gamma(l+2i-1/2)) r_l^{2i-2}
+#
                     fac = numpy.array([_PLI_FAC[l,i]/rl**(i*2) for i in range(nl)])
                     hl = numpy.einsum('i,ij,j->ij', fac, numpy.asarray(hl), fac)
                     hl_blocks.append(hl)

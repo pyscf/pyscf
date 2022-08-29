@@ -23,7 +23,7 @@ Refs:
 With strong orthogonalization ansatz 2
 '''
 
-import time
+import warnings
 from functools import reduce
 import numpy
 import scipy.linalg
@@ -33,6 +33,9 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf.scf import jk
 from pyscf.mp import mp2
+
+warnings.warn('Module MP2-F12 is under testing')
+
 
 # The cabs space, the complimentary space to the OBS.
 def find_cabs(mol, auxmol, lindep=1e-8):
@@ -76,7 +79,6 @@ def energy_f12(mf, auxmol, zeta):
     nao, nmo = mo_coeff.shape
     nca = cabs_coeff.shape[0]
     mo_o = mo_coeff[:,:nocc]
-    mo_v = mo_coeff[:,nocc:]
     Pcoeff = numpy.vstack((mo_coeff, numpy.zeros((nca-nao, nmo))))
     Pcoeff = numpy.hstack((Pcoeff, cabs_coeff))
     obs = (0, mol.nbas)

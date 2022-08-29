@@ -17,3 +17,6 @@
 
 class BasisNotFoundError(RuntimeError):
     pass
+
+class PointGroupSymmetryError(RuntimeError):
+    pass

@@ -21,17 +21,19 @@ from pyscf import dft
 from pyscf.dft import gen_grid
 from pyscf.dft import radi
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
+def setUpModule():
+    global h2o
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2o.basis = {"H": '6-31g',
-             "O": '6-31g',}
-h2o.build()
+    h2o.basis = {"H": '6-31g',
+                 "O": '6-31g',}
+    h2o.build()
 
 def tearDownModule():
     global h2o
@@ -84,7 +86,7 @@ class KnownValues(unittest.TestCase):
 
         grid.radi_method = radi.becke
         grid.build(with_non0tab=False)
-        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 45009387.132578261, 6)
+        self.assertAlmostEqual(lib.fp(grid.weights), 2486249.209827192, 6)
 
     def test_prune(self):
         grid = gen_grid.Grids(h2o)
@@ -102,10 +104,10 @@ class KnownValues(unittest.TestCase):
         z = 16
         rad, dr = radi.gauss_chebyshev(50)
         angs = gen_grid.sg1_prune(z, rad, 434, radii=radi.SG1RADII)
-        self.assertAlmostEqual(lib.finger(angs), -291.0794420982329, 9)
+        self.assertAlmostEqual(lib.fp(angs), -291.0794420982329, 9)
 
         angs = gen_grid.nwchem_prune(z, rad, 434, radii=radi.BRAGG_RADII)
-        self.assertAlmostEqual(lib.finger(angs), -180.12023039394498, 9)
+        self.assertAlmostEqual(lib.fp(angs), -180.12023039394498, 9)
 
         angs = gen_grid.nwchem_prune(z, rad, 26, radii=radi.BRAGG_RADII)
         self.assertTrue(numpy.all(angs==26))
@@ -122,8 +124,8 @@ class KnownValues(unittest.TestCase):
         grid.build()
         coords = grid.coords*10.
         non0 = gen_grid.make_mask(h2o, coords)
-        self.assertEqual(non0.sum(), 106)
-        self.assertAlmostEqual(lib.finger(non0), -0.81399929716237085, 9)
+        self.assertEqual(non0.sum(), 122)
+        self.assertAlmostEqual(lib.fp(non0), 0.554275491306796, 9)
 
     def test_overwriting_grids_attribute(self):
         g = gen_grid.Grids(h2o).run()

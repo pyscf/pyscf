@@ -20,7 +20,10 @@
 #include <complex.h>
 #include "cint.h"
 
-#if !defined HAVE_DEFINED_CINTENVVARS_H
+// HAVE_DEFINED_CINTOPT_H is defined in cint.h libcint v5.0. The CINTEnvVars
+// struct definition below is not the same to the one in cint.h . However, it
+// is compatible with both libcint v4 and libcint v5.
+#ifndef HAVE_DEFINED_CINTENVVARS_H
 #define HAVE_DEFINED_CINTENVVARS_H
 typedef struct {
         int *atm;
@@ -66,10 +69,10 @@ typedef struct {
         // Replace them with four words (ai, aj, ak, al)
         //double _padding1;
         //double rirj[3];
-        double ai;
-        double aj;
-        double ak;
-        double al;
+        double ai[1];
+        double aj[1];
+        double ak[1];
+        double al[1];
         double rkrl[3];
         double *rx_in_rijrx;
         double *rx_in_rklrx;
@@ -88,7 +91,7 @@ typedef struct {
 
 typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
                              double complex fac, double *Gv, double *b,
-                             int *gxyz, int *gs, size_t NGv);
+                             int *gxyz, int *gs, size_t NGv, double *cache);
 
 void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
                         int *atm, int natm, int *bas, int nbas, double *env);
@@ -105,10 +108,12 @@ void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
 
 int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                               FPtr_eval_gz eval_gz, double complex fac,
-                              double *Gv, double *b, int *gxyz, int *gs, size_t NGv);
+                              double *Gv, double *b, int *gxyz, int *gs,
+                              size_t NGv, double *cache);
 int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                              FPtr_eval_gz eval_gz, double complex fac,
-                             double *Gv, double *b, int *gxyz, int *gs,size_t NGv);
+                             double *Gv, double *b, int *gxyz, int *gs,
+                             size_t NGv, double *cache);
 
 int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
                      int (*eval_aopair)(), FPtr_eval_gz eval_gz, double complex fac,

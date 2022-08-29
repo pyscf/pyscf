@@ -19,51 +19,53 @@ from pyscf import gto
 from pyscf import lib
 from pyscf import dft
 
-h2o = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
-h2o.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
+def setUpModule():
+    global h2o, h2osym, h2o_cation, h2osym_cation
+    h2o = gto.Mole()
+    h2o.verbose = 5
+    h2o.output = '/dev/null'
+    h2o.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2o.basis = {"H": '6-31g', "O": '6-31g',}
-h2o.build()
+    h2o.basis = {"H": '6-31g', "O": '6-31g',}
+    h2o.build()
 
-h2osym = gto.Mole()
-h2osym.verbose = 5
-h2osym.output = '/dev/null'
-h2osym.atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ]
+    h2osym = gto.Mole()
+    h2osym.verbose = 5
+    h2osym.output = '/dev/null'
+    h2osym.atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ]
 
-h2osym.basis = {"H": '6-31g', "O": '6-31g',}
-h2osym.symmetry = 1
-h2osym.build()
+    h2osym.basis = {"H": '6-31g', "O": '6-31g',}
+    h2osym.symmetry = 1
+    h2osym.build()
 
-h2o_cation = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-    charge = 1,
-    spin = 1,
-    basis = '631g')
+    h2o_cation = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+        charge = 1,
+        spin = 1,
+        basis = '631g')
 
-h2osym_cation = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-    symmetry = True,
-    charge = 1,
-    spin = 1,
-    basis = '631g')
+    h2osym_cation = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+        symmetry = True,
+        charge = 1,
+        spin = 1,
+        basis = '631g')
 
 def tearDownModule():
     global h2o, h2osym, h2o_cation, h2osym_cation
@@ -82,27 +84,12 @@ class KnownValues(unittest.TestCase):
         method.xc = 'lda, vwn_rpa'
         self.assertAlmostEqual(method.scf(), -76.01330948329084, 8)
 
-    def test_nr_pw91pw91(self):
-        method = dft.RKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'pw91, pw91'
-        # Small change from libxc3 to libxc4
-        self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-
     def test_nr_b88vwn(self):
         method = dft.RKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'b88, vwn'
         self.assertAlmostEqual(method.scf(), -76.690247578608236, 8)
-
-    def test_nr_xlyp(self):
-        method = dft.RKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'xlyp'
-        self.assertAlmostEqual(method.scf(), -76.4174879445209, 8)
 
     def test_nr_b3lypg(self):
         method = dft.RKS(h2o)
@@ -124,15 +111,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 8)
         method.direct_scf = False
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 8)
-
-    def test_nr_ub3lypg(self):
-        method = dft.UKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lypg'
-        self.assertAlmostEqual(method.scf(), -76.384928891413438, 8)
-        g = method.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.035648777277847155, 6)
 
     def test_nr_uks_lsda(self):
         method = dft.UKS(h2osym_cation)
@@ -230,7 +208,7 @@ class KnownValues(unittest.TestCase):
         method.xc = 'pw91, pw91'
         # Small change from libxc3 to libxc4
         self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-        
+
     def test_nr_symm_b88vwn(self):
         method = dft.RKS(h2osym)
         method.grids.prune = dft.gen_grid.treutler_prune
@@ -509,6 +487,32 @@ class KnownValues(unittest.TestCase):
         dm = dft.UKS(h2osym).init_guess_by_vsap()
         self.assertEqual(dm.ndim, 3)
         self.assertAlmostEqual(lib.fp(dm), 1.9698972986009409, 9)
+
+    def test_init(self):
+        mol_r = h2o
+        mol_u = gto.M(atom='Li', spin=1, verbose=0)
+        mol_r1 = gto.M(atom='H', spin=1, verbose=0)
+        sym_mol_r = h2osym
+        sym_mol_u = gto.M(atom='Li', spin=1, symmetry=1, verbose=0)
+        sym_mol_r1 = gto.M(atom='H', spin=1, symmetry=1, verbose=0)
+        self.assertTrue(isinstance(dft.RKS(mol_r), dft.rks.RKS))
+        self.assertTrue(isinstance(dft.RKS(mol_u), dft.roks.ROKS))
+        self.assertTrue(isinstance(dft.UKS(mol_r), dft.uks.UKS))
+        self.assertTrue(isinstance(dft.ROKS(mol_r), dft.roks.ROKS))
+        self.assertTrue(isinstance(dft.GKS(mol_r), dft.gks.GKS))
+        self.assertTrue(isinstance(dft.KS(mol_r), dft.rks.RKS))
+        self.assertTrue(isinstance(dft.KS(mol_u), dft.uks.UKS))
+        self.assertTrue(isinstance(dft.DKS(mol_u), dft.dks.UDKS))
+
+        self.assertTrue(isinstance(mol_r.RKS(), dft.rks.RKS))
+        self.assertTrue(isinstance(mol_u.RKS(), dft.roks.ROKS))
+        self.assertTrue(isinstance(mol_r.UKS(), dft.uks.UKS))
+        self.assertTrue(isinstance(mol_r.ROKS(), dft.roks.ROKS))
+        self.assertTrue(isinstance(mol_r.GKS(), dft.gks.GKS))
+        self.assertTrue(isinstance(mol_r.KS(), dft.rks.RKS))
+        self.assertTrue(isinstance(mol_u.KS(), dft.uks.UKS))
+        self.assertTrue(isinstance(mol_u.DKS(), dft.dks.UDKS))
+        #TODO: self.assertTrue(isinstance(dft.X2C(mol_r), x2c.dft.UKS))
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

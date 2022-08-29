@@ -27,7 +27,7 @@ else:
 
 def load(chkfile, key):
     '''Load array(s) from chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile. The chkfile needs to be saved in HDF5 format.
@@ -76,7 +76,7 @@ load_chkfile_key = load
 
 def dump(chkfile, key, value):
     '''Save array(s) in chkfile
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -129,9 +129,9 @@ def dump(chkfile, key, value):
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
             if key in fh5:
-                del(fh5[key])
+                del (fh5[key])
             elif key + '__from_list__' in fh5:
-                del(fh5[key+'__from_list__'])
+                del (fh5[key+'__from_list__'])
             save_as_group(key, value, fh5)
     else:
         with h5py.File(chkfile, 'w') as fh5:
@@ -142,7 +142,7 @@ dump_chkfile_key = save = dump
 def load_mol(chkfile):
     '''Load Mole object from chkfile.
     The save_mol/load_mol operation can be used a serialization method for Mole object.
-    
+
     Args:
         chkfile : str
             Name of chkfile.
@@ -163,16 +163,16 @@ def load_mol(chkfile):
     try:
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.loads(fh5['mol'][()])
-    except:
-# Compatibility to the old serialization format
-# TODO: remove it in future release
+    except Exception:
+        # Compatibility to the old serialization format
+        # TODO: remove it in future release
         with h5py.File(chkfile, 'r') as fh5:
             mol = gto.Mole()
             mol.output = '/dev/null'
             moldic = eval(fh5['mol'][()])
             for key in ('mass', 'grids', 'light_speed'):
                 if key in moldic:
-                    del(moldic[key])
+                    del (moldic[key])
             mol.build(False, False, **moldic)
     return mol
 

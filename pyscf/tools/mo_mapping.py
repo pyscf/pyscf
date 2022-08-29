@@ -101,7 +101,7 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
     10       0.0021017982
     '''
     with lib.temporary_env(mol, cart=cart):
-        assert(mo_coeff.shape[0] == mol.nao)
+        assert (mo_coeff.shape[0] == mol.nao)
         s = mol.intor_symmetric('int1e_ovlp')
         lao = lo.orth.orth_ao(mol, orth_method, s=s)
 
@@ -112,4 +112,4 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
         s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
 
-del(BASE, MAP_TOL, ORTH_METHOD)
+del (BASE, MAP_TOL, ORTH_METHOD)

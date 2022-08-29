@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include "config.h"
 #include "cint.h"
@@ -25,7 +24,7 @@
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
 #define MIN(I,J)        ((I) < (J) ? (I) : (J))
 
-int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter)
+int GTOmax_shell_dim(const int *ao_loc, const int *shls_slice, int ncenter)
 {
         int i;
         int i0 = shls_slice[0];

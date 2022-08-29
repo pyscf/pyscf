@@ -68,8 +68,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     dm1 += ccsd_grad._response_dm1(cc, Xvo, eris)
     Imat[nocc:,:nocc] = Imat[:nocc,nocc:].T
 
-    h1 =-(mol.intor('int1e_ipkin', comp=3)
-         +mol.intor('int1e_ipnuc', comp=3))
+    h1 =-(mol.intor('int1e_ipkin', comp=3) +
+          mol.intor('int1e_ipnuc', comp=3))
     s1 =-mol.intor('int1e_ipovlp', comp=3)
     #zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
     eri1 = mol.intor('int2e_ip1', comp=3).reshape(3,nao,nao,nao,nao)
@@ -90,8 +90,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
             g1 = g1 + g1.transpose(1,0,2,3)
             g1 = g1 + g1.transpose(2,3,0,1)
             g1 *= -1
-            hx =(numpy.einsum('pq,pi,qj->ij', h1[i,p0:p1], mo_coeff[p0:p1], mo_coeff)
-               + reduce(numpy.dot, (mo_coeff.T, vrinv[i], mo_coeff)))
+            hx =(numpy.einsum('pq,pi,qj->ij', h1[i,p0:p1], mo_coeff[p0:p1], mo_coeff) +
+                 reduce(numpy.dot, (mo_coeff.T, vrinv[i], mo_coeff)))
             hx = hx + hx.T
             sx = numpy.einsum('pq,pi,qj->ij', s1[i,p0:p1], mo_coeff[p0:p1], mo_coeff)
             sx = sx + sx.T
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     ghf = grad.RHF(mf).grad()
     print('gcc')
     print(ghf+g1)
-    print(lib.finger(g1) - -0.042511000925747583)
+    print(lib.fp(g1) - -0.042511000925747583)
 #[[ 0   0                1.00950969e-02]
 # [ 0   2.28063353e-02  -5.04754844e-03]
 # [ 0  -2.28063353e-02  -5.04754844e-03]]
@@ -273,7 +273,7 @@ if __name__ == '__main__':
     ghf = grad.RHF(mf).grad()
     print('gcc')
     print(ghf+g1)
-    print(lib.finger(g1) - 0.10048468674687236)
+    print(lib.fp(g1) - 0.10048468674687236)
 #[[ -7.81105940e-17   3.81840540e-15   1.20415540e-02]
 # [  1.73095055e-16  -7.94568837e-02  -6.02077699e-03]
 # [ -9.49844615e-17   7.94568837e-02  -6.02077699e-03]]

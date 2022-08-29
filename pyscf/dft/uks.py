@@ -20,7 +20,7 @@
 Non-relativistic Unrestricted Kohn-Sham
 '''
 
-import time
+
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -37,21 +37,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         dm = numpy.asarray(dm)
     if dm.ndim == 2:  # RHF DM
         dm = numpy.asarray((dm*.5,dm*.5))
+    ks.initialize_grids(mol, dm)
+
+    t0 = (logger.process_clock(), logger.perf_counter())
+
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
-
-    t0 = (time.clock(), time.time())
-
-    if ks.grids.coords is None:
-        ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
-            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.grids)
-        t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc != '':
-        if ks.nlcgrids.coords is None:
-            ks.nlcgrids.build(with_non0tab=True)
-            if ks.small_rho_cutoff > 1e-20 and ground_state:
-                ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.nlcgrids)
-            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     ni = ks._numint
     if hermi == 2:  # because rho = 0
@@ -59,8 +49,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     else:
         max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm, max_memory=max_memory)
-        if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
+        if ks.nlc:
+            assert 'VV10' in ks.nlc.upper()
             _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1],
                                       max_memory=max_memory)
             exc += enlc
@@ -181,6 +171,15 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
         rks.KohnShamDFT.dump_flags(self, verbose)
         return self
 
+    def initialize_grids(self, mol=None, dm=None):
+        ground_state = (isinstance(dm, numpy.ndarray)
+                        and dm.ndim == 3 and dm.shape[0] == 2)
+        if ground_state:
+            super().initialize_grids(mol, dm[0]+dm[1])
+        else:
+            super().initialize_grids(mol)
+        return self
+
     get_veff = get_veff
     get_vsap = get_vsap
     energy_elec = energy_elec
@@ -190,20 +189,3 @@ class UKS(rks.KohnShamDFT, uhf.UHF):
     def nuc_grad_method(self):
         from pyscf.grad import uks
         return uks.Gradients(self)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
-    mol.build()
-
-    m = UKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753
-

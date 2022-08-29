@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ def make_intermediates(mycc, t1, t2, eris):
     eia = mo_e[:nocc,None] - mo_e[nocc:]
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
 
-    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei)
-        - numpy.einsum('imbc,majk->ijkabc', t2, majk))
+    t3c =(numpy.einsum('jkae,bcei->ijkabc', t2, bcei) -
+          numpy.einsum('imbc,majk->ijkabc', t2, majk))
     t3c = t3c - t3c.transpose(0,1,2,4,3,5) - t3c.transpose(0,1,2,5,4,3)
     t3c = t3c - t3c.transpose(1,0,2,3,4,5) - t3c.transpose(2,1,0,3,4,5)
     t3c /= d3

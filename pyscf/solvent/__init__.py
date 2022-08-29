@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from pyscf.solvent import ddcosmo
-from pyscf.solvent import ddpcm
 
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.
@@ -59,6 +58,7 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     from pyscf import gto
     from pyscf import scf, mcscf
     from pyscf import tdscf
+    from pyscf.solvent import ddpcm
 
     if isinstance(method_or_mol, gto.mole.Mole):
         return ddpcm.DDPCM(method_or_mol)

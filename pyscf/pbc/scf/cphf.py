@@ -21,7 +21,7 @@ Restricted coupled pertubed Hartree-Fock solver
 Modified from pyscf.scf.cphf
 '''
 
-import time
+
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -51,7 +51,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
                max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     '''For field independent basis. First order overlap matrix is zero'''
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     nkpt = len(h1)
     moloc = np.zeros([nkpt+1], dtype=int)
@@ -84,7 +84,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
         return np.hstack(v)
 
     _mo1 = lib.krylov(vind_vo, mo1base,
-                     tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log).flatten()
+                      tol=tol, max_cycle=max_cycle, hermi=hermi, verbose=log).flatten()
     log.timer('krylov solver in CPHF', *t0)
     mo1 = []
     for k in range(nkpt):
@@ -108,7 +108,7 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
         energy matrix
     '''
     log = logger.new_logger(verbose=verbose)
-    t0 = (time.clock(), time.time())
+    t0 = (logger.process_clock(), logger.perf_counter())
 
     nkpt = len(h1)
     ncomp = h1[0].shape[0]

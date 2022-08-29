@@ -71,7 +71,7 @@ if __name__ == '__main__':
     e3ref = uccsd_t.kernel(mycc, eris, t1, t2)
     print(ehf+ecc+e3ref)
     conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
+    g1 = Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
     print(g1)
 
     myccs = mycc.as_scanner()
@@ -111,7 +111,7 @@ H          0.96345360     1.30488291    -0.10782263
     print(ehf0+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
+    g1 = Gradients(mycc).kernel(t1, t2, l1, l2, eris=eris)
     print(g1)
 
     myccs = mycc.as_scanner()
@@ -133,6 +133,7 @@ H          0.96345360     1.30488291    -0.10782263
     mol.build(0, 0)
     e2 = myccs(mol)
     e2 += myccs.ccsd_t()
+    # FIXME: disagreements between analytical value and finite difference value
     print(g1[0,0], (e1-e2)/0.002)
 #CCSD
 #H   0.0113620114            0.0664344363            0.0029855587
@@ -145,4 +146,4 @@ H          0.96345360     1.30488291    -0.10782263
 #H   0.0112264011            0.0658917731            0.0029936671
 #H   0.0525667206           -0.0481602008           -0.0033751503
 #H   0.0107197424           -0.0823677005            0.0073804163
-#H  -0.0745128642            0.0646361282           -0.0069989330 
+#H  -0.0745128642            0.0646361282           -0.0069989330

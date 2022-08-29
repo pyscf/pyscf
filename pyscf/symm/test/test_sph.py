@@ -22,17 +22,23 @@ from pyscf import gto
 from pyscf import symm
 from pyscf.symm import sph
 
-h2o = gto.Mole()
-h2o.verbose = 0
-h2o.output = None#"out_h2o"
-h2o.atom.extend([
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ])
+def setUpModule():
+    global h2o
+    h2o = gto.Mole()
+    h2o.verbose = 0
+    h2o.output = None#"out_h2o"
+    h2o.atom.extend([
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ])
 
-h2o.basis = {"H": 'cc-pVDZ',
-             "O": 'cc-pVDZ',}
-h2o.build()
+    h2o.basis = {"H": 'cc-pVDZ',
+                 "O": 'cc-pVDZ',}
+    h2o.build()
+
+def tearDownModule():
+    global h2o
+    del h2o
 
 def real_sph_ref(rvecs, lmax):
     norms = np.linalg.norm(rvecs, axis=1)

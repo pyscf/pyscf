@@ -20,14 +20,14 @@
 '''
 semi-grid Coulomb and eXchange without differencial density matrix
 
-To lower the scaling of coulomb and exchange matrix construction for large system, one 
-coordinate is analitical and the other is grid. The traditional two electron 
-integrals turn to analytical one electron integrals and numerical integration 
+To lower the scaling of coulomb and exchange matrix construction for large system, one
+coordinate is analitical and the other is grid. The traditional two electron
+integrals turn to analytical one electron integrals and numerical integration
 based on grid.(see Friesner, R. A. Chem. Phys. Lett. 1985, 116, 39)
 
-Minimizing numerical errors using overlap fitting correction.(see 
+Minimizing numerical errors using overlap fitting correction.(see
 Lzsak, R. et. al. J. Chem. Phys. 2011, 135, 144105)
-Grid screening for weighted AO value and DktXkg. 
+Grid screening for weighted AO value and DktXkg.
 Two SCF steps: coarse grid then fine grid. There are 5 parameters can be changed:
 # threshold for Xg and Fg screening
 gthrd = 1e-10
@@ -36,28 +36,28 @@ grdlvl_i = 0
 grdlvl_f = 1
 # norm_ddm threshold for grids change
 thrd_nddm = 0.03
-# set block size to adapt memory 
+# set block size to adapt memory
 sblk = 200
 
 Set mf.direct_scf = False because no traditional 2e integrals
 '''
 
-import time
+
 import ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.df.incore import aux_e2
 from pyscf.gto import moleintor
 from pyscf.scf import _vhf
+from pyscf.dft import gen_grid
 
 
 def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
-    t0 = time.clock(), time.time()
+    t0 = logger.process_clock(), logger.perf_counter()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -72,7 +72,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_nuc = _gen_batch_nuc(mol)
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt)
+                                  sgx._opt, sgx.pjs)
     t1 = logger.timer_debug1(mol, "sgX initialziation", *t0)
 
     sn = numpy.zeros((nao,nao))
@@ -86,6 +86,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
     tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
+        weights = grids.weights[i0:i1,None]
         ao = mol.eval_gto('GTOval', coords)
         wao = ao * grids.weights[i0:i1,None]
         sn += lib.dot(ao.T, wao)
@@ -100,20 +101,21 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
             wao = wao[mask]
             fg = fg[:,mask]
             coords = coords[mask]
+            weights = weights[mask]
 
         if sgx.debug:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             gbn = batch_nuc(mol, coords)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
             if with_j:
                 jg = numpy.einsum('gij,xij->xg', gbn, dms)
             if with_k:
                 gv = lib.einsum('gvt,xgt->xgv', gbn, fg)
             gbn = None
         else:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-            jg, gv = batch_jk(mol, coords, dms, fg)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
+            jg, gv = batch_jk(mol, coords, dms, fg.copy(), weights)
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
         if with_j:
             xj = lib.einsum('gv,xg->xgv', ao, jg)
@@ -146,7 +148,7 @@ def get_jk_favork(sgx, dm, hermi=1, with_j=True, with_k=True,
 
 def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
                   direct_scf_tol=1e-13):
-    t0 = time.clock(), time.time()
+    t0 = logger.process_clock(), logger.perf_counter()
     mol = sgx.mol
     grids = sgx.grids
     gthrd = sgx.grids_thrd
@@ -161,7 +163,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_nuc = _gen_batch_nuc(mol)
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt)
+                                  sgx._opt, sgx.pjs)
 
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
@@ -184,6 +186,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     tnuc = 0, 0
     for i0, i1 in lib.prange(0, ngrids, blksize):
         coords = grids.coords[i0:i1]
+        weights = grids.weights[i0:i1,None]
         ao = mol.eval_gto('GTOval', coords)
         wao = ao * grids.weights[i0:i1,None]
 
@@ -196,6 +199,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             ao = ao[mask]
             fg = fg[:,mask]
             coords = coords[mask]
+            weights = weights[mask]
 
         if with_j:
             rhog = numpy.einsum('xgu,gu->xg', fg, ao)
@@ -203,18 +207,19 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
             rhog = None
 
         if sgx.debug:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
             gbn = batch_nuc(mol, coords)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
             if with_j:
                 jpart = numpy.einsum('guv,xg->xuv', gbn, rhog)
             if with_k:
                 gv = lib.einsum('gtv,xgt->xgv', gbn, fg)
             gbn = None
         else:
-            tnuc = tnuc[0] - time.clock(), tnuc[1] - time.time()
-            jpart, gv = batch_jk(mol, coords, rhog, fg)
-            tnuc = tnuc[0] + time.clock(), tnuc[1] + time.time()
+            tnuc = tnuc[0] - logger.process_clock(), tnuc[1] - logger.perf_counter()
+            if with_j: rhog = rhog.copy()
+            jpart, gv = batch_jk(mol, coords, rhog, fg.copy(), weights)
+            tnuc = tnuc[0] + logger.process_clock(), tnuc[1] + logger.perf_counter()
 
         if with_j:
             vj += jpart
@@ -245,7 +250,7 @@ def _gen_batch_nuc(mol):
         return lib.unpack_tril(j3c.T, out=out)
     return batch_nuc
 
-def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
+def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None, pjs=False):
     '''Contraction between sgX Coulomb integrals and density matrices
     J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
        einsum('gij,xij->xg', gbn, dms) if dms are density matrices
@@ -253,23 +258,29 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
     '''
     if sgxopt is None:
         from pyscf.sgx import sgx
-        sgxopt = sgx._make_opt(mol)
+        sgxopt = sgx._make_opt(mol, pjs=pjs)
     sgxopt.direct_scf_tol = direct_scf_tol
 
     ncomp = 1
     nao = mol.nao
     cintor = _vhf._fpointer(sgxopt._intor)
-    fdot = _vhf._fpointer('SGXdot_nr'+aosym)
+    fdot = _vhf._fpointer('SGXdot_nrk')
     drv = _vhf.libcvhf.SGXnr_direct_drv
 
-    def jk_part(mol, grid_coords, dms, fg):
-        fakemol = gto.fakemol_for_charges(grid_coords)
-        atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
-                                          fakemol._atm, fakemol._bas, fakemol._env)
+    def jk_part(mol, grid_coords, dms, fg, weights):
+        atm, bas, env = mol._atm, mol._bas, mol._env
+        ngrids = grid_coords.shape[0]
+        env = numpy.append(env, grid_coords.ravel())
+        env[gto.NGRIDS] = ngrids
+        env[gto.PTR_GRIDS] = mol._env.size
+        if pjs:
+            sgxopt.set_dm(fg / numpy.sqrt(numpy.abs(weights[None,:])),
+                          mol._atm, mol._bas, env)
 
         ao_loc = moleintor.make_loc(bas, sgxopt._intor)
-        shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, len(bas))
-        ngrids = grid_coords.shape[0]
+        shls_slice = (0, mol.nbas, 0, mol.nbas)
+
+        fg = numpy.ascontiguousarray(fg.transpose(0,2,1))
 
         vj = vk = None
         fjk = []
@@ -289,7 +300,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
                     vjkptr.append(vj[i].ctypes.data_as(ctypes.c_void_p))
                     fjk.append(_vhf._fpointer('SGXnr'+aosym+'_ijg_ji_g'))
         if with_k:
-            vk = numpy.zeros((len(fg),ncomp,ngrids,nao))[:,0]
+            vk = numpy.zeros((len(fg),ncomp,nao,ngrids))[:,0]
             for i, dm in enumerate(fg):
                 dmsptr.append(dm.ctypes.data_as(ctypes.c_void_p))
                 vjkptr.append(vk[i].ctypes.data_as(ctypes.c_void_p))
@@ -301,12 +312,17 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
         vjkptr = (ctypes.c_void_p*(n_dm))(*vjkptr)
 
         drv(cintor, fdot, fjk, dmsptr, vjkptr, n_dm, ncomp,
-            (ctypes.c_int*6)(*shls_slice),
+            (ctypes.c_int*4)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
             sgxopt._cintopt, sgxopt._this,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(env.shape[0]),
+            ctypes.c_int(2 if aosym == 's2' else 1))
+        if vk is not None:
+            vk = vk.transpose(0,2,1)
+            vk = numpy.ascontiguousarray(vk)
         return vj, vk
     return jk_part
 
@@ -314,8 +330,8 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol, sgxopt=None):
 # pre for get_k
 # Use default mesh grids and weights
 def get_gridss(mol, level=1, gthrd=1e-10):
-    Ktime = (time.clock(), time.time())
-    grids = dft.gen_grid.Grids(mol)
+    Ktime = (logger.process_clock(), logger.perf_counter())
+    grids = gen_grid.Grids(mol)
     grids.level = level
     grids.build()
 

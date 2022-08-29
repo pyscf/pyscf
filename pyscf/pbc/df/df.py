@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2019,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@ J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import os
-import time
+
 import copy
+import ctypes
 import warnings
 import tempfile
 import numpy
@@ -57,6 +58,7 @@ from pyscf.pbc.df.aft import _sub_df_jk_
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+LONGRANGE_AFT_TURNOVER_THRESHOLD = 2.5
 
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
@@ -68,6 +70,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     steep_shls = []
     ndrop = 0
     rcut = []
+    _env = auxcell._env.copy()
     for ib in range(len(auxcell._bas)):
         l = auxcell.bas_angular(ib)
         np = auxcell.bas_nprim(ib)
@@ -84,7 +87,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
         if np > 0:
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
-            auxcell._env[pe:pe+np] = es
+            _env[pe:pe+np] = es
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
             int1 = gto.gaussian_int(l*2+2, es)
@@ -93,13 +96,14 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
 # half_sph_norm here to normalize the monopole (charge).  This convention can
 # simplify the formulism of \int \bar{\rho}, see function auxbar.
             cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
-            auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+            _env[ptr:ptr+np*nc] = cs.T.reshape(-1)
 
             steep_shls.append(ib)
 
             r = _estimate_rcut(es, l, abs(cs).max(axis=1), cell.precision)
             rcut.append(r.max())
 
+    auxcell._env = _env
     auxcell.rcut = max(rcut)
 
     auxcell._bas = numpy.asarray(auxcell._bas[steep_shls], order='C')
@@ -110,8 +114,8 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     return auxcell
 
 def make_modchg_basis(auxcell, smooth_eta):
-# * chgcell defines smooth gaussian functions for each angular momentum for
-#   auxcell. The smooth functions may be used to carry the charge
+    # * chgcell defines smooth gaussian functions for each angular momentum for
+    #   auxcell. The smooth functions may be used to carry the charge
     chgcell = copy.copy(auxcell)  # smooth model density for coulomb integral to carry charge
     half_sph_norm = .5/numpy.sqrt(numpy.pi)
     chg_bas = []
@@ -132,7 +136,12 @@ def make_modchg_basis(auxcell, smooth_eta):
     chgcell._atm = auxcell._atm
     chgcell._bas = numpy.asarray(chg_bas, dtype=numpy.int32).reshape(-1,gto.BAS_SLOTS)
     chgcell._env = numpy.hstack((auxcell._env, chg_env))
-    chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    # _estimate_rcut is based on the integral overlap. It's likely too tight for
+    # rcut of the model charge. Using the value of functions at rcut seems enough
+    # chgcell.rcut = _estimate_rcut(smooth_eta, l_max, 1., auxcell.precision)
+    rcut = 15.
+    chgcell.rcut = (numpy.log(4*numpy.pi*rcut**2/auxcell.precision) / smooth_eta)**.5
+
     logger.debug1(auxcell, 'make compensating basis, num shells = %d, num cGTOs = %d',
                   chgcell.nbas, chgcell.nao_nr())
     logger.debug1(auxcell, 'chgcell.rcut %s', chgcell.rcut)
@@ -141,7 +150,7 @@ def make_modchg_basis(auxcell, smooth_eta):
 # kpti == kptj: s2 symmetry
 # kpti == kptj == 0 (gamma point): real
 def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
-    t1 = (time.clock(), time.time())
+    t1 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
@@ -179,10 +188,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
+    # Generally speaking, the int2c2e integrals with lattice sum applied on
+    # |j> are not necessary hermitian because int2c2e cannot be made converged
+    # with regular lattice sum unless the lattice sum vectors (from
+    # cell.get_lattice_Ls) are symmetric. After adding the planewaves
+    # contributions and fuse(fuse(j2c)), the output matrix is hermitian.
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts)
 
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
-    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = mydf.weighted_coulG(kpt, False, mesh)
@@ -193,15 +207,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aoaux = None
 
             if is_zero(kpt):  # kpti == kptj
-                j2c[k][naux:] -= lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
-                j2c[k][naux:] -= lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+                j2c_p  = lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
+                j2c_p += lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
             else:
                 j2cR, j2cI = zdotCN(LkR[naux:]*coulG[p0:p1],
                                     LkI[naux:]*coulG[p0:p1], LkR.T, LkI.T)
-                j2c[k][naux:] -= j2cR + j2cI * 1j
-                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
-            LkR = LkI = None
+                j2c_p = j2cR + j2cI * 1j
+            j2c[k][naux:] -= j2c_p
+            j2c[k][:naux,naux:] -= j2c_p[:,:naux].conj().T
+            j2c_p = LkR = LkI = None
+        # Symmetrizing the matrix is not must if the integrals converged.
+        # Since symmetry cannot be enforced in the pbc_intor('int2c2e'),
+        # the aggregated j2c here may have error in hermitian if the range of
+        # lattice sum is not big enough.
+        j2c[k] = (j2c[k] + j2c[k].conj().T) * .5
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
@@ -259,7 +278,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = fuse(mydf.auxbar(fused_cell))
+                vbar = mydf.auxbar(fused_cell)
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -279,21 +298,47 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         else:
             Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
         Gblksize = min(Gblksize, ngrids, 16384)
+
+        def load(aux_slice):
+            col0, col1 = aux_slice
+            j3cR = []
+            j3cI = []
+            for k, idx in enumerate(adapted_ji_idx):
+                v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
+                                  for i in range(nsegs)])
+                # vbar is the interaction between the background charge
+                # and the auxiliary basis.  0D, 1D, 2D do not have vbar.
+                if is_zero(kpt) and cell.dimension == 3:
+                    for i in numpy.where(vbar != 0)[0]:
+                        v[i] -= vbar[i] * ovlp[k][col0:col1]
+                j3cR.append(numpy.asarray(v.real, order='C'))
+                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                    j3cI.append(None)
+                else:
+                    j3cI.append(numpy.asarray(v.imag, order='C'))
+                v = None
+            return j3cR, j3cI
+
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty(nkptj*buflen*Gblksize, dtype=numpy.complex128)
-        def pw_contract(istep, sh_range, j3cR, j3cI):
-            bstart, bend, ncol = sh_range
+        cols = [sh_range[2] for sh_range in shranges]
+        locs = numpy.append(0, numpy.cumsum(cols))
+        tasks = zip(locs[:-1], locs[1:])
+        for istep, (j3cR, j3cI) in enumerate(lib.map_with_prefetch(load, tasks)):
+            bstart, bend, ncol = shranges[istep]
+            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
+                       istep+1, len(shranges), bstart, bend, ncol)
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
             else:
                 shls_slice = (bstart, bend, 0, cell.nbas)
 
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
-                dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                            b, gxyz[p0:p1], Gvbase, kpt,
-                                            adapted_kptjs, out=buf)
+                dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
+                                           b, gxyz[p0:p1], Gvbase, kpt,
+                                           adapted_kptjs, out=buf)
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -322,33 +367,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 # low-dimension systems
                 if j2c_negative is not None:
                     feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
+            j3cR = j3cI = None
 
-        with lib.call_in_background(pw_contract) as compute:
-            col1 = 0
-            for istep, sh_range in enumerate(shranges):
-                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d',
-                           istep+1, len(shranges), *sh_range)
-                bstart, bend, ncol = sh_range
-                col0, col1 = col1, col1+ncol
-                j3cR = []
-                j3cI = []
-                for k, idx in enumerate(adapted_ji_idx):
-                    v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
-                                      for i in range(nsegs)])
-                    # vbar is the interaction between the background charge
-                    # and the auxiliary basis.  0D, 1D, 2D do not have vbar.
-                    if is_zero(kpt) and cell.dimension == 3:
-                        for i in numpy.where(vbar != 0)[0]:
-                            v[i] -= vbar[i] * ovlp[k][col0:col1]
-                    j3cR.append(numpy.asarray(v.real, order='C'))
-                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                        j3cI.append(None)
-                    else:
-                        j3cI.append(numpy.asarray(v.imag, order='C'))
-                v = None
-                compute(istep, sh_range, j3cR, j3cI)
         for ji in adapted_ji_idx:
-            del(fswap['j3c-junk/%d'%ji])
+            del (fswap['j3c-junk/%d'%ji])
 
     # Wrapped around boundary and symmetry between k and -k can be used
     # explicitly for the metric integrals.  We consider this symmetry
@@ -427,6 +449,7 @@ class GDF(aft.AFTDF):
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
             eta_guess = estimate_eta(cell, cell.precision)
+            logger.debug3(self, 'eta_guess = %g', eta_guess)
             if eta_cell < eta_guess:
                 self.eta = eta_cell
                 self.mesh = cell.mesh
@@ -542,6 +565,8 @@ class GDF(aft.AFTDF):
             kband_uniq = numpy.zeros((0,3))
         else:
             kband_uniq = [k for k in self.kpts_band if len(member(k, kpts))==0]
+            if len(kband_uniq) == 0:
+                kband_uniq = numpy.zeros((0,3))
         if j_only is None:
             j_only = self._j_only
         if j_only:
@@ -568,7 +593,7 @@ class GDF(aft.AFTDF):
                                 'DF integrals will be saved in file %s .',
                                 cderi)
             self._cderi = cderi
-            t1 = (time.clock(), time.time())
+            t1 = (logger.process_clock(), logger.perf_counter())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
             t1 = logger.timer_debug1(self, 'j3c', *t1)
         return self
@@ -610,16 +635,16 @@ class GDF(aft.AFTDF):
                 if es.size == 1:
                     vbar[aux_loc[i]] = -1/es[0]
                 else:
-# Remove the normalization to get the primitive contraction coeffcients
+                    # Remove the normalization to get the primitive contraction coeffcients
                     norms = half_sph_norm/gto.gaussian_int(2, es)
                     cs = numpy.einsum('i,ij->ij', 1/norms, fused_cell._libcint_ctr_coeff(i))
                     vbar[aux_loc[i]:aux_loc[i+1]] = numpy.einsum('in,i->n', cs, -1/es)
-# TODO: fused_cell.cart and l%2 == 0: # 6d 10f ...
-# Normalization coefficients are different in the same shell for cartesian
-# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
-# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
-# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
-# normalization was not built in the basis.
+        # TODO: fused_cell.cart and l%2 == 0: # 6d 10f ...
+        # Normalization coefficients are different in the same shell for cartesian
+        # basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+        # the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+        # normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+        # normalization was not built in the basis.
         vbar *= numpy.pi/fused_cell.vol
         return vbar
 
@@ -635,63 +660,49 @@ class GDF(aft.AFTDF):
         nao = cell.nao_nr()
         if blksize is None:
             if is_real:
-                if unpack:
-                    blksize = max_memory*1e6/8/(nao*(nao+1)//2+nao**2)
-                else:
-                    blksize = max_memory*1e6/8/(nao*(nao+1))
+                blksize = max_memory*1e6/8/(nao**2*2)
             else:
                 blksize = max_memory*1e6/16/(nao**2*2)
+            blksize /= 2  # For prefetch
             blksize = max(16, min(int(blksize), self.blockdim))
             logger.debug3(self, 'max_memory %d MB, blksize %d', max_memory, blksize)
 
-        def load(Lpq, b0, b1, bufR, bufI):
-            Lpq = numpy.asarray(Lpq[b0:b1])
+        def load(aux_slice):
+            b0, b1 = aux_slice
             if is_real:
+                LpqR = numpy.asarray(j3c[b0:b1])
                 if unpack:
-                    LpqR = lib.unpack_tril(Lpq, out=bufR).reshape(-1,nao**2)
-                else:
-                    LpqR = Lpq
+                    LpqR = lib.unpack_tril(LpqR).reshape(-1,nao**2)
                 LpqI = numpy.zeros_like(LpqR)
             else:
-                shape = Lpq.shape
+                Lpq = numpy.asarray(j3c[b0:b1])
+                LpqR = numpy.asarray(Lpq.real, order='C')
+                LpqI = numpy.asarray(Lpq.imag, order='C')
+                Lpq = None
                 if unpack:
-                    tmp = numpy.ndarray(shape, buffer=buf)
-                    tmp[:] = Lpq.real
-                    LpqR = lib.unpack_tril(tmp, out=bufR).reshape(-1,nao**2)
-                    tmp[:] = Lpq.imag
-                    LpqI = lib.unpack_tril(tmp, lib.ANTIHERMI, out=bufI).reshape(-1,nao**2)
-                else:
-                    LpqR = numpy.ndarray(shape, buffer=bufR)
-                    LpqR[:] = Lpq.real
-                    LpqI = numpy.ndarray(shape, buffer=bufI)
-                    LpqI[:] = Lpq.imag
+                    LpqR = lib.unpack_tril(LpqR).reshape(-1,nao**2)
+                    LpqI = lib.unpack_tril(LpqI, lib.ANTIHERMI).reshape(-1,nao**2)
             return LpqR, LpqI
 
-        LpqR = LpqI = None
         with _load3c(self._cderi, 'j3c', kpti_kptj, 'j3c-kptij') as j3c:
-            naux = j3c.shape[0]
-            if unpack:
-                buf = numpy.empty((min(blksize, naux), nao * (nao + 1) // 2))
-            for b0, b1 in lib.prange(0, naux, blksize):
-                LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
+            slices = lib.prange(0, j3c.shape[0], blksize)
+            for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                 yield LpqR, LpqI, 1
+                LpqR = LpqI = None
 
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
-            LpqR = LpqI = None
             with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij',
                          ignore_key_error=True) as j3c:
-                naux = j3c.shape[0]
-                if unpack:
-                    buf = numpy.empty((min(blksize, naux), nao * (nao + 1) // 2))
-                for b0, b1 in lib.prange(0, naux, blksize):
-                    LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
+                slices = lib.prange(0, j3c.shape[0], blksize)
+                for LpqR, LpqI in lib.map_with_prefetch(load, slices):
                     yield LpqR, LpqI, -1
+                    LpqR = LpqI = None
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
-    get_nuc = aft.get_nuc
+    get_nuc = aft.get_nuc  # noqa: F811
     get_pp = aft.get_pp
 
     # Note: Special exxdiv by default should not be used for an arbitrary
@@ -702,7 +713,24 @@ class GDF(aft.AFTDF):
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, omega=None, exxdiv=None):
         if omega is not None:  # J/K for RSH functionals
-            return _sub_df_jk_(self, dm, hermi, kpts, kpts_band,
+            cell = self.cell
+            # * AFT is computationally more efficient than GDF if the Coulomb
+            #   attenuation tends to the long-range role (i.e. small omega).
+            # * Note: changing to AFT integrator may cause small difference to
+            #   the GDF integrator. If a very strict GDF result is desired,
+            #   we can disable this trick by setting
+            #   LONGRANGE_AFT_TURNOVER_THRESHOLD to 0.
+            # * The sparse mesh is not appropriate for low dimensional systems
+            #   with infinity vacuum since the ERI may require large mesh to
+            #   sample density in vacuum.
+            if (omega < LONGRANGE_AFT_TURNOVER_THRESHOLD and
+                cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
+                mydf = aft.AFTDF(cell, self.kpts)
+                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+            else:
+                mydf = self
+            return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,
                                with_j, with_k, omega, exxdiv)
 
         if kpts is None:
@@ -752,8 +780,8 @@ class GDF(aft.AFTDF):
         if blksize is None:
             blksize = self.blockdim
         for LpqR, LpqI, sign in self.sr_loop(compact=True, blksize=blksize):
-# LpqI should be 0 for gamma point DF
-#            assert(numpy.linalg.norm(LpqI) < 1e-12)
+            # LpqI should be 0 for gamma point DF
+            # assert (numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
 
     def get_naoaux(self):
@@ -802,15 +830,14 @@ def fuse_auxcell(mydf, auxcell):
         modchg_offset[ia,l] = smooth_loc[i]
 
     if auxcell.cart:
-# Normalization coefficients are different in the same shell for cartesian
-# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
-# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
-# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
-# normalization was not built in the basis.  There two ways to surmount this
-# problem.  First is to transform the cartesian basis and scale the 3s (for
-# d functions), 4p (for f functions) ... then transform back. The second is to
-# remove the 3s, 4p functions. The function below is the second solution
-        import ctypes
+        # Normalization coefficients are different in the same shell for cartesian
+        # basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+        # the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+        # normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+        # normalization was not built in the basis.  There two ways to surmount this
+        # problem.  First is to transform the cartesian basis and scale the 3s (for
+        # d functions), 4p (for f functions) ... then transform back. The second is to
+        # remove the 3s, 4p functions. The function below is the second solution
         c2s_fn = gto.moleintor.libcgto.CINTc2s_ket_sph
         aux_loc_sph = auxcell.ao_loc_nr(cart=False)
         naux_sph = aux_loc_sph[-1]
@@ -822,7 +849,7 @@ def fuse_auxcell(mydf, auxcell):
             else:
                 npq = Lpq.shape[1]
                 Lpq_sph = numpy.empty((naux_sph,npq), dtype=Lpq.dtype)
-            if Lpq.dtype == numpy.complex:
+            if Lpq.dtype == numpy.complex128:
                 npq *= 2  # c2s_fn supports double only, *2 to handle complex
             for i in range(auxcell.nbas):
                 l  = auxcell.bas_angular(i)
@@ -898,16 +925,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
-
-        dat = h5group[key]
-        if isinstance(dat, h5py.Group):
-            # Check whether the integral tensor is stored with old data
-            # foramt (v1.5.1 or older). The old format puts the entire
-            # 3-index tensor in an HDF5 dataset. The new format divides
-            # the tensor into pieces and stores them in different groups.
-            # The code below combines the slices into a single tensor.
-            dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
+        hermi = False
     else:
         # swap ki,kj due to the hermiticity
         kptji = kpti_kptj[[1,0]]
@@ -924,16 +942,24 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
+        hermi = True
 
-#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
-# the 3D tensor if it is too big.
-        dat = _load_and_unpack(h5group[key])
+    dat = _load_and_unpack(h5group[key],hermi)
     return dat
 
 class _load_and_unpack(object):
-    '''Load data lazily'''
-    def __init__(self, dat):
+    '''
+    This class returns an array-like object to an hdf5 file that can
+    be sliced, to allow for lazy loading
+
+    hermi : boolean
+    Take the conjugate transpose of the slice
+
+    See PR 1086 and Issue 1076
+    '''
+    def __init__(self, dat, hermi):
         self.dat = dat
+        self.hermi = hermi
     def __getitem__(self, s):
         dat = self.dat
         if isinstance(dat, h5py.Group):
@@ -941,9 +967,12 @@ class _load_and_unpack(object):
         else: # For mpi4pyscf, pyscf-1.5.1 or older
             v = numpy.asarray(dat[s])
 
-        nao = int(numpy.sqrt(v.shape[-1]))
-        v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
-        return v1.reshape(v.shape)
+        if self.hermi:
+            nao = int(numpy.sqrt(v.shape[-1]))
+            v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+            return v1.reshape(v.shape)
+        else:
+            return v
     def __array__(self):
         '''Create a numpy array'''
         return self[()]

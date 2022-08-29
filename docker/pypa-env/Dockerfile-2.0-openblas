@@ -1,0 +1,21 @@
+#FROM quay.io/pypa/manylinux2014_x86_64:latest
+#RUN yum install -y openblas-devel.x86_64
+#
+FROM quay.io/pypa/manylinux2010_x86_64:latest
+
+RUN yum install -y openblas-devel.x86_64 gcc && \
+    yum clean all && \
+    rm -rf /var/cache/yum
+RUN /opt/python/cp37-cp37m/bin/pip install --no-cache-dir cmake
+ENV PATH=/opt/python/cp37-cp37m/bin:$PATH
+
+COPY build-wheels.sh /build-wheels.sh
+CMD ['/build-wheels.sh']
+
+RUN pip config set global.disable-pip-version-check true
+# # openblas in quay.io/pypa/manylinux1_x86_64 has a bug that causes segfault
+# # (issue https://github.com/pyscf/pyscf/issues/1095). openblas r0-3.3 fixed
+# # the bug
+# COPY --from 0 /usr/lib64/libopenblas.so /usr/lib64/libopenblas.so.0
+# RUN rm -f libopenblas-r0.2.18.so && \
+#     ln -fs /usr/lib64/libopenblas.so.0 /usr/lib64/libopenblas.so

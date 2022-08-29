@@ -19,21 +19,27 @@ import pyscf.pbc.gto as pgto
 from pyscf.pbc.lib import kpts_helper
 from pyscf import ao2mo
 
-L = 5.
-n = 3
-cell = pgto.Cell()
-cell.a = numpy.diag([L,L,L])
-cell.mesh = numpy.array([n,n,n])
+def setUpModule():
+    global cell, nao
+    L = 5.
+    n = 3
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
 
-cell.atom = '''He    3.    2.       3.
-               He    1.    1.       1.'''
-cell.basis = 'ccpvdz'
-cell.verbose = 0
-cell.rcut = 17
-cell.build(0,0)
-nao = cell.nao_nr()
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.rcut = 17
+    cell.build(0,0)
+    nao = cell.nao_nr()
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell
+    del cell
+
+class KnownValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])

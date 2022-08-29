@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -26,7 +25,7 @@
 
 #define BOXSIZE         56
 
-int VXCao_empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
+int VXCao_empty_blocks(int8_t *empty, uint8_t *non0table, int *shls_slice,
                        int *ao_loc)
 {
         if (non0table == NULL || shls_slice == NULL || ao_loc == NULL) {
@@ -42,13 +41,14 @@ int VXCao_empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
         int has0 = 0;
         empty[box_id] = 1;
         for (bas_id = sh0; bas_id < sh1; bas_id++) {
-                empty[box_id] &= !non0table[bas_id];
                 if (ao_loc[bas_id] == bound) {
                         has0 |= empty[box_id];
                         box_id++;
                         bound += BOXSIZE;
                         empty[box_id] = 1;
-                } else if (ao_loc[bas_id] > bound) {
+                }
+                empty[box_id] &= !non0table[bas_id];
+                if (ao_loc[bas_id+1] > bound) {
                         has0 |= empty[box_id];
                         box_id++;
                         bound += BOXSIZE;
@@ -60,10 +60,10 @@ int VXCao_empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
 
 static void dot_ao_dm(double *vm, double *ao, double *dm,
                       int nao, int nocc, int ngrids, int bgrids,
-                      unsigned char *non0table, int *shls_slice, int *ao_loc)
+                      uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         int nbox = (nao+BOXSIZE-1) / BOXSIZE;
-        char empty[nbox];
+        int8_t empty[nbox];
         int has0 = VXCao_empty_blocks(empty, non0table, shls_slice, ao_loc);
 
         const char TRANS_T = 'T';
@@ -102,7 +102,7 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
 /* vm[nocc,ngrids] = ao[i,ngrids] * dm[i,nocc] */
 void VXCdot_ao_dm(double *vm, double *ao, double *dm,
                   int nao, int nocc, int ngrids, int nbas,
-                  unsigned char *non0table, int *shls_slice, int *ao_loc)
+                  uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
 
@@ -124,10 +124,10 @@ void VXCdot_ao_dm(double *vm, double *ao, double *dm,
 /* vv[n,m] = ao1[n,ngrids] * ao2[m,ngrids] */
 static void dot_ao_ao(double *vv, double *ao1, double *ao2,
                       int nao, int ngrids, int bgrids, int hermi,
-                      unsigned char *non0table, int *shls_slice, int *ao_loc)
+                      uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         int nbox = (nao+BOXSIZE-1) / BOXSIZE;
-        char empty[nbox];
+        int8_t empty[nbox];
         int has0 = VXCao_empty_blocks(empty, non0table, shls_slice, ao_loc);
 
         const char TRANS_T = 'T';
@@ -164,15 +164,16 @@ static void dot_ao_ao(double *vv, double *ao1, double *ao2,
 /* vv[nao,nao] = ao1[i,nao] * ao2[i,nao] */
 void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                   int nao, int ngrids, int nbas, int hermi,
-                  unsigned char *non0table, int *shls_slice, int *ao_loc)
+                  uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        memset(vv, 0, sizeof(double) * nao * nao);
+        size_t Nao = nao;
+        NPdset0(vv, Nao * Nao);
 
 #pragma omp parallel
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao+2, sizeof(double));
+        double *v_priv = calloc(Nao*Nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;
@@ -182,7 +183,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
         }
 #pragma omp critical
         {
-                for (ip = 0; ip < nao*nao; ip++) {
+                for (ip = 0; ip < Nao*Nao; ip++) {
                         vv[ip] += v_priv[ip];
                 }
         }

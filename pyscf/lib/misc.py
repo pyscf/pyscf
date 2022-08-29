@@ -22,10 +22,10 @@ Some helper functions
 
 import os, sys
 import warnings
-import imp
 import tempfile
 import functools
 import itertools
+import collections
 import ctypes
 import numpy
 import h5py
@@ -43,33 +43,27 @@ if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
                      'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
-if h5py.version.version[:2] == '3.':
-    h5py.get_config().default_file_mode = 'a'
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)
 
 def load_library(libname):
-# numpy 1.6 has bug in ctypeslib.load_library, see numpy/distutils/misc_util.py
-    if '1.6' in numpy.__version__:
-        if (sys.platform.startswith('linux') or
-            sys.platform.startswith('gnukfreebsd')):
-            so_ext = '.so'
-        elif sys.platform.startswith('darwin'):
-            so_ext = '.dylib'
-        elif sys.platform.startswith('win'):
-            so_ext = '.dll'
-        else:
-            raise OSError('Unknown platform')
-        libname_so = libname + so_ext
-        return ctypes.CDLL(os.path.join(os.path.dirname(__file__), libname_so))
-    else:
+    try:
         _loaderpath = os.path.dirname(__file__)
         return numpy.ctypeslib.load_library(libname, _loaderpath)
+    except OSError:
+        from pyscf import __path__ as ext_modules
+        for path in ext_modules:
+            libpath = os.path.join(path, 'lib')
+            if os.path.isdir(libpath):
+                for files in os.listdir(libpath):
+                    if files.startswith(libname):
+                        return numpy.ctypeslib.load_library(libname, libpath)
+        raise
 
 #Fixme, the standard resouce module gives wrong number when objects are released
-#see http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
+# http://fa.bianp.net/blog/2013/different-ways-to-get-memory-consumption-or-lessons-learned-from-memory_profiler/#fn:1
 #or use slow functions as memory_profiler._get_memory did
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
@@ -146,6 +140,27 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
+class with_multiproc_nproc(object):
+    '''
+    Using this macro to create a temporary context in which the number of
+    multi-processing processes are set to the required value.
+    '''
+    def __init__(self, nproc=1):
+        self.nproc = nproc
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nproc is not None and self.nproc >= 1:
+            self.sys_threads = num_threads()
+            if self.nproc > self.sys_threads:
+                warnings.warn('Reset nproc to nthreads: %s' % self.sys_threads)
+                self.nproc = self.sys_threads
+            nthreads = max(1, self.sys_threads // self.nproc)
+            num_threads(nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
+            self.nproc = 1
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
@@ -268,6 +283,45 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def map_with_prefetch(func, *iterables):
+    '''
+    Apply function to an task and prefetch the next task
+    '''
+    global_import_lock = False
+    if sys.version_info < (3, 6):
+        import imp
+        global_import_lock = imp.lock_held()
+
+    if not ASYNC_IO or global_import_lock:
+        for task in zip(*iterables):
+            yield func(*task)
+
+    elif ThreadPoolExecutor is not None:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = None
+            for task in zip(*iterables):
+                if future is None:
+                    future = executor.submit(func, *task)
+                else:
+                    result = future.result()
+                    future = executor.submit(func, *task)
+                    yield result
+            if future is not None:
+                yield future.result()
+    else:
+        def func_with_buf(_output_buf, *args):
+            _output_buf[0] = func(*args)
+        with call_in_background(func_with_buf) as f_prefetch:
+            buf0, buf1 = [None], [None]
+            for istep, task in enumerate(zip(*iterables)):
+                if istep == 0:
+                    f_prefetch(buf0, *task)
+                else:
+                    buf0, buf1 = buf1, buf0
+                    f_prefetch(buf0, *task)
+                    yield buf1[0]
+        if buf0[0] is not None:
+            yield buf0[0]
 
 def index_tril_to_pair(ij):
     '''Given tril-index ij, compute the pair indices (i,j) which satisfy
@@ -534,6 +588,13 @@ class StreamObject(object):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def add_keys(self, **kwargs):
+        '''Add or update attributes of the object and register these attributes in ._keys'''
+        if kwargs:
+            self.__dict__.update(**kwargs)
+            self._keys = self._keys.union(kwargs.keys())
+        return self
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
@@ -618,7 +679,7 @@ def alias(fn, alias_name=None):
 
 def class_as_method(cls):
     '''
-    The statement "fn1 = alias(Class)" is equivalent to:
+    The statement "fn1 = class_as_method(Class)" is equivalent to:
 
     .. code-block:: python
         def fn1(self, *args, **kwargs):
@@ -629,6 +690,14 @@ def class_as_method(cls):
     fn.__doc__ = cls.__doc__
     fn.__name__ = cls.__name__
     fn.__module__ = cls.__module__
+    return fn
+
+def invalid_method(name):
+    '''
+    The statement "fn1 = invalid_method(name)" can de-register a method
+    '''
+    def fn(obj, *args, **kwargs):
+        raise NotImplementedError(f'Method {name} invalid or not implemented')
     return fn
 
 def overwrite_mro(obj, mro):
@@ -647,7 +716,7 @@ def overwrite_mro(obj, mro):
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
-    del(HackMRO.mro)
+    del (HackMRO.mro)
     return obj
 
 def izip(*args):
@@ -697,10 +766,10 @@ class ThreadWithReturnValue(Thread):
         if self._e is not None:
             raise ThreadRuntimeError('Error on thread %s:\n%s' % (self, self._e))
         else:
-# Note: If the return value of target is huge, Queue.get may raise
-# SystemError: NULL result without error in PyObject_Call
-# It is because return value is cached somewhere by pickle but pickle is
-# unable to handle huge amount of data.
+            # Note: If the return value of target is huge, Queue.get may raise
+            # SystemError: NULL result without error in PyObject_Call
+            # It is because return value is cached somewhere by pickle but pickle is
+            # unable to handle huge amount of data.
             return self._q.get()
     get = join
 
@@ -782,14 +851,19 @@ class call_in_background(object):
             handlers = self.handlers
             ntasks = len(self.fns)
 
-            if self.sync or imp.lock_held():
-# Some modules like nosetests, coverage etc
-#   python -m unittest test_xxx.py  or  nosetests test_xxx.py
-# hang when Python multi-threading was used in the import stage due to (Python
-# import lock) bug in the threading module.  See also
-# https://github.com/paramiko/paramiko/issues/104
-# https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-# Disable the asynchoronous mode for safe importing
+            global_import_lock = False
+            if sys.version_info < (3, 6):
+                import imp
+                global_import_lock = imp.lock_held()
+
+            if self.sync or global_import_lock:
+                # Some modules like nosetests, coverage etc
+                #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
+                # hang when Python multi-threading was used in the import stage due to (Python
+                # import lock) bug in the threading module.  See also
+                # https://github.com/paramiko/paramiko/issues/104
+                # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
+                # Disable the asynchoronous mode for safe importing
                 def def_async_fn(i):
                     return fns[i]
 
@@ -907,7 +981,7 @@ class GradScanner:
 
     @property
     def converged(self):
-# Some base methods like MP2 does not have the attribute converged
+        # Some base methods like MP2 does not have the attribute converged
         conv = getattr(self.base, 'converged', True)
         return conv
 
@@ -965,6 +1039,101 @@ class light_speed(temporary_env):
     def __enter__(self):
         temporary_env.__enter__(self)
         return self.c
+
+def repo_info(repo_path):
+    '''
+    Repo location, version, git branch and commit ID
+    '''
+
+    def git_version(orig_head, head, branch):
+        git_version = []
+        if orig_head:
+            git_version.append('GIT ORIG_HEAD %s' % orig_head)
+        if branch:
+            git_version.append('GIT HEAD (branch %s) %s' % (branch, head))
+        elif head:
+            git_version.append('GIT HEAD      %s' % head)
+        return '\n'.join(git_version)
+
+    repo_path = os.path.abspath(repo_path)
+
+    if os.path.isdir(os.path.join(repo_path, '.git')):
+        git_str = git_version(*git_info(repo_path))
+
+    elif os.path.isdir(os.path.abspath(os.path.join(repo_path, '..', '.git'))):
+        repo_path = os.path.abspath(os.path.join(repo_path, '..'))
+        git_str = git_version(*git_info(repo_path))
+
+    else:
+        git_str = None
+
+    # TODO: Add info of BLAS, libcint, libxc, libxcfun, tblis if applicable
+
+    info = {'path': repo_path}
+    if git_str:
+        info['git'] = git_str
+    return info
+
+def git_info(repo_path):
+    orig_head = None
+    head = None
+    branch = None
+    try:
+        with open(os.path.join(repo_path, '.git', 'ORIG_HEAD'), 'r') as f:
+            orig_head = f.read().strip()
+    except IOError:
+        pass
+
+    try:
+        head = os.path.join(repo_path, '.git', 'HEAD')
+        with open(head, 'r') as f:
+            head = f.read().splitlines()[0].strip()
+
+        if head.startswith('ref:'):
+            branch = os.path.basename(head)
+            with open(os.path.join(repo_path, '.git', head.split(' ')[1]), 'r') as f:
+                head = f.read().strip()
+    except IOError:
+        pass
+    return orig_head, head, branch
+
+
+def isinteger(obj):
+    '''
+    Check if an object is an integer.
+    '''
+    # A bool is also an int in python, but we don't want that.
+    # On the other hand, numpy.bool_ is probably not a numpy.integer, but just to be sure...
+    if isinstance(obj, (bool, numpy.bool_)):
+        return False
+    # These are actual ints we expect to encounter.
+    else:
+        return isinstance(obj, (int, numpy.integer))
+
+
+def issequence(obj):
+    '''
+    Determine if the object provided is a sequence.
+    '''
+    # These are the types of sequences that we permit.
+    # numpy.ndarray is not a subclass of collections.abc.Sequence as of version 1.19.
+    sequence_types = (collections.abc.Sequence, numpy.ndarray)
+    return isinstance(obj, sequence_types)
+
+
+def isintsequence(obj):
+    '''
+    Determine if the object provided is a sequence of integers.
+    '''
+    if not issequence(obj):
+        return False
+    elif isinstance(obj, numpy.ndarray):
+        return issubclass(obj.dtype.type, numpy.integer)
+    else:
+        are_ints = True
+        for i in obj:
+            are_ints = are_ints and isinteger(i)
+        return are_ints
 
 
 if __name__ == '__main__':
