@@ -292,7 +292,7 @@ class KMP2_stagger(kmp2.KMP2):
                 # from an SCF-HF calculation with mesh 1*1*2k.
                 raise NotImplementedError
 
-            half_shift = mf.cell.get_abs_kpts([0.5/n for n in nks])
+            half_shift = mf.cell.get_abs_kpts( [0.5/n for n in nks] )
             kpts_vir = mf.kpts
             kpts_occ = kpts_vir + half_shift
             kpts = np.concatenate( (kpts_occ, kpts_vir), axis=0)
@@ -306,7 +306,7 @@ class KMP2_stagger(kmp2.KMP2):
             self.mo_coeff = mo_coeff
             self.mo_occ = mo_occ
 
-        if isinstance(self._scf.with_df, df.GDF):
+        if isinstance(self._scf.with_df, df.df.GDF):
             self.with_df_ints = True
         else:
             self.with_df_ints = False
