@@ -44,6 +44,9 @@ class TDA(rhf.TDA):
         warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
+        # exxdiv corrections are kept in hdiag while excluding them when calling
+        # the contractions between two-electron integrals and X/Y amplitudes.
+        # See also the relevant comments in function pbc.tdscf.rhf.TDA.gen_vind
         singlet = self.singlet
 
         mo_coeff = mf.mo_coeff
