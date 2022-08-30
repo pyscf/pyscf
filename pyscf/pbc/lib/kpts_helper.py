@@ -32,6 +32,27 @@ def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
 gamma_point = is_zero
 
+def round_to_fbz(kpts, wrap_around=False, tol=KPT_DIFF_TOL):
+    '''
+    Round scaled k-points to the first Brillouin zone.
+
+    Args:
+        kpts : (n,3) ndarray
+            Scaled k-points.
+        wrap_around : bool
+            If set to True, k-points are rounded to [-0.5, 0.5), otherwise [0.0, 1.0).
+            Default value is False.
+        tol : float
+            K-points differ less than tol are considered as the same.
+            Default value is 1e-6.
+    '''
+    kpts_round = np.mod(kpts, 1)
+    kpts_round = kpts_round.round(-np.log10(tol).astype(int))
+    kpts_round = np.mod(kpts_round, 1)
+    if wrap_around:
+        kpts_round[kpts_round >= 0.5] -= 1.0
+    return kpts_round
+
 def member(kpt, kpts):
     kpts = np.reshape(kpts, (len(kpts),kpt.size))
     dk = np.einsum('ki->k', abs(kpts-kpt.ravel()))

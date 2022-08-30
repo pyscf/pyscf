@@ -1,3 +1,18 @@
+#!/usr/bin/env python
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 k-point spin-restricted periodic MP2 calculation using the staggered mesh method
 Author: Xin Xing (xxing@berkeley.edu)
@@ -5,37 +20,19 @@ Reference: Staggered Mesh Method for Correlation Energy Calculations of Solids: 
         Møller–Plesset Perturbation Theory, J. Chem. Theory Comput. 2021, 17, 8, 4733-4745
 '''
 
+import h5py
 import numpy as np
+from pyscf import __config__
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LARGE_DENOM
-from pyscf import __config__
-from pyscf.pbc.mp.kmp2 import padding_k_idx, _add_padding
-from pyscf.pbc.mp import kmp2
-from pyscf.pbc.tools.pbc import get_monkhorst_pack_size
-from pyscf.pbc.scf.khf import get_occ
 from pyscf.pbc import df, dft, scf
-import h5py
-from pyscf.pbc.lib.kpts_helper import unique
-
-#   Minimum images of k-points to the first BZ
-def minimum_image(cell, kpts):
-    """
-    Compute the minimum image of k-points in 'kpts' in the first Brillouin zone
-
-    Arguments:
-        cell -- a cell instance
-        kpts -- a list of k-points
-
-    Returns:
-        kpts_bz -- a list of k-point in the first Brillouin zone
-    """
-    tmp_kpt = cell.get_scaled_kpts(kpts)
-    tmp_kpt = tmp_kpt - np.floor(tmp_kpt)
-    tmp_kpt[tmp_kpt > 0.5 - 1e-8] -= 1
-    kpts_bz = cell.get_abs_kpts(tmp_kpt)
-    return kpts_bz
+from pyscf.pbc.scf.khf import get_occ
+from pyscf.pbc.mp import kmp2
+from pyscf.pbc.mp.kmp2 import padding_k_idx, _add_padding
+from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib.kpts_helper import unique, round_to_fbz
+from pyscf.pbc.tools.pbc import get_monkhorst_pack_size
 
 #   Kernel function for computing the MP2 energy
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
@@ -299,14 +296,9 @@ class KMP2_stagger(kmp2.KMP2):
             kpts_vir = mf.kpts
             kpts_occ = kpts_vir + half_shift
             kpts = np.concatenate( (kpts_occ, kpts_vir), axis=0)
-            if isinstance(mf, scf.KRHF):
+            if isinstance(mf, scf.khf.KRHF):
                 with lib.temporary_env(mf, exxdiv='vcut_sph', with_df=df.FFTDF(mf.cell, mf.kpts)):
-                    mo_energy, mo_coeff = mf.get_bands( kpts )
-                    mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
-
-            elif isinstance(mf, dft.KRKS):
-                with lib.temporary_env(mf, with_df=df.FFTDF(mf.cell, mf.kpts)):
-                    mo_energy, mo_coeff = mf.get_bands( kpts )
+                    mo_energy, mo_coeff = mf.get_bands(kpts)
                     mo_occ = get_occ(mf, mo_energy_kpts=mo_energy)
 
             self.kpts = kpts
@@ -314,7 +306,7 @@ class KMP2_stagger(kmp2.KMP2):
             self.mo_coeff = mo_coeff
             self.mo_occ = mo_occ
 
-        if isinstance(self._scf.with_df, df.GDF):
+        if isinstance(self._scf.with_df, df.df.GDF):
             self.with_df_ints = True
         else:
             self.with_df_ints = False
@@ -330,9 +322,12 @@ class KMP2_stagger(kmp2.KMP2):
         self.nkpts_ov = len(self.kpts_vir)
 
         #   Map kpts, kpts_vir, and kpts_occ to the first BZ for better processing
-        kpts_bz = minimum_image(self.cell, self.kpts)
-        kpts_occ_bz = minimum_image(self.cell, self.kpts_occ)
-        kpts_vir_bz = minimum_image(self.cell, self.kpts_vir)
+        kpts_scaled = self.cell.get_scaled_kpts(self.kpts)
+        kpts_occ_scaled = self.cell.get_scaled_kpts(self.kpts_occ)
+        kpts_vir_scaled = self.cell.get_scaled_kpts(self.kpts_vir)
+        kpts_bz = round_to_fbz(kpts_scaled, wrap_around=True, tol=1e-8)
+        kpts_occ_bz = round_to_fbz(kpts_occ_scaled, wrap_around=True, tol=1e-8)
+        kpts_vir_bz = round_to_fbz(kpts_vir_scaled, wrap_around=True, tol=1e-8)
 
         #   indices of virtual k-points in self.kpts
         self.kpts_idx_vir = [ np.asarray(np.sum((kpts_bz - kvir)**2, axis=-1) < 1e-10).nonzero()[0]
@@ -452,5 +447,3 @@ if __name__ == '__main__':
     kmp = mp.KMP2(kmf)
     emp2, _ = kmp.kernel()
     assert((abs(emp2 - -0.0141829343769316))<1e-5)
-
-

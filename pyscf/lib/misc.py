@@ -141,6 +141,27 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
+class with_multiproc_nproc(object):
+    '''
+    Using this macro to create a temporary context in which the number of
+    multi-processing processes are set to the required value.
+    '''
+    def __init__(self, nproc=1):
+        self.nproc = nproc
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nproc is not None and self.nproc >= 1:
+            self.sys_threads = num_threads()
+            if self.nproc > self.sys_threads:
+                warnings.warn('Reset nproc to nthreads: %s' % self.sys_threads)
+                self.nproc = self.sys_threads
+            nthreads = max(1, self.sys_threads // self.nproc)
+            num_threads(nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
+            self.nproc = 1
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')

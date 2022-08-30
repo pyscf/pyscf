@@ -1141,11 +1141,20 @@ class KNumInt(numint.NumInt):
         grids_coords = grids.coords
         grids_weights = grids.weights
         ngrids = grids_coords.shape[0]
-        nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
+
+        kpts_all = kpts
+        if kpts_band is not None:
+            kpts_band = numpy.reshape(kpts_band, (-1,3))
+            where = [member(k, kpts) for k in kpts_band]
+            where = [k_id[0] if len(k_id)>0 else None for k_id in where]
+            kpts_band_uniq = [k for k in kpts_band if len(member(k, kpts))==0]
+            if kpts_band_uniq:
+                kpts_all = numpy.vstack([kpts,kpts_band_uniq])
+
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE
+            blksize = int(max_memory*1e6/(comp*2*len(kpts_all)*nao*16*BLKSIZE))*BLKSIZE
             blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
         if non0tab is None:
             non0tab = grids.non0tab
@@ -1153,21 +1162,26 @@ class KNumInt(numint.NumInt):
             non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE,cell.nbas),
                                   dtype=numpy.uint8)
             non0tab[:] = 0xff
-        if kpts_band is not None:
-            kpts_band = numpy.reshape(kpts_band, (-1,3))
-            where = [member(k, kpts) for k in kpts_band]
-            where = [k_id[0] if len(k_id)>0 else None for k_id in where]
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
             coords = grids_coords[ip0:ip1]
             weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv,
-                                         non0tab=non0, cutoff=self.cutoff)
+            ao_kall = self.eval_ao(cell, coords, kpts_all, deriv=deriv, non0tab=non0)
             if kpts_band is not None:
-                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv,
-                                     non0tab=non0, cutoff=self.cutoff)
+                ao_k2 = ao_kall[:len(kpts)]
+                ao_k1 = []
+                i = 0
+                for k_idx in where:
+                    if k_idx is not None:
+                        ao_k1.append(ao_kall[k_idx])
+                    else:
+                        ao_k1.append(ao_kall[i+len(kpts)])
+                        i += 1
+                assert(i+len(kpts) == len(kpts_all))
+            else:
+                ao_k1 = ao_k2 = ao_kall
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
