@@ -270,6 +270,13 @@ class KnownValues(unittest.TestCase):
         mf.kernel()
         self.assertAlmostEqual(mf.e_tot, -75.868344714445342, 9)
 
+        mf = dft.UKS(mol)
+        mf = addons.dynamic_level_shift(mf)
+        mf.init_guess = 'hcore'
+        mf.max_cycle = 2
+        mf.kernel()
+        self.assertAlmostEqual(mf.scf(), -74.7887264596429, 8)
+
     def test_convert_to_scf(self):
         from pyscf.x2c import x2c
         from pyscf.df import df_jk
