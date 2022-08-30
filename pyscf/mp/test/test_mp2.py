@@ -250,9 +250,10 @@ class KnownValues(unittest.TestCase):
         mo_energy = numpy.arange(nmo)
         mo_occ = numpy.zeros(nmo)
         mo_occ[:nocc] = 2
-        dm = numpy.diag(mo_occ)
-        vhf = numpy.einsum('ijkl,lk->ij', eri, dm)
-        vhf-= numpy.einsum('ijkl,jk->il', eri, dm) * .5
+        mf.make_rdm1 = lambda *args: numpy.diag(mo_occ)
+        dm = mf.make_rdm1()
+        mf.get_veff = lambda *args: numpy.einsum('ijkl,lk->ij', eri, dm) - numpy.einsum('ijkl,jk->il', eri, dm) * .5
+        vhf = mf.get_veff()
         hcore = numpy.diag(mo_energy) - vhf
         mf.get_hcore = lambda *args: hcore
         mf.get_ovlp = lambda *args: numpy.eye(nmo)

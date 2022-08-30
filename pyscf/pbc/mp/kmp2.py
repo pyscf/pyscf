@@ -714,8 +714,8 @@ class KMP2(mp2.MP2):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.e_corr = None
         self.e_hf = None
+        self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -754,15 +754,15 @@ class KMP2(mp2.MP2):
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 
-        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
-        # TODO: compute e_hf for non-canonical SCF
-        self.e_hf = self._scf.e_tot
+        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
+
 KRMP2 = KMP2
 
 

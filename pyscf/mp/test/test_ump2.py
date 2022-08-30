@@ -223,14 +223,16 @@ class KnownValues(unittest.TestCase):
         mo_occ = numpy.zeros((2,nmo))
         mo_occ[0,:nocca] = 1
         mo_occ[1,:noccb] = 1
-        dm = [numpy.diag(mo_occ[0]), numpy.diag(mo_occ[1])]
+        mf.make_rdm1 = lambda *args: [numpy.diag(mo_occ[0]), numpy.diag(mo_occ[1])]
+        dm = mf.make_rdm1()
         vja = numpy.einsum('ijkl,lk->ij', eri_aa, dm[0])
         vja+= numpy.einsum('ijkl,lk->ij', eri_ab, dm[1])
         vjb = numpy.einsum('ijkl,lk->ij', eri_bb, dm[1])
         vjb+= numpy.einsum('klij,lk->ij', eri_ab, dm[0])
         vka = numpy.einsum('ijkl,jk->il', eri_aa, dm[0])
         vkb = numpy.einsum('ijkl,jk->il', eri_bb, dm[1])
-        vhf = (vja - vka, vjb - vkb)
+        mf.get_veff = lambda *args: (vja - vka, vjb - vkb) 
+        vhf = mf.get_veff()
         hcore = (numpy.diag(mo_energy[0]) - vhf[0],
                  numpy.diag(mo_energy[1]) - vhf[1])
         mf.get_hcore = lambda *args: hcore

@@ -367,6 +367,14 @@ def get_frozen_mask(mp):
         raise NotImplementedError
     return moidx
 
+def get_e_hf(mp, mo_coeff=None):
+    # Get HF energy, which is needed for total MP2 energy.
+    if mo_coeff is None:
+        mo_coeff = mp.mo_coeff
+    dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
+    vhf = mp._scf.get_veff(mp._scf.mol, dm)
+    return mp._scf.energy_tot(dm=dm, vhf=vhf)
+
 
 def as_scanner(mp):
     '''Generating a scanner/solver for MP2 PES.
@@ -489,8 +497,8 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.e_corr = None
         self.e_hf = None
+        self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -517,6 +525,7 @@ class MP2(lib.StreamObject):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_e_hf = get_e_hf
 
     def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
         from pyscf import mp
@@ -541,7 +550,7 @@ class MP2(lib.StreamObject):
 
     @property
     def e_tot(self):
-        return (self.e_hf or self._scf.e_tot) + self.e_corr
+        return self.e_hf + self.e_corr
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
@@ -551,14 +560,13 @@ class MP2(lib.StreamObject):
         '''
         if self.verbose >= logger.WARN:
             self.check_sanity()
+
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
 
         if self._scf.converged:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
@@ -630,7 +638,6 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
         self.ovov = None
 
@@ -646,16 +653,14 @@ class _ChemistsERIs:
 
         if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             # The canonical MP2 from a converged SCF result. Rebuilding fock
-            # and e_hf can be skipped
+            # can be skipped
             self.mo_energy = _mo_energy_without_core(mp, mp._scf.mo_energy)
             self.fock = numpy.diag(self.mo_energy)
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
         return self
 
