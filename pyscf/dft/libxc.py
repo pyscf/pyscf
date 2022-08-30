@@ -1700,7 +1700,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     -76.3783361189611
     >>> def eval_xc(xc_code, rho, *args, **kwargs):
     ...     exc = 0.01 * rho**2
-    ...     vrho = 0.01 * 2 * rho
+    ...     vrho = 0.01 * 3 * rho**2
     ...     vxc = (vrho, None, None, None)
     ...     fxc = None  # 2nd order functional derivative
     ...     kxc = None  # 3rd order functional derivative
