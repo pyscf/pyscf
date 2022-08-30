@@ -249,10 +249,10 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         if (l <= 1) { // s, p functions
                                 (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                         env, l, np, nc, nao, ngrids, bgrids, cache);
+                                         env, l, np, nc, nao, ngrids, bgrids);
                         } else {
                                 (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                         env, l, np, nc, di, bgrids, bgrids, cache);
+                                         env, l, np, nc, di, bgrids, bgrids);
                                 pcart = cart_gto;
                                 for (i = 0; i < ncomp; i++) {
                                         pao = ao + (i*nao+ao_id)*ngrids;
@@ -308,7 +308,7 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                     (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
-                                 env, l, np, nc, nao, ngrids, bgrids, cache);
+                                 env, l, np, nc, nao, ngrids, bgrids);
                 } else {
                         for (i = 0; i < ncomp; i++) {
                                 _dset0(ao+(i*nao+ao_id)*ngrids, ngrids, bgrids, nc*deg);
@@ -361,7 +361,7 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
                         di = nc * dcart;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
-                                 env, l, np, nc, di, bgrids, bgrids, cache);
+                                 env, l, np, nc, di, bgrids, bgrids);
                         for (i = 0; i < ncomp; i++) {
                                 pcart = cart_gto + i * di*bgrids*ncomp_e1;
                                 off = (i*nao+ao_id)*ngrids;
@@ -419,7 +419,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2 + ncart + 3*(ANG_MAX+2)));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -475,7 +475,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2 + ncart + 3*(ANG_MAX+2)));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -493,4 +493,3 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         free(buf);
 }
 }
-

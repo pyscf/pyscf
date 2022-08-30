@@ -26,6 +26,7 @@
 #define POS_E1   0
 #define TENSOR   1
 
+#define LMAX            ANG_MAX
 #define SIMDD           8
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
@@ -54,7 +55,7 @@ typedef int (*FPtr_exp)(double *ectr, double *coord, double *alpha, double *coef
 typedef void (*FPtr_eval)(double *gto, double *ri, double *exps,
                           double *coord, double *alpha, double *coeff,
                           double *env, int l, int np, int nc,
-                          size_t nao, size_t ngrids, size_t blksize, double *cache);
+                          size_t nao, size_t ngrids, size_t blksize);
 
 void GTOnabla1(double *fx1, double *fy1, double *fz1,
                double *fx0, double *fy0, double *fz0, int l, double a);

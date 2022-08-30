@@ -7,7 +7,7 @@
 /*  #C(0 1) G |GTO> */
 static void shell_eval_GTOval_ig(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -143,7 +143,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  #C(0 1) NABLA G |GTO> */
 static void shell_eval_GTOval_ipig(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -331,7 +331,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  SIGMA DOT P |GTO> */
 static void shell_eval_GTOval_sp(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -468,7 +468,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  NABLA SIGMA DOT P |GTO> */
 static void shell_eval_GTOval_ipsp(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -667,7 +667,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  NABLA NABLA SIGMA DOT P |GTO> */
 static void shell_eval_GTOval_ipipsp(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -1042,7 +1042,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  NABLA RC |GTO> */
 static void shell_eval_GTOval_iprc(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -1230,7 +1230,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table, atm, natm, bas, nbas, e
 /*  NABLA R |GTO> */
 static void shell_eval_GTOval_ipr(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {
 const size_t degen = (l+1)*(l+2)/2;
 const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;

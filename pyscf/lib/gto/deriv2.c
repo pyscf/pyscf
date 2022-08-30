@@ -39,8 +39,7 @@ double CINTcommon_fac_sp(int l);
 void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    size_t nao, size_t ngrids, size_t bgrids,
-                                    double *cache)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
         const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -214,8 +213,7 @@ void GTOval_spinor_deriv2(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    size_t nao, size_t ngrids, size_t bgrids,
-                                    double *cache)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
         const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -442,8 +440,7 @@ void GTOval_spinor_deriv3(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    size_t nao, size_t ngrids, size_t bgrids,
-                                    double *cache)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
         const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
@@ -751,8 +748,7 @@ void GTOval_spinor_deriv4(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    size_t nao, size_t ngrids, size_t bgrids,
-                                    double *cache)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
         const size_t degen = (l+1)*(l+2)/2;
         int lx, ly, lz;
@@ -767,9 +763,10 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
         double *gtoy = gto + nao * ngrids * 2;
         double *gtoz = gto + nao * ngrids * 3;
         double *exps_2a = exps + NPRIMAX*BLKSIZE;
-        double *xpows_1less_in_power = cache;
-        double *ypows_1less_in_power = xpows_1less_in_power + (l+2) * BLKSIZE;
-        double *zpows_1less_in_power = ypows_1less_in_power + (l+2) * BLKSIZE;
+        double buf[(LMAX+2)*3 * BLKSIZE + 8];
+        double *xpows_1less_in_power = ALIGN8_UP(buf);
+        double *ypows_1less_in_power = xpows_1less_in_power + (LMAX+2)* BLKSIZE;
+        double *zpows_1less_in_power = ypows_1less_in_power + (LMAX+2)* BLKSIZE;
         double *xpows = xpows_1less_in_power + BLKSIZE;
         double *ypows = ypows_1less_in_power + BLKSIZE;
         double *zpows = zpows_1less_in_power + BLKSIZE;

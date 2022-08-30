@@ -70,14 +70,14 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                              double *coord, double *alpha, double *coeff,
                              double *env, int l, int np, int nc,
-                             size_t nao, size_t ngrids, size_t blksize,
-                             double *cache)
+                             size_t nao, size_t ngrids, size_t blksize)
 {
         int lx, ly, lz;
         size_t i, k;
-        double *xpows = ALIGN8_UP(cache);
-        double *ypows = xpows + (l+1) * BLKSIZE;
-        double *zpows = ypows + (l+1) * BLKSIZE;
+        double buf[(LMAX+1)*3 * BLKSIZE + 8];
+        double *xpows = ALIGN8_UP(buf);
+        double *ypows = xpows + (LMAX+1) * BLKSIZE;
+        double *zpows = ypows + (LMAX+1) * BLKSIZE;
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
@@ -205,8 +205,7 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
 void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                 double *coord, double *alpha, double *coeff,
                                 double *env, int l, int np, int nc,
-                                size_t nao, size_t ngrids, size_t blksize,
-                                double *cache)
+                                size_t nao, size_t ngrids, size_t blksize)
 {
         const size_t degen = (l+1)*(l+2)/2;
         int lx, ly, lz;
@@ -221,9 +220,10 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         double *gtoy = gto + nao * ngrids;
         double *gtoz = gto + nao * ngrids * 2;
         double *exps_2a = exps + NPRIMAX*BLKSIZE;
-        double *xpows_1less_in_power = cache;
-        double *ypows_1less_in_power = xpows_1less_in_power + (l+2) * BLKSIZE;
-        double *zpows_1less_in_power = ypows_1less_in_power + (l+2) * BLKSIZE;
+        double buf[(LMAX+2)*3 * BLKSIZE + 8];
+        double *xpows_1less_in_power = ALIGN8_UP(buf);
+        double *ypows_1less_in_power = xpows_1less_in_power + (LMAX+2)* BLKSIZE;
+        double *zpows_1less_in_power = ypows_1less_in_power + (LMAX+2)* BLKSIZE;
         double *xpows = xpows_1less_in_power + BLKSIZE;
         double *ypows = ypows_1less_in_power + BLKSIZE;
         double *zpows = zpows_1less_in_power + BLKSIZE;

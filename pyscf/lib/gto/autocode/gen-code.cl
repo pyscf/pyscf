@@ -174,7 +174,7 @@
     (format fout "/*  ~{~a ~}|GTO> */~%" expr)
     (format fout "static void shell_eval_~a(double *cgto, double *ri, double *exps,
 double *coord, double *alpha, double *coeff, double *env,
-int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids, double *cache)
+int l, int np, int nc, size_t nao, size_t ngrids, size_t bgrids)
 {" intname)
     (format fout "
 const size_t degen = (l+1)*(l+2)/2;
