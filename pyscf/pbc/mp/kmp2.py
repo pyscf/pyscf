@@ -36,6 +36,7 @@ from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
 from pyscf.pbc import df
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf import __config__
 
@@ -708,7 +709,7 @@ class KMP2(mp2.MP2):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.kpts = mf.kpts
-        if hasattr(self.kpts, "kpts"):
+        if isinstance(self.kpts, libkpts.KPoints):
             self.nkpts = self.kpts.nkpts
             self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts.kpts)
             #padding has to be after transformation
