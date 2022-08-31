@@ -1071,8 +1071,6 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         vj = None
     vG = None
 
-    if vk is not None:
-        veff += vk
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
@@ -1162,11 +1160,6 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     else:
         wv_freq = np.asarray(wv_freq).reshape(nset,2,-1,*mesh)
 
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(xc_code, spin=cell.spin)
-    vk = None
-    if abs(hyb) > 1e-10:
-        raise NotImplementedError
-
     if nset == 1:
         ecoul = ecoul[0]
         nelec = nelec[0]
@@ -1198,8 +1191,6 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         vj = None
     vG = None
 
-    if vk is not None:
-        veff += vk
     veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
     return nelec, excsum, veff
 
