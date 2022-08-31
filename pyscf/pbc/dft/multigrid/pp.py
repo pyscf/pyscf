@@ -110,21 +110,21 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
     fakemol._bas[0,gto.PTR_EXP  ] = ptr+3
     fakemol._bas[0,gto.PTR_COEFF] = ptr+4
 
-    SPG_lm_aoGs = []
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb not in cell._pseudo:
-            SPG_lm_aoGs.append(None)
-            continue
-        pp = cell._pseudo[symb]
-        p1 = 0
-        for l, proj in enumerate(pp[5:]):
-            rl, nl, hl = proj
-            if nl > 0:
-                p1 = p1+nl*(l*2+1)
-        SPG_lm_aoGs.append(numpy.zeros((p1, cell.nao), dtype=numpy.complex128))
-
     def vppnl_by_k(cell, kpt):
+        SPG_lm_aoGs = []
+        for ia in range(cell.natm):
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+                SPG_lm_aoGs.append(None)
+                continue
+            pp = cell._pseudo[symb]
+            p1 = 0
+            for l, proj in enumerate(pp[5:]):
+                rl, nl, hl = proj
+                if nl > 0:
+                    p1 = p1+nl*(l*2+1)
+            SPG_lm_aoGs.append(numpy.zeros((p1, cell.nao), dtype=numpy.complex128))
+
         mem_avail = max(max_memory, mydf.max_memory - lib.current_memory()[0])
         blksize = min(MAX_BLKSIZE, min(ngrids, max(MIN_BLKSIZE, int(mem_avail*1e6/((48+cell.nao+13+3)*16)))))
         vppnl = 0
@@ -179,6 +179,7 @@ def _get_pp_with_erf(mydf, kpts=None, max_memory=2000):
                     SPG_lm_aoG = SPG_lm_aoGs[ia][p0:p1].reshape(nl,l*2+1,-1)
                     tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                     vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
+        SPG_lm_aoGs=None
         return vppnl * (1./ngrids**2)
 
     fn_pp_nl = vppnl_by_k

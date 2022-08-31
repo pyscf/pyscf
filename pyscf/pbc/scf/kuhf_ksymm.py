@@ -144,7 +144,7 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
-    def get_init_guess(self, cell=None, key='minao'):
+    def get_init_guess(self, cell=None, key='minao', s1e=None):
         if cell is None:
             cell = self.cell
         dm_kpts = None
@@ -174,7 +174,9 @@ class KsymAdaptedKUHF(khf_ksymm.KsymAdaptedKSCF, kuhf.KUHF):
             dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
             assert dm_kpts.shape[0]==2
 
-        ne = np.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, self.get_ovlp(cell)).real
+        if s1e is None:
+            s1e = self.get_ovlp(cell)
+        ne = np.einsum('k,xkij,kji->x', self.kpts.weights_ibz, dm_kpts, s1e).real
         # FIXME: consider the fractional num_electron or not? This maybe
         # relates to the charged system.
         nkpts = self.kpts.nkpts
