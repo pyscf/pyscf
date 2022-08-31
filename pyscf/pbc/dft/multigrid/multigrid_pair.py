@@ -1220,7 +1220,7 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
+    kpts_band = _format_kpts_band(kpts_band, kpts)
     if spin == 1:
         nset //= 2
 
