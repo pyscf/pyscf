@@ -68,7 +68,7 @@ def transform_integrals_incore(myadc):
           iks = kconserv[ikp,ikq,ikr]
           eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                            (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
-          if dtype == np.float: eri_kpt = eri_kpt.real
+          if dtype == np.float64: eri_kpt = eri_kpt.real
           eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
           for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
               eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr)
@@ -139,7 +139,7 @@ def transform_integrals_outcore(myadc):
                 orbo_q = mo_coeff[kq][:, :nocc]
                 buf_kpt = fao2mo((orbo_p, orbo_q, mo_coeff[kr], mo_coeff[ks]),
                                  (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape(nocc, nocc, nmo, nmo)
                 dtype = buf_kpt.dtype
                 eris.oooo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
@@ -156,7 +156,7 @@ def transform_integrals_outcore(myadc):
                 orbv_q = mo_coeff[kq][:, nocc:]
                 buf_kpt = fao2mo((orbo_p, orbv_q, mo_coeff[kr], mo_coeff[ks]),
                                  (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape(nocc,nvir,nmo, nmo)
                 eris.ovoo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
                 eris.ovov[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
@@ -176,7 +176,7 @@ def transform_integrals_outcore(myadc):
                 # unit cell is small enough to handle vvvv in-core
                 buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                  kpts[[ikp,ikq,ikr,iks]], compact=False)
-                if dtype == np.float: buf_kpt = buf_kpt.real
+                if dtype == np.float64: buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                     buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -189,7 +189,7 @@ def transform_integrals_outcore(myadc):
                     orbva_p = orbv_p[:, a].reshape(-1, 1)
                     buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
                                      (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                    if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                    if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
                     eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts

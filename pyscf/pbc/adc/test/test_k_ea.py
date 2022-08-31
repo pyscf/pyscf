@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0][1], 0.00398257, 6)
         self.assertAlmostEqual(p[0][2], 0.00000299, 6)
 
-    def test_ea_adc2x_k(self):
+    def test_ea_adc2x_k_high_cost(self):
 
         nmp = [2,2,2]
         kpts = cell.make_kpts((nmp))

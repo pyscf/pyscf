@@ -76,13 +76,13 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
     dtype = np.result_type(adc.t2[0])
     nkop_chk = adc.nkop_chk
     kop_npick = adc.kop_npick
-    kop_w = np.zeros((len(kptlist),nroots), np.float)
+    kop_w = np.zeros((len(kptlist),nroots), np.float64)
     kop_v = np.zeros((len(kptlist),nroots,size), dtype)
 
-    evals = np.zeros((len(kptlist),nroots), np.float)
+    evals = np.zeros((len(kptlist),nroots), np.float64)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
-    conv = np.zeros((len(kptlist),nroots), np.bool)
-    P = np.zeros((len(kptlist),nroots), np.float)
+    conv = np.zeros((len(kptlist),nroots), np.bool_)
+    P = np.zeros((len(kptlist),nroots), np.float64)
     X = np.zeros((len(kptlist),nmo,nroots), dtype)
 
     imds = adc.get_imds(eris)
