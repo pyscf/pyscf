@@ -1042,18 +1042,6 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     else:
         wv_freq = np.asarray(wv_freq).reshape(nset,-1,*mesh)
 
-    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(xc_code, spin=cell.spin)
-    vk = None
-    if abs(hyb) > 1e-10:
-        if nkpts > 1:
-            raise NotImplementedError
-        from .hfx import sr_hfx
-        vk = sr_hfx(cell, dms, omega, hyb)
-        if nset == 1:
-            excsum[0] += lib.einsum('ij,ji->', vk, dms[0,0])
-        else:
-            raise KeyError
-
     if nset == 1:
         ecoul = ecoul[0]
         nelec = nelec[0]
@@ -1340,107 +1328,6 @@ def get_veff_ip1(mydf, dm_kpts, xc_code=None, kpts=np.zeros((1,3)), kpts_band=No
 
     if nkpts == 1:
         vj_kpts = vj_kpts[...,0,:,:]
-    if nset == 1:
-        vj_kpts = vj_kpts[0]
-    return vj_kpts
-
-
-def get_k_kpts(mydf, dm_kpts, hermi=0, kpts=None,
-               kpts_band=None, verbose=None):
-    raise NotImplementedError
-    if kpts is None: kpts = mydf.kpts
-    #log = logger.new_logger(mydf, verbose)
-    cell = mydf.cell
-    dm_kpts = lib.asarray(dm_kpts, order='C')
-    dms = _format_dms(dm_kpts, kpts)
-    nset, nkpts, nao = dms.shape[:3]
-    kpts_band, _ = _format_kpts_band(kpts_band, kpts), kpts_band
-
-    mesh = mydf.mesh
-    ngrids = np.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh).reshape(-1, *mesh)
-
-    task_list = _update_task_list(mydf, hermi=hermi, ngrids=mydf.ngrids,
-                                  ke_ratio=mydf.ke_ratio, rel_cutoff=mydf.rel_cutoff)
-
-    at_gamma_point = gamma_point(kpts)
-    if at_gamma_point:
-        vj_kpts = np.zeros((nset,nkpts,nao,nao))
-    else:
-        vj_kpts = np.zeros((nset,nkpts,nao,nao), dtype=np.complex128)
-
-    ish_atm = np.asarray(cell._atm, order='C', dtype=np.int32)
-    ish_bas = np.asarray(cell._bas, order='C', dtype=np.int32)
-    ish_env = np.asarray(cell._env, order='C', dtype=np.double)
-    ish_env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
-
-    jsh_atm = ish_atm
-    jsh_bas = ish_bas
-    jsh_env = ish_env
-
-    i0, i1, j0, j1 = (0, cell.nbas, 0, cell.nbas)
-
-    key = 'cart' if cell.cart else 'sph'
-    ao_loc0 = moleintor.make_loc(ish_bas, key)
-    ao_loc1 = ao_loc0
-
-
-    dimension = cell.dimension
-    if dimension == 0:
-        Ls = np.zeros((1,3))
-    else:
-        Ls = np.asarray(cell.get_lattice_Ls(), order='C')
-
-    a = cell.lattice_vectors()
-    b = np.linalg.inv(a.T)
-
-
-
-    drv = getattr(libdft, "grid_hfx_drv", None)
-    def make_k_mat(dm, vG, grid_level):
-        mat = np.zeros((nao, nao))
-        try:
-            drv(dm.ctypes.data_as(ctypes.c_void_p),
-                mat.ctypes.data_as(ctypes.c_void_p),
-                ctypes.byref(task_list),
-                vG.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(hermi),
-                ctypes.c_int(grid_level),
-                (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc0.ctypes.data_as(ctypes.c_void_p),
-                ao_loc1.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(dimension),
-                Ls.ctypes.data_as(ctypes.c_void_p),
-                a.ctypes.data_as(ctypes.c_void_p),
-                b.ctypes.data_as(ctypes.c_void_p),
-                ish_atm.ctypes.data_as(ctypes.c_void_p),
-                ish_bas.ctypes.data_as(ctypes.c_void_p),
-                ish_env.ctypes.data_as(ctypes.c_void_p),
-                jsh_atm.ctypes.data_as(ctypes.c_void_p),
-                jsh_bas.ctypes.data_as(ctypes.c_void_p),
-                jsh_env.ctypes.data_as(ctypes.c_void_p),
-                ctypes.c_int(cell.cart))
-        except Exception as e:
-            raise RuntimeError("Failed to compute K. %s" % e)
-        return mat
-
-
-    nlevels = task_list.contents.nlevels
-    meshes = task_list.contents.gridlevel_info.contents.mesh
-    meshes = np.ctypeslib.as_array(meshes, shape=(nlevels,3))
-    for ilevel in range(nlevels):
-        mesh = meshes[ilevel]
-        ngrids = np.prod(mesh)
-
-        gx = np.fft.fftfreq(mesh[0], 1./mesh[0]).astype(np.int32)
-        gy = np.fft.fftfreq(mesh[1], 1./mesh[1]).astype(np.int32)
-        gz = np.fft.fftfreq(mesh[2], 1./mesh[2]).astype(np.int32)
-        sub_coulG = _take_4d(coulG, (None, gx, gy, gz)).reshape(-1,ngrids)
-
-        for iset in range(nset):
-            for ikpt in range(nkpts):
-                vj_kpts[iset, ikpt] += make_k_mat(dms[iset, ikpt], sub_coulG, ilevel)
-
     if nset == 1:
         vj_kpts = vj_kpts[0]
     return vj_kpts

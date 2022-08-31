@@ -92,7 +92,7 @@ class KnownValues(unittest.TestCase):
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.fp(dip), 1.6424482249196493, 7)
+        self.assertAlmostEqual(lib.fp(dip), 1.6424482249196493, 6)
 
         dip = kmf.dip_moment()
         self.assertAlmostEqual(lib.fp(dip), 0.7361493256233677, 7)
