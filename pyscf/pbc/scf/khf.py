@@ -41,6 +41,7 @@ from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
 from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -485,6 +486,7 @@ class KSCF(pbchf.SCF):
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
+
     @kpts.setter
     def kpts(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
@@ -828,17 +830,17 @@ class KSCF(pbchf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self, mf=None):
         '''Convert the input mean-field object to a KRHF/KROHF/KRKS/KROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self, mf)
 
-    def to_uhf(self, mf):
+    def to_uhf(self, mf=None):
         '''Convert the input mean-field object to a KUHF/KUKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self, mf)
 
-    def to_ghf(self, mf):
+    def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self, mf)
 
     as_scanner = as_scanner
 
@@ -846,9 +848,13 @@ class KSCF(pbchf.SCF):
 class KRHF(KSCF, pbchf.RHF):
     def check_sanity(self):
         cell = self.cell
-        if cell.spin != 0 and len(self.kpts) % 2 != 0:
+        if isinstance(self.kpts, KPoints):
+            nkpts = self.kpts.nkpts
+        else:
+            nkpts = len(self.kpts)
+        if cell.spin != 0 and nkpts % 2 != 0:
             logger.warn(self, 'Problematic nelec %s and number of k-points %d '
-                        'found in KRHF method.', cell.nelec, len(self.kpts))
+                        'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
 
     def convert_from_(self, mf):

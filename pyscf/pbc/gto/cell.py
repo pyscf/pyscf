@@ -44,6 +44,7 @@ from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
+from pyscf.pbc.lib import kpts as libkpts
 from pyscf import __config__
 
 INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
@@ -209,7 +210,7 @@ def unpack(celldic):
 def dumps(cell):
     '''Serialize Cell object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys'))
+    exclude_keys = set(('output', 'stdout', '_keys', 'symm_orb', 'irrep_id', 'irrep_name'))
 
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
@@ -999,7 +1000,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
-              scaled_center=None):
+              scaled_center=None,
+              space_group_symmetry=False, time_reversal_symmetry=False,
+              symmorphic=True):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -1015,10 +1018,15 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
             scaled_center, given as the zeroth index of the returned kpts.
             Scaled meaning that the k-points are scaled to a grid from
             [-1,1] x [-1,1] x [-1,1]
+        space_group_symmetry : bool
+            Whether to consider space group symmetry
+        time_reversal_symmetry : bool
+            Whether to consider time reversal symmetry
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
-        first place in the k-points list
+        first place in the k-points list;
+        instance of :class:`KPoints` if k-point symmetry is considered
 
     Examples:
 
@@ -1038,6 +1046,8 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
     scaled_kpts = lib.cartesian_prod(ks_each_axis)
     scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
+    if space_group_symmetry or time_reversal_symmetry:
+        kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
     return kpts
 
 def get_uniform_grids(cell, mesh=None, **kwargs):
@@ -1700,6 +1710,14 @@ class Cell(mole.Mole):
         else:
             return a/self.unit
 
+    def get_scaled_positions(self):
+        ''' Get scaled atom positions.
+        '''
+        a = self.lattice_vectors()
+        atm_pos = self.atom_coords()
+        scaled_atm_pos = np.dot(atm_pos,np.linalg.inv(a))
+        return scaled_atm_pos
+
     def reciprocal_vectors(self, norm_to=2*np.pi):
         r'''
         .. math::
@@ -1734,15 +1752,24 @@ class Cell(mole.Mole):
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
-    def get_scaled_kpts(self, abs_kpts):
+    def get_scaled_kpts(self, abs_kpts, kpts_in_ibz=True):
         '''Get scaled k-points, given absolute k-points in 1/Bohr.
 
         Args:
-            abs_kpts : (nkpts, 3) ndarray of floats
+            abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+            kpts_in_ibz : bool
+                If True, return k-points in IBZ; otherwise, return k-points in BZ.
+                Default value is True. This has effects only if abs_kpts is a
+                :class:`KPoints` object
 
         Returns:
             scaled_kpts : (nkpts, 3) ndarray of floats
         '''
+        if isinstance(abs_kpts, libkpts.KPoints):
+            if kpts_in_ibz:
+                return abs_kpts.kpts_scaled_ibz
+            else:
+                return abs_kpts.kpts_scaled
         return 1./(2*np.pi)*np.dot(abs_kpts, self.lattice_vectors().T)
 
     make_kpts = get_kpts = make_kpts

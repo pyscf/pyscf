@@ -22,31 +22,53 @@
 
 #define MIN(x, y)       ((x) < (y) ? (x) : (y))
 
-//void NPomp_dsum_reduce_inplace(double **vec, size_t count)
-//{
-//        unsigned int nthreads = omp_get_num_threads();
-//        unsigned int thread_id = omp_get_thread_num();
-//        unsigned int bit, thread_src;
-//        unsigned int mask = 0;
-//        double *dst = vec[thread_id];
-//        double *src;
-//        size_t i;
-//#pragma omp barrier
-//        for (bit = 0; (1<<bit) < nthreads; bit++) {
-//                mask |= 1 << bit;
-//                if (!(thread_id & mask)) {
-//                        thread_src = thread_id | (1<<bit);
-//                        if (thread_src < nthreads) {
-//                                src = vec[thread_src];
-//                                for (i = 0; i < count; i++) {
-//                                        dst[i] += src[i];
-//                                }
-//                        }
-//                }
-//#pragma omp barrier
-//        }
-//
-//}
+void NPomp_split(size_t *start, size_t *end, size_t n) {
+        int nthread = omp_get_num_threads();
+        int thread_id = omp_get_thread_num();
+        int rest = n % nthread;
+        size_t blksize = n / nthread;
+        if (thread_id < rest) {
+                blksize++;
+                *start = blksize * thread_id;
+                *end = blksize * (thread_id + 1);
+        } else{
+                *start = blksize * thread_id + rest;
+                *end = *start + blksize;
+        }
+}
+
+static int _highest_power2(int n)
+{
+        int v = n - 1;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        return (v + 1) >> 1;
+}
+
+void NPomp_dsum_reduce_inplace1(double **vec, size_t count)
+{
+        if (count <= 1) {
+                return;
+        }
+        unsigned int nthreads = omp_get_num_threads();
+        unsigned int thread_id = omp_get_thread_num();
+        double *src = vec[thread_id];
+        double *dst;
+        int n;
+        size_t i;
+#pragma omp barrier
+        for (n = _highest_power2(nthreads); n > 0; n >>= 1) {
+                if (thread_id >= n) {
+                        dst = vec[thread_id - n];
+                        for (i = 0; i < count; i++) {
+                                dst[i] += src[i];
+                        }
+                }
+#pragma omp barrier
+        }
+}
 
 void NPomp_dsum_reduce_inplace(double **vec, size_t count)
 {
@@ -127,6 +149,7 @@ void NPomp_zprod_reduce_inplace(double complex **vec, size_t count)
         }
 #pragma omp barrier
 }
+
 
 #ifdef _OPENMP
 int get_omp_threads() {

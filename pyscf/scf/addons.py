@@ -170,6 +170,9 @@ def frac_occ_(mf, tol=1e-3):
 frac_occ = frac_occ_
 
 def dynamic_occ_(mf, tol=1e-3):
+    '''
+    Dyanmically adjust the occupancy to avoid degeneracy between HOMO and LUMO
+    '''
     assert (isinstance(mf, hf.RHF))
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
@@ -198,16 +201,18 @@ def dynamic_level_shift_(mf, factor=1.):
     value is set to (HF energy change * factor)
     '''
     old_get_fock = mf.get_fock
-    last_e = [None]
+    mf._last_e = None
     def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
-        if cycle >= 0 or diis is not None:
-            ehf =(numpy.einsum('ij,ji', h1e, dm) +
-                  numpy.einsum('ij,ji', vhf, dm) * .5)
-            if last_e[0] is not None:
-                level_shift_factor = abs(ehf-last_e[0]) * factor
+        if cycle > 0 or diis is not None:
+            if 'exc' in mf.scf_summary:  # DFT
+                e_tot = mf.scf_summary['e1'] + mf.scf_summary['coul'] + mf.scf_summary['exc']
+            else:
+                e_tot = mf.scf_summary['e1'] + mf.scf_summary['e2']
+            if mf._last_e is not None:
+                level_shift_factor = abs(e_tot-mf._last_e) * factor
                 logger.info(mf, 'Set level shift to %g', level_shift_factor)
-            last_e[0] = ehf
+            mf._last_e = e_tot
         return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
                             level_shift_factor, damp_factor)
     mf.get_fock = get_fock

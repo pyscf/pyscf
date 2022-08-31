@@ -82,7 +82,7 @@ def get_veff(ks_grad, mol=None, dm=None):
 def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((nset,3,nao,nao))
@@ -92,11 +92,9 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[0], mask, xctype)
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                 verbose=verbose)[1]
-                vrho = vxc[0]
-                #:aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
-                aow = numint._scale_ao(ao[0], weight*vrho)
+                vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[1]
+                wv = weight * vxc[0]
+                aow = numint._scale_ao(ao[0], wv)
                 _d1_dot_(vmat[idm], mol, ao[1:4], aow, mask, ao_loc, True)
 
     elif xctype == 'GGA':
@@ -105,9 +103,9 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[:4], mask, xctype)
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                 verbose=verbose)[1]
-                wv = numint._rks_gga_wv0(rho, vxc, weight)
+                vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[1]
+                wv = weight * vxc
+                wv[0] *= .5
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
 
     elif xctype == 'NLC':
@@ -119,13 +117,12 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             for idm in range(nset):
                 rho = make_rho(idm, ao[:10], mask, xctype)
-                vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                 verbose=verbose)[1]
-                wv = numint._rks_mgga_wv0(rho, vxc, weight)
+                vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[1]
+                wv = weight * vxc
+                wv[0] *= .5
+                wv[4] *= .5  # for the factor 1/2 in tau
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
-
-                # *2 because wv[5] is scaled by 0.5 in _rks_mgga_wv0
-                _tau_grad_dot_(vmat[idm], mol, ao, wv[5]*2, mask, ao_loc, True)
+                _tau_grad_dot_(vmat[idm], mol, ao, wv[4], mask, ao_loc, True)
 
     exc = None
     if nset == 1:
@@ -190,7 +187,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                           max_memory=2000, verbose=None):
     '''Full response including the response of the grids'''
     xctype = ni._xc_type(xc_code)
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
+    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi, False, grids)
     ao_loc = mol.ao_loc_nr()
 
     excsum = 0
@@ -200,15 +197,14 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         vtmp = numpy.empty((3,nao,nao))
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
             mask = gen_grid.make_mask(mol, coords)
-            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
+            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
+                            cutoff=grids.cutoff)
             rho = make_rho(0, ao[0], mask, xctype)
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                  verbose=verbose)[:2]
-            vrho = vxc[0]
+            exc, vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[:2]
+            wv = weight * vxc[0]
 
             vtmp = numpy.zeros((3,nao,nao))
-            #:aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho)
-            aow = numint._scale_ao(ao[0], weight*vrho)
+            aow = numint._scale_ao(ao[0], wv)
             _d1_dot_(vtmp, mol, ao[1:4], aow, mask, ao_loc, True)
             vmat += vtmp
 
@@ -216,19 +212,20 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho, weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = aow = None
+            rho = vxc = aow = None
 
     elif xctype == 'GGA':
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
             mask = gen_grid.make_mask(mol, coords)
-            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
+            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
+                            cutoff=grids.cutoff)
             rho = make_rho(0, ao[:4], mask, xctype)
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                  verbose=verbose)[:2]
+            exc, vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[:2]
+            wv = weight * vxc
+            wv[0] *= .5
 
             vtmp = numpy.zeros((3,nao,nao))
-            wv = numint._rks_gga_wv0(rho, vxc, weight)
             _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
             vmat += vtmp
 
@@ -236,7 +233,7 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = wv = None
+            rho = vxc = wv = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -245,22 +242,24 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 2
         for atm_id, (coords, weight, weight1) in enumerate(grids_response_cc(grids)):
             mask = gen_grid.make_mask(mol, coords)
-            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
+            ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask,
+                            cutoff=grids.cutoff)
             rho = make_rho(0, ao[:10], mask, xctype)
-            exc, vxc = ni.eval_xc(xc_code, rho, 0, relativity, 1,
-                                  verbose=verbose)[:2]
+            exc, vxc = ni.eval_xc_eff(xc_code, rho, 1, xctype=xctype)[:2]
+            wv = weight * vxc
+            wv[0] *= .5
+            wv[4] *= .5  # for the factor 1/2 in tau
 
             vtmp = numpy.zeros((3,nao,nao))
-            wv = numint._rks_mgga_wv0(rho, vxc, weight)
             _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
-            _tau_grad_dot_(vtmp, mol, ao, wv[5]*2, mask, ao_loc, True)
+            _tau_grad_dot_(vtmp, mol, ao, wv[4], mask, ao_loc, True)
             vmat += vtmp
 
             # response of weights
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho[0], weight1)
             # response of grids coordinates
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms) * 2
-            rho = vxc = vrho = wv = None
+            rho = vxc = wv = None
 
     # - sign because nabla_X = -nabla_x
     return excsum, -vmat

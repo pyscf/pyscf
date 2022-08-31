@@ -56,6 +56,9 @@ class KnownValues(unittest.TestCase):
         check = (kpts+kpts[idx]).dot(cell.lattice_vectors().T/(2*np.pi)) + 1e-14
         self.assertAlmostEqual(np.modf(check)[0].max(), 0, 12)
 
+    def test_symmetrize(self):
+        pass
+
 if __name__ == "__main__":
     print("Tests for kpts_helper")
     unittest.main()

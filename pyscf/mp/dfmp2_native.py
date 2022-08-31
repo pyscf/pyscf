@@ -576,7 +576,7 @@ def rmp2_densities_contribs(intsfile, mo_energy, frozen_mask, max_memory, logger
                     tbatch = tiset[jstart:jend, :, :]
                     Gbatch = Gamma[jstart:jend, :, :]
                     for jj in range(jend-jstart):
-                        TCijab_scal = 4.0 * (pt + pt) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
+                        TCijab_scal = 4.0 * (pt + ps) * tbatch[jj] - 4.0 * pt * tbatch[jj].T
                         Gbatch[jj] += lib.dot(ints3cV1_ia, TCijab_scal)
                     Gamma[jstart:jend, :, :] = Gbatch
                 del ints3cV1_ia, tbatch, Gbatch, TCijab_scal
