@@ -22,7 +22,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.adc import radc_ao2mo
 
-
 ### Integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
@@ -93,7 +92,6 @@ def transform_integrals_incore(myadc):
 
 
 def transform_integrals_outcore(myadc):
-
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(myadc.stdout, myadc.verbose)
 

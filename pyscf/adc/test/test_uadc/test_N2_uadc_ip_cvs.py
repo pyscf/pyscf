@@ -53,17 +53,13 @@ class KnownValues(unittest.TestCase):
 
         myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
         myadcipcvs.ncvs = 2 
-        e,v,p,x = myadcipcvs.kernel(nroots=4)
+        e,v,p,x = myadcipcvs.kernel(nroots=2)
 
         self.assertAlmostEqual(e[0], 15.12281031547323, 6)
         self.assertAlmostEqual(e[1], 15.12281031548646, 6)
-        self.assertAlmostEqual(e[2], 15.12611217616448, 6)
-        self.assertAlmostEqual(e[3], 15.12611217617556, 6)
 
         self.assertAlmostEqual(p[0], 0.77131403962843, 6)
         self.assertAlmostEqual(p[1], 0.77131403962002, 6)
-        self.assertAlmostEqual(p[2], 0.77076384112365, 6)
-        self.assertAlmostEqual(p[3], 0.77076384111545, 6)
 
     def test_ip_adc2x(self):
   
@@ -74,23 +70,19 @@ class KnownValues(unittest.TestCase):
 
         myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
         myadcipcvs.ncvs = 2 
-        e,v,p,x = myadcipcvs.kernel(nroots=6)
+        e,v,p,x = myadcipcvs.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 15.10850837418996, 6)
         self.assertAlmostEqual(e[1], 15.10850837420428, 6)
         self.assertAlmostEqual(e[2], 15.11180785804999, 6)
         self.assertAlmostEqual(e[3], 15.11180785806416, 6)
-        self.assertAlmostEqual(e[4], 15.70457314936650, 6)
-        self.assertAlmostEqual(e[5], 15.70457314936657, 6)
 
         self.assertAlmostEqual(p[0], 0.75798034434940, 6)
         self.assertAlmostEqual(p[1], 0.75798040042682, 6)
         self.assertAlmostEqual(p[2], 0.75723819837873, 6)
         self.assertAlmostEqual(p[3], 0.75723819850822, 6)
-        self.assertAlmostEqual(p[4], 0.00000000000000, 6)
-        self.assertAlmostEqual(p[5], 0.00000000000000, 6)
 
-    def test_ip_adc3(self):
+    def test_ip_adc3_high_cost(self):
          
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
@@ -99,21 +91,17 @@ class KnownValues(unittest.TestCase):
 
         myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
         myadcipcvs.ncvs = 2
-        e,v,p,x = myadcipcvs.kernel(nroots=6)
+        e,v,p,x = myadcipcvs.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 15.28014264411697, 6)
         self.assertAlmostEqual(e[1], 15.28014264412627, 6)
         self.assertAlmostEqual(e[2], 15.28358688862723, 6)
         self.assertAlmostEqual(e[3], 15.28358688863590, 6)
-        self.assertAlmostEqual(e[4], 15.70457314968271, 6)
-        self.assertAlmostEqual(e[5], 15.70457314968273, 6)
 
         self.assertAlmostEqual(p[0], 0.82130398832535, 6)
         self.assertAlmostEqual(p[1], 0.82130396559585, 6)
         self.assertAlmostEqual(p[2], 0.82061528343281, 6)
         self.assertAlmostEqual(p[3], 0.82061528704539, 6)
-        self.assertAlmostEqual(p[4], 0.00000000000000, 6)
-        self.assertAlmostEqual(p[5], 0.00000000000000, 6)
       
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")

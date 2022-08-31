@@ -49,16 +49,15 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-
     def test_ea_adc2(self):
 
         myadc.max_memory = 20
+        myadc.incore_complete = False
+        myadc.method_type = 'ea'
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
-        
-        myadcea = adc.radc_ea.RADCEA(myadc) 
-        e,v,p,x = myadcea.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
         self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
@@ -68,17 +67,36 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9941128865405613, 6)
         self.assertAlmostEqual(p[2], 1.9760420333383126, 6)
 
+    def test_ea_adc2x(self):
 
-    def test_ea_adc3(self):
-
-        myadc.method = "adc(3)"
         myadc.max_memory = 20
         myadc.incore_complete = False
+        myadc.method_type = 'ea'
+        myadc.method = "adc(2)-x"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.2218560609876961, 6)
+
+        e,v,p,x = myadc.kernel(nroots=3)
+
+        self.assertAlmostEqual(e[0], 0.0270276135717527, 6)
+        self.assertAlmostEqual(e[1], 0.0546446308721235, 6)
+        self.assertAlmostEqual(e[2], 0.1614552196278816, 6)
+
+        self.assertAlmostEqual(p[0], 1.9782643804856972, 6)
+        self.assertAlmostEqual(p[1], 1.9905409664546319, 6)
+        self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
+
+
+    def test_ea_adc3_high_cost(self):
+
+        myadc.max_memory = 20
+        myadc.incore_complete = False
+        myadc.method_type = 'ea'
+        myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
-        myadcea = adc.radc_ea.RADCEA(myadc) 
-        e,v,p,x = myadcea.kernel(nroots=4)
+        e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.0277406670820452, 6)
         self.assertAlmostEqual(e[1], 0.0551456657778995, 6)
@@ -89,26 +107,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
         self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
         self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
-
-
-    def test_ip_adc3(self):
-  
-        myadc.method = "adc(3)"
-        myadc.method_type = "ip"
-        myadc.incore_complete = False
-        myadc.max_memory = 10
-
-        e,v,p,x = myadc.kernel(nroots=3)
-        myadc.analyze()
       
-        self.assertAlmostEqual(e[0], 0.4777266577555, 6)
-        self.assertAlmostEqual(e[1], 0.5619000705967, 6)
-        self.assertAlmostEqual(e[2], 0.7119986982840, 6)
-
-        self.assertAlmostEqual(p[0], 1.8482158265750, 6)
-        self.assertAlmostEqual(p[1], 1.8499506292187, 6)
-        self.assertAlmostEqual(p[2], 1.8653509527805, 6)
-
 if __name__ == "__main__":
-    print("Out-of-core EA and IP  calculations for different RADC methods for water molecule")
+    print("EA calculations for different RADC methods for water molecule")
     unittest.main()

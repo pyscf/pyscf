@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(e_mp, -0.02095766698, 6)
 
-    def test_check_periodic_mp2_2(self):
+    def test_check_periodic_mp2_2_high_cost(self):
         nmp = [2,2,2]
         kpts = cell.make_kpts((nmp))
         kpts -= kpts[0]

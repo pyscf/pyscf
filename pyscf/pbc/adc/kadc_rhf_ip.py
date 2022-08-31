@@ -306,8 +306,8 @@ def get_diag(adc,kshift,M_ij=None,eris=None):
     e_vir = np.array(e_vir)
     e_occ = np.array(e_occ)
         
-    diag = np.zeros((dim), dtype=np.complex)
-    doubles = np.zeros((nkpts,nkpts,nvir*nocc*nocc),dtype=np.complex)
+    diag = np.zeros((dim), dtype=np.complex128)
+    doubles = np.zeros((nkpts,nkpts,nvir*nocc*nocc),dtype=np.complex128)
 
     # Compute precond in h1-h1 block
     M_ij_diag = np.diagonal(M_ij[kshift])
@@ -374,7 +374,7 @@ def matvec(adc, kshift, M_ij=None, eris=None):
         r2 = r[s_doubles:f_doubles]
 
         r2 = r2.reshape(nkpts,nkpts,nvir,nocc,nocc)
-        s2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex)
+        s2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex128)
         cell = adc.cell
         kpts = adc.kpts
         madelung = tools.madelung(cell, kpts)
@@ -641,8 +641,8 @@ def get_trans_moments_orbital(adc, orb, kshift):
     idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
 
-    T1 = np.zeros((nocc), dtype=np.complex)
-    T2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex)
+    T1 = np.zeros((nocc), dtype=np.complex128)
+    T2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex128)
     
 ######## ADC(2) 1h part  ############################################
 
@@ -871,7 +871,7 @@ class RADCIP(kadc_rhf.RADC):
         if diag is None :
             diag = self.get_diag()
         idx = None
-        dtype = getattr(diag, 'dtype', np.complex)
+        dtype = getattr(diag, 'dtype', np.complex128)
         if ascending:
             idx = np.argsort(diag)
         else:

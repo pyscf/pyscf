@@ -57,7 +57,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0][1], 1.80157487, 6)
         self.assertAlmostEqual(p[0][2], 0.00004972, 6)
 
-    def test_ip_adc2x_k(self):
+    def test_ip_adc2x_k_high_cost(self):
 
         nmp = [2,2,2]
         kpts = cell.make_kpts((nmp))
