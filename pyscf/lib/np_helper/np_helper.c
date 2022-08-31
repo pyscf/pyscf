@@ -13,7 +13,6 @@
     limitations under the License.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include "np_helper/np_helper.h"
 #include "config.h"
