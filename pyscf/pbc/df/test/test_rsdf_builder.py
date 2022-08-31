@@ -314,7 +314,7 @@ class KnownValues(unittest.TestCase):
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 0.9647178286189275, 7)
 
-    def test_make_j3c_sr(self):
+    def test_make_j3c_sr_high_cost(self):
         dfbuilder = rsdf_builder._RSGDFBuilder(cell_sr, auxcell_sr, kpts).build()
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
