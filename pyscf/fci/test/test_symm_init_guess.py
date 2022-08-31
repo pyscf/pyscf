@@ -36,7 +36,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_symm_spin0(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=True)
-        fs.wfnsym = 'B1'
+        fs.wfnsym = 'B2'
         fs.nroots = 3
         e, c = fs.kernel()
         self.assertAlmostEqual(e[0], -19.286003160337+mol.energy_nuc(), 9)
@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
 
     def test_symm_spin1(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=False)
-        fs.wfnsym = 'B1'
+        fs.wfnsym = 'B2'
         fs.nroots = 2
         e, c = fs.kernel()
         self.assertAlmostEqual(e[0], -19.303845373762+mol.energy_nuc(), 9)
