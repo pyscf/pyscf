@@ -19,20 +19,20 @@ import unittest
 import numpy
 from pyscf.pbc import gto
 from pyscf.pbc import scf,adc,mp
-from pyscf     import adc as mol_adc
+from pyscf import adc as mol_adc
 from pyscf.pbc.tools.pbc import super_cell
 
 cell = gto.M(
-    unit = 'B',
-    a = [[ 0.,          3.37013733,  3.37013733],
-         [ 3.37013733,  0.,          3.37013733],
-         [ 3.37013733,  3.37013733,  0.        ]],
-    mesh = [13]*3,
-    atom = '''He 0 0 0
+    unit='B',
+    a=[[0.,          3.37013733,  3.37013733],
+         [3.37013733,  0.,          3.37013733],
+         [3.37013733,  3.37013733,  0.        ]],
+    mesh=[13]*3,
+    atom='''He 0 0 0
               He 1.68506866 1.68506866 1.68506866''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    verbose = 0,
+    basis='gth-dzv',
+    pseudo='gth-pade',
+    verbose=0,
 )
 
 nmp = [1,1,2]
@@ -49,13 +49,13 @@ class KnownValues(unittest.TestCase):
 
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
 
-        self.assertAlmostEqual(e[0][0], 0.03211224, 6)
-        self.assertAlmostEqual(e[0][1], 0.52088413, 6)
-        self.assertAlmostEqual(e[0][2], 0.92916398, 6)
+        self.assertAlmostEqual(e[0][0], 0.03211224, 4)
+        self.assertAlmostEqual(e[0][1], 0.52088413, 4)
+        self.assertAlmostEqual(e[0][2], 0.92916398, 4)
 
-        self.assertAlmostEqual(p[0][0], 1.89132918, 6)
-        self.assertAlmostEqual(p[0][1], 1.80157487, 6)
-        self.assertAlmostEqual(p[0][2], 0.00004972, 6)
+        self.assertAlmostEqual(p[0][0], 1.89132918, 4)
+        self.assertAlmostEqual(p[0][1], 1.80157487, 4)
+        self.assertAlmostEqual(p[0][2], 0.00004972, 4)
 
     def test_ip_adc2x_k_high_cost(self):
 
@@ -67,13 +67,13 @@ class KnownValues(unittest.TestCase):
         kadc.method = 'adc(2)-x'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
 
-        self.assertAlmostEqual(e[0][0], 0.13741437, 6)
-        self.assertAlmostEqual(e[0][1], 0.65279043, 6)
-        self.assertAlmostEqual(e[0][2], 1.08236251, 6)
+        self.assertAlmostEqual(e[0][0], 0.13741437, 4)
+        self.assertAlmostEqual(e[0][1], 0.65279043, 4)
+        self.assertAlmostEqual(e[0][2], 1.08236251, 4)
 
-        self.assertAlmostEqual(p[0][0], 1.93375487, 6)
-        self.assertAlmostEqual(p[0][1], 1.90733872, 6)
-        self.assertAlmostEqual(p[0][2], 0.00357151, 6)
+        self.assertAlmostEqual(p[0][0], 1.93375487, 4)
+        self.assertAlmostEqual(p[0][1], 1.90733872, 4)
+        self.assertAlmostEqual(p[0][2], 0.00357151, 4)
 
     def test_ip_adc3_k(self):
 
@@ -81,14 +81,14 @@ class KnownValues(unittest.TestCase):
         kadc  = adc.KRADC(kmf)
         kadc.method = 'adc(3)'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
- 
-        self.assertAlmostEqual(e[0][0], 0.03297725, 6)
-        self.assertAlmostEqual(e[0][1], 0.52724032, 6)
-        self.assertAlmostEqual(e[0][2], 0.85718537, 6)
 
-        self.assertAlmostEqual(p[0][0], 1.90849228, 6)
-        self.assertAlmostEqual(p[0][1], 1.80306363, 6)
-        self.assertAlmostEqual(p[0][2], 0.00578080, 6)
+        self.assertAlmostEqual(e[0][0], 0.03297725, 4)
+        self.assertAlmostEqual(e[0][1], 0.52724032, 4)
+        self.assertAlmostEqual(e[0][2], 0.85718537, 4)
+
+        self.assertAlmostEqual(p[0][0], 1.90849228, 4)
+        self.assertAlmostEqual(p[0][1], 1.80306363, 4)
+        self.assertAlmostEqual(p[0][2], 0.00578080, 4)
 
 if __name__ == "__main__":
     print("k-point calculations for IP-ADC methods")

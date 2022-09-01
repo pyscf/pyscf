@@ -28,8 +28,8 @@ def setUpModule():
     r = 0.969286393
     mol = gto.Mole()
     mol.atom = [
-        ['O', ( 0., 0.    , -r/2   )],
-        ['H', ( 0., 0.    ,  r/2)],]
+        ['O', (0., 0.    , -r/2   )],
+        ['H', (0., 0.    ,  r/2)],]
     mol.basis = {'O':'cc-pvdz',
                  'H':'cc-pvdz'}
     mol.verbose = 0
@@ -49,7 +49,7 @@ class KnownValues(unittest.TestCase):
 
 
     def test_hf_dfgs(self):
-  
+
         mf = scf.UHF(mol).run()
         myadc = adc.ADC(mf)
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
@@ -58,20 +58,20 @@ class KnownValues(unittest.TestCase):
 
 
     def test_dfhs_dfgs(self):
-  
+
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.15094533756, 6)
 
 
     def test_ea_dfadc3(self):
-  
+
         mf = scf.UHF(mol).density_fit(auxbasis='cc-pvdz-jkfit')
         mf.kernel()
         myadc.with_df = df.DF(mol, auxbasis='cc-pvdz-ri')
         myadc.max_memory = 20
         myadc.method = "adc(3)"
         myadc.method_type = "ea"
-        
+
         e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.03349588, 6)
@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         myadc.max_memory = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
-        
+
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
@@ -106,10 +106,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.93869064, 6)
         self.assertAlmostEqual(p[1], 0.58692581, 6)
         self.assertAlmostEqual(p[2], 0.35111056, 6)
-      
+
 
     def test_hf_dfadc3_ip(self):
-  
+
         mf = scf.UHF(mol).run()
         myadc = adc.ADC(mf)
         myadc.with_df = df.DF(mol, auxbasis='aug-cc-pvdz-ri')
@@ -117,7 +117,7 @@ class KnownValues(unittest.TestCase):
 
         e,v,p,x = myadc.kernel(nroots=3)
         myadc.analyze()
-        e_corr = myadc.e_corr        
+        e_corr = myadc.e_corr
 
         self.assertAlmostEqual(e_corr, -0.1633223874, 6)
 

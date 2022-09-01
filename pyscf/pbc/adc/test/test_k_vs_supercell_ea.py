@@ -19,20 +19,20 @@ import unittest
 import numpy
 from pyscf.pbc import gto
 from pyscf.pbc import scf,adc,mp
-from pyscf     import adc as mol_adc
+from pyscf import adc as mol_adc
 from pyscf.pbc.tools.pbc import super_cell
 
 cell = gto.M(
-    unit = 'B',
-    a = [[ 0.,          3.37013733,  3.37013733],
-         [ 3.37013733,  0.,          3.37013733],
-         [ 3.37013733,  3.37013733,  0.        ]],
-    mesh = [13]*3,
-    atom = '''He 0 0 0
+    unit='B',
+    a=[[0.,          3.37013733,  3.37013733],
+         [3.37013733,  0.,          3.37013733],
+         [3.37013733,  3.37013733,  0.        ]],
+    mesh=[13]*3,
+    atom='''He 0 0 0
               He 1.68506866 1.68506866 1.68506866''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    verbose = 0,
+    basis='gth-dzv',
+    pseudo='gth-pade',
+    verbose=0,
 )
 
 nmp = [1,1,2]
@@ -76,7 +76,7 @@ class KnownValues(unittest.TestCase):
 
         myadc.method = 'adc(2)-x'
         e1,v1,p1,x1 = myadc.kernel(nroots=3)
-        
+
         kadc.method = 'adc(2)-x'
         e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
 
@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
 
         myadc.method = 'adc(3)'
         e1,v1,p1,x1 = myadc.kernel(nroots=3)
-    
+
         kadc.method = 'adc(3)'
         e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
 

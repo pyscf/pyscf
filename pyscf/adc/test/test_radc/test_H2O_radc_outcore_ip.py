@@ -30,9 +30,9 @@ def setUpModule():
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
     y = r * math.cos(104.468205* math.pi/(2 * 180.0))
     mol.atom = [
-        ['O', ( 0., 0.    , 0)],
-        ['H', ( 0., -x, y)],
-        ['H', ( 0., x , y)],]
+        ['O', (0., 0.    , 0)],
+        ['H', (0., -x, y)],
+        ['H', (0., x , y)],]
     mol.basis = {'H': 'cc-pVDZ',
                  'O': 'cc-pVDZ',}
     mol.verbose = 0
@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8720029748507658, 6)
         self.assertAlmostEqual(p[2], 1.8881842403480831, 6)
         self.assertAlmostEqual(p[3], 0.1651131053450, 6)
-      
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")
     unittest.main()

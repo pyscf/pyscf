@@ -29,60 +29,54 @@ import tempfile
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
-     cput0 = (time.process_time(), time.time())
-     log = logger.Logger(myadc.stdout, myadc.verbose)
-     cell = myadc.cell
-     kpts = myadc.kpts
-     nkpts = myadc.nkpts
-     nocc = myadc.nocc
-     nmo = myadc.nmo
-     nvir = nmo - nocc
-     dtype = myadc.mo_coeff[0].dtype
+    log = logger.Logger(myadc.stdout, myadc.verbose)
+    kpts = myadc.kpts
+    nkpts = myadc.nkpts
+    nocc = myadc.nocc
+    nmo = myadc.nmo
+    nvir = nmo - nocc
+    dtype = myadc.mo_coeff[0].dtype
 
-     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
+    mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-     # Get location of padded elements in occupied and virtual space.
-     nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-     nonzero_padding = padding_k_idx(myadc, kind="joint")
+    fao2mo = myadc._scf.with_df.ao2mo
 
-     fao2mo = myadc._scf.with_df.ao2mo
+    kconserv = myadc.khelper.kconserv
+    khelper = myadc.khelper
 
-     kconserv = myadc.khelper.kconserv
-     khelper = myadc.khelper
+    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
-     orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
-     orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
+    fao2mo = myadc._scf.with_df.ao2mo
+    eris = lambda:None
 
-     fao2mo = myadc._scf.with_df.ao2mo
-     eris = lambda:None
+    log.info('using incore ERI storage')
+    eris.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+    eris.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+    eris.ovoo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
+    eris.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+    eris.ovvv = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
+    eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
 
-     log.info('using incore ERI storage')
-     eris.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
-     eris.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-     eris.ovoo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), dtype=dtype)
-     eris.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
-     eris.ovvv = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nvir), dtype=dtype)
-     eris.ovvo = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=dtype)
+    for (ikp,ikq,ikr) in khelper.symm_map.keys():
+        iks = kconserv[ikp,ikq,ikr]
+        eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
+                         (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
+        if dtype == np.float64:
+            eri_kpt = eri_kpt.real
+        eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
+        for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
+            eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr)
+            eris.oooo[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,:nocc]/nkpts
+            eris.oovv[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc, nocc:,nocc:]/nkpts
+            eris.ovoo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,:nocc]/nkpts
+            eris.ovov[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,nocc:]/nkpts
+            eris.ovvv[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,nocc:]/nkpts
+            eris.ovvo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,:nocc]/nkpts
 
-     for (ikp,ikq,ikr) in khelper.symm_map.keys():
-          iks = kconserv[ikp,ikq,ikr]
-          eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
-                           (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
-          if dtype == np.float64: eri_kpt = eri_kpt.real
-          eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
-          for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
-              eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr)
-              eris.oooo[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc,:nocc,:nocc]/nkpts 
-              eris.oovv[kp,kq,kr] = eri_kpt_symm[:nocc,:nocc, nocc:,nocc:]/nkpts
-              eris.ovoo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,:nocc]/nkpts
-              eris.ovov[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,:nocc,nocc:]/nkpts
-              eris.ovvv[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,nocc:]/nkpts
-              eris.ovvo[kp,kq,kr] = eri_kpt_symm[:nocc,nocc:,nocc:,:nocc]/nkpts
+    if (myadc.method == "adc(2)-x" and myadc.higher_excitations is True) or (myadc.method == "adc(3)"):
+        eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
-     if (myadc.method == "adc(2)-x" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
-          eris.vvvv = myadc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
-           
-     return eris
+    return eris
 
 
 def transform_integrals_outcore(myadc):
@@ -90,9 +84,7 @@ def transform_integrals_outcore(myadc):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
 
-    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
-    cell = myadc.cell
     kpts = myadc.kpts
     nkpts = myadc.nkpts
     nocc = myadc.nocc
@@ -103,24 +95,17 @@ def transform_integrals_outcore(myadc):
 
     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-    # Get location of padded elements in occupied and virtual space.
-    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-    nonzero_padding = padding_k_idx(myadc, kind="joint")
-
     fao2mo = myadc._scf.with_df.ao2mo
 
     kconserv = myadc.khelper.kconserv
     khelper = myadc.khelper
-
-    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
-    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
     eris = lambda:None
     eris.feri = feri = lib.H5TmpFile()
 
     # The momentum conservation array
     kconserv = myadc.khelper.kconserv
-    
+
     eris.feri = feri = lib.H5TmpFile()
     eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
     eris.oovv = feri.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
@@ -139,7 +124,8 @@ def transform_integrals_outcore(myadc):
                 orbo_q = mo_coeff[kq][:, :nocc]
                 buf_kpt = fao2mo((orbo_p, orbo_q, mo_coeff[kr], mo_coeff[ks]),
                                  (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
+                if mo_coeff[0].dtype == np.float64:
+                    buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape(nocc, nocc, nmo, nmo)
                 dtype = buf_kpt.dtype
                 eris.oooo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
@@ -156,7 +142,8 @@ def transform_integrals_outcore(myadc):
                 orbv_q = mo_coeff[kq][:, nocc:]
                 buf_kpt = fao2mo((orbo_p, orbv_q, mo_coeff[kr], mo_coeff[ks]),
                                  (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
+                if mo_coeff[0].dtype == np.float64:
+                    buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape(nocc,nvir,nmo, nmo)
                 eris.ovoo[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
                 eris.ovov[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
@@ -164,8 +151,8 @@ def transform_integrals_outcore(myadc):
                 eris.ovvv[kp, kq, kr, :, :, :, :] = buf_kpt[:, :, nocc:, nocc:] / nkpts
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
-    if (myadc.method == "adc(2)-x" and myadc.higher_excitations == True) or (myadc.method == "adc(3)"):
-        mem_now = lib.current_memory()[0] 
+    if (myadc.method == "adc(2)-x" and myadc.higher_excitations is True) or (myadc.method == "adc(3)"):
+        mem_now = lib.current_memory()[0]
         if nvir ** 4 * 16 / 1e6 + mem_now < myadc.max_memory:
             for (ikp, ikq, ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp, ikq, ikr]
@@ -176,7 +163,8 @@ def transform_integrals_outcore(myadc):
                 # unit cell is small enough to handle vvvv in-core
                 buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                  kpts[[ikp,ikq,ikr,iks]], compact=False)
-                if dtype == np.float64: buf_kpt = buf_kpt.real
+                if dtype == np.float64:
+                    buf_kpt = buf_kpt.real
                 buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                     buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -189,14 +177,18 @@ def transform_integrals_outcore(myadc):
                     orbva_p = orbv_p[:, a].reshape(-1, 1)
                     buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
                                      (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                    if mo_coeff[0].dtype == np.float64: buf_kpt = buf_kpt.real
+                    if mo_coeff[0].dtype == np.float64:
+                        buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
                     eris.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
                     # Store symmetric permutations
-                    eris.vvvv[ikr, ikp, iks, :, a, :, :] = buf_kpt.transpose(1, 0, 3, 2)[:, 0, :, :] / nkpts
-                    eris.vvvv[ikq, iks, ikp, :, :, a, :] = buf_kpt.transpose(2, 3, 0, 1).conj()[:, :, 0, :] / nkpts
-                    eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[:, :, :, 0] / nkpts
+                    eris.vvvv[ikr, ikp, iks, :, a, :, :] = buf_kpt.transpose(1, 0, 3, 2)[
+                        :, 0, :, :] / nkpts
+                    eris.vvvv[ikq, iks, ikp, :, :, a, :] = buf_kpt.transpose(2, 3, 0, 1).conj()[
+                        :, :, 0, :] / nkpts
+                    eris.vvvv[iks, ikq, ikr, :, :, :, a] = buf_kpt.transpose(3, 2, 1, 0).conj()[
+                        :, :, :, 0] / nkpts
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
     return eris
@@ -205,8 +197,6 @@ def transform_integrals_outcore(myadc):
 def transform_integrals_df(myadc):
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
-    cput0 = (time.process_time(), time.time())
-    log = logger.Logger(myadc.stdout, myadc.verbose)
     cell = myadc.cell
     kpts = myadc.kpts
     nkpts = myadc.nkpts
@@ -221,22 +211,11 @@ def transform_integrals_df(myadc):
 
     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-    # Get location of padded elements in occupied and virtual space.
-    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-    nonzero_padding = padding_k_idx(myadc, kind="joint")
-
-    fao2mo = myadc._scf.with_df.ao2mo
-
     kconserv = myadc.khelper.kconserv
-    khelper = myadc.khelper
-
-    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
-    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
     # The momentum conservation array
     kconserv = myadc.khelper.kconserv
-    
-    nvir_pair = nvir*(nvir+1)//2
+
     with_df = myadc.with_df
     naux = with_df.get_naoaux()
     eris = lambda:None
@@ -250,8 +229,6 @@ def transform_integrals_df(myadc):
 
     eris.vvvv = None
     eris.ovvv = None
-
-    cput0 = (time.process_time(), time.time())
 
     with h5py.File(myadc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'][:]
@@ -272,12 +249,12 @@ def transform_integrals_df(myadc):
                         Lpq_ao = lib.unpack_tril(Lpq_ao).astype(np.complex128)
                     out = _ao2mo.r_e2(Lpq_ao, mo, (0, nmo, nmo, nmo+nmo), tao, ao_loc)
                 Lpq_mo[ki, kj] = out.reshape(-1, nmo, nmo)
-               
+
                 Loo[ki,kj] = Lpq_mo[ki,kj][:,:nocc,:nocc]
                 eris.Lov[ki,kj] = Lpq_mo[ki,kj][:,:nocc,nocc:]
                 Lvo[ki,kj] = Lpq_mo[ki,kj][:,nocc:,:nocc]
                 eris.Lvv[ki,kj] = Lpq_mo[ki,kj][:,nocc:,nocc:]
-                
+
     eris.feri = feri = lib.H5TmpFile()
 
     eris.oooo = feri.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
@@ -294,7 +271,8 @@ def transform_integrals_df(myadc):
                 eris.oooo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', Loo[kp,kq], Loo[kr,ks])/nkpts
                 eris.oovv[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', Loo[kp,kq], eris.Lvv[kr,ks])/nkpts
                 eris.ovoo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Loo[kr,ks])/nkpts
-                eris.ovov[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], eris.Lov[kr,ks])/nkpts
+                eris.ovov[kp,kq,kr] = lib.einsum(
+                    'Lpq,Lrs->pqrs', eris.Lov[kp,kq], eris.Lov[kr,ks])/nkpts
                 eris.ovvo[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Lvo[kr,ks])/nkpts
                 #eris.ovvv[kp,kq,kr] = lib.einsum('Lpq,Lrs->pqrs', eris.Lov[kp,kq], Lvv[kr,ks])/nkpts
 
@@ -302,7 +280,7 @@ def transform_integrals_df(myadc):
 
 def calculate_chunk_size(myadc):
 
-    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5 
+    avail_mem = (myadc.max_memory - lib.current_memory()[0]) * 0.5
     nocc = [np.count_nonzero(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]
     nocc = np.amax(nocc)
     nmo = [len(myadc.mo_occ[ikpt]) for ikpt in range(myadc.nkpts)]

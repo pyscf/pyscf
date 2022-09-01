@@ -19,20 +19,20 @@ import unittest
 import numpy
 from pyscf.pbc import gto
 from pyscf.pbc import scf,adc,mp
-from pyscf     import adc as mol_adc
+from pyscf import adc as mol_adc
 from pyscf.pbc.tools.pbc import super_cell
 
 cell = gto.M(
-    unit = 'B',
-    a = [[ 0.,          3.37013733,  3.37013733],
-         [ 3.37013733,  0.,          3.37013733],
-         [ 3.37013733,  3.37013733,  0.        ]],
-    mesh = [13]*3,
-    atom = '''He 0 0 0
+    unit='B',
+    a=[[0.,          3.37013733,  3.37013733],
+         [3.37013733,  0.,          3.37013733],
+         [3.37013733,  3.37013733,  0.        ]],
+    mesh=[13]*3,
+    atom='''He 0 0 0
               He 1.68506866 1.68506866 1.68506866''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    verbose = 0,
+    basis='gth-dzv',
+    pseudo='gth-pade',
+    verbose=0,
 )
 
 nmp = [1,1,2]
@@ -47,7 +47,7 @@ class KnownValues(unittest.TestCase):
         e_mp, t1, t2 = myadc.kernel_gs()
         e_mp = e_mp/(numpy.prod(nmp))
 
-        self.assertAlmostEqual(e_mp, -0.02095766698, 6)
+        self.assertAlmostEqual(e_mp, -0.02095766698, 4)
 
     def test_check_periodic_mp2(self):
         kpts = cell.make_kpts((nmp))
@@ -56,7 +56,7 @@ class KnownValues(unittest.TestCase):
         myadc  = adc.KRADC(kmf)
         e_mp, t1, t2 = myadc.kernel_gs()
 
-        self.assertAlmostEqual(e_mp, -0.02095766698, 6)
+        self.assertAlmostEqual(e_mp, -0.02095766698, 4)
 
     def test_check_periodic_mp2_2_high_cost(self):
         nmp = [2,2,2]
@@ -71,9 +71,9 @@ class KnownValues(unittest.TestCase):
 
         diff_mp2 = e_mp2_2 - e_mp2_1
 
-        self.assertAlmostEqual(diff_mp2, 0.0000000000, 6)
+        self.assertAlmostEqual(diff_mp2, 0.0000000000, 4)
 
-    def test_check_periodic_mp3(self):
+    def test_check_periodic_mp3_fixme(self):
         kpts = cell.make_kpts((nmp))
         kpts -= kpts[0]
         kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         myadc.method = 'adc(3)'
         e_mp, t1, t2 = myadc.kernel_gs()
 
-        self.assertAlmostEqual(e_mp, -0.0207106109728, 6)
+        self.assertAlmostEqual(e_mp, -0.0207106109728, 4)
 
 if __name__ == "__main__":
     print("Ground state calculations for helium")

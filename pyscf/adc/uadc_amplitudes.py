@@ -26,7 +26,7 @@ from pyscf.lib import logger
 from pyscf.adc import uadc_ao2mo
 from pyscf.adc import radc_ao2mo
 from pyscf.adc import dfadc
-from pyscf.adc.radc_amplitudes import _create_t2_h5cache 
+from pyscf.adc.radc_amplitudes import _create_t2_h5cache
 from pyscf import __config__
 from pyscf import df
 
@@ -127,7 +127,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
     t1_2 = (None,)
-    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
 
         t1_2_a = np.zeros((nocc_a,nvir_a))
@@ -136,7 +136,8 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_a,chnk_size):
-                eris_ovvv = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                eris_ovvv = dfadc.get_ovvv_spin_df(
+                    myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
                 k = eris_ovvv.shape[0]
                 t1_2_a += 0.5*lib.einsum('kdac,ikcd->ia',eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
                 t1_2_a -= 0.5*lib.einsum('kcad,ikcd->ia',eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
@@ -155,7 +156,8 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_b,chnk_size):
-                eris_OVvv = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                eris_OVvv = dfadc.get_ovvv_spin_df(
+                    myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
                 k = eris_OVvv.shape[0]
                 t1_2_a += lib.einsum('kdac,ikcd->ia',eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
                 del eris_OVvv
@@ -169,7 +171,8 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_a,chnk_size):
-                eris_ovVV = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                eris_ovVV = dfadc.get_ovvv_spin_df(
+                    myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
                 k = eris_ovVV.shape[0]
                 t1_2_b += lib.einsum('kdac,kidc->ia',eris_ovVV,t2_1_ab[a:a+k],optimize=True)
                 del eris_ovVV
@@ -187,7 +190,8 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_b,chnk_size):
-                eris_OVVV = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                eris_OVVV = dfadc.get_ovvv_spin_df(
+                    myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
                 k = eris_OVVV.shape[0]
                 t1_2_b += 0.5*lib.einsum('kdac,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
                 t1_2_b -= 0.5*lib.einsum('kcad,ikcd->ia',eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
@@ -214,7 +218,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = (None,)
     t2_1_vvvv = (None,)
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
 
         # Compute second-order doubles t2 (tijab)
 
@@ -228,7 +232,8 @@ def compute_amplitudes(myadc, eris):
 
         if isinstance(eris.vvvv_p, np.ndarray):
             eris_vvvv = eris.vvvv_p
-            temp = np.ascontiguousarray(t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
+            temp = np.ascontiguousarray(
+                t2_1_a[:,:,ab_ind_a[0],ab_ind_a[1]]).reshape(nocc_a*nocc_a,-1)
             t2_1_vvvv_a = np.dot(temp,eris_vvvv.T).reshape(nocc_a, nocc_a, -1)
             del eris_vvvv
         elif isinstance(eris.vvvv_p, list):
@@ -251,14 +256,16 @@ def compute_amplitudes(myadc, eris):
         temp_1 = lib.einsum('kcbj,ikac->ijab',eris_OVvo,t2_1_ab[:],optimize=True)
 
         t2_2_a += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
-        t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
+        t2_2_a += temp_1 - temp_1.transpose(1,0,2,3) - \
+                                            temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
 
         del temp
         del temp_1
 
         if isinstance(eris.VVVV_p, np.ndarray):
             eris_VVVV = eris.VVVV_p
-            temp = np.ascontiguousarray(t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]).reshape(nocc_b*nocc_b,-1)
+            temp = np.ascontiguousarray(
+                t2_1_b[:,:,ab_ind_b[0],ab_ind_b[1]]).reshape(nocc_b*nocc_b,-1)
             t2_1_vvvv_b = np.dot(temp,eris_VVVV.T).reshape(nocc_b, nocc_b, -1)
             del eris_VVVV
         elif isinstance(eris.VVVV_p, list) :
@@ -281,7 +288,8 @@ def compute_amplitudes(myadc, eris):
         temp_1 = lib.einsum('kcbj,kica->ijab',eris_ovVO,t2_1_ab[:],optimize=True)
 
         t2_2_b += temp - temp.transpose(1,0,2,3) - temp.transpose(0,1,3,2) + temp.transpose(1,0,3,2)
-        t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
+        t2_2_b += temp_1 - temp_1.transpose(1,0,2,3) - \
+                                            temp_1.transpose(0,1,3,2) + temp_1.transpose(1,0,3,2)
         del temp
         del temp_1
 
@@ -332,7 +340,7 @@ def compute_amplitudes(myadc, eris):
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
-    if (myadc.method == "adc(3)" and myadc.approx_trans_moments == False):
+    if (myadc.method == "adc(3)" and myadc.approx_trans_moments is False):
         # Compute third-order singles (tij)
 
         eris_ovoo = eris.ovoo
@@ -394,68 +402,110 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_a,chnk_size):
-                eris_ovvv = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
+                eris_ovvv = dfadc.get_ovvv_spin_df(
+                    myadc, eris.Lov, eris.Lvv, p, chnk_size).reshape(-1,nvir_a,nvir_a,nvir_a)
                 k = eris_ovvv.shape[0]
                 t1_3_a += 0.5*lib.einsum('ilde,lead->ia',t2_2_a[:,a:a+k],eris_ovvv,optimize=True)
                 t1_3_a -= 0.5*lib.einsum('ilde,ldae->ia',t2_2_a[:,a:a+k],eris_ovvv,optimize=True)
-                t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',t2_1_a[:], eris_ovvv,  t2_1_a[:,a:a+k] ,optimize=True)
-                t1_3_a += lib.einsum('ildf,mafe,lmde->ia',t2_1_a[:], eris_ovvv,  t2_1_a[:,a:a+k] ,optimize=True)
-                t1_3_a += lib.einsum('ilfd,mefa,mled->ia',t2_1_ab[:],eris_ovvv, t2_1_ab[a:a+k],optimize=True)
-                t1_3_a -= lib.einsum('ilfd,mafe,mled->ia',t2_1_ab[:],eris_ovvv, t2_1_ab[a:a+k],optimize=True)
-                t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
-                t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
-                t1_3_b += 0.5*lib.einsum('lifa,mefd,lmde->ia',t2_1_ab[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
-                t1_3_b -= 0.5*lib.einsum('lifa,mdfe,lmde->ia',t2_1_ab[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
-                t1_3_a[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-                t1_3_a[a:a+k] -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-                t1_3_a[a:a+k] += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],eris_ovvv,t2_1_ab[:],optimize=True)
-                t1_3_a[a:a+k] -= lib.einsum('mlfd,ifea,mled->ia',t2_1_ab[:],eris_ovvv,t2_1_ab[:],optimize=True)
-                t1_3_a[a:a+k] -= 0.25*lib.einsum('lmef,iedf,lmad->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-                t1_3_a[a:a+k] += 0.25*lib.einsum('lmef,ifde,lmad->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+                t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',
+                                     t2_1_a[:], eris_ovvv,  t2_1_a[:,a:a+k] ,optimize=True)
+                t1_3_a += lib.einsum('ildf,mafe,lmde->ia',
+                                     t2_1_a[:], eris_ovvv,  t2_1_a[:,a:a+k] ,optimize=True)
+                t1_3_a += lib.einsum('ilfd,mefa,mled->ia',
+                                     t2_1_ab[:],eris_ovvv, t2_1_ab[a:a+k],optimize=True)
+                t1_3_a -= lib.einsum('ilfd,mafe,mled->ia',
+                                     t2_1_ab[:],eris_ovvv, t2_1_ab[a:a+k],optimize=True)
+                t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                         t2_1_a[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
+                t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                         t2_1_a[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
+                t1_3_b += 0.5*lib.einsum('lifa,mefd,lmde->ia',
+                                         t2_1_ab[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
+                t1_3_b -= 0.5*lib.einsum('lifa,mdfe,lmde->ia',
+                                         t2_1_ab[:],eris_ovvv,t2_1_a[:,a:a+k],optimize=True)
+                t1_3_a[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                                t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+                t1_3_a[a:a+k] -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',
+                                                t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+                t1_3_a[a:a+k] += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],
+                                            eris_ovvv,t2_1_ab[:],optimize=True)
+                t1_3_a[a:a+k] -= lib.einsum('mlfd,ifea,mled->ia',t2_1_ab[:],
+                                            eris_ovvv,t2_1_ab[:],optimize=True)
+                t1_3_a[a:a+k] -= 0.25*lib.einsum('lmef,iedf,lmad->ia',
+                                                 t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+                t1_3_a[a:a+k] += 0.25*lib.einsum('lmef,ifde,lmad->ia',
+                                                 t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
                 del eris_ovvv
                 a += k
         else :
             eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir_a)
             t1_3_a += 0.5*lib.einsum('ilde,lead->ia',t2_2_a[:],eris_ovvv,optimize=True)
             t1_3_a -= 0.5*lib.einsum('ilde,ldae->ia',t2_2_a[:],eris_ovvv,optimize=True)
-            t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',t2_1_a[:], eris_ovvv,  t2_1_a[:] ,optimize=True)
-            t1_3_a += lib.einsum('ildf,mafe,lmde->ia',t2_1_a[:], eris_ovvv,  t2_1_a[:] ,optimize=True)
-            t1_3_a += lib.einsum('ilfd,mefa,mled->ia',t2_1_ab[:],eris_ovvv, t2_1_ab[:],optimize=True)
-            t1_3_a -= lib.einsum('ilfd,mafe,mled->ia',t2_1_ab[:],eris_ovvv, t2_1_ab[:],optimize=True)
-            t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_b += 0.5*lib.einsum('lifa,mefd,lmde->ia',t2_1_ab[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_b -= 0.5*lib.einsum('lifa,mdfe,lmde->ia',t2_1_ab[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_a += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_a -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',
+                                 t2_1_a[:], eris_ovvv,  t2_1_a[:] ,optimize=True)
+            t1_3_a += lib.einsum('ildf,mafe,lmde->ia',
+                                 t2_1_a[:], eris_ovvv,  t2_1_a[:] ,optimize=True)
+            t1_3_a += lib.einsum('ilfd,mefa,mled->ia',
+                                 t2_1_ab[:],eris_ovvv, t2_1_ab[:],optimize=True)
+            t1_3_a -= lib.einsum('ilfd,mafe,mled->ia',
+                                 t2_1_ab[:],eris_ovvv, t2_1_ab[:],optimize=True)
+            t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                     t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                     t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_b += 0.5*lib.einsum('lifa,mefd,lmde->ia',
+                                     t2_1_ab[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_b -= 0.5*lib.einsum('lifa,mdfe,lmde->ia',
+                                     t2_1_ab[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                     t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',
+                                     t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
             t1_3_a += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],eris_ovvv,t2_1_ab[:],optimize=True)
             t1_3_a -= lib.einsum('mlfd,ifea,mled->ia',t2_1_ab[:],eris_ovvv,t2_1_ab[:],optimize=True)
-            t1_3_a -= 0.25*lib.einsum('lmef,iedf,lmad->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
-            t1_3_a += 0.25*lib.einsum('lmef,ifde,lmad->ia',t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a -= 0.25*lib.einsum('lmef,iedf,lmad->ia',
+                                      t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
+            t1_3_a += 0.25*lib.einsum('lmef,ifde,lmad->ia',
+                                      t2_1_a[:],eris_ovvv,t2_1_a[:],optimize=True)
             del eris_ovvv
 
         if isinstance(eris.OVVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_b,chnk_size):
-                eris_OVVV = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
+                eris_OVVV = dfadc.get_ovvv_spin_df(
+                    myadc, eris.LOV, eris.LVV, p, chnk_size).reshape(-1,nvir_b,nvir_b,nvir_b)
                 k = eris_OVVV.shape[0]
                 t1_3_b += 0.5*lib.einsum('ilde,lead->ia',t2_2_b[:,a:a+k],eris_OVVV,optimize=True)
                 t1_3_b -= 0.5*lib.einsum('ilde,ldae->ia',t2_2_b[:,a:a+k],eris_OVVV,optimize=True)
-                t1_3_b -= lib.einsum('ildf,mefa,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_b += lib.einsum('ildf,mafe,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_b += lib.einsum('lidf,mefa,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_b -= lib.einsum('lidf,mafe,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_b += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_b -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
-                t1_3_b[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-                t1_3_b[a:a+k] -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-                t1_3_b[a:a+k] += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
-                t1_3_b[a:a+k] -= lib.einsum('lmdf,ifea,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
-                t1_3_b[a:a+k] -= 0.25*lib.einsum('lmef,iedf,lmad->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-                t1_3_b[a:a+k] += 0.25*lib.einsum('lmef,ifde,lmad->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+                t1_3_b -= lib.einsum('ildf,mefa,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_b += lib.einsum('ildf,mafe,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_b += lib.einsum('lidf,mefa,lmde->ia',
+                                     t2_1_ab[:],eris_OVVV,t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_b -= lib.einsum('lidf,mafe,lmde->ia',
+                                     t2_1_ab[:],eris_OVVV,t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                         t2_1_ab[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                         t2_1_ab[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_b += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                         t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_b -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                         t2_1_b[:],eris_OVVV,t2_1_b[:,a:a+k],optimize=True)
+                t1_3_b[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                                t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+                t1_3_b[a:a+k] -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',
+                                                t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+                t1_3_b[a:a+k] += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],
+                                            eris_OVVV,t2_1_ab[:],optimize=True)
+                t1_3_b[a:a+k] -= lib.einsum('lmdf,ifea,lmde->ia',t2_1_ab[:],
+                                            eris_OVVV,t2_1_ab[:],optimize=True)
+                t1_3_b[a:a+k] -= 0.25*lib.einsum('lmef,iedf,lmad->ia',
+                                                 t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+                t1_3_b[a:a+k] += 0.25*lib.einsum('lmef,ifde,lmad->ia',
+                                                 t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
                 del eris_OVVV
                 a += k
 
@@ -467,33 +517,50 @@ def compute_amplitudes(myadc, eris):
             t1_3_b += lib.einsum('ildf,mafe,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
             t1_3_b += lib.einsum('lidf,mefa,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
             t1_3_b -= lib.einsum('lidf,mafe,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
-            t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_b += 0.5*lib.einsum('ilaf,mefd,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_b -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_b += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_b -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_a += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                     t2_1_ab[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_a -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                     t2_1_ab[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b += 0.5*lib.einsum('ilaf,mefd,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b -= 0.5*lib.einsum('ilaf,mdfe,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b -= 0.5*lib.einsum('lmdf,ifea,lmde->ia',
+                                     t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
             t1_3_b += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
             t1_3_b -= lib.einsum('lmdf,ifea,lmde->ia',t2_1_ab[:],eris_OVVV,t2_1_ab[:],optimize=True)
-            t1_3_b -= 0.25*lib.einsum('lmef,iedf,lmad->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
-            t1_3_b += 0.25*lib.einsum('lmef,ifde,lmad->ia',t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b -= 0.25*lib.einsum('lmef,iedf,lmad->ia',
+                                      t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
+            t1_3_b += 0.25*lib.einsum('lmef,ifde,lmad->ia',
+                                      t2_1_b[:],eris_OVVV,t2_1_b[:],optimize=True)
             del eris_OVVV
 
         if isinstance(eris.ovVV, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_a,chnk_size):
-                eris_ovVV = dfadc.get_ovvv_spin_df(myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
+                eris_ovVV = dfadc.get_ovvv_spin_df(
+                    myadc, eris.Lov, eris.LVV, p, chnk_size).reshape(-1,nvir_a,nvir_b,nvir_b)
                 k = eris_ovVV.shape[0]
                 t1_3_b += lib.einsum('lied,lead->ia',t2_2_ab[a:a+k],eris_ovVV,optimize=True)
-                t1_3_a -= lib.einsum('ildf,mafe,mlde->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
-                t1_3_b -= lib.einsum('ildf,mefa,mled->ia',t2_1_b[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
-                t1_3_b += lib.einsum('lidf,mefa,lmde->ia',t2_1_ab[:],eris_ovVV,t2_1_a[:,a:a+k],optimize=True)
-                t1_3_a += lib.einsum('ilaf,mefd,mled->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
-                t1_3_b += lib.einsum('ilaf,mefd,mled->ia',t2_1_b[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
-                t1_3_a[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_b[:],eris_ovVV,t2_1_b[:],optimize=True)
-                t1_3_a[a:a+k] += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
-                t1_3_a[a:a+k] -= lib.einsum('lmef,iedf,lmad->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
+                t1_3_a -= lib.einsum('ildf,mafe,mlde->ia',
+                                     t2_1_ab[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
+                t1_3_b -= lib.einsum('ildf,mefa,mled->ia',
+                                     t2_1_b[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
+                t1_3_b += lib.einsum('lidf,mefa,lmde->ia',
+                                     t2_1_ab[:],eris_ovVV,t2_1_a[:,a:a+k],optimize=True)
+                t1_3_a += lib.einsum('ilaf,mefd,mled->ia',
+                                     t2_1_ab[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
+                t1_3_b += lib.einsum('ilaf,mefd,mled->ia',
+                                     t2_1_b[:],eris_ovVV,t2_1_ab[a:a+k],optimize=True)
+                t1_3_a[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                                t2_1_b[:],eris_ovVV,t2_1_b[:],optimize=True)
+                t1_3_a[a:a+k] += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],
+                                            eris_ovVV,t2_1_ab[:],optimize=True)
+                t1_3_a[a:a+k] -= lib.einsum('lmef,iedf,lmad->ia',t2_1_ab[:],
+                                            eris_ovVV,t2_1_ab[:],optimize=True)
                 del eris_ovVV
                 a += k
         else :
@@ -504,7 +571,8 @@ def compute_amplitudes(myadc, eris):
             t1_3_b += lib.einsum('lidf,mefa,lmde->ia',t2_1_ab[:],eris_ovVV,t2_1_a[:],optimize=True)
             t1_3_a += lib.einsum('ilaf,mefd,mled->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
             t1_3_b += lib.einsum('ilaf,mefd,mled->ia',t2_1_b[:],eris_ovVV,t2_1_ab[:],optimize=True)
-            t1_3_a += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_b[:],eris_ovVV,t2_1_b[:],optimize=True)
+            t1_3_a += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                     t2_1_b[:],eris_ovVV,t2_1_b[:],optimize=True)
             t1_3_a += lib.einsum('lmdf,iaef,lmde->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
             t1_3_a -= lib.einsum('lmef,iedf,lmad->ia',t2_1_ab[:],eris_ovVV,t2_1_ab[:],optimize=True)
             del eris_ovVV
@@ -513,17 +581,26 @@ def compute_amplitudes(myadc, eris):
             chnk_size = uadc_ao2mo.calculate_chunk_size(myadc)
             a = 0
             for p in range(0,nocc_b,chnk_size):
-                eris_OVvv = dfadc.get_ovvv_spin_df(myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
+                eris_OVvv = dfadc.get_ovvv_spin_df(
+                    myadc, eris.LOV, eris.Lvv, p, chnk_size).reshape(-1,nvir_b,nvir_a,nvir_a)
                 k = eris_OVvv.shape[0]
                 t1_3_a += lib.einsum('ilde,lead->ia',t2_2_ab[:,a:a+k],eris_OVvv,optimize=True)
-                t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',t2_1_a[:],eris_OVvv, t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_a += lib.einsum('ilfd,mefa,lmde->ia',t2_1_ab[:],eris_OVvv,t2_1_b[:,a:a+k] ,optimize=True)
-                t1_3_b -= lib.einsum('lifd,mafe,lmed->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_a += lib.einsum('ilaf,mefd,lmde->ia',t2_1_a[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_b += lib.einsum('lifa,mefd,lmde->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
-                t1_3_b[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_a[:],eris_OVvv,t2_1_a[:],optimize=True)
-                t1_3_b[a:a+k] += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
-                t1_3_b[a:a+k] -= lib.einsum('mlfe,iedf,mlda->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
+                t1_3_a -= lib.einsum('ildf,mefa,lmde->ia',
+                                     t2_1_a[:],eris_OVvv, t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_a += lib.einsum('ilfd,mefa,lmde->ia',
+                                     t2_1_ab[:],eris_OVvv,t2_1_b[:,a:a+k] ,optimize=True)
+                t1_3_b -= lib.einsum('lifd,mafe,lmed->ia',
+                                     t2_1_ab[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_a += lib.einsum('ilaf,mefd,lmde->ia',
+                                     t2_1_a[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_b += lib.einsum('lifa,mefd,lmde->ia',
+                                     t2_1_ab[:],eris_OVvv,t2_1_ab[:,a:a+k],optimize=True)
+                t1_3_b[a:a+k] += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                                t2_1_a[:],eris_OVvv,t2_1_a[:],optimize=True)
+                t1_3_b[a:a+k] += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],
+                                            eris_OVvv,t2_1_ab[:],optimize=True)
+                t1_3_b[a:a+k] -= lib.einsum('mlfe,iedf,mlda->ia',t2_1_ab[:],
+                                            eris_OVvv,t2_1_ab[:],optimize=True)
 
                 del eris_OVvv
                 a += k
@@ -535,12 +612,13 @@ def compute_amplitudes(myadc, eris):
             t1_3_b -= lib.einsum('lifd,mafe,lmed->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
             t1_3_a += lib.einsum('ilaf,mefd,lmde->ia',t2_1_a[:],eris_OVvv,t2_1_ab[:],optimize=True)
             t1_3_b += lib.einsum('lifa,mefd,lmde->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
-            t1_3_b += 0.5*lib.einsum('lmdf,iaef,lmde->ia',t2_1_a[:],eris_OVvv,t2_1_a[:],optimize=True)
+            t1_3_b += 0.5*lib.einsum('lmdf,iaef,lmde->ia',
+                                     t2_1_a[:],eris_OVvv,t2_1_a[:],optimize=True)
             t1_3_b += lib.einsum('mlfd,iaef,mled->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
             t1_3_b -= lib.einsum('mlfe,iedf,mlda->ia',t2_1_ab[:],eris_OVvv,t2_1_ab[:],optimize=True)
 
             del eris_OVvv
- 
+
         t1_3_a += 0.25*lib.einsum('inde,lamn,lmde->ia',t2_1_a[:],eris_ovoo,t2_1_a[:],optimize=True)
         t1_3_a -= 0.25*lib.einsum('inde,maln,lmde->ia',t2_1_a[:],eris_ovoo,t2_1_a[:],optimize=True)
         t1_3_a += lib.einsum('inde,lamn,lmde->ia',t2_1_ab[:],eris_ovOO,t2_1_ab[:],optimize=True)
@@ -551,18 +629,24 @@ def compute_amplitudes(myadc, eris):
 
         t1_3_a += 0.5*lib.einsum('inad,lemn,lmde->ia',t2_1_a[:],eris_ovoo,t2_1_a[:],optimize=True)
         t1_3_a -= 0.5*lib.einsum('inad,meln,lmde->ia',t2_1_a[:],eris_ovoo,t2_1_a[:],optimize=True)
-        t1_3_a -= 0.5 * lib.einsum('inad,lemn,mlde->ia',t2_1_a[:],eris_OVoo,t2_1_ab[:],optimize=True)
-        t1_3_a -= 0.5 * lib.einsum('inad,meln,lmde->ia',t2_1_a[:],eris_OVoo,t2_1_ab[:],optimize=True)
-        t1_3_a -= 0.5 *lib.einsum('inad,lemn,lmed->ia',t2_1_ab[:],eris_ovOO,t2_1_ab[:],optimize=True)
+        t1_3_a -= 0.5 * lib.einsum('inad,lemn,mlde->ia',
+                                   t2_1_a[:],eris_OVoo,t2_1_ab[:],optimize=True)
+        t1_3_a -= 0.5 * lib.einsum('inad,meln,lmde->ia',
+                                   t2_1_a[:],eris_OVoo,t2_1_ab[:],optimize=True)
+        t1_3_a -= 0.5 *lib.einsum('inad,lemn,lmed->ia',
+                                  t2_1_ab[:],eris_ovOO,t2_1_ab[:],optimize=True)
         t1_3_a -= 0.5*lib.einsum('inad,meln,mled->ia',t2_1_ab[:],eris_ovOO,t2_1_ab[:],optimize=True)
         t1_3_a += 0.5*lib.einsum('inad,lemn,lmde->ia',t2_1_ab[:],eris_OVOO,t2_1_b[:],optimize=True)
         t1_3_a -= 0.5*lib.einsum('inad,meln,lmde->ia',t2_1_ab[:],eris_OVOO,t2_1_b[:],optimize=True)
 
         t1_3_b += 0.5*lib.einsum('inad,lemn,lmde->ia',t2_1_b[:],eris_OVOO,t2_1_b[:],optimize=True)
         t1_3_b -= 0.5*lib.einsum('inad,meln,lmde->ia',t2_1_b[:],eris_OVOO,t2_1_b[:],optimize=True)
-        t1_3_b -= 0.5 * lib.einsum('inad,meln,mled->ia',t2_1_b[:],eris_ovOO,t2_1_ab[:],optimize=True)
-        t1_3_b -= 0.5 * lib.einsum('inad,lemn,lmed->ia',t2_1_b[:],eris_ovOO,t2_1_ab[:],optimize=True)
-        t1_3_b -= 0.5 *lib.einsum('nida,meln,lmde->ia',t2_1_ab[:],eris_OVoo,t2_1_ab[:],optimize=True)
+        t1_3_b -= 0.5 * lib.einsum('inad,meln,mled->ia',
+                                   t2_1_b[:],eris_ovOO,t2_1_ab[:],optimize=True)
+        t1_3_b -= 0.5 * lib.einsum('inad,lemn,lmed->ia',
+                                   t2_1_b[:],eris_ovOO,t2_1_ab[:],optimize=True)
+        t1_3_b -= 0.5 *lib.einsum('nida,meln,lmde->ia',
+                                  t2_1_ab[:],eris_OVoo,t2_1_ab[:],optimize=True)
         t1_3_b -= 0.5*lib.einsum('nida,lemn,mlde->ia',t2_1_ab[:],eris_OVoo,t2_1_ab[:],optimize=True)
         t1_3_b += 0.5*lib.einsum('nida,lemn,lmde->ia',t2_1_ab[:],eris_ovoo,t2_1_a[:],optimize=True)
         t1_3_b -= 0.5*lib.einsum('nida,meln,lmde->ia',t2_1_ab[:],eris_ovoo,t2_1_a[:],optimize=True)
@@ -606,7 +690,7 @@ def compute_amplitudes(myadc, eris):
 
     t2_1 = (t2_1_a , t2_1_ab, t2_1_b)
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         t2_2 = (t2_2_a , t2_2_ab, t2_2_b)
         t2_1_vvvv = (t2_1_vvvv_a, t2_1_vvvv_ab, t2_1_vvvv_b)
 

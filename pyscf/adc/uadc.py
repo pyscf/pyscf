@@ -50,7 +50,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-    guess = adc.get_init_guess(nroots, diag, ascending = True)
+    guess = adc.get_init_guess(nroots, diag, ascending=True)
 
     conv, adc.E, U = lib.linalg_helper.davidson1(
         lambda xs : [matvec(x) for x in xs],
@@ -119,8 +119,10 @@ class UADC(lib.StreamObject):
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ is None: mo_occ = mf.mo_occ
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+        if mo_occ is None:
+            mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -230,7 +232,8 @@ class UADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         return self.e_corr, self.t1, self.t2
@@ -271,7 +274,8 @@ class UADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = uadc_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         self.method_type = self.method_type.lower()
@@ -281,9 +285,11 @@ class UADC(lib.StreamObject):
         elif(self.method_type == "ip"):
 
             if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
-                e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+                e_exc, v_exc, spec_fac, X, adc_es = self.ip_cvs_adc(
+                    nroots=nroots, guess=guess, eris=eris)
             else:
-                e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+                e_exc, v_exc, spec_fac, X, adc_es = self.ip_adc(
+                    nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
 
@@ -345,8 +351,8 @@ if __name__ == '__main__':
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
-        ['N', ( 0., 0.    , -r/2   )],
-        ['N', ( 0., 0.    ,  r/2)],]
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()
@@ -358,7 +364,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr -  -0.32201692499346535)
 
-    myadcip = UADCIP(myadc)
+    myadcip = adc.uadc_ip.UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(2) IP energies")
     print (e[0] - 0.5434389897908212)
@@ -370,7 +376,7 @@ if __name__ == '__main__':
     print (p[1] - 0.8844048539643351)
     print (p[2] - 0.9096460559671828)
 
-    myadcea = UADCEA(myadc)
+    myadcea = adc.uadc_ea.UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
     print("ADC(2) EA energies")
     print (e[0] - 0.09617819143037348)
@@ -387,7 +393,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr - -0.31694173142858517)
 
-    myadcip = UADCIP(myadc)
+    myadcip = adc.uadc_ip.UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(3) IP energies")
     print (e[0] - 0.5667526838174817)
@@ -399,7 +405,7 @@ if __name__ == '__main__':
     print (p[1] - 0.9086596190173993)
     print (p[2] - 0.9214613318791076)
 
-    myadcea = UADCEA(myadc)
+    myadcea = adc.uadc_ea.UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
 
     print("ADC(3) EA energies")

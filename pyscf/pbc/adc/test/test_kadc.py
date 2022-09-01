@@ -6,7 +6,8 @@ import unittest
 def setUpModule():
     global cell, kmf, mycc, eris
     cell = make_test_cell.test_cell_n3_diffuse()
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None).density_fit()
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts(
+        [1,1,2], with_gamma_point=True), exxdiv=None).density_fit()
     kmf.conv_tol = 1e-10
     kmf.conv_tol_grad = 1e-6
     kmf.verbose = 0
@@ -19,7 +20,7 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_n3_diffuse(self):
-        
+
         # Running HF and MP2 and MP3 with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1729762695142645, 6)

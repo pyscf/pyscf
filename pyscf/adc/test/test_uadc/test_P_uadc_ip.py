@@ -26,7 +26,7 @@ def setUpModule():
     global mol, mf, myadc
     mol = gto.Mole()
     mol.atom = [
-        ['P', ( 0., 0.    , 0.)],]
+        ['P', (0., 0.    , 0.)],]
     mol.basis = {'P':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.spin = 3
@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.07351147825007748, 6)
 
-        myadcip = adc.uadc_ip.UADCIP(myadc) 
+        myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.38071502275761, 6)
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.07351147825007748, 6)
 
-        myadcip = adc.uadc_ip.UADCIP(myadc) 
+        myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.36951642121691, 6)
@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.0892040998302457, 6)
 
-        myadcip = adc.uadc_ip.UADCIP(myadc) 
+        myadcip = adc.uadc_ip.UADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.37866365404487, 6)

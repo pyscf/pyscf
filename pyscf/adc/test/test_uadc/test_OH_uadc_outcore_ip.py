@@ -27,8 +27,8 @@ def setUpModule():
     r = 0.969286393
     mol = gto.Mole()
     mol.atom = [
-        ['O', ( 0., 0.    , -r/2   )],
-        ['H', ( 0., 0.    ,  r/2)],]
+        ['O', (0., 0.    , -r/2   )],
+        ['H', (0., 0.    ,  r/2)],]
     mol.basis = {'O':'aug-cc-pvdz',
                  'H':'aug-cc-pvdz'}
     mol.verbose = 0
@@ -47,7 +47,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
-  
+
         myadc.max_memory = 30
         myadc.incore_complete = False
         e,v,p,x = myadc.kernel(nroots=3)
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
 
     def test_ip_adc2x(self):
-  
+
         myadc.max_memory = 300
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
@@ -80,9 +80,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9169548953028459, 6)
         self.assertAlmostEqual(p[1], 0.6997121885268642, 6)
         self.assertAlmostEqual(p[2], 0.212879313736106, 6)
-    
+
     def test_ip_adc3_high_cost(self):
-  
+
         myadc.max_memory = 300
         myadc.incore_complete = False
         myadc.method = "adc(3)"
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
         self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
         self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
-     
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")
     unittest.main()

@@ -30,9 +30,9 @@ def setUpModule():
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
     y = r * math.cos(104.468205* math.pi/(2 * 180.0))
     mol.atom = [
-        ['O', ( 0., 0.    , 0)],
-        ['H', ( 0., -x, y)],
-        ['H', ( 0., x , y)],]
+        ['O', (0., 0.    , 0)],
+        ['H', (0., -x, y)],
+        ['H', (0., x , y)],]
     mol.basis = {'H': 'aug-cc-pVDZ',
                  'O': 'aug-cc-pVDZ',}
     mol.verbose = 0
@@ -54,7 +54,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
         myadcea = adc.radc_ea.RADCEA(myadc)
-        myadcea.approx_trans_moments = True 
+        myadcea.approx_trans_moments = True
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
@@ -71,8 +71,8 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
-        myadcip = adc.radc_ip.RADCIP(myadc) 
-        myadcip.approx_trans_moments = True 
+        myadcip = adc.radc_ip.RADCIP(myadc)
+        myadcip.approx_trans_moments = True
         e,v,p,x = myadcip.kernel(nroots=4)
         myadcip.analyze()
 
@@ -85,7 +85,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8506484180294713, 6)
         self.assertAlmostEqual(p[2], 1.8657624547603837, 6)
         self.assertAlmostEqual(p[3], 0.1250466175471465, 6)
-      
+
 if __name__ == "__main__":
     print("Approximate transition moments calculations for different RADC methods for water molecule")
     unittest.main()
