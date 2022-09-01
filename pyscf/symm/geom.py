@@ -161,8 +161,9 @@ def _adjust_planar_d2h(atom_coords, center, axes):
             # rotate xz then rotate xy
             axes = numpy.array([axes[1], axes[2], axes[0]])
     elif natm_with_x == 0:  # atoms on yz plane
-        # rotate yz
-        axes = numpy.array([axes[0], -axes[2], axes[1]])
+        if natm_with_y < natm_with_z:  # atoms-on-z < atoms-on-y
+            # rotate yz
+            axes = numpy.array([axes[0], -axes[2], axes[1]])
     return axes
 
 def detect_symm(atoms, basis=None, verbose=logger.WARN):
