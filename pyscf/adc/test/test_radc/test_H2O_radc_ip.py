@@ -30,9 +30,9 @@ def setUpModule():
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
     y = r * math.cos(104.468205* math.pi/(2 * 180.0))
     mol.atom = [
-        ['O', ( 0., 0.    , 0)],
-        ['H', ( 0., -x, y)],
-        ['H', ( 0., x , y)],]
+        ['O', (0., 0.    , 0)],
+        ['H', (0., -x, y)],
+        ['H', (0., x , y)],]
     mol.basis = {'H': 'cc-pVDZ',
                  'O': 'cc-pVDZ',}
     mol.verbose = 0
@@ -53,7 +53,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
-        myadcip = adc.radc_ip.RADCIP(myadc) 
+        myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4034634878946100, 6)
@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2039852016968376, 6)
 
-        myadcip = adc.radc_ip.RADCIP(myadc) 
+        myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.4085610789192171, 6)
@@ -86,7 +86,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2107769014592799, 6)
 
-        myadcip = adc.radc_ip.RADCIP(myadc) 
+        myadcip = adc.radc_ip.RADCIP(myadc)
         e,v,p,x = myadcip.kernel(nroots=4)
         myadcip.analyze()
 
@@ -99,7 +99,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.8720029748507658, 6)
         self.assertAlmostEqual(p[2], 1.8881842403480831, 6)
         self.assertAlmostEqual(p[3], 0.1651131053450, 6)
-      
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for water molecule")
     unittest.main()

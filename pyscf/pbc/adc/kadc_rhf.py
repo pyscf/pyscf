@@ -46,15 +46,15 @@ import h5py
 import tempfile
 
 # Note : All interals are in Chemist's notation except for vvvv
-#        Eg.of momentum conservation : 
-#        Chemist's  oovv(ijab) : ki - kj + ka - kb 
+#        Eg.of momentum conservation :
+#        Chemist's  oovv(ijab) : ki - kj + ka - kb
 #        Amplitudes t2(ijab)  : ki + kj - ka - kba
 
 def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     adc.method = adc.method.lower()
     if adc.method not in ("adc(2)", "adc(2)-x","adc(3)"):
-       raise NotImplementedError(adc.method)
+        raise NotImplementedError(adc.method)
 
     cput0 = (logger.process_clock(), logger.perf_counter())
     log = logger.Logger(adc.stdout, adc.verbose)
@@ -72,7 +72,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     if kptlist is None:
         kptlist = range(nkpts)
-    
+
     dtype = np.result_type(adc.t2[0])
     nkop_chk = adc.nkop_chk
     kop_npick = adc.kop_npick
@@ -90,9 +90,10 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
     for k, kshift in enumerate(kptlist):
         matvec, diag = adc.gen_matvec(kshift, imds, eris)
 
-        guess = adc.get_init_guess(nroots, diag, ascending = True)
+        guess = adc.get_init_guess(nroots, diag, ascending=True)
 
-        conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
+        conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(lambda xs : [matvec(
+            x) for x in xs], guess, diag, nroots=nroots, verbose=log, tol=adc.conv_tol, max_cycle=adc.max_cycle, max_space=adc.max_space,tol_residual=adc.tol_residual)
 
         evals_k = evals_k.real
         evals[k] = evals_k
@@ -117,7 +118,8 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     for k, kshift in enumerate(kptlist):
         for n in range(nroots):
-            print_string = ('%s k-point %d | root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' % (adc.method, kshift, n, evals[k][n], evals[k][n]*27.2114))
+            print_string = ('%s k-point %d | root %d  |  Energy (Eh) = %14.10f  |  Energy (eV) = %12.8f  ' %
+                            (adc.method, kshift, n, evals[k][n], evals[k][n]*27.2114))
             if adc.compute_properties:
                 print_string += ("|  Spec factors = %10.8f  " % P[k][n])
             print_string += ("|  conv = %s" % conv[k][n].real)
@@ -140,7 +142,7 @@ class RADC(pyscf.adc.radc.RADC):
             mo_coeff = mf.mo_coeff
         if mo_occ is None:
             mo_occ = mf.mo_occ
-      
+
         self._scf = mf
         self.kpts = self._scf.kpts
         self.exxdiv = self._scf.exxdiv
@@ -215,7 +217,7 @@ class RADC(pyscf.adc.radc.RADC):
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
-    
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags_gs()
@@ -230,18 +232,19 @@ class RADC(pyscf.adc.radc.RADC):
         mem_now = lib.current_memory()[0]
 
         if type(self._scf.with_df) is df.GDF:
-           self.chnk_size = self.get_chnk_size()
-           self.with_df = self._scf.with_df
-           def df_transform():
-               return kadc_ao2mo.transform_integrals_df(self)
-           self.transform_integrals = df_transform
+            self.chnk_size = self.get_chnk_size()
+            self.with_df = self._scf.with_df
+            def df_transform():
+                return kadc_ao2mo.transform_integrals_df(self)
+            self.transform_integrals = df_transform
         elif (mem_incore+mem_now >= self.max_memory and not self.incore_complete):
             def outcore_transform():
                 return kadc_ao2mo.transform_integrals_outcore(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals()
-        self.e_corr,self.t1,self.t2 = kadc_rhf_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr,self.t1,self.t2 = kadc_rhf_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         print ("MPn:",self.e_corr)
         self._finalize()
         return self.e_corr, self.t1,self.t2
@@ -249,15 +252,15 @@ class RADC(pyscf.adc.radc.RADC):
     def kernel(self, nroots=1, guess=None, eris=None, kptlist=None):
         assert(self.mo_coeff is not None)
         assert(self.mo_occ is not None)
-    
+
         self.method = self.method.lower()
         if self.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
             raise NotImplementedError(self.method)
-    
+
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags_gs()
-    
+
         nmo = self.nmo
         nocc = self.nocc
         nvir = nmo - nocc
@@ -268,28 +271,31 @@ class RADC(pyscf.adc.radc.RADC):
         mem_now = lib.current_memory()[0]
 
         if type(self._scf.with_df) is df.GDF:
-           self.chnk_size = self.get_chnk_size()
-           self.with_df = self._scf.with_df
-           def df_transform():
-               return kadc_ao2mo.transform_integrals_df(self)
-           self.transform_integrals = df_transform
+            self.chnk_size = self.get_chnk_size()
+            self.with_df = self._scf.with_df
+            def df_transform():
+                return kadc_ao2mo.transform_integrals_df(self)
+            self.transform_integrals = df_transform
         elif (mem_incore+mem_now >= self.max_memory and not self.incore_complete):
             def outcore_transform():
                 return kadc_ao2mo.transform_integrals_outcore(self)
             self.transform_integrals = outcore_transform
 
         eris = self.transform_integrals()
-            
-        self.e_corr, self.t1, self.t2 = kadc_rhf_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+
+        self.e_corr, self.t1, self.t2 = kadc_rhf_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         print ("MPn:",self.e_corr)
         self._finalize()
 
         self.method_type = self.method_type.lower()
         if(self.method_type == "ea"):
-            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ea_adc(
+                nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
 
         elif(self.method_type == "ip"):
-             e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
+            e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(
+                nroots=nroots, guess=guess, eris=eris, kptlist=kptlist)
 
         else:
             raise NotImplementedError(self.method_type)
@@ -308,7 +314,7 @@ class RADC(pyscf.adc.radc.RADC):
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris, kptlist)
         return e_exc, v_exc, spec_fac, x, adc_es
 
-    def density_fit(self, auxbasis=None, with_df = None):
+    def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
             self.with_df = df.DF(self._scf.mol)
             self.with_df.max_memory = self.max_memory

@@ -50,7 +50,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     imds = adc.get_imds(eris)
     matvec, diag = adc.gen_matvec(imds, eris)
 
-    guess = adc.get_init_guess(nroots, diag, ascending = True)
+    guess = adc.get_init_guess(nroots, diag, ascending=True)
 
     conv, adc.E, U = lib.linalg_helper.davidson_nosym1(
         lambda xs : [matvec(x) for x in xs],
@@ -119,8 +119,10 @@ class RADC(lib.StreamObject):
         if 'dft' in str(mf.__module__):
             raise NotImplementedError('DFT reference for UADC')
 
-        if mo_coeff is None: mo_coeff = mf.mo_coeff
-        if mo_occ is None: mo_occ = mf.mo_occ
+        if mo_coeff is None:
+            mo_coeff = mf.mo_coeff
+        if mo_occ is None:
+            mo_occ = mf.mo_occ
 
         self.mol = mf.mol
         self._scf = mf
@@ -226,7 +228,8 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         return self.e_corr, self.t1, self.t2
@@ -267,7 +270,8 @@ class RADC(lib.StreamObject):
 
         eris = self.transform_integrals()
 
-        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(self, eris=eris, verbose=self.verbose)
+        self.e_corr, self.t1, self.t2 = radc_amplitudes.compute_amplitudes_energy(
+            self, eris=eris, verbose=self.verbose)
         self._finalize()
 
         self.method_type = self.method_type.lower()
@@ -276,9 +280,11 @@ class RADC(lib.StreamObject):
 
         elif(self.method_type == "ip"):
             if not isinstance(self.ncvs, type(None)) and self.ncvs > 0:
-                e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(nroots=nroots, guess=guess, eris=eris)
+                e_exc, v_exc, spec_fac, x, adc_es = self.ip_cvs_adc(
+                    nroots=nroots, guess=guess, eris=eris)
             else:
-                e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(nroots=nroots, guess=guess, eris=eris)
+                e_exc, v_exc, spec_fac, x, adc_es = self.ip_adc(
+                    nroots=nroots, guess=guess, eris=eris)
         else:
             raise NotImplementedError(self.method_type)
         self._adc_es = adc_es
@@ -308,7 +314,7 @@ class RADC(lib.StreamObject):
         e_exc, v_exc, spec_fac, x = adc_es.kernel(nroots, guess, eris)
         return e_exc, v_exc, spec_fac, x, adc_es
 
-    def density_fit(self, auxbasis=None, with_df = None):
+    def density_fit(self, auxbasis=None, with_df=None):
         if with_df is None:
             self.with_df = df.DF(self._scf.mol)
             self.with_df.max_memory = self.max_memory
@@ -339,8 +345,8 @@ if __name__ == '__main__':
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
-        ['N', ( 0., 0.    , -r/2   )],
-        ['N', ( 0., 0.    ,  r/2)],]
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()

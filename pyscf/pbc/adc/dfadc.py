@@ -15,7 +15,7 @@
 
 import numpy as np
 
-def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
+def get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
 
     ''' Returns approximate ovvv integrals used in restricted implementation'''
 
@@ -36,10 +36,10 @@ def  get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
     del Lvv
     del Lov
     del Lov_temp
-    return ovvv    
+    return ovvv
 
 
-def  get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
+def get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
 
     ''' Returns approximate vvvv integrals used in restricted implementation'''
 
@@ -59,4 +59,4 @@ def  get_vvvv_df(myadc, vv1, vv2, p, chnk_size):
     vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir ,nvir)
     del vv1
     del vv2
-    return vvvv    
+    return vvvv

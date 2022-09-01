@@ -27,8 +27,8 @@ def setUpModule():
     r = 0.969286393
     mol = gto.Mole()
     mol.atom = [
-        ['O', ( 0., 0.    , -r/2   )],
-        ['H', ( 0., 0.    ,  r/2)],]
+        ['O', (0., 0.    , -r/2   )],
+        ['H', (0., 0.    ,  r/2)],]
     mol.basis = {'O':'aug-cc-pvdz',
                  'H':'aug-cc-pvdz'}
     mol.verbose = 0
@@ -47,7 +47,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
-  
+
         myadc.max_memory = 30
         myadc.incore_complete = False
         myadc.method_type = "ea"
@@ -65,7 +65,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9956169835481459, 6)
 
     def test_ea_adc2x(self):
-  
+
         myadc.max_memory = 300
         myadc.incore_complete = False
         myadc.method = "adc(2)-x"
@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9772855298541363, 6)
 
     def test_ea_adc3_high_cost(self):
-  
+
         myadc.max_memory = 300
         myadc.incore_complete = False
         myadc.method = "adc(3)"
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
         self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")
     unittest.main()

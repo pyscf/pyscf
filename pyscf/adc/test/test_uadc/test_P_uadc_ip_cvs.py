@@ -26,7 +26,7 @@ def setUpModule():
     global mol, mf, myadc
     mol = gto.Mole()
     mol.atom = [
-        ['P', ( 0., 0.    , 0.)],]
+        ['P', (0., 0.    , 0.)],]
     mol.basis = {'P':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.spin = 3

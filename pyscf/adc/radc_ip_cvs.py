@@ -70,7 +70,7 @@ def get_imds(adc, eris=None):
     t2_1_coee = t2_1[:ncvs,:,:,:].copy()
     t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
     eris_ceeo = eris_ovvo[:ncvs,:,:,:].copy()
-    
+
     M_ij += 0.5 * 0.5 *  lib.einsum('ilde,jdel->ij',t2_1_coee, eris_ceeo,optimize=True)
     M_ij -= 0.5 * 0.5 *  lib.einsum('lide,jdel->ij',t2_1_ocee, eris_ceeo,optimize=True)
     M_ij -= 0.5 * 0.5 *  lib.einsum('ilde,jedl->ij',t2_1_coee, eris_ceeo,optimize=True)
@@ -102,7 +102,7 @@ def get_imds(adc, eris=None):
         eris_cooo = eris_oooo[:ncvs,:,:,:].copy()
         eris_cooc = eris_cooo[:,:,:,:ncvs].copy()
         eris_ccoo = eris_cooo[:,:ncvs,:,:].copy()
-     
+
         M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_oecc,optimize=True)
         M_ij -= lib.einsum('ld,jdli->ij',t1_2, eris_ceoc,optimize=True)
         M_ij += lib.einsum('ld,ldji->ij',t1_2, eris_oecc,optimize=True)
@@ -131,86 +131,86 @@ def get_imds(adc, eris=None):
 
         temp_t2_v_1_oece = lib.einsum('lmde,jldf->mejf',t2_1, t2_1_coee,optimize=True)
         temp_t2_v_1_ceoe = lib.einsum('lmde,jldf->mejf',t2_1_ocee, t2_1,optimize=True)
-        M_ij -=  0.5 * 2 * lib.einsum('mejf,ifem->ij',temp_t2_v_1_oece, eris_ceeo,optimize = True)
-        M_ij -=  0.5 * 2 * lib.einsum('jfme,ifem->ij',temp_t2_v_1_ceoe, eris_ceeo,optimize = True)
-        M_ij +=  0.5 * lib.einsum('mejf,imfe->ij',temp_t2_v_1_oece, eris_coee,optimize = True)
-        M_ij +=  0.5 * lib.einsum('jfme,imfe->ij',temp_t2_v_1_ceoe, eris_coee,optimize = True)
-        M_ij -=  0.5 * 2 * lib.einsum('meif,jfem->ij',temp_t2_v_1_oece, eris_ceeo ,optimize = True)
-        M_ij -=  0.5 * 2 * lib.einsum('ifme,jfem->ij',temp_t2_v_1_ceoe, eris_ceeo ,optimize = True)
-        M_ij +=  0.5 * lib.einsum('meif,jmfe->ij',temp_t2_v_1_oece, eris_coee ,optimize = True)
-        M_ij +=  0.5 * lib.einsum('ifme,jmfe->ij',temp_t2_v_1_ceoe, eris_coee ,optimize = True)
-        del temp_t2_v_1_oece        
-        del temp_t2_v_1_ceoe        
+        M_ij -=  0.5 * 2 * lib.einsum('mejf,ifem->ij',temp_t2_v_1_oece, eris_ceeo,optimize=True)
+        M_ij -=  0.5 * 2 * lib.einsum('jfme,ifem->ij',temp_t2_v_1_ceoe, eris_ceeo,optimize=True)
+        M_ij +=  0.5 * lib.einsum('mejf,imfe->ij',temp_t2_v_1_oece, eris_coee,optimize=True)
+        M_ij +=  0.5 * lib.einsum('jfme,imfe->ij',temp_t2_v_1_ceoe, eris_coee,optimize=True)
+        M_ij -=  0.5 * 2 * lib.einsum('meif,jfem->ij',temp_t2_v_1_oece, eris_ceeo ,optimize=True)
+        M_ij -=  0.5 * 2 * lib.einsum('ifme,jfem->ij',temp_t2_v_1_ceoe, eris_ceeo ,optimize=True)
+        M_ij +=  0.5 * lib.einsum('meif,jmfe->ij',temp_t2_v_1_oece, eris_coee ,optimize=True)
+        M_ij +=  0.5 * lib.einsum('ifme,jmfe->ij',temp_t2_v_1_ceoe, eris_coee ,optimize=True)
+        del temp_t2_v_1_oece
+        del temp_t2_v_1_ceoe
 
         temp_t2_v_2 = lib.einsum('lmde,ljdf->mejf',t2_1, t2_1_ocee,optimize=True)
-        M_ij +=  0.5 * 4 * lib.einsum('mejf,ifem->ij',temp_t2_v_2, eris_ceeo,optimize = True)
-        M_ij +=  0.5 * 4 * lib.einsum('meif,jfem->ij',temp_t2_v_2, eris_ceeo,optimize = True)
-        M_ij -=  0.5 * 2 * lib.einsum('meif,jmfe->ij',temp_t2_v_2, eris_coee,optimize = True)
-        M_ij -=  0.5 * 2 * lib.einsum('mejf,imfe->ij',temp_t2_v_2, eris_coee,optimize = True)
-        del temp_t2_v_2        
+        M_ij +=  0.5 * 4 * lib.einsum('mejf,ifem->ij',temp_t2_v_2, eris_ceeo,optimize=True)
+        M_ij +=  0.5 * 4 * lib.einsum('meif,jfem->ij',temp_t2_v_2, eris_ceeo,optimize=True)
+        M_ij -=  0.5 * 2 * lib.einsum('meif,jmfe->ij',temp_t2_v_2, eris_coee,optimize=True)
+        M_ij -=  0.5 * 2 * lib.einsum('mejf,imfe->ij',temp_t2_v_2, eris_coee,optimize=True)
+        del temp_t2_v_2
 
         temp_t2_v_3 = lib.einsum('mlde,jldf->mejf',t2_1, t2_1_coee,optimize=True)
-        M_ij += 0.5 * lib.einsum('mejf,ifem->ij',temp_t2_v_3, eris_ceeo,optimize = True)
-        M_ij += 0.5 * lib.einsum('meif,jfem->ij',temp_t2_v_3, eris_ceeo,optimize = True)
-        M_ij -= 0.5 * 2 *lib.einsum('meif,jmfe->ij',temp_t2_v_3, eris_coee,optimize = True)
-        M_ij -= 0.5 * 2 * lib.einsum('mejf,imfe->ij',temp_t2_v_3, eris_coee,optimize = True)
-        del temp_t2_v_3        
+        M_ij += 0.5 * lib.einsum('mejf,ifem->ij',temp_t2_v_3, eris_ceeo,optimize=True)
+        M_ij += 0.5 * lib.einsum('meif,jfem->ij',temp_t2_v_3, eris_ceeo,optimize=True)
+        M_ij -= 0.5 * 2 *lib.einsum('meif,jmfe->ij',temp_t2_v_3, eris_coee,optimize=True)
+        M_ij -= 0.5 * 2 * lib.einsum('mejf,imfe->ij',temp_t2_v_3, eris_coee,optimize=True)
+        del temp_t2_v_3
 
         temp_t2_v_8 = lib.einsum('lmdf,lmde->fe',t2_1, t2_1,optimize=True)
-        M_ij += 3 *lib.einsum('fe,jief->ij',temp_t2_v_8, eris_ccee, optimize = True)
-        M_ij -= 1.5 *lib.einsum('fe,jfei->ij',temp_t2_v_8, eris_ceec, optimize = True)
-        M_ij += lib.einsum('ef,jief->ij',temp_t2_v_8, eris_ccee, optimize = True)
-        M_ij -= 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_8, eris_ceec, optimize = True)
+        M_ij += 3 *lib.einsum('fe,jief->ij',temp_t2_v_8, eris_ccee, optimize=True)
+        M_ij -= 1.5 *lib.einsum('fe,jfei->ij',temp_t2_v_8, eris_ceec, optimize=True)
+        M_ij += lib.einsum('ef,jief->ij',temp_t2_v_8, eris_ccee, optimize=True)
+        M_ij -= 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_8, eris_ceec, optimize=True)
         del temp_t2_v_8
 
         temp_t2_v_9 = lib.einsum('lmdf,mlde->fe',t2_1, t2_1,optimize=True)
-        M_ij -= 1.0 * lib.einsum('fe,jief->ij',temp_t2_v_9, eris_ccee, optimize = True)
-        M_ij -= 1.0 * lib.einsum('ef,jief->ij',temp_t2_v_9, eris_ccee, optimize = True)
-        M_ij += 0.5 * lib.einsum('fe,jfei->ij',temp_t2_v_9, eris_ceec, optimize = True)
-        M_ij += 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_9, eris_ceec, optimize = True)
+        M_ij -= 1.0 * lib.einsum('fe,jief->ij',temp_t2_v_9, eris_ccee, optimize=True)
+        M_ij -= 1.0 * lib.einsum('ef,jief->ij',temp_t2_v_9, eris_ccee, optimize=True)
+        M_ij += 0.5 * lib.einsum('fe,jfei->ij',temp_t2_v_9, eris_ceec, optimize=True)
+        M_ij += 0.5 * lib.einsum('ef,jfei->ij',temp_t2_v_9, eris_ceec, optimize=True)
         del temp_t2_v_9
 
         temp_t2_v_10 = lib.einsum('lnde,lmde->nm',t2_1, t2_1,optimize=True)
-        M_ij -= 3.0 * lib.einsum('nm,jinm->ij',temp_t2_v_10, eris_ccoo, optimize = True)
-        M_ij -= 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_10, eris_ccoo, optimize = True)
-        M_ij += 1.5 * lib.einsum('nm,jmni->ij',temp_t2_v_10, eris_cooc, optimize = True)
-        M_ij += 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_10, eris_cooc, optimize = True)
+        M_ij -= 3.0 * lib.einsum('nm,jinm->ij',temp_t2_v_10, eris_ccoo, optimize=True)
+        M_ij -= 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_10, eris_ccoo, optimize=True)
+        M_ij += 1.5 * lib.einsum('nm,jmni->ij',temp_t2_v_10, eris_cooc, optimize=True)
+        M_ij += 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_10, eris_cooc, optimize=True)
         del temp_t2_v_10
 
         temp_t2_v_11 = lib.einsum('lnde,mlde->nm',t2_1, t2_1,optimize=True)
-        M_ij += 1.0 * lib.einsum('nm,jinm->ij',temp_t2_v_11, eris_ccoo, optimize = True)
-        M_ij -= 0.5 * lib.einsum('nm,jmni->ij',temp_t2_v_11, eris_cooc, optimize = True)
-        M_ij -= 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_11, eris_cooc, optimize = True)
-        M_ij += 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_11, eris_ccoo, optimize = True)
+        M_ij += 1.0 * lib.einsum('nm,jinm->ij',temp_t2_v_11, eris_ccoo, optimize=True)
+        M_ij -= 0.5 * lib.einsum('nm,jmni->ij',temp_t2_v_11, eris_cooc, optimize=True)
+        M_ij -= 0.5 * lib.einsum('mn,jmni->ij',temp_t2_v_11, eris_cooc, optimize=True)
+        M_ij += 1.0 * lib.einsum('mn,jinm->ij',temp_t2_v_11, eris_ccoo, optimize=True)
         del temp_t2_v_11
 
         temp_t2_v_12_cooo = lib.einsum('inde,lmde->inlm',t2_1_coee, t2_1,optimize=True)
         temp_t2_v_12_ooco = lib.einsum('inde,lmde->inlm',t2_1, t2_1_coee,optimize=True)
-        M_ij += 0.5 * 1.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12_cooo, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('lmin,jlnm->ij',temp_t2_v_12_ooco, eris_cooo, optimize = True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12_cooo, eris_cooo, optimize = True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,jmnl->ij',temp_t2_v_12_ooco, eris_cooo, optimize = True)
- 
-        M_ij += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ji',temp_t2_v_12_cooo, eris_cooo, optimize = True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ji',temp_t2_v_12_cooo, eris_cooo, optimize = True)
-        M_ij += 0.5 * 1.00 * lib.einsum('inlm,jlmn->ji',temp_t2_v_12_cooo, eris_cooo, optimize = True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,jmnl->ji',temp_t2_v_12_ooco, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('lmin,jlmn->ji',temp_t2_v_12_ooco, eris_cooo, optimize = True)
+        M_ij += 0.5 * 1.25 * lib.einsum('inlm,jlnm->ij',temp_t2_v_12_cooo, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('lmin,jlnm->ij',temp_t2_v_12_ooco, eris_cooo, optimize=True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ij',temp_t2_v_12_cooo, eris_cooo, optimize=True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,jmnl->ij',temp_t2_v_12_ooco, eris_cooo, optimize=True)
+
+        M_ij += 0.5 * 0.25 * lib.einsum('inlm,jlnm->ji',temp_t2_v_12_cooo, eris_cooo, optimize=True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('inlm,jmnl->ji',temp_t2_v_12_cooo, eris_cooo, optimize=True)
+        M_ij += 0.5 * 1.00 * lib.einsum('inlm,jlmn->ji',temp_t2_v_12_cooo, eris_cooo, optimize=True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('lmin,jmnl->ji',temp_t2_v_12_ooco, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('lmin,jlmn->ji',temp_t2_v_12_ooco, eris_cooo, optimize=True)
         del temp_t2_v_12_cooo
         del temp_t2_v_12_ooco
 
         temp_t2_v_13_cooo = lib.einsum('inde,mlde->inml',t2_1_coee, t2_1,optimize=True)
         temp_t2_v_13_ooco = lib.einsum('inde,mlde->inml',t2_1, t2_1_coee,optimize=True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ij',temp_t2_v_13_cooo, eris_cooo, optimize = True)
-        M_ij -= 0.5 * 0.25 * lib.einsum('mlin,jlnm->ij',temp_t2_v_13_ooco, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13_cooo, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('mlin,jmnl->ij',temp_t2_v_13_ooco, eris_cooo, optimize = True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ij',temp_t2_v_13_cooo, eris_cooo, optimize=True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('mlin,jlnm->ij',temp_t2_v_13_ooco, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ij',temp_t2_v_13_cooo, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('mlin,jmnl->ij',temp_t2_v_13_ooco, eris_cooo, optimize=True)
 
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ji',temp_t2_v_13_cooo, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ji',temp_t2_v_13_cooo, eris_cooo, optimize = True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlnm->ji',temp_t2_v_13_cooo, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ji',temp_t2_v_13_cooo, eris_cooo, optimize=True)
 
-        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlmn->ji',temp_t2_v_13_cooo, eris_cooo, optimize = True)
-        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ji',temp_t2_v_13_cooo, eris_cooo, optimize = True)
+        M_ij -= 0.5 * 0.25 * lib.einsum('inml,jlmn->ji',temp_t2_v_13_cooo, eris_cooo, optimize=True)
+        M_ij += 0.5 * 0.25 * lib.einsum('inml,jmnl->ji',temp_t2_v_13_cooo, eris_cooo, optimize=True)
         del temp_t2_v_13_cooo
         del temp_t2_v_13_ooco
         del t2_1
@@ -220,7 +220,7 @@ def get_imds(adc, eris=None):
     return M_ij
 
 def get_diag(adc,M_ij=None,eris=None):
-   
+
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
@@ -256,7 +256,7 @@ def get_diag(adc,M_ij=None,eris=None):
     d_ij = e_occ[:,None] + e_occ
     d_a = e_vir[:,None]
     D_n = -d_a + d_ij.reshape(-1)
-    
+
     D_aij = D_n.reshape(-1)
     D_aij = D_n.reshape(nvir,nocc,nocc)
 
@@ -270,7 +270,7 @@ def get_diag(adc,M_ij=None,eris=None):
     diag[s2_ecc:f2_ecc] = D_aij[:,:ncvs,:ncvs].reshape(-1)
     diag[s2_ecv:f2_ecv] = D_aij[:,:ncvs,ncvs:].reshape(-1)
     diag[s2_evc:f2_evc] = D_aij[:,ncvs:,:ncvs].reshape(-1)
-    
+
     diag = -diag
 
     return diag
@@ -339,11 +339,11 @@ def matvec(adc, M_ij=None, eris=None):
         r2_evc = r2_evc.reshape(nvir,nval,ncvs)
 
         eris_ovoo = eris.ovoo
-          
-        eris_cecc = eris_ovoo[:ncvs,:,:ncvs,:ncvs].copy() 
+
+        eris_cecc = eris_ovoo[:ncvs,:,:ncvs,:ncvs].copy()
         eris_cecv = eris_ovoo[:ncvs,:,:ncvs,ncvs:].copy()
         eris_vecc = eris_ovoo[ncvs:,:,:ncvs,:ncvs].copy()
-         
+
         del eris_ovoo
 
 ############ ADC(2) ij block ############################
@@ -352,18 +352,18 @@ def matvec(adc, M_ij=None, eris=None):
 
 ############ ADC(2) i - kja block #########################
 
-        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_cecc, r2_ecc, optimize = True)
-        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_cecc, r2_ecc, optimize = True)
-        s[s1:f1] += 2. * lib.einsum('jaik,ajk->i', eris_cecv, r2_ecv, optimize = True)
-        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_vecc, r2_ecv, optimize = True)
-        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_vecc, r2_evc, optimize = True)
-        s[s1:f1] -= lib.einsum('kaij,ajk->i', eris_cecv, r2_evc, optimize = True)
+        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_cecc, r2_ecc, optimize=True)
+        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_cecc, r2_ecc, optimize=True)
+        s[s1:f1] += 2. * lib.einsum('jaik,ajk->i', eris_cecv, r2_ecv, optimize=True)
+        s[s1:f1] -= lib.einsum('kaji,ajk->i', eris_vecc, r2_ecv, optimize=True)
+        s[s1:f1] += 2. * lib.einsum('jaki,ajk->i', eris_vecc, r2_evc, optimize=True)
+        s[s1:f1] -= lib.einsum('kaij,ajk->i', eris_cecv, r2_evc, optimize=True)
 
 ############## ADC(2) ajk - i block ############################
 
-        s[s2_ecc:f2_ecc] += lib.einsum('jaki,i->ajk', eris_cecc, r1, optimize = True).reshape(-1) 
-        s[s2_ecv:f2_ecv] += lib.einsum('jaik,i->ajk', eris_cecv, r1, optimize = True).reshape(-1) 
-        s[s2_evc:f2_evc] += lib.einsum('jaki,i->ajk', eris_vecc, r1, optimize = True).reshape(-1)
+        s[s2_ecc:f2_ecc] += lib.einsum('jaki,i->ajk', eris_cecc, r1, optimize=True).reshape(-1)
+        s[s2_ecv:f2_ecv] += lib.einsum('jaik,i->ajk', eris_cecv, r1, optimize=True).reshape(-1)
+        s[s2_evc:f2_evc] += lib.einsum('jaki,i->ajk', eris_vecc, r1, optimize=True).reshape(-1)
 
         del eris_cecc, eris_cecv, eris_vecc
 
@@ -379,231 +379,267 @@ def matvec(adc, M_ij=None, eris=None):
 ############### ADC(3) ajk - bil block ############################
 
         if (method == "adc(2)-x" or method == "adc(3)"):
-        
-               eris_oooo = eris.oooo
-               eris_oovv = eris.oovv
-               eris_ovvo = eris.ovvo
 
-               eris_cccc = eris_oooo[:ncvs,:ncvs,:ncvs,:ncvs].copy() 
-               eris_cccv = eris_oooo[:ncvs,:ncvs,:ncvs,ncvs:].copy()
-               eris_cvcv = eris_oooo[:ncvs,ncvs:,:ncvs,ncvs:].copy()
-               eris_ccvv = eris_oooo[:ncvs,:ncvs,ncvs:,ncvs:].copy()
-               eris_ceec = eris_ovvo[:ncvs,:,:,:ncvs].copy() 
-               eris_ceev = eris_ovvo[:ncvs,:,:,ncvs:].copy()
-               eris_veev = eris_ovvo[ncvs:,:,:,ncvs:].copy()
-               eris_ccee = eris_oovv[:ncvs,:ncvs,:,:].copy()  
-               eris_cvee = eris_oovv[:ncvs,ncvs:,:,:].copy()
-               eris_vvee = eris_oovv[ncvs:,ncvs:,:,:].copy()
+            eris_oooo = eris.oooo
+            eris_oovv = eris.oovv
+            eris_ovvo = eris.ovvo
 
-               del eris_oooo
-               del eris_oovv
-               del eris_ovvo
+            eris_cccc = eris_oooo[:ncvs,:ncvs,:ncvs,:ncvs].copy()
+            eris_cccv = eris_oooo[:ncvs,:ncvs,:ncvs,ncvs:].copy()
+            eris_cvcv = eris_oooo[:ncvs,ncvs:,:ncvs,ncvs:].copy()
+            eris_ccvv = eris_oooo[:ncvs,:ncvs,ncvs:,ncvs:].copy()
+            eris_ceec = eris_ovvo[:ncvs,:,:,:ncvs].copy()
+            eris_ceev = eris_ovvo[:ncvs,:,:,ncvs:].copy()
+            eris_veev = eris_ovvo[ncvs:,:,:,ncvs:].copy()
+            eris_ccee = eris_oovv[:ncvs,:ncvs,:,:].copy()
+            eris_cvee = eris_oovv[:ncvs,ncvs:,:,:].copy()
+            eris_vvee = eris_oovv[ncvs:,ncvs:,:,:].copy()
 
-               #eris_veev, eris_vvee
-               s[s2_ecv:f2_ecv] += lib.einsum('klba,bJl->aJk',eris_vvee,r2_ecv,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] += lib.einsum('jlba,blK->ajK',eris_vvee,r2_evc,optimize = True).reshape(-1)
-               del eris_vvee
-               s[s2_evc:f2_evc] += lib.einsum('jabl,bKl->ajK',eris_veev,r2_ecv,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] -= 2*lib.einsum('jabl,blK->ajK',eris_veev,r2_evc,optimize = True).reshape(-1)
-               del eris_veev
-               #eris_ceev, eris_cvee
-               s[s2_ecc:f2_ecc] += lib.einsum('Klba,bJl->aJK',eris_cvee,r2_ecv,optimize = True).reshape(-1)
-               s[s2_ecc:f2_ecc] += lib.einsum('Jlba,blK->aJK',eris_cvee,r2_evc,optimize = True).reshape(-1)
-               s[s2_ecv:f2_ecv] += lib.einsum('Lkba,bJL->aJk',eris_cvee,r2_ecc,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] += lib.einsum('Ljba,bLK->ajK',eris_cvee,r2_ecc,optimize = True).reshape(-1)
-               del eris_cvee
-               s[s2_ecc:f2_ecc] += lib.einsum('Jabl,bKl->aJK',eris_ceev,r2_ecv,optimize = True).reshape(-1)
-               s[s2_ecc:f2_ecc] -= 2*lib.einsum('Jabl,blK->aJK',eris_ceev,r2_evc,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] += lib.einsum('Lbaj,bKL->ajK',eris_ceev,r2_ecc,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] -= 2*lib.einsum('Lbaj,bLK->ajK',eris_ceev,r2_ecc,optimize = True).reshape(-1)
-               del eris_ceev
-               #eris_ceec, eris_ccee
-               s[s2_ecc:f2_ecc] += lib.einsum('KLba,bJL->aJK',eris_ccee,r2_ecc,optimize = True).reshape(-1)
-               s[s2_ecc:f2_ecc] += lib.einsum('JLba,bLK->aJK',eris_ccee,r2_ecc,optimize = True).reshape(-1)
-               s[s2_ecv:f2_ecv] += lib.einsum('JLba,bLk->aJk',eris_ccee,r2_ecv,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] += lib.einsum('KLba,bjL->ajK',eris_ccee,r2_evc,optimize = True).reshape(-1)
-               del eris_ccee
-               s[s2_ecc:f2_ecc] += lib.einsum('JabL,bKL->aJK',eris_ceec,r2_ecc,optimize = True).reshape(-1)
-               s[s2_ecc:f2_ecc] -= 2*lib.einsum('JabL,bLK->aJK',eris_ceec,r2_ecc,optimize = True).reshape(-1)
-               s[s2_ecv:f2_ecv] -= 2*lib.einsum('JabL,bLk->aJk',eris_ceec,r2_ecv,optimize = True).reshape(-1)
-               s[s2_ecv:f2_ecv] += lib.einsum('JabL,bkL->aJk',eris_ceec,r2_evc,optimize = True).reshape(-1)
-               del eris_ceec
-               #eris_cvcv, eris_ccvv
-               s[s2_ecv:f2_ecv] -= lib.einsum('JIkl,aIl->aJk',eris_ccvv,r2_ecv,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] -= lib.einsum('KIjl,alI->ajK',eris_ccvv,r2_evc,optimize = True).reshape(-1)
-               del eris_ccvv
-               s[s2_ecv:f2_ecv] -= lib.einsum('IkJl,alI->aJk',eris_cvcv,r2_evc,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] -= lib.einsum('KlIj,aIl->ajK',eris_cvcv,r2_ecv,optimize = True).reshape(-1)
-               del eris_cvcv
-               #eris_cccv
-               s[s2_ecc:f2_ecc] -= lib.einsum('KIJl,alI->aJK',eris_cccv,r2_evc,optimize = True).reshape(-1)
-               s[s2_ecc:f2_ecc] -= lib.einsum('JIKl,aIl->aJK',eris_cccv,r2_ecv,optimize = True).reshape(-1)
-               s[s2_ecv:f2_ecv] -= lib.einsum('JILk,aIL->aJk',eris_cccv,r2_ecc,optimize = True).reshape(-1)
-               s[s2_evc:f2_evc] -= lib.einsum('KLIj,aIL->ajK',eris_cccv,r2_ecc,optimize = True).reshape(-1)
-               del eris_cccv
-               #eris_cccc
-               s[s2_ecc:f2_ecc] -= lib.einsum('KLJI,aIL->aJK',eris_cccc,r2_ecc,optimize = True).reshape(-1)
-               del eris_cccc
+            del eris_oooo
+            del eris_oovv
+            del eris_ovvo
+
+            #eris_veev, eris_vvee
+            s[s2_ecv:f2_ecv] += lib.einsum('klba,bJl->aJk',eris_vvee,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] += lib.einsum('jlba,blK->ajK',eris_vvee,
+                                           r2_evc,optimize=True).reshape(-1)
+            del eris_vvee
+            s[s2_evc:f2_evc] += lib.einsum('jabl,bKl->ajK',eris_veev,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] -= 2*lib.einsum('jabl,blK->ajK',eris_veev,
+                                             r2_evc,optimize=True).reshape(-1)
+            del eris_veev
+            #eris_ceev, eris_cvee
+            s[s2_ecc:f2_ecc] += lib.einsum('Klba,bJl->aJK',eris_cvee,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_ecc:f2_ecc] += lib.einsum('Jlba,blK->aJK',eris_cvee,
+                                           r2_evc,optimize=True).reshape(-1)
+            s[s2_ecv:f2_ecv] += lib.einsum('Lkba,bJL->aJk',eris_cvee,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] += lib.einsum('Ljba,bLK->ajK',eris_cvee,
+                                           r2_ecc,optimize=True).reshape(-1)
+            del eris_cvee
+            s[s2_ecc:f2_ecc] += lib.einsum('Jabl,bKl->aJK',eris_ceev,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_ecc:f2_ecc] -= 2*lib.einsum('Jabl,blK->aJK',eris_ceev,
+                                             r2_evc,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] += lib.einsum('Lbaj,bKL->ajK',eris_ceev,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] -= 2*lib.einsum('Lbaj,bLK->ajK',eris_ceev,
+                                             r2_ecc,optimize=True).reshape(-1)
+            del eris_ceev
+            #eris_ceec, eris_ccee
+            s[s2_ecc:f2_ecc] += lib.einsum('KLba,bJL->aJK',eris_ccee,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_ecc:f2_ecc] += lib.einsum('JLba,bLK->aJK',eris_ccee,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_ecv:f2_ecv] += lib.einsum('JLba,bLk->aJk',eris_ccee,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] += lib.einsum('KLba,bjL->ajK',eris_ccee,
+                                           r2_evc,optimize=True).reshape(-1)
+            del eris_ccee
+            s[s2_ecc:f2_ecc] += lib.einsum('JabL,bKL->aJK',eris_ceec,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_ecc:f2_ecc] -= 2*lib.einsum('JabL,bLK->aJK',eris_ceec,
+                                             r2_ecc,optimize=True).reshape(-1)
+            s[s2_ecv:f2_ecv] -= 2*lib.einsum('JabL,bLk->aJk',eris_ceec,
+                                             r2_ecv,optimize=True).reshape(-1)
+            s[s2_ecv:f2_ecv] += lib.einsum('JabL,bkL->aJk',eris_ceec,
+                                           r2_evc,optimize=True).reshape(-1)
+            del eris_ceec
+            #eris_cvcv, eris_ccvv
+            s[s2_ecv:f2_ecv] -= lib.einsum('JIkl,aIl->aJk',eris_ccvv,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] -= lib.einsum('KIjl,alI->ajK',eris_ccvv,
+                                           r2_evc,optimize=True).reshape(-1)
+            del eris_ccvv
+            s[s2_ecv:f2_ecv] -= lib.einsum('IkJl,alI->aJk',eris_cvcv,
+                                           r2_evc,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] -= lib.einsum('KlIj,aIl->ajK',eris_cvcv,
+                                           r2_ecv,optimize=True).reshape(-1)
+            del eris_cvcv
+            #eris_cccv
+            s[s2_ecc:f2_ecc] -= lib.einsum('KIJl,alI->aJK',eris_cccv,
+                                           r2_evc,optimize=True).reshape(-1)
+            s[s2_ecc:f2_ecc] -= lib.einsum('JIKl,aIl->aJK',eris_cccv,
+                                           r2_ecv,optimize=True).reshape(-1)
+            s[s2_ecv:f2_ecv] -= lib.einsum('JILk,aIL->aJk',eris_cccv,
+                                           r2_ecc,optimize=True).reshape(-1)
+            s[s2_evc:f2_evc] -= lib.einsum('KLIj,aIL->ajK',eris_cccv,
+                                           r2_ecc,optimize=True).reshape(-1)
+            del eris_cccv
+            #eris_cccc
+            s[s2_ecc:f2_ecc] -= lib.einsum('KLJI,aIL->aJK',eris_cccc,
+                                           r2_ecc,optimize=True).reshape(-1)
+            del eris_cccc
 
         if (method == "adc(3)"):
 
-               eris_ovoo = eris.ovoo
-               t2_1 = adc.t2[0]
-               t2_1_ccee = t2_1[:ncvs,:ncvs,:,:].copy() 
-               t2_1_cvee = t2_1[:ncvs,ncvs:,:,:].copy()
-               t2_1_vcee = t2_1[ncvs:,:ncvs,:,:].copy()
-               del t2_1
+            eris_ovoo = eris.ovoo
+            t2_1 = adc.t2[0]
+            t2_1_ccee = t2_1[:ncvs,:ncvs,:,:].copy()
+            t2_1_cvee = t2_1[:ncvs,ncvs:,:,:].copy()
+            t2_1_vcee = t2_1[ncvs:,:ncvs,:,:].copy()
+            del t2_1
 ################ ADC(3) i - kja block and ajk - i ############################
 
-               eris_oecc = eris_ovoo[:,:,:ncvs,:ncvs].copy() 
-               eris_oecv = eris_ovoo[:,:,:ncvs,ncvs:].copy()
-               eris_oeco = eris_ovoo[:,:,:ncvs,:].copy()
-               eris_oevo = eris_ovoo[:,:,ncvs:,:ncvs].copy()
-               eris_ceco = eris_ovoo[:ncvs,:,:ncvs,:].copy()
-               eris_cevo = eris_ovoo[:ncvs,:,ncvs:,:].copy()
+            eris_oecc = eris_ovoo[:,:,:ncvs,:ncvs].copy()
+            eris_oecv = eris_ovoo[:,:,:ncvs,ncvs:].copy()
+            eris_oeco = eris_ovoo[:,:,:ncvs,:].copy()
+            eris_oevo = eris_ovoo[:,:,ncvs:,:ncvs].copy()
+            eris_ceco = eris_ovoo[:ncvs,:,:ncvs,:].copy()
+            eris_cevo = eris_ovoo[:ncvs,:,ncvs:,:].copy()
 
-               temp_1_ecc = lib.einsum('ijbc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
-               temp_ecc = 0.25 * temp_1_ecc
-               temp_ecc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
-               temp_ecc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
-               temp_ecc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
-               temp_1_ecv = lib.einsum('ijbc,aij->abc',t2_1_cvee, r2_ecv, optimize=True)
-               temp_ecv = 0.25 * temp_1_ecv
-               temp_ecv -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_vcee, r2_ecv, optimize=True)
-               temp_ecv -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_vcee, r2_ecv, optimize=True)
-               temp_ecv += 0.25 * lib.einsum('jibc,aji->abc',t2_1_cvee, r2_ecv, optimize=True)
-               temp_1_evc = lib.einsum('ijbc,aij->abc',t2_1_vcee, r2_evc, optimize=True)
-               temp_evc = 0.25 * temp_1_evc
-               temp_evc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_cvee, r2_evc, optimize=True)
-               temp_evc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_cvee, r2_evc, optimize=True)
-               temp_evc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_vcee, r2_evc, optimize=True)
+            temp_1_ecc = lib.einsum('ijbc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
+            temp_ecc = 0.25 * temp_1_ecc
+            temp_ecc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
+            temp_ecc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_ccee, r2_ecc, optimize=True)
+            temp_ecc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_ccee, r2_ecc, optimize=True)
+            temp_1_ecv = lib.einsum('ijbc,aij->abc',t2_1_cvee, r2_ecv, optimize=True)
+            temp_ecv = 0.25 * temp_1_ecv
+            temp_ecv -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_vcee, r2_ecv, optimize=True)
+            temp_ecv -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_vcee, r2_ecv, optimize=True)
+            temp_ecv += 0.25 * lib.einsum('jibc,aji->abc',t2_1_cvee, r2_ecv, optimize=True)
+            temp_1_evc = lib.einsum('ijbc,aij->abc',t2_1_vcee, r2_evc, optimize=True)
+            temp_evc = 0.25 * temp_1_evc
+            temp_evc -= 0.25 * lib.einsum('ijbc,aji->abc',t2_1_cvee, r2_evc, optimize=True)
+            temp_evc -= 0.25 * lib.einsum('jibc,aij->abc',t2_1_cvee, r2_evc, optimize=True)
+            temp_evc += 0.25 * lib.einsum('jibc,aji->abc',t2_1_vcee, r2_evc, optimize=True)
 
-               if isinstance(eris.ovvv, type(None)):
-                   chnk_size = radc_ao2mo.calculate_chunk_size(adc)
-               else:
-                   chnk_size = nocc
-               a = 0
-               temp_singles = np.zeros((ncvs))
-               temp_doubles = np.zeros((nvir,nvir,nvir))
-               for p in range(0,ncvs,chnk_size):
-                   if getattr(adc, 'with_df', None):
-                       eris_ceee = dfadc.get_ovvv_df(adc, eris.Lce, eris.Lee, p, chnk_size).reshape(-1,nvir,nvir,nvir)
-                   else:
-                       eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
-                       eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
-                       del eris_ovvv
-                   k = eris_ceee.shape[0]
+            if isinstance(eris.ovvv, type(None)):
+                chnk_size = radc_ao2mo.calculate_chunk_size(adc)
+            else:
+                chnk_size = nocc
+            a = 0
+            temp_singles = np.zeros((ncvs))
+            temp_doubles = np.zeros((nvir,nvir,nvir))
+            for p in range(0,ncvs,chnk_size):
+                if getattr(adc, 'with_df', None):
+                    eris_ceee = dfadc.get_ovvv_df(
+                        adc, eris.Lce, eris.Lee, p, chnk_size).reshape(-1,nvir,nvir,nvir)
+                else:
+                    eris_ovvv = radc_ao2mo.unpack_eri_1(eris.ovvv, nvir)
+                    eris_ceee = eris_ovvv[:ncvs,:,:,:].copy()
+                    del eris_ovvv
+                k = eris_ceee.shape[0]
 
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_ecc, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_ecc, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_ecv, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_ecv, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_evc, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_evc, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_1_ecc, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_1_ecv, eris_ceee, optimize=True)
-                   temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_1_evc, eris_ceee, optimize=True)
-                   temp_doubles = lib.einsum('i,icab->cba',r1[a:a+k],eris_ceee,optimize=True)
-                   s[s1:f1] += temp_singles
-                   s[s2_ecc:f2_ecc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_ccee, optimize=True).reshape(-1)
-                   s[s2_ecv:f2_ecv] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_vcee, optimize=True).reshape(-1)
-                   s[s2_evc:f2_evc] += lib.einsum('cba,kjcb->ajk',temp_doubles, t2_1_cvee, optimize=True).reshape(-1)
-                   del eris_ceee, temp_singles, temp_doubles
-                   a += k
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_ecc, eris_ceee, optimize=True)
+                temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_ecc, eris_ceee, optimize=True)
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_ecv, eris_ceee, optimize=True)
+                temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_ecv, eris_ceee, optimize=True)
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',temp_evc, eris_ceee, optimize=True)
+                temp_singles[a:a+k] -= lib.einsum('abc,ibac->i',temp_evc, eris_ceee, optimize=True)
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',
+                                                  temp_1_ecc, eris_ceee, optimize=True)
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',
+                                                  temp_1_ecv, eris_ceee, optimize=True)
+                temp_singles[a:a+k] += lib.einsum('abc,icab->i',
+                                                  temp_1_evc, eris_ceee, optimize=True)
+                temp_doubles = lib.einsum('i,icab->cba',r1[a:a+k],eris_ceee,optimize=True)
+                s[s1:f1] += temp_singles
+                s[s2_ecc:f2_ecc] += lib.einsum('cba,kjcb->ajk',
+                                               temp_doubles, t2_1_ccee, optimize=True).reshape(-1)
+                s[s2_ecv:f2_ecv] += lib.einsum('cba,kjcb->ajk',
+                                               temp_doubles, t2_1_vcee, optimize=True).reshape(-1)
+                s[s2_evc:f2_evc] += lib.einsum('cba,kjcb->ajk',
+                                               temp_doubles, t2_1_cvee, optimize=True).reshape(-1)
+                del eris_ceee, temp_singles, temp_doubles
+                a += k
 
-               # ADC(3) jka-i
-               temp_1_c_a  = lib.einsum('I,lbIK->Kbl',r1,eris_oecc, optimize=True)
-               temp_1_c_b  = -lib.einsum('I,IbKl->Kbl',r1,eris_ceco, optimize=True)
-               temp_1_c = temp_1_c_a + temp_1_c_b
-               temp_1_v_a  = lib.einsum('I,lbIk->kbl',r1,eris_oecv, optimize=True)
-               temp_1_v_b  = -lib.einsum('I,Ibkl->kbl',r1,eris_cevo, optimize=True)
-               temp_1_v = temp_1_v_a + temp_1_v_b
+            # ADC(3) jka-i
+            temp_1_c_a  = lib.einsum('I,lbIK->Kbl',r1,eris_oecc, optimize=True)
+            temp_1_c_b  = -lib.einsum('I,IbKl->Kbl',r1,eris_ceco, optimize=True)
+            temp_1_c = temp_1_c_a + temp_1_c_b
+            temp_1_v_a  = lib.einsum('I,lbIk->kbl',r1,eris_oecv, optimize=True)
+            temp_1_v_b  = -lib.einsum('I,Ibkl->kbl',r1,eris_cevo, optimize=True)
+            temp_1_v = temp_1_v_a + temp_1_v_b
 
-               t2_1 = adc.t2[0]
-               t2_1_coee = t2_1[:ncvs,:,:,:].copy() 
-               t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
-               t2_1_voee = t2_1[ncvs:,:,:,:].copy()
-               t2_1_ovee = t2_1[:,ncvs:,:,:].copy()
-               del t2_1
+            t2_1 = adc.t2[0]
+            t2_1_coee = t2_1[:ncvs,:,:,:].copy()
+            t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
+            t2_1_voee = t2_1[ncvs:,:,:,:].copy()
+            t2_1_ovee = t2_1[:,ncvs:,:,:].copy()
+            del t2_1
 
-               temp_ecc  = lib.einsum('Kbl,lJba->aJK',temp_1_c,t2_1_ocee,optimize=True)
-               temp_ecc += lib.einsum('Kbl,Jlab->aJK',temp_1_c_a,t2_1_coee,optimize=True)
-               temp_ecc -= lib.einsum('Kbl,lJab->aJK',temp_1_c_a,t2_1_ocee,optimize=True)
-               temp_ecc += lib.einsum('Jbl,Klba->aJK',temp_1_c_b,t2_1_coee,optimize=True)
-               temp_ecv  = lib.einsum('kbl,lJba->aJk',temp_1_v,t2_1_ocee,optimize=True)
-               temp_ecv += lib.einsum('kbl,Jlab->aJk',temp_1_v_a,t2_1_coee,optimize=True)
-               temp_ecv -= lib.einsum('kbl,lJab->aJk',temp_1_v_a,t2_1_ocee,optimize=True)
-               temp_ecv += lib.einsum('Jbl,klba->aJk',temp_1_c_b,t2_1_voee,optimize=True)
-               temp_evc  = lib.einsum('Kbl,ljba->ajK',temp_1_c,t2_1_ovee,optimize=True)
-               temp_evc += lib.einsum('Kbl,jlab->ajK',temp_1_c_a,t2_1_voee,optimize=True)
-               temp_evc -= lib.einsum('Kbl,ljab->ajK',temp_1_c_a,t2_1_ovee,optimize=True)
-               temp_evc += lib.einsum('jbl,Klba->ajK',temp_1_v_b,t2_1_coee,optimize=True)
-               s[s2_ecc:f2_ecc] += temp_ecc.reshape(-1)
-               s[s2_ecv:f2_ecv] += temp_ecv.reshape(-1)
-               s[s2_evc:f2_evc] += temp_evc.reshape(-1)
+            temp_ecc  = lib.einsum('Kbl,lJba->aJK',temp_1_c,t2_1_ocee,optimize=True)
+            temp_ecc += lib.einsum('Kbl,Jlab->aJK',temp_1_c_a,t2_1_coee,optimize=True)
+            temp_ecc -= lib.einsum('Kbl,lJab->aJK',temp_1_c_a,t2_1_ocee,optimize=True)
+            temp_ecc += lib.einsum('Jbl,Klba->aJK',temp_1_c_b,t2_1_coee,optimize=True)
+            temp_ecv  = lib.einsum('kbl,lJba->aJk',temp_1_v,t2_1_ocee,optimize=True)
+            temp_ecv += lib.einsum('kbl,Jlab->aJk',temp_1_v_a,t2_1_coee,optimize=True)
+            temp_ecv -= lib.einsum('kbl,lJab->aJk',temp_1_v_a,t2_1_ocee,optimize=True)
+            temp_ecv += lib.einsum('Jbl,klba->aJk',temp_1_c_b,t2_1_voee,optimize=True)
+            temp_evc  = lib.einsum('Kbl,ljba->ajK',temp_1_c,t2_1_ovee,optimize=True)
+            temp_evc += lib.einsum('Kbl,jlab->ajK',temp_1_c_a,t2_1_voee,optimize=True)
+            temp_evc -= lib.einsum('Kbl,ljab->ajK',temp_1_c_a,t2_1_ovee,optimize=True)
+            temp_evc += lib.einsum('jbl,Klba->ajK',temp_1_v_b,t2_1_coee,optimize=True)
+            s[s2_ecc:f2_ecc] += temp_ecc.reshape(-1)
+            s[s2_ecv:f2_ecv] += temp_ecv.reshape(-1)
+            s[s2_evc:f2_evc] += temp_evc.reshape(-1)
 
-               del temp_1_c_a, temp_1_c_b, temp_1_c , temp_1_v_a, temp_1_v_b, temp_1_v 
+            del temp_1_c_a, temp_1_c_b, temp_1_c , temp_1_v_a, temp_1_v_b, temp_1_v
 
-               # ADC(3) i-jka
-               temp_a = lib.einsum('Jlab,aJK->blK',t2_1_coee,r2_ecc,optimize=True)
-               temp_b = -lib.einsum('Jlab,aKJ->blK',t2_1_coee,r2_ecc,optimize=True)
-               temp_c = -lib.einsum('Jlba,aJK->blK',t2_1_coee,r2_ecc,optimize=True)
-               temp_d = lib.einsum('Jlba,aKJ->blK',t2_1_coee,r2_ecc,optimize=True)
-               temp_ecc = temp_a + temp_b + temp_c + temp_d
-               temp_1_ecc = -temp_a - temp_c
-               temp_2_ecc = -temp_a
-               temp_3_ecc = -temp_a - temp_b
-               temp_4_ecc = -temp_d             
+            # ADC(3) i-jka
+            temp_a = lib.einsum('Jlab,aJK->blK',t2_1_coee,r2_ecc,optimize=True)
+            temp_b = -lib.einsum('Jlab,aKJ->blK',t2_1_coee,r2_ecc,optimize=True)
+            temp_c = -lib.einsum('Jlba,aJK->blK',t2_1_coee,r2_ecc,optimize=True)
+            temp_d = lib.einsum('Jlba,aKJ->blK',t2_1_coee,r2_ecc,optimize=True)
+            temp_ecc = temp_a + temp_b + temp_c + temp_d
+            temp_1_ecc = -temp_a - temp_c
+            temp_2_ecc = -temp_a
+            temp_3_ecc = -temp_a - temp_b
+            temp_4_ecc = -temp_d
 
-               s[s1:f1] += lib.einsum('blK,lbIK->I',temp_ecc,eris_oecc,optimize=True)
-               s[s1:f1] -= lib.einsum('blK,IbKl->I',temp_ecc,eris_ceco,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_1_ecc,eris_oecc,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_2_ecc,eris_oecc,optimize=True)
-               s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_2_ecc,eris_ceco,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_3_ecc,eris_oecc,optimize=True)
-               s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_4_ecc,eris_ceco,optimize=True)
+            s[s1:f1] += lib.einsum('blK,lbIK->I',temp_ecc,eris_oecc,optimize=True)
+            s[s1:f1] -= lib.einsum('blK,IbKl->I',temp_ecc,eris_ceco,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_1_ecc,eris_oecc,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_2_ecc,eris_oecc,optimize=True)
+            s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_2_ecc,eris_ceco,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_3_ecc,eris_oecc,optimize=True)
+            s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_4_ecc,eris_ceco,optimize=True)
 
-               del temp_a, temp_b, temp_c, temp_d, temp_ecc, temp_1_ecc, temp_2_ecc, temp_3_ecc, temp_4_ecc
+            del temp_a, temp_b, temp_c, temp_d, temp_ecc, temp_1_ecc, temp_2_ecc, temp_3_ecc, temp_4_ecc
 
-               temp_a = lib.einsum('Jlab,aJk->blk',t2_1_coee,r2_ecv,optimize=True)
-               temp_b = -lib.einsum('lJab,aJk->blk',t2_1_ocee,r2_ecv,optimize=True)
-               temp_c = -lib.einsum('Jlab,akJ->blk',t2_1_coee,r2_evc,optimize=True)
-               temp_d = lib.einsum('lJab,akJ->blk',t2_1_ocee,r2_evc,optimize=True)
-               temp_ecv = temp_a + temp_b + temp_c + temp_d
-               temp_1_ecv = -temp_a - temp_b
-               temp_2_ecv = -temp_a
-               temp_3_ecv = -temp_a - temp_c
-               temp_4_ecv = -lib.einsum('klba,aJk->blJ',t2_1_voee,r2_ecv,optimize=True)
+            temp_a = lib.einsum('Jlab,aJk->blk',t2_1_coee,r2_ecv,optimize=True)
+            temp_b = -lib.einsum('lJab,aJk->blk',t2_1_ocee,r2_ecv,optimize=True)
+            temp_c = -lib.einsum('Jlab,akJ->blk',t2_1_coee,r2_evc,optimize=True)
+            temp_d = lib.einsum('lJab,akJ->blk',t2_1_ocee,r2_evc,optimize=True)
+            temp_ecv = temp_a + temp_b + temp_c + temp_d
+            temp_1_ecv = -temp_a - temp_b
+            temp_2_ecv = -temp_a
+            temp_3_ecv = -temp_a - temp_c
+            temp_4_ecv = -lib.einsum('klba,aJk->blJ',t2_1_voee,r2_ecv,optimize=True)
 
-               s[s1:f1] += lib.einsum('blk,lbIk->I',temp_ecv,eris_oecv,optimize=True)
-               s[s1:f1] -= lib.einsum('blk,Ibkl->I',temp_ecv,eris_cevo,optimize=True)
-               s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_1_ecv,eris_oecv,optimize=True)
-               s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_2_ecv,eris_oecv,optimize=True)
-               s[s1:f1] += lib.einsum('blj,Ibjl->I',temp_2_ecv,eris_cevo,optimize=True)
-               s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_3_ecv,eris_oecv,optimize=True)
-               s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_4_ecv,eris_ceco,optimize=True)
+            s[s1:f1] += lib.einsum('blk,lbIk->I',temp_ecv,eris_oecv,optimize=True)
+            s[s1:f1] -= lib.einsum('blk,Ibkl->I',temp_ecv,eris_cevo,optimize=True)
+            s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_1_ecv,eris_oecv,optimize=True)
+            s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_2_ecv,eris_oecv,optimize=True)
+            s[s1:f1] += lib.einsum('blj,Ibjl->I',temp_2_ecv,eris_cevo,optimize=True)
+            s[s1:f1] -= lib.einsum('blj,lbIj->I',temp_3_ecv,eris_oecv,optimize=True)
+            s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_4_ecv,eris_ceco,optimize=True)
 
-               del temp_a, temp_b, temp_c, temp_d, temp_ecv, temp_1_ecv, temp_2_ecv, temp_3_ecv, temp_4_ecv
+            del temp_a, temp_b, temp_c, temp_d, temp_ecv, temp_1_ecv, temp_2_ecv, temp_3_ecv, temp_4_ecv
 
-               temp_a = -lib.einsum('jlab,aKj->blK',t2_1_voee,r2_ecv,optimize=True)
-               temp_b = lib.einsum('ljab,aKj->blK',t2_1_ovee,r2_ecv,optimize=True)
-               temp_c = lib.einsum('jlab,ajK->blK',t2_1_voee,r2_evc,optimize=True)
-               temp_d = -lib.einsum('ljab,ajK->blK',t2_1_ovee,r2_evc,optimize=True)
-               temp_evc = temp_a + temp_b + temp_c + temp_d 
-               temp_1_evc = -temp_c - temp_d
-               temp_2_evc = -temp_c
-               temp_3_evc = -temp_a - temp_c
-               temp_4_evc = -lib.einsum('Klba,ajK->blj',t2_1_coee,r2_evc,optimize=True)
+            temp_a = -lib.einsum('jlab,aKj->blK',t2_1_voee,r2_ecv,optimize=True)
+            temp_b = lib.einsum('ljab,aKj->blK',t2_1_ovee,r2_ecv,optimize=True)
+            temp_c = lib.einsum('jlab,ajK->blK',t2_1_voee,r2_evc,optimize=True)
+            temp_d = -lib.einsum('ljab,ajK->blK',t2_1_ovee,r2_evc,optimize=True)
+            temp_evc = temp_a + temp_b + temp_c + temp_d
+            temp_1_evc = -temp_c - temp_d
+            temp_2_evc = -temp_c
+            temp_3_evc = -temp_a - temp_c
+            temp_4_evc = -lib.einsum('Klba,ajK->blj',t2_1_coee,r2_evc,optimize=True)
 
-               s[s1:f1] += lib.einsum('blK,lbIK->I',temp_evc,eris_oecc,optimize=True)
-               s[s1:f1] -= lib.einsum('blK,IbKl->I',temp_evc,eris_ceco,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_1_evc,eris_oecc,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_2_evc,eris_oecc,optimize=True)
-               s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_2_evc,eris_ceco,optimize=True)
-               s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_3_evc,eris_oecc,optimize=True)
-               s[s1:f1] += lib.einsum('blj,Ibjl->I',temp_4_evc,eris_cevo,optimize=True)
-               
-               del temp_a, temp_b, temp_c, temp_d, temp_evc, temp_1_evc, temp_2_evc, temp_3_evc, temp_4_evc
+            s[s1:f1] += lib.einsum('blK,lbIK->I',temp_evc,eris_oecc,optimize=True)
+            s[s1:f1] -= lib.einsum('blK,IbKl->I',temp_evc,eris_ceco,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_1_evc,eris_oecc,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_2_evc,eris_oecc,optimize=True)
+            s[s1:f1] += lib.einsum('blJ,IbJl->I',temp_2_evc,eris_ceco,optimize=True)
+            s[s1:f1] -= lib.einsum('blJ,lbIJ->I',temp_3_evc,eris_oecc,optimize=True)
+            s[s1:f1] += lib.einsum('blj,Ibjl->I',temp_4_evc,eris_cevo,optimize=True)
+
+            del temp_a, temp_b, temp_c, temp_d, temp_evc, temp_1_evc, temp_2_evc, temp_3_evc, temp_4_evc
 
         cput0 = log.timer_debug1("completed sigma vector calculation", *cput0)
         s *= -1.0
@@ -669,12 +705,12 @@ def get_trans_moments_orbital(adc, orb):
 
     if orb < nocc:
         T[s1:f1] = idn_occ[orb, :ncvs]
-        T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1_coee, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1_coee, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1_coee, optimize = True)
-        T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_1_coee, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1_coee, optimize = True)
-        T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1_coee, optimize = True)
+        T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_1_coee, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_1_coee, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_1_coee, optimize=True)
+        T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_1_coee, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1_coee, optimize=True)
+        T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1_coee, optimize=True)
     else :
         if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
             T[s1:f1] += t1_2_ce[:,(orb-nocc)]
@@ -719,23 +755,23 @@ def get_trans_moments_orbital(adc, orb):
         t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
 
         if orb < ncvs:
-            T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_2_coee, optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_2_coee, optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_2_coee, optimize = True)
-            T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_2_coee, optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_2_coee, optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_2_coee, optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_2_coee, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('kcd,ikdc->i',t2_1[:,orb,:,:], t2_2_coee, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('kdc,ikcd->i',t2_1[:,orb,:,:], t2_2_coee, optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('kcd,ikcd->i',t2_1[:,orb,:,:], t2_2_coee, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_2_coee, optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_2_coee, optimize=True)
 
-            T[s1:f1] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_coee, t2_2[:,orb,:,:],optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('ikcd,kdc->i',t2_1_coee, t2_2[:,orb,:,:],optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('ikdc,kcd->i',t2_1_coee, t2_2[:,orb,:,:],optimize = True)
-            T[s1:f1] += 0.25*lib.einsum('ikcd,kcd->i',t2_1_coee, t2_2[:,orb,:,:],optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_coee, t2_2[orb,:,:,:],optimize = True)
-            T[s1:f1] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_coee, t2_2[orb,:,:,:],optimize = True)
+            T[s1:f1] += 0.25*lib.einsum('ikdc,kdc->i',t2_1_coee, t2_2[:,orb,:,:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('ikcd,kdc->i',t2_1_coee, t2_2[:,orb,:,:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('ikdc,kcd->i',t2_1_coee, t2_2[:,orb,:,:],optimize=True)
+            T[s1:f1] += 0.25*lib.einsum('ikcd,kcd->i',t2_1_coee, t2_2[:,orb,:,:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('ikcd,kcd->i',t2_1_coee, t2_2[orb,:,:,:],optimize=True)
+            T[s1:f1] -= 0.25*lib.einsum('ikdc,kdc->i',t2_1_coee, t2_2[orb,:,:,:],optimize=True)
         else:
-            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize = True)
-            T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1_ocee[:,:,(orb-nocc),:], t1_2,optimize = True)
-            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize = True)
+            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize=True)
+            T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1_ocee[:,:,(orb-nocc),:], t1_2,optimize=True)
+            T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize=True)
             if (adc.approx_trans_moments == False):
                 T[s1:f1] += t1_3_ce[:,(orb-nocc)]
 
@@ -787,7 +823,8 @@ def analyze_spec_factor(adc):
         logger.info(adc, "-----------------------------------------------------------")
 
         for c in range(index_mo.shape[0]):
-            logger.info(adc, '     %3.d          %10.8f                %s', index_mo[c], spec_Contribution[c], sym[c])
+            logger.info(adc, '     %3.d          %10.8f                %s',
+                        index_mo[c], spec_Contribution[c], sym[c])
 
         logger.info(adc, '\nPartial spec. factor sum = %10.8f', np.sum(spec_Contribution))
         logger.info(adc, "\n*************************************************************\n")
@@ -821,10 +858,13 @@ def renormalize_eigenvectors(adc, nroots=1):
         U2_ecv = U[s2_ecv:f2_ecv,I].reshape(nvir,ncvs,nval)
         U2_evc = U[s2_evc:f2_evc,I].reshape(nvir,nval,ncvs)
 
-        UdotU = np.dot(U1, U1) 
-        UdotU += 2.*np.dot(U2_ecc.ravel(), U2_ecc.ravel()) - np.dot(U2_ecc.ravel(), U2_ecc.transpose(0,2,1).ravel())
-        UdotU += 2.*np.dot(U2_ecv.ravel(), U2_ecv.ravel()) - np.dot(U2_ecv.ravel(), U2_evc.transpose(0,2,1).ravel())
-        UdotU += 2.*np.dot(U2_evc.ravel(), U2_evc.ravel()) - np.dot(U2_evc.ravel(), U2_ecv.transpose(0,2,1).ravel())
+        UdotU = np.dot(U1, U1)
+        UdotU += 2.*np.dot(U2_ecc.ravel(), U2_ecc.ravel()) - \
+                           np.dot(U2_ecc.ravel(), U2_ecc.transpose(0,2,1).ravel())
+        UdotU += 2.*np.dot(U2_ecv.ravel(), U2_ecv.ravel()) - \
+                           np.dot(U2_ecv.ravel(), U2_evc.transpose(0,2,1).ravel())
+        UdotU += 2.*np.dot(U2_evc.ravel(), U2_evc.ravel()) - \
+                           np.dot(U2_evc.ravel(), U2_ecv.transpose(0,2,1).ravel())
         U[:,I] /= np.sqrt(UdotU)
 
     return U
@@ -915,6 +955,7 @@ class RADCIPCVS(radc.RADC):
         p_ip : float
             Spectroscopic amplitudes for each IP transition.
     '''
+
     def __init__(self, adc):
         self.mol = adc.mol
         self.verbose = adc.verbose
@@ -966,7 +1007,7 @@ class RADCIPCVS(radc.RADC):
     analyze = analyze
     compute_dyson_mo = compute_dyson_mo
 
-    def get_init_guess(self, nroots=1, diag=None, ascending = True):
+    def get_init_guess(self, nroots=1, diag=None, ascending=True):
         if diag is None :
             diag = self.get_diag()
         idx = None
@@ -985,7 +1026,8 @@ class RADCIPCVS(radc.RADC):
         return guess
 
     def gen_matvec(self, imds=None, eris=None):
-        if imds is None: imds = self.get_imds(eris)
+        if imds is None:
+            imds = self.get_imds(eris)
         diag = self.get_diag(imds, eris)
         matvec = self.matvec(imds, eris)
         return matvec, diag

@@ -30,9 +30,9 @@ def setUpModule():
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
     y = r * math.cos(104.468205* math.pi/(2 * 180.0))
     mol.atom = [
-        ['O', ( 0., 0.    , 0)],
-        ['H', ( 0., -x, y)],
-        ['H', ( 0., x , y)],]
+        ['O', (0., 0.    , 0)],
+        ['H', (0., -x, y)],
+        ['H', (0., x , y)],]
     mol.basis = {'H': 'aug-cc-pVDZ',
                  'O': 'aug-cc-pVDZ',}
     mol.verbose = 0
@@ -107,7 +107,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
         self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
         self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different RADC methods for water molecule")
     unittest.main()

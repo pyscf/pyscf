@@ -28,8 +28,8 @@ def setUpModule():
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
-        ['N', ( 0., 0.    , -r/2   )],
-        ['N', ( 0., 0.    ,  r/2)],]
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()
@@ -45,14 +45,14 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
-  
+
         myadc.method = "adc(2)"
         myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
         myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
-        myadcipcvs.ncvs = 2 
+        myadcipcvs.ncvs = 2
         e,v,p,x = myadcipcvs.kernel(nroots=2)
 
         self.assertAlmostEqual(e[0], 15.12281031547323, 6)
@@ -62,14 +62,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.77131403962002, 6)
 
     def test_ip_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
         myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
         myadcipcvs = adc.uadc_ip_cvs.UADCIPCVS(myadc)
-        myadcipcvs.ncvs = 2 
+        myadcipcvs.ncvs = 2
         e,v,p,x = myadcipcvs.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 15.10850837418996, 6)
@@ -83,7 +83,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3], 0.75723819850822, 6)
 
     def test_ip_adc3_high_cost(self):
-         
+
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
@@ -102,7 +102,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.82130396559585, 6)
         self.assertAlmostEqual(p[2], 0.82061528343281, 6)
         self.assertAlmostEqual(p[3], 0.82061528704539, 6)
-      
+
 if __name__ == "__main__":
     print("IP calculations for different ADC methods for open-shell molecule")
     unittest.main()

@@ -19,20 +19,20 @@ import unittest
 import numpy
 from pyscf.pbc import gto
 from pyscf.pbc import scf,adc,mp
-from pyscf     import adc as mol_adc
+from pyscf import adc as mol_adc
 from pyscf.pbc.tools.pbc import super_cell
 
 cell = gto.M(
-    unit = 'B',
-    a = [[ 0.,          3.37013733,  3.37013733],
-         [ 3.37013733,  0.,          3.37013733],
-         [ 3.37013733,  3.37013733,  0.        ]],
-    mesh = [13]*3,
-    atom = '''He 0 0 0
+    unit='B',
+    a=[[0.,          3.37013733,  3.37013733],
+         [3.37013733,  0.,          3.37013733],
+         [3.37013733,  3.37013733,  0.        ]],
+    mesh=[13]*3,
+    atom='''He 0 0 0
               He 1.68506866 1.68506866 1.68506866''',
-    basis = 'gth-dzv',
-    pseudo = 'gth-pade',
-    verbose = 0,
+    basis='gth-dzv',
+    pseudo='gth-pade',
+    verbose=0,
 )
 
 nmp = [1,1,2]
@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         kadc  = adc.KRADC(kmf)
         kadc.method = 'adc(3)'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])
- 
+
         self.assertAlmostEqual(e[0][0], 0.03297725, 6)
         self.assertAlmostEqual(e[0][1], 0.52724032, 6)
         self.assertAlmostEqual(e[0][2], 0.85718537, 6)

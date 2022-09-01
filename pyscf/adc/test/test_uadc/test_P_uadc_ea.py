@@ -26,7 +26,7 @@ def setUpModule():
     global mol, mf, myadc
     mol = gto.Mole()
     mol.atom = [
-        ['P', ( 0., 0.    , 0.)],]
+        ['P', (0., 0.    , 0.)],]
     mol.basis = {'P':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.spin = 3
@@ -48,7 +48,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.07351147825008204, 6)
 
-        myadcea = adc.uadc_ea.UADCEA(myadc) 
+        myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.00570584313941, 6)
@@ -64,7 +64,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.07351147825008204, 6)
 
-        myadcea = adc.uadc_ea.UADCEA(myadc) 
+        myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.02422205199715, 6)
@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.08920409983024569, 6)
 
-        myadcea = adc.uadc_ea.UADCEA(myadc) 
+        myadcea = adc.uadc_ea.UADCEA(myadc)
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], -0.01331220104400, 6)
