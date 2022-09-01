@@ -416,7 +416,7 @@ class KnownValues(unittest.TestCase):
 
         mf = dft.UKS(pmol).run()
         td = tdscf.uks.TDA(mf)
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         es = td.kernel(nstates=3)[0]
         self.assertAlmostEqual(lib.fp(es), 0.16350926466999033, 6)
         td.analyze()
@@ -428,7 +428,7 @@ class KnownValues(unittest.TestCase):
 
         mf = scf.UHF(pmol).run()
         td = tdscf.uhf.TDHF(mf)
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         td.nroots = 3
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.11306948533259675, 6)
@@ -439,12 +439,12 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(lib.logger.Logger, note=temp_logger_note):
             td.analyze()
         ref = [(),
-               (1, 'B1', 2.0573933276026657, 602.6275864706528, 0.1605980714821934),
-               (2, 'B1', 14.851066559488304, 83.4850460381169, 0.001928664835262468),
-               (3, 'B1', 16.832235179166293, 73.65878400799706, 0.17021505486468672)]
-        self.assertEqual(note_args[1][1], 'B1')
-        self.assertEqual(note_args[2][1], 'B1')
-        self.assertEqual(note_args[3][1], 'B1')
+               (1, 'B2', 2.0573933276026657, 602.6275864706528, 0.1605980714821934),
+               (2, 'B2', 14.851066559488304, 83.4850460381169, 0.001928664835262468),
+               (3, 'B2', 16.832235179166293, 73.65878400799706, 0.17021505486468672)]
+        self.assertEqual(note_args[1][1], 'B2')
+        self.assertEqual(note_args[2][1], 'B2')
+        self.assertEqual(note_args[3][1], 'B2')
         self.assertAlmostEqual(abs(numpy.hstack((ref[1][2:], ref[2][2:], ref[3][2:])) -
                                    numpy.hstack((note_args[1][2:], note_args[2][2:], note_args[3][2:]))).max(),
                                0, 6)
@@ -456,7 +456,7 @@ class KnownValues(unittest.TestCase):
 
         mf = dft.UKS(pmol).run()
         td = tdscf.uks.CasidaTDDFT(mf)
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         td.nroots = 3
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.15403661700414412, 6)
