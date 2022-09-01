@@ -1046,7 +1046,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
     method = adc.method
 
-    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
         t1_2_a, t1_2_b = adc.t1[0]
 
     t2_1_a = adc.t2[0][0][:]
@@ -1103,7 +1103,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
             T[s_a:f_a] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize=True)
             T[s_a:f_a] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1_ab[orb,:,:,:], t2_1_ab, optimize=True)
         else:
-            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
                 T[s_a:f_a] += t1_2_a[:,(orb-nocc_a)]
 
 ######## ADC(2) 2h-1p  part  ############################################
@@ -1117,7 +1117,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -1134,7 +1134,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
         if (method == 'adc(3)'):
 
-            if (adc.approx_trans_moments == False):
+            if (adc.approx_trans_moments is False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_a:
@@ -1162,7 +1162,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
                 T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_a_tmp, t1_2_a,optimize=True)
                 T[s_a:f_a] += 0.5*lib.einsum('ikc,kc->i',t2_1_ab_tmp, t1_2_b,optimize=True)
-                if (adc.approx_trans_moments == False):
+                if (adc.approx_trans_moments is False):
                     T[s_a:f_a] += t1_3_a[:,(orb-nocc_a)]
                 del t2_1_a_tmp, t2_1_ab_tmp
 
@@ -1191,7 +1191,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
             T[s_b:f_b]-= 0.25*lib.einsum('kcd,kicd->i',t2_1_ab_tmp, t2_1_ab, optimize=True)
             del t2_1_b_tmp, t2_1_ab_tmp
         else:
-            if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+            if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
                 T[s_b:f_b] += t1_2_b[:,(orb-nocc_b)]
 
 ######## ADC(2) 2h-1p part  ############################################
@@ -1205,7 +1205,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
 ######## ADC(3) 2h-1p part  ############################################
 
-        if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
+        if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
 
             t2_2_a = adc.t2[1][0][:]
             t2_2_ab = adc.t2[1][1][:]
@@ -1224,7 +1224,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
         if (method=='adc(3)'):
 
-            if (adc.approx_trans_moments == False):
+            if (adc.approx_trans_moments is False):
                 t1_3_a, t1_3_b = adc.t1[1]
 
             if orb < nocc_b:
@@ -1253,7 +1253,7 @@ def get_trans_moments_orbital(adc, orb, spin="alpha"):
 
                 T[s_b:f_b] += 0.5*lib.einsum('ikc,kc->i',t2_1_b_tmp, t1_2_b,optimize=True)
                 T[s_b:f_b] += 0.5*lib.einsum('kic,kc->i',t2_1_ab_tmp, t1_2_a,optimize=True)
-                if (adc.approx_trans_moments == False):
+                if (adc.approx_trans_moments is False):
                     T[s_b:f_b] += t1_3_b[:,(orb-nocc_b)]
                 del t2_1_b_tmp, t2_1_ab_tmp
                 del t2_2_b

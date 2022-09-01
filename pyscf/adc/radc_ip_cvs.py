@@ -675,7 +675,7 @@ def get_trans_moments_orbital(adc, orb):
 
     t2_1 = adc.t2[0][:]
     t2_1_coee = t2_1[:ncvs,:,:,:].copy()
-    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
         t1_2 = adc.t1[0][:]
         t1_2_ce = t1_2[:ncvs,:].copy()
 
@@ -712,7 +712,7 @@ def get_trans_moments_orbital(adc, orb):
         T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1_coee, optimize=True)
         T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1_coee, optimize=True)
     else :
-        if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+        if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
             T[s1:f1] += t1_2_ce[:,(orb-nocc)]
 
 ######## ADC(2) 2h-1p  part  ############################################
@@ -728,7 +728,7 @@ def get_trans_moments_orbital(adc, orb):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -749,7 +749,7 @@ def get_trans_moments_orbital(adc, orb):
     if(method=='adc(3)'):
         t2_2 = adc.t2[1][:]
         t2_2_coee = t2_2[:ncvs,:,:,:].copy()
-        if (adc.approx_trans_moments == False):
+        if (adc.approx_trans_moments is False):
             t1_3 = adc.t1[1]
             t1_3_ce = t1_3[:ncvs,:].copy()
         t2_1_ocee = t2_1[:,:ncvs,:,:].copy()
@@ -772,7 +772,7 @@ def get_trans_moments_orbital(adc, orb):
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize=True)
             T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1_ocee[:,:,(orb-nocc),:], t1_2,optimize=True)
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1_coee[:,:,(orb-nocc),:], t1_2,optimize=True)
-            if (adc.approx_trans_moments == False):
+            if (adc.approx_trans_moments is False):
                 T[s1:f1] += t1_3_ce[:,(orb-nocc)]
 
         del t2_2

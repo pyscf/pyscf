@@ -118,7 +118,7 @@ def compute_amplitudes(myadc, eris):
     cput0 = log.timer_debug1("Completed t2_1 amplitude calculation", *cput0)
 
     t1_2 = None
-    if myadc.approx_trans_moments == False or myadc.method == "adc(3)":
+    if myadc.approx_trans_moments is False or myadc.method == "adc(3)":
         # Compute second-order singles t1 (tij)
         t1_2 = np.zeros((nkpts,nocc,nvir), dtype=t2_1.dtype)
         eris_ovoo = eris.ovoo
@@ -188,7 +188,7 @@ def compute_amplitudes(myadc, eris):
     t1_3 = None
     t2_1_vvvv = None
 
-    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments == False) or (myadc.method == "adc(3)"):
+    if (myadc.method == "adc(2)-x" and myadc.approx_trans_moments is False) or (myadc.method == "adc(3)"):
         # Compute second-order doubles t2 (tijab)
         t2_1_vvvv = f.create_dataset(
             't2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
@@ -281,7 +281,7 @@ def compute_amplitudes(myadc, eris):
 
         cput0 = log.timer_debug1("Completed t2_2 amplitude calculation", *cput0)
 
-        if (myadc.method == "adc(3)" and myadc.approx_trans_moments == False):
+        if (myadc.method == "adc(3)" and myadc.approx_trans_moments is False):
             raise NotImplementedError('3rd order singles amplitues not implemented')
 
     t1 = (t1_2, t1_3)

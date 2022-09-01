@@ -513,7 +513,7 @@ def get_trans_moments_orbital(adc, orb):
     method = adc.method
 
     t2_1 = adc.t2[0][:]
-    if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+    if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
         t1_2 = adc.t1[0][:]
 
     nocc = adc._nocc
@@ -543,7 +543,7 @@ def get_trans_moments_orbital(adc, orb):
         T[s1:f1] -= 0.25*lib.einsum('kdc,ikdc->i',t2_1[orb,:,:,:], t2_1, optimize=True)
         T[s1:f1] -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[orb,:,:,:], t2_1, optimize=True)
     else :
-        if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+        if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
             T[s1:f1] += t1_2[:,(orb-nocc)]
 
 ######### ADC(2) 2h-1p  part  ############################################
@@ -554,7 +554,7 @@ def get_trans_moments_orbital(adc, orb):
 
 ######## ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1][:]
 
@@ -567,7 +567,7 @@ def get_trans_moments_orbital(adc, orb):
 
     if(method=='adc(3)'):
         t2_2 = adc.t2[1][:]
-        if (adc.approx_trans_moments == False):
+        if (adc.approx_trans_moments is False):
             t1_3 = adc.t1[1]
         if orb < nocc:
             T[s1:f1] += 0.25*lib.einsum('kdc,ikdc->i',t2_1[:,orb,:,:], t2_2, optimize=True)
@@ -587,7 +587,7 @@ def get_trans_moments_orbital(adc, orb):
             T[s1:f1] += 0.5 * lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize=True)
             T[s1:f1] -= 0.5*lib.einsum('kic,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize=True)
             T[s1:f1] += 0.5*lib.einsum('ikc,kc->i',t2_1[:,:,(orb-nocc),:], t1_2,optimize=True)
-            if (adc.approx_trans_moments == False):
+            if (adc.approx_trans_moments is False):
                 T[s1:f1] += t1_3[:,(orb-nocc)]
 
         del t2_2

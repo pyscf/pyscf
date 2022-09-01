@@ -807,7 +807,7 @@ def get_trans_moments_orbital(adc, orb, kshift):
                 T1 -= 0.25*lib.einsum('kcd,ikcd->i',t2_1[kshift,kk,kc]
                                       [orb,:,:,:].conj(), t2_1[ki,kk,kc], optimize=True)
     else :
-        if (adc.approx_trans_moments == False or adc.method == "adc(3)"):
+        if (adc.approx_trans_moments is False or adc.method == "adc(3)"):
             t1_2 = adc.t1[0]
             T1 += t1_2[kshift][:,(orb-nocc)]
 
@@ -824,7 +824,7 @@ def get_trans_moments_orbital(adc, orb, kshift):
         del t2_1_t
 ####### ADC(3) 2h-1p  part  ############################################
 
-    if (adc.method == "adc(2)-x" and adc.approx_trans_moments == False) or (adc.method == "adc(3)"):
+    if (adc.method == "adc(2)-x" and adc.approx_trans_moments is False) or (adc.method == "adc(3)"):
 
         t2_2 = adc.t2[1]
 
