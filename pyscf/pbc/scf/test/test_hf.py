@@ -292,7 +292,7 @@ class KnownValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L*5,0],[0,0,L*5]],
-                   mesh = [11,20,20],
+                   mesh = [11,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -308,14 +308,14 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.24497234871167, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 5)
 
     def test_rhf_2d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L,0],[0,0,L*5]],
-                   mesh = [11,11,20],
+                   mesh = [11,11,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
@@ -330,7 +330,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.eta = 0.3
         mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.2681555164454039, 5)
+        self.assertAlmostEqual(e1, -3.2683850732448168, 4)
 
     def test_rhf_2d_fft(self):
         L = 4
@@ -369,7 +369,7 @@ class KnownValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = numpy.eye(3)*4,
-                   mesh = [10,20,20],
+                   mesh = [10,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -385,14 +385,14 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.24497234871167, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 5)
 
     def test_ghf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = numpy.eye(3)*4,
-                   mesh = [10,20,20],
+                   mesh = [10,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -408,7 +408,7 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.init_guess = 'hcore'
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.24497234871167, 5)
+        self.assertAlmostEqual(e1, -3.245417718, 5)
 
     def test_get_veff(self):
         mf = pscf.RHF(cell)
@@ -493,11 +493,11 @@ class KnownValues(unittest.TestCase):
 
     def test_init_guess_by_1e(self):
         dm = mf.get_init_guess(key='1e')
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 9)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
 
         dm = kmf.get_init_guess(key='1e')
         self.assertEqual(dm.ndim, 3)
-        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 9)
+        self.assertAlmostEqual(lib.fp(dm), 0.025922864381755062, 8)
 
     def test_init_guess_by_atom(self):
         with lib.temporary_env(cell, dimension=1):

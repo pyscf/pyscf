@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-MP2 at an individual k-point
+MP2 with k-points sampling
 '''
 
 from functools import reduce

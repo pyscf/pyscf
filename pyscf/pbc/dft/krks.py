@@ -143,7 +143,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return tot_e.real, vhf.ecoul + vhf.exc
 
-class KRKS(rks.KohnShamDFT, khf.KRHF):
+class KRKS(khf.KRHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',

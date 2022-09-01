@@ -440,6 +440,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-8
         cell.build()
 
         np.random.seed(2)
@@ -465,12 +466,11 @@ class KnownValues(unittest.TestCase):
         vector = np.random.random(eom.vector_size())
 
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-2.615041322934018 -0.19907655222705176j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-2.615041322934018 -0.19907655222705176j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9105694363906784+0.4623840337230889j ), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9105694363906784+0.4623840337230889j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-3.5191624937262938-0.09803982911194647j), 8)
-
+        self.assertAlmostEqual(lib.fp(hc), (-3.5191624937262938-0.09803982911194647j), 7)
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf
@@ -479,21 +479,21 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 7)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 7)
 
     def test_eomea_l_matvec(self):
         cell = gto.Cell()
@@ -507,6 +507,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-8
         cell.build()
 
         np.random.seed(2)
@@ -532,12 +533,11 @@ class KnownValues(unittest.TestCase):
         vector = np.random.random(eom.vector_size())
 
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.9490117387531858-1.726564412656459j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9490117387531858-1.726564412656459j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.4497554439273588-5.620765390422395j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4497554439273588-5.620765390422395j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9057184472068758+2.7776122802218817j), 8)
-
+        self.assertAlmostEqual(lib.fp(hc), (-1.9057184472068758+2.7776122802218817j), 7)
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf
@@ -545,22 +545,22 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
 
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 8)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
 
 if __name__ == '__main__':
     print("eom_kccsd_rhf tests")

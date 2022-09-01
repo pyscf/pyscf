@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ def gto_norm(l, expnt):
         #return math.sqrt(f)
         return 1/numpy.sqrt(gaussian_int(l*2+2, 2*expnt))
     else:
-        raise ValueError('l should be > 0')
+        raise ValueError('l should be >= 0')
 
 def cart2sph(l, c_tensor=None, normalized=None):
     '''
@@ -259,7 +259,7 @@ def sph2spinor_l(l):
     '''Real spherical to spinor transformation matrix for angular moment l'''
     return sph2spinor_kappa(0, l)
 
-def atom_types(atoms, basis=None):
+def atom_types(atoms, basis=None, magmom=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
@@ -283,6 +283,22 @@ def atom_types(atoms, basis=None):
                 atmgroup[stdsymb].append(ia)
             else:
                 atmgroup[stdsymb] = [ia]
+
+    if magmom is not None:
+        atmgroup_new = {}
+        suffix = {1.0:'u', -1.0:'d', 0.0:'o'}
+        magmom = np.asarray(magmom)
+        for elem, idx in atmgroup.items():
+            uniq_mag = np.unique(magmom[idx])
+            if len(uniq_mag) > 1:
+                for i, mag in enumerate(uniq_mag):
+                    subgrp = np.asarray(idx)[np.where(magmom[idx] == mag)[0]]
+                    if mag not in suffix:
+                        raise RuntimeError("Magmom should be chosen from [-1., 0., 1.], but %s is given" % mag)
+                    atmgroup_new[elem+'_'+suffix[mag]] = subgrp.tolist()
+            else:
+                atmgroup_new[elem] = idx
+        atmgroup = atmgroup_new
     return atmgroup
 
 
@@ -511,9 +527,9 @@ contract = contracted_basis = basis.to_general_contraction
 
 def to_uncontracted_cartesian_basis(mol):
     '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
-    with the uncontracted basis environment and a list of coefficients that
-    transform the uncontracted cartesian basis to the original basis.  Each
-    element in the list corresponds to one shell of the original Mole (Cell).
+    with uncontracted Cartesian basis and a list of coefficients that
+    transform the uncontracted basis to the original basis. Each element in
+    the coefficients list corresponds to one shell of the original Mole (Cell).
 
     Examples:
 
@@ -524,37 +540,109 @@ def to_uncontracted_cartesian_basis(mol):
     >>> abs(s-mol.intor('int1e_ovlp')).max()
     0.0
     '''
-    import copy
-    lmax = mol._bas[:,ANG_OF].max()
-    if mol.cart:
-        c2s = [numpy.eye((l+1)*(l+2)//2) for l in range(lmax+1)]
-    else:
-        c2s = [cart2sph(l, normalized='sp') for l in range(lmax+1)]
+    return decontract_basis(mol, to_cart=True)
 
+def decontract_basis(mol, atoms=None, to_cart=False):
+    '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
+    with the uncontracted basis environment and a list of coefficients that
+    transform the uncontracted basis to the original basis. Each element in
+    the coefficients list corresponds to one shell of the original Mole (Cell).
+
+    Kwargs:
+        atoms: list or str
+            Atoms on which the basis to be decontracted. By default, all basis
+            are decontracted
+        to_cart: bool
+            Decontract basis and transfer to Cartesian basis
+
+    Examples:
+
+    >>> mol = gto.M(atom='Ne', basis='ccpvdz')
+    >>> pmol, ctr_coeff = mol.decontract_basis()
+    >>> c = scipy.linalg.block_diag(*ctr_coeff)
+    >>> s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+    >>> abs(s-mol.intor('int1e_ovlp')).max()
+    0.0
+    '''
+    import copy
     pmol = copy.copy(mol)
-    pmol.cart = True
+
+    # Some input basis may be segmented basis from a general contracted set.
+    # This may lead to duplicated pGTOs. First contract all basis to remove
+    # duplicated primitive functions.
+    bas_exps = mol.bas_exps()
+    def _to_full_contraction(mol, bas_idx):
+        es = numpy.hstack([bas_exps[i] for i in bas_idx])
+        cs = scipy.linalg.block_diag(*[mol._libcint_ctr_coeff(ib) for ib in bas_idx])
+
+        es, e_idx, rev_idx = numpy.unique(es.round(9), True, True)
+        cs_new = numpy.zeros((es.size, cs.shape[1]))
+        for i, j in enumerate(rev_idx):
+            cs_new[j] += cs[i]
+        return es[::-1], cs_new[::-1]
+
     _bas = []
     _env = mol._env.copy()
     contr_coeff = []
-    for ib in range(mol.nbas):
-        l = mol._bas[ib,ANG_OF]
-        ncart = (l+1)*(l+2)//2
-        es = mol.bas_exp(ib)
-        cs = mol._libcint_ctr_coeff(ib)
-        nprim = cs.shape[0]
-        norm = gto_norm(l, es)
-        c = numpy.einsum('pi,p,xm->pxim', cs, 1./norm, c2s[l])
-        contr_coeff.append(c.reshape(nprim*ncart,-1))
 
-        pexp = mol._bas[ib,PTR_EXP]
-        pc = mol._bas[ib,PTR_COEFF]
-        bs = numpy.empty((nprim,8), dtype=numpy.int32)
-        bs[:] = mol._bas[ib]
-        bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
-        bs[:,PTR_EXP] = numpy.arange(pexp, pexp+nprim)
-        bs[:,PTR_COEFF] = numpy.arange(pc, pc+nprim)
-        _env[pc:pc+nprim] = norm
-        _bas.append(bs)
+    lmax = mol._bas[:,ANG_OF].max()
+    if mol.cart:
+        c2s = [numpy.eye((l+1)*(l+2)//2) for l in range(lmax+1)]
+    elif to_cart:
+        c2s = [cart2sph(l, normalized='sp') for l in range(lmax+1)]
+        pmol.cart = True
+    else:
+        c2s = [numpy.eye(l*2+1) for l in range(lmax+1)]
+
+    aoslices = mol.aoslice_by_atom()
+    for ia, (ib0, ib1) in enumerate(aoslices[:,:2]):
+        if atoms is not None:
+            if isinstance(atoms, str):
+                to_apply = ((atoms == mol.atom_pure_symbol(ia)) or
+                            (atoms == mol.atom_symbol(ia)))
+            elif isinstance(atoms, (tuple, list)):
+                to_apply = ((mol.atom_pure_symbol(ia) in atoms) or
+                            (mol.atom_symbol(ia) in atoms) or
+                            (ia in atoms))
+            else:
+                to_apply = True
+            if not to_apply:
+                for ib in range(ib0, ib1):
+                    l = mol.bas_angular(ib)
+                    nc = mol.bas_nctr(ib)
+                    c = numpy.einsum('pi,xm->pxim', numpy.eye(nc), c2s[l])
+                    contr_coeff.append(c.reshape(nc * c2s[l].shape[0], -1))
+                _bas.append(mol._bas[ib0:ib1])
+                continue
+
+        lmax = mol._bas[ib0:ib1,ANG_OF].max()
+        pexp = mol._bas[ib0,PTR_EXP]
+        for l in range(lmax+1):
+            bas_idx = ib0 + numpy.where(mol._bas[ib0:ib1,ANG_OF] == l)[0]
+            if len(bas_idx) == 0:
+                continue
+
+            mol_exps, b_coeff = _to_full_contraction(mol, bas_idx)
+            nprim, nc = b_coeff.shape
+            bs = numpy.zeros((nprim, BAS_SLOTS), dtype=numpy.int32)
+            bs[:,ATOM_OF] = ia
+            bs[:,ANG_OF ] = l
+            bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
+            norm = gto_norm(l, mol_exps)
+            if atoms is None:
+                bs[:,PTR_EXP] = pexp + numpy.arange(nprim)
+                bs[:,PTR_COEFF] = pexp + numpy.arange(nprim, nprim*2)
+                _env[pexp:pexp+nprim] = mol_exps
+                _env[pexp+nprim:pexp+nprim*2] = norm
+                pexp += nprim * 2
+            else:
+                bs[:,PTR_EXP] = _env.size + numpy.arange(nprim)
+                bs[:,PTR_COEFF] = _env.size + numpy.arange(nprim, nprim*2)
+                _env = np.hstack([_env, mol_exps, norm])
+            _bas.append(bs)
+
+            c = numpy.einsum('pi,p,xm->pxim', b_coeff, 1./norm, c2s[l])
+            contr_coeff.append(c.reshape(nprim * c2s[l].shape[0], -1))
 
     pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
     pmol._env = _env
@@ -1866,6 +1954,26 @@ def condense_to_shell(mol, mat, compressor='max'):
         abstract = lib.condense(compressor, mat, ao_loc)
     return abstract
 
+def get_overlap_cond(mol, shls_slice=None):
+    '''Overlap magnitudes measured by -log(overlap) between two shells
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+    Returns:
+        2D mask array of shape (nbas,nbas)
+    '''
+    nbas = mol.nbas
+    if shls_slice is None:
+        shls_slice = (0, nbas, 0, nbas)
+    cond = numpy.zeros((nbas, nbas))
+    moleintor.libcgto.GTOoverlap_cond(
+        cond.ctypes.data_as(ctypes.c_void_p), (ctypes.c_int * 4)(*shls_slice),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    return cond
+
 
 def tostring(mol, format='raw'):
     '''Convert molecular geometry to a string of the required format.
@@ -2023,6 +2131,8 @@ class Mole(lib.StreamObject):
             It is needed by pyscf.prop module and submodules.
         cart : boolean
             Using Cartesian GTO basis and integrals (6d,10f,15g)
+        magmom : list
+            Collinear spin of each atom. Default is [0.0,]*natm
 
         ** Following attributes are generated by :func:`Mole.build` **
 
@@ -2121,6 +2231,8 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 # Nuclear property. self.nucprop = {atom_symbol: {key: value}}
         self.nucprop = {}
+# Collinear spin of each atom. self.magmom = [0., ...]
+        self.magmom = []
 ##################################################
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6), dtype=numpy.int32)
@@ -2295,7 +2407,7 @@ class Mole(lib.StreamObject):
               verbose=None, output=None, max_memory=None,
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=0, symmetry=None, symmetry_subgroup=None,
-              cart=None):
+              cart=None, magmom=None):
         '''Setup moleclue and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
@@ -2328,6 +2440,8 @@ class Mole(lib.StreamObject):
             symmetry : bool or str
                 Whether to use symmetry.  If given a string of point group
                 name, the given point group symmetry will be used.
+            magmom : list
+                Collinear spin of each atom. Default is [0.0,]*natm
 
         '''
         if not DISABLE_GC:
@@ -2351,6 +2465,7 @@ class Mole(lib.StreamObject):
         if symmetry is not None: self.symmetry = symmetry
         if symmetry_subgroup is not None: self.symmetry_subgroup = symmetry_subgroup
         if cart is not None: self.cart = cart
+        if magmom is not None: self.magmom = magmom
 
         if parse_arg:
             _update_from_cmdargs_(self)
@@ -2418,6 +2533,12 @@ class Mole(lib.StreamObject):
             # Access self.nelec in which the code checks whether the spin and
             # number of electrons are consistent.
             self.nelec
+
+        if not self.magmom:
+            self.magmom = [0.,]*self.natm
+        if self.spin == 0 and abs(numpy.sum(numpy.asarray(self.magmom)) - self.spin) > 1e-6:
+            #don't check for unrestricted calcs.
+            raise ValueError("mol.magmom is set incorrectly.")
 
         if self.symmetry:
             self._build_symmetry()
@@ -2590,12 +2711,15 @@ class Mole(lib.StreamObject):
         if self.cart:
             self.stdout.write('[INPUT] Cartesian GTO integrals (6d 10f)\n')
 
+        self.stdout.write('[INPUT] Symbol           X                Y                Z      unit'
+                          '          X                Y                Z       unit  Magmom\n')
         for ia,atom in enumerate(self._atom):
             coorda = tuple([x * param.BOHR for x in atom[1]])
             coordb = tuple([x for x in atom[1]])
+            magmom = self.magmom[ia]
             self.stdout.write('[INPUT]%3d %-4s %16.12f %16.12f %16.12f AA  '
-                              '%16.12f %16.12f %16.12f Bohr\n'
-                              % ((ia+1, _symbol(atom[0])) + coorda + coordb))
+                              '%16.12f %16.12f %16.12f Bohr  %4.1f\n'
+                              % ((ia+1, _symbol(atom[0])) + coorda + coordb + (magmom,)))
         if self.nucmod:
             if isinstance(self.nucmod, (int, str, unicode,
                                         types.FunctionType)):
@@ -3174,6 +3298,15 @@ class Mole(lib.StreamObject):
         ptr = self._bas[bas_id,PTR_EXP]
         return self._env[ptr:ptr+nprim].copy()
 
+    def bas_exps(self):
+        '''exponents of all basis
+        return [mol.bas_exp(i) for i in range(self.nbas)]
+        '''
+        nprims = self._bas[:,NPRIM_OF]
+        pexps = self._bas[:,PTR_EXP]
+        exps = [self._env[i0:i1] for i0, i1 in zip(pexps, pexps + nprims)]
+        return exps
+
     def _libcint_ctr_coeff(self, bas_id):
         nprim = self.bas_nprim(bas_id)
         nctr = self.bas_nctr(bas_id)
@@ -3413,6 +3546,14 @@ class Mole(lib.StreamObject):
     def get_enuc(self):
         return self.energy_nuc()
 
+    def get_ao_indices(self, bas_list, ao_loc=None):
+        '''
+        Generate (dis-continued) AO indices for basis specified in bas_list
+        '''
+        if ao_loc is None:
+            ao_loc = self.ao_loc
+        return lib.locs_to_indices(ao_loc, bas_list)
+
     sph_labels = spheric_labels = sph_labels
     cart_labels = cart_labels
     ao_labels = ao_labels
@@ -3431,8 +3572,10 @@ class Mole(lib.StreamObject):
     aoslice_2c_by_atom = offset_2c_by_atom = offset_2c_by_atom
 
     condense_to_shell = condense_to_shell
+    get_overlap_cond = get_overlap_cond
 
     to_uncontracted_cartesian_basis = to_uncontracted_cartesian_basis
+    decontract_basis = decontract_basis
 
     __add__ = conc_mol
 

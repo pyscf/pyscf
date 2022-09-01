@@ -34,6 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df import df
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -709,7 +710,6 @@ KRCCSD = RCCSD
 #
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
-        from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
@@ -923,7 +923,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
 
 def _init_df_eris(cc, eris):
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -951,14 +950,12 @@ def _init_df_eris(cc, eris):
     dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
-    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df._load3c(cc._scf.with_df._cderi, 'j3c') as fload:
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+                Lpq = np.asarray(fload(kpti, kptj))
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')

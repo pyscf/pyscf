@@ -77,19 +77,19 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     Examples:
 
     >>> cell = pbc.gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
-    >>> coords = cell.get_uniform_grids([20,20,20])
+    >>> coords = cell.get_uniform_grids([10,10,10])
     >>> kpts = cell.make_kpts([3,3,3])
     >>> ao_value = cell.pbc_eval_gto("GTOval_sph", coords, kpts)
     >>> len(ao_value)
     27
     >>> ao_value[0].shape
-    (100, 2)
+    (1000, 2)
     >>> ao_value = cell.pbc_eval_gto("GTOval_ig_sph", coords, kpts, comp=3)
     >>> print(ao_value.shape)
     >>> len(ao_value)
     27
     >>> ao_value[0].shape
-    (3, 100, 2)
+    (3, 1000, 2)
     '''
     if eval_name[:3] == 'PBC':  # PBCGTOval_xxx
         eval_name, comp = _get_intor_and_comp(cell, eval_name[3:], comp)

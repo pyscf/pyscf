@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -798,32 +798,30 @@ def make_cintopt(atm, bas, env, intor):
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
-    cintopt = lib.c_null_ptr()
+    cintopt = ctypes.cast(lib.c_null_ptr(), _cintoptHandler)
+    cintopt.intor = intor
+
     # TODO: call specific ECP optimizers for each intor.
     if intor[:3] == 'ECP':
+        AS_ECPBAS_OFFSET = 18  # from gto/mole.py
+        if env[AS_ECPBAS_OFFSET] == 0:
+            raise RuntimeError('ecpbas or env is not properly initialized')
         foptinit = libcgto.ECPscalar_optimizer
-        foptinit(ctypes.byref(cintopt),
-                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-                 c_env.ctypes.data_as(ctypes.c_void_p))
-        return ctypes.cast(cintopt, _ecpoptHandler)
     else:
         foptinit = getattr(libcgto, intor+'_optimizer')
-        foptinit(ctypes.byref(cintopt),
-                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-                 c_env.ctypes.data_as(ctypes.c_void_p))
-        return ctypes.cast(cintopt, _cintoptHandler)
+    foptinit(ctypes.byref(cintopt),
+             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+             c_env.ctypes.data_as(ctypes.c_void_p))
+    return cintopt
+
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
         try:
-            libcgto.CINTdel_optimizer(ctypes.byref(self))
-        except AttributeError:
-            pass
-class _ecpoptHandler(ctypes.c_void_p):
-    def __del__(self):
-        try:
-            libcgto.ECPdel_optimizer(ctypes.byref(self))
+            if self.intor[:3] == 'ECP':
+                libcgto.ECPdel_optimizer(ctypes.byref(self))
+            else:
+                libcgto.CINTdel_optimizer(ctypes.byref(self))
         except AttributeError:
             pass
 

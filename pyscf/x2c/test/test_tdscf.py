@@ -95,7 +95,7 @@ class KnownValues(unittest.TestCase):
     def test_col_mgga_ab_ks(self):
         mf_m06l = dft.UKS(mol).run(xc='m06l', conv_tol=1e-12)
         mf_m06l.__dict__.update(scf.chkfile.load(mf_lda.chkfile, 'scf'))
-        self._check_against_ab_ks(mf_m06l.TDDFT(), -0.4919270127924622, 0.14597029880651433)
+        self._check_against_ab_ks(mf_m06l.TDDFT(), -0.4919270127924622, 0.14597029880651433, places=5)
 
     @unittest.skipIf(mcfun is None, "mcfun library not found.")
     def test_mcol_lda_ab_ks(self):

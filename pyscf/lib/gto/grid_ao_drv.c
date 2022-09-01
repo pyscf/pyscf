@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -26,6 +26,90 @@
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 
 double CINTcommon_fac_sp(int l);
+
+void GTO_screen_index(uint8_t *screen_index, int nbins, double cutoff,
+                      double *coords, int ngrids, int blksize,
+                      int *atm, int natm, int *bas, int nbas, double *env)
+{
+        double scale = -nbins / log(MIN(cutoff, .1));
+        nbins = MIN(127, nbins);
+#pragma omp parallel
+{
+        const int nblk = (ngrids+blksize-1) / blksize;
+        int i, j;
+        int np, nc, l, atm_id, ng0, ng1, dg;
+        size_t bas_id, ib;
+        double min_exp, log_coeff, maxc, arr, arr_min, rr_min, r2sup, si;
+        double dx, dy, dz, atom_x, atom_y, atom_z;
+        double *p_exp, *pcoeff, *ratm;
+        double *coordx = coords;
+        double *coordy = coords + ngrids;
+        double *coordz = coords + ngrids * 2;
+        double *rr = malloc(sizeof(double) * blksize);
+#pragma omp for nowait schedule(static)
+        for (bas_id = 0; bas_id < nbas; bas_id++) {
+                np = bas[NPRIM_OF+bas_id*BAS_SLOTS];
+                nc = bas[NCTR_OF +bas_id*BAS_SLOTS];
+                l = bas[ANG_OF+bas_id*BAS_SLOTS];
+                p_exp = env + bas[PTR_EXP+bas_id*BAS_SLOTS];
+                pcoeff = env + bas[PTR_COEFF+bas_id*BAS_SLOTS];
+                atm_id = bas[ATOM_OF+bas_id*BAS_SLOTS];
+                ratm = env + atm[atm_id*ATM_SLOTS+PTR_COORD];
+                atom_x = ratm[0];
+                atom_y = ratm[1];
+                atom_z = ratm[2];
+
+                maxc = 0;
+                min_exp = 1e9;
+                for (j = 0; j < np; j++) {
+                        min_exp = MIN(min_exp, p_exp[j]);
+                        for (i = 0; i < nc; i++) {
+                                maxc = MAX(maxc, fabs(pcoeff[i*np+j]));
+                        }
+                }
+                log_coeff = log(maxc);
+                if (l > 0) {
+                        r2sup = l / (2. * min_exp);
+                        arr_min = min_exp * r2sup - .5 * log(r2sup) * l - log_coeff;
+                } else {
+                        r2sup = 0.;
+                        arr_min = -log_coeff;
+                }
+
+                for (ib = 0; ib < nblk; ib++) {
+                        ng0 = ib * blksize;
+                        ng1 = MIN(ngrids, (ib+1)*blksize);
+                        dg = ng1 - ng0;
+#pragma GCC ivdep
+                        for (i = 0; i < dg; i++) {
+                                dx = coordx[ng0+i] - atom_x;
+                                dy = coordy[ng0+i] - atom_y;
+                                dz = coordz[ng0+i] - atom_z;
+                                rr[i] = dx*dx + dy*dy + dz*dz;
+                        }
+                        rr_min = 1e9;
+                        for (i = 0; i < dg; i++) {
+                                rr_min = MIN(rr_min, rr[i]);
+                        }
+                        if (l == 0) {
+                                arr = min_exp * rr_min - log_coeff;
+                        } else if (rr_min < r2sup) {
+                                arr = arr_min;
+                        } else {
+                                arr = min_exp * rr_min - .5 * log(rr_min) * l
+                                        - log_coeff;
+                        }
+                        si = nbins - arr * scale;
+                        if (si <= 0) {
+                                screen_index[ib*nbas+bas_id] = 0;
+                        } else {
+                                screen_index[ib*nbas+bas_id] = (uint8_t)(si + 1);
+                        }
+                }
+        }
+        free(rr);
+}
+}
 
 void GTOnabla1(double *fx1, double *fy1, double *fz1,
                double *fx0, double *fy0, double *fz0, int l, double a)
@@ -61,26 +145,14 @@ void GTOx1(double *fx1, double *fy1, double *fz1,
 }
 
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
-                int l, int nprim, int nctr, size_t ngrids,
-                double fac, double expcutoff)
+                int l, int nprim, int nctr, size_t ngrids, double fac)
 {
         int i, j;
-        double arr, maxc;
-        double logcoeff[nprim];
-        double rr[ngrids];
+        double arr;
+        double rr[BLKSIZE];
         double *gridx = coord;
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
-        int not0 = 0;
-
-        // the maximum value of the coefficients for each pGTO
-        for (j = 0; j < nprim; j++) {
-                maxc = 0;
-                for (i = 0; i < nctr; i++) {
-                        maxc = MAX(maxc, fabs(coeff[i*nprim+j]));
-                }
-                logcoeff[j] = log(maxc);
-        }
 
         for (i = 0; i < ngrids; i++) {
                 rr[i] = gridx[i]*gridx[i] + gridy[i]*gridy[i] + gridz[i]*gridz[i];
@@ -89,15 +161,10 @@ int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
         for (j = 0; j < nprim; j++) {
                 for (i = 0; i < ngrids; i++) {
                         arr = alpha[j] * rr[i];
-                        if (arr-logcoeff[j] < expcutoff) {
-                                eprim[j*BLKSIZE+i] = exp(-arr) * fac;
-                                not0 = 1;
-                        } else {
-                                eprim[j*BLKSIZE+i] = 0;
-                        }
+                        eprim[j*BLKSIZE+i] = exp(-arr) * fac;
                 }
         }
-        return not0;
+        return 1;
 }
 
 
@@ -110,13 +177,10 @@ static void _fill_grid2atm(double *grid2atm, double *coord, size_t bgrids, size_
         double *r_atm;
         for (atm_id = 0; atm_id < natm; atm_id++) {
                 r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+#pragma GCC ivdep
                 for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[0*BLKSIZE+ig] = coord[0*ngrids+ig] - r_atm[0];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[1*BLKSIZE+ig] = coord[1*ngrids+ig] - r_atm[1];
-                }
-                for (ig = 0; ig < bgrids; ig++) {
                         grid2atm[2*BLKSIZE+ig] = coord[2*ngrids+ig] - r_atm[2];
                 }
                 grid2atm += 3*BLKSIZE;
@@ -163,12 +227,6 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
         double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -185,8 +243,7 @@ void GTOeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids,
-                            fac1, expcutoff)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         dcart = (l+1)*(l+2)/2;
                         di = nc * dcart;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
@@ -232,12 +289,6 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         double *p_exp, *pcoeff, *pcoord, *ri;
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -254,8 +305,7 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids,
-                            fac1, expcutoff)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
                                  env, l, np, nc, nao, ngrids, bgrids);
@@ -289,12 +339,6 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
         double *grid2atm = ALIGN8_UP(buf); // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
         double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         _fill_grid2atm(grid2atm, coord, bgrids, ngrids,
                        atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
@@ -311,8 +355,7 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
                 pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
                 ao_id = ao_loc[bas_id] - ao_loc[sh0];
                 if (non0table[bas_id] &&
-                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids,
-                            fac1, expcutoff)) {
+                    (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         kappa = bas[bas_id*BAS_SLOTS+KAPPA_OF];
                         dcart = (l+1)*(l+2)/2;
                         di = nc * dcart;
@@ -376,7 +419,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -432,7 +475,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
+        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart+1));
 #pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -450,4 +493,3 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         free(buf);
 }
 }
-

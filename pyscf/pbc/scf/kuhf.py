@@ -495,7 +495,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             g = reduce(np.dot, (mo[:,viridx].T.conj(), fock, mo[:,occidx]))
             return g.ravel()
 
-        nkpts = len(self.kpts)
+        nkpts = len(mo_occ_kpts[0])
         grad_kpts = [grad(mo_coeff_kpts[0][k], mo_occ_kpts[0][k], fock[0][k])
                      for k in range(nkpts)]
         grad_kpts+= [grad(mo_coeff_kpts[1][k], mo_occ_kpts[1][k], fock[1][k])

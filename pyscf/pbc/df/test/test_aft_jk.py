@@ -43,8 +43,8 @@ class KnownValues(unittest.TestCase):
         vj, vk = mydf.get_jk(dm, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 9)
-        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 9)
+        self.assertAlmostEqual(ej1, 3.0455881073561235*(4./3.66768353356587)**2, 8)
+        self.assertAlmostEqual(ek1, 7.7905480251964629*(4./3.66768353356587)**2, 7)
 
         numpy.random.seed(12)
         nao = cell.nao_nr()
@@ -53,16 +53,16 @@ class KnownValues(unittest.TestCase):
         vj1, vk1 = mydf.get_jk(dm, hermi=0, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
-        self.assertAlmostEqual(ej1, 12.234106555081793, 9)
-        self.assertAlmostEqual(ek1, 43.988705494650802, 9)
+        self.assertAlmostEqual(ej1, 12.234106555081793, 7)
+        self.assertAlmostEqual(ek1, 43.988705494650802, 6)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
         vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
-        self.assertAlmostEqual(ej1, 12.233546641482697, 9)
-        self.assertAlmostEqual(ek1, 43.946958026023722, 9)
+        self.assertAlmostEqual(ej1, 12.233546641482697, 8)
+        self.assertAlmostEqual(ek1, 43.946958026023722, 7)
 
     def test_aft_j(self):
         numpy.random.seed(1)
@@ -120,18 +120,17 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((8,nao,nao))
         dm = dm + dm.transpose(0,2,1)
         vk = aft_jk.get_k_kpts(mydf, dm, 1, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk[0]), (8.7518173818250702-0.11793770445839372j) /8, 9)
-        self.assertAlmostEqual(lib.fp(vk[1]), (5.7682393685317894+0.069482280306391239j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[2]), (7.1890462727492324-0.088727079644645671j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[3]), (10.08358152800003+0.1278144339422369j   )/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[4]), (8.393281242945573-0.099410704957774876j) /8, 9)
-        self.assertAlmostEqual(lib.fp(vk[5]), (7.9413682328898769+0.1015563120870652j)  /8, 9)
-        self.assertAlmostEqual(lib.fp(vk[6]), (7.3743790120272408-0.096290683129384574j)/8, 9)
-        self.assertAlmostEqual(lib.fp(vk[7]), (6.8144379626901443+0.08071261392857812j) /8, 9)
+        self.assertAlmostEqual(lib.fp(vk[0]), (8.7518173818250702-0.11793770445839372j) /8, 8)
+        self.assertAlmostEqual(lib.fp(vk[1]), (5.7682393685317894+0.069482280306391239j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[2]), (7.1890462727492324-0.088727079644645671j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[3]), (10.08358152800003+0.1278144339422369j   )/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[4]), (8.393281242945573-0.099410704957774876j) /8, 8)
+        self.assertAlmostEqual(lib.fp(vk[5]), (7.9413682328898769+0.1015563120870652j)  /8, 8)
+        self.assertAlmostEqual(lib.fp(vk[6]), (7.3743790120272408-0.096290683129384574j)/8, 8)
+        self.assertAlmostEqual(lib.fp(vk[7]), (6.8144379626901443+0.08071261392857812j) /8, 8)
 
 
 
 if __name__ == '__main__':
     print("Full Tests for aft jk")
     unittest.main()
-

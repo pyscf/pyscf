@@ -233,6 +233,9 @@ class FFTDF(lib.StreamObject):
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         return self
 
+    def build(self):
+        return self.check_sanity()
+
     def aoR_loop(self, grids=None, kpts=None, deriv=0):
         if grids is None:
             grids = self.grids

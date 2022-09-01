@@ -218,7 +218,6 @@ class RCCSD(ccsd.CCSD):
 
     energy = energy
     update_amps = update_amps
-    get_e_hf = ccsd.get_e_hf
 
     def nip(self):
         nocc = self.nocc
