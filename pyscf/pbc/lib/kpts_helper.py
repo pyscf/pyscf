@@ -89,8 +89,8 @@ def unique_with_wrap_around(cell, kpts):
     '''Search unique kpts in first Brillouin zone.'''
     scaled_kpts = cell.get_scaled_kpts(kpts).round(5)
     scaled_kpts = np.modf(scaled_kpts)[0]
-    scaled_kpts[scaled_kpts > .5] -= 1
-    scaled_kpts[scaled_kpts <= -.5] += 1
+    scaled_kpts[scaled_kpts >= .5] -= 1
+    scaled_kpts[scaled_kpts < -.5] += 1
 
     uniq_index, uniq_inverse = unique(scaled_kpts)[1:3]
     uniq_kpts = kpts[uniq_index]
