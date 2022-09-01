@@ -865,9 +865,8 @@ class KPoints(symm.Symmetry, lib.StreamObject):
     """
     def __init__(self, cell=None, kpts=np.zeros((1,3))):
         symm.Symmetry.__init__(self, cell)
-        self.verbose = logger.NOTE
-        if getattr(self.cell, 'verbose', None):
-            self.verbose = self.cell.verbose
+        self.verbose = getattr(cell, 'verbose', logger.NOTE)
+        self.stdout = getattr(cell, 'stdout', None)
         self.time_reversal = False
 
         self.kpts_ibz = self.kpts = kpts

@@ -200,11 +200,11 @@ He
 
         ref = get_pp_loc_part2(cell)
         dat = pp_int.get_pp_loc_part2(cell)
-        self.assertAlmostEqual(abs(ref-dat).max(), 0, 11)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 8)
 
         ref = get_pp_loc_part2(cell, kpt)
         dat = pp_int.get_pp_loc_part2(cell, kpt)
-        self.assertAlmostEqual(abs(ref-dat).max(), 0, 11)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 8)
 
     def test_pp_loc_part2(self):
         cell = pbcgto.Cell()
@@ -220,11 +220,11 @@ He
 
         ref = get_pp_loc_part2(cell)
         dat = pp_int.get_pp_loc_part2(cell)
-        self.assertAlmostEqual(abs(ref-dat).max(), 0, 11)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 9)
 
         ref = get_pp_loc_part2(cell, kpt)
         dat = pp_int.get_pp_loc_part2(cell, kpt)
-        self.assertAlmostEqual(abs(ref-dat).max(), 0, 11)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 9)
 
     def test_pp(self):
         cell = pbcgto.Cell()

@@ -24,8 +24,9 @@ JK with analytic Fourier transformation
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0
-from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.lib import zdotNN, zdotCN, zdotNC
+from pyscf.pbc.df.df_jk import (_format_dms, _format_kpts_band, _format_jks,
+                                _ewald_exxdiv_for_G0)
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 

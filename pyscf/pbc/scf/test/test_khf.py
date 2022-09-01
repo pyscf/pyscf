@@ -140,7 +140,7 @@ class KnownValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,20,20],
+                   mesh = [8,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -156,14 +156,14 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5112358424228809, 5)
+        self.assertAlmostEqual(e1, -3.5113107, 4)
 
     def test_krhf_2d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [10,10,20],
+                   mesh = [10,10,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
@@ -179,14 +179,14 @@ class KnownValues(unittest.TestCase):
         mf.with_df.mesh = cell.mesh
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5376801775171911, 5)
+        self.assertAlmostEqual(e1, -3.53769771, 4)
 
     def test_kuhf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,20,20],
+                   mesh = [8,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -202,14 +202,14 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5112358424228809, 5)
+        self.assertAlmostEqual(e1, -3.5113107, 4)
 
     def test_kghf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,20,20],
+                   mesh = [8,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -225,7 +225,7 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5112358424228809, 4)
+        self.assertAlmostEqual(e1, -3.5113107, 4)
 
     def test_get_fermi(self):
         self.assertAlmostEqual(kmf.get_fermi(), 0.33154831914017424, 6)

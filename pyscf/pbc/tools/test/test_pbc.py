@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (2099,3))
+        self.assertEqual(Ls.shape, (2335,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
@@ -154,7 +154,7 @@ C  15.16687337 15.16687337 15.16687337
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([8, 15, 11])))
+        self.assertEqual(list(cl1.nimgs), [8, 16, 12])
         cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)

@@ -267,7 +267,8 @@ class SpaceGroup(lib.StreamObject):
     def __init__(self, cell, symprec=SYMPREC):
         self.cell = cell
         self.symprec = symprec
-        self.verbose = self.cell.verbose
+        self.verbose = cell.verbose
+        self.stdout = cell.stdout
         self.backend = 'pyscf'
 
         # Followings are not input variables

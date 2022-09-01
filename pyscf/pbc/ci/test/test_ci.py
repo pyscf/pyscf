@@ -93,6 +93,29 @@ class KnownValues(unittest.TestCase):
         ref = h.dot(vec)
         self.assertAlmostEqual(abs(hc - ref).max(), 0, 7)
 
+    def test_kcis_with_df(self):
+        cell = gto.Cell()
+        cell.atom = '''
+        He 0.000000000000   0.000000000000   0.000000000000
+        He 1.685068664391   1.685068664391   1.685068664391
+        '''
+        cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+        cell.a = '''
+        0.000000000, 3.370137329, 3.370137329
+        3.370137329, 0.000000000, 3.370137329
+        3.370137329, 3.370137329, 0.000000000'''
+        cell.unit = 'B'
+        cell.verbose = 7
+        cell.output = '/dev/null'
+        cell.build()
+        kpts = cell.make_kpts([2,1,1])
+        kmf = scf.KRHF(cell, kpts=kpts).density_fit()
+        kmf.kernel()
+        eci, v = ci.KCIS(kmf).kernel()
+        self.assertAlmostEqual(eci[0][0], 1.4249289, 5)
+        self.assertAlmostEqual(eci[1][0], 1.5164275, 5)
+
+
 if __name__ == "__main__":
     print("Full Tests for PBC CIS")
     unittest.main()

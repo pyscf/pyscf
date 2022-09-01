@@ -40,7 +40,7 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
-from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
@@ -801,7 +801,7 @@ class KSCF(pbchf.SCF):
                 self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction

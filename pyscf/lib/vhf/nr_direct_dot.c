@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -152,6 +152,7 @@ static void nrs1_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 for (l = 0; l < dl; l++) {
                 for (k = 0; k < dk; k++) {
                         s = v[k*dl+l];
+#pragma GCC ivdep
                         for (ij = 0; ij < dij; ij++) {
                                 s += eri[ij] * dmji[ij];
                         }
@@ -181,7 +182,7 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
         DECLARE(v, i, j);
         DEF_DM(l, k);
         int i, j, k, l, ij, icomp;
-        double buf[MAXCGTO*MAXCGTO];
+        double *buf = eri + dij * dk * dl * ncomp;
         double s;
 
         for (icomp = 0; icomp < ncomp; icomp++) {
@@ -190,6 +191,7 @@ static void nrs1_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 for (l = 0; l < dl; l++) {
                 for (k = 0; k < dk; k++) {
                         s = dmlk[l*dk+k];
+#pragma GCC ivdep
                         for (ij = 0; ij < dij; ij++) {
                                 buf[ij] += eri[ij] * s;
                         }
@@ -307,7 +309,7 @@ static void nrs2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(i, j);
                 DEF_DM(j, i);
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -319,6 +321,7 @@ static void nrs2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -353,7 +356,7 @@ static void nrs2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 LOCATE(vji, j, i);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double s;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -362,6 +365,7 @@ static void nrs2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 s = dmlk[l*dk+k];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * s;
                                 }
@@ -499,6 +503,7 @@ static void nrs2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * dmji[ij];
                                 }
@@ -533,7 +538,7 @@ static void nrs2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -542,6 +547,7 @@ static void nrs2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmkl[k*dl+l] + dmlk[l*dk+k];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -678,7 +684,7 @@ static void nrs4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(i, j);
                 DEF_DM(j, i);
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -691,6 +697,7 @@ static void nrs4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -728,7 +735,7 @@ static void nrs4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -737,6 +744,7 @@ static void nrs4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmlk[l*dk+k] + dmkl[k*dl+l];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -1147,22 +1155,25 @@ static void nrs8_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
-                double buf[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
+                double *buf = tdm + dij;
                 double tdm2, tmp;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
                         for (ij = 0, j = 0; j < dj; j++) {
                                 for (i = 0; i < di; i++, ij++) {
                                         tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
-                                        buf[ij] = 0;
                                 }
+                        }
+                        for (ij = 0; ij < dij; ij++) {
+                                buf[ij] = 0;
                         }
 
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
                                 tdm2 = dmkl[k*dl+l] + dmlk[l*dk+k];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                         buf[ij] += eri[ij] * tdm2;
@@ -1203,22 +1214,25 @@ static void nrs8_ji_s2kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
-                double buf[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
+                double *buf = tdm + dij;
                 double tmp, tdm2;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
                         for (ij = 0, j = 0; j < dj; j++) {
                                 for (i = 0; i < di; i++, ij++) {
                                         tdm[ij] = dmij[i*dj+j] + dmji[j*di+i];
-                                        buf[ij] = 0;
                                 }
+                        }
+                        for (ij = 0; ij < dij; ij++) {
+                                buf[ij] = 0;
                         }
 
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm2 = dmkl[k*dl+l] + dmlk[l*dk+k];
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm2;
                                         tmp     += eri[ij] * tdm[ij];
@@ -1570,7 +1584,7 @@ static void nra2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, i);
                 int dij = di * dj;
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -1583,6 +1597,7 @@ static void nra2ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -1616,13 +1631,14 @@ static void nra2ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 LOCATE(vji, j, i);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
 
                         for (i = 0; i < dij; i++) { buf[i] = 0; }
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * dmlk[l*dk+k];
                                 }
@@ -1755,6 +1771,7 @@ static void nra2kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * dmji[ij];
                                 }
@@ -1796,7 +1813,7 @@ static void nra2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -1805,6 +1822,7 @@ static void nra2kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -1928,7 +1946,7 @@ static void nra4ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, i);
                 int dij = di * dj;
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -1941,6 +1959,7 @@ static void nra4ij_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -1977,7 +1996,7 @@ static void nra4ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -1986,6 +2005,7 @@ static void nra4ij_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmlk[l*dk+k] + dmkl[k*dl+l];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -2326,7 +2346,7 @@ static void nra4kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, i);
                 int dij = di * dj;
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -2339,6 +2359,7 @@ static void nra4kl_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -2383,7 +2404,7 @@ static void nra4kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -2392,6 +2413,7 @@ static void nra4kl_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
@@ -2727,7 +2749,7 @@ static void nraa4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(j, i);
                 int dij = di * dj;
                 int i, j, k, l, ij, icomp;
-                double tdm[MAXCGTO*MAXCGTO];
+                double *tdm = eri + dij * dkl * ncomp;
                 double tmp;
 
                 for (ij = 0, j = 0; j < dj; j++) {
@@ -2740,6 +2762,7 @@ static void nraa4_ji_s1kl(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tmp = 0;
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         tmp += eri[ij] * tdm[ij];
                                 }
@@ -2776,7 +2799,7 @@ static void nraa4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                 DEF_DM(k, l);
                 DEF_DM(l, k);
                 int i, j, k, l, ij, icomp;
-                double buf[MAXCGTO*MAXCGTO];
+                double *buf = eri + dij * dk * dl * ncomp;
                 double tdm;
 
                 for (icomp = 0; icomp < ncomp; icomp++) {
@@ -2785,6 +2808,7 @@ static void nraa4_lk_s1ij(double *eri, double *dm, JKArray *out, int *shls,
                         for (l = 0; l < dl; l++) {
                         for (k = 0; k < dk; k++) {
                                 tdm = dmlk[l*dk+k] - dmkl[k*dl+l];
+#pragma GCC ivdep
                                 for (ij = 0; ij < dij; ij++) {
                                         buf[ij] += eri[ij] * tdm;
                                 }
