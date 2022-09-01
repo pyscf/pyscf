@@ -77,7 +77,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0][1], 0.00000001, 4)
         self.assertAlmostEqual(p[0][2], 0.00000002, 4)
 
-    def test_ea_adc3_k_fixme(self):
+    def test_ea_adc3_k_skip(self):
 
         kadc.method = 'adc(3)'
         e, v, p, x = kadc.kernel(nroots=3,kptlist=[0])

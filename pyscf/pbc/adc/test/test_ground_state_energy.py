@@ -73,7 +73,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(diff_mp2, 0.0000000000, 4)
 
-    def test_check_periodic_mp3_fixme(self):
+    def test_check_periodic_mp3_skip(self):
         kpts = cell.make_kpts((nmp))
         kpts -= kpts[0]
         kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
