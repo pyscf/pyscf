@@ -407,19 +407,24 @@ def get_imds(adc, eris=None):
                                 M_ab[ka,a:a+k] -= lib.einsum('lmdf,lmed,aebf->ab',t2_1[kl,km,kd],
                                                              t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
                                 M_ab[ka,a:a+k] += 2.*lib.einsum(
-                                    'mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 del eris_vvvv
 
                                 eris_vvvv = dfadc.get_vvvv_df(
                                     adc, eris.Lvv[kb,kf], eris.Lvv[ke,ka], p, chnk_size)/nkpts
                                 M_ab[ka,a:a+k] += 0.5*lib.einsum(
-                                    'mldf,mled,aefb->ab',t2_1[km,kl,kd], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'mldf,mled,aefb->ab',t2_1[km,kl,kd], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= 0.5*lib.einsum(
-                                    'mldf,lmed,aefb->ab',t2_1[km,kl,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
+                                    'mldf,lmed,aefb->ab',t2_1[km,kl,kd], t2_1[kl,km,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= 0.5*lib.einsum(
-                                    'lmdf,mled,aefb->ab',t2_1[kl,km,kd], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'lmdf,mled,aefb->ab',t2_1[kl,km,kd], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] += 0.5*lib.einsum(
-                                    'lmdf,lmed,aefb->ab',t2_1[kl,km,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
+                                    'lmdf,lmed,aefb->ab',t2_1[kl,km,kd], t2_1[kl,km,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1[km,kl,kf],
                                                              t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
                                 del eris_vvvv
@@ -464,17 +469,22 @@ def get_imds(adc, eris=None):
                                 M_ab[ka,a:a+k] -= lib.einsum('lmdf,lmed,aebf->ab',t2_1[kl,km,kd],
                                                              t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
                                 M_ab[ka,a:a+k] += 2.*lib.einsum(
-                                    'mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'mlfd,mled,aebf->ab',t2_1[km,kl,kf], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 del eris_vvvv
                                 eris_vvvv = eris.vvvv[ka,ke,kf,p:p+chnk_size]
                                 M_ab[ka,a:a+k] += 0.5*lib.einsum(
-                                    'mldf,mled,aefb->ab',t2_1[km,kl,kd], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'mldf,mled,aefb->ab',t2_1[km,kl,kd], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= 0.5*lib.einsum(
-                                    'mldf,lmed,aefb->ab',t2_1[km,kl,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
+                                    'mldf,lmed,aefb->ab',t2_1[km,kl,kd], t2_1[kl,km,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= 0.5*lib.einsum(
-                                    'lmdf,mled,aefb->ab',t2_1[kl,km,kd], t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
+                                    'lmdf,mled,aefb->ab',t2_1[kl,km,kd], t2_1[km,kl,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] += 0.5*lib.einsum(
-                                    'lmdf,lmed,aefb->ab',t2_1[kl,km,kd], t2_1[kl,km,ke].conj(), eris_vvvv, optimize=True)
+                                    'lmdf,lmed,aefb->ab',t2_1[kl,km,kd], t2_1[kl,km,ke].conj(), eris_vvvv,
+                                    optimize=True)
                                 M_ab[ka,a:a+k] -= lib.einsum('mlfd,mled,aefb->ab',t2_1[km,kl,kf],
                                                              t2_1[km,kl,ke].conj(), eris_vvvv, optimize=True)
                                 del eris_vvvv
@@ -767,7 +777,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                             for p in range(0,nocc,chnk_size):
                                 ka = kconserv[kz, kd, kl]
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kd], eris.Lvv[kz,ka], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,kd], eris.Lvv[kz,ka], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
 
                                 s1 += 0.5*lib.einsum('lzd,ldza->a',
@@ -777,7 +788,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 del eris_ovvv
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,ka], eris.Lvv[kz,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,ka], eris.Lvv[kz,kd], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 s1 -= 0.5*lib.einsum('lzd,lazd->a',
                                                      temp_s_a[a:a+k],eris_ovvv,optimize=True)
                                 s1 -= 0.5*lib.einsum('lzd,lazd->a',
@@ -840,7 +852,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
 
                                 ka = kconserv[kw, kd, kl]
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kd], eris.Lvv[kw,ka], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,kd], eris.Lvv[kw,ka], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
                                 s1 -= 0.5*lib.einsum('lwd,ldwa->a',
                                                      temp_s_a_1[a:a+k],eris_ovvv,optimize=True)
@@ -849,7 +862,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 del eris_ovvv
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,ka], eris.Lvv[kw,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,ka], eris.Lvv[kw,kd], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 s1 += 0.5*lib.einsum('lwd,lawd->a',
                                                      temp_s_a_1[a:a+k],eris_ovvv,optimize=True)
                                 s1 += 0.5*lib.einsum('lwd,lawd->a',
@@ -892,7 +906,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 kb = kconserv[kl,kd,kx]
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kd], eris.Lvv[kx,kb], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,kd], eris.Lvv[kx,kb], p, 
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
                                 temp_1_1[a:a+k] += lib.einsum('ldxb,b->lxd',
                                                               eris_ovvv,r1,optimize=True)
@@ -901,7 +916,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 del eris_ovvv
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kb], eris.Lvv[kx,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,kb], eris.Lvv[kx,kd], p, 
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 temp_1_1[a:a+k] -= lib.einsum('lbxd,b->lxd',
                                                               eris_ovvv,r1,optimize=True)
                                 del eris_ovvv
@@ -909,7 +925,8 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 kd = kconserv[kl, kshift, ky]
                                 kb = kconserv[ky,kd,kl]
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kb], eris.Lvv[ky,kd], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[kl,kb], eris.Lvv[ky,kd], p, 
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 temp[a:a+k] -= lib.einsum('lbyd,b->lyd', eris_ovvv,r1,optimize=True)
                                 del eris_ovvv
                                 a += k
@@ -1191,7 +1208,8 @@ class RADCEA(kadc_rhf.RADC):
     Saved results
 
         e_ea : float or list of floats
-            EA energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+            EA energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1,
+            it is a list of floats for the lowest nroots eigenvalues.
         v_ea : array
             Eigenvectors for each EA transition.
         p_ea : float

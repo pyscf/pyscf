@@ -591,7 +591,8 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                             a = 0
                             for p in range(0,nocc,chnk_size):
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[ki,kc], eris.Lvv[ka,kb], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[ki,kc], eris.Lvv[ka,kb], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
                                 s1[a:a+k] += lib.einsum('abc,icab->i',temp_1,
                                                         eris_ovvv, optimize=True)
@@ -599,7 +600,8 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                                                         eris_ovvv, optimize=True)
                                 del eris_ovvv
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[ki,kb], eris.Lvv[ka,kc], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[ki,kb], eris.Lvv[ka,kc], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 s1[a:a+k] -= lib.einsum('abc,ibac->i',temp,
                                                         eris_ovvv, optimize=True)
                                 del eris_ovvv
@@ -633,7 +635,8 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                             for p in range(0,nocc,chnk_size):
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[ki,kc], eris.Lvv[ka,kb], p, chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
+                                    adc, eris.Lov[ki,kc], eris.Lvv[ka,kb], p,
+                                    chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
                                 temp = lib.einsum(
                                     'i,icab->cba',r1[a:a+k],eris_ovvv.conj(), optimize=True)
@@ -984,7 +987,8 @@ class RADCIP(kadc_rhf.RADC):
     Saved results
 
         e_ip : float or list of floats
-            IP energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list of floats for the lowest nroots eigenvalues.
+            IP energy (eigenvalue). For nroots = 1, it is a single float number. If nroots > 1, it is a list
+            of floats for the lowest nroots eigenvalues.
         v_ip : array
             Eigenvectors for each IP transition.
         p_ip : float
