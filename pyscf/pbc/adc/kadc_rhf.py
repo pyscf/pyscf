@@ -41,7 +41,6 @@ from pyscf.pbc.cc.kccsd_t_rhf import _get_epqr
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 
-from pyscf.pbc import tools
 import h5py
 import tempfile
 
@@ -74,10 +73,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
         kptlist = range(nkpts)
 
     dtype = np.result_type(adc.t2[0])
-    nkop_chk = adc.nkop_chk
-    kop_npick = adc.kop_npick
-    kop_w = np.zeros((len(kptlist),nroots), np.float64)
-    kop_v = np.zeros((len(kptlist),nroots,size), dtype)
 
     evals = np.zeros((len(kptlist),nroots), np.float64)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
@@ -94,7 +89,7 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
         conv_k,evals_k, evecs_k = lib.linalg_helper.davidson_nosym1(
                 lambda xs : [matvec(x) for x in xs], guess, diag,
-                nroots=nroots, verbose=log, tol=adc.conv_tol, 
+                nroots=nroots, verbose=log, tol=adc.conv_tol,
                 max_cycle=adc.max_cycle, max_space=adc.max_space,
                 tol_residual=adc.tol_residual)
 
@@ -137,7 +132,6 @@ class RADC(pyscf.adc.radc.RADC):
 
     def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
 
-        from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         assert (isinstance(mf, scf.khf.KSCF))
 

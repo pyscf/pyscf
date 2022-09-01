@@ -364,7 +364,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr -  -0.32201692499346535)
 
-    myadcip = UADCIP(myadc)
+    myadcip = adc.uadc_ip.UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(2) IP energies")
     print (e[0] - 0.5434389897908212)
@@ -376,7 +376,7 @@ if __name__ == '__main__':
     print (p[1] - 0.8844048539643351)
     print (p[2] - 0.9096460559671828)
 
-    myadcea = UADCEA(myadc)
+    myadcea = adc.uadc_ea.UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
     print("ADC(2) EA energies")
     print (e[0] - 0.09617819143037348)
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr - -0.31694173142858517)
 
-    myadcip = UADCIP(myadc)
+    myadcip = adc.uadc_ip.UADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(3) IP energies")
     print (e[0] - 0.5667526838174817)
@@ -405,7 +405,7 @@ if __name__ == '__main__':
     print (p[1] - 0.9086596190173993)
     print (p[2] - 0.9214613318791076)
 
-    myadcea = UADCEA(myadc)
+    myadcea = adc.uadc_ea.UADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
 
     print("ADC(3) EA energies")

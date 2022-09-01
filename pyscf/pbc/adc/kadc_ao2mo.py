@@ -29,9 +29,7 @@ import tempfile
 ### Incore integral transformation for integrals in Chemists' notation###
 def transform_integrals_incore(myadc):
 
-    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
-    cell = myadc.cell
     kpts = myadc.kpts
     nkpts = myadc.nkpts
     nocc = myadc.nocc
@@ -41,16 +39,11 @@ def transform_integrals_incore(myadc):
 
     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-    # Get location of padded elements in occupied and virtual space.
-    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-    nonzero_padding = padding_k_idx(myadc, kind="joint")
-
     fao2mo = myadc._scf.with_df.ao2mo
 
     kconserv = myadc.khelper.kconserv
     khelper = myadc.khelper
 
-    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
     orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
     fao2mo = myadc._scf.with_df.ao2mo
@@ -91,9 +84,7 @@ def transform_integrals_outcore(myadc):
     from pyscf.pbc import tools
     from pyscf.pbc.cc.ccsd import _adjust_occ
 
-    cput0 = (time.process_time(), time.time())
     log = logger.Logger(myadc.stdout, myadc.verbose)
-    cell = myadc.cell
     kpts = myadc.kpts
     nkpts = myadc.nkpts
     nocc = myadc.nocc
@@ -104,17 +95,10 @@ def transform_integrals_outcore(myadc):
 
     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-    # Get location of padded elements in occupied and virtual space.
-    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-    nonzero_padding = padding_k_idx(myadc, kind="joint")
-
     fao2mo = myadc._scf.with_df.ao2mo
 
     kconserv = myadc.khelper.kconserv
     khelper = myadc.khelper
-
-    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
-    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
     eris = lambda:None
     eris.feri = feri = lib.H5TmpFile()
@@ -213,8 +197,6 @@ def transform_integrals_outcore(myadc):
 def transform_integrals_df(myadc):
     from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
-    cput0 = (time.process_time(), time.time())
-    log = logger.Logger(myadc.stdout, myadc.verbose)
     cell = myadc.cell
     kpts = myadc.kpts
     nkpts = myadc.nkpts
@@ -229,22 +211,11 @@ def transform_integrals_df(myadc):
 
     mo_coeff = myadc.mo_coeff = padded_mo_coeff(myadc, myadc.mo_coeff)
 
-    # Get location of padded elements in occupied and virtual space.
-    nocc_per_kpt = get_nocc(myadc, per_kpoint=True)
-    nonzero_padding = padding_k_idx(myadc, kind="joint")
-
-    fao2mo = myadc._scf.with_df.ao2mo
-
     kconserv = myadc.khelper.kconserv
-    khelper = myadc.khelper
-
-    orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
-    orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
     # The momentum conservation array
     kconserv = myadc.khelper.kconserv
 
-    nvir_pair = nvir*(nvir+1)//2
     with_df = myadc.with_df
     naux = with_df.get_naoaux()
     eris = lambda:None
@@ -258,8 +229,6 @@ def transform_integrals_df(myadc):
 
     eris.vvvv = None
     eris.ovvv = None
-
-    cput0 = (time.process_time(), time.time())
 
     with h5py.File(myadc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'][:]

@@ -41,10 +41,6 @@ def get_imds(adc, eris=None):
 
     t2 = adc.t2
 
-    nocc_a = adc.nocc_a
-    nocc_b = adc.nocc_b
-    nvir_a = adc.nvir_a
-    nvir_b = adc.nvir_b
     ncvs = adc.ncvs
 
     # We assume that the number of ionized alpha and beta electrons is the same

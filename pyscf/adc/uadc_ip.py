@@ -45,16 +45,9 @@ def get_imds(adc, eris=None):
 
     nocc_a = adc.nocc_a
     nocc_b = adc.nocc_b
-    nvir_a = adc.nvir_a
-    nvir_b = adc.nvir_b
-
-    ab_ind_a = np.tril_indices(nvir_a, k=-1)
-    ab_ind_b = np.tril_indices(nvir_b, k=-1)
 
     e_occ_a = adc.mo_energy_a[:nocc_a]
     e_occ_b = adc.mo_energy_b[:nocc_b]
-    e_vir_a = adc.mo_energy_a[nocc_a:]
-    e_vir_b = adc.mo_energy_b[nocc_b:]
 
     idn_occ_a = np.identity(nocc_a)
     idn_occ_b = np.identity(nocc_b)

@@ -109,7 +109,6 @@ def transform_integrals_outcore(myadc):
     nocc_b = occ_b.shape[1]
     nvir_a = vir_a.shape[1]
     nvir_b = vir_b.shape[1]
-    ncvs = myadc.ncvs
 
     nvpair_a = nvir_a * (nvir_a+1) // 2
     nvpair_b = nvir_b * (nvir_b+1) // 2

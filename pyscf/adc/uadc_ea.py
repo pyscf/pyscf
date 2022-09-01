@@ -52,8 +52,6 @@ def get_imds(adc, eris=None):
     ab_ind_a = np.tril_indices(nvir_a, k=-1)
     ab_ind_b = np.tril_indices(nvir_b, k=-1)
 
-    e_occ_a = adc.mo_energy_a[:nocc_a]
-    e_occ_b = adc.mo_energy_b[:nocc_b]
     e_vir_a = adc.mo_energy_a[nocc_a:]
     e_vir_b = adc.mo_energy_b[nocc_b:]
 
@@ -111,9 +109,6 @@ def get_imds(adc, eris=None):
         eris_OVVO = eris.OVVO
         eris_OVvo = eris.OVvo
         eris_ovVO = eris.ovVO
-        eris_oooo = eris.oooo
-        eris_OOOO = eris.OOOO
-        eris_ooOO = eris.ooOO
 
         if isinstance(eris.ovvv, type(None)):
             chnk_size = uadc_ao2mo.calculate_chunk_size(adc)

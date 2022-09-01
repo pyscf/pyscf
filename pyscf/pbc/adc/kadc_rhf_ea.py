@@ -71,7 +71,6 @@ def get_imds(adc, eris=None):
 
     mo_energy =  adc.mo_energy
     mo_coeff =  adc.mo_coeff
-    nmo =  adc.get_nmo
     nocc = adc.nocc
     nvir = adc.nmo - adc.nocc
     kconserv = adc.khelper.kconserv
@@ -144,7 +143,6 @@ def get_imds(adc, eris=None):
 
         eris_oovv = eris.oovv
         eris_ovvo = eris.ovvo
-        eris_oooo = eris.oooo
 
         t1_2 = adc.t1[0]
 
@@ -502,8 +500,6 @@ def get_diag(adc,kshift,M_ab=None,eris=None):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
-    method = adc.method
-
     if M_ab is None:
         M_ab = adc.get_imds()
 
@@ -570,8 +566,6 @@ def matvec(adc, kshift, M_ab=None, eris=None):
     nvir = adc.nmo - adc.nocc
     n_singles = nvir
     n_doubles = nkpts * nkpts * nocc * nvir * nvir
-
-    dim = n_singles + n_doubles
 
     s_singles = 0
     f_singles = n_singles
@@ -906,7 +900,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 kb = kconserv[kl,kd,kx]
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kd], eris.Lvv[kx,kb], p, 
+                                    adc, eris.Lov[kl,kd], eris.Lvv[kx,kb], p,
                                     chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 k = eris_ovvv.shape[0]
                                 temp_1_1[a:a+k] += lib.einsum('ldxb,b->lxd',
@@ -916,7 +910,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 del eris_ovvv
 
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kb], eris.Lvv[kx,kd], p, 
+                                    adc, eris.Lov[kl,kb], eris.Lvv[kx,kd], p,
                                     chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 temp_1_1[a:a+k] -= lib.einsum('lbxd,b->lxd',
                                                               eris_ovvv,r1,optimize=True)
@@ -925,7 +919,7 @@ def matvec(adc, kshift, M_ab=None, eris=None):
                                 kd = kconserv[kl, kshift, ky]
                                 kb = kconserv[ky,kd,kl]
                                 eris_ovvv = dfadc.get_ovvv_df(
-                                    adc, eris.Lov[kl,kb], eris.Lvv[ky,kd], p, 
+                                    adc, eris.Lov[kl,kb], eris.Lvv[ky,kd], p,
                                     chnk_size).reshape(-1,nvir,nvir,nvir)/nkpts
                                 temp[a:a+k] -= lib.einsum('lbyd,b->lyd', eris_ovvv,r1,optimize=True)
                                 del eris_ovvv
@@ -987,7 +981,7 @@ def get_trans_moments(adc,kshift):
 def get_trans_moments_orbital(adc, orb, kshift):
 
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
-        raise notimplementederror(adc.method)
+        raise NotImplementedError(adc.method)
 
     method = adc.method
     nkpts = adc.nkpts
@@ -995,7 +989,6 @@ def get_trans_moments_orbital(adc, orb, kshift):
     nvir = adc.nmo - adc.nocc
     t2_1 = adc.t2[0]
 
-    idn_occ = np.identity(nocc)
     idn_vir = np.identity(nvir)
 
     T1 = np.zeros((nvir),dtype=np.complex128)
@@ -1138,13 +1131,8 @@ def renormalize_eigenvectors(adc, kshift, U, nroots=1):
 
     nkpts = adc.nkpts
     nocc = adc.t2[0].shape[3]
-    t2 = adc.t2[0]
-    t1_2 = adc.t1[0]
     nvir = adc.nmo - adc.nocc
     n_singles = nvir
-    n_doubles = nkpts * nkpts * nocc * nvir * nvir
-
-    dim = n_singles + n_doubles
 
     for I in range(U.shape[1]):
         U1 = U[:n_singles,I]
@@ -1299,7 +1287,6 @@ class RADCEA(kadc_rhf.RADC):
 
 def ea_contract_r_vvvv(adc,r2,vvvv,ka,kb,kc):
 
-    log = logger.Logger(adc.stdout, adc.verbose)
     nocc = r2.shape[0]
     nvir = r2.shape[1]
     nkpts = adc.nkpts

@@ -50,7 +50,6 @@ def get_imds(adc, eris=None):
     nocc = adc._nocc
     nvir = adc._nvir
 
-    e_occ = adc.mo_energy[:nocc].copy()
     e_vir = adc.mo_energy[nocc:].copy()
 
     idn_vir = np.identity(nvir)
@@ -86,7 +85,6 @@ def get_imds(adc, eris=None):
     if(method =='adc(3)'):
 
         eris_oovv = eris.oovv
-        eris_oooo = eris.oooo
 
         if isinstance(eris.ovvv, type(None)):
             chnk_size = radc_ao2mo.calculate_chunk_size(adc)

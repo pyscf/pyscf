@@ -46,11 +46,7 @@ def get_imds(adc, eris=None):
 
     t1_2 = t1[0]
 
-    nocc = adc._nocc
     ncvs = adc.ncvs
-
-    e_occ = adc.mo_energy[:nocc]
-    e_vir = adc.mo_energy[nocc:]
 
     e_cvs = adc.mo_energy[:ncvs]
     idn_cvs = np.identity(ncvs)
@@ -241,9 +237,6 @@ def get_diag(adc,M_ij=None,eris=None):
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
 
-    idn_occ = np.identity(nocc)
-    idn_vir = np.identity(nvir)
-
     s1 = 0
     f1 = n_singles
     s2_ecc = f1
@@ -282,8 +275,6 @@ def matvec(adc, M_ij=None, eris=None):
 
     method = adc.method
 
-    t1_2 = adc.t1[0]
-
     nocc = adc._nocc
     nvir = adc._nvir
     ncvs = adc.ncvs
@@ -297,9 +288,6 @@ def matvec(adc, M_ij=None, eris=None):
 
     e_occ = adc.mo_energy[:nocc]
     e_vir = adc.mo_energy[nocc:]
-
-    idn_occ = np.identity(nocc)
-    idn_vir = np.identity(nvir)
 
     if eris is None:
         eris = adc.transform_integrals()
@@ -486,8 +474,6 @@ def matvec(adc, M_ij=None, eris=None):
 
             eris_oecc = eris_ovoo[:,:,:ncvs,:ncvs].copy()
             eris_oecv = eris_ovoo[:,:,:ncvs,ncvs:].copy()
-            eris_oeco = eris_ovoo[:,:,:ncvs,:].copy()
-            eris_oevo = eris_ovoo[:,:,ncvs:,:ncvs].copy()
             eris_ceco = eris_ovoo[:ncvs,:,:ncvs,:].copy()
             eris_cevo = eris_ovoo[:ncvs,:,ncvs:,:].copy()
 
@@ -685,9 +671,6 @@ def get_trans_moments_orbital(adc, orb):
 
     dim = n_singles + n_doubles_ecc + 2 * n_doubles_ecv
 
-    e_occ = adc.mo_energy[:nocc]
-    e_vir = adc.mo_energy[nocc:]
-
     idn_occ= np.identity(nocc)
 
     s1 = 0
@@ -841,7 +824,6 @@ def renormalize_eigenvectors(adc, nroots=1):
     n_doubles_ecc = nvir * ncvs * ncvs
     n_doubles_ecv =  nvir * ncvs * nval
 
-    s1 = 0
     f1 = n_singles
     s2_ecc = f1
     f2_ecc = s2_ecc + n_doubles_ecc

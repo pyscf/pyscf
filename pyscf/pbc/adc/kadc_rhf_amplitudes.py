@@ -193,7 +193,6 @@ def compute_amplitudes(myadc, eris):
         t2_1_vvvv = f.create_dataset(
             't2_1_vvvv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         eris_oooo = eris.oooo
-        eris_ovov = eris.ovov
         eris_ovvo = eris.ovvo
         eris_oovv = eris.oovv
 
@@ -292,8 +291,6 @@ def compute_amplitudes(myadc, eris):
 
 def compute_energy(myadc, t2, eris):
 
-    cput0 = (time.process_time(), time.time())
-    log = logger.Logger(myadc.stdout, myadc.verbose)
     nkpts = myadc.nkpts
 
     emp2 = 0.0
@@ -315,7 +312,6 @@ def compute_energy(myadc, t2, eris):
 
 def contract_ladder(myadc,t_amp,vvvv,ka,kb,kc):
 
-    log = logger.Logger(myadc.stdout, myadc.verbose)
     nocc = myadc.nocc
     nmo = myadc.nmo
     nvir = nmo - nocc

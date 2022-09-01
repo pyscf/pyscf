@@ -49,7 +49,6 @@ def get_imds(adc, eris=None):
     nocc = adc._nocc
 
     e_occ = adc.mo_energy[:nocc]
-    e_vir = adc.mo_energy[nocc:]
 
     idn_occ = np.identity(nocc)
 
@@ -808,8 +807,6 @@ def make_rdm1_eigenvectors(adc, L, R):
     nocc = adc._nocc
     nvir = adc._nvir
     nmo = nocc + nvir
-
-    ij_ind = np.tril_indices(nocc, k=-1)
 
     n_singles = nocc
     n_doubles = nvir * nocc * nocc

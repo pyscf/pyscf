@@ -62,8 +62,6 @@ def kernel(adc, nroots=1, guess=None, eris=None, verbose=None):
     if adc.compute_properties:
         adc.P,adc.X = adc.get_properties(nroots)
 
-    nfalse = np.shape(conv)[0] - np.sum(conv)
-
     header = ("\n*************************************************************"
               "\n            ADC calculation summary"
               "\n*************************************************************")
@@ -358,7 +356,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr - -0.32201692360512324)
 
-    myadcip = RADCIP(myadc)
+    myadcip = adc.radc_ip.RADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(2) IP energies")
     print (e[0] - 0.5434389910483670)
@@ -370,7 +368,7 @@ if __name__ == '__main__':
     print (p[1] - 1.8192921131700284)
     print (p[2] - 1.8192921131700293)
 
-    myadcea = RADCEA(myadc)
+    myadcea = adc.radc_ea.RADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
     print("ADC(2) EA energies")
     print (e[0] - 0.0961781923822576)
@@ -387,7 +385,7 @@ if __name__ == '__main__':
     ecorr, t_amp1, t_amp2 = myadc.kernel_gs()
     print(ecorr - -0.31694173142858517)
 
-    myadcip = RADCIP(myadc)
+    myadcip = adc.radc_ip.RADCIP(myadc)
     e,v,p = kernel(myadcip,nroots=3)
     print("ADC(3) IP energies")
     print (e[0] - 0.5667526829981027)
@@ -399,7 +397,7 @@ if __name__ == '__main__':
     print (p[1] - 1.8429224413853840)
     print (p[2] - 1.8429224413853851)
 
-    myadcea = RADCEA(myadc)
+    myadcea = adc.radc_ea.RADCEA(myadc)
     e,v,p = kernel(myadcea,nroots=3)
 
     print("ADC(3) EA energies")

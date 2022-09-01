@@ -71,9 +71,7 @@ def get_imds(adc, eris=None):
 
     mo_energy =  adc.mo_energy
     mo_coeff =  adc.mo_coeff
-    nmo =  adc.get_nmo
     nocc =  adc.nocc
-    nvir = adc.nmo - adc.nocc
     kconserv = adc.khelper.kconserv
 
     mo_coeff, mo_energy = _add_padding(adc, mo_coeff, mo_energy)
@@ -379,13 +377,10 @@ def get_diag(adc,kshift,M_ij=None,eris=None):
     if adc.method not in ("adc(2)", "adc(2)-x", "adc(3)"):
         raise NotImplementedError(adc.method)
 
-    method = adc.method
-
     if M_ij is None:
         M_ij = adc.get_imds()
 
     nkpts = adc.nkpts
-    t2 = adc.t2[0]
     kconserv = adc.khelper.kconserv
     nocc = adc.nocc
     n_singles = nocc
@@ -448,8 +443,6 @@ def matvec(adc, kshift, M_ij=None, eris=None):
     n_singles = nocc
     nvir = adc.nmo - adc.nocc
     n_doubles = nkpts * nkpts * nvir * nocc * nocc
-
-    dim = n_singles + n_doubles
 
     s_singles = 0
     f_singles = n_singles
@@ -516,7 +509,6 @@ def matvec(adc, kshift, M_ij=None, eris=None):
             eris_oooo = eris.oooo
             eris_oovv = eris.oovv
             eris_ovvo = eris.ovvo
-            eris_ovov = eris.ovov
 
             for kj in range(nkpts):
                 for kk in range(nkpts):
@@ -618,7 +610,6 @@ def matvec(adc, kshift, M_ij=None, eris=None):
             del temp
             del temp_1
 
-            temp_doubles = np.zeros_like((r2))
             t2_1 = adc.t2[0]
 
             for kj in range(nkpts):
@@ -720,7 +711,6 @@ def matvec(adc, kshift, M_ij=None, eris=None):
                         del temp_1
                         del temp_2
 
-            temp_doubles = np.zeros_like((r2))
             for kj in range(nkpts):
                 for kk in range(nkpts):
                     ka = kconserv[kk, kshift, kj]
@@ -784,7 +774,6 @@ def get_trans_moments_orbital(adc, orb, kshift):
     t2_1 = adc.t2[0]
 
     idn_occ = np.identity(nocc)
-    idn_vir = np.identity(nvir)
 
     T1 = np.zeros((nocc), dtype=np.complex128)
     T2 = np.zeros((nkpts,nkpts,nvir,nocc,nocc), dtype=np.complex128)
@@ -819,7 +808,6 @@ def get_trans_moments_orbital(adc, orb, kshift):
         for ki in range(nkpts):
             for kj in range(nkpts):
                 ka = adc.khelper.kconserv[kj, kshift, ki]
-                kb = adc.khelper.kconserv[ki, ka, kj]
 
                 t2_1_t = -t2_1[ki,kj,ka].transpose(2,3,1,0)
                 T2[ka,kj] += t2_1_t[:,(orb-nocc),:,:].conj()
@@ -835,7 +823,6 @@ def get_trans_moments_orbital(adc, orb, kshift):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     ka = adc.khelper.kconserv[kj, kshift, ki]
-                    kb = adc.khelper.kconserv[ki, ka, kj]
 
                     t2_2_t = -t2_2[ki,kj,ka].transpose(2,3,1,0)
                     T2[ka,kj] += t2_2_t[:,(orb-nocc),:,:].conj()
@@ -917,13 +904,8 @@ def renormalize_eigenvectors(adc, kshift, U, nroots=1):
 
     nkpts = adc.nkpts
     nocc = adc.t2[0].shape[3]
-    t2 = adc.t2[0]
-    t1_2 = adc.t1[0]
     n_singles = nocc
     nvir = adc.nmo - adc.nocc
-    n_doubles = nkpts * nkpts * nvir * nocc * nocc
-
-    dim = n_singles + n_doubles
 
     for I in range(U.shape[1]):
         U1 = U[:n_singles,I]
