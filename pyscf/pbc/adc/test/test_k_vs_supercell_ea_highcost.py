@@ -54,7 +54,7 @@ kadc.method_type = 'ea'
 
 class KnownValues(unittest.TestCase):
 
-    def test_ea_adc2_supercell_vs_k(self):
+    def test_ea_adc2_supercell_vs_k_high_cost(self):
         myadc.approx_trans_moments = True
         e1,v1,p1,x1 = myadc.kernel(nroots=3)
         e2, v2, p2, x2 = kadc.kernel(nroots=3,kptlist=[0])
@@ -62,7 +62,7 @@ class KnownValues(unittest.TestCase):
         ediff = e1[0] - e2[0][0]
         self.assertAlmostEqual(ediff, 0.00000000, 3)
 
-    def test_ea_adc2x_supercell_vs_k(self):
+    def test_ea_adc2x_supercell_vs_k_high_cost(self):
 
         myadc.approx_trans_moments = True
         myadc.method = 'adc(2)-x'
@@ -74,7 +74,7 @@ class KnownValues(unittest.TestCase):
         ediff = e1[0] - e2[0][0]
         self.assertAlmostEqual(ediff, 0.00000000, 3)
 
-    def test_ea_adc3_supercell_vs_k(self):
+    def test_ea_adc3_supercell_vs_k_high_cost(self):
 
         myadc.approx_trans_moments = True
         myadc.method = 'adc(3)'
