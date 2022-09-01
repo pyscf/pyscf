@@ -231,7 +231,7 @@ class RADC(pyscf.adc.radc.RADC):
         mem_incore *= 16 /1e6
         mem_now = lib.current_memory()[0]
 
-        if type(self._scf.with_df) is df.GDF:
+        if isinstance(self._scf.with_df, df.GDF):
             self.chnk_size = self.get_chnk_size()
             self.with_df = self._scf.with_df
             def df_transform():
@@ -270,7 +270,7 @@ class RADC(pyscf.adc.radc.RADC):
         mem_incore *= 16 /1e6
         mem_now = lib.current_memory()[0]
 
-        if type(self._scf.with_df) is df.GDF:
+        if isinstance(self._scf.with_df, df.GDF):
             self.chnk_size = self.get_chnk_size()
             self.with_df = self._scf.with_df
             def df_transform():
