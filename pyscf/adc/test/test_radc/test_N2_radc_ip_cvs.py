@@ -45,62 +45,57 @@ class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
 
+        myadc.ncvs = 2
+        myadc.method = "adc(2)"
+        myadc.method_type = "ip"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
-        e,v,p,x,es = myadc.ip_adc(nroots=3)
-        es.analyze()
+        e,v,p,x = myadc.kernel(nroots=2)
 
-        self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
-        self.assertAlmostEqual(e[1], 0.6240296243595950, 6)
-        self.assertAlmostEqual(e[2], 0.6240296243595956, 6)
+        self.assertAlmostEqual(e[0], 15.12281031796864, 6)
+        self.assertAlmostEqual(e[1], 15.12611217935994, 6)
 
-        self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
-        self.assertAlmostEqual(p[1], 1.8192921131700284, 6)
-        self.assertAlmostEqual(p[2], 1.8192921131700293, 6)
 
-    def test_ip_adc2_oneroot(self):
+        self.assertAlmostEqual(p[0], 1.54262807973040, 6)
+        self.assertAlmostEqual(p[1], 1.54152768244107, 6)
 
-        e,v,p,x = myadc.kernel()
-
-        self.assertAlmostEqual(e[0], 0.5434389910483670, 6)
-
-        self.assertAlmostEqual(p[0], 1.7688097076459075, 6)
 
     def test_ip_adc2x(self):
 
+        myadc.ncvs = 2
         myadc.method = "adc(2)-x"
+        myadc.method_type = "ip"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.32201692499346535, 6)
 
         e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr
 
-        self.assertAlmostEqual(e_corr, -0.32201692499346535, 6)
+        self.assertAlmostEqual(e[0], 15.10850837488190, 6)
+        self.assertAlmostEqual(e[1], 15.11180785851825, 6)
+        self.assertAlmostEqual(e[2], 15.74525610353200, 6)
 
-        self.assertAlmostEqual(e[0], 0.5405255360673243, 6)
-        self.assertAlmostEqual(e[1], 0.6208026698756092, 6)
-        self.assertAlmostEqual(e[2], 0.6208026698756107, 6)
-
-        self.assertAlmostEqual(p[0], 1.7513284912002309, 6)
-        self.assertAlmostEqual(p[1], 1.8152869633769022, 6)
-        self.assertAlmostEqual(p[2], 1.8152869633769015, 6)
+        self.assertAlmostEqual(p[0], 1.51596080565362, 6)
+        self.assertAlmostEqual(p[1], 1.51447639333099, 6)
+        self.assertAlmostEqual(p[2], 0.00000030441510, 6)
 
     def test_ip_adc3(self):
 
+        myadc.ncvs = 2
         myadc.method = "adc(3)"
         myadc.method_type = "ip"
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.31694173142858517 , 6)
 
         e,v,p,x = myadc.kernel(nroots=3)
-        e_corr = myadc.e_corr
 
-        self.assertAlmostEqual(e_corr, -0.31694173142858517 , 6)
+        self.assertAlmostEqual(e[0], 15.28014264694833, 6)
+        self.assertAlmostEqual(e[1], 15.28358689153576, 6)
+        self.assertAlmostEqual(e[2], 15.74525610336261, 6)
 
-        self.assertAlmostEqual(e[0], 0.5667526829981027, 6)
-        self.assertAlmostEqual(e[1], 0.6099995170092525, 6)
-        self.assertAlmostEqual(e[2], 0.6099995170092529, 6)
-
-        self.assertAlmostEqual(p[0], 1.8173191958988848, 6)
-        self.assertAlmostEqual(p[1], 1.8429224413853840, 6)
-        self.assertAlmostEqual(p[2], 1.8429224413853851, 6)
+        self.assertAlmostEqual(p[0], 1.64260781902935, 6)
+        self.assertAlmostEqual(p[1], 1.64123055314380, 6)
+        self.assertAlmostEqual(p[2], 0.00000030441505, 6)
 
 if __name__ == "__main__":
     print("IP calculations for different RADC methods for nitrogen molecule")

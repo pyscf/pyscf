@@ -50,11 +50,14 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
+
+        myadc.max_memory = 20
+        myadc.incore_complete = False
+        myadc.method_type = 'ea'
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
-        myadcea = adc.radc_ea.RADCEA(myadc)
-        e,v,p,x = myadcea.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
         self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
@@ -65,12 +68,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.9760420333383126, 6)
 
     def test_ea_adc2x(self):
+
+        myadc.max_memory = 20
+        myadc.incore_complete = False
+        myadc.method_type = 'ea'
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
-        myadcea = adc.radc_ea.RADCEA(myadc)
-        e,v,p,x = myadcea.kernel(nroots=3)
+        e,v,p,x = myadc.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0270276135717527, 6)
         self.assertAlmostEqual(e[1], 0.0546446308721235, 6)
@@ -81,14 +87,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 1.9593142553574816, 6)
 
 
-    def test_ea_adc3(self):
+    def test_ea_adc3_high_cost(self):
+
+        myadc.max_memory = 20
+        myadc.incore_complete = False
+        myadc.method_type = 'ea'
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
-        myadcea = adc.radc_ea.RADCEA(myadc)
-        e,v,p,x = myadcea.kernel(nroots=4)
-        myadcea.analyze()
+        e,v,p,x = myadc.kernel(nroots=4)
 
         self.assertAlmostEqual(e[0], 0.0277406670820452, 6)
         self.assertAlmostEqual(e[1], 0.0551456657778995, 6)
