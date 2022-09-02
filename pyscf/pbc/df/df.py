@@ -35,6 +35,7 @@ import ctypes
 import warnings
 import tempfile
 import contextlib
+import itertools
 import numpy
 import h5py
 import scipy.linalg
@@ -285,6 +286,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         j_only = self._j_only or len(kpts_union) == 1
         dfbuilder.make_j3c(cderi_file, j_only=j_only)
 
+    def cderi_array(self, label='j3c'):
+        '''
+        Returns CDERIArray object which provides numpy APIs to access cderi tensor.
+        '''
+        if self._cderi is None:
+            self.build()
+        return CDERIArray(self._cderi, label)
+
     def has_kpts(self, kpts):
         if kpts is None:
             return True
@@ -469,6 +478,99 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
 
 DF = GDF
 
+class CDERIArray:
+    '''
+    Provide numpy APIs to access cderi tensor. This object can be viewed as an
+    5-dimension array [kpt-i, kpt-j, aux-index, ao-i, ao-j]
+    '''
+
+    def __init__(self, data_group, label='j3c'):
+        self._data_is_h5obj = isinstance(data_group, h5py.Group)
+        if not self._data_is_h5obj:
+            data_group = h5py.File(data_group, 'r')
+        self.data_group = data_group
+        if 'kpts' not in data_group:
+            raise RuntimeError('cderi data not generated or format incompatible')
+
+        aosym = data_group['aosym'][()]
+        if isinstance(aosym, bytes):
+            aosym = aosym.decode()
+        self.aosym = aosym
+        self.j3c = data_group[label]
+        self.kpts = data_group['kpts'][:]
+        self.nkpts = self.kpts.shape[0]
+        nao_pair = sum(dat.shape[1] for dat in self.j3c['0'].values())
+        nao = int(nao_pair ** .5)
+        if nao ** 2 == nao_pair:  # s
+            self.nao = nao
+        else:
+            self.nao = int((nao_pair * 2)**.5)
+        self.naux = self.j3c['0/0'].shape[0]
+
+    def __del__(self):
+        if not self._data_is_h5obj:
+            self.data_group.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if not self._data_is_h5obj:
+            self.data_group.close()
+
+    def __getitem__(self, slices):
+        if isinstance(slices, tuple):
+            ns = len(slices)
+            if ns < 2:
+                # patch (:) to slices
+                slices = slices + (range(self.nkpts),) * (2 - ns)
+
+            k_slices = slices[:2]
+            a_slices = slices[2:]
+            if isinstance(k_slices[0], int) and isinstance(k_slices[1], int):
+                return self._load_one(k_slices[0], k_slices[1], ())
+        else:
+            k_slices = slices
+            a_slices = ()
+        out = numpy.empty((self.nkpts, self.nkpts), dtype=object)
+        out[k_slices] = True
+
+        for ki, kj in numpy.argwhere(out):
+            out[ki,kj] = self._load_one(ki, kj, a_slices)
+        return out[k_slices]
+
+    def _load_one(self, ki, kj, slices):
+        kikj = ki * self.nkpts + kj
+        kjki = kj * self.nkpts + ki
+        if self.aosym == 's1' or kikj == kjki:
+            dat = self.j3c[str(kikj)]
+            nsegs = len(dat)
+            out = numpy.hstack([dat[str(i)][slices] for i in range(nsegs)])
+        elif self.aosym == 's2':
+            dat_ij = self.j3c[str(kikj)]
+            dat_ji = self.j3c[str(kjki)]
+            tril = numpy.hstack([dat_ij[str(i)][slices] for i in range(len(dat_ij))])
+            triu = numpy.hstack([dat_ji[str(i)][slices] for i in range(len(dat_ji))])
+            assert tril.dtype == numpy.complex128
+            naux = self.naux
+            nao = self.nao
+            out = numpy.empty((naux, nao*nao), dtype=tril.dtype)
+            libpbc.PBCunpack_tril_triu(out.ctypes.data_as(ctypes.c_void_p),
+                                       tril.ctypes.data_as(ctypes.c_void_p),
+                                       triu.ctypes.data_as(ctypes.c_void_p),
+                                       ctypes.c_int(naux), ctypes.c_int(nao))
+        return out
+
+    def load(self, kpti, kptj):
+        ki = member(kpti, self.kpts)
+        kj = member(kptj, self.kpts)
+        if len(ki) == 0 or len(kj) == 0:
+            raise RuntimeError(f'CDERI for kpts ({kpti}, {kptj}) not found')
+        return self._load_one(ki[0], kj[0], ())
+
+    def __array__(self):
+        '''Create a numpy array'''
+        return self[:]
 
 class _load3c:
     #'''Read cderi from old version pyscf (<= 2.0)'''
@@ -538,14 +640,20 @@ class _load3c:
         if self.data_version == 'v2':
             kpts = self.kptij_lst
             nkpts = len(kpts)
-            ki = member(kpti, kpts)
-            kj = member(kptj, kpts)
-            if len(ki) == 0 or len(kj) == 0:
-                raise RuntimeError(f'CDERI {self.label} for kpts ({kpti}, {kptj}) is '
-                                   'not initialized.')
+            if (isinstance(kpti, (int, numpy.integer)) and
+                isinstance(kptj, (int, numpy.integer))):
+                ki = kpti
+                kj = kptj
+            else:
+                ki = member(kpti, kpts)
+                kj = member(kptj, kpts)
+                if len(ki) == 0 or len(kj) == 0:
+                    raise RuntimeError(f'CDERI {self.label} for kpts ({kpti}, {kptj}) is '
+                                       'not initialized.')
 
-            ki = ki[0]
-            kj = kj[0]
+                ki = ki[0]
+                kj = kj[0]
+
             key = f'{self.label}/{ki * nkpts + kj}'
             if key not in self.feri:
                 if self.ignore_key_error:
