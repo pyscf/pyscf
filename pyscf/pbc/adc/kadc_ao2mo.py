@@ -20,6 +20,7 @@ import numpy as np
 import pyscf.ao2mo as ao2mo
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.df import df
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 import time
@@ -195,7 +196,6 @@ def transform_integrals_outcore(myadc):
 
 
 def transform_integrals_df(myadc):
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     cell = myadc.cell
     kpts = myadc.kpts
@@ -230,14 +230,12 @@ def transform_integrals_df(myadc):
     eris.vvvv = None
     eris.ovvv = None
 
-    with h5py.File(myadc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df._load3c(myadc._scf.with_df._cderi, 'j3c') as fload:
         tao = []
         ao_loc = None
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+                Lpq_ao = np.asarray(fload(kpti, kptj))
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
