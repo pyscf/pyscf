@@ -102,6 +102,7 @@ class KnownValues(unittest.TestCase):
                        He    1.2   1.       1.'''
         cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
         cell.verbose = 0
+        cell.precision = 1e-12
         cell.build(0,0)
 
         kpts = cell.make_kpts([1,3,1])
@@ -126,4 +127,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for aft ao2mo")
     unittest.main()
-

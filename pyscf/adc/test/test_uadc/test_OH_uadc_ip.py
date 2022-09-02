@@ -17,7 +17,7 @@
 #
 
 import unittest
-import numpy
+import numpy as np
 from pyscf import gto
 from pyscf import scf
 from pyscf import adc
@@ -27,8 +27,8 @@ def setUpModule():
     r = 0.969286393
     mol = gto.Mole()
     mol.atom = [
-        ['O', ( 0., 0.    , -r/2   )],
-        ['H', ( 0., 0.    ,  r/2)],]
+        ['O', (0., 0.    , -r/2   )],
+        ['H', (0., 0.    ,  r/2)],]
     mol.basis = {'O':'aug-cc-pvdz',
                  'H':'aug-cc-pvdz'}
     mol.verbose = 0
@@ -47,7 +47,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ip_adc2(self):
-  
+
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
 
@@ -62,7 +62,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9119655964285802, 6)
 
     def test_ip_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.16402828164387906, 6)
@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.212879313736106, 6)
 
     def test_ip_adc3(self):
-  
+
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072194, 6)
@@ -94,9 +94,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9282869467221032, 6)
         self.assertAlmostEqual(p[1], 0.5188529241094367, 6)
         self.assertAlmostEqual(p[2], 0.40655844616580944, 6)
-      
+
     def test_ip_adc3_oneroot(self):
-  
+
         myadc.method = "adc(3)"
         e,v,p,x = myadc.kernel()
 

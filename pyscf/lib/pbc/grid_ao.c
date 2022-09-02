@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -178,7 +178,7 @@ static void _fill_grid2atm(double *grid2atm, double *min_grid2atm,
 }
 
 
-void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_cart_iter(FPtr_eval feval, FPtr_exp fexp,
                        size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
                        double *Ls, double complex *expLk,
@@ -194,12 +194,6 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         const char TRANS_T = 'T';
         const double D1 = 1;
         const int nkpts2 = nkpts * OF_CMPLX;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         int i, j, k, l, np, nc, atm_id, bas_id, deg, ao_id;
         int iL, iL0, iLcount, dimc;
@@ -270,7 +264,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, expcutoff)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
                 pao = aobuf + count * dimc;
                 (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
                          l, np, nc, nc*deg, bgrids, bgrids);
@@ -303,7 +297,7 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 }
 
 
-void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
+void PBCeval_sph_iter(FPtr_eval feval, FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *Ls, double complex *expLk,
@@ -319,12 +313,6 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
         const char TRANS_T = 'T';
         const double D1 = 1;
         const int nkpts2 = nkpts * OF_CMPLX;
-        double expcutoff;
-        if (env[PTR_EXPCUTOFF] == 0) {
-                expcutoff = EXPCUTOFF;
-        } else {
-                expcutoff = env[PTR_EXPCUTOFF];
-        }
 
         int i, j, k, l, np, nc, atm_id, bas_id, deg, dcart, ao_id;
         int iL, iL0, iLcount, dimc;
@@ -395,7 +383,7 @@ void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
 
         pcoord = grid2atm + iL * 3*BLKSIZE;
         if ((min_grid2atm[iL] < rcut[bas_id]) &&
-            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac, expcutoff)) {
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
                 pao = aobuf + ((size_t)count) * dimc;
                 if (l <= 1) { // s, p functions
                         (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,

@@ -422,18 +422,18 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
     '''Use the elements of the lower triangular part to fill the upper triangular part.
 
     Kwargs:
-        filltriu : int
+        hermi : int
 
             | 1 (default) return a hermitian matrix
             | 2           return an anti-hermitian matrix
 
     Examples:
 
-    >>> unpack_row(numpy.arange(9.).reshape(3,3), 1)
+    >>> hermi_triu(numpy.arange(9.).reshape(3,3), 1)
     [[ 0.  3.  6.]
      [ 3.  4.  7.]
      [ 6.  7.  8.]]
-    >>> unpack_row(numpy.arange(9.).reshape(3,3), 2)
+    >>> hermi_triu(numpy.arange(9.).reshape(3,3), 2)
     [[ 0. -3. -6.]
      [ 3.  4. -7.]
      [ 6.  7.  8.]]
@@ -556,8 +556,8 @@ def transpose(a, axes=None, inplace=False, out=None):
      [ 1.  1.  1.]]
     '''
     if inplace:
-        arow, acol = a.shape
-        assert (arow == acol)
+        arow, acol = a.shape[:2]
+        assert arow == acol
         tmp = numpy.empty((BLOCK_DIM,BLOCK_DIM))
         for c0, c1 in misc.prange(0, acol, BLOCK_DIM):
             for r0, r1 in misc.prange(0, c0, BLOCK_DIM):
@@ -571,6 +571,9 @@ def transpose(a, axes=None, inplace=False, out=None):
     if (not a.flags.c_contiguous
         or (a.dtype != numpy.double and a.dtype != numpy.complex128)):
         if a.ndim == 2:
+            if a.flags.f_contiguous:
+                return a.T.copy()
+
             arow, acol = a.shape
             out = numpy.empty((acol,arow), a.dtype)
             r1 = c1 = 0
@@ -586,7 +589,7 @@ def transpose(a, axes=None, inplace=False, out=None):
             out[c1:acol,r1:arow] = a[r1:arow,c1:acol].T
             return out
         else:
-            return a.transpose(axes)
+            return numpy.asarray(a.transpose(axes), order='C')
 
     if a.ndim == 2:
         arow, acol = a.shape
@@ -630,8 +633,10 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
      [ 3.  6.]]
     '''
     if inplace:
+        assert isinstance(a, numpy.ndarray)
         out = a
     else:
+        a = numpy.asarray(a)
         out = numpy.ndarray(a.shape, a.dtype, buffer=out)
 
     if (not a.flags.c_contiguous
@@ -736,6 +741,30 @@ def zdot(a, b, alpha=1, c=None, beta=0):
         assert (c.shape == (m,n))
 
     return _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
+
+def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
+    '''c = a*b'''
+    cR = ddot(aR, bR, alpha, cR, beta)
+    cR = ddot(aI, bI,-alpha, cR, 1   )
+    cI = ddot(aR, bI, alpha, cI, beta)
+    cI = ddot(aI, bR, alpha, cI, 1   )
+    return cR, cI
+
+def zdotCN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
+    '''c = a.conj()*b'''
+    cR = ddot(aR, bR, alpha, cR, beta)
+    cR = ddot(aI, bI, alpha, cR, 1   )
+    cI = ddot(aR, bI, alpha, cI, beta)
+    cI = ddot(aI, bR,-alpha, cI, 1   )
+    return cR, cI
+
+def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
+    '''c = a*b.conj()'''
+    cR = ddot(aR, bR, alpha, cR, beta)
+    cR = ddot(aI, bI, alpha, cR, 1   )
+    cI = ddot(aR, bI,-alpha, cI, beta)
+    cI = ddot(aI, bR, alpha, cI, 1   )
+    return cR, cI
 
 def dot(a, b, alpha=1, c=None, beta=0):
     atype = a.dtype
@@ -1024,26 +1053,34 @@ def condense(opname, a, loc_x, loc_y=None):
     '''
     .. code-block:: python
 
-        for i,i0 in enumerate(loc_x):
+        for i,i0 in enumerate(loc_x[:-1]):
             i1 = loc_x[i+1]
-            for j,j0 in enumerate(loc_y):
+            for j,j0 in enumerate(loc_y[:-1]):
                 j1 = loc_y[j+1]
-                out[i,j] = op(a[i0:i1,j0:j1])
-
-    opname can be  sum, max, min, abssum, absmax, absmin, norm
+                out[i,j] = op(a[i0:i1, j0:j1])
     '''
-    assert a.dtype == numpy.double
-    if not opname.startswith('NP_'):
-        opname = 'NP_' + opname
-    assert opname[3:] in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')
-
-    op = getattr(_np_helper, opname)
     if loc_y is None:
         loc_y = loc_x
     loc_x = numpy.asarray(loc_x, numpy.int32)
     loc_y = numpy.asarray(loc_y, numpy.int32)
     nloc_x = loc_x.size - 1
     nloc_y = loc_y.size - 1
+    opname = opname.replace('numpy.', '').replace('np.', '')
+    if opname.startswith('NP_'):
+        opname = opname[3:]
+
+    if (a.dtype != numpy.double or
+        opname not in ('sum', 'max', 'min', 'abssum', 'absmax', 'absmin', 'norm')):
+        tmp = numpy.empty((nloc_x, a.shape[1]), dtype=a.dtype)
+        out = numpy.empty((nloc_x, nloc_y), dtype=a.dtype)
+        op = getattr(numpy, opname)
+        for i, (i0, i1) in enumerate(zip(loc_x[:-1], loc_x[1:])):
+            tmp[i] = op(a[i0:i1], axis=0)
+        for j, (j0, j1) in enumerate(zip(loc_y[:-1], loc_y[1:])):
+            out[:,j] = op(tmp[:,j0:j1], axis=1)
+        return out
+
+    op = getattr(_np_helper, 'NP_' + opname)
     if a.flags.f_contiguous:
         a = transpose(a.T)
     a = numpy.asarray(a, order='C')
@@ -1157,6 +1194,46 @@ def split_reshape(a, shapes):
         size = p1
         return tensors, size
     return sub_split(a, shapes)[0]
+
+def locs_to_indices(locs, segement_list):
+    '''
+    Generate indices based on the segement information list "locs" and the
+    required segements.
+
+    Args:
+        locs : list or ndarray
+            locs[i], locs[i+1] indicates the [start:end] index for i-th segement
+        segement_list: list or ndarray
+            The segement Ids to extract.
+
+    Examples::
+
+    >>> locs_to_indices([0, 2, 5, 6, 9, 15, 17], [0, 2, 3, 5])
+    array([0, 1, 5, 6, 7, 8, 15, 16])
+
+    >>> locs_to_indices([0, 2, 5, 6, 9], array([True, False, True, True]))
+    array([0, 1, 5, 6, 7, 8])
+    '''
+    segement_list = numpy.asarray(segement_list)
+    if segement_list.dtype == bool:
+        segement_list = numpy.where(segement_list)[0]
+    nsegs = segement_list.size
+    if nsegs == 0:
+        idx = []
+    elif nsegs == 1:
+        i0, i1 = locs[segement_list[0]:segement_list[0]+2]
+        idx = numpy.arange(i0, i1)
+    else:
+        assert segement_list[-1] < len(locs)
+        # Find the dis-continued Ids in segement_list
+        bas_mask = segement_list[:-1] + 1 != segement_list[1:]
+        segs_loc = numpy.hstack([0, numpy.where(bas_mask)[0] + 1, nsegs])
+        idx = []
+        for b0, b1 in zip(segs_loc[:-1], segs_loc[1:]):
+            i0, i1 = locs[segement_list[b0]], locs[segement_list[b1-1]+1]
+            idx.append(numpy.arange(i0, i1))
+        idx = numpy.hstack(idx)
+    return numpy.asarray(idx, dtype=numpy.int32)
 
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))

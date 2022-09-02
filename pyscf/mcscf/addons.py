@@ -954,6 +954,24 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
             return rdm1, rdm2
 
+        def states_make_rdm12s(self, ci0, norb, nelec, *args, **kwargs):
+            dm1a, dm1b = [], []
+            dm2aa, dm2ab, dm2bb = [], [], []
+            for c in ci0:
+                dm1s, dm2s = fcibase_class.make_rdm12s(self, c, norb, nelec, *args, **kwargs)
+                dm1a.append(dm1s[0])
+                dm1b.append(dm1s[1])
+                dm2aa.append(dm2s[0])
+                dm2ab.append(dm2s[1])
+                dm2bb.append(dm2s[2])
+            return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
+
+        def make_rdm12s(self, ci0, norb, nelec, *args, **kwargs):
+            rdm1s, rdm2s = self.states_make_rdm12s(ci0, norb, nelec, *args, **kwargs)
+            rdm1s = numpy.einsum ('r,srpq->spq', self.weights, rdm1s)
+            rdm2s = numpy.einsum ('r,srpqtu->spqtu', self.weights, rdm2s)
+            return rdm1s, rdm2s
+
         def states_trans_rdm12 (self, ci1, ci0, norb, nelec, *args, **kwargs):
             tdm1 = []
             tdm2 = []
@@ -1345,6 +1363,26 @@ def state_average_mix(casscf, fcisolvers, weights=(0.5,0.5)):
             rdm1 = numpy.einsum ('r,rpq->pq', self.weights, rdm1)
             rdm2 = numpy.einsum ('r,rpqst->pqst', self.weights, rdm2)
             return rdm1, rdm2
+
+        def states_make_rdm12s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            ci0 = _state_args (ci0)
+            link_index = _solver_args (link_index)
+            nelec = _solver_args ([self._get_nelec (solver, nelec) for solver in self.fcisolvers])
+            dm1a, dm1b = [], []
+            dm2aa, dm2ab, dm2bb = [], [], []
+            for dm1s, dm2s in self._collect ('make_rdm12s', ci0, norb, nelec, link_index=link_index, **kwargs):
+                dm1a.append(dm1s[0])
+                dm1b.append(dm1s[1])
+                dm2aa.append(dm2s[0])
+                dm2ab.append(dm2s[1])
+                dm2bb.append(dm2s[2])
+            return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
+
+        def make_rdm12s(self, ci0, norb, nelec, link_index=None, **kwargs):
+            rdm1s, rdm2s = self.states_make_rdm12s(ci0, norb, nelec, link_index=link_index, **kwargs)
+            rdm1s = numpy.einsum ('r,srpq->spq', self.weights, rdm1s)
+            rdm2s = numpy.einsum ('r,srpqtu->spqtu', self.weights, rdm2s)
+            return rdm1s, rdm2s
 
         # TODO: linkstr support
         def states_trans_rdm12 (self, ci1, ci0, norb, nelec, link_index=None, **kwargs):

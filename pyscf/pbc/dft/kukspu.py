@@ -41,9 +41,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
 
     # J + V_xc
-    vxc = kuks.get_veff(ks, cell=cell, dm=dm, dm_last=dm_last,
-                        vhf_last=vhf_last, hermi=hermi, kpts=kpts,
-                        kpts_band=kpts_band)
+    vxc = super(ks.__class__, ks).get_veff(cell=cell, dm=dm, dm_last=dm_last,
+                                           vhf_last=vhf_last, hermi=hermi, kpts=kpts,
+                                           kpts_band=kpts_band)
 
     # V_U
     C_ao_lo = ks.C_ao_lo
@@ -57,8 +57,12 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
             C_inv = np.dot(C_ao_lo[s, k].conj().T, ovlp[k])
             rdm1_lo[s, k] = mdot(C_inv, dm[s][k], C_inv.conj().T)
 
+    is_ibz = hasattr(kpts, "kpts_ibz")
+    if is_ibz:
+        rdm1_lo_0 = kpts.dm_at_ref_cell(rdm1_lo)
+
     E_U = 0.0
-    weight = 1.0 / nkpts
+    weight = getattr(kpts, "weights_ibz", np.repeat(1.0/nkpts, nkpts))
     logger.info(ks, "-" * 79)
     with np.printoptions(precision=5, suppress=True, linewidth=1000):
         for idx, val, lab in zip(ks.U_idx, ks.U_val, ks.U_lab):
@@ -78,13 +82,16 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                     SC = np.dot(S_k, C_k)
                     vxc[s][k] += mdot(SC, (np.eye(P_k.shape[-1]) - P_k * 2.0)
                                       * (val * 0.5), SC.conj().T).astype(vxc[s][k].dtype,copy=False)
-                    E_U += (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
-                    P_loc += P_k
-                P_loc = P_loc.real / nkpts
+                    E_U += weight[k] * (val * 0.5) * (P_k.trace() - np.dot(P_k, P_k).trace())
+                    if not is_ibz:
+                        P_loc += P_k
+                if is_ibz:
+                    P_loc = rdm1_lo_0[s][U_mesh].real
+                else:
+                    P_loc = P_loc.real / nkpts
                 logger.info(ks, "spin %s\n%s\n%s", s, lab_string, P_loc)
             logger.info(ks, "-" * 79)
 
-    E_U *= weight
     if E_U.real < 0.0 and all(np.asarray(ks.U_val) > 0):
         logger.warn(ks, "E_U (%s) is negative...", E_U.real)
     vxc = lib.tag_array(vxc, E_U=E_U.real)
@@ -99,9 +106,10 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = mf.get_veff(mf.cell, dm_kpts)
 
-    weight = 1.0 / len(h1e_kpts)
-    e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
+    weight = getattr(mf.kpts, "weights_ibz",
+                     np.array([1.0/len(h1e_kpts),]*len(h1e_kpts)))
+    e1 = (np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[0]) +
+          np.einsum('k,kij,kji', weight, h1e_kpts, dm_kpts[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc + vhf.E_U
     mf.scf_summary['e1'] = e1.real
     mf.scf_summary['coul'] = vhf.ecoul.real
@@ -118,7 +126,7 @@ class KUKSpU(kuks.KUKS):
     """
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald'),
-                 U_idx=[], U_val=[], C_ao_lo='minao', **kwargs):
+                 U_idx=[], U_val=[], C_ao_lo='minao', minao_ref='MINAO'):
         """
         DFT+U args:
             U_idx: can be
@@ -133,23 +141,14 @@ class KUKSpU(kuks.KUKS):
             C_ao_lo: LO coefficients, can be
                      np.array, shape ((spin,), nkpts, nao, nlo),
                      string, in 'minao'.
-
-        Kwargs:
             minao_ref: reference for minao orbitals, default is 'MINAO'.
         """
-        try:
-            kuks.KUKS.__init__(self, cell, kpts, xc=xc, exxdiv=exxdiv)
-        except TypeError:
-            # backward compatibility
-            kuks.KUKS.__init__(self, cell, kpts)
-            self.xc = xc
-            self.exxdiv = exxdiv
+        super(self.__class__, self).__init__(cell, kpts, xc=xc, exxdiv=exxdiv)
 
         set_U(self, U_idx, U_val)
 
         if isinstance(C_ao_lo, str):
-            if C_ao_lo == 'minao':
-                minao_ref = kwargs.get("minao_ref", "MINAO")
+            if C_ao_lo.upper() == 'MINAO':
                 self.C_ao_lo = make_minao_lo(self, minao_ref)
             else:
                 raise NotImplementedError
@@ -185,7 +184,7 @@ if __name__ == '__main__':
     cell.pseudo = 'gth-pade'
     cell.verbose = 7
     cell.build()
-    kmesh = [2, 1, 1]
+    kmesh = [2, 2, 2]
     kpts = cell.make_kpts(kmesh, wrap_around=True)
     #U_idx = ["2p", "2s"]
     #U_val = [5.0, 2.0]

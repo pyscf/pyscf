@@ -710,15 +710,17 @@ class RNumInt(numint._NumIntMixin):
     eval_xc_eff = _eval_xc_eff
     mcfun_eval_xc_adapter = mcfun_eval_xc_adapter
     eval_ao = staticmethod(eval_ao)
+    eval_rho = staticmethod(eval_rho)
+
+    def eval_rho1(self, mol, ao, dm, screen_index=None, xctype='LDA', hermi=0,
+                  with_lapl=True, cutoff=None, ao_cutoff=None, pair_mask=None,
+                  verbose=None):
+        return self.eval_rho(mol, ao, dm, screen_index, xctype, hermi,
+                             with_lapl, verbose=verbose)
 
     def eval_rho2(self, mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
                   with_lapl=True, verbose=None):
         raise NotImplementedError
-
-    @lib.with_doc(eval_rho.__doc__)
-    def eval_rho(self, mol, ao, dm, non0tab=None, xctype='LDA', hermi=0,
-                 with_lapl=True, verbose=None):
-        return eval_rho(mol, ao, dm, non0tab, xctype, hermi, with_lapl, verbose)
 
     def block_loop(self, mol, grids, nao, deriv=0, max_memory=2000,
                    non0tab=None, blksize=None, buf=None, with_s=False):
@@ -746,12 +748,12 @@ class RNumInt(numint._NumIntMixin):
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao = self.eval_ao(mol, coords, deriv=deriv, with_s=with_s,
-                              non0tab=non0, cutoff=self.cutoff, out=buf)
+                              non0tab=non0, cutoff=grids.cutoff, out=buf)
             yield ao, non0, weight, coords
 
-    def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False):
-        dms = numpy.asarray(dms)
-        if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
+    def _gen_rho_evaluator(self, mol, dms, hermi=1, with_lapl=False, grids=None):
+        dms = numpy.asarray(dms, order='C')
+        if dms.ndim == 2:
             dms = dms[numpy.newaxis]
         ndms, nao = dms.shape[:2]
         def make_rho(idm, ao, non0tab, xctype):

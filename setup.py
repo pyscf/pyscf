@@ -59,7 +59,7 @@ VERSION = get_version()
 EXTRAS = {
     'geomopt': ['pyberny>=0.6.2', 'geometric>=0.9.7.2', 'pyscf-qsdopt'],
     'dftd3': ['pyscf-dftd3'],
-    'dmrgscf': ['pyscf-dmrgscf'],
+    #'dmrgscf': ['pyscf-dmrgscf'],
     'doci': ['pyscf-doci'],
     'icmpspt': ['pyscf-icmpspt'],
     'properties': ['pyscf-properties'],

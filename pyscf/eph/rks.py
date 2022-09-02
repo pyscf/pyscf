@@ -83,7 +83,7 @@ def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
             ao_dm0 = [numint._dot_ao_dm(mol, ao[i], dm0, mask, shls_slice, ao_loc)
                       for i in range(4)]
             for ia in range(mol.natm):
-                wv = dR_rho1 = rks_hess._make_dR_rho1(ao, ao_dm0, ia, aoslices)
+                wv = dR_rho1 = rks_hess._make_dR_rho1(ao, ao_dm0, ia, aoslices, xctype)
                 wv[0] = numint._rks_gga_wv1(rho, dR_rho1[0], vxc, fxc, weight)
                 wv[1] = numint._rks_gga_wv1(rho, dR_rho1[1], vxc, fxc, weight)
                 wv[2] = numint._rks_gga_wv1(rho, dR_rho1[2], vxc, fxc, weight)

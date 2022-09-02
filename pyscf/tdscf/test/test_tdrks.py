@@ -24,6 +24,8 @@ from pyscf.tdscf import rhf, rks
 from pyscf import tdscf
 from pyscf.data import nist
 
+has_xcfun = hasattr(dft, 'xcfun')
+
 def setUpModule():
     global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp, mf_m06l
     mol = gto.Mole()
@@ -114,6 +116,7 @@ class KnownValues(unittest.TestCase):
         es = td.kernel(nstates=5)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es), -41.201828219760415, 5)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tddft_b3lyp_xcfun(self):
         with lib.temporary_env(dft.numint.NumInt, libxc=dft.xcfun):
             td = rks.TDDFT(mf_b3lyp)
@@ -121,12 +124,14 @@ class KnownValues(unittest.TestCase):
         ref = [9.88975514, 9.88975514, 15.16643994, 30.55289462, 30.55289462]
         self.assertAlmostEqual(abs(es - ref).max(), 0, 5)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tda_b3lyp_xcfun(self):
         with lib.temporary_env(dft.numint.NumInt, libxc=dft.xcfun):
             td = rks.TDA(mf_b3lyp)
             es = td.kernel(nstates=5)[0] * 27.2114
         self.assertAlmostEqual(lib.fp(es), -41.393122257109056, 5)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_tda_lda_xcfun(self):
         mf = dft.RKS(mol)
         mf.xc = 'lda,vwn'
@@ -409,6 +414,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(td._scf.mol is mol1)
         self.assertTrue(td._scf._scf.mol is mol1)
 
+    @unittest.skipIf(has_xcfun, "xcfun library not found.")
     def test_custom_rsh(self):
         mol = gto.M(atom='H 0 0 0.6; H 0 0 0', basis = "6-31g")
         mf = dft.RKS(mol)

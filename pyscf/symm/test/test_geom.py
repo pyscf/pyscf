@@ -95,6 +95,16 @@ class KnownValues(unittest.TestCase):
                          [[0, 3], [1, 2], [4, 5], [6, 7]])
         self.assertTrue(geom.check_symm('C2', atoms, basis))
 
+    def test_c2v_planar_mole(self):
+        atoms = [
+            ['O', [0, 0, 0.1197]],
+            ['H', [0, 0.7616, -0.4786]],
+            ['H', [0,-0.7616, -0.4786]],
+        ]
+        gpname, orig, axes = geom.detect_symm(atoms, {'O': 'sto3g', 'H': 'sto3g'})
+        self.assertEqual(gpname, 'C2v')
+        self.assertAlmostEqual(abs(axes - numpy.diag(axes.diagonal())).max(), 0, 12)
+
     def test_s4(self):
         atoms = [['C', (  0.5,   0    ,   1)],
                  ['O', (  0.4,   0.2  ,   1)],
@@ -1021,4 +1031,3 @@ def random_rotz(seed=19):
 if __name__ == "__main__":
     print("Full Tests geom")
     unittest.main()
-

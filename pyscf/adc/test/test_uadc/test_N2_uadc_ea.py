@@ -27,8 +27,8 @@ def setUpModule():
     r = 1.098
     mol = gto.Mole()
     mol.atom = [
-        ['N', ( 0., 0.    , -r/2   )],
-        ['N', ( 0., 0.    ,  r/2)],]
+        ['N', (0., 0.    , -r/2   )],
+        ['N', (0., 0.    ,  r/2)],]
     mol.basis = {'N':'aug-cc-pvdz'}
     mol.verbose = 0
     mol.build()
@@ -44,7 +44,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
-  
+
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9817184085436222, 6)
 
     def test_ea_adc2_oneroot(self):
-  
+
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel()
 
@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9916427196092643, 6)
 
     def test_ea_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=4)
@@ -85,7 +85,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[3],0.9757598335315953 , 6)
 
     def test_ea_adc3(self):
-  
+
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.31694173142858517 , 6)
@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9920495595411523, 6)
         self.assertAlmostEqual(p[1], 0.9920495596160825, 6)
         self.assertAlmostEqual(p[2], 0.9819275025204279, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different ADC methods")
     unittest.main()

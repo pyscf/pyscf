@@ -948,6 +948,7 @@ class RAGF2(lib.StreamObject):
 
     @property
     def e_corr(self):
+        # TODO Should HF energy be recalculated in case DFT orbitals or so were used?
         e_hf = mpi_helper.bcast(self._scf.e_tot)
         return self.e_tot - e_hf
 

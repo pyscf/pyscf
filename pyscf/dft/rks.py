@@ -247,19 +247,9 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     return e1+e2, e2
 
 
-NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, mol, dm, grids):
     rho = ks._numint.get_rho(mol, dm, grids, ks.max_memory)
-    n = numpy.dot(rho, grids.weights)
-    if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
-        rho *= grids.weights
-        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
-        logger.debug(ks, 'Drop grids %d',
-                     grids.weights.size - numpy.count_nonzero(idx))
-        grids.coords  = numpy.asarray(grids.coords [idx], order='C')
-        grids.weights = numpy.asarray(grids.weights[idx], order='C')
-        grids.non0tab = grids.make_mask(mol, grids.coords)
-    return grids
+    return grids.prune_by_density_(rho, ks.small_rho_cutoff)
 
 def define_xc_(ks, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     libxc = ks._numint.libxc

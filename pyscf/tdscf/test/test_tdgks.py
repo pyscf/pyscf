@@ -178,21 +178,21 @@ class KnownValues(unittest.TestCase):
 
     def test_tda_with_wfnsym(self):
         td = mf_bp86.TDA()
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         es = td.kernel(nstates=3)[0]
         self.assertAlmostEqual(lib.fp(es), 0.4523465502706356, 6)
 
     def test_tdhf_with_wfnsym(self):
         mf_ghf = scf.GHF(molsym).run()
         td = mf_ghf.TDHF()
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         td.nroots = 3
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.48380638923581476, 6)
 
     def test_tddft_with_wfnsym(self):
         td = mf_bp86.CasidaTDDFT()
-        td.wfnsym = 'B1'
+        td.wfnsym = 'B2'
         td.nroots = 3
         es = td.kernel()[0]
         self.assertAlmostEqual(lib.fp(es), 0.45050838461527387, 6)
