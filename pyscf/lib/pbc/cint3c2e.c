@@ -29,7 +29,10 @@
 
 void CINTinit_int3c2e_EnvVars(CINTEnvVars *envs, int *ng, int *shls,
                               int *atm, int natm, int *bas, int nbas, double *env);
-void CINTgout2e(double *gout, double *g, int *idx, CINTEnvVars *envs, int gout_empty);
+extern void CINTgout2e();
+#ifdef QCINT_VERSION
+extern void CINTgout2e_simd1();
+#endif
 int CINT3c2e_loop_nopt(double *gctr, CINTEnvVars *envs, double *cache, int *empty);
 int CINT3c2e_loop(double *gctr, CINTEnvVars *envs, double *cache, int *empty);
 int CINT3c2e_111_loop(double *gctr, CINTEnvVars *envs, double *cache, int *empty);
@@ -205,6 +208,9 @@ int PBCint3c2e_cart(double *eri_buf, int *cell0_shls, int *bvk_cells, double cut
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};
         PBCinit_int3c2e_EnvVars(envs_cint, ng, cell0_shls, envs_bvk);
         envs_cint->f_gout = &CINTgout2e;
+#ifdef QCINT_VERSION
+        envs_cint->f_gout_simd1 = &CINTgout2e_simd1;
+#endif
 
         int *x_ctr = envs_cint->x_ctr;
         int ncomp = 1;
@@ -231,6 +237,9 @@ int PBCint3c2e_sph(double *eri_buf, int *cell0_shls, int *bvk_cells, double cuto
         int ng[] = {0, 0, 0, 0, 0, 1, 1, 1};
         PBCinit_int3c2e_EnvVars(envs_cint, ng, cell0_shls, envs_bvk);
         envs_cint->f_gout = &CINTgout2e;
+#ifdef QCINT_VERSION
+        envs_cint->f_gout_simd1 = &CINTgout2e_simd1;
+#endif
 
         int *x_ctr = envs_cint->x_ctr;
         int ncomp = 1;
