@@ -187,8 +187,7 @@ class _Int3cBuilder(lib.StreamObject):
             rcut = abs(-np.log(cell.precision) / eij)**.5 * 2
             log.debug1('exp_min = %g, rcut = %g', exp_min, rcut)
 
-        supmol = _ExtendedMole.from_cell(rs_cell, kmesh, rcut, verbose=log)
-        supmol = supmol.strip_basis()
+        supmol = ft_ao._ExtendedMole.from_cell(rs_cell, kmesh, rcut, verbose=log)
         self.supmol = supmol
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -379,10 +378,20 @@ class _Int3cBuilder(lib.StreamObject):
         return None
 
     def get_ovlp_mask(self, cutoff, cintopt=None):
+        '''integral screening mask between two sup-mols'''
+        if cutoff is None:
+            cutoff = self.cell.precision
         supmol = self.supmol
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
         nbasp = self.cell.nbas  # The number of shells in the primitive cell
-        ovlp_mask = supmol.get_ovlp_mask(cutoff)
+        nbas = supmol.nbas
+        ovlp_mask = np.empty((nbas, nbas), dtype=np.int8)
+        libpbc.PBCsupmol_ovlp_mask(
+            ovlp_mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
+            supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
+            supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
+            supmol._env.ctypes.data_as(ctypes.c_void_p))
+
         bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
         cell0_ovlp_mask = bvk_ovlp_mask.reshape(
             bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
@@ -400,27 +409,6 @@ class _Int3cBuilder(lib.StreamObject):
         bas_map = np.where(self.supmol.bas_mask.ravel())[0].astype(np.int32)
         bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
         return bas_map
-
-
-class _ExtendedMole(ft_ao._ExtendedMole):
-    '''Extended Mole for 3c integrals'''
-
-    def strip_basis(self):
-        '''Remove redundant remote basis'''
-        return self
-
-    def get_ovlp_mask(self, cutoff=None):
-        '''integral screening mask for supmols'''
-        if cutoff is None:
-            cutoff = self.precision
-        nbas = self.nbas
-        mask = np.empty((nbas, nbas), dtype=np.int8)
-        libpbc.PBCsupmol_ovlp_mask(
-            mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
-            self._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.natm),
-            self._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.nbas),
-            self._env.ctypes.data_as(ctypes.c_void_p))
-        return mask
 
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int
@@ -516,12 +504,18 @@ class _IntNucBuilder(_Int3cBuilder):
         kpt_allow = np.zeros(3)
         eta, mesh, ke_cutoff = _guess_eta(cell, kpts, mesh)
         log.debug1('get_nuc/get_pp_loc_part1 eta = %s mesh = %s', eta, mesh)
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+
+        # Initialize self.supmol
+        self.build()
+        self.supmol = supmol = _strip_basis(self.supmol, eta)
+        log.debug('stripped supmol nbas = %d cGTO = %d pGTO = %d',
+                  supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         modchg_cell = _compensate_nuccell(cell, eta)
         vj = self._int_nuc_vloc(modchg_cell, with_pseudo=with_pseudo)
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(modchg_cell, Gv)
         charges = cell.atom_charges()
@@ -676,3 +670,24 @@ def _compensate_nuccell(cell, eta):
     modchg_cell._bas = np.asarray(chg_bas, dtype=np.int32)
     modchg_cell._env = np.hstack((cell._env, chg_env))
     return modchg_cell
+
+def _strip_basis(supmol, eta):
+    rs_cell = supmol.rs_cell
+    cutoff = rs_cell.precision * 1e-2
+
+    supmol_exps = np.array([e.min() for e in supmol.bas_exps()])
+    supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
+
+    # estimation based on 3-center gaussian overlap integrals
+    # minimize (ai*aj*|ri-rj|^2+ai*eta*ri^2+aj*eta*rj^2)/(ai+aj+eta)
+    ajk = supmol_exps + eta
+    ejk = supmol_exps * eta / ajk
+    rb = np.linalg.norm(supmol_bas_coords, axis=1)
+    dr = rb - np.linalg.norm(rs_cell.lattice_vectors(), axis=1).max()
+    ovlp = ejk * dr**2
+    bas_mask = ovlp < -np.log(cutoff)
+
+    supmol._bas = supmol._bas[bas_mask]
+    supmol.bas_mask = bas_mask.reshape(supmol.bas_mask.shape)
+    supmol.sh_loc = supmol.bas_mask_to_sh_loc(rs_cell, supmol.bas_mask)
+    return supmol

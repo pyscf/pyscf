@@ -67,7 +67,7 @@ def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     # The interaction between two s-type density distributions should be
     # enough for the error estimation.  Put lmax here to increate Ecut for
     # slightly better accuracy
-    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax-1)))
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**max(0, lmax-1)))
     log_eta = -1
     eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
@@ -113,7 +113,15 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    omega = (-.5 * ke_cutoff / numpy.log(precision / (32*numpy.pi**2)))**.5
+    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # enough to converge the 2-electron integrals. A penalty term here is to
+    # reduce the error in integrals
+    precision *= 1e-2
+    # Consider l>0 basis here to increate Ecut for slightly better accuracy
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = numpy.log(precision / (16*numpy.pi**2 * kmax**lmax))
+    omega = (-.5 * ke_cutoff / log_rest)**.5
     return omega
 
 def get_pp_loc_part1(mydf, kpts=None):
