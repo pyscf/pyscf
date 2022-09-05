@@ -107,12 +107,12 @@ def kernel(adc, nroots=1, guess=None, eris=None, kptlist=None, verbose=None):
 
     nfalse = np.shape(conv)[0] - np.sum(conv)
 
-    str = ("\n*************************************************************"
+    msg = ("\n*************************************************************"
            "\n            ADC calculation summary"
            "\n*************************************************************")
-    logger.info(adc, str)
+    logger.info(adc, msg)
     if nfalse >= 1:
-        logger.warn(adc, "Davidson iterations for " + str(nfalse) + " root(s) not converged\n")
+        logger.warn(adc, "Davidson iterations for %s root(s) not converged\n", nfalse)
 
     for k, kshift in enumerate(kptlist):
         for n in range(nroots):

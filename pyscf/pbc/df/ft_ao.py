@@ -261,6 +261,8 @@ class _RangeSeparatedCell(pbcgto.Cell):
                   rcut_threshold=None, verbose=None):
         from pyscf.pbc.dft.multigrid import _primitive_gto_cutoff
         log = logger.new_logger(cell, verbose)
+        if ke_cut_threshold is None:
+            ke_cut_threshold = KECUT_THRESHOLD
         if not isinstance(ke_cut_threshold, float):
             ke_cut_threshold = np.min(ke_cut_threshold)
 
@@ -375,7 +377,7 @@ class _RangeSeparatedCell(pbcgto.Cell):
         cell_d = self.view(pbcgto.Cell)
         mask = self.bas_type == SMOOTH_BASIS
         cell_d._bas = self._bas[mask]
-        precision = self.precision**2
+        precision = self.precision
         cell_d.rcut = pbcgto.estimate_rcut(cell_d, precision=precision)
 
         # Update mesh
@@ -580,14 +582,21 @@ class _ExtendedMole(gto.Mole):
                                  dtype=np.int32, order='C')
         return supmol
 
-    def strip_basis(self):
+    def strip_basis(self, inplace=True):
         '''Remove remote basis if they do not contribute to the FT of basis product'''
-        ovlp_mask = self.get_ovlp_mask()
-        bas_mask = ovlp_mask.any(axis=0)
-        self._bas = self._bas[bas_mask]
-        self.bas_mask = bas_mask.reshape(self.bas_mask.shape)
-        self.sh_loc = self.bas_mask_to_sh_loc(self.rs_cell, self.bas_mask)
-        return self
+        ovlp_mask = self.get_ovlp_mask().any(axis=0)
+        if inplace:
+            supmol = self
+        else:
+            supmol = copy.copy(self)
+        if ovlp_mask.size == supmol.bas_mask.size:
+            supmol.bas_mask = ovlp_mask.reshape(supmol.bas_mask.shape)
+        else:
+            supmol.bas_mask = supmol.bas_mask.copy()
+            supmol.bas_mask[supmol.bas_mask] = ovlp_mask
+        supmol._bas = supmol._bas[ovlp_mask]
+        supmol.sh_loc = supmol.bas_mask_to_sh_loc(supmol.rs_cell, supmol.bas_mask)
+        return supmol
 
     def get_ovlp_mask(self, cutoff=None):
         '''integral screening mask for basis product between cell and supmol'''

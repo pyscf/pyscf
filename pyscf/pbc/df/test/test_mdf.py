@@ -167,7 +167,7 @@ class KnownValues(unittest.TestCase):
     def test_get_eri_0011_1(self):
         eri0011 = kmdf1.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(eri0011.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0011.real.sum(), 44.24664121577983, 8)
+        self.assertAlmostEqual(eri0011.real.sum(), 44.24664121577983, 7)
         self.assertAlmostEqual(abs(eri0011.imag).sum(), 5.352293608702593, 7)
         self.assertAlmostEqual(lib.fp(eri0011), (6.219464888983939-0.18720246604245444j), 7)
 

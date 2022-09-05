@@ -594,7 +594,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
     elif mesh is None:
         a = cell.lattice_vectors()
-        eta_min = aft.estimate_eta(cell, cell.precision)
+        eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
         ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
 
@@ -603,8 +603,8 @@ def _guess_eta(cell, kpts=None, mesh=None):
         nao = cell.nao
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
         mesh = int(min((1e8/nao)**(1./3), mesh))
-        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]

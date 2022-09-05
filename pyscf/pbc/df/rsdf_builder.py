@@ -236,9 +236,10 @@ class _RSGDFBuilder(_Int3cBuilder):
             q_cond[smooth_idx[:,None], smooth_idx] = 1e-200
         return q_cond
 
-    def get_q_cond_aux(self):
+    def get_q_cond_aux(self, auxcell=None, supmol=None):
         '''max(sqrt((k|ii))) between the auxcell and the supmol'''
-        supmol = self.supmol
+        if supmol is None:
+            supmol = self.supmol
         auxcell_s = self.rs_auxcell.copy()
         auxcell_s._bas[:,ANG_OF] = 0
         intor = 'int3c2e_sph'
@@ -264,10 +265,12 @@ class _RSGDFBuilder(_Int3cBuilder):
             q_cond_aux[self.rs_auxcell.bas_type == ft_ao.SMOOTH_BASIS] = 1e-200
         return q_cond_aux
 
-    def get_bas_map(self):
+    def get_bas_map(self, auxcell=None, supmol=None):
         '''bas_map is to assign each basis of supmol._bas the index in
         [bvk_cell-id, bas-id, image-id]
         '''
+        if supmol is None:
+            supmol = self.supmol
         if self.exclude_d_aux:
             # Use aux_mask to skip smooth auxiliary basis and handle them in AFT part.
             aux_mask = (self.rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS).astype(np.int32)
@@ -276,12 +279,13 @@ class _RSGDFBuilder(_Int3cBuilder):
 
         # Append aux_mask to bas_map as a temporary solution for function
         # _assemble3c in fill_ints.c
-        bas_map = np.where(self.supmol.bas_mask.ravel())[0].astype(np.int32)
+        bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
         bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
         return bas_map
 
-    def get_ovlp_mask(self, cutoff, cintopt=None):
-        supmol = self.supmol
+    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
+        if supmol is None:
+            supmol = self.supmol
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
         nbasp = self.cell.nbas  # The number of shells in the primitive cell
         ovlp_mask = self.get_q_cond() > cutoff
@@ -1153,10 +1157,10 @@ def _guess_omega(cell, kpts, mesh=None):
         a = cell.lattice_vectors()
         nao = cell.npgto_nr()
         nkpts = len(kpts)
-        rcut = cell.rcut
-        omega_min = 0.3
-        omega_min = 0.8 * (-np.log(cell.precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
-        ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min)
+        # requiring Coulomb potential < cell.precision at rcut is often not
+        # enough to truncate the interaction.
+        omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
+        ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
         # FIXME: balance the two workloads
         # int3c2e integrals ~ nao*(cell.rcut**3/cell.vol*nao)**2
@@ -1164,8 +1168,8 @@ def _guess_omega(cell, kpts, mesh=None):
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
         mesh = int(min((1e8/nao)**(1./3), mesh))
-        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]
