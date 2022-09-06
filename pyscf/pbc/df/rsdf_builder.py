@@ -524,8 +524,8 @@ class _RSGDFBuilder(_Int3cBuilder):
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
         if max_buflen > buflen:
-            log.warn('memory usage of outcore_auxe2 may be '
-                     f'{(max_buflen/buflen - 1):.2%} over max_memory')
+            log.warn('memory usage of outcore_auxe2 may be %.2f over max_memory',
+                     (max_buflen/buflen - 1))
 
         bufR = np.empty((nkpts_ij, comp, max_buflen, naux))
         bufI = np.empty_like(bufR)
