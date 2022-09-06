@@ -253,8 +253,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
         if max_buflen > buflen:
-            log.warn('memory usage of outcore_auxe2 may be '
-                     f'{(max_buflen/buflen - 1):.2%} over max_memory')
+            log.warn('memory usage of outcore_auxe2 may be %.2f over max_memory',
+                     (max_buflen/buflen - 1))
 
         cpu0 = logger.process_clock(), logger.perf_counter()
         nsteps = len(sh_ranges)
