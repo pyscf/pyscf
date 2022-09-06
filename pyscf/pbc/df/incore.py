@@ -433,24 +433,21 @@ class _IntNucBuilder(_Int3cBuilder):
     '''In this builder, ovlp_mask can be reused for different types of intor
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
-        self.ovlp_mask = None
-        self.cell0_ovlp_mask = None
+        # cache ovlp_mask
+        self._supmol = None
+        self._ovlp_mask = None
+        self._cell0_ovlp_mask = None
         _Int3cBuilder.__init__(self, cell, None, kpts)
 
     def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
-        if self.ovlp_mask is None:
-            self.ovlp_mask, self.cell0_ovlp_mask = \
+        if self._ovlp_mask is None or supmol is not self._supmol:
+            self._ovlp_mask, self._cell0_ovlp_mask = \
                     _Int3cBuilder.get_ovlp_mask(self, cutoff, supmol, cintopt)
-        return self.ovlp_mask, self.cell0_ovlp_mask
-
-    def kernel(self, auxcell=None, intor=None, aosym='s2', comp=None):
-        int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True,
-                                      auxcell=auxcell)
-        vR, vI = int3c()
-        return vR, vI
+            self._supmol = supmol
+        return self._ovlp_mask, self._cell0_ovlp_mask
 
     def _int_nuc_vloc(self, nuccell, intor='int3c2e', aosym='s2', comp=None,
-                      with_pseudo=True):
+                      with_pseudo=True, supmol=None):
         '''Vnuc - Vloc. nuccell is the cell for model charges
         '''
         logger.debug2(self, 'Real space integrals %s for Vnuc - Vloc', intor)
@@ -465,7 +462,9 @@ class _IntNucBuilder(_Int3cBuilder):
                 gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
                              fakenuc._atm, fakenuc._bas, fakenuc._env)
 
-        bufR, bufI = self.kernel(fakenuc, intor, aosym, comp)
+        int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True,
+                                      auxcell=fakenuc, supmol=supmol)
+        bufR, bufI = int3c()
 
         charge = cell.atom_charges()
         charge = np.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
@@ -516,7 +515,8 @@ class _IntNucBuilder(_Int3cBuilder):
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         modchg_cell = _compensate_nuccell(cell, eta)
-        vj = self._int_nuc_vloc(modchg_cell, with_pseudo=with_pseudo)
+        vj = self._int_nuc_vloc(modchg_cell, with_pseudo=with_pseudo,
+                                supmol=supmol)
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
@@ -584,6 +584,9 @@ class _IntNucBuilder(_Int3cBuilder):
         if self.rs_cell is None:
             self.build()
         cell = self.cell
+        supmol = self.supmol
+        if supmol.nbas == supmol.bas_mask.size:  # supmol not stripped
+            supmol = self.supmol.strip_basis(inplace=False)
         kpts = self.kpts
         nkpts = len(kpts)
         intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
@@ -593,8 +596,6 @@ class _IntNucBuilder(_Int3cBuilder):
         for cn in range(1, 5):
             fake_cell = pp_int.fake_cell_vloc(cell, cn)
             if fake_cell.nbas > 0:
-                eta = np.hstack(fake_cell.bas_exps()).min()
-                supmol = _strip_basis(self.supmol, eta, inplace=False)
                 int3c = self.gen_int3c_kernel(intors[cn], 's2', comp=1, j_only=True,
                                               auxcell=fake_cell, supmol=supmol)
                 vR, vI = int3c()
@@ -694,7 +695,7 @@ def _strip_basis(supmol, eta, cutoff=None, inplace=True):
         if cutoff is None:
             cutoff = supmol.precision
         # estimation based on 3-center gaussian overlap integrals
-        # minimize (ai*aj*|ri-rj|^2+ai*eta*ri^2+aj*eta*rj^2)/(ai+aj+eta)
+        # ejk = minimize (ai*aj*|ri-rj|^2+ai*eta*ri^2+aj*eta*rj^2)/(ai+aj+eta)
         ajk = supmol_exps + eta
         ejk = supmol_exps * eta / ajk
         rb = np.linalg.norm(supmol_bas_coords[:,:dim], axis=1)
