@@ -206,10 +206,10 @@ class KnownValues(unittest.TestCase):
         mydf.exp_to_discard = 0.3
         mydf.auxbasis = 'weigend'
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
-        self.assertAlmostEqual(lib.fp(vk[0]), (4.831027586092549-0.12376435978940196j) , 8)
-        self.assertAlmostEqual(lib.fp(vk[1]), (4.783208264204395-0.00585421470169705j) , 8)
-        self.assertAlmostEqual(lib.fp(vk[2]), (4.823839360632854+0.002511545727704362j), 8)
-        self.assertAlmostEqual(lib.fp(vk[3]), (4.833891390413435+0.0208696082684768j)  , 8)
+        self.assertAlmostEqual(lib.fp(vk[0]), (4.831027586092549-0.12376435978940196j) , 7)
+        self.assertAlmostEqual(lib.fp(vk[1]), (4.783208264204395-0.00585421470169705j) , 7)
+        self.assertAlmostEqual(lib.fp(vk[2]), (4.823839360632854+0.002511545727704362j), 7)
+        self.assertAlmostEqual(lib.fp(vk[3]), (4.833891390413435+0.0208696082684768j)  , 7)
 
     def test_k_kpts_high_cost(self):
         numpy.random.seed(1)

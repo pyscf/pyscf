@@ -582,9 +582,9 @@ class _ExtendedMole(gto.Mole):
                                  dtype=np.int32, order='C')
         return supmol
 
-    def strip_basis(self, inplace=True):
+    def strip_basis(self, cutoff=None, inplace=True):
         '''Remove remote basis if they do not contribute to the FT of basis product'''
-        ovlp_mask = self.get_ovlp_mask().any(axis=0)
+        ovlp_mask = self.get_ovlp_mask(cutoff).any(axis=0)
         if inplace:
             supmol = self
         else:

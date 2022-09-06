@@ -593,8 +593,10 @@ class _IntNucBuilder(_Int3cBuilder):
         for cn in range(1, 5):
             fake_cell = pp_int.fake_cell_vloc(cell, cn)
             if fake_cell.nbas > 0:
+                eta = np.hstack(fake_cell.bas_exps()).min()
+                supmol = _strip_basis(self.supmol, eta, inplace=False)
                 int3c = self.gen_int3c_kernel(intors[cn], 's2', comp=1, j_only=True,
-                                              auxcell=fake_cell)
+                                              auxcell=fake_cell, supmol=supmol)
                 vR, vI = int3c()
                 bufR += np.einsum('...i->...', vR)
                 if vI is not None:
@@ -679,7 +681,7 @@ def _compensate_nuccell(cell, eta):
     modchg_cell._env = np.hstack((cell._env, chg_env))
     return modchg_cell
 
-def _strip_basis(supmol, eta):
+def _strip_basis(supmol, eta, cutoff=None, inplace=True):
     rs_cell = supmol.rs_cell
 
     supmol_exps = np.array([e.min() for e in supmol.bas_exps()])
@@ -689,6 +691,8 @@ def _strip_basis(supmol, eta):
     if dim == 0:
         bas_mask = np.ones(supmol.nbas, dtype=bool)
     else:
+        if cutoff is None:
+            cutoff = supmol.precision
         # estimation based on 3-center gaussian overlap integrals
         # minimize (ai*aj*|ri-rj|^2+ai*eta*ri^2+aj*eta*rj^2)/(ai+aj+eta)
         ajk = supmol_exps + eta
@@ -698,10 +702,15 @@ def _strip_basis(supmol, eta):
         dr = rb - np.linalg.norm(a[:dim])
         dr[dr < 0] = 0
         ovlp = ejk * dr**2
-        cutoff = rs_cell.precision * ft_ao.LATTICE_SUM_PENALTY
         bas_mask = ovlp < -np.log(cutoff)
 
+    if not inplace:
+        supmol = copy.copy(supmol)
+    if bas_mask.size == supmol.bas_mask.size:
+        supmol.bas_mask = bas_mask.reshape(supmol.bas_mask.shape)
+    else:
+        supmol.bas_mask = supmol.bas_mask.copy()
+        supmol.bas_mask[supmol.bas_mask] = bas_mask
     supmol._bas = supmol._bas[bas_mask]
-    supmol.bas_mask = bas_mask.reshape(supmol.bas_mask.shape)
     supmol.sh_loc = supmol.bas_mask_to_sh_loc(rs_cell, supmol.bas_mask)
     return supmol
