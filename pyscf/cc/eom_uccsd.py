@@ -76,12 +76,24 @@ def amplitudes_to_vector_ip(r1, r2):
                       r2aaa[idxa].ravel(), r2baa.ravel(),
                       r2abb.ravel(), r2bbb[idxb].ravel()))
 
-def spatial2spin_ip(r1, r2, orbspin=None):
-    '''Convert R1/R2 of spatial orbital representation to R1/R2 of
-    spin-orbital representation
-    '''
-    r1a, r1b = r1
-    r2aaa, r2baa, r2abb, r2bbb = r2
+def spatial2spin_ip(rx, orbspin=None):
+    '''Convert EOMIP spatial-orbital R1/R2 to spin-orbital R1/R2'''
+    if len(rx) == 2:  # r1
+        r1a, r1b = rx
+        nocc_a = r1a.size
+        nocc_b = r1b.size
+        nocc = nocc_a + nocc_b
+
+        r1 = np.zeros(nocc, dtype=r1a.dtype)
+        if orbspin is None:
+            r1[0::2] = r1a
+            r1[1::2] = r1b
+        else:
+            r1[orbspin[:nocc] == 0] = r1a
+            r1[orbspin[:nocc] == 1] = r1b
+        return r1
+
+    r2aaa, r2baa, r2abb, r2bbb = rx
     nocc_a, nvir_a = r2aaa.shape[1:]
     nocc_b, nvir_b = r2bbb.shape[1:]
 
@@ -95,10 +107,6 @@ def spatial2spin_ip(r1, r2, orbspin=None):
     idxob = np.where(orbspin[:nocc] == 1)[0]
     idxva = np.where(orbspin[nocc:] == 0)[0]
     idxvb = np.where(orbspin[nocc:] == 1)[0]
-
-    r1 = np.zeros((nocc), dtype=r1a.dtype)
-    r1[idxoa] = r1a
-    r1[idxob] = r1b
 
     r2 = np.zeros((nocc**2, nvir), dtype=r2aaa.dtype)
     idxoaa = idxoa[:,None] * nocc + idxoa
@@ -121,9 +129,16 @@ def spatial2spin_ip(r1, r2, orbspin=None):
     r2bab = -r2abb
     lib.takebak_2d(r2, r2aba, idxoab.T.ravel(), idxva.ravel())
     lib.takebak_2d(r2, r2bab, idxoba.T.ravel(), idxvb.ravel())
-    return r1, r2.reshape(nocc, nocc, nvir)
+    return r2.reshape(nocc, nocc, nvir)
 
-def spin2spatial_ip(r1, r2, orbspin):
+def spin2spatial_ip(rx, orbspin):
+    '''Convert EOMIP spin-orbital R1/R2 to spatial-orbital R1/R2'''
+    if rx.ndim == 1:
+        nocc = rx.size
+        r1a = rx[orbspin[:nocc] == 0]
+        r1b = rx[orbspin[:nocc] == 1]
+        return r1a, r1b
+
     nocc, nvir = r2.shape[1:]
 
     idxoa = np.where(orbspin[:nocc] == 0)[0]
@@ -134,9 +149,6 @@ def spin2spatial_ip(r1, r2, orbspin):
     nocc_b = len(idxob)
     nvir_a = len(idxva)
     nvir_b = len(idxvb)
-
-    r1a = r1[idxoa]
-    r1b = r1[idxob]
 
     idxoaa = idxoa[:,None] * nocc + idxoa
     idxoab = idxoa[:,None] * nocc + idxob
@@ -157,7 +169,7 @@ def spin2spatial_ip(r1, r2, orbspin):
     r2baa = r2baa.reshape(nocc_b, nocc_a, nvir_a)
     r2abb = r2abb.reshape(nocc_a, nocc_b, nvir_b)
     r2bbb = r2bbb.reshape(nocc_b, nocc_b, nvir_b)
-    return [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb]
+    return r2aaa, r2baa, r2abb, r2bbb
 
 def ipccsd_matvec(eom, vector, imds=None, diag=None):
     '''For spin orbitals
@@ -400,13 +412,23 @@ def amplitudes_to_vector_ea(r1, r2):
 def spatial2spin_ea(rx, orbspin=None):
     '''Convert EOMEA spatial-orbital R1/R2 to spin-orbital R1/R2'''
     if len(rx) == 2:  # r1
-        r1a, r1b = r1
-        nvir_a = r1a.shape
-        nvir_b = r1b.shape
-    else:
-        r2aaa, r2aba, r2bab, r2bbb = rx
-        nocc_a, nvir_a = r2aaa.shape[:2]
-        nocc_b, nvir_b = r2bbb.shape[:2]
+        r1a, r1b = rx
+        nvir_a = r1a.size
+        nvir_b = r1b.size
+        nvir = nvir_a + nvir_b
+
+        r1 = np.zeros(nvir, dtype=r1a.dtype)
+        if orbspin is None:
+            r1[0::2] = r1a
+            r1[1::2] = r1b
+        else:
+            r1[orbspin[-nvir:] == 0] = r1a
+            r1[orbspin[-nvir:] == 1] = r1b
+        return r1
+
+    r2aaa, r2aba, r2bab, r2bbb = rx
+    nocc_a, nvir_a = r2aaa.shape[:2]
+    nocc_b, nvir_b = r2bbb.shape[:2]
 
     if orbspin is None:
         orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
@@ -418,10 +440,6 @@ def spatial2spin_ea(rx, orbspin=None):
     idxob = np.where(orbspin[:nocc] == 1)[0]
     idxva = np.where(orbspin[nocc:] == 0)[0]
     idxvb = np.where(orbspin[nocc:] == 1)[0]
-
-    r1 = np.zeros((nvir), dtype=r1a.dtype)
-    r1[idxva] = r1a
-    r1[idxvb] = r1b
 
     r2 = np.zeros((nocc, nvir**2), dtype=r2aaa.dtype)
     #idxoaa = idxoa[:,None] * nocc + idxoa
@@ -447,18 +465,16 @@ def spatial2spin_ea(rx, orbspin=None):
     lib.takebak_2d(r2, r2bba, idxob.ravel(), idxvba.T.ravel())
     lib.takebak_2d(r2, r2aab, idxoa.ravel(), idxvab.T.ravel())
     r2 = r2.reshape(nocc, nvir, nvir)
-    return r1, r2
+    return r2
 
 def spin2spatial_ea(rx, orbspin):
-    '''Convert EOMEE spin-orbital R1/R2 to spatial-orbital R1/R2'''
-    if len(rx) == 2:  # r1
-        r1ab, r1ba = rx
-        nocca, nvirb = r1ab.shape
-        noccb, nvira = r1ba.shape
-    else:
-        r2baaa,r2aaba,r2abbb,r2bbab = rx
-        noccb, nocca, nvira = r2baaa.shape[:3]
-        nvirb = r2aaba.shape[2]
+    '''Convert EOMEA spin-orbital R1/R2 to spatial-orbital R1/R2'''
+    if rx.ndim == 1:
+        nvir = rx.size
+        r1a = rx[orbspin[-nvir:] == 0]
+        r1b = rx[orbspin[-nvir:] == 1]
+        return r1a, r1b
+
     nocc, nvir = r2.shape[:2]
 
     idxoa = np.where(orbspin[:nocc] == 0)[0]
@@ -470,13 +486,6 @@ def spin2spatial_ea(rx, orbspin):
     nvir_a = len(idxva)
     nvir_b = len(idxvb)
 
-    r1a = r1[idxva]
-    r1b = r1[idxvb]
-
-    #idxoaa = idxoa[:,None] * nocc + idxoa
-    #idxoab = idxoa[:,None] * nocc + idxob
-    #idxoba = idxob[:,None] * nocc + idxoa
-    #idxobb = idxob[:,None] * nocc + idxob
     idxvaa = idxva[:,None] * nvir + idxva
     idxvab = idxva[:,None] * nvir + idxvb
     idxvba = idxvb[:,None] * nvir + idxva
@@ -492,7 +501,7 @@ def spin2spatial_ea(rx, orbspin):
     r2aba = r2aba.reshape(nocc_a, nvir_b, nvir_a)
     r2bab = r2bab.reshape(nocc_b, nvir_a, nvir_b)
     r2bbb = r2bbb.reshape(nocc_b, nvir_b, nvir_b)
-    return [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb]
+    return r2aaa, r2aba, r2bab, r2bbb
 
 def eaccsd_matvec(eom, vector, imds=None, diag=None):
     '''For spin orbitals.
