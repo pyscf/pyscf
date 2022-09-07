@@ -56,7 +56,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.')
+                    'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
