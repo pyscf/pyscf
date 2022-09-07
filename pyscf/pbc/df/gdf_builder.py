@@ -41,7 +41,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_builder
 from pyscf.pbc.df.rsdf_builder import _round_off_to_odd_mesh
-from pyscf.pbc.df.incore import libpbc, make_auxcell, _Int3cBuilder, _ExtendedMole
+from pyscf.pbc.df.incore import libpbc, _Int3cBuilder, _strip_basis
 from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
                                        group_by_conj_pairs)
 
@@ -96,13 +96,15 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff.min()
 
+        self.dump_flags()
+
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
 
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
 
-        supmol = _ExtendedMole.from_cell(rs_cell, kmesh)
-        self.supmol = supmol.strip_basis()
+        supmol = ft_ao._ExtendedMole.from_cell(rs_cell, kmesh)
+        self.supmol = supmol = _strip_basis(supmol, self.eta)
 
         log.timer_debug1('initializing supmol', *cpu0)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
@@ -115,7 +117,8 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
 
     def get_2c2e(self, uniq_kpts):
         fused_cell = self.fused_cell
-        naux = self.auxcell.nao
+        auxcell = self.auxcell
+        naux = auxcell.nao
 
         # j2c ~ (-kpt_ji | kpt_ji)
         # Generally speaking, the int2c2e integrals with lattice sum applied on
@@ -125,7 +128,17 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         # contributions and fuse(fuse(j2c)), the output matrix is hermitian.
         j2c = list(fused_cell.pbc_intor('int2c2e', hermi=0, kpts=uniq_kpts))
 
-        Gv, Gvbase, kws = fused_cell.get_Gv_weights(self.mesh)
+        # 2c2e integrals the metric can easily cause errors in cderi tensor.
+        # self.mesh may not be enough to produce required accuracy.
+        # mesh = self.mesh
+        precision = auxcell.precision**2
+        ke = aft.estimate_ke_cutoff_for_eta(auxcell, self.eta, precision)
+        mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
+        if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
+            mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
+        logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
+
+        Gv, Gvbase, kws = fused_cell.get_Gv_weights(mesh)
         b = fused_cell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
         ngrids = Gv.shape[0]
@@ -133,7 +146,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         blksize = max(2048, int(max_memory*.4e6/16/fused_cell.nao_nr()))
         logger.debug2(self, 'max_memory %s (MB)  blocksize %s', max_memory, blksize)
         for k, kpt in enumerate(uniq_kpts):
-            coulG = self.weighted_coulG(kpt, False, self.mesh)
+            coulG = self.weighted_coulG(kpt, False, mesh)
             for p0, p1 in lib.prange(0, ngrids, blksize):
                 auxG = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
                 auxGR = np.asarray(auxG.real, order='C')
@@ -581,7 +594,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
     elif mesh is None:
         a = cell.lattice_vectors()
-        eta_min = aft.estimate_eta(cell, cell.precision)
+        eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
         ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
 
@@ -589,8 +602,9 @@ def _guess_eta(cell, kpts=None, mesh=None):
         nkpts = len(kpts)
         nao = cell.nao
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
-        mesh = np.max([mesh_min, [int(mesh)] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        mesh = int(min((1e8/nao)**(1./3), mesh))
+        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]

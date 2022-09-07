@@ -274,9 +274,9 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         if self._prefer_ccdf or cell.omega > 0:
             # For long-range integrals _CCGDFBuilder is the only option
             dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
+            dfbuilder.eta = self.eta
         else:
             dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
-        dfbuilder.eta = self.eta
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
         dfbuilder.make_j3c(cderi_file, j_only=self._j_only)
