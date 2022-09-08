@@ -30,7 +30,7 @@ import scipy
 from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import hf, hf_symm, uhf_symm
+from pyscf.scf import hf, hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import newton_ah
 
@@ -192,7 +192,7 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
 
-    vrespz = mf.gen_response(#singlet=None, 
+    vrespz = mf.gen_response(#singlet=None,
                              with_j=False,
                              hermi=2)
     def hop_real2complex(x1):
@@ -271,7 +271,7 @@ def ghf_stability(mf, verbose=None, return_status=False, tol=1e-4):
     else:
         log.note(f'{mf.__class__} wavefunction is stable in the real->complex '
                  'stability analysis')
-    
+
     if return_status:
         return mo, stable
     else:
