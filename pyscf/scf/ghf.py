@@ -524,9 +524,9 @@ class GHF(hf.SCF):
         from pyscf.scf import addons
         return addons.convert_to_ghf(mf, out=self)
 
-    def stability(self, internal=None, external=None, verbose=None, return_status=False):
+    def stability(self, internal=None, external=None, verbose=None, return_status=False, tol=1e-4):
         from pyscf.scf.stability import ghf_stability
-        return ghf_stability(self, verbose, return_status)
+        return ghf_stability(self, verbose, return_status, tol)
 
     def nuc_grad_method(self):
         raise NotImplementedError

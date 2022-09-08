@@ -996,7 +996,8 @@ class UHF(hf.SCF):
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),
                   verbose=None,
-                  return_status=False):
+                  return_status=False,
+                  tol=1e-4):
         '''
         Stability analysis for UHF/UKS method.
 
@@ -1026,7 +1027,7 @@ class UHF(hf.SCF):
             and the second corresponds to the external stability.
         '''
         from pyscf.scf.stability import uhf_stability
-        return uhf_stability(self, internal, external, verbose, return_status)
+        return uhf_stability(self, internal, external, verbose, return_status, tol)
 
     def nuc_grad_method(self):
         from pyscf.grad import uhf
