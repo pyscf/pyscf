@@ -694,7 +694,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
 
     if ismodule:
         base_contract_2e = fciobj.contract_2e
-        self = SpinPenaltyMod (shift=shift, ss_value=ss_value, 
+        self = SpinPenaltyMod (shift=shift, ss_value=ss_value,
                                contract_ss=fciobj.contract_ss,
                                base_contract_2e=base_contract_2e)
         from functools import partial
