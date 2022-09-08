@@ -173,8 +173,6 @@ class _Int3cBuilder(lib.StreamObject):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        if self.ke_cutoff is None:
-            self.ke_cutoff = KECUT_THRESHOLD
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
 
@@ -187,8 +185,7 @@ class _Int3cBuilder(lib.StreamObject):
             rcut = abs(-np.log(cell.precision) / eij)**.5 * 2
             log.debug1('exp_min = %g, rcut = %g', exp_min, rcut)
 
-        supmol = _ExtendedMole.from_cell(rs_cell, kmesh, rcut, verbose=log)
-        supmol = supmol.strip_basis()
+        supmol = ft_ao._ExtendedMole.from_cell(rs_cell, kmesh, rcut, verbose=log)
         self.supmol = supmol
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -196,7 +193,7 @@ class _Int3cBuilder(lib.StreamObject):
 
     def gen_int3c_kernel(self, intor='int3c2e', aosym='s2', comp=None,
                          j_only=False, reindex_k=None, rs_auxcell=None,
-                         return_complex=False):
+                         auxcell=None, supmol=None, return_complex=False):
         '''Generate function to compute int3c2e with double lattice-sum
 
         rs_auxcell: range-separated auxcell for gdf/rsdf module
@@ -207,9 +204,11 @@ class _Int3cBuilder(lib.StreamObject):
         cput0 = logger.process_clock(), logger.perf_counter()
         if self.rs_cell is None:
             self.build()
-        supmol = self.supmol
+        if auxcell is None:
+            auxcell = self.auxcell
+        if supmol is None:
+            supmol = self.supmol
         cell = self.cell
-        auxcell = self.auxcell
         kpts = self.kpts
         nkpts = len(kpts)
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
@@ -245,8 +244,8 @@ class _Int3cBuilder(lib.StreamObject):
             q_cond_aux = self.get_q_cond_aux()
             cintopt = _vhf.make_cintopt(supmol._atm, supmol._bas, supmol._env, intor)
 
-        ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(supmol.precision, cintopt=cintopt)
-        bas_map = self.get_bas_map()
+        ovlp_mask, cell0_ovlp_mask = self.get_ovlp_mask(supmol.precision, supmol, cintopt)
+        bas_map = self.get_bas_map(auxcell, supmol)
 
         # Estimate the buffer size required by PBCfill_nr3c functions
         cache_size = max(_get_cache_size(cell, intor),
@@ -378,11 +377,22 @@ class _Int3cBuilder(lib.StreamObject):
         '''To compute Schwarz inequality for auxiliary basis'''
         return None
 
-    def get_ovlp_mask(self, cutoff, cintopt=None):
-        supmol = self.supmol
+    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
+        '''integral screening mask between two sup-mols'''
+        if cutoff is None:
+            cutoff = self.cell.precision
+        if supmol is None:
+            supmol = self.supmol
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
         nbasp = self.cell.nbas  # The number of shells in the primitive cell
-        ovlp_mask = supmol.get_ovlp_mask(cutoff)
+        nbas = supmol.nbas
+        ovlp_mask = np.empty((nbas, nbas), dtype=np.int8)
+        libpbc.PBCsupmol_ovlp_mask(
+            ovlp_mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
+            supmol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.natm),
+            supmol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(supmol.nbas),
+            supmol._env.ctypes.data_as(ctypes.c_void_p))
+
         bvk_ovlp_mask = lib.condense('np.any', ovlp_mask, supmol.sh_loc)
         cell0_ovlp_mask = bvk_ovlp_mask.reshape(
             bvk_ncells, nbasp, bvk_ncells, nbasp).any(axis=2).any(axis=0)
@@ -390,37 +400,20 @@ class _Int3cBuilder(lib.StreamObject):
         cell0_ovlp_mask = cell0_ovlp_mask.astype(np.int8)
         return ovlp_mask, cell0_ovlp_mask
 
-    def get_bas_map(self):
+    def get_bas_map(self, auxcell=None, supmol=None):
         '''bas_map is to assign each basis of supmol._bas the index in
         [bvk_cell-id, bas-id, image-id]
         '''
         # Append aux_mask to bas_map as a temporary solution for function
         # _assemble3c in fill_ints.c
-        aux_mask = np.ones(self.auxcell.nbas, dtype=np.int32)
-        bas_map = np.where(self.supmol.bas_mask.ravel())[0].astype(np.int32)
+        if auxcell is None:
+            auxcell = self.auxcell
+        if supmol is None:
+            supmol = self.supmol
+        aux_mask = np.ones(auxcell.nbas, dtype=np.int32)
+        bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
         bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
         return bas_map
-
-
-class _ExtendedMole(ft_ao._ExtendedMole):
-    '''Extended Mole for 3c integrals'''
-
-    def strip_basis(self):
-        '''Remove redundant remote basis'''
-        return self
-
-    def get_ovlp_mask(self, cutoff=None):
-        '''integral screening mask for supmols'''
-        if cutoff is None:
-            cutoff = self.precision
-        nbas = self.nbas
-        mask = np.empty((nbas, nbas), dtype=np.int8)
-        libpbc.PBCsupmol_ovlp_mask(
-            mask.ctypes.data_as(ctypes.c_void_p), ctypes.c_double(cutoff),
-            self._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.natm),
-            self._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(self.nbas),
-            self._env.ctypes.data_as(ctypes.c_void_p))
-        return mask
 
 
 libpbc.GTOmax_cache_size.restype = ctypes.c_int
@@ -440,26 +433,21 @@ class _IntNucBuilder(_Int3cBuilder):
     '''In this builder, ovlp_mask can be reused for different types of intor
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
-        self.ovlp_mask = None
-        self.cell0_ovlp_mask = None
+        # cache ovlp_mask
+        self._supmol = None
+        self._ovlp_mask = None
+        self._cell0_ovlp_mask = None
         _Int3cBuilder.__init__(self, cell, None, kpts)
 
-    def get_ovlp_mask(self, cutoff, cintopt=None):
-        if self.ovlp_mask is None:
-            self.ovlp_mask, self.cell0_ovlp_mask = \
-                    _Int3cBuilder.get_ovlp_mask(self, cutoff, cintopt)
-        return self.ovlp_mask, self.cell0_ovlp_mask
-
-    def kernel(self, auxcell, intor, aosym='s2', comp=None):
-        self.auxcell = auxcell
-        if self.ke_cutoff is None:
-            self.ke_cutoff = KECUT_THRESHOLD
-        int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True)
-        vR, vI = int3c()
-        return vR, vI
+    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
+        if self._ovlp_mask is None or supmol is not self._supmol:
+            self._ovlp_mask, self._cell0_ovlp_mask = \
+                    _Int3cBuilder.get_ovlp_mask(self, cutoff, supmol, cintopt)
+            self._supmol = supmol
+        return self._ovlp_mask, self._cell0_ovlp_mask
 
     def _int_nuc_vloc(self, nuccell, intor='int3c2e', aosym='s2', comp=None,
-                      with_pseudo=True):
+                      with_pseudo=True, supmol=None):
         '''Vnuc - Vloc. nuccell is the cell for model charges
         '''
         logger.debug2(self, 'Real space integrals %s for Vnuc - Vloc', intor)
@@ -474,7 +462,9 @@ class _IntNucBuilder(_Int3cBuilder):
                 gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
                              fakenuc._atm, fakenuc._bas, fakenuc._env)
 
-        bufR, bufI = self.kernel(fakenuc, intor, aosym, comp)
+        int3c = self.gen_int3c_kernel(intor, aosym, comp=comp, j_only=True,
+                                      auxcell=fakenuc, supmol=supmol)
+        bufR, bufI = int3c()
 
         charge = cell.atom_charges()
         charge = np.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
@@ -516,12 +506,20 @@ class _IntNucBuilder(_Int3cBuilder):
         kpt_allow = np.zeros(3)
         eta, mesh, ke_cutoff = _guess_eta(cell, kpts, mesh)
         log.debug1('get_nuc/get_pp_loc_part1 eta = %s mesh = %s', eta, mesh)
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+
+        # Initialize self.supmol
+        if self.rs_cell is None:
+            self.build()
+        self.supmol = supmol = _strip_basis(self.supmol, eta)
+        log.debug('stripped supmol nbas = %d cGTO = %d pGTO = %d',
+                  supmol.nbas, supmol.nao, supmol.npgto_nr())
 
         modchg_cell = _compensate_nuccell(cell, eta)
-        vj = self._int_nuc_vloc(modchg_cell, with_pseudo=with_pseudo)
+        vj = self._int_nuc_vloc(modchg_cell, with_pseudo=with_pseudo,
+                                supmol=supmol)
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(modchg_cell, Gv)
         charges = cell.atom_charges()
@@ -583,7 +581,12 @@ class _IntNucBuilder(_Int3cBuilder):
         return self._get_nuc(mesh, with_pseudo=True)
 
     def get_pp_loc_part2(self):
+        if self.rs_cell is None:
+            self.build()
         cell = self.cell
+        supmol = self.supmol
+        if supmol.nbas == supmol.bas_mask.size:  # supmol not stripped
+            supmol = self.supmol.strip_basis(inplace=False)
         kpts = self.kpts
         nkpts = len(kpts)
         intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
@@ -593,7 +596,9 @@ class _IntNucBuilder(_Int3cBuilder):
         for cn in range(1, 5):
             fake_cell = pp_int.fake_cell_vloc(cell, cn)
             if fake_cell.nbas > 0:
-                vR, vI = self.kernel(fake_cell, intors[cn], 's2', comp=1)
+                int3c = self.gen_int3c_kernel(intors[cn], 's2', comp=1, j_only=True,
+                                              auxcell=fake_cell, supmol=supmol)
+                vR, vI = int3c()
                 bufR += np.einsum('...i->...', vR)
                 if vI is not None:
                     bufI += np.einsum('...i->...', vI)
@@ -676,3 +681,37 @@ def _compensate_nuccell(cell, eta):
     modchg_cell._bas = np.asarray(chg_bas, dtype=np.int32)
     modchg_cell._env = np.hstack((cell._env, chg_env))
     return modchg_cell
+
+def _strip_basis(supmol, eta, cutoff=None, inplace=True):
+    rs_cell = supmol.rs_cell
+
+    supmol_exps = np.array([e.min() for e in supmol.bas_exps()])
+    supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
+
+    dim = rs_cell.dimension
+    if dim == 0:
+        bas_mask = np.ones(supmol.nbas, dtype=bool)
+    else:
+        if cutoff is None:
+            cutoff = supmol.precision
+        # estimation based on 3-center gaussian overlap integrals
+        # ejk = minimize (ai*aj*|ri-rj|^2+ai*eta*ri^2+aj*eta*rj^2)/(ai+aj+eta)
+        ajk = supmol_exps + eta
+        ejk = supmol_exps * eta / ajk
+        rb = np.linalg.norm(supmol_bas_coords[:,:dim], axis=1)
+        a = rs_cell.lattice_vectors()
+        dr = rb - np.linalg.norm(a[:dim])
+        dr[dr < 0] = 0
+        ovlp = ejk * dr**2
+        bas_mask = ovlp < -np.log(cutoff)
+
+    if not inplace:
+        supmol = copy.copy(supmol)
+    if bas_mask.size == supmol.bas_mask.size:
+        supmol.bas_mask = bas_mask.reshape(supmol.bas_mask.shape)
+    else:
+        supmol.bas_mask = supmol.bas_mask.copy()
+        supmol.bas_mask[supmol.bas_mask] = bas_mask
+    supmol._bas = supmol._bas[bas_mask]
+    supmol.sh_loc = supmol.bas_mask_to_sh_loc(rs_cell, supmol.bas_mask)
+    return supmol

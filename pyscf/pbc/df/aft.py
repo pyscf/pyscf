@@ -39,6 +39,7 @@ from pyscf import __config__
 
 CUTOFF = getattr(__config__, 'pbc_df_aft_estimate_eta_cutoff', 1e-12)
 ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.2)
+OMEGA_MIN = getattr(__config__, 'pbc_df_aft_estimate_omega_min', 0.3)
 PRECISION = getattr(__config__, 'pbc_df_aft_estimate_eta_precision', 1e-8)
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
@@ -67,7 +68,7 @@ def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     # The interaction between two s-type density distributions should be
     # enough for the error estimation.  Put lmax here to increate Ecut for
     # slightly better accuracy
-    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax-1)))
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**max(0, lmax-1)))
     log_eta = -1
     eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
@@ -96,6 +97,18 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     Ecut = max(Ecut, .5)
     return Ecut
 
+def estimate_omega(cell, cutoff=CUTOFF):
+    '''The parameter for attenuated Coulomb interactions, requiring that at
+    boundary, the Coulomb potential ~ 1e-12
+    '''
+    # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
+    # erfc(omega*rcut)/rcut < cutoff
+    # ~ exp(-(omega*rcut)**2) / (omega*rcut**2*pi**.5) < cutoff
+    rcut = cell.rcut
+    omega = OMEGA_MIN
+    omega = max((-numpy.log(cutoff * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
+    return omega
+
 # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
 # ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
 # = 16 pi^{5/2} omega erfc(sqrt(ke_cutoff/(2*omega^2)))
@@ -105,7 +118,10 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    ke_cutoff = -2*omega**2 * numpy.log(precision / (32*omega**2*numpy.pi**2))
+    precision *= 1e-2
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2))
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2*(ke_cutoff*2)**(.5*lmax)))
     return ke_cutoff
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
@@ -113,7 +129,15 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    omega = (-.5 * ke_cutoff / numpy.log(precision / (32*numpy.pi**2)))**.5
+    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # enough to converge the 2-electron integrals. A penalty term here is to
+    # reduce the error in integrals
+    precision *= 1e-2
+    # Consider l>0 basis here to increate Ecut for slightly better accuracy
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = numpy.log(precision / (16*numpy.pi**2 * kmax**lmax))
+    omega = (-.5 * ke_cutoff / log_rest)**.5
     return omega
 
 def get_pp_loc_part1(mydf, kpts=None):
@@ -195,7 +219,7 @@ def get_pp(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
     dfbuilder = _IntNucBuilder(mydf.cell, kpts_lst)
-    vpp = dfbuilder.get_pp()
+    vpp = dfbuilder.get_pp(mydf.mesh)
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
     logger.timer(mydf, 'get_pp', *t0)

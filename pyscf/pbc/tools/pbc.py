@@ -367,8 +367,10 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
     if omega is not None:
         if omega > 0:
+            # long range part
             coulG *= np.exp(-.25/omega**2 * absG2)
         elif omega < 0:
+            # short range part
             coulG *= (1 - np.exp(-.25/omega**2 * absG2))
     elif cell.omega > 0:
         coulG *= np.exp(-.25/cell.omega**2 * absG2)

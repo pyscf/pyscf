@@ -43,7 +43,7 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df.incore import libpbc, make_auxcell, _Int3cBuilder
+from pyscf.pbc.df.incore import libpbc, _Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
                                        group_by_conj_pairs)
 from pyscf import __config__
@@ -81,7 +81,6 @@ class _RSGDFBuilder(_Int3cBuilder):
             self.omega = None
         self.rs_auxcell = None
 
-        cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'
         _Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
     @property
@@ -140,6 +139,8 @@ class _RSGDFBuilder(_Int3cBuilder):
         log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
                  self.omega, self.ke_cutoff, self.mesh)
 
+        self.dump_flags()
+
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         self.rs_auxcell = rs_auxcell = ft_ao._RangeSeparatedCell.from_cell(
@@ -166,6 +167,8 @@ class _RSGDFBuilder(_Int3cBuilder):
         if not exps_c: # Only smooth functions
             rcut_sr = cell.rcut
         else:
+            # Estimation with the assumption self.exclude_dd_block = True
+            # Is rcut enough if exclude_dd_block = False?
             if not exps_d:  # Only compact functions
                 exp_d_min = exp_c_min = np.hstack(exps_c).min()
                 aij = exp_c_min * 2
@@ -192,7 +195,7 @@ class _RSGDFBuilder(_Int3cBuilder):
                        exp_d_min, exp_c_min, exp_aux_min, rcut_sr)
 
         supmol = _ExtendedMoleSR.from_cell(rs_cell, kmesh, self.omega, rcut_sr, log)
-        self.supmol = supmol.strip_basis(exp_aux_min, self.exclude_dd_block)
+        self.supmol = _strip_basis(supmol, self.omega, exp_aux_min, self.exclude_dd_block)
         log.timer_debug1('initializing supmol', *cpu0)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -233,9 +236,10 @@ class _RSGDFBuilder(_Int3cBuilder):
             q_cond[smooth_idx[:,None], smooth_idx] = 1e-200
         return q_cond
 
-    def get_q_cond_aux(self):
+    def get_q_cond_aux(self, auxcell=None, supmol=None):
         '''max(sqrt((k|ii))) between the auxcell and the supmol'''
-        supmol = self.supmol
+        if supmol is None:
+            supmol = self.supmol
         auxcell_s = self.rs_auxcell.copy()
         auxcell_s._bas[:,ANG_OF] = 0
         intor = 'int3c2e_sph'
@@ -261,10 +265,12 @@ class _RSGDFBuilder(_Int3cBuilder):
             q_cond_aux[self.rs_auxcell.bas_type == ft_ao.SMOOTH_BASIS] = 1e-200
         return q_cond_aux
 
-    def get_bas_map(self):
+    def get_bas_map(self, auxcell=None, supmol=None):
         '''bas_map is to assign each basis of supmol._bas the index in
         [bvk_cell-id, bas-id, image-id]
         '''
+        if supmol is None:
+            supmol = self.supmol
         if self.exclude_d_aux:
             # Use aux_mask to skip smooth auxiliary basis and handle them in AFT part.
             aux_mask = (self.rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS).astype(np.int32)
@@ -273,12 +279,13 @@ class _RSGDFBuilder(_Int3cBuilder):
 
         # Append aux_mask to bas_map as a temporary solution for function
         # _assemble3c in fill_ints.c
-        bas_map = np.where(self.supmol.bas_mask.ravel())[0].astype(np.int32)
+        bas_map = np.where(supmol.bas_mask.ravel())[0].astype(np.int32)
         bas_map = np.asarray(np.append(bas_map, aux_mask), dtype=np.int32)
         return bas_map
 
-    def get_ovlp_mask(self, cutoff, cintopt=None):
-        supmol = self.supmol
+    def get_ovlp_mask(self, cutoff, supmol=None, cintopt=None):
+        if supmol is None:
+            supmol = self.supmol
         bvk_ncells, rs_nbas, nimgs = supmol.bas_mask.shape
         nbasp = self.cell.nbas  # The number of shells in the primitive cell
         ovlp_mask = self.get_q_cond() > cutoff
@@ -332,18 +339,19 @@ class _RSGDFBuilder(_Int3cBuilder):
                 gamma_point_idx = member(np.zeros(3), uniq_kpts)
                 if len(gamma_point_idx) > 0:
                     # Add G=0 contribution
-                    g0_fac = np.pi / omega**2 / self.cell.vol
+                    g0_fac = np.pi / omega**2 / auxcell.vol
                     aux_chg = _gaussian_int(auxcell)
                     j2c[gamma_point_idx[0]] -= g0_fac * aux_chg[:,None] * aux_chg
             return j2c
 
+        precision = auxcell.precision**2
         omega = self.omega
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
             rcut_sr = auxcell_c.rcut
             rcut_sr = (-2*np.log(
-                .225*self.supmol.precision * omega**4 * rcut_sr**2))**.5 / omega
+                .225*precision * omega**4 * rcut_sr**2))**.5 / omega
             auxcell_c.rcut = rcut_sr
             logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
@@ -359,7 +367,15 @@ class _RSGDFBuilder(_Int3cBuilder):
         else:
             sr_j2c = None
 
-        mesh = self.mesh
+        # 2c2e integrals the metric can easily cause errors in cderi tensor.
+        # self.mesh may not be enough to produce required accuracy.
+        # mesh = self.mesh
+        ke = aft.estimate_ke_cutoff_for_omega(auxcell, omega, precision)
+        mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
+        if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
+            mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
+        logger.debug(self, 'Set 2c2e integrals precision %g, mesh %s', precision, mesh)
+
         Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
         b = auxcell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
@@ -601,11 +617,12 @@ class _RSGDFBuilder(_Int3cBuilder):
             log.debug2('Not found diffused basis. Skip outcore_smooth_block')
             return
 
-        aoR_ks, aoI_ks = _eval_gto(cell_d, cell_d.mesh, kpts)
-        coords = cell_d.get_uniform_grids(cell_d.mesh)
+        mesh = cell_d.mesh
+        aoR_ks, aoI_ks = _eval_gto(cell_d, mesh, kpts)
+        coords = cell_d.get_uniform_grids(mesh)
 
         # TODO check if max_memory is enough
-        Gv, Gvbase, kws = auxcell.get_Gv_weights(cell_d.mesh)
+        Gv, Gvbase, kws = auxcell.get_Gv_weights(mesh)
         b = cell_d.reciprocal_vectors()
         gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
         ngrids = Gv.shape[0]
@@ -622,10 +639,10 @@ class _RSGDFBuilder(_Int3cBuilder):
             # Vaux = ao*exp(-1j*coords.dot(kpt)) * ifft(coulG * ft_ao(aux, -kpt))
             auxG = ft_ao.ft_ao(auxcell, Gv, shls_slice, b, gxyz, Gvbase, -kpt).T
             if self.has_long_range():
-                auxG *= pbctools.get_coulG(cell, -kpt, False, None, cell_d.mesh, Gv,
+                auxG *= pbctools.get_coulG(cell, -kpt, False, None, mesh, Gv,
                                            omega=cell.omega)
             else:
-                auxG *= pbctools.get_coulG(cell, -kpt, False, None, cell_d.mesh, Gv,
+                auxG *= pbctools.get_coulG(cell, -kpt, False, None, mesh, Gv,
                                            omega=-self.omega)
 
             max_memory = (self.max_memory - lib.current_memory()[0])
@@ -634,7 +651,7 @@ class _RSGDFBuilder(_Int3cBuilder):
             # Reuse auxG to reduce memory footprint
             Vaux = auxG
             for p0, p1 in lib.prange(0, naux, blksize):
-                Vaux[p0:p1] = pbctools.ifft(auxG[p0:p1], cell_d.mesh)
+                Vaux[p0:p1] = pbctools.ifft(auxG[p0:p1], mesh)
             Vaux *= np.exp(-1j * coords.dot(kpt))
             return Vaux
 
@@ -1027,6 +1044,81 @@ class _RSGDFBuilder(_Int3cBuilder):
         return self
 
 
+def _strip_basis(supmol, omega, exp_aux_min=None, exclude_dd_block=False):
+    '''Remove redundant remote basis'''
+    rs_cell = supmol.rs_cell
+    bas_mask = supmol.bas_mask
+    compact_bas_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
+    exps = np.array([e.min() for e in rs_cell.bas_exps()])
+    exps_c = exps[compact_bas_mask]
+    if exps_c.size > 0:
+        exp_min = exps.min()
+        # compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
+        # exp_aux_min = min([rs_auxcell.bas_exp(ib).min() for ib in compact_aux_idx])
+        # Is the exact exp_aux_min needed here?
+        if exp_aux_min is None:
+            exp_aux_min = exp_min
+        aij = exp_min + exps_c
+        eij = exp_min * exps_c / aij
+        theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
+        LKs = supmol.Ls[:,None,:] + supmol.bvkmesh_Ls
+
+        # For basis on the boundary of a cell, boundary_penalty can adjust
+        # the LKs to get proper distance between basis
+        shifts = lib.cartesian_prod([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
+        a_off_bond = rs_cell.lattice_vectors() - 1.
+        boundary_penalty = np.einsum('te,ex->tx', shifts, a_off_bond)
+        rLK = np.linalg.norm(LKs + boundary_penalty[:,None,None], axis=-1).min(axis=0)
+        rLK[rLK < 1e-2] = 1e-2  # avoid singularity in upper_bounds
+        rr = rLK ** 2
+
+        # x = rcut * x_ratio for the distance between compact function
+        # and smooth function (compact function in the far end)
+        # fac*erfc(\sqrt(theta)|rcut - x|) for the asymptotic value of short-range eri
+        x_ratio = 1. / (exp_min/aij + exps_c/theta)
+        exp_fac = eij * x_ratio**2 + theta * (1 - exp_min/aij*x_ratio)**2
+        fac = ((8*np.pi*exp_min*exps_c/(aij*exp_aux_min)**2)**.75
+               / (theta * np.pi)**.5)
+        # upper_bounds are the maximum values int3c2e can reach for each
+        # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
+        upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
+                                 np.exp(-exp_fac[:,None,None]*rr))
+        # The cutoff here is most critical parameter that impacts the
+        # accuracy of DF integrals
+        bas_mask[:,compact_bas_mask] = upper_bounds > supmol.precision
+
+        # determine rcut boundary for diffused functions
+        exps_d = exps[~compact_bas_mask]
+        if exps_d.size > 0:
+            if exclude_dd_block:
+                # Just needs to estimate the upper bounds of (C,D|aux)
+                # otherwise, we need exp_min = exp_d_min for the (D,D|aux)
+                # upper bound estimation
+                exp_min = exps_c.min()
+            aij = exp_min + exps_d
+            eij = exp_min * exps_d / aij
+            theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
+
+            x_ratio = 1. / (exps_d/aij + exp_min/theta)
+            exp_fac = eij * x_ratio**2 + theta * (1 - exps_d/aij*x_ratio)**2
+            fac = ((8*np.pi*exps_d*exp_min/(aij*exp_aux_min)**2)**.75
+                   / (theta * np.pi)**.5)
+            # upper_bounds are the maximum values int3c2e can reach for each
+            # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
+            upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
+                                     np.exp(-exp_fac[:,None,None]*rr))
+            bas_mask[:,~compact_bas_mask] = upper_bounds > supmol.precision
+
+        bas_mask[0,:,0] = True
+
+    nbas0 = supmol._bas.shape[0]
+    supmol._bas = np.asarray(supmol._bas[bas_mask.ravel()], dtype=np.int32, order='C')
+    nbas1 = supmol._bas.shape[0]
+    logger.debug1(supmol, 'strip_basis %d to %d ', nbas0, nbas1)
+    supmol.sh_loc = supmol.bas_mask_to_sh_loc(rs_cell, bas_mask)
+    supmol.bas_mask = bas_mask
+    return supmol
+
 class _ExtendedMoleSR(ft_ao._ExtendedMole):
     '''Extended Mole for short-range ERIs without dd-blocks'''
 
@@ -1035,82 +1127,6 @@ class _ExtendedMoleSR(ft_ao._ExtendedMole):
         supmol = super(_ExtendedMoleSR, cls).from_cell(cell, kmesh, rcut, verbose)
         supmol.omega = -omega
         return supmol
-
-    def strip_basis(self, exp_aux_min=None, exclude_dd_block=False):
-        '''Remove redundant remote basis'''
-        rs_cell = self.rs_cell
-        bas_mask = self.bas_mask
-        compact_bas_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
-        omega = self.omega
-        exps = np.array([e.min() for e in rs_cell.bas_exps()])
-        exps_c = exps[compact_bas_mask]
-        if exps_c.size > 0:
-            exp_min = exps.min()
-            # compact_aux_idx = np.where(rs_auxcell.bas_type != ft_ao.SMOOTH_BASIS)[0]
-            # exp_aux_min = min([rs_auxcell.bas_exp(ib).min() for ib in compact_aux_idx])
-            # Is the exact exp_aux_min needed here?
-            if exp_aux_min is None:
-                exp_aux_min = exp_min
-            aij = exp_min + exps_c
-            eij = exp_min * exps_c / aij
-            theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
-            LKs = self.Ls[:,None,:] + self.bvkmesh_Ls
-
-            # For basis on the boundary of a cell, boundary_penalty can adjust
-            # the LKs to get proper distance between basis
-            shifts = lib.cartesian_prod([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
-            a_off_bond = rs_cell.lattice_vectors() - 1.
-            boundary_penalty = np.einsum('te,ex->tx', shifts, a_off_bond)
-            rLK = np.linalg.norm(LKs + boundary_penalty[:,None,None], axis=-1).min(axis=0)
-            rLK[rLK < 1e-2] = 1e-2  # avoid singularity in upper_bounds
-            rr = rLK ** 2
-
-            # x = rcut * x_ratio for the distance between compact function
-            # and smooth function (compact function in the far end)
-            # fac*erfc(\sqrt(theta)|rcut - x|) for the asymptotic value of short-range eri
-            x_ratio = 1. / (exp_min/aij + exps_c/theta)
-            exp_fac = eij * x_ratio**2 + theta * (1 - exp_min/aij*x_ratio)**2
-            fac = ((8*np.pi*exp_min*exps_c/(aij*exp_aux_min)**2)**.75
-                   / (theta * np.pi)**.5)
-            # upper_bounds are the maximum values int3c2e can reach for each
-            # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
-            upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
-                                     np.exp(-exp_fac[:,None,None]*rr))
-            # The cutoff here is most critical parameter that impacts the
-            # accuracy of DF integrals
-            bas_mask[:,compact_bas_mask] = upper_bounds > self.precision
-
-            # determine rcut boundary for diffused functions
-            exps_d = exps[~compact_bas_mask]
-            if exps_d.size > 0:
-                if exclude_dd_block:
-                    # Just needs to estimate the upper bounds of (C,D|aux)
-                    # otherwise, we need exp_min = exp_d_min for the (D,D|aux)
-                    # upper bound estimation
-                    exp_min = exps_c.min()
-                aij = exp_min + exps_d
-                eij = exp_min * exps_d / aij
-                theta = 1./(omega**-2 + 1./aij + 1./exp_aux_min)
-
-                x_ratio = 1. / (exps_d/aij + exp_min/theta)
-                exp_fac = eij * x_ratio**2 + theta * (1 - exps_d/aij*x_ratio)**2
-                fac = ((8*np.pi*exps_d*exp_min/(aij*exp_aux_min)**2)**.75
-                       / (theta * np.pi)**.5)
-                # upper_bounds are the maximum values int3c2e can reach for each
-                # basis in each repeated image. shape (bas_id, image_id, bvk_cell_id)
-                upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
-                                         np.exp(-exp_fac[:,None,None]*rr))
-                bas_mask[:,~compact_bas_mask] = upper_bounds > self.precision
-
-            bas_mask[0,:,0] = True
-
-        nbas0 = self._bas.shape[0]
-        self._bas = np.asarray(self._bas[bas_mask.ravel()], dtype=np.int32, order='C')
-        nbas1 = self._bas.shape[0]
-        logger.debug1(self, 'strip_basis %d to %d ', nbas0, nbas1)
-        self.sh_loc = self.bas_mask_to_sh_loc(rs_cell, bas_mask)
-        self.bas_mask = bas_mask
-        return self
 
 class _ExtendedMoleFT(ft_ao._ExtendedMole):
     '''Extended Mole for Fourier Transform without dd-blocks'''
@@ -1132,40 +1148,39 @@ class _ExtendedMoleFT(ft_ao._ExtendedMole):
         return ovlp_mask
 
 # ngrids ~= 8*naux = prod(mesh)
-def _guess_omega(auxcell, kpts, mesh=None):
-    if auxcell.dimension == 0:
+def _guess_omega(cell, kpts, mesh=None):
+    if cell.dimension == 0:
         if mesh is None:
-            mesh = auxcell.mesh
-        ke_cutoff = pbctools.mesh_to_cutoff(auxcell.lattice_vectors(), mesh).min()
+            mesh = cell.mesh
+        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
     elif mesh is None:
-        a = auxcell.lattice_vectors()
-        naux = auxcell.npgto_nr()
+        a = cell.lattice_vectors()
+        nao = cell.npgto_nr()
         nkpts = len(kpts)
-        rcut = auxcell.rcut
-        omega_min = 0.3
-        omega_min = 0.8 * (-np.log(auxcell.precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
-        ke_min = aft.estimate_ke_cutoff_for_omega(auxcell, omega_min)
+        # requiring Coulomb potential < cell.precision at rcut is often not
+        # enough to truncate the interaction.
+        omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
+        ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
         # FIXME: balance the two workloads
-        # int3c2e integrals ~ naux*(cell.rcut**3/cell.vol*nao)**2
+        # int3c2e integrals ~ nao*(cell.rcut**3/cell.vol*nao)**2
         # ft_ao integrals ~ nkpts*nao*(cell.rcut**3/cell.vol*nao)*mesh**3
-        nimgs = (8 * auxcell.rcut**3 / auxcell.vol) ** (auxcell.dimension / 3)
-        mesh = (nimgs**2*naux / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*naux))**(1./3) * 4 + 2
-        mesh = int(min((1e8/naux)**(1./3), mesh))
-        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
-        ke_cutoff = ke_cutoff[:auxcell.dimension].min()
-        if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
-            mesh[auxcell.dimension:] = auxcell.mesh[auxcell.dimension:]
-        elif auxcell.dimension == 2:
+        nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
+        mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
+        mesh = int(min((1e8/nao)**(1./3), mesh))
+        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
+        ke_cutoff = ke_cutoff[:cell.dimension].min()
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+        elif cell.dimension == 2:
             mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
         mesh = _round_off_to_odd_mesh(mesh)
     else:
-        a = auxcell.lattice_vectors()
+        a = cell.lattice_vectors()
         ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
-        ke_cutoff = ke_cutoff[:auxcell.dimension].min()
-
-    omega = aft.estimate_omega_for_ke_cutoff(auxcell, ke_cutoff, auxcell.precision)
+        ke_cutoff = ke_cutoff[:cell.dimension].min()
+    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return omega, mesh, ke_cutoff
 
 def _eval_gto(cell, mesh, kpts):
