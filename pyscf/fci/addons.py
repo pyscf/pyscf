@@ -706,23 +706,19 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
 
     class FCISolver (fciobj_class, SpinPenaltyFCISolver):
 
-        def __init__(self, mol=None):
+        def __init__(self, fcibase):
+            self.base = copy.copy (fcibase)
+            self.__dict__.update (fcibase.__dict__)
             self.ss_value = ss_value
             self.shift = shift
-            self.base = copy.copy (fciobj)
-            fciobj_class.__init__(self, mol=mol)
+            self.davidson_only = self.base.davidson_only = True
 
         def base_contract_2e (self, *args, **kwargs):
-            return self.base.contract_2e (*args, **kwargs)
+            return self.base.__class__.contract_2e (self, *args, **kwargs)
 
     FCISolver.contract_2e = contract_2e
     mol = getattr (fciobj, 'mol', None)
-    new_fciobj = FCISolver (mol)
-    new_fciobj.ss_value = ss_value
-    new_fciobj.shift = shift
-    new_fciobj.__dict__.update (new_fciobj.base.__dict__)
-    new_fciobj.davidson_only = True
-    new_fciobj.base.davidson_only = True
+    new_fciobj = FCISolver (fciobj)
     fciobj.__class__ = new_fciobj.__class__
     fciobj.__dict__.update (new_fciobj.__dict__)
     return fciobj
