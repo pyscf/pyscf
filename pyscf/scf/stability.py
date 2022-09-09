@@ -34,6 +34,27 @@ from pyscf.scf import hf, hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import _response_functions  # noqa
 from pyscf.soscf import newton_ah
 
+def _get_internal_stability_status(mf):
+    res = mf.stability(return_status=True)
+    if len(res) == 4:
+        return res[0], res[2]
+    elif len(res) == 2:
+        return res
+
+def stable_opt_internal(mf, max_attempt=10):
+    log = logger.new_logger(mf)
+    mo1, stable = _get_internal_stability_status(mf)
+    cyc = 0
+    while (not stable and cyc < max_attempt):
+        log.note('Try to optimize orbitals until stable, attempt %d' % cyc)
+        dm1 = mf.make_rdm1(mo1, mf.mo_occ)
+        mf = mf.run(dm1)
+        mo1, stable = _get_internal_stability_status(mf)
+        cyc += 1
+    if not stable:
+        log.note('Stability Opt failed after %d attempts' % cyc)
+    return mf
+
 def rhf_stability(mf, internal=True, external=False, verbose=None, return_status=False, tol=1e-4):
     '''
     Stability analysis for RHF/RKS method.
