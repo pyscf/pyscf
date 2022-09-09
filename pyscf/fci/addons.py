@@ -656,7 +656,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
 
     if isinstance (fciobj, SpinPenaltyFCISolver):
         # recursion avoidance
-        fciobj.shift = shift
+        fciobj.ss_penalty = shift
         fciobj.ss_value = ss
         return fciobj
     ismodule = isinstance (fciobj, types.ModuleType)
@@ -686,7 +686,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             ci1 = -ss * tmp
             ci1 += self.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
-        ci1 *= self.shift
+        ci1 *= self.ss_penalty
 
         ci0 = self.base_contract_2e (eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
@@ -694,7 +694,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
 
     if ismodule:
         base_contract_2e = fciobj.contract_2e
-        self = SpinPenaltyMod (shift=shift, ss_value=ss_value,
+        self = SpinPenaltyMod (ss_penalty=shift, ss_value=ss_value,
                                contract_ss=fciobj.contract_ss,
                                base_contract_2e=base_contract_2e)
         from functools import partial
@@ -710,7 +710,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             self.base = copy.copy (fcibase)
             self.__dict__.update (fcibase.__dict__)
             self.ss_value = ss_value
-            self.shift = shift
+            self.ss_penalty = shift
             self.davidson_only = self.base.davidson_only = True
 
         def base_contract_2e (self, *args, **kwargs):
