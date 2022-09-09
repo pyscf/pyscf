@@ -711,13 +711,14 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             self.__dict__.update (fcibase.__dict__)
             self.ss_value = ss_value
             self.ss_penalty = shift
+            keys = set (('ss_value', 'ss_penalty', 'base'))
+            self._keys = self._keys.union (keys)
             self.davidson_only = self.base.davidson_only = True
 
         def base_contract_2e (self, *args, **kwargs):
             return self.base.__class__.contract_2e (self, *args, **kwargs)
 
     FCISolver.contract_2e = contract_2e
-    mol = getattr (fciobj, 'mol', None)
     new_fciobj = FCISolver (fciobj)
     fciobj.__class__ = new_fciobj.__class__
     fciobj.__dict__.update (new_fciobj.__dict__)
