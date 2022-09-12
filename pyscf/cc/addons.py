@@ -25,7 +25,7 @@ def spatial2spin(tx, orbspin=None):
         return spatial2spin((tx,tx), orbspin)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 4:
         # RCCSD t2 amplitudes
-        t2aa = tx - tx.transpose(0,1,3,2)
+        t2aa = tx - tx.transpose(1,0,2,3)
         return spatial2spin((t2aa,tx,t2aa), orbspin)
     elif len(tx) == 2:  # t1
         t1a, t1b = tx
@@ -38,6 +38,7 @@ def spatial2spin(tx, orbspin=None):
         raise RuntimeError('Unknown T amplitudes')
 
     if orbspin is None:
+        assert nocc_a == nocc_b
         orbspin = numpy.zeros((nocc_a+nvir_a)*2, dtype=int)
         orbspin[1::2] = 1
 

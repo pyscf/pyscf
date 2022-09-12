@@ -25,7 +25,7 @@
 import numpy as np
 
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.lib import logger, module_method
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
@@ -86,6 +86,7 @@ def spatial2spin_ip(rx, orbspin=None):
 
         r1 = np.zeros(nocc, dtype=r1a.dtype)
         if orbspin is None:
+            assert nocc_a == nocc_b
             r1[0::2] = r1a
             r1[1::2] = r1b
         else:
@@ -98,6 +99,7 @@ def spatial2spin_ip(rx, orbspin=None):
     nocc_b, nvir_b = r2bbb.shape[1:]
 
     if orbspin is None:
+        assert nocc_a == nocc_b
         orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
         orbspin[1::2] = 1
 
@@ -139,7 +141,7 @@ def spin2spatial_ip(rx, orbspin):
         r1b = rx[orbspin[:nocc] == 1]
         return r1a, r1b
 
-    nocc, nvir = r2.shape[1:]
+    nocc, nvir = rx.shape[1:]
 
     idxoa = np.where(orbspin[:nocc] == 0)[0]
     idxob = np.where(orbspin[:nocc] == 1)[0]
@@ -159,7 +161,7 @@ def spin2spatial_ip(rx, orbspin):
     #idxvba = idxvb[:,None] * nvir + idxva
     #idxvbb = idxvb[:,None] * nvir + idxvb
 
-    r2 = r2.reshape(nocc**2, nvir)
+    r2 = rx.reshape(nocc**2, nvir)
     r2aaa = lib.take_2d(r2, idxoaa.ravel(), idxva.ravel())
     r2baa = lib.take_2d(r2, idxoba.ravel(), idxva.ravel())
     r2abb = lib.take_2d(r2, idxoab.ravel(), idxvb.ravel())
@@ -181,7 +183,7 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa, nmob = nocca+nvira, noccb+nvirb
-    r1, r2 = vector_to_amplitudes_ip(vector, (nmoa,nmob), (nocca,noccb))
+    r1, r2 = eom.vector_to_amplitudes(vector, (nmoa,nmob), (nocca,noccb))
     r1a, r1b = r1
     r2aaa, r2baa, r2abb, r2bbb = r2
 
@@ -342,14 +344,9 @@ class EOMIP(eom_rccsd.EOMIP):
             guess.append(g)
         return guess
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ip(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ip(r1, r2)
-
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ip)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ip,
+                                         absences=['nmo', 'nocc'])
     spatial2spin = staticmethod(spatial2spin_ip)
     spin2spatial = staticmethod(spin2spatial_ip)
 
@@ -419,6 +416,7 @@ def spatial2spin_ea(rx, orbspin=None):
 
         r1 = np.zeros(nvir, dtype=r1a.dtype)
         if orbspin is None:
+            assert nvir_a == nvir_b
             r1[0::2] = r1a
             r1[1::2] = r1b
         else:
@@ -431,6 +429,7 @@ def spatial2spin_ea(rx, orbspin=None):
     nocc_b, nvir_b = r2bbb.shape[:2]
 
     if orbspin is None:
+        assert nvir_a == nvir_b
         orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
         orbspin[1::2] = 1
 
@@ -475,7 +474,7 @@ def spin2spatial_ea(rx, orbspin):
         r1b = rx[orbspin[-nvir:] == 1]
         return r1a, r1b
 
-    nocc, nvir = r2.shape[:2]
+    nocc, nvir = rx.shape[:2]
 
     idxoa = np.where(orbspin[:nocc] == 0)[0]
     idxob = np.where(orbspin[:nocc] == 1)[0]
@@ -491,7 +490,7 @@ def spin2spatial_ea(rx, orbspin):
     idxvba = idxvb[:,None] * nvir + idxva
     idxvbb = idxvb[:,None] * nvir + idxvb
 
-    r2 = r2.reshape(nocc, nvir**2)
+    r2 = rx.reshape(nocc, nvir**2)
     r2aaa = lib.take_2d(r2, idxoa.ravel(), idxvaa.ravel())
     r2aba = lib.take_2d(r2, idxoa.ravel(), idxvba.ravel())
     r2bab = lib.take_2d(r2, idxob.ravel(), idxvab.ravel())
@@ -514,7 +513,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa, nmob = nocca+nvira, noccb+nvirb
-    r1, r2 = vector_to_amplitudes_ea(vector, (nmoa,nmob), (nocca,noccb))
+    r1, r2 = eom.vector_to_amplitudes(vector, (nmoa,nmob), (nocca,noccb))
     r1a, r1b = r1
     r2aaa, r2aba, r2bab, r2bbb = r2
 
@@ -872,14 +871,9 @@ class EOMEA(eom_rccsd.EOMEA):
             guess.append(g)
         return guess
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ea(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ea(r1, r2)
-
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ea)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ea,
+                                         absences=['nmo', 'nocc'])
     spatial2spin = staticmethod(spatial2spin_ea)
     spin2spatial = staticmethod(spin2spatial_ea)
 
@@ -1009,8 +1003,8 @@ def eomsf_ccsd(eom, nroots=1, koopmans=False, guess=None,
     '''
     return eomee_ccsd(eom, nroots, koopmans, guess, eris, imds, diag)
 
-amplitudes_to_vector_ee = uccsd.amplitudes_to_vector
-vector_to_amplitudes_ee = uccsd.vector_to_amplitudes
+amplitudes_to_vector_ee = amplitudes_to_vector_eomee = uccsd.amplitudes_to_vector
+vector_to_amplitudes_ee = vector_to_amplitudes_eomee = uccsd.vector_to_amplitudes
 
 def amplitudes_to_vector_eomsf(t1, t2, out=None):
     t1ab, t1ba = t1
@@ -1076,29 +1070,10 @@ def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     t2bbab = t2bbab.reshape(noccb,noccb,nvira,nvirb)
     return (t1ab,t1ba), (t2baaa, t2aaba, t2abbb, t2bbab)
 
-def spatial2spin_eomee(rx, orbspin):
-    '''Convert spin-reserved EOMEE spatial-orbital R1/R2 to spin-orbital R1/R2'''
-    if len(rx) == 2:  # r1
-        r1ab, r1ba = rx
-        nocca, nvirb = r1ab.shape
-        noccb, nvira = r1ba.shape
-    else:
-        r2baaa,r2aaba,r2abbb,r2bbab = rx
-        noccb, nocca, nvira = r2baaa.shape[:3]
-        nvirb = r2aaba.shape[2]
-    raise NotImplementedError
+spatial2spin_eomee = addons.spatial2spin
+spin2spatial_eomee = addons.spin2spatial
 
-def spin2spatial_eomee(rx, orbspin):
-    '''Convert EOMEE spin-orbital R1/R2 to spin-reserved EOMEE spatial-orbital R1/R2'''
-    if rx.ndim == 2:
-        r1ab = lib.take_2d(rx, idxoa, idxvb)
-        r1ba = lib.take_2d(rx, idxob, idxva)
-        return r1ab, r1ba
-    else:
-        pass
-    raise NotImplementedError
-
-def spatial2spin_eomsf(rx, orbspin):
+def spatial2spin_eomsf(rx, orbspin=None):
     '''Convert spin-flip EOMEE spatial-orbital R1/R2 to spin-orbital R1/R2'''
     if len(rx) == 2:  # r1
         r1ab, r1ba = rx
@@ -1111,6 +1086,11 @@ def spatial2spin_eomsf(rx, orbspin):
 
     nocc = nocca + noccb
     nvir = nvira + nvirb
+    if orbspin is None:
+        assert nocca == noccb
+        orbspin = np.zeros(nocc+nvir, dtype=int)
+        orbspin[1::2] = 1
+
     idxoa = np.where(orbspin[:nocc] == 0)[0]
     idxob = np.where(orbspin[:nocc] == 1)[0]
     idxva = np.where(orbspin[nocc:] == 0)[0]
@@ -1197,7 +1177,7 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa, nmob = nocca+nvira, noccb+nvirb
-    r1, r2 = vector_to_amplitudes_ee(vector, (nmoa,nmob), (nocca,noccb))
+    r1, r2 = eom.vector_to_amplitudes(vector, (nmoa,nmob), (nocca,noccb))
     r1a, r1b = r1
     r2aa, r2ab, r2bb = r2
 
@@ -1418,7 +1398,7 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
     nmoa, nmob = nocca+nvira, noccb+nvirb
-    r1, r2 = vector_to_amplitudes_eomsf(vector, (nmoa,nmob), (nocca,noccb))
+    r1, r2 = eom.vector_to_amplitudes(vector, (nmoa,nmob), (nocca,noccb))
     r1ab, r1ba = r1
     r2baaa, r2aaba, r2abbb, r2bbab = r2
 
@@ -1902,14 +1882,9 @@ class EOMEESpinKeep(EOMEE):
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_ee(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_ee(r1, r2)
-
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_ee)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_ee,
+                                         absences=['nmo', 'nocc'])
     spatial2spin = staticmethod(spatial2spin_eomee)
     spin2spatial = staticmethod(spin2spatial_eomee)
 
@@ -1953,14 +1928,9 @@ class EOMEESpinFlip(EOMEE):
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
-    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
-        if nmo is None: nmo = self.nmo
-        if nocc is None: nocc = self.nocc
-        return vector_to_amplitudes_eomsf(vector, nmo, nocc)
-
-    def amplitudes_to_vector(self, r1, r2):
-        return amplitudes_to_vector_eomsf(r1, r2)
-
+    amplitudes_to_vector = staticmethod(amplitudes_to_vector_eomsf)
+    vector_to_amplitudes = module_method(vector_to_amplitudes_eomsf,
+                                         absences=['nmo', 'nocc'])
     spatial2spin = staticmethod(spatial2spin_eomsf)
     spin2spatial = staticmethod(spin2spatial_eomsf)
 
@@ -2659,229 +2629,3 @@ class _IMDS:
 
         self.made_ee_imds = True
         log.timer('EOM-UCCSD EE intermediates', *cput0)
-
-def rand_mf(mol, seed=1):
-    from pyscf import scf
-    from pyscf import gto
-    from pyscf import lo
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = 'sto-3g'
-    mol.verbose = 0
-    mol.spin = 0
-    mol.build()
-
-    np.random.seed(seed)
-
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    nmo = mol.nao_nr()
-    mf.mo_occ = np.zeros((2,nmo))
-    mf.mo_occ[0,:4] = 1
-    mf.mo_occ[1,:2] = 1
-    mf.mo_energy = np.arange(nmo) + np.random.random((2,nmo)) * .3
-    mf.mo_energy[mf.mo_occ == 0] += 2
-
-    mo = np.random.random((2,nmo,nmo))
-    s = mf.get_ovlp()
-    mf.mo_coeff = np.empty_like(mo)
-    mf.mo_coeff[0] = lo.orth.vec_lowdin(mo[0], s)
-    mf.mo_coeff[1] = lo.orth.vec_lowdin(mo[1], s)
-    return mf
-
-def rand_cc_t1_t2(mf, seed=1):
-    from pyscf import ao2mo
-    from pyscf.cc import uccsd
-    mycc = uccsd.UCCSD(mf)
-
-    nocca, noccb = mycc.nocc
-    nmoa, nmob = mycc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
-    def my_ao2mo(mo):
-        eris = ao2mo.kernel(mycc._scf._eri, mo, compact=False)
-        eris = ao2mo.restore(1, eris, mf.mol.nao_nr())
-
-        eris = eris + np.cos(eris)*1j
-        eris = eris + eris.transpose(1, 0, 3, 2)
-        eris = eris + eris.conj().transpose(2, 3, 0, 1)
-        return eris
-    eris = uccsd._make_eris_incore(mycc)#, ao2mofn=my_ao2mo)
-
-    np.random.seed(seed)
-    t1a = (np.random.random((nocca,nvira)) +
-           np.random.random((nocca,nvira))*1j - .5 - .5j)
-    t1b = (np.random.random((noccb,nvirb)) +
-           np.random.random((noccb,nvirb))*1j - .5 - .5j)
-    t2aa = (np.random.random((nocca,nocca,nvira,nvira)) +
-            np.random.random((nocca,nocca,nvira,nvira))*1j - .5 - .5j)
-    t2aa = t2aa - t2aa.transpose(1, 0, 2, 3)
-    t2aa = t2aa - t2aa.transpose(0, 1, 3, 2)
-
-    t2ab = (np.random.random((nocca,noccb,nvira,nvirb)) +
-            np.random.random((nocca,noccb,nvira,nvirb))*1j - .5 - .5j)
-
-    t2bb = (np.random.random((noccb,noccb,nvirb,nvirb)) +
-            np.random.random((noccb,noccb,nvirb,nvirb))*1j - .5 - .5j)
-    t2bb = t2bb - t2bb.transpose(1, 0, 2, 3)
-    t2bb = t2bb - t2bb.transpose(0, 1, 3, 2)
-
-    t1 = (t1a, t1b)
-    t2 = (t2aa, t2ab, t2bb)
-    return mycc, eris, t1, t2
-
-def enforce_symm_2p_spin(r1, r2, orbspin, excitation):
-    assert (excitation in ['ip', 'ea'])
-    if excitation == 'ip':
-        nocc, nvir = r2.shape[1:]
-    elif excitation == 'ea':
-        nocc, nvir = r2.shape[:2]
-    else:
-        raise NotImplementedError
-
-    idxoa = np.where(orbspin[:nocc] == 0)[0]
-    idxob = np.where(orbspin[:nocc] == 1)[0]
-    idxva = np.where(orbspin[nocc:] == 0)[0]
-    idxvb = np.where(orbspin[nocc:] == 1)[0]
-
-    idxoaa = idxoa[:,None] * nocc + idxoa
-    idxobb = idxob[:,None] * nocc + idxob
-    idxvaa = idxva[:,None] * nvir + idxva
-    idxvbb = idxvb[:,None] * nvir + idxvb
-
-    if excitation == 'ip':
-        r2 = r2 - r2.transpose(1, 0, 2)
-
-        r2 = r2.reshape(nocc**2, nvir)
-        r2[idxobb.ravel()[:, None], idxva.ravel()] = 0.0
-        r2[idxoaa.ravel()[:, None], idxvb.ravel()] = 0.0
-        r2 = r2.reshape(nocc, nocc, nvir)
-
-    if excitation == 'ea':
-        r2 = r2 - r2.transpose(0, 2, 1)
-
-        r2 = r2.reshape(nocc, nvir**2)
-        r2[idxoa.ravel(), idxvbb.ravel()[:, None]] = 0.0
-        r2[idxob.ravel(), idxvaa.ravel()[:, None]] = 0.0
-        r2 = r2.reshape(nocc, nvir, nvir)
-
-    return r1, r2
-
-def enforce_symm_2p_spin_ip(r1, r2, orbspin):
-    return enforce_symm_2p_spin(r1, r2, orbspin, 'ip')
-
-def enforce_symm_2p_spin_ea(r1, r2, orbspin):
-    return enforce_symm_2p_spin(r1, r2, orbspin, 'ea')
-
-if __name__ == '__main__':
-    from pyscf import gto
-    #from pyscf import scf
-    #from pyscf.cc import rccsd
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = 'sto-3g'
-    mol.verbose = 0
-    mol.spin = 0
-    mol.build()
-
-    mf = rand_mf(mol)
-    mycc, eris, t1, t2 = rand_cc_t1_t2(mf)
-    mycc.t1 = t1
-    mycc.t2 = t2
-
-    nocca, noccb = mycc.nocc
-    nmoa, nmob = mycc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
-    nocc = nocca + noccb
-    nvir = nvira + nvirb
-    nmo = nocc + nvir
-
-    def my_ao2mo(mo):
-        nao, nmo = mo.shape
-        orbspin = mo.orbspin
-
-#        eris = ao2mo.kernel(mygcc._scf._eri, mo_a + mo_b)
-#        sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
-#        eris[sym_forbid,:] = 0
-#        eris[:,sym_forbid] = 0
-#        eris = ao2mo.restore(1, eris, nao)
-#        return eris
-        eris =(np.random.random((nmo,nmo,nmo,nmo)) +
-               np.random.random((nmo,nmo,nmo,nmo)) * 1j)
-
-        eris = eris + np.cos(eris)*1j
-        eris = eris + eris.transpose(1, 0, 3, 2)
-        eris = eris + eris.conj().transpose(2, 3, 0, 1)
-        eris[orbspin[:,None] != orbspin] = 0
-        eris[:,:,orbspin[:,None] != orbspin] = 0
-        return eris
-
-    import pyscf.cc.addons
-    from pyscf.cc import gccsd
-    mygcc = pyscf.cc.addons.convert_to_gccsd(mycc)
-    mygcc._ucc = mycc
-    mygcc._ucc_eris = eris
-    eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
-    orbspin = eris.orbspin
-
-    ## EOM-IP
-    myeom = EOMIP(mycc)
-    imds = myeom.make_imds()
-
-    np.random.seed(1)
-    r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
-    r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
-    r2 = r2.reshape(nocc, nocc, nvir)
-    r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
-    r1, r2 = spin2spatial_ip(r1, r2, orbspin)
-
-    vector = myeom.amplitudes_to_vector(r1, r2)
-    r1x, r2x = myeom.vector_to_amplitudes(vector)
-    print(abs(r1[0]-r1x[0]).max() < 1e-13 and
-          abs(r1[1]-r1x[1]).max() < 1e-13 and
-          abs(r2[0]-r2x[0]).max() < 1e-13 and
-          abs(r2[1]-r2x[1]).max() < 1e-13 and
-          abs(r2[2]-r2x[2]).max() < 1e-13 and
-          abs(r2[3]-r2x[3]).max() < 1e-13)
-    Hvector = myeom.matvec(vector, imds=imds)
-    print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
-    print('diag', lib.finger(myeom.get_diag()) - (-9.6676217223549763+9.325219825942975j))
-
-    # EOM-EA
-    myeom = EOMEA(mycc)
-    imds = myeom.make_imds()
-
-    np.random.seed(1)
-    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
-    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
-    r2 = r2.reshape(nocc, nvir, nvir)
-    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
-    r1, r2 = spin2spatial_ea(r1, r2, orbspin)
-
-    vector = myeom.amplitudes_to_vector(r1, r2)
-    r1x, r2x = myeom.vector_to_amplitudes(vector)
-    print(abs(r1[0]-r1x[0]).max() < 1e-13 and
-          abs(r1[1]-r1x[1]).max() < 1e-13 and
-          abs(r2[0]-r2x[0]).max() < 1e-13 and
-          abs(r2[1]-r2x[1]).max() < 1e-13 and
-          abs(r2[2]-r2x[2]).max() < 1e-13 and
-          abs(r2[3]-r2x[3]).max() < 1e-13)
-    Hvector = myeom.matvec(vector, imds=imds)
-    print('ea', lib.finger(Hvector) - (6.5543877287461187-13.175055314063574j))
-    print('diag', lib.finger(myeom.get_diag()) - (-57.353207240857785+1.4052857730841204j))
-
-    mycc = uccsd.UCCSD(mol.UHF().run())
-    ecc, t1, t2 = mycc.kernel()
-    print(ecc - -0.04946750711013597)
-    e,v = mycc.ipccsd(nroots=6)
-    print(e[0] - 0.3092874511803249)
-    print(e[1] - 0.3092874511803249)
-    print(e[2] - 0.4011171373779585)
-    print(e[3] - 0.4011171373779585)
-    print(e[4] - 0.6107409208314764)
-    print(e[5] - 0.6107409208314764)

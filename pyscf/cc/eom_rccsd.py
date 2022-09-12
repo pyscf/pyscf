@@ -1327,7 +1327,7 @@ def eeccsd_matvec_triplet(eom, vector, imds=None):
         tmp1 += lib.einsum('mfae,me->af', ovvv, r1[p0:p1])
         Hr2aa+= lib.einsum('mb,maij->ijab', t1[p0:p1]*.5, tmpaa)
         Hr2ab-= lib.einsum('mb,mAiJ->iJbA', t1[p0:p1], tmpab)
-        ovvv = tmpaa = tmpab = tmpba = None
+        ovvv = tmpaa = tmpab = None
     tau2aa = tau2ab = None
 
     woVVo = np.asarray(imds.woVVo)
