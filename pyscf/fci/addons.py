@@ -618,6 +618,13 @@ def overlap(bra, ket, norb, nelec, s=None):
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
     return numpy.dot(bra.ravel().conj(), ket.ravel())
 
+class SpinPenaltyFCISolver ():
+    pass
+class SpinPenaltyMod ():
+    def __init__(self,**kwargs):
+        self.__dict__.update (kwargs)
+
+
 def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     r'''If FCI solver cannot stay on spin eigenfunction, this function can
     add a shift to the states which have wrong spin.
@@ -639,6 +646,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
             A modified FCI object based on fciobj.
     '''
     import types
+
     if 'ss_value' in kwargs:
         sys.stderr.write('fix_spin_: kwarg "ss_value" will be removed in future release. '
                          'It was replaced by "ss"\n')
@@ -646,40 +654,74 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    if (not isinstance(fciobj, types.ModuleType)
-        and 'contract_2e' in getattr(fciobj, '__dict__', {})):
+    if isinstance (fciobj, SpinPenaltyFCISolver):
+        # recursion avoidance
+        fciobj.ss_penalty = shift
+        fciobj.ss_value = ss
+        return fciobj
+    ismodule = isinstance (fciobj, types.ModuleType)
+
+    if (not ismodule and 'contract_2e' in getattr(fciobj, '__dict__', {})):
         del fciobj.contract_2e  # To avoid initialize twice
-    old_contract_2e = fciobj.contract_2e
-    def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
+
+    def contract_2e(self, eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
             sz = (nelec % 2) * .5
         else:
             sz = abs(nelec[0]-nelec[1]) * .5
-        if ss_value is None:
+        if self.ss_value is None:
             ss = sz*(sz+1)
         else:
-            ss = ss_value
+            ss = self.ss_value
 
         if ss < sz*(sz+1)+.1:
             # (S^2-ss)|Psi> to shift state other than the lowest state
-            ci1 = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            ci1 = self.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             ci1 -= ss * fcivec
         else:
             # (S^2-ss)^2|Psi> to shift states except the given spin.
             # It still relies on the quality of initial guess
-            tmp = fciobj.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
+            tmp = self.contract_ss(fcivec, norb, nelec).reshape(fcivec.shape)
             tmp -= ss * fcivec
             ci1 = -ss * tmp
-            ci1 += fciobj.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
+            ci1 += self.contract_ss(tmp, norb, nelec).reshape(fcivec.shape)
             tmp = None
-        ci1 *= shift
+        ci1 *= self.ss_penalty
 
-        ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
+        ci0 = self.base_contract_2e (eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
 
-    fciobj.davidson_only = True
-    fciobj.contract_2e = contract_2e
+    if ismodule:
+        base_contract_2e = fciobj.contract_2e
+        self = SpinPenaltyMod (ss_penalty=shift, ss_value=ss_value,
+                               contract_ss=fciobj.contract_ss,
+                               base_contract_2e=base_contract_2e)
+        from functools import partial
+        fciobj.davidson_only = True
+        fciobj.contract_2e = partial (contract_2e, self)
+        return fciobj
+    else:
+        fciobj_class = fciobj.__class__
+
+    class FCISolver (fciobj_class, SpinPenaltyFCISolver):
+
+        def __init__(self, fcibase):
+            self.base = copy.copy (fcibase)
+            self.__dict__.update (fcibase.__dict__)
+            self.ss_value = ss_value
+            self.ss_penalty = shift
+            keys = set (('ss_value', 'ss_penalty', 'base'))
+            self._keys = self._keys.union (keys)
+            self.davidson_only = self.base.davidson_only = True
+
+        def base_contract_2e (self, *args, **kwargs):
+            return self.base.__class__.contract_2e (self, *args, **kwargs)
+
+    FCISolver.contract_2e = contract_2e
+    new_fciobj = FCISolver (fciobj)
+    fciobj.__class__ = new_fciobj.__class__
+    fciobj.__dict__.update (new_fciobj.__dict__)
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):
     return fix_spin_(copy.copy(fciobj), shift, ss)
