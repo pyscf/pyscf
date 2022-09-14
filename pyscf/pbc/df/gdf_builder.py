@@ -72,6 +72,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
+        logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'j2c_eig_always = %s', self.j2c_eig_always)
         return self
@@ -266,7 +267,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
         if max_buflen > buflen:
-            log.warn('memory usage of outcore_auxe2 may be %.2f over max_memory',
+            log.warn('memory usage of outcore_auxe2 may be %.2f times over max_memory',
                      (max_buflen/buflen - 1))
 
         cpu0 = logger.process_clock(), logger.perf_counter()
@@ -592,18 +593,21 @@ def _guess_eta(cell, kpts=None, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
-    elif mesh is None:
-        a = cell.lattice_vectors()
-        eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
-        ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
-        mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
+        eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+        return eta, mesh, ke_cutoff
 
+    a = cell.lattice_vectors()
+    eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
+    ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
+    mesh_min = pbctools.cutoff_to_mesh(a, ke_min) + 1
+
+    if mesh is None:
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         nkpts = len(kpts)
         nao = cell.nao
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
         mesh = int(min((1e8/nao)**(1./3), mesh))
-        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
         ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -612,7 +616,11 @@ def _guess_eta(cell, kpts=None, mesh=None):
             mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
         mesh = _round_off_to_odd_mesh(mesh)
     else:
-        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
+        if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
+            logger.warn(cell, 'mesh %s is not enough to converge to the required '
+                        'integral precision %g.\nRecommended mesh is %s.',
+                        mesh, cell.precision, mesh_min)
+        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), np.asarray(mesh)-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
     eta = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return eta, mesh, ke_cutoff
