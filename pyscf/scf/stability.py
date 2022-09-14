@@ -186,6 +186,50 @@ def rohf_stability(mf, internal=True, external=False, verbose=None, return_statu
             mo_e = rohf_external(mf, verbose=verbose, tol=tol)
         return mo_i, mo_e
 
+def is_complex(mf):
+    if mf.mo_coeff.dtype == numpy.float64:
+        return False
+    else:
+        dm = mf.make_rdm1()
+        return abs(dm.imag).max() > 1e-6
+
+def ghf_stability(mf, verbose=None, return_status=False, tol=1e-4):
+    '''
+    Stability analysis for GHF/GKS method.
+    For real GHF/GKS, internal and real2complex stability analysis are performed.
+    For complex GHF/GKS, internal stability analysis is performed.
+
+    Args:
+        mf : GHF or GKS object
+
+    Kwargs:
+        return_status: bool
+            Whether to return `stable_i` and `stable_e`
+        tol: float
+            Convergence tolerance for Davidson solver
+
+    Returns:
+        If return_status is False (default), the return value includes
+        one set of orbitals, which is more close to the stable condition.
+
+        Else, another boolean variables (indicating current status:
+        stable or unstable) are returned.
+    '''
+    mo_i = None
+    if return_status:
+        stable_i = None
+        if is_complex(mf):
+            mo_i, stable_i = ghf_complex(mf, verbose=verbose, return_status=True, tol=tol)
+        else:
+            mo_i, stable_i = ghf_real(mf, verbose=verbose, return_status=True, tol=tol)
+        return mo_i, stable_i
+    else:
+        if is_complex(mf):
+            mo_i = ghf_complex(mf, verbose=verbose, tol=tol)
+        else:
+            mo_i = ghf_real(mf, verbose=verbose, tol=tol)
+        return mo_i
+
 def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -235,26 +279,7 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
 
     return hop_real2complex, hdiag
 
-def ghf_stability(mf, verbose=None, return_status=False, tol=1e-4):
-    '''
-    Stability analysis for GHF/GKS method.
-
-    Args:
-        mf : GHF or GKS object
-
-    Kwargs:
-        return_status: bool
-            Whether to return `stable`
-        tol: float
-            Convergence tolerance for Davidson solver
-
-    Returns:
-        If return_status is False (default), the return value includes
-        a new set of orbitals, which are more close to the stable condition.
-
-        Else, another one boolean variable (indicating current status:
-        stable or unstable) is returned.
-    '''
+def ghf_real(mf, verbose=None, return_status=False, tol=1e-4):
     log = logger.new_logger(mf, verbose)
     with_symmetry = True
     g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ)
@@ -273,11 +298,11 @@ def ghf_stability(mf, verbose=None, return_status=False, tol=1e-4):
         x0[numpy.argmin(hdiag)] = 1
     e, v = lib.davidson(hessian_x, x0, precond, tol, verbose=log)
     if e < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an internal instability')
+        log.note(f'{mf.__class__} wavefunction (real) has an internal instability')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
         stable = False
     else:
-        log.note(f'{mf.__class__} wavefunction is stable in the internal '
+        log.note(f'{mf.__class__} wavefunction (real) is stable in the internal '
                  'stability analysis')
         mo = mf.mo_coeff
 
@@ -288,9 +313,39 @@ def ghf_stability(mf, verbose=None, return_status=False, tol=1e-4):
         return dx/hdiagd
     e2, v2 = lib.davidson(hop_r2c, x0, precond, tol, verbose=log)
     if e2 < -1e-5:
-        log.note(f'{mf.__class__} wavefunction has an real->complex instability')
+        log.note(f'{mf.__class__} wavefunction (real) has a real->complex instability')
     else:
-        log.note(f'{mf.__class__} wavefunction is stable in the real->complex '
+        log.note(f'{mf.__class__} wavefunction (real) is stable in the real->complex '
+                 'stability analysis')
+
+    if return_status:
+        return mo, stable
+    else:
+        return mo
+
+def _gen_hop_ghf_complex_internal(mf, with_symmetry=True, verbose=None):
+    raise NotImplementedError
+
+def ghf_complex(mf, verbose=None, return_status=False, tol=1e-4):
+    log = logger.new_logger(mf, verbose)
+    with_symmetry = True
+    hop, hdiag = _gen_hop_ghf_complex_internal(mf)
+    stable = True
+    def precond(dx, e, x0):
+        hdiagd = hdiag - e
+        hdiagd[abs(hdiagd)<1e-8] = 1e-8
+        return dx/hdiagd
+    x0 = numpy.zeros_like(hdiag)
+    x0[hdiag>1e-5] = 1. / hdiag[hdiag>1e-5]
+    if not with_symmetry:  # allow to break point group symmetry
+        x0[numpy.argmin(hdiag)] = 1
+    e, v = lib.davidson(hop, x0, precond, tol, verbose=log)
+    if e < -1e-5:
+        log.note(f'{mf.__class__} wavefunction (complex) has an internal instability')
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        stable = False
+    else:
+        log.note(f'{mf.__class__} wavefunction (complex) is stable in the internal '
                  'stability analysis')
 
     if return_status:
