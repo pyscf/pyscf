@@ -1207,9 +1207,10 @@ class Cell(mole.Mole):
             else:
                 mf = scf.HF(self)
 
-        method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Cell object does not have method %s' % key)
+
+        method = getattr(mf, key)
 
         mf.run()
         return method

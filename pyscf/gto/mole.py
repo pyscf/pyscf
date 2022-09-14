@@ -2361,9 +2361,10 @@ class Mole(lib.StreamObject):
         else:
             mf = scf.HF(self)
 
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Mole object does not have method %s' % key)
+
         method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Mole object has no attribute %s' % key)
 
         # Initialize SCF object for post-SCF methods if applicable
         if self.nelectron != 0:
