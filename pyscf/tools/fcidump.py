@@ -212,7 +212,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
                    tol, float_format)
 
 
-def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
+def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
     parameters with keys:  H1, H2, ECORE, NORB, NELEC, MS, ORBSYM, ISYM
 
@@ -221,8 +221,10 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
             Molpro orbsym convention as documented in
             https://www.molpro.net/info/current/doc/manual/node36.html
             In return, orbsym is converted to pyscf symmetry convention
+        verbose (bool): Whether to print debugging information
     '''
-    print('Parsing %s' % filename)
+    if verbose:
+        print('Parsing %s' % filename)
     finp = open(filename, 'r')
 
     data = []
