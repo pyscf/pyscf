@@ -78,6 +78,9 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     else:
         assert (out.shape == eri_shape)
 
+    if mydf._cderi is None:
+        mydf.build()
+
     kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
     kptis_lst = kptij_lst[:,0]
     kptjs_lst = kptij_lst[:,1]

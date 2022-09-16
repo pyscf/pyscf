@@ -90,6 +90,18 @@ class MDF(df.GDF):
         self._rsh_df = {}  # Range separated Coulomb DF objects
         self._keys = set(self.__dict__.keys())
 
+    def build(self, j_only=None, with_j3c=True, kpts_band=None):
+        df.GDF.build(self, j_only, with_j3c, kpts_band)
+        cell = self.cell
+        if any(x % 2 == 0 for x in self.mesh[:cell.dimension]):
+            # Even number in mesh can produce planewaves without couterparts
+            # (see np.fft.fftfreq). MDF mesh is typically not enough to capture
+            # all basis. The singular planewaves can break the symmetry in
+            # potential (leads to non-real density) and thereby break the
+            # hermitian of J and K matrices
+            logger.warn(self, 'MDF with even number in mesh may have significant errors')
+        return self
+
     def _make_j3c(self, cell=None, auxcell=None, kptij_lst=None, cderi_file=None):
         if cell is None: cell = self.cell
         if auxcell is None: auxcell = self.auxcell
