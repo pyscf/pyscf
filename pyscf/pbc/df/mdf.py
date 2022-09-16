@@ -212,16 +212,10 @@ class _RSMDFBuilder(_RSGDFBuilder):
         # {|g> - |G><G|g>}. computing j2c for orthogonal gaussians here:
         #    <g|g> - 2 <g|G><G|g> + <g|G><G|G><G|g> = <g|g> - <g|G><G|g>
         auxcell = self.auxcell
-        precision = auxcell.precision**2
         omega = self.omega
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            rcut_sr = auxcell_c.rcut
-            rcut_sr = (-2*np.log(
-                .225*precision * omega**4 * rcut_sr**2))**.5 / omega
-            auxcell_c.rcut = rcut_sr
-            logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
                 sr_j2c = list(auxcell_c.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts))
 
