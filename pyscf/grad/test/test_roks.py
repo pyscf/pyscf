@@ -57,6 +57,30 @@ class KnownValues(unittest.TestCase):
                         H    0.   0.757    0.587''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-3*lib.param.BOHR, 4)
 
+    def test_finite_diff_df_roks_grad(self):
+        mf = scf.ROKS(mol).density_fit ()
+        mf.xc = 'b3lypg'
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        mf_grad = mf.nuc_grad_method ()
+        ### BEGIN DEBUGGING ###
+        # from pyscf.grad.rohf import make_rdm1e
+        # from functools import partial
+        # mf_grad.make_rdm1e = partial (make_rdm1e, mf_grad)
+        ### END DEBUGGING ###
+        g = mf_grad.kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.758   0.587
+                        H    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.756   0.587
+                        H    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-3*lib.param.BOHR, 4)
+
     def test_roks_lda_grid_response(self):
         mol = gto.Mole()
         mol.atom = [

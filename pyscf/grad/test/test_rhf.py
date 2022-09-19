@@ -141,8 +141,8 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).density_fit ()
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
-        g = grad.RHF(mf).kernel(atmlst=range(mol.natm))
-        self.assertAlmostEqual(lib.fp(g), 0.005513248517864607, 6)
+        g = mf.nuc_grad_method ().kernel(atmlst=range(mol.natm))
+        self.assertAlmostEqual(lib.fp(g), 0.005516675903099752, 6)
 
         mf_scanner = mf.as_scanner()
         pmol = mol.copy()
