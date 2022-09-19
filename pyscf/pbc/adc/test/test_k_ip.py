@@ -22,26 +22,32 @@ from pyscf.pbc import scf,adc,mp
 from pyscf import adc as mol_adc
 from pyscf.pbc.tools.pbc import super_cell
 
-cell = gto.M(
-    unit='B',
-    a=[[0.,          3.37013733,  3.37013733],
-         [3.37013733,  0.,          3.37013733],
-         [3.37013733,  3.37013733,  0.        ]],
-    mesh=[13]*3,
-    atom='''He 0 0 0
-              He 1.68506866 1.68506866 1.68506866''',
-    basis='gth-dzv',
-    pseudo='gth-pade',
-    verbose=0,
-)
+def setUpModule():
+    global cell, kpts, kadc
+    cell = gto.M(
+        unit='B',
+        a=[[0.,          3.37013733,  3.37013733],
+             [3.37013733,  0.,          3.37013733],
+             [3.37013733,  3.37013733,  0.        ]],
+        mesh=[13]*3,
+        atom='''He 0 0 0
+                  He 1.68506866 1.68506866 1.68506866''',
+        basis='gth-dzv',
+        pseudo='gth-pade',
+        verbose=0,
+    )
 
-nmp = [1,1,2]
+    nmp = [1,1,2]
 
-# periodic calculation at gamma point
-kpts = cell.make_kpts((nmp))
-kpts -= kpts[0]
-kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
-kadc  = adc.KRADC(kmf)
+    # periodic calculation at gamma point
+    kpts = cell.make_kpts((nmp))
+    kpts -= kpts[0]
+    kmf = scf.KRHF(cell, kpts,exxdiv=None).density_fit().run()
+    kadc  = adc.KRADC(kmf)
+
+def tearDownModule():
+    global cell, kadc
+    del cell, kadc
 
 class KnownValues(unittest.TestCase):
 

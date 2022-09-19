@@ -35,7 +35,7 @@ def setUpModule():
     mol.spin = 2
     mol.build()
     mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
+    mf.conv_tol = 1e-12
     mf.scf()
 
 def tearDownModule():

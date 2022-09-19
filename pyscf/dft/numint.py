@@ -429,8 +429,11 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             rho = numpy.zeros(ngrids)
         elif xctype in ('GGA', 'NLC'):
             rho = numpy.zeros((4,ngrids))
-        else:
-            rho = numpy.zeros((6,ngrids))
+        else:  # meta-GGA
+            if with_lapl:
+                rho = numpy.zeros((6, ngrids))
+            else:
+                rho = numpy.zeros((5, ngrids))
 
     neg = mo_occ < -OCCDROP
     if numpy.any(neg):

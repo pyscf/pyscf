@@ -257,7 +257,7 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 1.0942903795950072, 8)
+            self.assertAlmostEqual(lib.fp(v2), 1.0942903795950072, 7)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             v1 = load(tmpf.name, kpts[[0, 0]])
@@ -276,7 +276,7 @@ class KnownValues(unittest.TestCase):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 7)
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 2.701808485558761+0.09199879527908592j, 8)
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8939154964856898+0j, 8)
 
@@ -297,7 +297,7 @@ class KnownValues(unittest.TestCase):
             v_s2 = []
             for ki in range(nkpts):
                 v_s2.append(load(tmpf.name, kpts[[ki, ki]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 7)
             self.assertAlmostEqual(lib.fp(v_s2[2]), 0.8939154964856898+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1', j_only=True)

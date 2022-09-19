@@ -1,4 +1,4 @@
-PySCF 2.1.0 (2021-11-01)
+PySCF 2.1.0 (2022-09-01)
 ------------------------
 * Added
   - k-point symmetry for mean-field methods and MP2

@@ -868,6 +868,9 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             self.weights = weights
             self.wfnsym = wfnsym
             self.e_states = [None]
+            # MRH 09/09/2022: I turned the _base_class property into an
+            # attribute to prevent conflict with fix_spin_ dynamic class
+            self._base_class = fcibase_class
             keys = set (('weights','e_states','_base_class'))
             self._keys = self._keys.union (keys)
 
@@ -878,11 +881,6 @@ def state_average(casscf, weights=(0.5,0.5), wfnsym=None):
             log.info('State-average over %d states with weights %s',
                      len(self.weights), self.weights)
             return self
-
-        @property
-        def _base_class (self):
-            ''' for convenience; this is equal to fcibase_class '''
-            return self.__class__.__bases__[0]
 
         def kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if 'nroots' not in kwargs:

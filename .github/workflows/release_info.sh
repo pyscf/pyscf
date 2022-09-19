@@ -25,6 +25,6 @@ if [[ -n "$last_version" ]] && [[ -n "$cur_version" ]] && [[ "$cur_version" != "
 
   # Extract release info from CHANGELOG
   #release_info=$(sed -n "/$cur_version/,/$last_version/p" CHANGELOG | head -n -2)
-  sed -n "/$cur_version/,/$last_version/p" CHANGELOG | sed -n '3,$p' | head -n -2 > RELEASE.md
+  sed -n "/^PySCF $cur_version/,/^PySCF $last_version/p" CHANGELOG | tail -n +3 | sed -e '/^PySCF /,$d' | head -n -2 > RELEASE.md
   echo "::set-output name=version_tag::$version_tag"
 fi

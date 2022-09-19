@@ -137,6 +137,8 @@ setup(
     name=NAME,
     version=VERSION,
     description=DESCRIPTION,
+    long_description_content_type="text/markdown",
+    long_description=DESCRIPTION,
     url=URL,
     download_url=DOWNLOAD_URL,
     license=LICENSE,
