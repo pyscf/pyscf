@@ -236,9 +236,6 @@ def _get_vvvv(eris):
     else:
         return eris.vvvv
 
-def _cp(a):
-    return np.array(a, copy=False, order='C')
-
 def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None):
     """Calculates T1, T2 amplitudes corrected by second-order T3 contribution
     and intermediates used in IP/EA-CCSD(T)a
@@ -261,8 +258,8 @@ def get_t3p2_imds_slow(cc, t1, t2, eris=None, t3p2_ip_out=None, t3p2_ea_out=None
     mo_e_o = eris.mo_energy[:nocc]
     mo_e_v = eris.mo_energy[nocc:]
 
-    ovov = _cp(eris.ovov)
-    ovvv = _cp(eris.get_ovvv())
+    ovov = np.asarray(eris.ovov)
+    ovvv = np.asarray(eris.get_ovvv())
     eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)  # Physicist notation
     eris_vooo = eris.ovoo[:].conj().transpose(1,0,3,2)  # Chemist notation
 
