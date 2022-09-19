@@ -523,9 +523,10 @@ def _discard_edge_images(cell, Ls, rcut):
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
+    dimension = cell.dimension
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
-    atom_boundary_max = scaled_atom_coords[:cell.dimension].max(axis=0)
-    atom_boundary_min = scaled_atom_coords[:cell.dimension].min(axis=0)
+    atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
+    atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
     if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
         logger.warn(cell, 'Atoms found very far from the primitive cell. '
                     'Atom coordinates may be error.')
@@ -538,9 +539,16 @@ def _discard_edge_images(cell, Ls, rcut):
     # of the primitive cell converged
     boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
     boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
+    penalty_x = penalty_y = penalty_z = [0]
+    if dimension == 1:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+    elif dimension == 2:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    else:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+        penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
     shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
     Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
     # cell0 (Ls == 0) should always be included.
