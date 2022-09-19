@@ -635,10 +635,10 @@ void PBC_ft_bvk_drv(FPtrIntor intor, FPtr_eval_gz eval_gz, FPtrFill fill, FPtrSo
         double *buf = malloc(sizeof(double) * size_v);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
-                ish = ij / njsh;
-                jsh = ij % njsh;
-                cell0_shls[0] = ish + ish0;
-                cell0_shls[1] = jsh + jsh0;
+                ish = ij / njsh + ish0;
+                jsh = ij % njsh + jsh0;
+                cell0_shls[0] = ish;
+                cell0_shls[1] = jsh;
                 if (!cell0_ovlp_mask[ish*nbasp+jsh]) {
                         _fill0(fsort, out, cell0_shls, &envs_bvk);
                         continue;

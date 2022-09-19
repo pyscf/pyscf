@@ -72,8 +72,8 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     mesh = mydf.mesh
-    SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
+    SI = cell.get_SI(Gv)
     vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     ngrids = len(vpplocG)

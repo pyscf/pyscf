@@ -141,7 +141,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         self.kpts_band = None
         self._auxbasis = None
 
-        self.eta, self.mesh, ke_cutoff = _guess_eta(cell, kpts)
+        self.eta = None
+        self.mesh = None
 
         # exp_to_discard to remove diffused fitting functions. The diffused
         # fitting functions may cause linear dependency in DF metric. Removing
@@ -197,12 +198,14 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         log = logger.new_logger(self, verbose)
         log.info('\n')
         log.info('******** %s ********', self.__class__)
-        log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
             log.info('auxbasis = %s', self.auxcell.basis)
-        log.info('eta = %s', self.eta)
+        if self.eta is not None:
+            log.info('eta = %s', self.eta)
+        if self.mesh is not None:
+            log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         log.info('exp_to_discard = %s', self.exp_to_discard)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
@@ -279,7 +282,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             dfbuilder = _RSGDFBuilder(cell, auxcell, kpts_union)
         dfbuilder.mesh = self.mesh
         dfbuilder.linear_dep_threshold = self.linear_dep_threshold
-        dfbuilder.make_j3c(cderi_file, j_only=self._j_only)
+        j_only = self._j_only or len(kpts_union) == 1
+        dfbuilder.make_j3c(cderi_file, j_only=j_only)
 
     def has_kpts(self, kpts):
         if kpts is None:
@@ -374,8 +378,8 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
             if (omega < LONGRANGE_AFT_TURNOVER_THRESHOLD and
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
-                mydf.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), mydf.ke_cutoff)
+                ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             else:
                 mydf = self
             return _sub_df_jk_(mydf, dm, hermi, kpts, kpts_band,

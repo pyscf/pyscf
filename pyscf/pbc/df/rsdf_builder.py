@@ -99,6 +99,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         logger.info(self, '\n')
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
+        logger.info(self, 'ke_cutoff = %s', self.ke_cutoff)
         logger.info(self, 'omega = %s', self.omega)
         logger.info(self, 'exclude_d_aux = %s', self.exclude_d_aux)
         logger.info(self, 'exclude_dd_block = %s', self.exclude_dd_block)
@@ -135,9 +136,6 @@ class _RSGDFBuilder(_Int3cBuilder):
         elif self.ke_cutoff is None:
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff[:cell.dimension].min()
-
-        log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
-                 self.omega, self.ke_cutoff, self.mesh)
 
         self.dump_flags()
 
@@ -540,7 +538,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         sh_ranges = _guess_shell_ranges(cell, buflen, aosym, start=ish0, stop=ish1)
         max_buflen = max([x[2] for x in sh_ranges])
         if max_buflen > buflen:
-            log.warn('memory usage of outcore_auxe2 may be %.2f over max_memory',
+            log.warn('memory usage of outcore_auxe2 may be %.2f times over max_memory',
                      (max_buflen/buflen - 1))
 
         bufR = np.empty((nkpts_ij, comp, max_buflen, naux))
@@ -1153,22 +1151,26 @@ def _guess_omega(cell, kpts, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
-    elif mesh is None:
-        a = cell.lattice_vectors()
+        omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+        return omega, mesh, ke_cutoff
+
+    a = cell.lattice_vectors()
+    # requiring Coulomb potential < cell.precision at rcut is often not
+    # enough to truncate the interaction.
+    omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
+    ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    mesh_min = pbctools.cutoff_to_mesh(a, ke_min) + 1
+
+    if mesh is None:
         nao = cell.npgto_nr()
         nkpts = len(kpts)
-        # requiring Coulomb potential < cell.precision at rcut is often not
-        # enough to truncate the interaction.
-        omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
-        ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
-        mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
         # FIXME: balance the two workloads
         # int3c2e integrals ~ nao*(cell.rcut**3/cell.vol*nao)**2
         # ft_ao integrals ~ nkpts*nao*(cell.rcut**3/cell.vol*nao)*mesh**3
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
         mesh = int(min((1e8/nao)**(1./3), mesh))
-        mesh = np.max([mesh_min+1, [mesh] * 3], axis=0)
+        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
         ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
@@ -1177,8 +1179,11 @@ def _guess_omega(cell, kpts, mesh=None):
             mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
         mesh = _round_off_to_odd_mesh(mesh)
     else:
-        a = cell.lattice_vectors()
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
+            logger.warn(cell, 'mesh %s is not enough to converge to the required '
+                        'integral precision %g.\nRecommended mesh is %s.',
+                        mesh, cell.precision, mesh_min)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, np.asarray(mesh)-1)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
     omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return omega, mesh, ke_cutoff

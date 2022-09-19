@@ -185,13 +185,12 @@ class KnownValues(unittest.TestCase):
         kmf2.conv_tol = 1e-12
         kmf2.with_df._cderi = kmf.with_df._cderi
         ekpt2 = kmf2.scf()
-        mp = pyscf.pbc.mp.kmp2.KMP2(kmf2).run()        
+        mp = pyscf.pbc.mp.kmp2.KMP2(kmf2).run()
 
-        self.assertAlmostEqual(ekpt2, -1.2053666821021261, 9)
+        self.assertAlmostEqual(ekpt2, -1.2053666821021261, 7)
         self.assertAlmostEqual(mp.e_corr, -6.9881475423322723e-06, 9)
 
 
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
-
