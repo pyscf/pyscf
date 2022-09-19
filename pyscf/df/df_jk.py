@@ -151,12 +151,17 @@ def density_fit(mf, auxbasis=None, with_df=None, only_dfj=False):
 # 2. A hook to register DF specific methods, such as nuc_grad_method.
 class _DFHF(object):
     def nuc_grad_method(self):
-        from pyscf.df.grad import rhf, uhf, rks, uks
-        if isinstance(self, (scf.uhf.UHF, scf.rohf.ROHF)):
+        from pyscf.df.grad import rhf, rohf, uhf, rks, roks, uks
+        if isinstance(self, scf.uhf.UHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return uks.Gradients(self)
             else:
                 return uhf.Gradients(self)
+        elif isinstance(self, scf.rohf.ROHF):
+            if isinstance(self, scf.hf.KohnShamDFT):
+                return roks.Gradients(self)
+            else:
+                return rohf.Gradients(self)
         elif isinstance(self, scf.rhf.RHF):
             if isinstance(self, scf.hf.KohnShamDFT):
                 return rks.Gradients(self)

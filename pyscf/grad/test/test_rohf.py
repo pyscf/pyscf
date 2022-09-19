@@ -114,11 +114,6 @@ H             -0.43459905    0.65805058   -0.00861418''')
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         mf_grad = mf.nuc_grad_method ()
-        ### BEGIN DEBUGGING ###
-        # from pyscf.grad.rohf import make_rdm1e
-        # from functools import partial
-        # mf_grad.make_rdm1e = partial (make_rdm1e, mf_grad)
-        ### END DEBUGGING ###
         g = mf_grad.kernel()
         mf_scanner = mf.as_scanner()
 
@@ -146,11 +141,6 @@ H             -0.43459905    0.65805058   -0.00861418''')
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         mf_grad = mf.nuc_grad_method ()
-        ### BEGIN DEBUGGING ###
-        # from pyscf.grad.rohf import make_rdm1e
-        # from functools import partial
-        # mf_grad.make_rdm1e = partial (make_rdm1e, mf_grad)
-        ### END DEBUGGING ###
         g = mf_grad.kernel()
         mf_scanner = mf.as_scanner()
 
