@@ -920,16 +920,16 @@ void PBCfill_nr3c_drv(int (*intor)(), FPtrFill fill, int is_pbcintor,
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic)
         for (n = 0; n < nijk; n++) {
-                ksh = n / nij;
+                ksh = n / nij + ksh0;
                 ij = n % nij;
-                ish = ij / njsh;
-                jsh = ij % njsh;
+                ish = ij / njsh + ish0;
+                jsh = ij % njsh + jsh0;
                 if (!cell0_ovlp_mask[ish*nbasp+jsh]) {
                         continue;
                 }
-                cell0_shls[0] = ish + ish0;
-                cell0_shls[1] = jsh + jsh0;
-                cell0_shls[2] = ksh + ksh0;
+                cell0_shls[0] = ish;
+                cell0_shls[1] = jsh;
+                cell0_shls[2] = ksh;
                 (*fill)(intor, eriR, eriI, cache, cell0_shls, &envs_cint, &envs_bvk);
         }
         free(cache);

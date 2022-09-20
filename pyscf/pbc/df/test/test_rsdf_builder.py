@@ -157,14 +157,15 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 1.2630074629589676+0j, 6)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
-            for ki in range(nkpts):
-                for kj in range(nkpts):
-                    v1 = load(tmpf.name, kpts[[ki, kj]])
-                    if ki == kj:
-                        v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
-                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
-                    else:
-                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                for ki in range(nkpts):
+                    for kj in range(nkpts):
+                        v1 = cderi_array[ki, kj]
+                        if ki == kj:
+                            v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
+                            self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
+                        else:
+                            self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
 
     def test_make_j3c_j_only(self):
         dfbuilder = rsdf_builder._RSGDFBuilder(cell, auxcell, kpts).build()
@@ -327,14 +328,16 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8297008206216369+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                v_s1 = cderi_array[:]
             for ki in range(nkpts):
                 for kj in range(nkpts):
-                    v1 = load(tmpf.name, kpts[[ki, kj]])
+                    v1 = v_s1[ki,kj]
                     if ki == kj:
                         v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
-                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 8)
+                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
                     else:
-                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 8)
+                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
 
     def test_make_j3c_j_only_sr(self):
         dfbuilder = rsdf_builder._RSGDFBuilder(cell_sr, auxcell_sr, kpts).build()

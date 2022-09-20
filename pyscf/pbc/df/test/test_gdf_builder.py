@@ -25,54 +25,57 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools
 pyscf.pbc.DEBUG = False
 
-basis = '''
-He    S
-     38.00    0.05
-      5.00    0.25
-      0.20    0.60
-He    S
-      0.25    1.00
-He    P
-      1.27    1.00
-   '''
-auxbasis = '''
-He    S
-     50.60   0.06
-     12.60   0.21
-      3.80   0.37
-He    S
-      1.40   0.29
-He    S
-      0.30   0.06
-He    P
-      4.00   1.00
-      1.00   1.00
-He    D
-      4.00   1.00
-'''
-cell = pgto.M(
-    a = np.eye(3) * 3.5,
-    mesh = [11] * 3,
-    atom = '''He    3.    2.       3.
-              He    1.    1.       1.''',
-    basis = basis,
-    verbose = 0,
-    max_memory = 1000,
-)
+def setUpModule():
+    global cell, auxcell, cell_lr, auxcell_lr, cell_sr, auxcell_sr
+    global basis, auxbasis, kpts, nkpts
+    basis = '''
+    He    S
+         38.00    0.05
+          5.00    0.25
+          0.20    0.60
+    He    S
+          0.25    1.00
+    He    P
+          1.27    1.00
+       '''
+    auxbasis = '''
+    He    S
+         50.60   0.06
+         12.60   0.21
+          3.80   0.37
+    He    S
+          1.40   0.29
+    He    S
+          0.30   0.06
+    He    P
+          4.00   1.00
+          1.00   1.00
+    He    D
+          4.00   1.00
+    '''
+    cell = pgto.M(
+        a = np.eye(3) * 3.5,
+        mesh = [11] * 3,
+        atom = '''He    3.    2.       3.
+                  He    1.    1.       1.''',
+        basis = basis,
+        verbose = 0,
+        max_memory = 1000,
+    )
 
-kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-nkpts = len(kpts)
+    kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    nkpts = len(kpts)
 
-auxcell = df.make_auxcell(cell, auxbasis)
+    auxcell = df.make_auxcell(cell, auxbasis)
 
-cell_lr = cell.copy()
-cell_lr.omega = 1.2
-auxcell_lr = df.make_auxcell(cell_lr, auxbasis)
+    cell_lr = cell.copy()
+    cell_lr.omega = 1.2
+    auxcell_lr = df.make_auxcell(cell_lr, auxbasis)
 
-cell_sr = cell.copy()
-cell_sr.omega = -1.2
-auxcell_sr = df.make_auxcell(cell_sr, auxbasis)
+    cell_sr = cell.copy()
+    cell_sr.omega = -1.2
+    auxcell_sr = df.make_auxcell(cell_sr, auxbasis)
 
 def load(filename, kptij):
     with df._load3c(filename, 'j3c', kptij) as cderi:
@@ -130,9 +133,11 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 1.2630074629589676+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                v_s1 = cderi_array[:]
             for ki in range(nkpts):
                 for kj in range(nkpts):
-                    v1 = load(tmpf.name, kpts[[ki, kj]])
+                    v1 = v_s1[ki,kj]
                     if ki == kj:
                         v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
                         self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
@@ -281,14 +286,15 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8939154964856898+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
-            for ki in range(nkpts):
-                for kj in range(nkpts):
-                    v1 = load(tmpf.name, kpts[[ki, kj]])
-                    if ki == kj:
-                        v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
-                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
-                    else:
-                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                for ki in range(nkpts):
+                    for kj in range(nkpts):
+                        v1 = cderi_array[ki, kj]
+                        if ki == kj:
+                            v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
+                            self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
+                        else:
+                            self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
 
     def test_make_j3c_j_only_lr(self):
         dfbuilder = gdf_builder._CCGDFBuilder(cell_lr, auxcell_lr, kpts).build()
@@ -393,14 +399,16 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8297008206216369+0j, 7)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
+            with df.CDERIArray(tmpf.name) as cderi_array:
+                v_s1 = cderi_array[:]
             for ki in range(nkpts):
                 for kj in range(nkpts):
-                    v1 = load(tmpf.name, kpts[[ki, kj]])
+                    v1 = v_s1[ki,kj]
                     if ki == kj:
                         v2 = lib.unpack_tril(v_s2[ki*nkpts+kj]).reshape(v1.shape)
-                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 8)
+                        self.assertAlmostEqual(abs(v1 - v2).max(), 0, 9)
                     else:
-                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 8)
+                        self.assertAlmostEqual(abs(v1 - v_s2[ki*nkpts+kj]).max(), 0, 9)
 
     def test_make_j3c_j_only_sr(self):
         dfbuilder = gdf_builder._CCGDFBuilder(cell_sr, auxcell_sr, kpts).build()
