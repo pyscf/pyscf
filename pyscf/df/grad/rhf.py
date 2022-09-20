@@ -160,7 +160,6 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
         #                  Here, the sparse matrix int3c is transformed into the smaller MO
         #                  basis. The latter approach is obviously more performant.
         for i in range (nset):
-            assert (orbol[i].flags.f_contiguous), '{} {}'.format (orbol[i].shape, orbol[i].strides)
             buf = numpy.empty ((3, p1-p0, nocc[i], nao), dtype=orbol[i].dtype) 
             fdrv(ftrans, fmmm, # lib.einsum ('pmn,ni->pim', int3c, orbol[i])
                  buf.ctypes.data_as(ctypes.c_void_p),
