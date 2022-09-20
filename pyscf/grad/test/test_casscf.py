@@ -191,8 +191,7 @@ class KnownValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf_df, 4, 4)
         mc.conv_tol = 1e-10 # B/c high sensitivity in the numerical test
         mc.fcisolver.conv_tol = 1e-10
-        gs = dfsacasscf_grad.Gradients (mc.state_average_([0.5, 0.5]))
-        gs = gs.as_scanner ()
+        gs = mc.state_average_([0.5, 0.5]).nuc_grad_method().as_scanner()
         e_avg, de_avg = gs(mol)
         e_0, de_0 = gs(mol, state=0)
         e_1, de_1 = gs(mol, state=1)

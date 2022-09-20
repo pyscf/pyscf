@@ -352,20 +352,6 @@ class Gradients (sacasscf_grad.Gradients):
         self.auxbasis_response = True
         sacasscf_grad.Gradients.__init__(self, mc, state=state)
 
-    def make_fcasscf_sa (self, casscf_attr={}, fcisolver_attr={}):
-        ''' Make a fake SA-CASSCF object to get around weird inheritance conflicts '''
-        # Fix me for state_average_mix!
-        fcasscf = sacasscf_grad.Gradients.make_fcasscf_sa (self, casscf_attr=casscf_attr,
-                                                           fcisolver_attr=fcisolver_attr)
-        class fcasscf_monkeypatch (fcasscf.__class__):
-            def __init__(self, my_fcas):
-                self.__dict__.update (fcasscf.__dict__)
-            def _base_class (self, my_scf, my_ncas, my_nelecas, **kwargs):
-                return fcasscf.__class__.__bases__[0] ()
-        return fcasscf_monkeypatch (fcasscf)
-        # Matt: do NOT let THIS ^^ godawful bullshit remain in your code by the time you make a pull request!!!
-        # Fix the problem in pyscf.mcscf.newton_casscf or pyscf.mcscf.df instead!
-
     def kernel (self, **kwargs):
         mf_grad = kwargs['mf_grad'] if 'mf_grad' in kwargs else None
         if mf_grad is None: kwargs['mf_grad'] = dfrhf_grad.Gradients (self.base._scf)
