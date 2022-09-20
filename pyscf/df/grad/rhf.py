@@ -169,7 +169,6 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
                  (ctypes.c_int*4)(0, nocc[i], 0, nao),
                  null, ctypes.c_int(0))
             for j in range (nset): # lib.einsum ('pim,mj->pij', buf, orbor[j])
-                assert (orbor[j].flags.f_contiguous), '{} {}'.format (orbor[j].shape, orbor[j].strides)
                 int3c_ij = lib.dot (buf.reshape (-1, nao), orbor[j])
                 int3c_ij = int3c_ij.reshape (3, p1-p0, nocc[i], nocc[j])
                 rhok_oo_ij = rhok_oo[(i*nset)+j][p0:p1]
