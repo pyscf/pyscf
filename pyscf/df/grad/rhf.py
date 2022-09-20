@@ -214,7 +214,6 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0, ishf=True):
     auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
-    ao_loc = mol.ao_loc
     nbas = mol.nbas
 
     get_int3c_s2 = _int3c_wrapper(mol, auxmol, 'int3c2e', 's2ij')
