@@ -49,10 +49,8 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     auxmol = with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(with_df.mol, with_df.auxbasis)
-    ao_loc = mol.ao_loc
-    nbas, nao = mol.nbas, mol.nao
+    nbas, nao, naux = mol.nbas, mol.nao, auxmol.nao
     aux_loc = auxmol.ao_loc
-    nauxbas, naux = auxmol.nbas, auxmol.nao
 
     # Density matrix preprocessing
     dms = numpy.asarray(dm)
@@ -72,7 +70,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     nocc = [o.shape[-1] for o in orbor]
 
     # Coulomb: (P|Q) D_Q = (P|uv) D_uv for D_Q ("rhoj")
-    # Exchange: (P|Q) D_Qui = (P|uv) C_vi n_i for D_Qui ("rhok") 
+    # Exchange: (P|Q) D_Qui = (P|uv) C_vi n_i for D_Qui ("rhok")
     rhoj, get_rhok = _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor)
 
     # (d/dX i,j|P)
@@ -86,7 +84,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s1 # MO output index slower than AO output index; input AOs are asymmetric
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv # comp and aux indices are slower
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s1 # input is not tril_packed
-    null = lib.c_null_ptr() 
+    null = lib.c_null_ptr()
     t2 = t1
     for shl0, shl1, nL in ao_ranges:
         int3c = get_int3c_ip1((0, nbas, 0, nbas, shl0, shl1)).transpose (0,3,2,1)  # (P|mn'), row-major order
@@ -98,7 +96,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
             vj[i,1] += numpy.dot (rhoj[i,p0:p1], int3c[1].reshape (p1-p0, -1)).reshape (nao, nao).T
             vj[i,2] += numpy.dot (rhoj[i,p0:p1], int3c[2].reshape (p1-p0, -1)).reshape (nao, nao).T
             t2 = logger.timer_debug1 (mf_grad, "df grad einsum rho_P (P|mn') rho_P", *t2)
-            tmp = numpy.empty ((3,p1-p0,nocc[i],nao), dtype=orbol[0].dtype) 
+            tmp = numpy.empty ((3,p1-p0,nocc[i],nao), dtype=orbol[0].dtype)
             fdrv(ftrans, fmmm, # lib.einsum ('xpmn,mi->xpin', int3c, orbol[i])
                  tmp.ctypes.data_as(ctypes.c_void_p),
                  int3c.ctypes.data_as(ctypes.c_void_p),
@@ -146,7 +144,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     fmmm = _ao2mo.libao2mo.AO2MOmmm_bra_nr_s2 # MO output index slower than AO output index; input AOs are symmetric
     fdrv = _ao2mo.libao2mo.AO2MOnr_e2_drv # comp and aux indices are slower
     ftrans = _ao2mo.libao2mo.AO2MOtranse2_nr_s2 # input is tril_packed
-    null = lib.c_null_ptr() 
+    null = lib.c_null_ptr()
     for shl0, shl1, nL in ao_ranges:
         int3c = get_int3c_ip2((0, nbas, 0, nbas, shl0, shl1))  # (i,j|P)
         t2 = logger.timer_debug1 (mf_grad, "df grad intor (P'|mn)", *t2)
@@ -160,7 +158,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
         #                  Here, the sparse matrix int3c is transformed into the smaller MO
         #                  basis. The latter approach is obviously more performant.
         for i in range (nset):
-            buf = numpy.empty ((3, p1-p0, nocc[i], nao), dtype=orbol[i].dtype) 
+            buf = numpy.empty ((3, p1-p0, nocc[i], nao), dtype=orbol[i].dtype)
             fdrv(ftrans, fmmm, # lib.einsum ('pmn,ni->pim', int3c, orbol[i])
                  buf.ctypes.data_as(ctypes.c_void_p),
                  int3c.ctypes.data_as(ctypes.c_void_p),
@@ -299,7 +297,7 @@ def _int3c_wrapper(mol, auxmol, intor, aosym):
     return get_int3c
 
 def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
-    '''Decompose dms as U.Vh, where 
+    '''Decompose dms as U.Vh, where
     U = orbol = eigenvectors
     V = orbor = U * eigenvalues
 
@@ -331,7 +329,7 @@ def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
     elif ishf:
         mo_coeff = mf_grad.base.mo_coeff
         mo_occ = mf_grad.base.mo_occ
-        if isinstance (mf_grad.base, scf.rohf.ROHF): 
+        if isinstance (mf_grad.base, scf.rohf.ROHF):
             mo_coeff = numpy.vstack((mo_coeff,mo_coeff))
             mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
             mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)

@@ -35,7 +35,8 @@ from functools import reduce
 from scipy import linalg
 from pyscf.df.grad.casdm2_util import solve_df_rdm2, grad_elec_dferi, grad_elec_auxresponse_dferi
 
-def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None, auxbasis_response=True):
+def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None,
+                       auxbasis_response=True):
     ''' Modification of pyscf.grad.casscf.kernel to compute instead the orbital
     Lagrange term nuclear gradient (sum_pq Lorb_pq d2_Ecas/d_lambda d_kpq)
     This involves removing nuclear-nuclear terms and making the substitution
@@ -60,9 +61,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     nocc = ncore + ncas
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
-    nao_pair = nao * (nao+1) // 2
 
-    mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
 
@@ -136,7 +135,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     vhf1c, vhf1a, vhf1cL, vhf1aL = list (vj - vk * 0.5)
     if auxbasis_response:
         de_aux = vj.aux - 0.5 * vk.aux
-                #      D.T     +    T.D
+        #              D.T     +    T.D
         de_aux = ((de_aux[0,2] + de_aux[2,0]) # core-core
                 + (de_aux[0,3] + de_aux[2,1]) # core-active
                 + (de_aux[1,2] + de_aux[3,0])) # active-core
@@ -155,11 +154,14 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     dfcasdm2  = solve_df_rdm2 (mc, mo_cas=(mo_cas, moL_cas), casdm2=casdm2)
     de_eri += grad_elec_dferi (mc, mo_cas=mo_cas, dfcasdm2=dfcasdm2, atmlst=atmlst, max_memory=mc.max_memory)[0]
     if auxbasis_response:
-        de_aux += grad_elec_auxresponse_dferi (mc, mo_cas=mo_cas, dfcasdm2=dfcasdm2, atmlst=atmlst, max_memory=mc.max_memory)[0]
-    dfcasdm2  = solve_df_rdm2 (mc, mo_cas=mo_cas, casdm2=casdm2) 
-    de_eri += grad_elec_dferi (mc, mo_cas=(mo_cas, moL_cas), dfcasdm2=dfcasdm2, atmlst=atmlst, max_memory=mc.max_memory)[0]
+        de_aux += grad_elec_auxresponse_dferi (mc, mo_cas=mo_cas, dfcasdm2=dfcasdm2, atmlst=atmlst,
+                                               max_memory=mc.max_memory)[0]
+    dfcasdm2  = solve_df_rdm2 (mc, mo_cas=mo_cas, casdm2=casdm2)
+    de_eri += grad_elec_dferi (mc, mo_cas=(mo_cas, moL_cas), dfcasdm2=dfcasdm2, atmlst=atmlst,
+                               max_memory=mc.max_memory)[0]
     if auxbasis_response:
-        de_aux += grad_elec_auxresponse_dferi (mc, mo_cas=(mo_cas, moL_cas), dfcasdm2=dfcasdm2, atmlst=atmlst, max_memory=mc.max_memory)[0]
+        de_aux += grad_elec_auxresponse_dferi (mc, mo_cas=(mo_cas, moL_cas), dfcasdm2=dfcasdm2, atmlst=atmlst,
+                                               max_memory=mc.max_memory)[0]
     dfcasdm2 = casdm2 = None
 
     for k, ia in enumerate(atmlst):
@@ -189,7 +191,8 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
 
     return de
 
-def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None, auxbasis_response=True):
+def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, eris=None, verbose=None,
+                     auxbasis_response=True):
     ''' Modification of pyscf.grad.casscf.kernel to compute instead the CI
     Lagrange term nuclear gradient (sum_IJ Lci_IJ d2_Ecas/d_lambda d_PIJ)
     This involves removing all core-core and nuclear-nuclear terms and making the substitution
@@ -209,8 +212,6 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     nocc = ncore + ncas
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
-    nao_pair = nao * (nao+1) // 2
-    nroots = len (ci)
 
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
@@ -341,7 +342,7 @@ def as_scanner(mcscf_grad, state=None):
                 kwargs['state'] = self.state
             de = self.kernel(**kwargs)
             return e_tot, de
-            
+
     return CASSCF_GradScanner(mcscf_grad)
 
 
@@ -354,7 +355,8 @@ class Gradients (sacasscf_grad.Gradients):
     def make_fcasscf_sa (self, casscf_attr={}, fcisolver_attr={}):
         ''' Make a fake SA-CASSCF object to get around weird inheritance conflicts '''
         # Fix me for state_average_mix!
-        fcasscf = sacasscf_grad.Gradients.make_fcasscf_sa (self, casscf_attr=casscf_attr, fcisolver_attr=fcisolver_attr)
+        fcasscf = sacasscf_grad.Gradients.make_fcasscf_sa (self, casscf_attr=casscf_attr,
+                                                           fcisolver_attr=fcisolver_attr)
         class fcasscf_monkeypatch (fcasscf.__class__):
             def __init__(self, my_fcas):
                 self.__dict__.update (fcasscf.__dict__)
@@ -377,4 +379,3 @@ class Gradients (sacasscf_grad.Gradients):
     def get_LdotJnuc (self, Lvec, **kwargs):
         with lib.temporary_env (sacasscf_grad, Lci_dot_dgci_dx=Lci_dot_dgci_dx, Lorb_dot_dgorb_dx=Lorb_dot_dgorb_dx):
             return sacasscf_grad.Gradients.get_LdotJnuc (self, Lvec, **kwargs)
-
