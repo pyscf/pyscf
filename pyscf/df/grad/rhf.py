@@ -66,7 +66,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     dm_tril[:,idx] *= .5
 
     # For k
-    orbol, orbor = _decompose_rdm1 (mf_grad, mol, dm, ishf=ishf)
+    orbol, orbor = _decompose_rdm1 (mf_grad, mol, dm)
     nocc = [o.shape[-1] for o in orbor]
 
     # Coulomb: (P|Q) D_Q = (P|uv) D_uv for D_Q ("rhoj")
@@ -189,12 +189,10 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     auxslices = auxmol.aoslice_by_atom()
     vjaux = numpy.array ([-vjaux[:,:,:,p0:p1].sum(axis=3) for p0, p1 in auxslices[:,2:]])
     vkaux = numpy.array ([-vkaux[:,:,:,p0:p1].sum(axis=3) for p0, p1 in auxslices[:,2:]])
-    if ishf:
-        vjaux = vjaux.sum ((1,2))
-        vkaux = numpy.trace (vkaux, axis1=1, axis2=2)
-    else:
-        vjaux = numpy.ascontiguousarray (vjaux.transpose (1,2,0,3))
-        vkaux = numpy.ascontiguousarray (vkaux.transpose (1,2,0,3))
+
+    vjaux = numpy.ascontiguousarray (vjaux.transpose (1,2,0,3))
+    vkaux = numpy.ascontiguousarray (vkaux.transpose (1,2,0,3))
+
     vj = lib.tag_array(-vj.reshape(out_shape), aux=numpy.array(vjaux))
     vk = lib.tag_array(-vk.reshape(out_shape), aux=numpy.array(vkaux))
     logger.timer (mf_grad, 'df grad vj and vk', *t0)
@@ -271,10 +269,7 @@ def get_j(mf_grad, mol=None, dm=None, hermi=0, ishf=True):
 
         auxslices = auxmol.aoslice_by_atom()
         vjaux = numpy.array ([-vjaux[:,:,:,p0:p1].sum(axis=3) for p0, p1 in auxslices[:,2:]])
-        if ishf:
-            vjaux = vjaux.sum ((1,2))
-        else:
-            vjaux = numpy.ascontiguousarray (vjaux.transpose (1,2,0,3))
+        vjaux = numpy.ascontiguousarray (vjaux.transpose (1,2,0,3))
         vj = lib.tag_array(-vj.reshape(out_shape), aux=numpy.array(vjaux))
     else:
         vj = -vj.reshape(out_shape)
@@ -296,7 +291,7 @@ def _int3c_wrapper(mol, auxmol, intor, aosym):
                        aosym=aosym, cintopt=opt)
     return get_int3c
 
-def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
+def _decompose_rdm1 (mf_grad, mol, dm):
     '''Decompose dms as U.Vh, where
     U = orbol = eigenvectors
     V = orbor = U * eigenvalues
@@ -307,17 +302,12 @@ def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
         dm : ndarray or sequence of ndarrays of shape (nao,nao)
             Density matrices
 
-    Kwargs:
-        ishf : Logical
-            Unused
-
     Returns:
         orbol : list of ndarrays of shape (nao,*)
             Contains non-null eigenvectors of density matrix
         orbor : list of ndarrays of shape (nao,*)
             Contains orbol * eigenvalues (occupancies)
     '''
-    # TODO: get rid of ishf and tag dm in the caller instead
     nao = mol.nao
     dms = numpy.asarray(dm).reshape (-1,nao,nao)
     nset = dms.shape[0]
@@ -455,7 +445,7 @@ class Gradients(rhf_grad.Gradients):
         vj, vk = self.get_jk(mol, dm)
         vhf = vj - vk*.5
         if self.auxbasis_response:
-            e1_aux = vj.aux - vk.aux*.5
+            e1_aux = (vj.aux - vk.aux*.5).sum ((0,1))
             logger.debug1(self, 'sum(auxbasis response) %s', e1_aux.sum(axis=0))
             vhf = lib.tag_array(vhf, aux=e1_aux)
         return vhf
