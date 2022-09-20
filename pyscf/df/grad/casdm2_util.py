@@ -164,8 +164,7 @@ def solve_df_eri (mc_or_mc_grad, mo_cas=None, compact=True):
     auxmol = mc.with_df.auxmol
     if auxmol is None:
         auxmol = df.addons.make_auxmol(mc.with_df.mol, mc.with_df.auxbasis)
-    nao, naux = mol.nao, auxmol.nao
-    ncore, ncas = mc.ncore, mc.ncas
+    naux, ncore, ncas = auxmol.nao, mc.ncore, mc.ncas
     nocc = ncore + ncas
     if mo_cas is None: mo_cas = mc.mo_coeff[:,ncore:nocc]
     if isinstance (mo_cas, np.ndarray) and mo_cas.ndim == 2:
@@ -528,7 +527,7 @@ if __name__ == '__main__':
     e2_test = energy_elec_dferi (mc, mo_cas=mo_cas_sl, casdm2=casdm2_sl)[0] * 2
     print ("Testing slice c.c. DFERI: e2_test - e2_ref = {:13.6e} - {:13.6e} = {:13.6e}".format (
            e2_test, e2_ref, e2_err))
-    
+
     # 2-RDM slice electron interchange
     casdm2_sl = casdm2[0:4,1:6,0:2,1:3]
     eri_cas_sl = eri_cas[0:4,1:6,0:2,1:3]

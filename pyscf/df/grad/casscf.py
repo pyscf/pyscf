@@ -55,13 +55,11 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     time0 = logger.process_clock(), logger.perf_counter()
     log = logger.new_logger(mc_grad, verbose)
     mol = mc_grad.mol
-    auxmol = with_df.auxmol
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
-    nao_pair = nao * (nao+1) // 2
 
     # Necessary kludge because gfock isn't zero in occ-virt space in SA-CASSCf
     # Among many other potential applications!
@@ -104,7 +102,7 @@ def grad_elec(mc_grad, mo_coeff=None, ci=None, atmlst=None, verbose=None):
     if atmlst is None:
         atmlst = range(mol.natm)
     aoslices = mol.aoslice_by_atom()
-    de = grad_elec_dferi (mc_grad, mo_cas=mo_cas, dfcasdm2=dfcasdm2, atmlst=atmlst, 
+    de = grad_elec_dferi (mc_grad, mo_cas=mo_cas, dfcasdm2=dfcasdm2, atmlst=atmlst,
         max_memory=mc_grad.max_memory)[0]
     if mc_grad.auxbasis_response:
         de_aux = vj.aux - vk.aux * .5
