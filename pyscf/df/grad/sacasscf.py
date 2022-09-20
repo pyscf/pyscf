@@ -131,7 +131,7 @@ def Lorb_dot_dgorb_dx (Lorb, mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=No
     de = np.zeros((len(atmlst),3))
 
     #vhf1c, vhf1a, vhf1cL, vhf1aL = mf_grad.get_veff(mol, (dm_core, dm_cas, dmL_core, dmL_cas))
-    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas, dmL_core, dmL_cas), ishf=False)
+    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas, dmL_core, dmL_cas))
     vhf1c, vhf1a, vhf1cL, vhf1aL = list (vj - vk * 0.5)
     if auxbasis_response:
         de_aux = vj.aux - 0.5 * vk.aux
@@ -251,7 +251,7 @@ def Lci_dot_dgci_dx (Lci, weights, mc, mo_coeff=None, ci=None, atmlst=None, mf_g
     de = np.zeros((len(atmlst),3))
 
     #vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
-    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas), ishf=False)
+    vj, vk = mf_grad.get_jk (mol, (dm_core, dm_cas))
     if auxbasis_response:
         de_aux = vj.aux - 0.5 * vk.aux
         de_aux = de_aux[0,1] + de_aux[1,0]

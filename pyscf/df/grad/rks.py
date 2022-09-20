@@ -72,7 +72,7 @@ def get_veff(ks_grad, mol=None, dm=None):
         vj, vk = ks_grad.get_jk(mol, dm)
         if ks_grad.auxbasis_response:
             vk_aux = vk.aux * hyb
-        vk *= hyb
+        vk[:] *= hyb # Don't erase the .aux tags!
         if abs(omega) > 1e-10:  # For range separated Coulomb operator
             raise NotImplementedError
             vk_lr = ks_grad.get_k(mol, dm, omega=omega)

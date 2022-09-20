@@ -186,7 +186,7 @@ class Gradients(casci_grad.Gradients):
         if mol is None: mol = self.mol
         if dm is None: dm = self.base.make_rdm1()
         cpu0 = (logger.process_clock(), logger.perf_counter())
-        vj, vk = dfrhf_grad.get_jk(self, mol, dm, ishf=False)
+        vj, vk = dfrhf_grad.get_jk(self, mol, dm)
         logger.timer(self, 'vj and vk', *cpu0)
         return vj, vk
 

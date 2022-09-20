@@ -38,10 +38,10 @@ from functools import reduce
 from itertools import product
 from pyscf.ao2mo import _ao2mo
 
-def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=True):
+def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True):
     assert (with_j or with_k)
     if not with_k:
-        return get_j (mf_grad, mol=mol, dm=dm, hermi=hermi, ishf=ishf), None
+        return get_j (mf_grad, mol=mol, dm=dm, hermi=hermi), None
     t0 = (logger.process_clock (), logger.perf_counter ())
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
@@ -199,7 +199,7 @@ def get_jk(mf_grad, mol=None, dm=None, hermi=0, with_j=True, with_k=True, ishf=T
     if with_j: return vj, vk
     else: return None, vk
 
-def get_j(mf_grad, mol=None, dm=None, hermi=0, ishf=True):
+def get_j(mf_grad, mol=None, dm=None, hermi=0):
     if mol is None: mol = mf_grad.mol
     if dm is None: dm = mf_grad.base.make_rdm1()
     t0 = (logger.process_clock (), logger.perf_counter ())
@@ -431,15 +431,11 @@ class Gradients(rhf_grad.Gradients):
 
     get_jk = get_jk
 
-    # Setting ishf=False as the default in get_j and get_k is literally
-    # just a convenience thing for MRH on 09/01/2021. A different philosophy
-    # is probably needed here.
+    def get_j(self, mol=None, dm=None, hermi=0):
+        return self.get_jk(mol, dm, with_k=False)[0]
 
-    def get_j(self, mol=None, dm=None, hermi=0, ishf=False):
-        return self.get_jk(mol, dm, with_k=False, ishf=False)[0]
-
-    def get_k(self, mol=None, dm=None, hermi=0, ishf=False):
-        return self.get_jk(mol, dm, with_j=False, ishf=False)[1]
+    def get_k(self, mol=None, dm=None, hermi=0):
+        return self.get_jk(mol, dm, with_j=False)[1]
 
     def get_veff(self, mol=None, dm=None):
         vj, vk = self.get_jk(mol, dm)
