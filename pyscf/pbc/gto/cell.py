@@ -909,7 +909,7 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
         kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
     return kpts
 
-def get_uniform_grids(cell, mesh=None, **kwargs):
+def get_uniform_grids(cell, mesh=None, wrap_around=True):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -921,14 +921,18 @@ def get_uniform_grids(cell, mesh=None, **kwargs):
 
     '''
     if mesh is None: mesh = cell.mesh
-    if 'gs' in kwargs:
-        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
-                      'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in kwargs['gs']]
-    mesh = np.asarray(mesh, dtype=np.double)
-    qv = lib.cartesian_prod([np.arange(x) for x in mesh])
-    a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
-    coords = np.dot(qv, a_frac)
+
+    if wrap_around:
+        # wrap the coordinates around the origin. If coordinates are generated
+        # inside the primitive cell without wrap-around, an extra layer would be
+        # needed in function get_lattice_Ls for 2D calculations.
+        qv = lib.cartesian_prod([np.fft.fftfreq(x) for x in mesh])
+        coords = np.dot(qv, cell.lattice_vectors())
+    else:
+        mesh = np.asarray(mesh, dtype=np.double)
+        qv = lib.cartesian_prod([np.arange(x) for x in mesh])
+        a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
+        coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
 

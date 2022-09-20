@@ -174,28 +174,19 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             coords, vol = atom_grids_tab[cell.atom_symbol(ia)]
             coords = coords + atm_coords[iL,ia]
             # search for grids in unit cell
-            c = b.dot(coords.T).round(8)
+            c = b.dot(coords.T)
 
             mask = np.ones(c.shape[1], dtype=bool)
             if dimension >= 1:
-                mask &= (c[0]>=0) & (c[0]<=1)
+                mask &= (c[0]>=-.5) & (c[0]<.5)
             if dimension >= 2:
-                mask &= (c[1]>=0) & (c[1]<=1)
+                mask &= (c[1]>=-.5) & (c[1]<.5)
             if dimension == 3:
-                mask &= (c[2]>=0) & (c[2]<=1)
+                mask &= (c[2]>=-.5) & (c[2]<.5)
 
             vol = vol[mask]
             if vol.size > 8:
                 c = c[:,mask]
-                if dimension >= 1:
-                    vol[c[0]==0] *= .5
-                    vol[c[0]==1] *= .5
-                if dimension >= 2:
-                    vol[c[1]==0] *= .5
-                    vol[c[1]==1] *= .5
-                if dimension == 3:
-                    vol[c[2]==0] *= .5
-                    vol[c[2]==1] *= .5
                 coords = coords[mask]
                 coords_all.append(coords)
                 weights_all.append(vol)
