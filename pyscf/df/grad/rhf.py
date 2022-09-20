@@ -309,9 +309,7 @@ def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
 
     Kwargs:
         ishf : Logical
-            If True and dm lacks tags mo_coeff (eigenvectors)
-            or mo_occ (eigenvalues), these are taken from attributes
-            of mf_grad.base instead
+            Unused
 
     Returns:
         orbol : list of ndarrays of shape (nao,*)
@@ -326,15 +324,6 @@ def _decompose_rdm1 (mf_grad, mol, dm, ishf=True):
     if hasattr (dm, 'mo_coeff') and hasattr (dm, 'mo_occ'):
         mo_coeff = dm.mo_coeff
         mo_occ = dm.mo_occ
-    elif ishf:
-        mo_coeff = mf_grad.base.mo_coeff
-        mo_occ = mf_grad.base.mo_occ
-        if isinstance (mf_grad.base, scf.rohf.ROHF):
-            mo_coeff = numpy.vstack((mo_coeff,mo_coeff))
-            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
-            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
-            assert(mo_occa.sum() + mo_occb.sum() == mo_occ.sum())
-            mo_occ = numpy.vstack((mo_occa, mo_occb))
     else:
         s0 = mol.intor ('int1e_ovlp')
         mo_occ = []
