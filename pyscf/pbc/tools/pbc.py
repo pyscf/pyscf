@@ -512,10 +512,10 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
     if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut)
+        Ls = _discard_edge_images(cell, Ls, rcut, dimension)
     return np.asarray(Ls, order='C')
 
-def _discard_edge_images(cell, Ls, rcut):
+def _discard_edge_images(cell, Ls, rcut, dimension):
     '''
     Discard images if no basis in the image would contribute to lattice sum.
     '''
@@ -523,7 +523,6 @@ def _discard_edge_images(cell, Ls, rcut):
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
-    dimension = cell.dimension
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)

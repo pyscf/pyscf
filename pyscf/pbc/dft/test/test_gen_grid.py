@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         cell = pgto.Cell()
         cell.a = numpy.eye(3)*L
         cell.a[1,0] = cell.a[1,1] = L / 2
-        cell.a[2] *= 2
+        cell.a[2,2] = L * 2
         cell.mesh = numpy.array([n,n,n])
 
         cell.atom = 'He 1 0 1'
@@ -119,7 +119,11 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 7233)
+        self.assertEqual(grids.weights.size, 7624)
+
+        grids = gen_grid.UniformGrids(cell)
+        s1 = get_ovlp(cell, grids)
+        self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
 
 
 if __name__ == '__main__':

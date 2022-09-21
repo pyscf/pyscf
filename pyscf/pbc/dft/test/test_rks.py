@@ -137,7 +137,7 @@ class KnownValues(unittest.TestCase):
         cell.build()
         mf = pbcdft.RKS(cell).density_fit()
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 7)
+        self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 6)
 
     def test_density_fit_2d(self):
         L = 4.

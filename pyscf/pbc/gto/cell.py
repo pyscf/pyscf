@@ -382,7 +382,11 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     fintor = getattr(moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
 
-    Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
+    rcut = max(cell1.rcut, cell2.rcut)
+    if cell1.dimension < 2 or cell1.low_dim_ft_type == 'inf_vacuum':
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=cell1.dimension)
+    else:
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=3)
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
 

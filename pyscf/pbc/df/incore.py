@@ -115,7 +115,12 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
         wherej = kptij_idx[len(kpti):]
         nkpts = len(kpts)
         kptij_idx = wherei * nkpts + wherej
-    dfbuilder = _Int3cBuilder(cell, auxcell, kpts)
+    dfbuilder = _Int3cBuilder(cell, auxcell, kpts).build()
+    # Reduce the size of supmol based on the 3-center overlaps. Otherwise the
+    # dfbuilder.supmol oftens two large for the calculations.
+    # TODO: strip supmol basis based on the intor type.
+    eta = np.hstack(auxcell.bas_exps()).min()
+    dfbuilder.supmol = _strip_basis(dfbuilder.supmol, eta)
     int3c = dfbuilder.gen_int3c_kernel(intor, aosym, comp, j_only,
                                        kptij_idx, return_complex=True)
     return int3c

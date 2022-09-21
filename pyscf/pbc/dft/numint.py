@@ -969,7 +969,7 @@ class NumInt(numint.NumInt):
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*2400))
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1155,7 +1155,7 @@ class KNumInt(numint.NumInt):
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
             blksize = int(max_memory*1e6/(comp*2*len(kpts_all)*nao*16*BLKSIZE))*BLKSIZE
-            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
+            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*2400))
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
