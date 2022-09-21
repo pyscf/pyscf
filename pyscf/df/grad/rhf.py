@@ -330,21 +330,13 @@ def _decompose_rdm1 (mf_grad, mol, dm):
     mo_occ   = numpy.asarray(mo_occ).reshape(-1,nmo)
     orbor = []
     orbol = []
-    orbor_stack = numpy.zeros ((nao,0), dtype=mo_coeff.dtype, order='F')
-    orbol_stack = numpy.zeros ((nao,0), dtype=mo_coeff.dtype, order='F')
-    offs = 0
     for i in range(nset):
         idx = numpy.abs (mo_occ[i])>1e-8
-        nocc = numpy.count_nonzero (idx)
         c = mo_coeff[i][:,idx]
-        orbol_stack = numpy.append (orbol_stack, c, axis=1)
-        orbol.append (orbol_stack[:,offs:offs+nocc])
+        orbol.append (numpy.asfortranarray (c))
         cn = lib.einsum('pi,i->pi', c, mo_occ[i][idx])
-        orbor_stack = numpy.append (orbor_stack, cn, axis=1)
-        orbor.append (orbor_stack[:,offs:offs+nocc])
-        offs += nocc
+        orbor.append (numpy.asfortranarray (cn))
 
-    # For Coulomb
     return orbol, orbor
 
 def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
