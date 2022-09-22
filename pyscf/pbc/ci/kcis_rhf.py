@@ -650,12 +650,12 @@ def _init_cis_df_eris(cis, eris):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
 
-    with df._load3c(cis._scf.with_df._cderi, 'j3c') as fload:
+    with df.CDERIArray(cis._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                Lpq_ao = np.asarray(fload(kpti, kptj))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq_ao = cderi_array[ki,kj]
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
