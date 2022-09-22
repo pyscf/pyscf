@@ -451,10 +451,7 @@ def madelung(cell, kpts):
     ecell.mesh = np.asarray(cell.mesh) * Nk
 
     if cell.omega == 0:
-        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                          Nk, ew_eta, ew_cut)
-        return -2*ecell.ewald(ew_eta, ew_cut)
+        return -2*ecell.ewald()
 
     else:
         # cell.ewald function does not use the Coulomb kernel function
@@ -666,34 +663,40 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
+    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
+    # Search largest mesh_x requiring E(mesh_x) <= 2*cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    cutoff = cutoff * _cubic2nonorth_factor(a)
-    mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
+    c = b.dot(b.T)
+    # r is the ratio between G of each direction when E(mesh) reaches minimum
+    r = np.linalg.inv(c) / np.linalg.det(c)
+    r /= r.diagonal()[:,None]
+    Gmax = (2*cutoff / (np.linalg.norm(r.dot(b), axis=1)**2))**.5
+    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
+    # off-diagonal part
+    # e.g r[:,2] = [1, .5, 1.2], Gx = max(Gx, Gy*.5, Gz*1.2)
+    Gmax = (r * Gmax[:,None]).max(axis=0)
+    mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
+    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
+    # Search min(E(mesh_x)/2) subject to mesh_x > mesh
     b = 2 * np.pi * np.linalg.inv(a.T)
-    Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    ke_cutoff = Gmax**2/2
-    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
-    return ke_cutoff / _cubic2nonorth_factor(a)
-
-def _cubic2nonorth_factor(a):
-    '''The factors to transform the energy cutoff from cubic lattice to
-    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
-    It needs to be rescaled for the non-orthogonal lattice to ensure that the
-    minimal Gv vector in the reciprocal space is larger than the required
-    energy cutoff.
-    '''
-    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
-    # inside the box defined by Gv vectors
-    abase = a / np.linalg.norm(a, axis=1)[:,None]
-    bbase = np.linalg.inv(abase.T)
-    overlap = np.einsum('ix,ix->i', abase, bbase)
-    return 1./overlap**2
+    c = b.dot(b.T)
+    # r is the ratio between G of each direction when E(mesh) reaches minimum
+    r = np.linalg.inv(c) / np.linalg.det(c)
+    r /= r.diagonal()[:,None]
+    gs = (np.asarray(mesh) - 1) // 2
+    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
+    # off-diagonal part
+    # e.g r[2] = [1.2, 1.2, 1], ke_cutoff_z = min(Gx/1.2, Gy/1.2, Gz)
+    gs_eff = (gs / (r + 1e-100)).min(axis=1)
+    Gmax = gs_eff * np.linalg.norm(r.dot(b), axis=1)
+    ke_cutoff = Gmax**2 / 2
+    return ke_cutoff
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''

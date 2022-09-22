@@ -467,4 +467,19 @@ class KnownValues(unittest.TestCase):
 
 if __name__ == '__main__':
     print("Full Tests for gdf_builder")
-    unittest.main()
+    #unittest.main()
+    if 1:
+        from pyscf.df.incore import cholesky_eri
+        cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
+                      basis=basis,
+                      a=np.eye(3) * 2.8,
+                      dimension=0)
+        auxcell = df.make_auxcell(cell, auxbasis)
+        dfbuilder = gdf_builder._CCGDFBuilder(cell, auxcell).build()
+        with tempfile.NamedTemporaryFile() as tmpf:
+            dfbuilder.make_j3c(tmpf.name)
+            v2 = load(tmpf.name, kpts[[0, 0]])
+            print(lib.fp(v2) - 2.4133985606622783, 7)
+
+        ref = cholesky_eri(cell, auxmol=auxcell)
+        print(abs(v2-ref).max(), 0, 2)

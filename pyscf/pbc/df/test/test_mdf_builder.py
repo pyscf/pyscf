@@ -178,7 +178,6 @@ class KnownValues(unittest.TestCase):
         )
 
         dfbuilder = mdf._CCMDFBuilder(cell, auxcell, kpts)
-        dfbuilder.mesh = [7] * 3
         dfbuilder.build()
         j2c = dfbuilder.get_2c2e(np.zeros((1, 3)))
 
@@ -205,26 +204,26 @@ class KnownValues(unittest.TestCase):
     def test_rsmdf_get_2c2e_gamma(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell).set(mesh=mesh).build()
         j2c = dfbuilder.get_2c2e(np.zeros((1, 3)))
-        self.assertAlmostEqual(lib.fp(j2c), 0.010615787015170507, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.010615787015170507, 7)
 
     def test_rsmdf_get_2c2e(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
         j2c = dfbuilder.get_2c2e(kpts)
-        self.assertAlmostEqual(lib.fp(j2c), 0.09006694627014439+0.014552394902466072j, 9)
-        self.assertAlmostEqual(lib.fp(j2c[0]), 0.010615787015170507, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.09006694627014439+0.014552394902466072j, 7)
+        self.assertAlmostEqual(lib.fp(j2c[0]), 0.010615787015170507, 7)
 
     def test_rsmdf_get_2c2e_cart(self):
         with lib.temporary_env(cell, cart=True):
             dfbuilder = mdf._RSMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
             j2c = dfbuilder.get_2c2e(kpts)
-        self.assertAlmostEqual(lib.fp(j2c), 0.09006694627014439+0.014552394902466072j, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.09006694627014439+0.014552394902466072j, 7)
 
     def test_rsmdf_make_j3c_gamma(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell).set(mesh=mesh).build()
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 6)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             v1 = load(tmpf.name, kpts[[0, 0]])
@@ -235,19 +234,19 @@ class KnownValues(unittest.TestCase):
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 6)
 
             dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = True
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 6)
 
             dfbuilder.fft_dd_block = False
             dfbuilder.exclude_d_aux = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.01486794482668373, 6)
 
     def test_rsmdf_make_j3c(self):
         dfbuilder = mdf._RSMDFBuilder(cell, auxcell, kpts).set(mesh=mesh).build()
@@ -257,9 +256,9 @@ class KnownValues(unittest.TestCase):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.01486794482668373, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 0.0009656916277807118+0.011048147592950475j, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.01509142892728263+0j, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.01486794482668373, 6)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 0.0009656916277807118+0.011048147592950475j, 6)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.01509142892728263+0j, 6)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             idx, idy = np.tril_indices(cell.nao)
@@ -278,8 +277,8 @@ class KnownValues(unittest.TestCase):
             v_s2 = []
             for ki in range(nkpts):
                 v_s2.append(load(tmpf.name, kpts[[ki, ki]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.01486794482668373, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2]), 0.01509142892728263+0j, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.01486794482668373, 6)
+            self.assertAlmostEqual(lib.fp(v_s2[2]), 0.01509142892728263+0j, 6)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1', j_only=True)
             idx, idy = np.tril_indices(cell.nao)
@@ -501,7 +500,6 @@ class KnownValues(unittest.TestCase):
         )
 
         dfbuilder = mdf._CCMDFBuilder(cell_sr, auxcell_sr, kpts)
-        dfbuilder.mesh = [7] * 3
         dfbuilder.build()
         j2c = dfbuilder.get_2c2e(np.zeros((1, 3)))
 
@@ -525,26 +523,26 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2', j_only=True)
             v1 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(abs(ref - v1).max(), 0, 7)
+            self.assertAlmostEqual(abs(ref - v1).max(), 0, 8)
 
 #### Test _RSMDFBuilder with omega < 0 ####
 
     def test_rsmdf_get_2c2e_gamma_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr).set(mesh=mesh).build()
         j2c = dfbuilder.get_2c2e(np.zeros((1, 3)))
-        self.assertAlmostEqual(lib.fp(j2c), 0.010646767031704538, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.010646767031704538, 6)
 
     def test_rsmdf_get_2c2e_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
         j2c = dfbuilder.get_2c2e(kpts)
-        self.assertAlmostEqual(lib.fp(j2c), 0.0902078021182187+0.01449234991201075j, 9)
-        self.assertAlmostEqual(lib.fp(j2c[0]), 0.010646767031704538, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.0902078021182187+0.01449234991201075j, 6)
+        self.assertAlmostEqual(lib.fp(j2c[0]), 0.010646767031704538, 6)
 
     def test_rsmdf_get_2c2e_cart_sr(self):
         with lib.temporary_env(cell_sr, cart=True):
             dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr, kpts).set(mesh=mesh).build()
             j2c = dfbuilder.get_2c2e(kpts)
-        self.assertAlmostEqual(lib.fp(j2c), 0.0902078021182187+0.01449234991201075j, 9)
+        self.assertAlmostEqual(lib.fp(j2c), 0.0902078021182187+0.01449234991201075j, 6)
 
     def test_rsmdf_make_j3c_gamma_sr(self):
         dfbuilder = mdf._RSMDFBuilder(cell_sr, auxcell_sr).set(mesh=mesh).build()
