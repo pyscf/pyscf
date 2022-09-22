@@ -258,10 +258,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(f[0], 3, 9)
         self.assertAlmostEqual(f[1], 1.5, 9)
 
-    def test_dipole_moment(self):
-        dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.fp(dip), 0.729751581497479, 5)
-
     def test_krhf_vs_rhf(self):
         np.random.seed(1)
         k = np.random.random(3)

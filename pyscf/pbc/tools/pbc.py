@@ -405,7 +405,7 @@ def precompute_exx(cell, kpts):
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    rs = gen_grid.gen_uniform_grids(kcell)
+    rs = kcell.get_uniform_grids(wrap_around=False)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
     corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
