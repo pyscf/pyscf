@@ -38,6 +38,7 @@ def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
         else:
             kpts = numpy.reshape(mf.kpt, (1,3))
 
+        kpts = getattr(kpts, 'kpts', kpts)
         with_df = rsdf.RSDF(mf.cell, kpts)
         with_df.max_memory = mf.max_memory
         with_df.stdout = mf.stdout
