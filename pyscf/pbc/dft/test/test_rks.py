@@ -152,7 +152,7 @@ class KnownValues(unittest.TestCase):
         mf = pbcdft.RKS(cell).run()
         self.assertAlmostEqual(mf.e_tot, -0.6252695697315944, 7)
         mf = pbcdft.RKS(cell).density_fit().run()
-        self.assertAlmostEqual(mf.e_tot, -0.635069475138011, 7)
+        self.assertAlmostEqual(mf.e_tot, -0.635069614773985, 5)
 
     def test_rsh_fft(self):
         mf = pbcdft.RKS(cell)

@@ -222,7 +222,7 @@ C  15.16687337 15.16687337 15.16687337
             [3.37, 0.  , 3.37],
             [3.37, 3.37, 0.  ],])
         ke = tools.mesh_to_cutoff(a, [15]*3)
-        self.assertAlmostEqual(ke, 4.7314419296089065, 9)
+        self.assertAlmostEqual(ke.min(), 4.7314419296089065, 9)
         mesh = tools.cutoff_to_mesh(a, ke.min())
         k1 = tools.mesh_to_cutoff(a, mesh)
         self.assertAlmostEqual(ke.min(), k1.min(), 9)

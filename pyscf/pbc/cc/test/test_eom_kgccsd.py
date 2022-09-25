@@ -31,24 +31,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        eom = eom_gccsd.EOMIP(gcc)
-        e1, v = eom.ipccsd(nroots=6)
-        eom = eom_gccsd.EOMEA(gcc)
-        e2, v = eom.eaccsd(nroots=6, left=True, koopmans=True)
-        '''
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
@@ -150,24 +132,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        #eom = eom_gccsd.EOMIP(gcc)
-        #e1, v = eom.ipccsd_star(nroots=6, koopmans=True)
-        eom = eom_gccsd.EOMEA(gcc)
-        e2, v = eom.eaccsd_star(nroots=9, koopmans=True)
-        '''
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
 
@@ -192,26 +156,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        gmf.conv_tol = 1e-10
-        gmf.conv_tol_grad = gmf.conv_tol * 10**2
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        eom = eom_gccsd.EOMIP_Ta(gcc)
-        e1 = eom.ipccsd_star(nroots=6, koopmans=True)
-        eom = eom_gccsd.EOMEA_Ta(gcc)
-        e2 = eom.eaccsd_star(nroots=6, koopmans=True)
-        '''
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
@@ -248,3 +192,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][1], 1.2229050426609025, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.374851059956632, 6)
 
+if __name__ == '__main__':
+    print("eom_kccsd_rhf tests")
+    unittest.main()

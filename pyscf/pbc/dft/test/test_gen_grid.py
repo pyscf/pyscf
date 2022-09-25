@@ -119,7 +119,7 @@ class KnownValues(unittest.TestCase):
         s1 = get_ovlp(cell, grids)
         s2 = cell.pbc_intor('int1e_ovlp_sph')
         self.assertAlmostEqual(numpy.linalg.norm(s1-s2), 0, 5)
-        self.assertEqual(grids.weights.size, 7624)
+        self.assertEqual(grids.weights.size, 7560)
 
         grids = gen_grid.UniformGrids(cell)
         s1 = get_ovlp(cell, grids)
