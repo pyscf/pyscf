@@ -354,7 +354,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         nelec = numpy.zeros(nset)
         excsum = numpy.zeros(nset)
         shls_slice = (0, cell.nbas)
-        ao_loc = cell.ao_loc_2c()
+        ao_loc = cell.ao_loc
         deriv = 1
         vmat = [0]*nset
         v_hermi = 1  # the output matrix must be hermitian
@@ -457,7 +457,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=1,
     excsum = numpy.zeros(nset)
     if xctype in ('LDA', 'GGA', 'MGGA'):
         shls_slice = (0, cell.nbas)
-        ao_loc = cell.ao_loc_2c()
+        ao_loc = cell.ao_loc
         deriv = 1
         vmata = [0]*nset
         vmatb = [0]*nset
