@@ -592,7 +592,8 @@ class _IntNucBuilder(_Int3cBuilder):
 
         supmol = self.supmol
         if supmol.nbas == supmol.bas_mask.size:  # supmol not stripped
-            eta = min([np.hstack(c.bas_exps()).min() for c in fake_cells])
+            eta = min([np.hstack(c.bas_exps()).min()
+                       for c in fake_cells if c.nbas > 0])
             supmol = _strip_basis(supmol, eta, inplace=False)
 
         bufR = 0

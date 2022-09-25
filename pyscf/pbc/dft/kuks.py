@@ -82,7 +82,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vxc += vj
     else:
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-            logger.warn('df.j_only cannot be used with hybrid functional')
+            logger.warn(ks, 'df.j_only cannot be used with hybrid functional')
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vj = vj[0] + vj[1]
