@@ -916,12 +916,11 @@ O    SP
         s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
-        mol0.cart = True
-        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
-        c = scipy.linalg.block_diag(*ctr_coeff)
-        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
-        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
-        mol0.cart = False
+        with lib.temporary_env(mol0, cart=True):
+            pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+            c = scipy.linalg.block_diag(*ctr_coeff)
+            s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+            self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
     def test_getattr(self):
         from pyscf import scf, dft, ci, tdscf
@@ -1027,6 +1026,13 @@ H    P
         #basis = [[1, [0.9, .7], [0.5, .7]], [1, -2, [0.5, .8], [0.3, .6]], [1, [0.3, 1]]]
         #serl.assertEqual(gto.uncontract(basis),
         #                 [[1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
+
+    def test_decontract_basis(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 01', basis='ccpvdz')
+        pmol, ctr_coeff = mol.decontract_basis(atoms=[1], to_cart=True)
+        ctr_coeff = scipy.linalg.block_diag(*ctr_coeff)
+        s = ctr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(ctr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
 
 if __name__ == "__main__":
     print("test mole.py")

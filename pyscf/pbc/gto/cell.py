@@ -44,6 +44,7 @@ from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
+from pyscf.pbc.lib import kpts as libkpts
 from pyscf import __config__
 
 INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
@@ -51,8 +52,6 @@ WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
 EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
                         [1.0, 0.5, 0.25, 0.1, 0])
-# cutoff penalty due to lattice summation
-LATTICE_SUM_PENALTY = 1e-1
 
 
 # For code compatiblity in python-2 and python-3
@@ -208,12 +207,12 @@ def unpack(celldic):
 def dumps(cell):
     '''Serialize Cell object to a JSON formatted str.
     '''
-    exclude_keys = set(('output', 'stdout', '_keys'))
+    exclude_keys = set(('output', 'stdout', '_keys', 'symm_orb', 'irrep_id', 'irrep_name'))
 
     celldic = dict(cell.__dict__)
     for k in exclude_keys:
         if k in celldic:
-            del(celldic[k])
+            del (celldic[k])
     for k in celldic:
         if isinstance(celldic[k], np.ndarray):
             celldic[k] = celldic[k].tolist()
@@ -382,13 +381,6 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
-    pbcopt = kwargs.get('pbcopt', None)
-    if pbcopt is None:
-        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
-    if isinstance(pbcopt, _pbcintor.PBCOpt):
-        cpbcopt = pbcopt._this
-    else:
-        cpbcopt = lib.c_null_ptr()
 
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
@@ -413,7 +405,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
                 Ls.ctypes.data_as(ctypes.c_void_p),
                 facx.ctypes.data_as(ctypes.c_void_p),
                 (ctypes.c_int*4)(i0, i1, j0, j1),
-                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
                 atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
                 bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
                 env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -431,7 +423,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(i0, i1, j0, j1),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
         env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
@@ -467,9 +459,8 @@ def get_nimgs(cell, precision=None):
     if precision is None:
         precision = cell.precision
 
-    rcut = max([cell.bas_rcut(ib, precision) for ib in range(cell.nbas)])
-
     # nimgs determines the supercell size
+    rcut = estimate_rcut(cell, precision)
     nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
@@ -477,8 +468,11 @@ def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     '''rcut based on the overlap integrals. This estimation is too conservative
     in many cases. A possible replacement can be the value of the basis
     function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
-    C = (c**2)*(2*l+1) / (precision * LATTICE_SUM_PENALTY)
     r0 = 20
+    # lattice_sum_penalty is the factor in terms of lattice sum in overlap
+    # integrals
+    lattice_sum_penalty = 4 * np.pi * r0 / alpha
+    C = c**2*(2*l+1)*alpha / precision * lattice_sum_penalty
     # +1. to ensure np.log returning positive value
     r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     rcut = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
@@ -495,6 +489,33 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
+
+def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
+    '''Lattice-sum cutoff for the entire system'''
+    rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
+    if rcut:
+        rcut_max = max(rcut)
+    else:
+        rcut_max = 0
+    return rcut_max
+
+def _rcut_penalty(cell):
+    '''Basis near the boundary of a cell may be closed to basis near the
+    boundary of the neighbour image. Use a penalty for this when calling
+    estimate_rcut
+    '''
+    a = cell.lattice_vectors()
+    if cell.dimension == 3:
+        vol = np.linalg.det(a)
+        penalty = vol ** (1./3) * 3**.5
+    elif cell.dimension == 2:
+        area = np.linalg.norm(np.cross(a[0], a[1]))
+        penalty = area ** .5 * 2**.5
+    elif cell.dimension == 1:
+        penalty = np.linalg.norm(a[0])
+    else:
+        penalty = 0
+    return penalty
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation based on cubic lattice'''
@@ -525,7 +546,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
-    '''Energy cutoff estimation'''
+    '''Energy cutoff estimation for the entire system'''
     Ecut_max = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
@@ -780,8 +801,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     #   1/2 * 4\pi / Omega \sum_I \sum_{G\neq 0} |ZS_I(G)|^2 \exp[-|G|^2/4\eta^2]
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
-    # See also Eq. (32) of ewald.pdf at
-    #   http://www.fisica.uniud.it/~giannozz/public/ewald.pdf
+
     mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
@@ -839,7 +859,9 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 energy_nuc = ewald
 
 def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
-              scaled_center=None):
+              scaled_center=None,
+              space_group_symmetry=False, time_reversal_symmetry=False,
+              symmorphic=True):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -855,10 +877,15 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
             scaled_center, given as the zeroth index of the returned kpts.
             Scaled meaning that the k-points are scaled to a grid from
             [-1,1] x [-1,1] x [-1,1]
+        space_group_symmetry : bool
+            Whether to consider space group symmetry
+        time_reversal_symmetry : bool
+            Whether to consider time reversal symmetry
 
     Returns:
         kpts in absolute value (unit 1/Bohr).  Gamma point is placed at the
-        first place in the k-points list
+        first place in the k-points list;
+        instance of :class:`KPoints` if k-point symmetry is considered
 
     Examples:
 
@@ -878,6 +905,8 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
     scaled_kpts = lib.cartesian_prod(ks_each_axis)
     scaled_kpts += np.array(scaled_center)
     kpts = cell.get_abs_kpts(scaled_kpts)
+    if space_group_symmetry or time_reversal_symmetry:
+        kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
     return kpts
 
 def get_uniform_grids(cell, mesh=None, **kwargs):
@@ -1133,8 +1162,8 @@ class Cell(mole.Mole):
         '''To support accessing methods (cell.HF, cell.KKS, cell.KUCCSD, ...)
         from Cell object.
         '''
-        if key[:2] == '__':  # Skip Python builtins
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if key[0] == '_':  # Skip private attributes and Python builtins
+            raise AttributeError('Cell object does not have attribute %s' % key)
         elif key in ('_ipython_canary_method_should_not_exist_',
                      '_repr_mimebundle_'):
             # https://github.com/mewwts/addict/issues/26
@@ -1268,7 +1297,7 @@ class Cell(mole.Mole):
                 default_pseudo = self.pseudo['default']
                 _pseudo = dict(((a, default_pseudo) for a in uniq_atoms))
                 _pseudo.update(self.pseudo)
-                del(_pseudo['default'])
+                del (_pseudo['default'])
             else:
                 _pseudo = self.pseudo
             self._pseudo = self.format_pseudo(_pseudo)
@@ -1360,8 +1389,7 @@ class Cell(mole.Mole):
             return self
 
         if self.rcut is None or self._rcut_from_build:
-            self._rcut = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)] + [0])
+            self._rcut = estimate_rcut(self, self.precision)
             self._rcut_from_build = True
 
         _a = self.lattice_vectors()
@@ -1479,12 +1507,7 @@ class Cell(mole.Mole):
         b = self.reciprocal_vectors(norm_to=1)
         heights_inv = lib.norm(b, axis=1)
         self.rcut = max(np.asarray(x) / heights_inv)
-
-        if self.nbas == 0:
-            rcut_guess = _estimate_rcut(.05, 0, 1, 1e-8)
-        else:
-            rcut_guess = max([self.bas_rcut(ib, self.precision)
-                              for ib in range(self.nbas)])
+        rcut_guess = estimate_rcut(self, self.precision)
         if self.rcut > rcut_guess*1.5:
             msg = ('.nimgs is a deprecated attribute.  It is replaced by .rcut '
                    'attribute for lattic sum cutoff radius.  The given nimgs '
@@ -1525,6 +1548,14 @@ class Cell(mole.Mole):
         else:
             return a/self.unit
 
+    def get_scaled_positions(self):
+        ''' Get scaled atom positions.
+        '''
+        a = self.lattice_vectors()
+        atm_pos = self.atom_coords()
+        scaled_atm_pos = np.dot(atm_pos,np.linalg.inv(a))
+        return scaled_atm_pos
+
     def reciprocal_vectors(self, norm_to=2*np.pi):
         r'''
         .. math::
@@ -1538,11 +1569,11 @@ class Cell(mole.Mole):
         '''  # noqa: E501
         a = self.lattice_vectors()
         if self.dimension == 1:
-            assert(abs(np.dot(a[0], a[1])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[1])) < 1e-9 and
                    abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         elif self.dimension == 2:
-            assert(abs(np.dot(a[0], a[2])) < 1e-9 and
+            assert (abs(np.dot(a[0], a[2])) < 1e-9 and
                    abs(np.dot(a[1], a[2])) < 1e-9)
         b = np.linalg.inv(a.T)
         return norm_to * b
@@ -1559,15 +1590,24 @@ class Cell(mole.Mole):
         '''
         return np.dot(scaled_kpts, self.reciprocal_vectors())
 
-    def get_scaled_kpts(self, abs_kpts):
+    def get_scaled_kpts(self, abs_kpts, kpts_in_ibz=True):
         '''Get scaled k-points, given absolute k-points in 1/Bohr.
 
         Args:
-            abs_kpts : (nkpts, 3) ndarray of floats
+            abs_kpts : (nkpts, 3) ndarray of floats or :class:`KPoints` object
+            kpts_in_ibz : bool
+                If True, return k-points in IBZ; otherwise, return k-points in BZ.
+                Default value is True. This has effects only if abs_kpts is a
+                :class:`KPoints` object
 
         Returns:
             scaled_kpts : (nkpts, 3) ndarray of floats
         '''
+        if isinstance(abs_kpts, libkpts.KPoints):
+            if kpts_in_ibz:
+                return abs_kpts.kpts_scaled_ibz
+            else:
+                return abs_kpts.kpts_scaled
         return 1./(2*np.pi)*np.dot(abs_kpts, self.lattice_vectors().T)
 
     make_kpts = get_kpts = make_kpts
@@ -1639,22 +1679,18 @@ class Cell(mole.Mole):
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
                            shls_slice, **kwargs)
 
-    @lib.with_doc(pbc_eval_gto.__doc__)
-    def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                     shls_slice=None, non0tab=None, ao_loc=None, out=None):
-        return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
-                            shls_slice, non0tab, ao_loc, out)
-    pbc_eval_ao = pbc_eval_gto
+    pbc_eval_ao = pbc_eval_gto = pbc_eval_gto
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
-                 shls_slice=None, non0tab=None, ao_loc=None, out=None):
+                 shls_slice=None, non0tab=None, ao_loc=None, cutoff=None,
+                 out=None):
         if eval_name[:3] == 'PBC':
             return self.pbc_eval_gto(eval_name, coords, comp, kpts, kpt,
-                                     shls_slice, non0tab, ao_loc, out)
+                                     shls_slice, non0tab, ao_loc, cutoff, out)
         else:
             return mole.eval_gto(self, eval_name, coords, comp,
-                                 shls_slice, non0tab, ao_loc, out)
+                                 shls_slice, non0tab, ao_loc, cutoff, out)
     eval_ao = eval_gto
 
     def from_ase(self, ase_atom):
@@ -1692,4 +1728,4 @@ class Cell(mole.Mole):
               **kwargs):
         raise NotImplementedError
 
-del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)
+del (INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

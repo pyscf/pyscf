@@ -248,7 +248,7 @@ class KnownValues(unittest.TestCase):
     def test_get_occ(self):
         mf1 = copy.copy(mfsym)
         mf1.irrep_nelec = {}
-        mf1.irrep_nelec['B2'] = 1
+        mf1.irrep_nelec['B1'] = 1
         occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
         self.assertAlmostEqual(lib.fp(occ), 0.49368251542877073, 9)
         mf1.irrep_nelec['A2'] = 5

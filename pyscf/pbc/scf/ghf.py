@@ -85,7 +85,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
         vk[:,nao:,nao:] = k1[1]
         vk[:,:nao,nao:] = k1[2]
         if hermi:
-            vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+            vk[:,nao:,:nao] = k1[2].conj().transpose(0,2,1)
         else:
             vk[:,nao:,:nao] = k1[3]
         vk = vk.reshape(jk_shape)

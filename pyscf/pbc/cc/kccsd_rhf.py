@@ -34,6 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df import df
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -253,7 +254,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac
@@ -604,10 +605,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf()
         if eris is None:
             # eris = self.ao2mo()
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
+
         if mbpt2:
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
@@ -706,7 +710,6 @@ KRCCSD = RCCSD
 #
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
-        from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
@@ -738,7 +741,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
@@ -921,7 +923,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
 
 def _init_df_eris(cc, eris):
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -949,14 +950,12 @@ def _init_df_eris(cc, eris):
     dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
-    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(cc._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq = cderi_array[ki,kj]
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')

@@ -102,10 +102,15 @@ def sap_effective_charge(Z, r):
         return 0.0
     if Z >= sap_Zeff.shape[1]:
         raise ValueError('Atoms beyond Og are not supported')
-    if r < 0.0:
+    if numpy.any(r < 0.0):
         raise ValueError('Distance cannot be negative')
-    if r >= sap_Zeff.shape[0]:
-        return 0.0
 
-    # Linear interpolation
-    return numpy.interp(r, sap_Zeff[0,:], sap_Zeff[Z,:])
+    if r.ndim == 0:
+        if r >= sap_Zeff.shape[0]:
+            return 0.0
+        # Linear interpolation
+        return numpy.interp(r, sap_Zeff[0,:], sap_Zeff[Z,:])
+    else:
+        v = numpy.interp(r, sap_Zeff[0,:], sap_Zeff[Z,:])
+        v[r >= sap_Zeff.shape[0]] = 0.
+        return v

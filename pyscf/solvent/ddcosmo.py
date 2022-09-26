@@ -634,7 +634,7 @@ class DDCOSMO(lib.StreamObject):
         self.lmax = 6  # max angular momentum of spherical harmonics basis
         self.eta = .1  # regularization parameter
         self.eps = 78.3553
-        self.grids = gen_grid.Grids(mol)
+        self.grids = Grids(mol)
 
         # The maximum iterations and convergence tolerance to update solvent
         # effects in CASCI, CC, MP, CI, ... methods
@@ -728,7 +728,7 @@ class DDCOSMO(lib.StreamObject):
     # computed by the host program. It requires the numerical integration code.
     def build(self):
         if self.grids.coords is None:
-            self.grids.build(with_non0tab=True)
+            self.grids.build()
 
         mol = self.mol
         natm = mol.natm
@@ -866,6 +866,15 @@ class DDCOSMO(lib.StreamObject):
             return _ddcosmo_tdscf_grad.make_grad_object(grad_method)
         else:
             return ddcosmo_grad.make_grad_object(grad_method)
+
+class Grids(gen_grid.Grids):
+    '''DFT grids without sorting grids'''
+
+    alignment = 0
+
+    def build(self, mol=None, *args, **kwargs):
+        assert self.alignment == 0
+        return super().build(mol, with_non0tab=False, sort_grids=False)
 
 
 if __name__ == '__main__':

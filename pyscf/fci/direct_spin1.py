@@ -63,7 +63,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     f1e_tril = lib.pack_tril(f1e)
     ci1 = numpy.zeros_like(fcivec)
     libfci.FCIcontract_a_1e(f1e_tril.ctypes.data_as(ctypes.c_void_p),
@@ -82,7 +82,7 @@ def contract_1e(f1e, fcivec, norb, nelec, link_index=None):
                             ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                             link_indexa.ctypes.data_as(ctypes.c_void_p),
                             link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(FCIvector)
 
 def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     r'''Contract the 4-index tensor eri[pqrs] with a FCI vector
@@ -127,7 +127,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na, nlinka = link_indexa.shape[:2]
     nb, nlinkb = link_indexb.shape[:2]
-    assert(fcivec.size == na*nb)
+    assert (fcivec.size == na*nb)
     ci1 = numpy.empty_like(fcivec)
 
     libfci.FCIcontract_2e_spin1(eri.ctypes.data_as(ctypes.c_void_p),
@@ -138,7 +138,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None):
                                 ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                                 link_indexa.ctypes.data_as(ctypes.c_void_p),
                                 link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return ci1
+    return ci1.view(FCIvector)
 
 def make_hdiag(h1e, eri, norb, nelec):
     '''Diagonal Hamiltonian for Davidson preconditioner
@@ -440,7 +440,7 @@ def _get_init_guess(na, nb, nroots, hdiag):
     for addr in addrs:
         x = numpy.zeros((na*nb))
         x[addr] = 1
-        ci0.append(x.ravel())
+        ci0.append(x.ravel().view(FCIvector))
 
     # Add noise
     ci0[0][0 ] += 1e-5
@@ -509,7 +509,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     log = logger.new_logger(fci, verbose)
 
     nelec = _unpack_nelec(nelec, fci.spin)
-    assert(0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
+    assert (0 <= nelec[0] <= norb and 0 <= nelec[1] <= norb)
     link_indexa, link_indexb = _unpack(norb, nelec, link_index)
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
@@ -532,15 +532,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
             # The degenerated wfn can break symmetry.  The davidson iteration with proper
             # initial guess doesn't have this issue
             if na*nb == 1:
-                return pw[0]+ecore, pv[:,0].reshape(1,1)
+                return pw[0]+ecore, pv[:,0].reshape(1,1).view(FCIvector)
             elif nroots > 1:
                 civec = numpy.empty((nroots,na*nb))
                 civec[:,addr] = pv[:,:nroots].T
-                return pw[:nroots]+ecore, [c.reshape(na,nb) for c in civec]
+                return pw[:nroots]+ecore, [c.reshape(na,nb).view(FCIvector) for c in civec]
             elif abs(pw[0]-pw[1]) > 1e-12:
                 civec = numpy.empty((na*nb))
                 civec[addr] = pv[:,0]
-                return pw[0]+ecore, civec.reshape(na,nb)
+                return pw[0]+ecore, civec.reshape(na,nb).view(FCIvector)
     except NotImplementedError:
         addr = [0]
         pw = pv = None
@@ -591,9 +591,9 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
                        max_memory=max_memory, verbose=log, follow_state=True,
                        tol_residual=tol_residual, **kwargs)
     if nroots > 1:
-        return e+ecore, [ci.reshape(na,nb) for ci in c]
+        return e+ecore, [ci.reshape(na,nb).view(FCIvector) for ci in c]
     else:
-        return e+ecore, c.reshape(na,nb)
+        return e+ecore, c.reshape(na,nb).view(FCIvector)
 
 def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     # precondition with pspace Hamiltonian, CPL, 169, 463
@@ -915,6 +915,17 @@ class FCISolver(FCIBase):
 
 FCI = FCISolver
 
+class FCIvector(numpy.ndarray):
+    '''An 2D np array for FCI coefficients'''
+
+    # Special cases for ndarray when the array was modified (through ufunc)
+    def __array_wrap__(self, out):
+        if out.shape == self.shape:
+            return out
+        elif out.shape == ():  # if ufunc returns a scalar
+            return out[()]
+        else:
+            return out.view(numpy.ndarray)
 
 def _unpack(norb, nelec, link_index, spin=None):
     if link_index is None:

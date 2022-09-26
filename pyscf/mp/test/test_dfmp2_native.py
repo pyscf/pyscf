@@ -171,7 +171,7 @@ class KnownValues(unittest.TestCase):
         lhs -= numpy.einsum('a,ai->ai', self.mf.mo_energy[nocc:], zai)
         lhs -= fock_response_rhf(self.mf, zai, full=False)
         diffnorm = numpy.linalg.norm(Lai - lhs)
-        self.assertAlmostEqual(diffnorm, 0, delta=1.0e-6)
+        self.assertAlmostEqual(diffnorm, 0, delta=1.0e-5)
 
     def test_natorbs_relaxed(self):
         mol = self.mf.mol
@@ -294,7 +294,7 @@ class KnownValues(unittest.TestCase):
             # orbitals orthogonal
             check_orth(self, mol, natorb)
             # selected values
-            self.assertAlmostEqual(natocc[7], 1.9379674743, delta=1.0e-7)
+            self.assertAlmostEqual(natocc[7], 1.9396460867, delta=1.0e-7)
             self.assertAlmostEqual(natocc[8], 0.0483792759, delta=1.0e-7)
 
 

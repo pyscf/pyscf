@@ -84,27 +84,12 @@ class KnownValues(unittest.TestCase):
         method.xc = 'lda, vwn_rpa'
         self.assertAlmostEqual(method.scf(), -76.01330948329084, 8)
 
-    def test_nr_pw91pw91(self):
-        method = dft.RKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'pw91, pw91'
-        # Small change from libxc3 to libxc4
-        self.assertAlmostEqual(method.scf(), -76.355310330095563, 7)
-
     def test_nr_b88vwn(self):
         method = dft.RKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'b88, vwn'
         self.assertAlmostEqual(method.scf(), -76.690247578608236, 8)
-
-    def test_nr_xlyp(self):
-        method = dft.RKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'xlyp'
-        self.assertAlmostEqual(method.scf(), -76.4174879445209, 8)
 
     def test_nr_b3lypg(self):
         method = dft.RKS(h2o)
@@ -126,15 +111,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 8)
         method.direct_scf = False
         self.assertAlmostEqual(method.scf(), -76.384928823070567, 8)
-
-    def test_nr_ub3lypg(self):
-        method = dft.UKS(h2o)
-        method.grids.prune = dft.gen_grid.treutler_prune
-        method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
-        method.xc = 'b3lypg'
-        self.assertAlmostEqual(method.scf(), -76.384928891413438, 8)
-        g = method.nuc_grad_method().kernel()
-        self.assertAlmostEqual(lib.fp(g), -0.035648777277847155, 6)
 
     def test_nr_uks_lsda(self):
         method = dft.UKS(h2osym_cation)

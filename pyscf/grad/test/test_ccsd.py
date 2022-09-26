@@ -54,7 +54,10 @@ class KnownValues(unittest.TestCase):
         ecc, t1, t2 = mycc.kernel(eris=eris)
         l1, l2 = mycc.solve_lambda(eris=eris)
         g1 = ccsd_grad.Gradients(mycc).kernel(t1, t2, l1, l2)
-        self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 6)
+#[[ 0   0                1.00950925e-02]
+# [ 0   2.28063426e-02  -5.04754623e-03]
+# [ 0  -2.28063426e-02  -5.04754623e-03]]
+        self.assertAlmostEqual(lib.fp(g1), -0.036999389889460096, 6)
 
         mol = gto.M(
             verbose = 5,
@@ -74,49 +77,16 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(g_scanner.converged)
         self.assertAlmostEqual(g1[0,2], (mycc1.e_tot-mycc0.e_tot)*500, 6)
 
-    def test_frozen(self):
+    def test_ccsd_frozen(self):
         mycc = cc.ccsd.CCSD(mf)
         mycc.frozen = [0,1,10,11,12]
         mycc.diis_start_cycle = 1
         mycc.max_memory = 1
         g1 = mycc.nuc_grad_method().kernel(atmlst=range(mol.natm))
-        self.assertAlmostEqual(lib.finger(g1), 0.10599503839207361, 6)
-
-    def test_uccsd_grad(self):
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.atom = [
-            [8 , (0. , 0.     , 0.)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]]
-        mol.spin = 2
-        mol.basis = '631g'
-        mol.build(0, 0)
-        mf = scf.UHF(mol)
-        mf.conv_tol_grad = 1e-8
-        mf.kernel()
-        mycc = cc.UCCSD(mf)
-        mycc.max_memory = 1
-        mycc.conv_tol = 1e-10
-        eris = mycc.ao2mo()
-        ecc, t1, t2 = mycc.kernel(eris=eris)
-        l1, l2 = mycc.solve_lambda(eris=eris)
-        g_scan = mycc.nuc_grad_method().as_scanner()
-        g1 = g_scan(mol.atom)[1]
-        self.assertAlmostEqual(lib.finger(g1), -0.22892720804519961, 6)
-
-        cc_scanner = mycc.as_scanner()
-        mol.set_geom_([
-            [8 , (0. , 0.     , 0.001)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]], unit='Ang')
-        e1 = cc_scanner(mol)
-        mol.set_geom_([
-            [8 , (0. , 0.     ,-0.001)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]], unit='Ang')
-        e2 = cc_scanner(mol)
-        self.assertAlmostEqual(g1[0,2], (e1-e2)/.002*lib.param.BOHR, 5)
+#[[ -7.81105940e-17   3.81840540e-15   1.20415540e-02]
+# [  1.73095055e-16  -7.94568837e-02  -6.02077699e-03]
+# [ -9.49844615e-17   7.94568837e-02  -6.02077699e-03]]
+        self.assertAlmostEqual(lib.fp(g1), 0.10599503839207361, 6)
 
     def test_rdm2_mo2ao(self):
         mycc = cc.ccsd.CCSD(mf)
@@ -139,56 +109,7 @@ class KnownValues(unittest.TestCase):
         ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
         self.assertAlmostEqual(abs(ref-rdm2).max(), 0, 10)
         self.assertAlmostEqual(abs(ref-fdm2['dm2'][:]).max(), 0, 10)
-        self.assertAlmostEqual(lib.finger(rdm2), -0.32532303057849454, 6)
-
-    def test_uccsd_rdm2_mo2ao(self):
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.atom = [
-            [8 , (0. , 0.     , 0.)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]]
-        mol.spin = 2
-        mol.basis = '631g'
-        mol.build(0, 0)
-        mf = scf.UHF(mol)
-        mf.conv_tol_grad = 1e-8
-        mf.kernel()
-        mycc = cc.UCCSD(mf)
-        mycc.diis_start_cycle = 1
-        mycc.conv_tol = 1e-10
-        eris = mycc.ao2mo()
-        ecc, t1, t2 = mycc.kernel(eris=eris)
-        l1, l2 = mycc.solve_lambda(eris=eris)
-        fdm2 = lib.H5TmpFile()
-        d2 = cc.uccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2, True)
-
-        nao = mycc.mo_coeff[0].shape[0]
-        ref = cc.uccsd_rdm._make_rdm2(mycc, None, d2, with_dm1=False)
-        aa = lib.einsum('ijkl,pi,qj,rk,sl->pqrs', ref[0], mycc.mo_coeff[0],
-                        mycc.mo_coeff[0], mycc.mo_coeff[0], mycc.mo_coeff[0])
-        ab = lib.einsum('ijkl,pi,qj,rk,sl->pqrs', ref[1], mycc.mo_coeff[0],
-                        mycc.mo_coeff[0], mycc.mo_coeff[1], mycc.mo_coeff[1])
-        bb = lib.einsum('ijkl,pi,qj,rk,sl->pqrs', ref[2], mycc.mo_coeff[1],
-                        mycc.mo_coeff[1], mycc.mo_coeff[1], mycc.mo_coeff[1])
-        aa = aa + aa.transpose(0,1,3,2)
-        aa = aa + aa.transpose(1,0,2,3)
-        aa = ao2mo.restore(4, aa, nao) * .5
-        bb = bb + bb.transpose(0,1,3,2)
-        bb = bb + bb.transpose(1,0,2,3)
-        bb = ao2mo.restore(4, bb, nao) * .5
-        ab = ab + ab.transpose(0,1,3,2)
-        ab = ab + ab.transpose(1,0,2,3)
-        ab = ao2mo.restore(4, ab, nao) * .5
-        ref = (aa+ab, bb+ab.T)
-        rdm2 = uccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff)
-        self.assertAlmostEqual(abs(ref[0]-rdm2[0]).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref[1]-rdm2[1]).max(), 0, 10)
-        uccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
-        self.assertAlmostEqual(abs(ref[0]-fdm2['dm2aa+ab'][:]).max(), 0, 10)
-        self.assertAlmostEqual(abs(ref[1]-fdm2['dm2bb+ab'][:]).max(), 0, 10)
-        self.assertAlmostEqual(lib.finger(rdm2[0]), -1.6247203743431637, 7)
-        self.assertAlmostEqual(lib.finger(rdm2[1]), -0.44062825991527471, 7)
+        self.assertAlmostEqual(lib.fp(rdm2), -0.32532303057849454, 6)
 
     def test_with_x2c_scanner(self):
         with lib.light_speed(20.):
@@ -198,12 +119,16 @@ class KnownValues(unittest.TestCase):
             e, g1 = gscan(mol)
 
             cs = mycc.as_scanner()
-            e1 = cs([[8 , (0. , 0.     , 0.)],
-                     [1 , (0. , -0.757 , 0.5871)],
-                     [1 , (0. ,  0.757 , 0.587)]])
-            e2 = cs([[8 , (0. , 0.     , 0.)],
-                     [1 , (0. , -0.757 , 0.5869)],
-                     [1 , (0. ,  0.757 , 0.587)]])
+            e1 = cs(gto.M(
+                atom=[[8 , (0. , 0.     , 0.)],
+                      [1 , (0. , -0.757 , 0.5871)],
+                      [1 , (0. ,  0.757 , 0.587)]],
+                basis='631g'))
+            e2 = cs(gto.M(
+                atom=[[8 , (0. , 0.     , 0.)],
+                      [1 , (0. , -0.757 , 0.5869)],
+                      [1 , (0. ,  0.757 , 0.587)]],
+                basis='631g'))
             self.assertAlmostEqual(g1[1,2], (e1-e2)/0.0002*lib.param.BOHR, 5)
 
     def test_with_qmmm_scanner(self):
@@ -234,10 +159,9 @@ class KnownValues(unittest.TestCase):
     def test_symmetrize(self):
         mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='631g', symmetry=True)
         g = mol.RHF.run().CCSD().run().Gradients().kernel()
-        self.assertAlmostEqual(lib.finger(g), 0.10105388861195158, 7)
+        self.assertAlmostEqual(lib.fp(g), 0.10105388861195158, 6)
 
 
 if __name__ == "__main__":
     print("Tests for CCSD gradients")
     unittest.main()
-

@@ -454,7 +454,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
         addons.convert_to_rhf(mf, self)
         return self
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

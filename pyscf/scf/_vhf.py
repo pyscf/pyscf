@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ class _CVHFOpt(ctypes.Structure):
 # hermi = 2 : anti-hermitian
 ################################################
 def incore(eri, dms, hermi=0, with_j=True, with_k=True):
-    assert(eri.dtype == numpy.double)
+    assert (eri.dtype == numpy.double)
     eri = numpy.asarray(eri, order='C')
     dms = numpy.asarray(dms, order='C', dtype=numpy.double)
     dms_shape = dms.shape
@@ -383,9 +383,9 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False,
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_mapdm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
-                 shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                     'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
+                 shls_slice=None, shls_excludes=None):
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -414,12 +414,11 @@ def direct_mapdm(intor, aosym, jkdescript,
     if cintopt is None:
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
-    fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
-
     if shls_slice is None:
-        shls_slice = (0, c_bas.shape[0])*4
+        shls_slice = [0, c_bas.shape[0]] * 4
+    if shls_excludes is not None:
+        shls_excludes = _check_shls_excludes(shls_slice, shls_excludes)
+
     ao_loc = make_loc(bas, intor)
 
     vjk = []
@@ -427,6 +426,7 @@ def direct_mapdm(intor, aosym, jkdescript,
     fjk = (ctypes.c_void_p*(njk*n_dm))()
     dmsptr = (ctypes.c_void_p*(njk*n_dm))()
     vjkptr = (ctypes.c_void_p*(njk*n_dm))()
+
     for i, (dmsym, vsym) in enumerate(descr_sym):
         if dmsym in ('ij', 'kl', 'il', 'kj'):
             sys.stderr.write('not support DM description %s, transpose to %s\n' %
@@ -434,7 +434,7 @@ def direct_mapdm(intor, aosym, jkdescript,
             dmsym = dmsym[::-1]
         f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
-        vshape = (n_dm,ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
+        vshape = (n_dm, ncomp) + get_dims(vsym[-2:], shls_slice, ao_loc)
         vjk.append(numpy.empty(vshape))
         for j in range(n_dm):
             if dms[j].shape != get_dims(dmsym, shls_slice, ao_loc):
@@ -444,7 +444,15 @@ def direct_mapdm(intor, aosym, jkdescript,
             dmsptr[i*n_dm+j] = dms[j].ctypes.data_as(ctypes.c_void_p)
             vjkptr[i*n_dm+j] = vjk[i][j].ctypes.data_as(ctypes.c_void_p)
             fjk[i*n_dm+j] = f1
-    shls_slice = (ctypes.c_int*8)(*shls_slice)
+
+    if shls_excludes is None:
+        fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
+        shls_slice = (ctypes.c_int*8)(*shls_slice)
+    else:
+        fdrv = getattr(libcvhf, 'CVHFnr_direct_ex_drv')
+        shls_slice = (ctypes.c_int*16)(*shls_slice, *shls_excludes)
+    dotsym = _INTSYMAP[aosym]
+    fdot = _fpointer('CVHFdot_nr'+dotsym)
 
     fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
          ctypes.c_int(njk*n_dm), ctypes.c_int(ncomp),
@@ -454,11 +462,11 @@ def direct_mapdm(intor, aosym, jkdescript,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
     if n_dm * ncomp == 1:
-        vjk = [v.reshape(v.shape[2:]) for v in vjk]
+        vjk = [v[0,0] for v in vjk]
     elif n_dm == 1:
-        vjk = [v.reshape((ncomp,)+v.shape[2:]) for v in vjk]
+        vjk = [v[0,:] for v in vjk]
     elif ncomp == 1:
-        vjk = [v.reshape((n_dm,)+v.shape[2:]) for v in vjk]
+        vjk = [v[:,0] for v in vjk]
     if isinstance(jkdescript, str):
         vjk = vjk[0]
     return vjk
@@ -467,9 +475,9 @@ def direct_mapdm(intor, aosym, jkdescript,
 # jkdescript: 'ij->s1kl', 'kl->s2ij', ...
 def direct_bindm(intor, aosym, jkdescript,
                  dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
-                 shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
-                     'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
+                 shls_slice=None, shls_excludes=None):
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+                      'aa4', 'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -486,7 +494,7 @@ def direct_bindm(intor, aosym, jkdescript,
     else:
         jkdescripts = jkdescript
     njk = len(jkdescripts)
-    assert(njk == n_dm)
+    assert (njk == n_dm)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -499,12 +507,11 @@ def direct_bindm(intor, aosym, jkdescript,
     if cintopt is None:
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
 
-    fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
-    dotsym = _INTSYMAP[aosym]
-    fdot = _fpointer('CVHFdot_nr'+dotsym)
-
     if shls_slice is None:
-        shls_slice = (0, c_bas.shape[0])*4
+        shls_slice = [0, c_bas.shape[0]] * 4
+    if shls_excludes is not None:
+        shls_excludes = _check_shls_excludes(shls_slice, shls_excludes)
+
     ao_loc = make_loc(bas, intor)
 
     vjk = []
@@ -524,7 +531,15 @@ def direct_bindm(intor, aosym, jkdescript,
         dmsptr[i] = dms[i].ctypes.data_as(ctypes.c_void_p)
         vjkptr[i] = vjk[i].ctypes.data_as(ctypes.c_void_p)
         fjk[i] = f1
-    shls_slice = (ctypes.c_int*8)(*shls_slice)
+
+    if shls_excludes is None:
+        fdrv = getattr(libcvhf, 'CVHFnr_direct_drv')
+        shls_slice = (ctypes.c_int*8)(*shls_slice)
+    else:
+        fdrv = getattr(libcvhf, 'CVHFnr_direct_ex_drv')
+        shls_slice = (ctypes.c_int*16)(*shls_slice, *shls_excludes)
+    dotsym = _INTSYMAP[aosym]
+    fdot = _fpointer('CVHFdot_nr'+dotsym)
 
     fdrv(cintor, fdot, fjk, dmsptr, vjkptr,
          ctypes.c_int(n_dm), ctypes.c_int(ncomp),
@@ -534,7 +549,7 @@ def direct_bindm(intor, aosym, jkdescript,
          c_env.ctypes.data_as(ctypes.c_void_p))
 
     if ncomp == 1:
-        vjk = [v.reshape(v.shape[1:]) for v in vjk]
+        vjk = [v[0] for v in vjk]
     if isinstance(jkdescript, str):
         vjk = vjk[0]
     return vjk
@@ -554,7 +569,7 @@ def int2e_sph(atm, bas, env, cart=False):  # pragma: no cover
 def rdirect_mapdm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -623,7 +638,7 @@ def rdirect_mapdm(intor, aosym, jkdescript,
 def rdirect_bindm(intor, aosym, jkdescript,
                   dms, ncomp, atm, bas, env, vhfopt=None, cintopt=None,
                   shls_slice=None):
-    assert(aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
+    assert (aosym in ('s8', 's4', 's2ij', 's2kl', 's1',
                      'a4ij', 'a4kl', 'a2ij', 'a2kl'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
@@ -727,3 +742,16 @@ def get_dims(descr_sym, shls_slice, ao_loc):
     dj = ao_loc[shls_slice[j+1]] - ao_loc[shls_slice[j]]
     return (di,dj)
 
+def _check_shls_excludes(shls_slice, shls_excludes):
+    '''shls_excludes must be inside shls_slice. Check this'''
+    _slice = numpy.array(shls_slice)
+    _excludes = numpy.array(shls_excludes)
+    if ((_excludes < _slice)[[0, 2, 4, 6]].any() or  # i0, j0, k0, l0
+        (_excludes > _slice)[[1, 3, 5, 7]].any()):   # i1, j1, k1, l1
+        shls_excludes = numpy.max([_excludes, _slice], axis=0)
+        shls_excludes[[1, 3, 5, 7]] = numpy.min(
+            [_excludes[[1, 3, 5, 7]], _slice[[1, 3, 5, 7]]], axis=0)
+        shls_excludes = shls_excludes.tolist()
+        sys.stderr.write(f'shls_excludes {_excludes} conflicts to shls_slice {_slice}\n'
+                         f'Set shls_excludes to {shls_excludes}')
+    return shls_excludes

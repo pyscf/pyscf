@@ -163,20 +163,20 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.nlc_coeff('pbe__vv10'), [5.9, 0.0093])
 
     def test_lda(self):
-        e,v,f,k = dft.libxc.eval_xc('lda,', rho[0][:3], deriv=3)
-        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.fp(v[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.fp(f[0]), -1.1414693830969338, 8)
-        self.assertAlmostEqual(lib.fp(k[0]),  4.1402447248393921, 8)
+        e,v,f,k = dft.libxc.eval_xc('lda,', rho[0], deriv=3)
+        self.assertAlmostEqual(numpy.dot(rho[0], e)   , -789.1150849798871 , 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], v[0]), -1052.1534466398498, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], f[0]), -1762.3340626646932, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0]), 1202284274.6255436 , 3)
 
-        e,v,f,k = dft.libxc.eval_xc('lda,', [rho[0][:3]*.5]*2, spin=1, deriv=3)
-        self.assertAlmostEqual(lib.fp(e)   , -0.4720562542635522, 8)
-        self.assertAlmostEqual(lib.fp(v[0].T[0]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.fp(v[0].T[1]), -0.6294083390180697, 8)
-        self.assertAlmostEqual(lib.fp(f[0].T[0]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.fp(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.fp(k[0].T[0]),  4.1402447248393921*4, 7)
-        self.assertAlmostEqual(lib.fp(k[0].T[3]),  4.1402447248393921*4, 7)
+        e,v,f,k = dft.libxc.eval_xc('lda,', [rho[0]*.5]*2, spin=1, deriv=3)
+        self.assertAlmostEqual(numpy.dot(rho[0], e)        , -789.1150849798871 , 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], v[0].T[0]), -1052.1534466398498, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], v[0].T[1]), -1052.1534466398498, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[0]), -1762.3340626646932*2, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], f[0].T[2]), -1762.3340626646932*2, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[0]),  1202284274.6255436*4, 3)
+        self.assertAlmostEqual(numpy.dot(rho[0], k[0].T[3]),  1202284274.6255436*4, 3)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]

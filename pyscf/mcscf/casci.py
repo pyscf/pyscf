@@ -320,10 +320,10 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # Rotate CI according to the unitary coefficients ucas if applicable
     fcivec = None
     if getattr(mc.fcisolver, 'transform_ci_for_orbital_rotation', None):
-        if isinstance(ci, numpy.ndarray):
+        if isinstance(ci, (fci.FCIvector, fci.SCIvector, numpy.ndarray)):
             fcivec = mc.fcisolver.transform_ci_for_orbital_rotation(ci, ncas, nelecas, ucas)
         elif (isinstance(ci, (list, tuple)) and
-              all(isinstance(x[0], numpy.ndarray) for x in ci)):
+              all(isinstance(x[0], (fci.FCIvector, fci.SCIvector, numpy.ndarray)) for x in ci)):
             fcivec = [mc.fcisolver.transform_ci_for_orbital_rotation(x, ncas, nelecas, ucas)
                       for x in ci]
     elif getattr(mc.fcisolver, 'states_transform_ci_for_orbital_rotation', None):
@@ -765,7 +765,7 @@ class CASCI(lib.StreamObject):
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
-                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
+                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-12)
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
         self.fcisolver.conv_tol = getattr(__config__,
@@ -973,14 +973,23 @@ To enable the solvent model for CASCI, the following code needs to be called
         log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and getattr(self.fcisolver, 'spin_square', None):
             if isinstance(self.e_cas, (float, numpy.number)):
-                ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
-                log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                         self.e_tot, self.e_cas, ss[0])
+                try:
+                    ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
+                    log.note('CASCI E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                             self.e_tot, self.e_cas, ss[0])
+                except NotImplementedError:
+                    log.note('CASCI E = %.15g  E(CI) = %.15g',
+                             self.e_tot, self.e_cas)
             else:
                 for i, e in enumerate(self.e_cas):
-                    ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
-                    log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
-                             i, self.e_tot[i], e, ss[0])
+                    try:
+                        ss = self.fcisolver.spin_square(self.ci[i], self.ncas, self.nelecas)
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g  S^2 = %.7f',
+                                 i, self.e_tot[i], e, ss[0])
+                    except NotImplementedError:
+                        log.note('CASCI state %d  E = %.15g  E(CI) = %.15g',
+                                 i, self.e_tot[i], e)
+
         else:
             if isinstance(self.e_cas, (float, numpy.number)):
                 log.note('CASCI E = %.15g  E(CI) = %.15g', self.e_tot, self.e_cas)
@@ -1112,7 +1121,7 @@ To enable the solvent model for CASCI, the following code needs to be called
 scf.hf.RHF.CASCI = scf.rohf.ROHF.CASCI = lib.class_as_method(CASCI)
 scf.uhf.UHF.CASCI = None
 
-del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
+del (WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':

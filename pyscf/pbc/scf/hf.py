@@ -40,7 +40,7 @@ from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc.scf import addons
 from pyscf.pbc import df
-from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -56,7 +56,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(cell, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.')
+                    'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -817,10 +817,14 @@ class SCF(mol_hf.SCF):
                 df_method = J if 'DF' in J else K
                 self.with_df = getattr(df, df_method)(self.cell, self.kpt)
 
-        if 'RS' in J or 'RS' in K:
+        # For nuclear attraction
+        if ('RS' in J or 'RS' in K) and not self.with_df:
+            self.with_df = df.GDF(self.cell, self.kpt)
+
+        if J == 'RS' or K == 'RS':
             if not gamma_point(self.kpt):
                 raise NotImplementedError('Single k-point must be gamma point')
-            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpt)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction

@@ -69,7 +69,7 @@ def sgx_fit(mf, auxbasis=None, with_df=None, pjs=False):
     >>> mf.scf()
     -100.00978770951018
     '''
-    assert(isinstance(mf, scf.hf.SCF))
+    assert (isinstance(mf, scf.hf.SCF))
 
     if with_df is None:
         with_df = SGX(mf.mol, pjs=pjs)
@@ -288,7 +288,7 @@ class SGX(lib.StreamObject):
         log.info('grids_level_f = %s', self.grids_level_f)
         log.info('grids_thrd = %s', self.grids_thrd)
         log.info('grids_switch_thrd = %s', self.grids_switch_thrd)
-        log.info('df_j = %s', self.df_j)
+        log.info('dfj = %s', self.dfj)
         log.info('auxbasis = %s', self.auxbasis)
         return self
 

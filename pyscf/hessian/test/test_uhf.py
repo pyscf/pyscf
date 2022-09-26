@@ -41,7 +41,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol = 1e-14
         e0 = mf.kernel()
         hess = mf.Hessian().kernel()
-        self.assertAlmostEqual(lib.finger(hess), -0.20243405976628576, 6)
+        self.assertAlmostEqual(lib.fp(hess), -0.20243405976628576, 6)
 
         g_scanner = mf.nuc_grad_method().as_scanner()
         pmol = mol.copy()

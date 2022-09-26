@@ -131,8 +131,13 @@ def get_init_guess(mol, key='minao'):
     return UHF(mol).get_init_guess(mol, key)
 
 def make_rdm1(mo_coeff, mo_occ, **kwargs):
-    '''One-particle density matrix
+    '''One-particle density matrix in AO representation
 
+    Args:
+        mo_coeff : tuple of 2D ndarrays
+            Orbital coefficients for alpha and beta spins. Each column is one orbital.
+        mo_occ : tuple of 1D ndarrays
+            Occupancies for alpha and beta spins.
     Returns:
         A list of 2D ndarrays for alpha and beta spins
     '''
@@ -145,6 +150,25 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
 # (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
 # arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a, dm_b))
+
+def make_rdm2(mo_coeff, mo_occ):
+    '''Two-particle density matrix in AO representation
+
+    Args:
+        mo_coeff : tuple of 2D ndarrays
+            Orbital coefficients for alpha and beta spins. Each column is one orbital.
+        mo_occ : tuple of 1D ndarrays
+            Occupancies for alpha and beta spins.
+    Returns:
+        A tuple of three 4D ndarrays for alpha,alpha and alpha,beta and beta,beta spins
+    '''
+    dm1a, dm1b = make_rdm1(mo_coeff, mo_occ)
+    dm2aa = (numpy.einsum('ij,kl->ijkl', dm1a, dm1a)
+           - numpy.einsum('ij,kl->iklj', dm1a, dm1a))
+    dm2bb = (numpy.einsum('ij,kl->ijkl', dm1b, dm1b)
+           - numpy.einsum('ij,kl->iklj', dm1b, dm1b))
+    dm2ab = numpy.einsum('ij,kl->ijkl', dm1a, dm1b)
+    return dm2aa, dm2ab, dm2bb
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     r'''Unrestricted Hartree-Fock potential matrix of alpha and beta spins,
@@ -207,7 +231,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vj, vk = hf.get_jk(mol, ddm.reshape(-1,nao,nao), hermi=hermi, vhfopt=vhfopt)
     vj = vj.reshape(dm.shape)
     vk = vk.reshape(dm.shape)
-    assert(vj.ndim >= 3 and vj.shape[0] == 2)
+    assert (vj.ndim >= 3 and vj.shape[0] == 2)
     vhf = vj[0] + vj[1] - vk
     vhf += numpy.asarray(vhf_last)
     return vhf
@@ -614,7 +638,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     virtual subspaces separatedly (without change occupancy).
     '''
     mo_occ = numpy.asarray(mo_occ)
-    assert(mo_occ.ndim == 2)
+    assert (mo_occ.ndim == 2)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_fock(dm=dm)
@@ -797,6 +821,14 @@ class UHF(hf.SCF):
             mo_occ = self.mo_occ
         return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
+    @lib.with_doc(make_rdm2.__doc__)
+    def make_rdm2(self, mo_coeff=None, mo_occ=None, **kwargs):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_occ is None:
+            mo_occ = self.mo_occ
+        return make_rdm2(mo_coeff, mo_occ, **kwargs)
+
     energy_elec = energy_elec
 
     def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
@@ -845,7 +877,8 @@ class UHF(hf.SCF):
         mo_energy, mo_coeff = self.eig(h1e, s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
-        if breaksym:
+        natm = getattr(mol, 'natm', 0)  # handle custom Hamiltonian
+        if natm > 0 and breaksym:
             dma, dmb = _break_dm_spin_symm(mol, (dma, dmb))
         return numpy.array((dma,dmb))
 
@@ -1019,4 +1052,4 @@ class HF1e(UHF):
     def spin_square(self, mo_coeff=None, s=None):
         return .75, 2
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD, BREAKSYM)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD, BREAKSYM)

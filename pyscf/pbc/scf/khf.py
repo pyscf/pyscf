@@ -40,7 +40,8 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile  # noqa
 from pyscf.pbc import tools
 from pyscf.pbc import df
-from pyscf.pbc.scf.rsjk import RangeSeparationJKBuilder
+from pyscf.pbc.scf.rsjk import RangeSeparatedJKBuilder
+from pyscf.pbc.lib.kpts import KPoints
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
@@ -67,7 +68,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if hermi_error > cell.precision and hermi_error > 1e-12:
         logger.warn(mf, '%.4g error found in overlap integrals. '
                     'cell.precision  or  cell.rcut  can be adjusted to '
-                    'improve accuracy.')
+                    'improve accuracy.', hermi_error)
 
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -179,8 +180,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
-    assert(mo_energy_kpts[0].ndim == 1)
-    assert(mo_occ_kpts[0].ndim == 1)
+    assert (mo_energy_kpts[0].ndim == 1)
+    assert (mo_occ_kpts[0].ndim == 1)
 
     # occ array in mo_occ_kpts may have different size. See issue #250
     nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
@@ -485,6 +486,7 @@ class KSCF(pbchf.SCF):
             # To handle the attribute kpt loaded from chkfile
             self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
+
     @kpts.setter
     def kpts(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
@@ -799,7 +801,7 @@ class KSCF(pbchf.SCF):
                 self.with_df = getattr(df, df_method)(self.cell, self.kpts)
 
         if 'RS' in J or 'RS' in K:
-            self.rsjk = RangeSeparationJKBuilder(self.cell, self.kpts)
+            self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpts)
             self.rsjk.verbose = self.verbose
 
         # For nuclear attraction
@@ -826,17 +828,17 @@ class KSCF(pbchf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
-    def to_rhf(self, mf):
+    def to_rhf(self, mf=None):
         '''Convert the input mean-field object to a KRHF/KROHF/KRKS/KROKS object'''
-        return addons.convert_to_rhf(mf)
+        return addons.convert_to_rhf(self, mf)
 
-    def to_uhf(self, mf):
+    def to_uhf(self, mf=None):
         '''Convert the input mean-field object to a KUHF/KUKS object'''
-        return addons.convert_to_uhf(mf)
+        return addons.convert_to_uhf(self, mf)
 
-    def to_ghf(self, mf):
+    def to_ghf(self, mf=None):
         '''Convert the input mean-field object to a KGHF/KGKS object'''
-        return addons.convert_to_ghf(mf)
+        return addons.convert_to_ghf(self, mf)
 
     as_scanner = as_scanner
 
@@ -844,9 +846,13 @@ class KSCF(pbchf.SCF):
 class KRHF(KSCF, pbchf.RHF):
     def check_sanity(self):
         cell = self.cell
-        if cell.spin != 0 and len(self.kpts) % 2 != 0:
+        if isinstance(self.kpts, KPoints):
+            nkpts = self.kpts.nkpts
+        else:
+            nkpts = len(self.kpts)
+        if cell.spin != 0 and nkpts % 2 != 0:
             logger.warn(self, 'Problematic nelec %s and number of k-points %d '
-                        'found in KRHF method.', cell.nelec, len(self.kpts))
+                        'found in KRHF method.', cell.nelec, nkpts)
         return KSCF.check_sanity(self)
 
     def convert_from_(self, mf):
@@ -858,7 +864,7 @@ class KRHF(KSCF, pbchf.RHF):
         from pyscf.pbc.grad import krhf
         return krhf.Gradients(self)
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

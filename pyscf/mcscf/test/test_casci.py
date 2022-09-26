@@ -111,8 +111,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 9)
         self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 9)
         dm1 = mc1.analyze()
-        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6252082970845532, 7)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6252082970845532, 7)
+        self.assertAlmostEqual(lib.fp(dm1[0]), 2.6252082970845532, 7)
+        self.assertAlmostEqual(lib.fp(dm1[1]), 2.6252082970845532, 7)
 
     def test_external_fcisolver(self):
         class FCI_as_DMRG(fci.direct_spin1.FCISolver):
@@ -130,7 +130,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 9)
         self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 9)
         dm1 = mc1.analyze(with_meta_lowdin=False)
-        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6252082970845532*2, 7)
+        self.assertAlmostEqual(lib.fp(dm1[0]), 2.6252082970845532*2, 7)
 
     def test_get_h2eff(self):
         mc1 = mcscf.approx_hessian(mcscf.CASCI(m, 4, 4))

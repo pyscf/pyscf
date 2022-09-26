@@ -712,7 +712,7 @@ def _xc_key_without_underscore(xc_keys):
                 break
     return new_xc
 XC_CODES.update(_xc_key_without_underscore(XC_CODES))
-del(_xc_key_without_underscore)
+del (_xc_key_without_underscore)
 
 #
 # alias
@@ -993,8 +993,8 @@ def rsh_coeff(xc_code):
             = alpha * HFX   + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
             = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
 
-    SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
-    LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+    SR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+    LR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
     alpha = c_LR
     beta = c_SR - c_LR = hyb - alpha
     '''
@@ -1478,7 +1478,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, omega=None, verbose=Non
 
 
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    assert(deriv <= 3)
+    assert (deriv <= 3)
     if spin == 0:
         nspin = 1
         rho_u = rho_d = numpy.asarray(rho, order='C')
@@ -1486,8 +1486,8 @@ def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         nspin = 2
         rho_u = numpy.asarray(rho[0], order='C')
         rho_d = numpy.asarray(rho[1], order='C')
-    assert(rho_u.dtype == numpy.double)
-    assert(rho_d.dtype == numpy.double)
+    assert (rho_u.dtype == numpy.double)
+    assert (rho_d.dtype == numpy.double)
 
     if rho_u.ndim == 1:
         rho_u = rho_u.reshape(1,-1)
@@ -1700,7 +1700,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     -76.3783361189611
     >>> def eval_xc(xc_code, rho, *args, **kwargs):
     ...     exc = 0.01 * rho**2
-    ...     vrho = 0.01 * 2 * rho
+    ...     vrho = 0.01 * 3 * rho**2
     ...     vxc = (vrho, None, None, None)
     ...     fxc = None  # 2nd order functional derivative
     ...     kxc = None  # 3rd order functional derivative

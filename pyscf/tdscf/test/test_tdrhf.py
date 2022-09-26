@@ -39,27 +39,27 @@ class KnownValues(unittest.TestCase):
         td = mf.TDA()
         e = td.kernel()[0]
         ref = [11.90276464, 11.90276464, 16.86036434]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tda_triplet(self):
         td = mf.TDA()
         td.singlet = False
         e = td.kernel()[0]
         ref = [11.01747918, 11.01747918, 13.16955056]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf_singlet(self):
         td = mf.TDHF()
         e = td.kernel()[0]
         ref = [11.83487199, 11.83487199, 16.66309285]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
     def test_tdhf_triplet(self):
         td = mf.TDHF()
         td.singlet = False
         e = td.kernel()[0]
         ref = [10.8919234, 10.8919234, 12.63440705]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 6)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
 
 
 if __name__ == "__main__":

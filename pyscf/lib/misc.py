@@ -25,6 +25,7 @@ import warnings
 import tempfile
 import functools
 import itertools
+import inspect
 import collections
 import ctypes
 import numpy
@@ -140,6 +141,27 @@ class with_omp_threads(object):
         if self.sys_threads is not None:
             num_threads(self.sys_threads)
 
+class with_multiproc_nproc(object):
+    '''
+    Using this macro to create a temporary context in which the number of
+    multi-processing processes are set to the required value.
+    '''
+    def __init__(self, nproc=1):
+        self.nproc = nproc
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nproc is not None and self.nproc >= 1:
+            self.sys_threads = num_threads()
+            if self.nproc > self.sys_threads:
+                warnings.warn('Reset nproc to nthreads: %s' % self.sys_threads)
+                self.nproc = self.sys_threads
+            nthreads = max(1, self.sys_threads // self.nproc)
+            num_threads(nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
+            self.nproc = 1
 
 def c_int_arr(m):
     npm = numpy.array(m).flatten('C')
@@ -633,28 +655,88 @@ def alias(fn, alias_name=None):
     overloaded in the child class. Using "alias" can make sure that the
     overloaded mehods were called when calling the aliased method.
     '''
-    fname = fn.__name__
-    def aliased_fn(self, *args, **kwargs):
-        return getattr(self, fname)(*args, **kwargs)
+    name = fn.__name__
+    if alias_name is None:
+        alias_name = name
 
-    if alias_name is not None:
-        aliased_fn.__name__ = alias_name
-
-    doc_str = 'An alias to method %s\n' % fname
-    if sys.version_info >= (3,):
-        from inspect import signature
-        sig = str(signature(fn))
-        if alias_name is None:
-            doc_str += 'Function Signature: %s\n' % sig
+    _locals = {}
+    sig = inspect.signature(fn)
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
         else:
-            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
-    doc_str += '----------------------------------------\n\n'
+            var_args.append(k)
+    txt = f'''def {alias_name}({", ".join(var_args)}):
+    return {var_args[0]}.{name}({", ".join(var_args[1:])})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[alias_name]
 
-    if fn.__doc__ is not None:
-        doc_str += fn.__doc__
+    new_fn.__defaults__ = fn.__defaults__
+    new_fn.__module__ = fn.__module__
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
-    aliased_fn.__doc__ = doc_str
-    return aliased_fn
+def module_method(fn, absences=None):
+    '''
+    The statement "fn1 = module_method(fn, absences=['a'])"
+    in a class is equivalent to define the following method in the class:
+
+    .. code-block:: python
+        def fn1(self, ..., a=None, b, ...):
+            if a is None: a = self.a
+            return fn(..., a, b, ...)
+
+    If absences are not specified, all position arguments will be assigned in
+    terms of the corresponding attributes of self, i.e.
+
+    .. code-block:: python
+        def fn1(self, a=None, b=None):
+            if a is None: a = self.a
+            if b is None: b = self.b
+            return fn(a, b)
+    '''
+    _locals = {}
+    name = fn.__name__
+    sig = inspect.signature(fn)
+    body = []
+    var_args = []
+    for k, v in sig.parameters.items():
+        if v.kind == v.VAR_POSITIONAL or v.kind == v.VAR_KEYWORD:
+            var_args.append(str(v))
+        else:
+            var_args.append(k)
+            if absences is None and v.default == v.empty:  # positional argument
+                body.append(f'    if {k} is None: {k} = self.{k}')
+
+    fn_defaults = fn.__defaults__
+    nargs = fn.__code__.co_argcount
+    if fn_defaults is None:
+        fn_defaults = [None] * nargs
+    else:
+        fn_defaults = [None] * (nargs-len(fn_defaults)) + list(fn_defaults)
+
+    if absences is not None:
+        for k in absences:
+            try:
+                idx = var_args.index(k)
+            except ValueError:
+                raise ValueError(f'Unknown argument {k}')
+            body.append(f'    if {k} is None: {k} = self.{k}')
+            fn_defaults[idx] = None
+
+    body = '\n'.join(body)
+    txt = f'''def {name}(self, {", ".join(var_args)}):
+{body}
+    return {name}({", ".join(var_args)})'''
+    exec(txt, fn.__globals__, _locals)
+    new_fn = _locals[name]
+    new_fn.__module__ = fn.__module__
+    new_fn.__defaults__ = tuple(fn_defaults)
+    new_fn.__doc__ = fn.__doc__
+    new_fn.__annotations__ = fn.__annotations__
+    return new_fn
 
 def class_as_method(cls):
     '''
@@ -695,7 +777,7 @@ def overwrite_mro(obj, mro):
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
-    del(HackMRO.mro)
+    del (HackMRO.mro)
     return obj
 
 def izip(*args):
@@ -1113,8 +1195,3 @@ def isintsequence(obj):
         for i in obj:
             are_ints = are_ints and isinteger(i)
         return are_ints
-
-
-if __name__ == '__main__':
-    for i,j in prange_tril(0, 90, 300):
-        print(i, j, j*(j+1)//2-i*(i+1)//2)

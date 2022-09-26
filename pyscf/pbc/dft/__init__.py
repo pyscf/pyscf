@@ -16,22 +16,62 @@ from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
 from pyscf.pbc.dft import roks
+from pyscf.pbc.dft import gks
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import kuks
 from pyscf.pbc.dft import kroks
+from pyscf.pbc.dft import kgks
+from pyscf.pbc.dft import krks_ksymm
+from pyscf.pbc.dft import kuks_ksymm
 from pyscf.pbc.dft import krkspu
 from pyscf.pbc.dft import kukspu
+from pyscf.pbc.dft import krkspu_ksymm
+from pyscf.pbc.dft import kukspu_ksymm
 from pyscf.pbc.dft.rks import KohnShamDFT
+from pyscf.pbc.lib import kpts as libkpts
 
 UKS = uks.UKS
 ROKS = roks.ROKS
+GKS = gks.GKS
 
-KRKS = krks.KRKS
-KUKS = kuks.KUKS
+def KRKS(cell, *args, **kwargs):
+    for arg in args:
+        if isinstance(arg, libkpts.KPoints):
+            return krks_ksymm.KRKS(cell, *args, **kwargs)
+    if 'kpts' in kwargs:
+        if isinstance(kwargs['kpts'], libkpts.KPoints):
+            return krks_ksymm.KRKS(cell, *args, **kwargs)
+    return krks.KRKS(cell, *args, **kwargs)
+
+def KUKS(cell, *args, **kwargs):
+    for arg in args:
+        if isinstance(arg, libkpts.KPoints):
+            return kuks_ksymm.KUKS(cell, *args, **kwargs)
+    if 'kpts' in kwargs:
+        if isinstance(kwargs['kpts'], libkpts.KPoints):
+            return kuks_ksymm.KUKS(cell, *args, **kwargs)
+    return kuks.KUKS(cell, *args, **kwargs)
+
 KROKS = kroks.KROKS
+KGKS = kgks.KGKS
 
-KRKSpU = krkspu.KRKSpU
-KUKSpU = kukspu.KUKSpU
+def KRKSpU(cell, *args, **kwargs):
+    for arg in args:
+        if isinstance(arg, libkpts.KPoints):
+            return krkspu_ksymm.KRKSpU(cell, *args, **kwargs)
+    if 'kpts' in kwargs:
+        if isinstance(kwargs['kpts'], libkpts.KPoints):
+            return krkspu_ksymm.KRKSpU(cell, *args, **kwargs)
+    return krkspu.KRKSpU(cell, *args, **kwargs)
+
+def KUKSpU(cell, *args, **kwargs):
+    for arg in args:
+        if isinstance(arg, libkpts.KPoints):
+            return kukspu_ksymm.KUKSpU(cell, *args, **kwargs)
+    if 'kpts' in kwargs:
+        if isinstance(kwargs['kpts'], libkpts.KPoints):
+            return kukspu_ksymm.KUKSpU(cell, *args, **kwargs)
+    return kukspu.KUKSpU(cell, *args, **kwargs)
 
 def RKS(cell, *args, **kwargs):
     if cell.spin == 0:

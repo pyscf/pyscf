@@ -15,7 +15,7 @@
 import unittest
 import numpy as np
 from pyscf import lib
-from pyscf.pbc import gto, scf
+from pyscf.pbc import gto, scf, tools
 from pyscf.pbc.tools import k2gamma
 
 def setUpModule():
@@ -48,6 +48,24 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_k2gamma(self):
+        cell = gto.Cell()
+        cell.a = '''
+             1.755000    1.755000    -1.755000
+             1.755000    -1.755000    1.755000
+             -1.755000    1.755000    1.755000'''
+        cell.atom = '''Li      0.00000      0.00000      0.00000'''
+        cell.basis = 'gth-szv'
+        cell.pseudo = {'Li': 'GTH-PBE-q3'}
+        cell.mesh = [20]*3
+        cell.verbose = 6
+        cell.output = '/dev/null'
+        cell.build()
+
+        kpts = cell.make_kpts([2,2,2])
+        mf = scf.KUKS(cell, kpts)
+        mf.xc = 'lda,vwn'
+        mf.kernel()
+
         popa, popb = mf.mulliken_meta()[0]
         self.assertAlmostEqual(lib.finger(popa).sum(), 1.5403023058, 7)
         self.assertAlmostEqual(lib.finger(popb).sum(), 1.5403023058, 7)
@@ -55,6 +73,30 @@ class KnownValues(unittest.TestCase):
         popa, popb = k2gamma.k2gamma(mf).mulliken_meta()[0]
         self.assertAlmostEqual(lib.finger(popa), 0.8007278745, 7)
         self.assertAlmostEqual(lib.finger(popb), 0.8007278745, 7)
+
+    def test_k2gamma_ksymm(self):
+        cell = gto.Cell()
+        cell.atom = '''
+            He 0.  0. 0.
+        '''
+        cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.a = np.eye(3) * 2.
+        cell.build()
+
+        kmesh = [2,2,1]
+        kpts = cell.make_kpts(kmesh, space_group_symmetry=True)
+        kmf = scf.KRKS(cell, kpts).density_fit()
+        kmf.kernel()
+        c_g_ao = k2gamma.k2gamma(kmf).mo_coeff
+
+        scell = tools.super_cell(cell, kmesh)
+        mf_sc = scf.RKS(scell).density_fit()
+        s = mf_sc.get_ovlp()
+        mf_sc.run()
+        sc_mo = mf_sc.mo_coeff
+
+        one = np.linalg.det(c_g_ao.T.conj().dot(s).dot(sc_mo))
+        self.assertAlmostEqual(abs(one), 1., 9)
 
     def test_double_translation_indices(self):
         idx2 = k2gamma.translation_map(2)
@@ -72,6 +114,30 @@ class KnownValues(unittest.TestCase):
 
         result = k2gamma.double_translation_indices([2,3,4])
         self.assertEqual(abs(ref.reshape(24,24) - result).max(), 0)
+
+    def test_kpts_to_kmesh(self):
+        cell = gto.M(atom='He 0 0 0', basis=[[0, (.3, 1)]], a=np.eye(3), verbose=0)
+        cell.rcut = 38
+        self.assertEqual(cell.nimgs.tolist(), [21, 21, 21])
+        scaled_kpts = np.array([
+                [0. ,  0,  0],
+                [0.5, -.5, .25],
+                [0.5, .25, .333333],
+        ])
+        kpts = cell.get_abs_kpts(scaled_kpts)
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.assertEqual(kmesh.tolist(), [2, 4, 12])
+
+        cell.rcut = 9
+        self.assertEqual(cell.nimgs.tolist(), [5, 5, 5])
+        scaled_kpts = np.array([
+                [0. ,  0,  0],
+                [0.5, -.5, .25],
+                [0.5, .25, .3333],
+        ])
+        kpts = cell.get_abs_kpts(scaled_kpts)
+        kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        self.assertEqual(kmesh.tolist(), [2, 4, 11])
 
 
 if __name__ == '__main__':

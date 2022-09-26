@@ -30,9 +30,9 @@ def setUpModule():
     x = r * math.sin(104.468205 * math.pi/(2 * 180.0))
     y = r * math.cos(104.468205* math.pi/(2 * 180.0))
     mol.atom = [
-        ['O', ( 0., 0.    , 0)],
-        ['H', ( 0., -x, y)],
-        ['H', ( 0., x , y)],]
+        ['O', (0., 0.    , 0)],
+        ['H', (0., -x, y)],
+        ['H', (0., x , y)],]
     mol.basis = {'H': 'aug-cc-pVDZ',
                  'O': 'aug-cc-pVDZ',}
     mol.verbose = 0
@@ -49,66 +49,43 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
-
     def test_ea_adc2(self):
-
-        myadc.max_memory = 20
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.2218560609876961, 6)
 
-        
-        myadcea = adc.radc.RADCEA(myadc) 
+        myadcea = adc.radc_ea.RADCEA(myadc)
+        myadcea.approx_trans_moments = True
         e,v,p,x = myadcea.kernel(nroots=3)
 
         self.assertAlmostEqual(e[0], 0.0287675413010661, 6)
         self.assertAlmostEqual(e[1], 0.0553475511361251, 6)
         self.assertAlmostEqual(e[2], 0.1643553780332306, 6)
 
-        self.assertAlmostEqual(p[0], 1.9868196915945326, 6)
-        self.assertAlmostEqual(p[1], 1.9941128865405613, 6)
-        self.assertAlmostEqual(p[2], 1.9760420333383126, 6)
-
-
-    def test_ea_adc3(self):
-
-        myadc.method = "adc(3)"
-        myadc.max_memory = 20
-        myadc.incore_complete = False
-        e, t_amp1, t_amp2 = myadc.kernel_gs()
-        self.assertAlmostEqual(e, -0.2263968409281272, 6)
-
-        myadcea = adc.radc.RADCEA(myadc) 
-        e,v,p,x = myadcea.kernel(nroots=4)
-
-        self.assertAlmostEqual(e[0], 0.0277406670820452, 6)
-        self.assertAlmostEqual(e[1], 0.0551456657778995, 6)
-        self.assertAlmostEqual(e[2], 0.1620710279026066, 6)
-        self.assertAlmostEqual(e[3], 0.1882010099486046, 6)
-
-        self.assertAlmostEqual(p[0], 1.9814233118436899, 6)
-        self.assertAlmostEqual(p[1], 1.9920778842193207, 6)
-        self.assertAlmostEqual(p[2], 1.9676462978544356, 6)
-        self.assertAlmostEqual(p[3], 1.9743650630026532, 6)
+        self.assertAlmostEqual(p[0],1.9868096728772893, 6)
+        self.assertAlmostEqual(p[1],1.994118278569895 , 6)
+        self.assertAlmostEqual(p[2],1.975969169959369 , 6)
 
 
     def test_ip_adc3(self):
-  
         myadc.method = "adc(3)"
-        myadc.method_type = "ip"
-        myadc.incore_complete = False
-        myadc.max_memory = 10
+        e, t_amp1, t_amp2 = myadc.kernel_gs()
+        self.assertAlmostEqual(e, -0.2263968409281272, 6)
 
-        e,v,p,x = myadc.kernel(nroots=3)
-        myadc.analyze()
-      
-        self.assertAlmostEqual(e[0], 0.4777266577555, 6)
-        self.assertAlmostEqual(e[1], 0.5619000705967, 6)
-        self.assertAlmostEqual(e[2], 0.7119986982840, 6)
+        myadcip = adc.radc_ip.RADCIP(myadc)
+        myadcip.approx_trans_moments = True
+        e,v,p,x = myadcip.kernel(nroots=4)
+        myadcip.analyze()
 
-        self.assertAlmostEqual(p[0], 1.8482158265750, 6)
-        self.assertAlmostEqual(p[1], 1.8499506292187, 6)
-        self.assertAlmostEqual(p[2], 1.8653509527805, 6)
+        self.assertAlmostEqual(e[0], 0.4777266119748338, 6)
+        self.assertAlmostEqual(e[1], 0.5619000725247504, 6)
+        self.assertAlmostEqual(e[2], 0.7119986982840371, 6)
+        self.assertAlmostEqual(e[3], 1.1184438337100486, 6)
+
+        self.assertAlmostEqual(p[0], 1.8489784284385662, 6)
+        self.assertAlmostEqual(p[1], 1.8506484180294713, 6)
+        self.assertAlmostEqual(p[2], 1.8657624547603837, 6)
+        self.assertAlmostEqual(p[3], 0.1250466175471465, 6)
 
 if __name__ == "__main__":
-    print("Out-of-core EA and IP  calculations for different RADC methods for water molecule")
+    print("Approximate transition moments calculations for different RADC methods for water molecule")
     unittest.main()
