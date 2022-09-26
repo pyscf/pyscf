@@ -405,7 +405,7 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
     class get_rhok_class (object):
         def __init__(self, my_f):
             self.f_rhok = my_f
-        def __call__(set_id, p0, p1):
+        def __call__(self, set_id, p0, p1):
             buf = numpy.empty((p1-p0,nocc[set_id],nao))
             col1 = 0
             for istep in range(nsteps):
