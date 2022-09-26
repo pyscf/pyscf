@@ -402,14 +402,18 @@ def _cho_solve_rhojk (mf_grad, mol, auxmol, orbol, orbor):
     rhoj = scipy.linalg.cho_solve(int2c, rhoj.T).T
     int2c = None
     t1 = logger.timer_debug1 (mf_grad, 'df grad vj and vk AO (P|Q) D_Q = (P|mn) D_mn solve', *t1)
-    def get_rhok(set_id, p0, p1):
-        buf = numpy.empty((p1-p0,nocc[set_id],nao))
-        col1 = 0
-        for istep in range(nsteps):
-            dat = f_rhok['%s/%s'%(set_id,istep)][p0:p1]
-            col0, col1 = col1, col1 + dat.shape[1]
-            buf[:p1-p0,:,col0:col1] = dat.transpose(0,2,1)
-        return buf
+    class get_rhok_class (object):
+        def __init__(self, my_f):
+            self.f_rhok = my_f
+        def __call__(set_id, p0, p1):
+            buf = numpy.empty((p1-p0,nocc[set_id],nao))
+            col1 = 0
+            for istep in range(nsteps):
+                dat = self.f_rhok['%s/%s'%(set_id,istep)][p0:p1]
+                col0, col1 = col1, col1 + dat.shape[1]
+                buf[:p1-p0,:,col0:col1] = dat.transpose(0,2,1)
+            return buf
+    get_rhok = get_rhok_class (f_rhok)
     return rhoj, get_rhok
 
 
