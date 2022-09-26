@@ -469,8 +469,17 @@ def madelung(cell, kpts):
 
 
 def get_monkhorst_pack_size(cell, kpts):
-    skpts = cell.get_scaled_kpts(kpts).round(decimals=6)
-    Nk = np.array([len(np.unique(ki)) for ki in skpts.T])
+    kpts = np.reshape(kpts, (-1,3))
+    min_tol = 1e-5
+    assert kpts.shape[0] < 1/min_tol
+    if kpts.shape[0] == 1:
+        Nk = np.array([1,1,1])
+    else:
+        tol = max(10**(-int(-np.log10(1/kpts.shape[0]))-2), min_tol)
+        skpts = cell.get_scaled_kpts(kpts)
+        Nk = np.array([np.count_nonzero(abs(ski[1:]-ski[:-1]) > tol) + 1
+                       for ski in np.sort(skpts.T)])
+    assert np.prod(Nk) == kpts.shape[0]
     return Nk
 
 
