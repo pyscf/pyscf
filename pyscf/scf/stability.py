@@ -268,7 +268,7 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
         x2 = numpy.einsum('ps,sq->pq', fvv, x1)
         x2-= numpy.einsum('ps,rp->rs', foo, x1)
 
-        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.conj().T))
+        d1 = reduce(numpy.dot, (orbv, x1, orbo.conj().T))
         dm1 = d1 - d1.conj().T
 # No Coulomb and fxc contribution for anti-hermitian DM
         v1 = vrespz(dm1)
@@ -279,9 +279,9 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
 
     return hop_real2complex, hdiag
 
-def ghf_real(mf, verbose=None, return_status=False, tol=1e-4):
+def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False, tol=1e-4):
     log = logger.new_logger(mf, verbose)
-    with_symmetry = True
+    #with_symmetry = True
     g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ)
     hdiag *= 2
     stable = True
@@ -296,6 +296,7 @@ def ghf_real(mf, verbose=None, return_status=False, tol=1e-4):
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
+    #x0[0] += 0.1
     e, v = lib.davidson(hessian_x, x0, precond, tol, verbose=log)
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction (real) has an internal instability')
@@ -311,6 +312,11 @@ def ghf_real(mf, verbose=None, return_status=False, tol=1e-4):
         hdiagd = hdiag_r2c - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
         return dx/hdiagd
+    x0 = numpy.zeros_like(hdiag_r2c)
+    x0[hdiag_r2c>1e-5] = 1. / hdiag_r2c[hdiag_r2c>1e-5]
+    if not with_symmetry:  # allow to break point group symmetry
+        x0[numpy.argmin(hdiag_r2c)] = 1
+        print(x0)
     e2, v2 = lib.davidson(hop_r2c, x0, precond, tol, verbose=log)
     if e2 < -1e-5:
         log.note(f'{mf.__class__} wavefunction (real) has a real->complex instability')
@@ -324,7 +330,75 @@ def ghf_real(mf, verbose=None, return_status=False, tol=1e-4):
         return mo
 
 def _gen_hop_ghf_complex_internal(mf, with_symmetry=True, verbose=None):
-    raise NotImplementedError
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    nao, nmo = mo_coeff.shape
+    occidx = numpy.where(mo_occ == 1)[0]
+    viridx = numpy.where(mo_occ == 0)[0]
+    nocc = len(occidx)
+    nvir = len(viridx)
+    orbv = mo_coeff[:,viridx]
+    orbo = mo_coeff[:,occidx]
+
+    #if wfnsym is not None and mol.symmetry:
+    #    if isinstance(wfnsym, str):
+    #        wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
+    #    wfnsym = wfnsym % 10  # convert to D2h subgroup
+    #    orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
+    #    orbsym_in_d2h = numpy.asarray(orbsym) % 10  # convert to D2h irreps
+    #    sym_forbid = (orbsym_in_d2h[occidx,None] ^ orbsym_in_d2h[viridx]) != wfnsym
+    if with_symmetry and mol.symmetry:
+        orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbid = orbsym[viridx] != orbsym[occidx]
+
+    #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+    #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
+    #fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+    #foo = fock[occidx[:,None],occidx]
+    #fvv = fock[viridx[:,None],viridx]
+    foo = numpy.diag(mo_energy[occidx])
+    fvv = numpy.diag(mo_energy[viridx])
+
+    hdiag = fvv.diagonal() - foo.diagonal()[:,None]
+    if with_symmetry and mol.symmetry:
+        hdiag[sym_forbid] = 0
+    hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel().conj()))
+
+    mo_coeff = numpy.asarray(numpy.hstack((orbo,orbv)), order='F')
+    vresp = mf.gen_response(hermi=0)
+
+    def hop(x1):
+        x1 = numpy.asarray(x1).reshape(2,nocc,nvir)
+        if with_symmetry and mol.symmetry:
+            # shape(nz,2,nocc,nvir): 2 ~ X,Y
+            x1 = numpy.copy(x1)
+            x1[:,sym_forbid] = 0
+
+        xs, ys = x1
+        # dms = AX + BY
+        dms  = lib.einsum('ov,qv,po->pq', xs, orbv.conj(), orbo)
+        dms += lib.einsum('ov,pv,qo->pq', ys, orbv, orbo.conj())
+
+        v1ao = vresp(dms)
+        v1ov = lib.einsum('pq,po,qv->ov', v1ao, orbo.conj(), orbv)
+        v1vo = lib.einsum('pq,qo,pv->ov', v1ao, orbo, orbv.conj())
+        v1ov += lib.einsum('qs,sp->qp', xs, fvv)  # AX
+        v1ov -= lib.einsum('pr,sp->sr', xs, foo)  # AX
+        v1vo += lib.einsum('qs,sp->qp', ys, fvv.conj())  # (A*)Y
+        v1vo -= lib.einsum('pr,sp->sr', ys, foo.conj())  # (A*)Y
+
+        if with_symmetry and mol.symmetry:
+            v1ov[:,sym_forbid] = 0
+            v1vo[:,sym_forbid] = 0
+
+        # (AX, (-A*)Y)
+        #nz = x1.shape[0]
+        hx = numpy.hstack((v1ov.ravel(), v1vo.ravel()))
+        return hx
+
+    return hop, hdiag
 
 def ghf_complex(mf, verbose=None, return_status=False, tol=1e-4):
     log = logger.new_logger(mf, verbose)
@@ -342,7 +416,8 @@ def ghf_complex(mf, verbose=None, return_status=False, tol=1e-4):
     e, v = lib.davidson(hop, x0, precond, tol, verbose=log)
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction (complex) has an internal instability')
-        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+        mo = mf.mo_coeff
+        #mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
         stable = False
     else:
         log.note(f'{mf.__class__} wavefunction (complex) is stable in the internal '

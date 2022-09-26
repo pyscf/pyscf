@@ -28,6 +28,7 @@ import scipy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf import tdscf
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     if internal:
@@ -227,6 +228,84 @@ def uhf_external(mf, verbose=None):
     else:
         log.log('UHF wavefunction is stable in the UHF -> GHF stability analysis')
 
+#def ao2mo_incore(mf, mo_coeff=None, ao2mofn=None, verbose=None):
+#    #from pyscf.mp.gmp2 import _PhysicistsERIs
+#    #eri = _PhysicistsERIs()
+#    #mp = mf.MP2()
+#    #eri._common_init_(mp, mo_coeff)
+#
+#    #nocc = mf.nocc
+#    nao, nmo = mo_coeff.shape
+#    #nvir = nmo - nocc
+#    #orbspin = mf.orbspin
+#
+#    orba = mo_coeff[:nao//2,:]
+#    orbb = mo_coeff[nao//2:,:]
+#    #if orbspin is None:
+#    eri  = ao2mo.kernel(mf._eri, (orba,orba,orba,orba))
+#    eri += ao2mo.kernel(mf._eri, (orbb,orbb,orbb,orbb))
+#    eri1 = ao2mo.kernel(mf._eri, (orba,orba,orbb,orbb))
+#    eri += eri1
+#    eri += eri1.T
+#    #else:
+#    #    c = orba + orbb
+#    #    eri = ao2mo.full(mf._eri, c)
+#    #    sym_forbid = (orbspin[:,None] != orbspin)[numpy.tril_indices(nmo)]
+#    #    eri[sym_forbid,:] = 0
+#    #    eri[:,sym_forbid] = 0
+#
+#    print(eri.shape)
+#    if eri.dtype == numpy.double:
+#        eri = ao2mo.restore(1, eri, nmo)
+#
+#    print(eri.shape)
+#    eri = eri.reshape(nmo,nmo,nmo,nmo)
+#    eri = eri.transpose(0,2,1,3) #- eri.transpose(0,2,3,1)
+#    return eri
+
+def ghf_real_internal(mf, verbose=None):
+    log = logger.new_logger(mf, verbose)
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    nmo = mo_coeff.shape[1]
+    nocc = numpy.count_nonzero(mo_occ)
+    nvir = nmo - nocc
+
+    #eri_mo = ao2mo.full(mol, mo_coeff)
+    #eri_mo = ao2mo.restore(1, eri_mo, nmo)
+    #eri_mo = ao2mo_incore(mf, mo_coeff)
+    #eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+    # A
+    #h = numpy.einsum('ckld->kcld', eri_mo[nocc:,:nocc,:nocc,nocc:])
+    #h-= numpy.einsum('cdlk->kcld', eri_mo[nocc:,nocc:,:nocc,:nocc])
+    #for a in range(nvir):
+    #    for i in range(nocc):
+    #        h[i,a,i,a] += eai[a,i]
+    # B
+    #h+= numpy.einsum('ckdl->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
+    #h-= numpy.einsum('cldk->kcld', eri_mo[nocc:,:nocc,nocc:,:nocc])
+    a,b = tdscf.ghf.get_ab(mf)
+    nov = nocc * nvir
+    a = a.reshape(nov,nov)
+    b = b.reshape(nov,nov)
+    print(a.shape)
+    print(a, '\n', b)
+    h = a + b
+    e = scipy.linalg.eigh(h)[0]
+    log.debug('ghf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
+    if e[0] < -1e-5:
+        log.log('GHF (real) wavefunction has an internal instability')
+    else:
+        log.log('GHF (real) wavefunction is stable in the internal stability analysis')
+    h2 = a - b
+    e2 = scipy.linalg.eigh(h2)[0]
+    log.debug('ghf_internal: lowest eigs = %s', e2[e2<=max(e2[0],1e-5)])
+    if e2[0] < -1e-5:
+        log.log('GHF (real) wavefunction has a real2complex instability')
+    else:
+        log.log('GHF (real) wavefunction is stable in the real2complex stability analysis')
 
 if __name__ == '__main__':
     from pyscf import gto, scf
