@@ -243,7 +243,7 @@ def _gen_hop_ghf_real2complex(mf, with_symmetry=True, verbose=None):
 
     if with_symmetry and mol.symmetry:
         orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
-        sym_forbid = orbsym[viridx] != orbsym[occidx]
+        sym_forbid = orbsym[viridx, None] != orbsym[occidx]
 
     h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -296,7 +296,6 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False, tol=1e-4
     x0[g!=0] = 1. / hdiag[g!=0]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag)] = 1
-    #x0[0] += 0.1
     e, v = lib.davidson(hessian_x, x0, precond, tol, verbose=log)
     if e < -1e-5:
         log.note(f'{mf.__class__} wavefunction (real) has an internal instability')
@@ -307,7 +306,7 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False, tol=1e-4
                  'stability analysis')
         mo = mf.mo_coeff
 
-    hop_r2c, hdiag_r2c = _gen_hop_ghf_real2complex(mf)
+    hop_r2c, hdiag_r2c = _gen_hop_ghf_real2complex(mf, with_symmetry=with_symmetry)
     def precond(dx, e, x0):
         hdiagd = hdiag_r2c - e
         hdiagd[abs(hdiagd)<1e-8] = 1e-8
@@ -316,7 +315,8 @@ def ghf_real(mf, with_symmetry=True, verbose=None, return_status=False, tol=1e-4
     x0[hdiag_r2c>1e-5] = 1. / hdiag_r2c[hdiag_r2c>1e-5]
     if not with_symmetry:  # allow to break point group symmetry
         x0[numpy.argmin(hdiag_r2c)] = 1
-        print(x0)
+    #print(hdiag_r2c)
+    #print(x0)
     e2, v2 = lib.davidson(hop_r2c, x0, precond, tol, verbose=log)
     if e2 < -1e-5:
         log.note(f'{mf.__class__} wavefunction (real) has a real->complex instability')

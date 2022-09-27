@@ -293,6 +293,7 @@ def ghf_real_internal(mf, verbose=None):
     print(a.shape)
     print(a, '\n', b)
     h = a + b
+    print(h[:,0])
     e = scipy.linalg.eigh(h)[0]
     log.debug('ghf_internal: lowest eigs = %s', e[e<=max(e[0],1e-5)])
     if e[0] < -1e-5:
@@ -300,6 +301,7 @@ def ghf_real_internal(mf, verbose=None):
     else:
         log.log('GHF (real) wavefunction is stable in the internal stability analysis')
     h2 = a - b
+    print(h2[:,0])
     e2 = scipy.linalg.eigh(h2)[0]
     log.debug('ghf_internal: lowest eigs = %s', e2[e2<=max(e2[0],1e-5)])
     if e2[0] < -1e-5:
