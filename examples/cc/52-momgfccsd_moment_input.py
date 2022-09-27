@@ -35,7 +35,7 @@ assert ccsd.converged_lambda
 # Run a moment-constrained GF-CCSD calculation
 # Note: 5 cycles of moment constraint in the EA
 # sector compared to 3 in the IP sector.
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel()
 ip = gfcc.ipgfccsd(nroots=1)[0]
 
@@ -45,7 +45,7 @@ ip = gfcc.ipgfccsd(nroots=1)[0]
 # provenance of these moments.
 th = gfcc.build_hole_moments()
 tp = gfcc.build_part_moments()
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel(hole_moments=th, part_moments=tp)
 assert np.allclose(ip, gfcc.ipgfccsd(nroots=1)[0])
 
@@ -62,7 +62,7 @@ t = np.array([np.linalg.matrix_power(f, n) for n in range(5*2+2)])
 th, tp = t.copy(), t.copy()
 th[:, ccsd.nocc:, ccsd.nocc:] = 0.0
 tp[:, :ccsd.nocc, :ccsd.nocc] = 0.0
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 5))
 gfcc.kernel(hole_moments=th, part_moments=tp)
 
 # Or, moments from another post-HF Green's function method to
@@ -73,7 +73,7 @@ agf2.kernel()
 gf = agf2.gf
 th = gf.get_occupied().moment(np.arange(3*2+2))
 tp = gf.get_virtual().moment(np.arange(5*2+2))
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 5))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 5))
 gfcc.hermi_moments = True
 gfcc.hermi_solver = True
 gfcc.kernel(hole_moments=th, part_moments=tp)

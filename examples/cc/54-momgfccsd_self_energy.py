@@ -37,7 +37,7 @@ ccsd.solve_lambda()
 assert ccsd.converged_lambda
 
 # Run GF-CCSD:
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
+gfcc = cc.MomGFCCSD(ccsd, niter=(4, 4))
 gfcc.kernel()
 ip = gfcc.ipgfccsd(nroots=1)[0]
 ea = gfcc.eagfccsd(nroots=1)[0]

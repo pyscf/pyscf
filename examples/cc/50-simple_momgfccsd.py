@@ -44,7 +44,7 @@ assert ccsd.converged_lambda
 #
 # The gfcc object will store information on the resulting
 # pole energies and residues of the Green's function.
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
+gfcc = cc.MomGFCCSD(ccsd, niter=(4, 4))
 gfcc.kernel()
 
 # Compare IPs and EAs to IP/EA-EOM-CCSD

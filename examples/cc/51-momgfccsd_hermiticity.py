@@ -34,14 +34,14 @@ assert ccsd.converged_lambda
 #
 # Default mode: GF Moments are non-hermitian, and 
 # full Hamiltonian/Green's function is non-hermitian
-gfcc1 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
+gfcc1 = cc.MomGFCCSD(ccsd, niter=(4, 4))
 gfcc1.hermi_moments = False
 gfcc1.hermi_solver = False
 gfcc1.kernel()
 ip1 = gfcc1.ipgfccsd(nroots=1)[0]
 
 # We can force the CCSD GF moments to be hermitian
-gfcc2 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
+gfcc2 = cc.MomGFCCSD(ccsd, niter=(4, 4))
 gfcc2.hermi_moments = True
 gfcc2.hermi_solver = False
 gfcc2.kernel()
@@ -49,7 +49,7 @@ ip2 = gfcc2.ipgfccsd(nroots=1)[0]
 
 # We can constrain the GF moments and full GF / 
 # hamiltonian to be hermitian
-gfcc3 = cc.gfccsd.GFCCSD(ccsd, niter=(4, 4))
+gfcc3 = cc.MomGFCCSD(ccsd, niter=(4, 4))
 gfcc3.hermi_moments = True
 gfcc3.hermi_solver = True
 gfcc3.kernel()

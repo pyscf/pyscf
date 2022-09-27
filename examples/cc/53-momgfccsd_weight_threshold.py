@@ -41,13 +41,13 @@ assert ccsd.converged_lambda
 # excitations.
 
 # Run a GF-CCSD calculation with the default weight_tol
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 3))
 gfcc.weight_tol = 1e-1
 gfcc.kernel()
 
 # Run a GF-CCSD calculation with a much lower weight_tol -
 # one observes additional low-weighted IPs in the output
-gfcc = cc.gfccsd.GFCCSD(ccsd, niter=(3, 3))
+gfcc = cc.MomGFCCSD(ccsd, niter=(3, 3))
 gfcc.weight_tol = 1e-5
 gfcc.kernel()
 

@@ -31,8 +31,6 @@ from pyscf import lib, cc, ao2mo
 from pyscf.lib import logger
 from pyscf.agf2 import mpi_helper
 
-# TODO don't allow complex integrals yet
-
 
 def kernel(
         gfccsd,
@@ -576,8 +574,9 @@ def build_bra_part(gfccsd, eom, t1, t2, l1, l2, orb):
     return eom.amplitudes_to_vector(e1, e2)
 
 
-class GFCCSD(lib.StreamObject):
-    """Green's function coupled cluster singles and doubles.
+class MomGFCCSD(lib.StreamObject):
+    """Green's function coupled cluster singles and doubles using the
+    moment-resolved solver.
 
     Attributes:
         verbose : int
@@ -898,10 +897,7 @@ if __name__ == "__main__":
 
     niter = 5
 
-    #from gf_ccsd import GFCCSD
-
-    gfcc = GFCCSD(ccsd, (niter, niter))
-
+    gfcc = MomGFCCSD(ccsd, (niter, niter))
     gfcc.kernel()
 
     ip1, vip1 = ccsd.ipccsd(nroots=8)
