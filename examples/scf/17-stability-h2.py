@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Author:  <osirpt.sun@gmail.com>
+# Author: Shirong Wang <srwang20@fudan.edu.cn>
 #
 
 '''
