@@ -229,7 +229,7 @@ def block_lanczos_symm(gfccsd, moments, verbose=None):
     best reproduce the inputted moments.
 
     Args:
-        gfccsd : GFCCSD
+        gfccsd : MomGFCCSD
             GF-CCSD object
         moments : ndarray (2*niter+2, n, n)
             Array of moments with which the resulting poles should
@@ -326,7 +326,7 @@ def block_lanczos_nosymm(gfccsd, moments, verbose=None):
     best reproduce the inputted moments.
 
     Args:
-        gfccsd : GFCCSD
+        gfccsd : MomGFCCSD
             GF-CCSD object
         moments : ndarray (2*niter+2, n, n)
             Array of moments with which the resulting poles should
@@ -613,7 +613,7 @@ class MomGFCCSD(lib.StreamObject):
         self.stdout = mycc.stdout
 
         if isinstance(mycc, cc.uccsd.UCCSD):
-            raise NotImplementedError("GFCCSD for unrestricted CCSD")
+            raise NotImplementedError("MomGFCCSD for unrestricted CCSD")
 
         if isinstance(niter, int):
             self.niter = (niter, niter)
