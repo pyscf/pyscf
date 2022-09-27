@@ -265,9 +265,9 @@ def uhf_external(mf, verbose=None):
 
 def ghf_real_internal(mf, verbose=None):
     log = logger.new_logger(mf, verbose)
-    mol = mf.mol
+    #mol = mf.mol
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
+    #mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nmo = mo_coeff.shape[1]
     nocc = numpy.count_nonzero(mo_occ)
