@@ -23,18 +23,20 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf import fci
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = [
-    ['H', ( 1.,-1.    , 0.   )],
-    ['H', ( 0.,-1.    ,-1.   )],
-    ['H', ( 1.,-0.5   , 0.   )],
-    ['H', ( 0.,-1.    , 1.   )],
-]
-mol.charge = 2
-mol.basis = '3-21g'
-mol.build()
-mf = scf.RHF(mol).run()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        ['H', ( 1.,-1.    , 0.   )],
+        ['H', ( 0.,-1.    ,-1.   )],
+        ['H', ( 1.,-0.5   , 0.   )],
+        ['H', ( 0.,-1.    , 1.   )],
+    ]
+    mol.charge = 2
+    mol.basis = '3-21g'
+    mol.build()
+    mf = scf.RHF(mol).run()
 
 def tearDownModule():
     global mol, mf

@@ -160,7 +160,7 @@ def get_euler_angles(c1, c2):
     else: # For backward compatibility, c1 and c2 are two points
         norm1 = numpy.linalg.norm(c1)
         norm2 = numpy.linalg.norm(c2)
-        assert(abs(norm1 - norm2) < 1e-12)
+        assert (abs(norm1 - norm2) < 1e-12)
 
         xy_norm = numpy.linalg.norm(c1[:2])
         if xy_norm > 1e-12:

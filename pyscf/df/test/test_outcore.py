@@ -25,17 +25,19 @@ from pyscf import gto
 from pyscf import ao2mo
 from pyscf import df
 
-mol = gto.Mole()
-mol.build(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''O     0    0.       0.
-              1     0    -0.757   0.587
-              1     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+def setUpModule():
+    global mol, auxmol
+    mol = gto.Mole()
+    mol.build(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''O     0    0.       0.
+                  1     0    -0.757   0.587
+                  1     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
 
-auxmol = df.addons.make_auxmol(mol, 'weigend')
+    auxmol = df.addons.make_auxmol(mol, 'weigend')
 
 def tearDownModule():
     global mol, auxmol

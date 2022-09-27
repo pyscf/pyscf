@@ -462,7 +462,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     noccb, nvirb = t2bb.shape[1:3]
 
     if mycc.direct:
-        assert(t2sym is None)
+        assert (t2sym is None)
         if with_ovvv:
             raise NotImplementedError
         if getattr(eris, 'mo_coeff', None) is not None:
@@ -516,7 +516,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         u2ab = u2ab.reshape(t2ab.shape)
 
     else:
-        assert(not with_ovvv)
+        assert (not with_ovvv)
         if t2sym is None:
             tmp = eris._contract_vvvv_t2(mycc, t2aa[np.tril_indices(nocca)],
                                          mycc.direct, None)
@@ -632,7 +632,8 @@ class UCCSD(ccsd.CCSD):
         return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
     uccsd_t = ccsd_t
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_mf=True):
         '''Un-relaxed 1-particle density matrix in MO space
 
         Returns:
@@ -644,9 +645,11 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                   with_frozen=with_frozen, with_mf=with_mf)
 
-    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
+    def make_rdm2(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False,
+                  with_frozen=True, with_dm1=True):
         '''2-particle density matrix in spin-orbital basis.
         '''
         from pyscf.cc import uccsd_rdm
@@ -655,7 +658,8 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr)
+        return uccsd_rdm.make_rdm2(self, t1, t2, l1, l2, ao_repr=ao_repr,
+                                   with_frozen=with_frozen, with_dm1=with_dm1)
 
     def spin_square(self, mo_coeff=None, s=None):
         from pyscf.fci.spin_op import spin_square_general
@@ -809,7 +813,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
-        self.e_hf = mycc._scf.energy_tot(dm=dm, vhf=vhf)
+
         nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
@@ -1128,7 +1132,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             eris.oovv[i] = buf[:nocca,nocca:,nocca:]
             eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
             eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
-        del(tmpf['aa'])
+        del (tmpf['aa'])
 
     if noccb > 0:
         buf = np.empty((nmob,nmob,nmob))
@@ -1141,7 +1145,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
             eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
             eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
-        del(tmpf['bb'])
+        del (tmpf['bb'])
 
     if nocca > 0:
         buf = np.empty((nmoa,nmob,nmob))
@@ -1154,7 +1158,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
             eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
             eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
-        del(tmpf['ab'])
+        del (tmpf['ab'])
 
     if noccb > 0:
         buf = np.empty((nmob,nmoa,nmoa))
@@ -1165,7 +1169,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
             eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
             eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
-        del(tmpf['ba'])
+        del (tmpf['ba'])
     buf = None
     cput1 = logger.timer_debug1(mycc, 'transforming oopq, ovpq', *cput1)
 

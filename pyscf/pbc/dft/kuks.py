@@ -69,7 +69,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, 0,
+        n, exc, vxc = ks._numint.nr_uks(cell, ks.grids, ks.xc, dm, hermi,
                                         kpts, kpts_band)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
@@ -127,7 +127,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
-class KUKS(rks.KohnShamDFT, kuhf.KUHF):
+class KUKS(kuhf.KUHF, rks.KohnShamDFT):
     '''RKS class adapted for PBCs with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), xc='LDA,VWN',

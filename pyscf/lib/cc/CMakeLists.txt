@@ -17,9 +17,7 @@ add_library(cc SHARED
 add_dependencies(cc np_helper ao2mo)
 
 set_target_properties(cc PROPERTIES
-  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMPILE_FLAGS ${OpenMP_C_FLAGS}
-  LINK_FLAGS ${OpenMP_C_FLAGS})
+  LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-target_link_libraries(cc ao2mo cvhf np_helper ${BLAS_LIBRARIES})
+target_link_libraries(cc ao2mo cvhf np_helper ${BLAS_LIBRARIES} ${OPENMP_C_PROPERTIES})
 

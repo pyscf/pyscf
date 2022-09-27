@@ -31,20 +31,22 @@ from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
 REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
-POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
         from pyscf.pbc import scf
-        assert(isinstance(mf, scf.khf.KSCF))
+        assert (isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         rhf.TDA.__init__(self, mf)
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(mf)
 
     def gen_vind(self, mf):
+        # exxdiv corrections are kept in hdiag while excluding them when calling
+        # the contractions between two-electron integrals and X/Y amplitudes.
+        # See also the relevant comments in function pbc.tdscf.rhf.TDA.gen_vind
         singlet = self.singlet
 
         mo_coeff = mf.mo_coeff
@@ -85,6 +87,9 @@ class TDA(rhf.TDA):
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
 
+    def get_ab(self, mf=None):
+        raise NotImplementedError
+
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
 
@@ -115,7 +120,7 @@ class TDA(rhf.TDA):
         precond = self.get_precond(hdiag)
 
         def pickeig(w, v, nroots, envs):
-            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            idx = numpy.where(w > self.positive_eig_threshold)[0]
             return w[idx], v[:,idx], idx
 
         log = logger.Logger(self.stdout, self.verbose)
@@ -199,7 +204,7 @@ class TDHF(TDA):
     def init_guess(self, mf, nstates=None):
         x0 = TDA.init_guess(self, mf, nstates)
         y0 = numpy.zeros_like(x0)
-        return numpy.hstack((x0,y0))
+        return numpy.asarray(numpy.block([[x0, y0], [y0, x0.conj()]]))
 
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
@@ -222,7 +227,7 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+                                  (w.real > self.positive_eig_threshold))[0]
             return lib.linalg_helper._eigs_cmplx2real(w, v, realidx, real_system)
 
         log = logger.Logger(self.stdout, self.verbose)

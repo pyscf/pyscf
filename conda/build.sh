@@ -13,4 +13,5 @@ set -x -e
 
 # env PYTHON not defined in certain conda-build version
 # $PYTHON -m pip install . -vv
+export CMAKE_CONFIGURE_ARGS="-DWITH_F12=OFF"
 pip install -v --prefix=$PREFIX .

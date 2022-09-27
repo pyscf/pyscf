@@ -23,52 +23,54 @@ from pyscf import scf
 from pyscf import mcscf
 from pyscf import fci
 
-b = 1.4
-mol = gto.Mole()
-mol.build(
-verbose = 7,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-symmetry = 1
-)
-mfr = scf.RHF(mol)
-mfr.scf()
-mcr = mcscf.CASSCF(mfr, 4, 4)
-mcr.conv_tol_grad = 1e-6
-mcr.mc1step()[0]
+def setUpModule():
+    global mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
+    b = 1.4
+    mol = gto.Mole()
+    mol.build(
+    verbose = 7,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    symmetry = 1
+    )
+    mfr = scf.RHF(mol)
+    mfr.scf()
+    mcr = mcscf.CASSCF(mfr, 4, 4)
+    mcr.conv_tol_grad = 1e-6
+    mcr.mc1step()[0]
 
-mfu = scf.UHF(mol)
-mfu.scf()
-mcu = mcscf.UCASSCF(mfu, 4, 4)
-mcu.conv_tol_grad = 1e-6
-mcu.mc1step()[0]
+    mfu = scf.UHF(mol)
+    mfu.scf()
+    mcu = mcscf.UCASSCF(mfu, 4, 4)
+    mcu.conv_tol_grad = 1e-6
+    mcu.mc1step()[0]
 
-mol_prg = gto.M(
-verbose = 0,
-atom = [
-    ['N',(  0.000000,  0.000000, -(b+0.1)/2)],
-    ['N',(  0.000000,  0.000000,  (b+0.1)/2)], ],
-basis = 'ccpvdz',
-symmetry=1)
-mfr_prg = scf.RHF(mol_prg).set (max_cycle=1).run()
-mcr_prg = mcscf.CASSCF(mfr_prg, 4, 4).set (max_cycle_macro=1).run()
-mfu_prg = scf.UHF(mol_prg).set (max_cycle=1).run()
-mcu_prg = mcscf.UCASSCF(mfu_prg, 4, 4).set (max_cycle_macro=1).run()
+    mol_prg = gto.M(
+    verbose = 0,
+    atom = [
+        ['N',(  0.000000,  0.000000, -(b+0.1)/2)],
+        ['N',(  0.000000,  0.000000,  (b+0.1)/2)], ],
+    basis = 'ccpvdz',
+    symmetry=1)
+    mfr_prg = scf.RHF(mol_prg).set (max_cycle=1).run()
+    mcr_prg = mcscf.CASSCF(mfr_prg, 4, 4).set (max_cycle_macro=1).run()
+    mfu_prg = scf.UHF(mol_prg).set (max_cycle=1).run()
+    mcu_prg = mcscf.UCASSCF(mfu_prg, 4, 4).set (max_cycle_macro=1).run()
 
-mol_prb = mol.copy ()
-mol_prb.basis = {'N': 'aug-cc-pvdz' }
-mol_prb.build ()
-mfr_prb = scf.RHF(mol_prb).set (max_cycle=1).run()
-mcr_prb = mcscf.CASSCF(mfr_prb, 4, 4).set (max_cycle_macro=1).run()
+    mol_prb = mol.copy ()
+    mol_prb.basis = {'N': 'aug-cc-pvdz' }
+    mol_prb.build ()
+    mfr_prb = scf.RHF(mol_prb).set (max_cycle=1).run()
+    mcr_prb = mcscf.CASSCF(mfr_prb, 4, 4).set (max_cycle_macro=1).run()
 
 
 def tearDownModule():
-    global mol, mfr, mcr, mfu, mcu
+    global mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
     mol.stdout.close()
-    del mol, mfr, mcr, mfu, mcu
+    del mol, mfr, mcr, mfu, mcu, mcr_prg, mcr_prb, mfr_prg, mfr_prb, mcu_prg, mfu_prg
 
 
 class KnownValues(unittest.TestCase):
@@ -82,8 +84,8 @@ class KnownValues(unittest.TestCase):
 
     def test_rcas_natorb(self):
         mo1, ci1, mocc1 = mcscf.addons.cas_natorb(mcr)
-        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 5.1687145190800079, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(mo1)  , 9.9260608594977491, 5)
+        self.assertAlmostEqual(numpy.linalg.norm(mocc1), 5.1687145190800079, 5)
 
 #TODO:    def test_ucas_natorb(self):
 #TODO:        mo2, ci2, mocc2 = mcscf.addons.cas_natorb(mcu)
@@ -93,7 +95,7 @@ class KnownValues(unittest.TestCase):
     def test_get_fock(self):
         f1 = mcscf.addons.get_fock(mcr)
         self.assertTrue(numpy.allclose(f1, f1.T))
-        self.assertAlmostEqual(numpy.linalg.norm(f1), 25.482177562349467, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(f1), 25.482177562349467, 5)
 #TODO:        f1 = mcscf.addons.get_fock(mcu)
 #TODO:        self.assertTrue(numpy.allclose(f1[0], f1[0].T))
 #TODO:        self.assertTrue(numpy.allclose(f1[1], f1[1].T))
@@ -113,20 +115,20 @@ class KnownValues(unittest.TestCase):
         mo, ci, mo_e = mcr.canonicalize(mo1, eris=mcr.ao2mo(mcr.mo_coeff))
         e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
         self.assertAlmostEqual(e1, 44.2658681077, 7)
-        self.assertAlmostEqual(lib.fp(mo_e), 4.1206025804989173, 7)
+        self.assertAlmostEqual(lib.fp(mo_e), 4.1206025804989173, 4)
 
         mcr1 = copy.copy(mcr)
         mcr1.frozen = 2
         mo, ci, mo_e = mcr1.canonicalize(mo1)
-        self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 7)
+        self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 5)
 
         mcr1.frozen = [0,1]
         mo, ci, mo_e = mcr1.canonicalize(mo1)
-        self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 7)
+        self.assertAlmostEqual(lib.fp(mo_e), 6.6030999409178577, 5)
 
         mcr1.frozen = [1,12]
         mo, ci, mo_e = mcr1.canonicalize(mo1)
-        self.assertAlmostEqual(lib.fp(mo_e), 5.2182584355788162, 7)
+        self.assertAlmostEqual(lib.fp(mo_e), 5.2182584355788162, 5)
 
     def test_canonicalize(self):
         mo, ci, mo_e = mcr.canonicalize()
@@ -404,8 +406,8 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 6.782329983125268, 9)
-        
-    def test_project_init_guess_uhf (self): 
+
+    def test_project_init_guess_uhf (self):
         mo1_u = mcscf.addons.project_init_guess (mcu_prg, mfu.mo_coeff)
         for mo1 in mo1_u:
             s1 = reduce(numpy.dot, (mo1.T, mfu_prg.get_ovlp(), mo1))
@@ -444,7 +446,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (s1[0] > s1[1])
 
     def test_project_init_guess_gramschmidt (self):
-        gram_schmidt_idx = numpy.arange (27, dtype=numpy.integer)[:,None].tolist ()
+        gram_schmidt_idx = numpy.arange (27, dtype=int)[:,None].tolist ()
         mo1 = mcscf.addons.project_init_guess (mcr_prg, mfr.mo_coeff, priority=gram_schmidt_idx)
         s1 = reduce(numpy.dot, (mo1.T, mfr_prg.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),

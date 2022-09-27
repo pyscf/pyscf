@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2022 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@ def get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
 
     ''' Returns approximate ovvv integrals used in restricted implementation'''
 
-    nocc = myadc._nocc
     nvir = myadc._nvir
     naux = myadc.with_df.get_naoaux()
 
     Lvv = Lvv.reshape(naux,nvir*nvir)
+    nocc = Lov.size//(naux*nvir)
     Lov = Lov.reshape(naux,nocc,nvir)
 
     if chnk_size < nocc:
@@ -34,7 +34,6 @@ def get_ovvv_df(myadc, Lov, Lvv, p, chnk_size):
     ovvv = np.dot(Lov_temp, Lvv)
     ovvv = ovvv.reshape(-1, nvir, nvir, nvir)
     return ovvv
-
 
 def get_ovvv_spin_df(myadc, Lov, Lvv, p, chnk_size):
 
@@ -58,7 +57,6 @@ def get_ovvv_spin_df(myadc, Lov, Lvv, p, chnk_size):
     ovvv = ovvv.reshape(-1, nvir_1, nvir_2, nvir_2)
     #vvvv = np.ascontiguousarray(vvvv.transpose(0,2,1,3)).reshape(-1, nvir, nvir * nvir)
     return ovvv
-
 
 def get_vvvv_df(myadc, Lvv, p, chnk_size):
 

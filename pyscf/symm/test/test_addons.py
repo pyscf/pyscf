@@ -22,27 +22,33 @@ from pyscf import gto
 from pyscf import scf
 from pyscf.symm import addons
 
-mol = gto.Mole()
-mol.build(
-    verbose = 0,
-    atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. , -0.757 , 0.587)],
-    [1   , (0. , 0.757  , 0.587)] ],
-    basis = 'cc-pvdz',
-    symmetry = 1,
-)
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.build(
+        verbose = 0,
+        atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. , -0.757 , 0.587)],
+        [1   , (0. , 0.757  , 0.587)] ],
+        basis = 'cc-pvdz',
+        symmetry = 1,
+    )
 
-mf = scf.RHF(mol)
-mf.scf()
+    mf = scf.RHF(mol)
+    mf.scf()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnowValues(unittest.TestCase):
     def test_label_orb_symm(self):
         l = addons.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff)
-        lab0 = ['A1', 'A1', 'B1', 'A1', 'B2', 'A1', 'B1', 'B1',
-                'A1', 'A1', 'B2', 'B1', 'A1', 'A2', 'B2', 'A1',
-                'B1', 'B1', 'A1', 'B2', 'A2', 'A1', 'A1', 'B1']
+        lab0 = ['A1', 'A1', 'B2', 'A1', 'B1', 'A1', 'B2', 'B2',
+                'A1', 'A1', 'B1', 'B2', 'A1', 'A2', 'B1', 'A1',
+                'B2', 'B2', 'A1', 'B1', 'A2', 'A1', 'A1', 'B2']
         self.assertEqual(list(l), lab0)
 
     def test_symmetrize_orb(self):

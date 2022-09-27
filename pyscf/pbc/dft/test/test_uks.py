@@ -26,13 +26,15 @@ import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
 
-L = 4.
-cell = pbcgto.Cell()
-cell.verbose = 0
-cell.a = np.eye(3)*L
-cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
-cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
-cell.build()
+def setUpModule():
+    global cell
+    L = 4.
+    cell = pbcgto.Cell()
+    cell.verbose = 0
+    cell.a = np.eye(3)*L
+    cell.atom =[['He' , ( L/2+0., L/2+0. ,   L/2+1.)],]
+    cell.basis = {'He': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+    cell.build()
 
 def tearDownModule():
     global cell
@@ -66,17 +68,18 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         self.assertAlmostEqual(mf.scf(), -7.6162130840535092, 8)
 
-    def test_rsh_df(self):
+    def test_rsh_fft(self):
         mf = pbcdft.UKS(cell)
         mf.xc = 'camb3lyp'
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3032261128220544, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4745140703871877, 7)
 
+    def test_rsh_df(self):
         mf = pbcdft.UKS(cell).density_fit()
         mf.xc = 'camb3lyp'
         mf.omega = .15
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -2.3987656490734555, 7)
+        self.assertAlmostEqual(mf.e_tot, -2.4766238116030683, 7)
 
 
 if __name__ == '__main__':

@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from pyscf.pbc import scf
 from pyscf.pbc.tdscf import rhf
 from pyscf.pbc.tdscf import uhf
 from pyscf.pbc.tdscf import krhf
@@ -31,88 +32,71 @@ except (ImportError, IOError):
 
 def TDHF(mf):
     import numpy
+    if isinstance(mf, scf.khf.KSCF):
+        return KTDHF(mf)
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError
-    from pyscf.pbc import scf
+        raise NotImplementedError('Only supports gamma-point TDHF')
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    if isinstance(mf, scf.uhf.UHF):
-        #mf = scf.addons.convert_to_uhf(mf) # To remove newton decoration
-        return uhf.TDHF(mf)
-    else:
-        #mf = scf.addons.convert_to_rhf(mf)
-        return rhf.TDHF(mf)
+    #TODO: mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        # Is it correct to call TDUHF for ROHF?
+        mf = mf.to_uhf()
+    return mf.TDHF()
 
 def TDA(mf):
     import numpy
+    if isinstance(mf, scf.khf.KSCF):
+        return KTDA(mf)
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
-        #mf = scf.addons.convert_to_uhf(mf)
+        raise NotImplementedError('Only supports gamma-point TDA')
+    #TODO: mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, scf.hf.KohnShamDFT):
-            return uks.TDA(mf)
+            mf = mf.to_uks()
         else:
-            return uhf.TDA(mf)
-    else:
-        #mf = scf.addons.convert_to_rhf(mf)
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return rks.TDA(mf)
-        else:
-            return rhf.TDA(mf)
+            mf = mf.to_uhf()
+    return mf.TDA()
 
 def TDDFT(mf):
     import numpy
+    if isinstance(mf, scf.khf.KSCF):
+        return KTDDFT(mf)
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
-        #mf = scf.addons.convert_to_uhf(mf)
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return uks.tddft(mf)
-        else:
-            return uhf.TDHF(mf)
+        raise NotImplementedError('Only supports gamma-point TDDFT')
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        #TODO: mf = mf.remove_soscf()
+        if isinstance(mf, scf.rohf.ROHF):
+            mf = mf.to_uks()
+        return mf.TDDFT()
     else:
-        #mf = scf.addons.convert_to_rhf(mf)
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return rks.tddft(mf)
-        else:
-            return rhf.TDHF(mf)
+        return TDHF(mf)
 
 def KTDHF(mf):
-    from pyscf.pbc import scf
     if isinstance(mf, scf.hf.KohnShamDFT):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    if isinstance(mf, scf.uhf.UHF):
-        return kuhf.TDHF(mf)
-    else:
-        return krhf.TDHF(mf)
+    #TODO: mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
+        mf = mf.to_uhf()
+    return mf.TDHF()
 
 def KTDA(mf):
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
+    #TODO: mf = mf.remove_soscf()
+    if isinstance(mf, scf.rohf.ROHF):
         if isinstance(mf, scf.hf.KohnShamDFT):
-            return kuks.TDA(mf)
+            mf = mf.to_uks()
         else:
-            return kuhf.TDA(mf)
-    else:
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return krks.TDA(mf)
-        else:
-            return krhf.TDA(mf)
+            mf = mf.to_uhf()
+    return mf.TDA()
 
 def KTDDFT(mf):
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return kuks.tddft(mf)
-        else:
-            return kuhf.TDHF(mf)
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        #TODO: mf = mf.remove_soscf()
+        if isinstance(mf, scf.rohf.ROHF):
+            mf = mf.to_uks()
+        return mf.TDDFT()
     else:
-        if isinstance(mf, scf.hf.KohnShamDFT):
-            return krks.tddft(mf)
-        else:
-            return krhf.TDHF(mf)
+        return KTDHF(mf)
 
 KTD = KTDDFT
 

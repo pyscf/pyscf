@@ -171,6 +171,17 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(numpy.dot(a, c+d*1j), lib.dot(a, c+d*1j)))
         self.assertTrue(numpy.allclose(numpy.dot(a+b*1j, c), lib.dot(a+b*1j, c)))
 
+        def check(a, b):
+            self.assertAlmostEqual(abs(a.dot(b) - lib.dot(a, b)).max(), 0, 13)
+        dims = [4, 17, 70]
+        for m in dims:
+            for n in dims:
+                for k in dims:
+                    check(numpy.random.rand(m, k), numpy.random.rand(k, n))
+                    check(numpy.random.rand(k, m).T, numpy.random.rand(k, n))
+                    check(numpy.random.rand(m, k), numpy.random.rand(n, k).T)
+                    check(numpy.random.rand(k, m).T, numpy.random.rand(n, k).T)
+
     def test_cartesian_prod(self):
         arrs = (range(3,9), range(4))
         cp = lib.cartesian_prod(arrs)

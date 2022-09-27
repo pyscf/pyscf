@@ -23,27 +23,34 @@ import numpy as np
 from pyscf import gto
 from pyscf import lib
 from pyscf.pbc import gto as pgto
+from pyscf.pbc.gto import ecp
 
 
-L = 1.5
-n = 41
-cl = pgto.Cell()
-cl.build(
-    a = [[L,0,0], [0,L,0], [0,0,L]],
-    mesh = [n,n,n],
-    atom = 'He %f %f %f' % ((L/2.,)*3),
-    basis = 'ccpvdz')
+def setUpModule():
+    global cl, cl1, L, n
+    L = 1.5
+    n = 41
+    cl = pgto.Cell()
+    cl.build(
+        a = [[L,0,0], [0,L,0], [0,0,L]],
+        mesh = [n,n,n],
+        atom = 'He %f %f %f' % ((L/2.,)*3),
+        basis = 'ccpvdz')
 
-numpy.random.seed(1)
-cl1 = pgto.Cell()
-cl1.build(a = numpy.random.random((3,3)).T,
-          precision = 1e-9,
-          mesh = [n,n,n],
-          atom ='''He .1 .0 .0
-                   He .5 .1 .0
-                   He .0 .5 .0
-                   He .1 .3 .2''',
-          basis = 'ccpvdz')
+    numpy.random.seed(1)
+    cl1 = pgto.Cell()
+    cl1.build(a = numpy.random.random((3,3)).T,
+              precision = 1e-9,
+              mesh = [n,n,n],
+              atom ='''He .1 .0 .0
+                       He .5 .1 .0
+                       He .0 .5 .0
+                       He .1 .3 .2''',
+              basis = 'ccpvdz')
+
+def tearDownModule():
+    global cl, cl1
+    del cl, cl1
 
 class KnownValues(unittest.TestCase):
     def test_nimgs(self):
@@ -97,9 +104,9 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1361, 3))
-        rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1465, 3))
+        rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1657, 3))
 
     def test_ewald(self):
         cell = pgto.Cell()
@@ -230,7 +237,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(12)
         kpts = numpy.random.random((4,3))
         kpts[0] = 0
-        self.assertEqual(list(cl1.nimgs), [34,23,20])
+        self.assertEqual(list(cl1.nimgs), [36,24,21])
         s0 = cl1.pbc_intor('int1e_ovlp_sph', hermi=0, kpts=kpts)
         self.assertAlmostEqual(lib.fp(s0[0]), 492.30658304804126, 4)
         self.assertAlmostEqual(lib.fp(s0[1]), 37.812956255000756-28.972806230140314j, 4)
@@ -241,7 +248,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(s1), 492.30658304804126, 4)
 
     def test_ecp_pseudo(self):
-        from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,
             mesh = [9]*3,
@@ -258,7 +264,6 @@ class KnownValues(unittest.TestCase):
         cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
         cell.ecp = {'Na':'lanl2dz'}
         cell.build()
-        # FIXME: ECP integrals segfault
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
@@ -343,13 +348,25 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(cell.KKS().__class__, dft.KKS(cell).__class__)
         self.assertEqual(cell.CCSD().__class__, cc.ccsd.RCCSD)
         self.assertEqual(cell.TDA().__class__, tdscf.rhf.TDA)
-        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.TDDFTNoHybrid)
+        self.assertEqual(cell.TDBP86().__class__, tdscf.rks.CasidaTDDFT)
         self.assertEqual(cell.TDB3LYP().__class__, tdscf.rks.TDDFT)
         self.assertEqual(cell.KCCSD().__class__, cc.kccsd_rhf.KRCCSD)
         self.assertEqual(cell.KTDA().__class__, tdscf.krhf.TDA)
-        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFTNoHybrid)
+        self.assertEqual(cell.KTDBP86().__class__, tdscf.krks.TDDFT)
         self.assertRaises(AttributeError, lambda: cell.xyz)
         self.assertRaises(AttributeError, lambda: cell.TDxyz)
+
+        cell = pgto.M(atom='He', charge=1, spin=1, a=np.eye(3)*4, basis={'He': [[0, (1, 1)]]})
+        self.assertTrue(cell.HF().__class__, scf.uhf.UHF)
+        self.assertTrue(cell.KS().__class__, dft.uks.UKS)
+        self.assertTrue(cell.KKS().__class__, dft.kuks.KUKS)
+        self.assertTrue(cell.CCSD().__class__, cc.ccsd.UCCSD)
+        self.assertTrue(cell.TDA().__class__, tdscf.uhf.TDA)
+        self.assertTrue(cell.TDBP86().__class__, tdscf.uks.CasidaTDDFT)
+        self.assertTrue(cell.TDB3LYP().__class__, tdscf.uks.TDDFT)
+        self.assertTrue(cell.KCCSD().__class__, cc.kccsd_uhf.KUCCSD)
+        self.assertTrue(cell.KTDA().__class__, tdscf.kuhf.TDA)
+        self.assertTrue(cell.KTDBP86().__class__, tdscf.kuks.TDDFT)
 
     def test_ghost(self):
         cell = pgto.Cell(
@@ -425,4 +442,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")
     unittest.main()
-

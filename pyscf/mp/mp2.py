@@ -35,7 +35,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
     if mo_energy is not None or mo_coeff is not None:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
         # not supported when mo_energy or mo_coeff is given.
-        assert(mp.frozen == 0 or mp.frozen is None)
+        assert (mp.frozen == 0 or mp.frozen is None)
 
     if eris is None:
         eris = mp.ao2mo(mo_coeff)
@@ -119,7 +119,7 @@ def energy(mp, t2, eris):
 
 def update_amps(mp, t2, eris):
     '''Update non-canonical MP2 amplitudes'''
-    #assert(isinstance(eris, _ChemistsERIs))
+    #assert (isinstance(eris, _ChemistsERIs))
     nocc, nvir = t2.shape[1:3]
     fock = eris.fock
     mo_e_o = eris.mo_energy[:nocc]
@@ -321,17 +321,17 @@ def get_nocc(mp):
         return mp._nocc
     elif mp.frozen is None:
         nocc = numpy.count_nonzero(mp.mo_occ > 0)
-        assert(nocc > 0)
+        assert (nocc > 0)
         return nocc
     elif isinstance(mp.frozen, (int, numpy.integer)):
         nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
-        assert(nocc > 0)
+        assert (nocc > 0)
         return nocc
     elif isinstance(mp.frozen[0], (int, numpy.integer)):
         occ_idx = mp.mo_occ > 0
         occ_idx[list(mp.frozen)] = False
         nocc = numpy.count_nonzero(occ_idx)
-        assert(nocc > 0)
+        assert (nocc > 0)
         return nocc
     else:
         raise NotImplementedError
@@ -354,7 +354,7 @@ def get_frozen_mask(mp):
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    moidx = numpy.ones(mp.mo_occ.size, dtype=bool)
     if mp._nmo is not None:
         moidx[mp._nmo:] = False
     elif mp.frozen is None:
@@ -366,6 +366,14 @@ def get_frozen_mask(mp):
     else:
         raise NotImplementedError
     return moidx
+
+def get_e_hf(mp, mo_coeff=None):
+    # Get HF energy, which is needed for total MP2 energy.
+    if mo_coeff is None:
+        mo_coeff = mp.mo_coeff
+    dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
+    vhf = mp._scf.get_veff(mp._scf.mol, dm)
+    return mp._scf.energy_tot(dm=dm, vhf=vhf)
 
 
 def as_scanner(mp):
@@ -447,6 +455,8 @@ class MP2(lib.StreamObject):
             >>> mf = scf.RHF(mol).run()
             >>> # freeze 2 core orbitals
             >>> pt = mp.MP2(mf).set(frozen = 2).run()
+            >>> # auto-generate the number of core orbitals to be frozen (1 in this case)
+            >>> pt = mp.MP2(mf).set_frozen().run()
             >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
             >>> pt.set(frozen = [0,1,16,17,18]).run()
 
@@ -487,8 +497,8 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.e_corr = None
         self.e_hf = None
+        self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -515,6 +525,13 @@ class MP2(lib.StreamObject):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    get_e_hf = get_e_hf
+
+    def set_frozen(self, method='auto', window=(-1000.0, 1000.0)):
+        from pyscf import mp
+        is_gmp = isinstance(self, mp.gmp2.GMP2)
+        from pyscf.cc.ccsd import set_frozen
+        return set_frozen(self, method=method, window=window, is_gcc=is_gmp)
 
     def dump_flags(self, verbose=None):
         log = logger.new_logger(self, verbose)
@@ -533,7 +550,7 @@ class MP2(lib.StreamObject):
 
     @property
     def e_tot(self):
-        return (self.e_hf or self._scf.e_tot) + self.e_corr
+        return self.e_hf + self.e_corr
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         '''
@@ -543,14 +560,13 @@ class MP2(lib.StreamObject):
         '''
         if self.verbose >= logger.WARN:
             self.check_sanity()
+
         self.dump_flags()
 
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
+        if eris is None:
+            eris = self.ao2mo(mo_coeff)
 
         if self._scf.converged:
             self.e_corr, self.t2 = self.init_amps(mo_energy, mo_coeff, eris, with_t2)
@@ -622,7 +638,6 @@ class _ChemistsERIs:
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
-        self.e_hf = None
         self.orbspin = None
         self.ovov = None
 
@@ -638,16 +653,14 @@ class _ChemistsERIs:
 
         if mo_coeff is mp._scf.mo_coeff and mp._scf.converged:
             # The canonical MP2 from a converged SCF result. Rebuilding fock
-            # and e_hf can be skipped
+            # can be skipped
             self.mo_energy = _mo_energy_without_core(mp, mp._scf.mo_energy)
             self.fock = numpy.diag(self.mo_energy)
-            self.e_hf = mp._scf.e_tot
         else:
             dm = mp._scf.make_rdm1(mo_coeff, mp.mo_occ)
             vhf = mp._scf.get_veff(mp.mol, dm)
             fockao = mp._scf.get_fock(vhf=vhf, dm=dm)
             self.fock = self.mo_coeff.conj().T.dot(fockao).dot(self.mo_coeff)
-            self.e_hf = mp._scf.energy_tot(dm=dm, vhf=vhf)
             self.mo_energy = self.fock.diagonal().real
         return self
 
@@ -715,7 +728,7 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     nao, nocc = orbo.shape
     nvir = orbv.shape[1]
     nbas = mol.nbas
-    assert(nvir <= nao)
+    assert (nvir <= nao)
 
     ao_loc = mol.ao_loc_nr()
     dmax = max(4, min(nao/3, numpy.sqrt(max_memory*.95e6/8/(nao+nocc)**2)))
@@ -795,7 +808,7 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
     return h5dat
 
-del(WITH_T2)
+del (WITH_T2)
 
 
 if __name__ == '__main__':

@@ -32,7 +32,7 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
         mc1step.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
 
-        assert(self.mol.symmetry)
+        assert (self.mol.symmetry)
         fcisolver = self.fcisolver
         if isinstance(fcisolver, fci.direct_spin0.FCISolver):
             self.fcisolver = fci.direct_spin0_symm.FCISolver(self.mol)

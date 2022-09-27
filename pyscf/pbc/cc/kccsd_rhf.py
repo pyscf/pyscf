@@ -34,6 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM  # noqa
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import gamma_point
+from pyscf.pbc.df import df
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -253,7 +254,7 @@ def _get_epq(pindices,qindices,fac=[1.0,1.0],large_num=LARGE_DENOM):
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     fac_p, fac_q = fac
@@ -604,10 +605,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         self.dump_flags()
+
+        self.e_hf = self.get_e_hf()
         if eris is None:
             # eris = self.ao2mo()
             eris = self.ao2mo(self.mo_coeff)
         self.eris = eris
+
         if mbpt2:
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
@@ -706,7 +710,6 @@ KRCCSD = RCCSD
 #
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore'):
-        from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         log = logger.Logger(cc.stdout, cc.verbose)
@@ -738,7 +741,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         fockao = cc._scf.get_hcore() + vhf
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        self.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
 
@@ -790,7 +792,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
                                  (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
-                if dtype == np.float: eri_kpt = eri_kpt.real
+                if dtype == np.double: eri_kpt = eri_kpt.real
                 eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                     eri_kpt_symm = khelper.transform_symm(eri_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -834,7 +836,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_r = mo_coeff[kr][:, :nocc]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbo_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nocc, nmo).transpose(0, 2, 1, 3)
                         self.dtype = buf_kpt.dtype
                         self.oooo[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, :nocc] / nkpts
@@ -852,7 +854,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbv_r = mo_coeff[kr][:, nocc:]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
                                          (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(0, 2, 1, 3)
                         self.ovov[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
                         # TODO: compute vovv on the fly
@@ -874,7 +876,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #                orbva_p = orbv_p[:,a].reshape(-1,1)
             #                buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
             #                                 (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
-            #                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+            #                if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
             #                buf_kpt = buf_kpt.reshape((1,nvir,nvir,nvir)).transpose(0,2,1,3)
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
             # cput1 = log.timer_debug1('transforming vvvv', *cput1)
@@ -894,7 +896,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                      kpts[[ikp,ikq,ikr,iks]], compact=False)
-                    if dtype == np.float: buf_kpt = buf_kpt.real
+                    if dtype == np.double: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
                     for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
                         buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
@@ -907,7 +909,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
                                          (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
-                        if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
+                        if mo_coeff[0].dtype == np.double: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
                         self.vvvv[ikp, ikr, ikq, a, :, :, :] = buf_kpt[0, :, :, :] / nkpts
@@ -921,7 +923,6 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
 
 def _init_df_eris(cc, eris):
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -949,14 +950,12 @@ def _init_df_eris(cc, eris):
     dtype = np.result_type(dtype, *eris.mo_coeff)
     eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
-    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(cc._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq = cderi_array[ki,kj]
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')

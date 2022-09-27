@@ -6,19 +6,21 @@ from pyscf import lib, gto, scf, dft, tdscf
 from pyscf import gw
 from pyscf.gw import rpa
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    ['O' , (0. , 0.     , 0.)],
-    ['H' , (0. , -0.7571 , 0.5861)],
-    ['H' , (0. , 0.7571 , 0.5861)]]
-mol.basis = 'def2-svp'
-mol.build()
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        ['O' , (0. , 0.     , 0.)],
+        ['H' , (0. , -0.7571 , 0.5861)],
+        ['H' , (0. , 0.7571 , 0.5861)]]
+    mol.basis = 'def2-svp'
+    mol.build()
 
-mf = dft.RKS(mol)
-mf.xc = 'pbe'
-mf.kernel()
+    mf = dft.RKS(mol)
+    mf.xc = 'pbe'
+    mf.kernel()
 
 def tearDownModule():
     global mol, mf

@@ -337,6 +337,38 @@ ALIAS = {
     'ccecpregaugccpvtz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVTZ.dat'),
     'ccecpregaugccpvqz': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pVQZ.dat'),
     'ccecpregaugccpv5z': join('ccecp-basis', 'ccECP_reg', 'ccECP_aug-cc-pV5Z.dat'),
+#spin-orbit ECPs
+    'ecpds10mdfso' : os.path.join('soecp', 'ECPDS10MDFSO.dat'),
+    'ecpds28mdfso' : os.path.join('soecp', 'ECPDS28MDFSO.dat'),
+    'ecpds28mwbso' : os.path.join('soecp', 'ECPDS28MWBSO.dat'),
+    'ecpds46mdfso' : os.path.join('soecp', 'ECPDS46MDFSO.dat'),
+    'ecpds60mdfso' : os.path.join('soecp', 'ECPDS60MDFSO.dat'),
+    'ecpds60mwbso' : os.path.join('soecp', 'ECPDS60MWBSO.dat'),
+    'ecpds78mdfso' : os.path.join('soecp', 'ECPDS78MDFSO.dat'),
+    'ecpds92mdfbso' : os.path.join('soecp', 'ECPDS92MDFBSO.dat'),
+    'ecpds92mdfbqso' : os.path.join('soecp', 'ECPDS92MDFBQSO.dat'),
+# dyall's sets
+    'dyall2zp' : 'dyall-basis.dyall_2zp',
+    'dyall3zp' : 'dyall-basis.dyall_3zp',
+    'dyall4zp' : 'dyall-basis.dyall_4zp',
+    'dyallaae2z' : 'dyall-basis.dyall_aae2z',
+    'dyallaae3z' : 'dyall-basis.dyall_aae3z',
+    'dyallaae4z' : 'dyall-basis.dyall_aae4z',
+    'dyallacv2z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv3z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv4z' : 'dyall-basis.dyall_acv4z',
+    'dyallae2z' : 'dyall-basis.dyall_ae2z',
+    'dyallae3z' : 'dyall-basis.dyall_ae3z',
+    'dyallae4z' : 'dyall-basis.dyall_ae4z',
+    'dyallav2z' : 'dyall-basis.dyall_av2z',
+    'dyallav3z' : 'dyall-basis.dyall_av3z',
+    'dyallav4z' : 'dyall-basis.dyall_av4z',
+    'dyallcv2z' : 'dyall-basis.dyall_cv2z',
+    'dyallcv3z' : 'dyall-basis.dyall_cv3z',
+    'dyallcv4z' : 'dyall-basis.dyall_cv4z',
+    'dyallv2z' : 'dyall-basis.dyall_v2z',
+    'dyallv3z' : 'dyall-basis.dyall_v3z',
+    'dyallv4z' : 'dyall-basis.dyall_v4z',
 }
 
 def _is_pople_basis(basis):
@@ -529,6 +561,7 @@ def load_ecp(filename_or_basisname, symb):
                 return parse_ecp(fin.read(), symb)
 
     name = _format_basis_name(filename_or_basisname)
+
     if name in ALIAS:
         basmod = ALIAS[name]
         return parse_nwchem.load_ecp(join(_BASIS_DIR, basmod), symb)

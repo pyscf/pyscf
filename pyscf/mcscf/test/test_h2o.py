@@ -20,35 +20,37 @@ from pyscf import scf
 from pyscf import mcscf
 from pyscf import fci
 
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. ,-0.757  , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-basis = '631g',
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-10
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym, mc_ref
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. ,-0.757  , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+    basis = '631g',
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-10
+    m.scf()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ["O" , (0. , 0.     , 0.)],
-    [1   , (0. ,-0.757  , 0.587)],
-    [1   , (0. , 0.757  , 0.587)]],
-basis = '631g',
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-10
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ["O" , (0. , 0.     , 0.)],
+        [1   , (0. ,-0.757  , 0.587)],
+        [1   , (0. , 0.757  , 0.587)]],
+    basis = '631g',
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-10
+    msym.scf()
 
-mc_ref = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4)
-mc_ref.kernel ()
+    mc_ref = mcscf.CASSCF (m, 4, 4).state_average_([0.25,]*4)
+    mc_ref.kernel ()
 
 def tearDownModule():
     global mol, molsym, m, msym, mc_ref
@@ -88,17 +90,17 @@ class KnownValues(unittest.TestCase):
         fcisolvers = [fci.solver (molsym, symm=True, singlet=False) for i in range (2)]
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[0].wfnsym = 'A1'
-        fcisolvers[1].wfnsym = 'B2'
+        fcisolvers[1].wfnsym = 'B1'
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
             self.assertAlmostEqual (e1, e0, 5)
-        
+
     def test_pointgroup_sa4_newton (self):
         fcisolvers = [fci.solver (molsym, symm=True, singlet=False) for i in range (2)]
         fcisolvers[0].nroots = fcisolvers[1].nroots = 2
         fcisolvers[0].wfnsym = 'A1'
-        fcisolvers[1].wfnsym = 'B2'
+        fcisolvers[1].wfnsym = 'B1'
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()
         self.assertAlmostEqual (mc.e_tot, mc_ref.e_tot, 8)
         for e1, e0 in zip (numpy.sort (mc.e_states), mc_ref.e_states):
@@ -106,7 +108,7 @@ class KnownValues(unittest.TestCase):
 
     def test_spin_and_pointgroup_sa4 (self):
         fcisolvers = [fci.solver (molsym, singlet = not(bool(i%2))) for i in range (4)]
-        fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B2'
+        fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B1'
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).run ()
@@ -116,7 +118,7 @@ class KnownValues(unittest.TestCase):
 
     def test_spin_and_pointgroup_sa4_newton (self):
         fcisolvers = [fci.solver (molsym, singlet = not(bool(i%2))) for i in range (4)]
-        fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B2'
+        fcisolvers[0].wfnsym = fcisolvers[1].wfnsym = 'B1'
         fcisolvers[2].wfnsym = fcisolvers[3].wfnsym = 'A1'
         fcisolvers[1].spin = fcisolvers[3].spin = 2
         mc = mcscf.addons.state_average_mix (mcscf.CASSCF (msym, 4, 4), fcisolvers, [0.25,]*4).newton ().run ()

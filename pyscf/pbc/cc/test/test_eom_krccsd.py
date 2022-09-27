@@ -14,11 +14,6 @@ from pyscf.pbc.cc import kintermediates, kintermediates_rhf
 from pyscf import lib
 import unittest
 
-cell_n3d = make_test_cell.test_cell_n3_diffuse()
-kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
-kmf.conv_tol = 1e-10
-kmf.scf()
-
 # Helper functions
 def kconserve_pmatrix(nkpts, kconserv):
     Ps = numpy.zeros((nkpts, nkpts, nkpts, nkpts))
@@ -91,9 +86,16 @@ def make_rand_kmf(nkpts=3):
     #kmf.get_hcore = lambda *x: mat_hcore
     return kmf
 
-rand_kmf = make_rand_kmf()
-rand_kmf1 = make_rand_kmf(nkpts=1)
-rand_kmf2 = make_rand_kmf(nkpts=2)
+def setUpModule():
+    global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
+    cell_n3d = make_test_cell.test_cell_n3_diffuse()
+    kmf = pbcscf.KRHF(cell_n3d, cell_n3d.make_kpts((1,1,2), with_gamma_point=True), exxdiv=None)
+    kmf.conv_tol = 1e-10
+    kmf.scf()
+
+    rand_kmf = make_rand_kmf()
+    rand_kmf1 = make_rand_kmf(nkpts=1)
+    rand_kmf2 = make_rand_kmf(nkpts=2)
 
 def tearDownModule():
     global cell_n3d, kmf, rand_kmf, rand_kmf1, rand_kmf2
@@ -186,7 +188,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-8
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -214,7 +216,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -231,7 +233,7 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.KGCCSD(kmf)
         cc.conv_tol = 1e-10
         eris = cc.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(cc.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(cc.nkpts)]
         ecc, t1, t2 = cc.kernel(eris=eris)
         ehf = kmf.e_tot
         self.assertAlmostEqual(ehf, ehf_bench, 6)
@@ -246,8 +248,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(eip_gccsd[0][0], -1.1435100754903331, 6)
 
         # Usually slightly higher agreement when comparing directly against one another
-        self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 9)
-        self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 9)
+        self.assertAlmostEqual(eea_gccsd[0][0], eea_rccsd[0][0], 8)
+        self.assertAlmostEqual(eip_gccsd[0][0], eip_rccsd[0][0], 8)
 
     def test_n3_ee(self):
         n = 15
@@ -305,16 +307,16 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds_slow(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e),47165803.39384298, 3)
-        self.assertAlmostEqual(lib.finger(pt1),10444.351837617747+20016.35108560657j, 4)
-        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
-        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
-        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
+        self.assertAlmostEqual(lib.fp(e),47165803.39384298, 3)
+        self.assertAlmostEqual(lib.fp(pt1),10444.351837617747+20016.35108560657j, 4)
+        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.fp(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.fp(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
     def test_t3p2_imds_complex(self):
         '''Test t3p2 implementation.'''
@@ -327,16 +329,16 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e), 47165803.393840045, 3)
-        self.assertAlmostEqual(lib.finger(pt1),10444.3518376177471509+20016.3510856065695407j, 4)
-        self.assertAlmostEqual(lib.finger(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
-        self.assertAlmostEqual(lib.finger(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
-        self.assertAlmostEqual(lib.finger(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
+        self.assertAlmostEqual(lib.fp(e), 47165803.393840045, 3)
+        self.assertAlmostEqual(lib.fp(pt1),10444.3518376177471509+20016.3510856065695407j, 4)
+        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 3)
+        self.assertAlmostEqual(lib.fp(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
+        self.assertAlmostEqual(lib.fp(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
     def test_t3p2_imds_complex_against_so(self):
         '''Test t3[2] implementation against spin-orbital implmentation.'''
@@ -350,16 +352,16 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e), 3867.812511518491, 6)
-        self.assertAlmostEqual(lib.finger(pt1),(179.0050003787795+521.7529255474592j), 6)
-        self.assertAlmostEqual(lib.finger(pt2),(361.4902731606503+1079.5387279755082j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik),(34.9811459194098-86.93467379996585j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek),(183.86684834783233+179.66583663669644j), 6)
+        self.assertAlmostEqual(lib.fp(e), 3867.812511518491, 6)
+        self.assertAlmostEqual(lib.fp(pt1),(179.0050003787795+521.7529255474592j), 6)
+        self.assertAlmostEqual(lib.fp(pt2),(361.4902731606503+1079.5387279755082j), 6)
+        self.assertAlmostEqual(lib.fp(Wmcik),(34.9811459194098-86.93467379996585j), 6)
+        self.assertAlmostEqual(lib.fp(Wacek),(183.86684834783233+179.66583663669644j), 6)
 
         gkmf = convert_to_ghf(rand_kmf2)
         # Round to make this insensitive to small changes between PySCF versions
@@ -370,17 +372,17 @@ class KnownValues(unittest.TestCase):
 
         rand_gcc = pbcc.KGCCSD(gkmf)
         eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_gcc.nkpts)]
         gt1 = rand_gcc.spatial2spin(t1)
         gt2 = rand_gcc.spatial2spin(t2)
         rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
 
         ge, gpt1, gpt2, gWmcik, gWacek = kintermediates.get_t3p2_imds_slow(rand_gcc, gt1, gt2)
-        self.assertAlmostEqual(lib.finger(ge), lib.finger(e), 8)
-        self.assertAlmostEqual(lib.finger(gpt1[:,::2,::2]), lib.finger(pt1), 8)
-        self.assertAlmostEqual(lib.finger(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.finger(pt2), 8)
-        self.assertAlmostEqual(lib.finger(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wmcik), 8)
-        self.assertAlmostEqual(lib.finger(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wacek), 8)
+        self.assertAlmostEqual(lib.fp(ge), lib.fp(e), 8)
+        self.assertAlmostEqual(lib.fp(gpt1[:,::2,::2]), lib.fp(pt1), 8)
+        self.assertAlmostEqual(lib.fp(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.fp(pt2), 8)
+        self.assertAlmostEqual(lib.fp(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.fp(Wmcik), 8)
+        self.assertAlmostEqual(lib.fp(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.fp(Wacek), 8)
 
     def test_t3p2_imds_complex_against_so_frozen(self):
         '''Test t3[2] implementation against spin-orbital implmentation with frozen orbitals.'''
@@ -394,16 +396,16 @@ class KnownValues(unittest.TestCase):
 
         rand_cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=1)
         eris = rand_cc.ao2mo(kmf.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.finger(e), -328.44609187669454, 6)
-        self.assertAlmostEqual(lib.finger(pt1),(-64.29455737653288+94.36604246905883j), 6)
-        self.assertAlmostEqual(lib.finger(pt2),(-24.663592135920723+36.00181963359046j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik),(6.692675632408793+6.926864923969868j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek),(24.78958393361647-15.627512899715132j), 6)
+        self.assertAlmostEqual(lib.fp(e), -328.44609187669454, 6)
+        self.assertAlmostEqual(lib.fp(pt1),(-64.29455737653288+94.36604246905883j), 6)
+        self.assertAlmostEqual(lib.fp(pt2),(-24.663592135920723+36.00181963359046j), 6)
+        self.assertAlmostEqual(lib.fp(Wmcik),(6.692675632408793+6.926864923969868j), 6)
+        self.assertAlmostEqual(lib.fp(Wacek),(24.78958393361647-15.627512899715132j), 6)
 
         gkmf = convert_to_ghf(rand_kmf2)
         # Round to make this insensitive to small changes between PySCF versions
@@ -414,17 +416,17 @@ class KnownValues(unittest.TestCase):
 
         rand_gcc = pbcc.KGCCSD(gkmf, frozen=2)
         eris = rand_gcc.ao2mo(rand_gcc.mo_coeff)
-        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_gcc.nkpts)]
+        eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_gcc.nkpts)]
         gt1 = rand_gcc.spatial2spin(t1)
         gt2 = rand_gcc.spatial2spin(t2)
         rand_gcc.t1, rand_gcc.t2, rand_gcc.eris = gt1, gt2, eris
 
         ge, gpt1, gpt2, gWmcik, gWacek = kintermediates.get_t3p2_imds_slow(rand_gcc, gt1, gt2)
-        self.assertAlmostEqual(lib.finger(ge), lib.finger(e), 8)
-        self.assertAlmostEqual(lib.finger(gpt1[:,::2,::2]), lib.finger(pt1), 8)
-        self.assertAlmostEqual(lib.finger(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.finger(pt2), 8)
-        self.assertAlmostEqual(lib.finger(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wmcik), 8)
-        self.assertAlmostEqual(lib.finger(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.finger(Wacek), 8)
+        self.assertAlmostEqual(lib.fp(ge), lib.fp(e), 8)
+        self.assertAlmostEqual(lib.fp(gpt1[:,::2,::2]), lib.fp(pt1), 8)
+        self.assertAlmostEqual(lib.fp(gpt2[:,:,:,::2,1::2,::2,1::2]), lib.fp(pt2), 8)
+        self.assertAlmostEqual(lib.fp(gWmcik[:,:,:,::2,1::2,::2,1::2]), lib.fp(Wmcik), 8)
+        self.assertAlmostEqual(lib.fp(gWacek[:,:,:,::2,1::2,::2,1::2]), lib.fp(Wacek), 8)
 
     def test_eomea_matvec(self):
         cell = gto.Cell()
@@ -438,6 +440,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-8
         cell.build()
 
         np.random.seed(2)
@@ -463,12 +466,11 @@ class KnownValues(unittest.TestCase):
         vector = np.random.random(eom.vector_size())
 
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-2.615041322934018 -0.19907655222705176j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-2.615041322934018 -0.19907655222705176j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9105694363906784+0.4623840337230889j ), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9105694363906784+0.4623840337230889j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.5191624937262938-0.09803982911194647j), 9)
-
+        self.assertAlmostEqual(lib.fp(hc), (-3.5191624937262938-0.09803982911194647j), 7)
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf
@@ -477,21 +479,21 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 7)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-2.6242967982318532-0.19622574939883755j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-2.6242967982318532-0.19622574939883755j), 7)
         hc = eom.matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9052161075024587+0.4635723967077203j ), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9052161075024587+0.4635723967077203j ), 7)
         hc = eom.matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-3.5273812229833275-0.10165584293391894j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-3.5273812229833275-0.10165584293391894j), 7)
 
     def test_eomea_l_matvec(self):
         cell = gto.Cell()
@@ -505,6 +507,7 @@ class KnownValues(unittest.TestCase):
         3.370137329, 0.000000000, 3.370137329
         3.370137329, 3.370137329, 0.000000000'''
         cell.unit = 'B'
+        cell.precision = 1e-8
         cell.build()
 
         np.random.seed(2)
@@ -530,12 +533,11 @@ class KnownValues(unittest.TestCase):
         vector = np.random.random(eom.vector_size())
 
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.9490117387531858-1.726564412656459j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9490117387531858-1.726564412656459j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.4497554439273588-5.620765390422395j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4497554439273588-5.620765390422395j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9057184472068758+2.7776122802218817j), 9)
-
+        self.assertAlmostEqual(lib.fp(hc), (-1.9057184472068758+2.7776122802218817j), 7)
 
         kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
         mycc._scf = kmf
@@ -543,22 +545,22 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
 
         mycc.max_memory = 4000
         eris = mycc.ao2mo()
 
         imds = eom.make_imds(eris)
         hc = eom.l_matvec(vector, 0, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.9525095721066594-1.722602584395692j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.9525095721066594-1.722602584395692j), 7)
         hc = eom.l_matvec(vector, 1, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-0.4402079681364959-5.610500177034039j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-0.4402079681364959-5.610500177034039j), 7)
         hc = eom.l_matvec(vector, 2, imds)
-        self.assertAlmostEqual(lib.finger(hc), (-1.9053243731138183+2.785112360342188j), 9)
+        self.assertAlmostEqual(lib.fp(hc), (-1.9053243731138183+2.785112360342188j), 7)
 
 if __name__ == '__main__':
     print("eom_kccsd_rhf tests")

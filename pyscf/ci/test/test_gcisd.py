@@ -73,7 +73,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(c2new[0]-c2ref[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(c2new[1]-c2ref[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(c2new[2]-c2ref[2]).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(cinew), -102.17887236599671, 9)
+        self.assertAlmostEqual(lib.fp(cinew), -102.17887236599671, 9)
 
     def test_from_fcivec(self):
         numpy.random.seed(12)
@@ -126,12 +126,12 @@ class KnownValues(unittest.TestCase):
         mf = scf.GHF(mol).run(conv_tol=1e-14)
         myci = ci.GCISD(mf)
         myci.kernel()
-        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 8)
+        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 6)
 
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.GCISD(mf)
         myci.kernel()
-        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 8)
+        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 6)
 
         mol = gto.Mole()
         mol.verbose = 0
@@ -148,7 +148,7 @@ class KnownValues(unittest.TestCase):
         mf = scf.UHF(mol).run(conv_tol=1e-14)
         myci = ci.GCISD(mf)
         myci.kernel()
-        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 8)
+        self.assertAlmostEqual(myci.e_tot, -0.86423570617209888, 6)
 
         mf = scf.UHF(mol).run(conv_tol=1e-14)
         gmf = scf.addons.convert_to_ghf(mf)
@@ -171,11 +171,11 @@ class KnownValues(unittest.TestCase):
         rdm2 = myci.make_rdm2(myci.ci, nmo, mol.nelectron)
         idxa = eris.orbspin == 0
         idxb = eris.orbspin == 1
-        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[idxa][:,idxa]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[idxb][:,idxb]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[idxa][:,idxa][:,:,idxa][:,:,:,idxa]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[idxa][:,idxa][:,:,idxb][:,:,:,idxb]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[idxb][:,idxb][:,:,idxb][:,:,:,idxb]).max(), 0, 6)
+        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[idxa][:,idxa]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[idxb][:,idxb]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[idxa][:,idxa][:,:,idxa][:,:,:,idxa]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[idxa][:,idxa][:,:,idxb][:,:,:,idxb]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[idxb][:,idxb][:,:,idxb][:,:,:,idxb]).max(), 0, 5)
 
     def test_h4_a(self):
         '''Compare to FCI'''
@@ -257,7 +257,7 @@ class KnownValues(unittest.TestCase):
         myci = ci.GCISD(mf)
         eris = myci.ao2mo()
         ecisd, civec = myci.kernel(eris=eris)
-        self.assertAlmostEqual(ecisd, -0.035165114624046617, 8)
+        self.assertAlmostEqual(ecisd, -0.035165114624046617, 6)
 
         nmo = eris.mo_coeff.shape[1]
         rdm1 = myci.make_rdm1(civec, nmo, mol.nelectron)
@@ -416,11 +416,11 @@ class KnownValues(unittest.TestCase):
 
         idxa = numpy.where(orbspin == 0)[0]
         idxb = numpy.where(orbspin == 1)[0]
-        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 5)
-        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 4)
+        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 4)
 
         c0, c1, c2 = myuci.cisdvec_to_amplitudes(myuci.ci)
         ut1 = [0] * 2
@@ -493,8 +493,8 @@ class KnownValues(unittest.TestCase):
         dm2ab = dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb]
         trdm2+= dm2ab
         trdm2+= dm2ab.transpose(2,3,0,1)
-        self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 5)
-        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 5)
+        self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 4)
+        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 4)
 
         c0, c1, c2 = myrci.cisdvec_to_amplitudes(myrci.ci)
         rt0 = c0 + .2j
@@ -539,7 +539,7 @@ class KnownValues(unittest.TestCase):
         myci.frozen = [2,3,4,5]
         myci.direct = True
         ecisd, civec = myci.kernel()
-        self.assertAlmostEqual(ecisd, -0.048829195509732602, 8)
+        self.assertAlmostEqual(ecisd, -0.048829195509732602, 6)
 
     def test_trans_rdm1(self):
         numpy.random.seed(1)
@@ -594,7 +594,7 @@ class KnownValues(unittest.TestCase):
         myci = ci.GCISD(mf)
         myci.nroots = 3
         myci.run()
-        self.assertAlmostEqual(myci.e_tot[2], -1.9802158893844912, 8)
+        self.assertAlmostEqual(myci.e_tot[2], -1.9802158893844912, 6)
 
     def test_trans_rdm_with_frozen(self):
         mol = gto.M(atom='''
@@ -636,9 +636,22 @@ class KnownValues(unittest.TestCase):
         check_frozen([10])
         check_frozen([10,3])
 
+    def test_cisdvec_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        myci = scf.GHF(mol).apply(ci.GCISD)
+        nelec = (3,3)
+        nocc, nvir = sum(nelec), 4
+        nmo = nocc + nvir
+        myci.nocc = nocc
+        myci.nmo = nmo
+        vec = numpy.zeros(myci.vector_size())
+        vec_orig = vec.copy()
+        c0, c1, c2 = myci.cisdvec_to_amplitudes(vec)
+        c1[:] = 1
+        c2[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
+
 
 if __name__ == "__main__":
     print("Full Tests for GCISD")
     unittest.main()
-
-

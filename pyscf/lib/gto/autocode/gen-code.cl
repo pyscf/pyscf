@@ -162,6 +162,7 @@
 (defun gen-code-eval-ao (fout intname expr)
   (let* ((op-rev (reverse (effect-keys expr)))
          (op-len (length op-rev))
+         (fx-inc (1+ op-len))
          (raw-script (eval-gto expr))
          (ts1 (car raw-script))
          (sf1 (cadr raw-script))
@@ -185,14 +186,17 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*~a];
-double fy0[SIMDD*16*~a];
-double fz0[SIMDD*16*~a];~%" (ash 1 op-len) (ash 1 op-len) (ash 1 op-len))
+double fx0[SIMDD*(ANG_MAX+~d)*~a];
+double fy0[SIMDD*(ANG_MAX+~d)*~a];
+double fz0[SIMDD*(ANG_MAX+~d)*~a];~%"
+            fx-inc (ash 1 op-len)
+            fx-inc (ash 1 op-len)
+            fx-inc (ash 1 op-len))
     (loop
        for i in (range (1- (ash 1 op-len))) do
-         (format fout "double *fx~d = fx~d + SIMDD*16;~%" (1+ i) i)
-         (format fout "double *fy~d = fy~d + SIMDD*16;~%" (1+ i) i)
-         (format fout "double *fz~d = fz~d + SIMDD*16;~%" (1+ i) i))
+         (format fout "double *fx~d = fx~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
+         (format fout "double *fy~d = fy~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc)
+         (format fout "double *fz~d = fz~d + SIMDD*(ANG_MAX+~d);~%" (1+ i) i fx-inc))
     (format fout "double buf[SIMDD*nc*~d];~%" goutinc)
     (format fout "double s[SIMDD*~d];~%" (expt 3 op-len))
     (format fout "double *gto0 = cgto;~%")
@@ -239,6 +243,7 @@ for (n = 0; n < SIMDD; n++) {
     (format fout "~a" codestr)
     (format fout "                }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {~%")
     (loop
        for i in (range goutinc) do
@@ -283,7 +288,7 @@ for (n = 0; n < SIMDD; n++) {
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; _cart
     (format fout "void ~a_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
@@ -292,7 +297,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
 ;;; _sph
     (format fout "void ~a_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)
@@ -301,7 +306,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);~%}~%" intname (factor-of expr))
 ;;; _spinor
     (format fout "void ~a_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {~%" intname)
     (format fout "int param[] = {~d, ~d};~%" e1comps tensors)

@@ -103,7 +103,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     dvvov = None
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
-def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_mf=True):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -116,9 +116,10 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
+    return _make_rdm1(mycc, d1, with_frozen=with_frozen, ao_repr=ao_repr,
+                      with_mf=with_mf)
 
-def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_dm1=True):
     r'''
     Two-particle density matrix in the molecular spin-orbital representation
 
@@ -131,10 +132,10 @@ def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+    return _make_rdm2(mycc, d1, d2, with_dm1=with_dm1, with_frozen=with_frozen,
                       ao_repr=ao_repr)
 
-def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
+def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False, with_mf=True):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -156,13 +157,15 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].conj().T
     dm1[nocc:,nocc:] = dvv + dvv.conj().T
     dm1 *= .5
-    dm1[numpy.diag_indices(nocc)] += 1
+    if with_mf:
+        dm1[numpy.diag_indices(nocc)] += 1
 
     if with_frozen and mycc.frozen is not None:
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
-        rdm1[numpy.diag_indices(nocc)] = 1
+        if with_mf:
+            rdm1[numpy.diag_indices(nocc)] = 1
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1

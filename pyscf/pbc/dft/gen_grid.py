@@ -24,11 +24,12 @@ from pyscf import dft
 from pyscf.pbc.gto.cell import get_uniform_grids, gen_uniform_grids
 from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
-                                BLKSIZE)
+                                BLKSIZE, NBINS, CUTOFF)
 
 libpbc = lib.load_library('libpbc')
 
-def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
+def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
+              verbose=None):
     '''Mask to indicate whether a shell is zero on grid.
     The resultant mask array is an extension to the mask array used in
     molecular code (see also pyscf.dft.numint.make_mask function).
@@ -41,13 +42,17 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, cell.nbas)
-    assert(shls_slice == (0, cell.nbas))
+    assert (shls_slice == (0, cell.nbas))
 
-    Ls = cell.get_lattice_Ls(dimension=3)
+    # For atoms near the boundary of the cell, it is necessary (even in low-
+    # dimensional systems) to include lattice translations in all 3 dimensions.
+    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+    else:
+        Ls = cell.get_lattice_Ls(dimension=3)
     Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
-    non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                          dtype=np.uint8)
+    non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas), dtype=np.uint8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
@@ -60,6 +65,8 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
 
 class UniformGrids(lib.StreamObject):
     '''Uniform Grid class.'''
+
+    cutoff = CUTOFF
 
     def __init__(self, cell):
         self.cell = cell

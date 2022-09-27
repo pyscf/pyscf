@@ -87,7 +87,7 @@ def qmmm_for_scf(scf_method, mm_mol):
     Args:
         mm_mol : MM Mole object
     '''
-    assert(isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
+    assert (isinstance(scf_method, (scf.hf.SCF, mcscf.casci.CASCI)))
 
     if isinstance(scf_method, scf.hf.SCF):
         # Avoid to initialize _QMMM twice
@@ -214,7 +214,7 @@ def add_mm_charges_grad(scf_grad, atoms_or_coords, charges, unit=None):
     [[-0.25912357 -0.29235976 -0.38245077]
      [-1.70497052 -1.89423883  1.2794798 ]]
     '''
-    assert(isinstance(scf_grad, grad.rhf.Gradients))
+    assert (isinstance(scf_grad, grad.rhf.Gradients))
     mol = scf_grad.mol
     if unit is None:
         unit = mol.unit
@@ -237,7 +237,7 @@ def qmmm_grad_for_scf(scf_grad):
     if isinstance(scf_grad, _QMMMGrad):
         return scf_grad
 
-    assert(isinstance(scf_grad.base, scf.hf.SCF) and
+    assert (isinstance(scf_grad.base, scf.hf.SCF) and
            isinstance(scf_grad.base, _QMMM))
 
     grad_class = scf_grad.__class__

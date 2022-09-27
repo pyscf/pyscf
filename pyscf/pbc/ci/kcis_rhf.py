@@ -31,7 +31,7 @@ from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.mp.kmp2 import (get_nocc, get_nmo, padding_k_idx,
                                padded_mo_coeff, get_frozen_mask)
 
-from pyscf.pbc import df
+from pyscf.pbc.df import df
 from pyscf.pbc import tools
 from pyscf.pbc.cc.ccsd import _adjust_occ
 
@@ -551,7 +551,7 @@ class _CIS_ERIS:
                         (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]),
                         compact=False,
                     )
-                    if dtype == np.float:
+                    if dtype == np.double:
                         eri_kpt = eri_kpt.real
                     eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                     for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
@@ -590,7 +590,7 @@ class _CIS_ERIS:
                                 (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
                                 compact=False,
                             )
-                            if mo_coeff[0].dtype == np.float:
+                            if mo_coeff[0].dtype == np.double:
                                 buf_kpt = buf_kpt.real
                             buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(
                                 0, 2, 1, 3
@@ -620,7 +620,6 @@ def _init_cis_df_eris(cis, eris):
     Returns:
         _CIS_ERIS -- A _CIS_ERIS instance with 3c ints
     """
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
 
@@ -651,14 +650,12 @@ def _init_cis_df_eris(cis, eris):
 
     cput0 = (logger.process_clock(), logger.perf_counter())
 
-    with h5py.File(cis._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(cis._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq_ao = cderi_array[ki,kj]
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')

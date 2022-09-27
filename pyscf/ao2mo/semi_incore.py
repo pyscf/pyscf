@@ -142,11 +142,11 @@ def general(eri, mo_coeffs, erifile, dataname='eri_mo',
         if h5py.is_hdf5(erifile):
             feri = h5py.File(erifile, 'a')
             if dataname in feri:
-                del(feri[dataname])
+                del (feri[dataname])
         else:
             feri = h5py.File(erifile,'w',libver='latest')
     else:
-        assert(isinstance(erifile, h5py.Group))
+        assert (isinstance(erifile, h5py.Group))
         feri = erifile
 
     h5d_eri = feri.create_dataset(dataname,(nij_pair,nkl_pair), dtype.char)

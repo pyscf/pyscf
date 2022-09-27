@@ -1,3 +1,74 @@
+PySCF 2.1.1 (2022-09-21)
+------------------------
+* Added
+  - CDERIArray class to load PBC GDF tensor
+* Improved
+  - MCSCF fix_spin_ as a class for SA-CASSCF gradient compatibility
+  - PBC GDF and MDF accuracy
+  - PBC X2C hcore integrals performance
+* Fixed
+  - Integral screening bug in ft_ao
+  - EOM-EE RCCSD intermediates
+  - MGGA fully polarized system bug
+
+
+PySCF 2.1.0 (2022-09-01)
+------------------------
+* Added
+  - k-point symmetry for mean-field methods and MP2
+  - UCASSCF work with state_average
+  - make_rdm12s for MCSCF state_average
+  - Staggered mesh method for k-point restricted periodic MP2 energy
+  - PBC-X2C1E DFT methods in spin-orbital basis
+  - Adds make_rdm2 to RHF and UHF
+  - Auto-generate frozen-core orbitals
+  - Atomic chemical core configuration
+  - Various MGGA functionalities (Gradients, Hessian, TDDFT, etc.)
+  - Mcfun (multi-collinear functional) and relevant GKS, DKS, X2C-DFT, TDDFT methods for molecules
+  - Supports to aarch64 architecture
+  - Atomic spherically averaged DFT and add HFS ground-state configurations
+  - RPA, URPA
+  - UCCSD with density fitting
+  - X2C for GHF/GKS on spin-orbital basis (make identical to X2C-SCF with j-adapted basis)
+  - Gamma-point periodic EA/IP-ADC
+  - K-point periodic EA/IP-ADC
+  - CVS-IP-ADC
+* Improved
+  - DFT numerical integral module with better integral screening
+  - Aligns E(HF) of KRCCSD with other CCSD classes, and CISD, MP2 classes
+  - Adjustable screening value for eval_ao function
+  - MCSCF convergence for small systems
+  - Renormalized perturbative triples correction in CCSD
+  - Optimises UCCSD 1DM
+  - Linear dependency handled for IAOs
+  - vhf prescreeening efficiency
+  - Lattice sum ranges in PBC AO-value evaluation
+  - Various cutoffs in PBC integrals for exceptional cells
+  - Handles 1e system for KS methods
+  - Try to use original axes when creating Mole object if pointgroup is inputed
+  - More symmetry information of MCSCF active space dumped
+  - SA-CASSCF nuc grad API reform
+  - Upgrade cint library to v5
+  - Accelerating SGX module
+  - rsdf, gdf, aft, mdf, ft_ao, rsjk modules refactored and their performance are optimized
+  - The return status of HF statbility checks
+  - GDF 3-index integral tensor loader to support tensor sliced from disk
+* Fixed
+  - Dynamic level shift for UHF
+  - gamma-point TDDFT by adding response fn
+  - Initial guess issue for uhf custom Hamiltonian
+  - Projecting the dm to a larger basis set in PBC systems using from_chk() and init_guess
+  - Ensure deterministic result from pyscf.lib.einsum
+  - Symmetry detection bugs and C2v orientation for planar molecules
+  - State-average CASSCF 1RDM for orbital canonicalization
+  - wfnsym for state_average CASSCF
+  - Concatenating two Molecule objects with ecp
+  - cisd.tn_addrs_signs for impossible excitations
+  - KMP2 takes KHF with precomputed GDF integrals
+  - Huckel guess with mol.cart=True
+  - UCCSD 2RDM without frozen
+
+
 PySCF 2.0.0 (2021-11-01)
 ------------------------
 * Added

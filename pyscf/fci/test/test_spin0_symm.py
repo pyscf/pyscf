@@ -23,30 +23,33 @@ from pyscf import fci
 import pyscf.symm
 from pyscf.fci import fci_slow
 
-mol = gto.Mole()
-mol.verbose = 0
-mol.atom = '''
-    O    0.  0.      0.
-    H    0.  -0.757  0.587
-    H    0.  0.757   0.587'''
-mol.basis = 'sto-3g'
-mol.symmetry = 'c2v'
-mol.build()
-m = scf.RHF(mol)
-m.conv_tol_grad = 1e-8
-ehf = m.scf()
-norb = m.mo_coeff.shape[1]
-nelec = mol.nelectron
-h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
-g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
-orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
-cis = fci.direct_spin0_symm.FCISolver(mol)
-cis.orbsym = orbsym
+def setUpModule():
+    global mol, m, h1e, g2e, ci0, cis
+    global norb, nelec, orbsym
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = '''
+        O    0.  0.      0.
+        H    0.  -0.757  0.587
+        H    0.  0.757   0.587'''
+    mol.basis = 'sto-3g'
+    mol.symmetry = 'c2v'
+    mol.build()
+    m = scf.RHF(mol)
+    m.conv_tol_grad = 1e-8
+    ehf = m.scf()
+    norb = m.mo_coeff.shape[1]
+    nelec = mol.nelectron
+    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
+    g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
+    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    cis = fci.direct_spin0_symm.FCISolver(mol)
+    cis.orbsym = orbsym
 
-numpy.random.seed(15)
-na = fci.cistring.num_strings(norb, nelec//2)
-ci0 = numpy.random.random((na,na))
-ci0 = (ci0 + ci0.T) * .5
+    numpy.random.seed(15)
+    na = fci.cistring.num_strings(norb, nelec//2)
+    ci0 = numpy.random.random((na,na))
+    ci0 = (ci0 + ci0.T) * .5
 
 def tearDownModule():
     global mol, m, h1e, g2e, ci0, cis
@@ -60,11 +63,11 @@ class KnownValues(unittest.TestCase):
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=1)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=1)
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.571087072474697, 9)
-        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
-        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.257163492625622, 9)
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=3)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=3)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.257163492625622, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.010497935954916, 9)
 
     def test_kernel(self):

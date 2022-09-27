@@ -329,6 +329,129 @@ MASSES = [
     294.214,            # Og
 ]
 
+# Atomic Weights of the most common isotopes
+# From https://chemistry.sciences.ncsu.edu/msf/pdf/IsotopicMass_NaturalAbundance.pdf
+COMMON_ISOTOPE_MASSES = [
+    0.,       # Ghost
+    1.007825, # H
+    4.002603, # He
+    7.016004, # Li
+    9.012182, # Be
+    11.009305, # B
+    12.000000, # C
+    14.003074, # N
+    15.994915, # O
+    18.998403, # F
+    19.992440, # Ne
+    22.989770, # Na
+    23.985042, # Mg
+    26.981538, # Al
+    27.976927, # Si
+    30.973762, # P
+    31.972071, # S
+    34.968853, # Cl
+    39.962383, # Ar
+    38.963707, # K
+    39.962591, # Ca
+    44.955910, # Sc
+    47.947947, # Ti
+    50.943964, # V
+    51.940512, # Cr
+    54.938050, # Mn
+    55.934942, # Fe
+    58.933200, # Co
+    57.935348, # Ni
+    62.929601, # Cu
+    63.929147, # Zn
+    68.925581, # Ga
+    73.921178, # Ge
+    74.921596, # As
+    79.916522, # Se
+    78.918338, # Br
+    83.911507, # Kr
+    84.911789, # Rb
+    87.905614, # Sr
+    88.905848, # Y
+    89.904704, # Zr
+    92.906378, # Nb
+    97.905408, # Mo
+    98.907216, # 98
+    101.904350, # Ru
+    102.905504, # Rh
+    105.903483, # Pd
+    106.905093, # Ag
+    113.903358, # Cd
+    114.903878, # In
+    119.902197, # Sn
+    120.903818, # Sb
+    129.906223, # Te
+    126.904468, # I
+    131.904154, # Xe
+    132.905447, # Cs
+    137.905241, # Ba
+    138.906348, # La
+    139.905435, # Ce
+    140.907648, # Pr
+    141.907719, # Nd
+    144.912744, # 14
+    151.919729, # Sm
+    152.921227, # Eu
+    157.924101, # Gd
+    158.925343, # Tb
+    163.929171, # Dy
+    164.930319, # Ho
+    165.930290, # Er
+    168.934211, # Tm
+    173.938858, # Yb
+    174.940768, # Lu
+    179.946549, # Hf
+    180.947996, # Ta
+    183.950933, # W
+    186.955751, # Re
+    191.961479, # Os
+    192.962924, # Ir
+    194.964774, # Pt
+    196.966552, # Au
+    201.970626, # Hg
+    204.974412, # Tl
+    207.976636, # Pb
+    208.980383, # Bi
+    208.982416, # Po
+    209.987131, # At
+    222.017570, # Rn
+    223.019731, # Fr
+    226.025403, # Ra
+    227.027747, # Ac
+    232.038050, # Th
+    231.035879, # Pa
+    238.050783, # U
+    237.048167, # Np
+    244.064198, # Pu
+    243.061373, # Am
+    247.070347, # Cm
+    247.070299, # Bk
+    251.079580, # Cf
+    252.082972, # Es
+    257.095099, # Fm
+    258.098425, # Md
+    259.101024, # No
+    262.109692, # Lr
+    267.,       # Rf
+    268.,       # Db
+    269.,       # Sg
+    270.,       # Bh
+    270.,       # Hs
+    278.,       # Mt
+    281.,       # Ds
+    282.,       # Rg
+    285.,       # Cn
+    286.,       # Nh
+    289.,       # Fl
+    290.,       # Mc
+    293.,       # Lv
+    294.,       # Ts
+    294.        # Og
+]
 
 # ground state configuration = (num. electrons for each irrep./angular moment)
 CONFIGURATION = [
@@ -953,6 +1076,48 @@ N_CORE_VALENCE_SHELLS = [
     '7s6p4d2f',         #118  Og
 ]
 
+chemcore_atm = [
+    0, # ghost
+    0,                                                                  0,
+    0,  0,                                          1,  1,  1,  1,  1,  1,
+    1,  1,                                          5,  5,  5,  5,  5,  5,
+    5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  9,  9,  9,  9,  9,  9,
+    9,  9, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 18, 18, 18, 18, 18, 18,
+    18, 18,
+    # lanthanides
+    18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 23,
+    23, 23, 23, 23, 23, 23, 23, 23, 23, 34, 34, 34, 34, 34, 34,
+    34, 34,
+    # actinides
+    34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
+    50, 50, 50, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55, 55]
+
+def chemcore(mol, spinorb=False):
+    '''
+    Set spinorb=True for GMP2, GCCSD, etc.
+    For R/U ones, spinorb=False is fine.
+    '''
+    core = 0
+    for a in range(mol.natm):
+        atm_nelec = mol.atom_charge(a)
+        atm_z = charge(mol.atom_symbol(a))
+        ne_ecp = atm_z - atm_nelec
+        atm_ncore = chemcore_atm[atm_z]
+        if ne_ecp == 0:
+            core += atm_ncore
+        elif ne_ecp > atm_ncore:
+            core += 0
+        else:
+            core += atm_ncore - ne_ecp
+
+    if spinorb:
+        core *= 2
+    return core
+
+#def chemcore_list(mol):
+#    ncore = chemcore(mol)
+#    return list(range(ncore))
+
 
 ########################################
 #
@@ -964,7 +1129,7 @@ N_CORE_VALENCE_SHELLS = [
 import sys
 if sys.version_info >= (3,):
     unicode = str
-del(sys)
+del (sys)
 
 def _rm_digit(symb):
     if symb.isalpha():
