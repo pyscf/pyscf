@@ -1,0 +1,64 @@
+#
+# K.A. Peterson and C. Puzzarini, Theor. Chem. Acc. 114, 283 (2005)
+# Pseudopotential parameters (rel) from D. Figgen, G. Rauhut, M. Dolg, and H. Stoll, Chem. Phys. 311, 227 (2005)
+# These can be downloaded from: http://www.theochem.uni-stuttgart.de/pseudopotentials/index.en.html
+# Note: the -PP basis sets should be used ONLY with the appropriate Stuttgart/Koeln pseudopotentials
+# Note: the -PP-nr basis sets should be used with the Stuttgart/Koeln ECPxxMHF (xx=10, 28, 60) pseudopotentials
+# Pseudopotential-based correlation consistent polarized  Valence Quintuple- Basis Set for Cu, Augmenting Functions
+#
+
+#BASIS SET:
+Cu s
+1.740000E-02 1.000000E+00
+Cu p
+1.700000E-02 1.000000E+00
+Cu d
+8.720000E-02 1.000000E+00
+Cu f
+9.066000E-01 1.000000E+00
+#BASIS SET:
+Ag s
+1.620000E-02 1.000000E+00
+Ag p
+1.520000E-02 1.000000E+00
+Ag d
+6.200000E-02 1.000000E+00
+Ag f
+4.449000E-01 1.000000E+00
+#BASIS SET:
+Au s
+1.930000E-02 1.000000E+00
+Au p
+1.470000E-02 1.000000E+00
+Au d
+4.890000E-02 1.000000E+00
+Au f
+3.789000E-01 1.000000E+00
+#BASIS SET:
+Zn s
+1.810000E-02 1.000000E+00
+Zn p
+1.740000E-02 1.000000E+00
+Zn d
+1.172000E-01 1.000000E+00
+Zn f
+1.087000E+00 1.000000E+00
+#BASIS SET:
+Cd s
+1.670000E-02 1.000000E+00
+Cd p
+1.530000E-02 1.000000E+00
+Cd d
+7.820000E-02 1.000000E+00
+Cd f
+5.177000E-01 1.000000E+00
+#BASIS SET:
+Hg s
+1.990000E-02 1.000000E+00
+Hg p
+1.470000E-02 1.000000E+00
+Hg d
+5.850000E-02 1.000000E+00
+Hg f
+4.377000E-01 1.000000E+00
+END

@@ -1,0 +1,14 @@
+enable_language(Fortran)
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
+set(BLAS_LIBRARIES "${BLAS_LIBRARIES};-lm")
+
+set(CMAKE_Fortran_FLAGS "-DTIMING -ffree-line-length-0")
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
+
+# Better to use the method procided in the pyscf website for the installation
+#set(BLAS_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+#set(LAPACK_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+#message("LAPACK libraries: ${LAPACK_LIBRARIES}")

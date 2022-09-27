@@ -1,0 +1,21 @@
+codecov:
+  notify:
+    require_ci_to_pass: yes
+    after_n_builds: 10
+coverage:
+  status:
+    project:
+      default:
+        target: 75
+        threshold: 5%
+    patch: true
+    changes: true
+comment:
+  after_n_builds: 10
+  layout: "diff, files"
+  behavior: default
+  require_changes: true  # if true: only post the comment if coverage changes
+  require_base: no        # [yes :: must have a base report to post]
+  require_head: yes       # [yes :: must have a head report to post]
+  branches:               # branch names that can post comment
+    - "master"

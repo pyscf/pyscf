@@ -1,0 +1,248 @@
+***************************
+  What's New in PySCF 1.2
+***************************
+
+This article explains new features in PySCF 1.2, compared to PySCF 1.1.
+PySCF 1.1 was released on Jun 4, 2016.
+
+
+Relase highlights
+=================
+
+New features:
+
+* Periodic boundary condition (PBC) for gamma point RHF, UHF, RKS, UKS
+* PBC RHF, UHF, RKS, UKS with k-point sampling
+* PBC AO integrals
+* PBC MO integral transformation
+* PBC k-point CCSD
+* Mixed density fitting (MDF) method for molecular and PBC 2-election integrals
+* DMET-CAS function to generate CASSCF active space using Density matrix embedding theory
+* FCI solver for electron-phonon coupled system
+* State average CASSCF helper function for mixed spin/spatial-symmetry FCI solvers
+* U-CCSD (based on spin-orbital formulation)
+* Function to dump CASSCF canonical orbitals in molden format
+* Co-iterative augmented hessian (CIAH) optimizer
+* Optimized einsum function using numpy.tensordot function
+* Burkatzi-Filippi-Dolg pseudo potential
+* FCI solver to support integrals which do not have 8-fold symmetry
+* Dual interface to call pyFFTW or numpy.fft
+* Maximum overlap method (MOM) method for SCF method
+* PBC AO value
+* Analytical Fourier transformation for AO and AO product
+* meta-GGA for ground state DFT
+* GAMESS WFN wirter
+* IC-MPS-PT2
+
+Improvements:
+
+* Orbitals space symmetrization
+* CASSCF subspace (core, active, external) symmetrization
+* Created X2C object to hold X2C functions and parameters
+* Boys, Edmiston, Pipek-Mezey Localization with general CIAH optimizer
+* Asynchronized IO to overlap integration and IO for ao2mo integral transformation
+* Fixing orbital ordering for degenerated SCF orbitals
+
+
+API changes
+===========
+
+* An independent density fitting class is introduced to hold the parameters and
+  resources for density fitting method, such as auxiliary basis, memory usage,
+  temporary files etc.  This API updates are applied on the conventional DF
+  module and the newly implemented MDF module.  Note the :func:`get_jk` methods
+  of DF class and SCF class take different arguments (the former does not need
+  ``mol`` object to be the first argument).  The density fitting factory
+  function :func:`density_fit` does not overwrite the SCF/MCSCF methods anymore.
+  Instead, :attr:`with_df` is introduced in the density-fitting SCF/MCSCF
+  objects to hold DF relevant parameters and functions.
+
+* An independent X2C class is introduced to hold the parameters and resources
+  for X2C method.  The factory function :func:`sfx2c` does not overwrite the
+  SCF :func:`get_hcore` methods anymore.  :attr:`with_x2c` attribute is
+  introduced in the SCF object to hold relevant functions.
+
+* In PySCF 1.2, one can pass the print relevant keyword arguments to SCF and
+  MCSCF :func:`analyze` methods to control the orbital coefficients output format.
+
+* bas_ctr_coeff method of :class:`Mole` returns the normalized basis
+  contraction coefficients.  In PySCF 1.1 or older, it was the scaled by
+  spheric normalization coefficients which is only used by libcint library.
+
+
+Features
+========
+
+Periodic boudnary condition
+---------------------------
+The newly added :mod:`pbc` module (under directory pyscf/pbc) provides functions
+to handle extended systems of periodic boundary condition.  It supports
+Hartree-Fock and DFT calculations for gamma point calculation using
+:class:`RHF`, :class:`UHF`, :class:`RKS`, :class:`UKS` and k-point sampling with
+:class:`KRHF`, :class:`KUHF`, :class:`KRKS`, and :class:`KUKS`.  The PBC module
+are built upon the Gaussian basis.  The single particle wavefunction is expanded
+on Gaussian basis functions.  Plane waves are employed as auxiliary functions to
+solve the Coulomb problem.  Both all-electron and/or pseudo potential
+calculations are fully supported.
+
+The PBC program has simple input structure to setup calculations which is
+similar to the molecular code, for example::
+
+    from pyscf.pbc import gto, scf
+    cell = gto.Cell()
+    cell.h = '''
+            0        1.7834   1.7834
+            1.7834   0        1.7834
+            1.7834   1.7834   0     '''
+    cell.atom = '''
+            0        0        0
+            0.8917   0.8917   0.8917'''
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.gs = [7]*3
+    cell.build()
+    pbcmf = scf.RHF(cell)  # gamma point Hartree-Fock
+    pbcmf.kernel()
+
+The PBC module is designed following the structure and APIs of molecular
+program.  Modules in directory pyscf/pbc, eg :mod:`scf`, :mod:`ao2mo`,
+:mod:`df`, :mod:`dft`, :mod:`cc` etc have the similar functionalities as those
+of molecular code.  It allows you to mix the molecular methods and PBC (gamma
+point) calculations seamlessly, eg::
+
+    from pyscf import cc, tddft
+    mycc = cc.CCSD(pbcmf)
+    mycc.kernel()
+
+    mytd = tddft.TDHF(pbcmf)
+    mytd.nstates = 5
+    mytd.kernel()
+
+All integrals of :mod:`pbc` calculations are built on Gaussian basis functions.
+Integral APIs are exported to access the one-electron AO integrals, two-electron
+AO integrals, and two-electron integral transformation::
+
+    overlap = cell.pbc_intor('cint1e_ovlp_sph')
+    kinetic = cell.pbc_intor('cint1e_kin_sph')
+    eri = pbcmf.with_df.get_eri()
+    eri = pbcmf.with_df.ao2mo(pbcmf.mo_coeff)
+
+This is a simple example to get AO/MO integrals for gamma point calculation.
+To access the integrals with k-point symmetry, you need pass the k-point
+information to the integral function.  MDF integration scheme is available
+for integrals of all-electron basis.
+
+
+Mixed density fitting
+---------------------
+Mixed density fitting (MDF) was developed to provide high accuracy density
+fitting integrals.  It can be used in both the molecular systems and periodic
+systems.  MDF is particularly useful for PBC calculation because it can
+significantly decrease the plane wave cutoff in the PBC Coulomb integration
+which allows you to do all-electron PBC calculations using regular Gaussian
+basis developed by Quantum chemistry community.  You can access the MDF
+integrals with the common DF APIs through the molecular MDF object or PBC MDF
+object::
+
+    from pyscf import df  # molecular system
+    mole_mdf = df.MDF(mol)
+    vj, vk = mole_mdf.get_jk(dm)
+
+    from pyscf.pbc import df as pbc_df  # PBC
+    cell_mdf = pbc_df.MDF(cell)
+    vj, vk = mole_mdf.get_jk(dm)
+
+You can deploy the MDF method using the in the density-fitting SCF calculation
+by overiding the :attr:`with_df` attributes::
+
+    from pyscf.pbc import df, scf
+    pbc_mf = scf.RHF(cell)
+    pbc_mdf = df.MDF(cell)
+    pbc_mf = pbc_mdf.update(pbc_mf)
+
+
+CIAH orbital optimizer
+----------------------
+Co-iterative augmented hessian (CIAH) orbital optimizer is a Newton optimization
+implementation.  By reusing and approximating the orbital Hessian, it limited
+the calls to the expensive operation H*x (Hessian times trial vector).  It can
+speed up the SCF and orbital localization convergence.  IAH-SCF optimization
+has its own function wrapper defined in :mod:`scf` module, see
+:func:`scf.newton` and :func:`scf.fast_scf`.  The orbital localization methods
+Foster-Boys, Edmiston-Ruedenberg, Pipek-Mezey are deployed with CIAH orbital
+optimizer.
+
+
+DMET-CAS
+--------
+A difficult task in CASSCF or DMRG-CASSCF calculation is to determine the
+active space.  Atomic orbitals or localized orbitals often have more physical
+significance than SCF canonical orbitals for electron correlation effects.
+Density matrix embedding theory (DMET) provides a simple way to setup a local
+correlated embedding problem defined by impurity and entangled baths.  This
+technique can be used in CASSCF active space selection, to extract the AO or
+localized orbitals from given mean-field or correlated density matrix.
+:mod:`mcscf.dmet_cas` provides :func:`guess_cas` function to generate the
+CASSCF initial guess (active space plus the number of active electrons).
+
+
+einsum
+------
+NumPy package has a powerful tensor contraction engine :func:`einsum`.
+Following the :func:`numpy.einsum` convention, we implemented a simplified but
+more efficient :func:`einsum` function in :mod:`pbc.lib.numpy_helper` using
+:func:`numpy.tensordot` (which in turn calls BLAS for matrix multiplication).
+
+
+Improvements
+============
+
+CASSCF state average wrapper
+----------------------------
+The existed state average wrapper :func:`mcscf.state_average_` allows user to
+mix CI states of same spin and spatial symmetry.  To mix CI states of different
+spin/spatial symmetry, one needs call different CI solver in multiple passes.
+The newly implemented :func:`mcscf.state_average_mix` wrapper can take
+different type of CI solvers and mix the solutions in terms of the given
+weights.
+
+
+FCI contraction
+---------------
+The implementation of :mod:`fci.direct_nosym` allows you to input a Hamiltonian
+without the 8-fold permutation symmetry which is assumed in the real-hermitian
+Hamiltonian.  This is the general case for complex Hamiltonian, in which
+(ij|kl) == (ji|lk)^* == (kl|ij) /= (ji|kl).  Using this module, one can easily
+extend the FCI solver to solve the complex Hamiltonian.
+
+
+Orbitals space symmetrization
+-----------------------------
+For systems which have point group symmetry, transferring the calculation from
+the symmetry-disabled method to the symmetry-enabled one can cause
+inconsistency in orbital symmetry (or symmetry broken for degenerated
+orbitals).  :func:`symm.symmetrize_space` function is implemented to restore
+the symmetry within the space spanned by the given orbitals.  The resultant
+orbitals are transformed to retain the required symmetry and the largest
+overlap to the given orbital.
+
+This symmetrization is added to the symmetry-enabled CASSCF calculation by
+default if the given initial guess mcscf orbitals are not strictly symmetrized.
+The symmetrization are carried out within individual subspace (core, active,
+external) separately.
+
+
+ao2mo with async IO
+-------------------
+ao2mo integral transformation is IO bounded program.  Asynchronized-IO are
+implemented in :func:`ao2mo.outcore` to overlap the integral evaluation and
+read/write functions.  It brings about 10%-20% improvements on small memory
+machine.
+
+
+Orbital ordering
+----------------
+For linear molecule, the doubly-degenerated pi/delta/phi orbitals have
+arbitrary orientation in symmetry-enabled SCF calculation.  The orbital
+ordering are fixed to pi_x, pi_y, delta_x, delta_y, ... in PySCF 1.2.  
+

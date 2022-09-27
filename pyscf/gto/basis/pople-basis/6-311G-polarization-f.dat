@@ -1,0 +1,71 @@
+#  6-311G(2df,2pd)  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H, Li - Ne: R. Krishnan, J.S. Binkley, R. Seeger and J.A. Pople,
+#             J. Chem. Phys. 72, 650 (1980)
+# Na - Ar:    A.D. McLean and G.S. Chandler J. Chem. Phys. 72, 5639, (1980).
+# K  - Ca:    J-P. Blaudeau, M. P. McGrath, L.A. Curtiss and L. Radom,
+#             J. Chem. Phys. 107, 5016 (1997).
+# Ga - Kr:    L. A. Curtiss, M. P. McGrath, J-P. Blandeau, N. E. Davis, 
+#             R. C. Binning, Jr. L. Radom, J. Chem. Phys. 103, 6104 (1995).
+# I      :    M.N. Glukhovstev, A. pross, M.P. McGrath, L. Radom, J. Chem. Phys.
+#             103, 1878 (1995)
+#   
+
+# Elements                             References
+# --------                             ----------
+# H-Ne: M.J. Frisch, J.A. Pople and J.S. Binkley, J. Chem. Phys. 80, 3265 (1984)
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Li    F
+      0.1500000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Be    F
+      0.2600000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+B    F
+      0.5000000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+C    F
+      0.8000000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+N    F
+      1.0000000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+O    F
+      1.4000000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+F    F
+      1.8500000              1.0000000        
+#BASIS SET: (11s,5p,2d,1f) -> [4s,3p,2d,1f]
+Ne    F
+      2.5000000              1.0000000        
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+Na    F
+      0.1500000              1.0000000
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+Mg    F
+      0.2000000              1.0000000
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+Al    F
+      0.2500000              1.0000000
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+Si    F
+      0.3200000              1.0000000
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+P    F
+      0.4500000              1.0000000
+#BASIS SET: (14s,10p,3d,1f) -> [7s,6p,3d,1f]
+S    F
+      0.5500000              1.0000000
+#BASIS SET: (14s,11p,3d,1f) -> [7s,6p,3d,1f]
+Cl    F
+      0.7000000              1.0000000
+#BASIS SET: (14s,11p,3d,1f) -> [7s,6p,3d,1f]
+Ar    F
+      0.8500000              1.0000000
+END

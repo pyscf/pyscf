@@ -1,0 +1,137 @@
+#  6-31G(3df,3pd)  EMSL  Basis Set Exchange Library  6/9/17 6:23 PM
+# Elements                             References
+# --------                             ----------
+# H - He: W.J. Hehre, R. Ditchfield and J.A. Pople, J. Chem. Phys. 56,
+# Li - Ne: 2257 (1972).  Note: Li and B come from J.D. Dill and J.A.
+# Pople, J. Chem. Phys. 62, 2921 (1975).
+# Na - Ar: M.M. Francl, W.J. Petro, W.J. Hehre, J.S. Binkley, M.S. Gordon,
+# D.J. DeFrees and J.A. Pople, J. Chem. Phys. 77, 3654 (1982)
+# K  - Zn: V. Rassolov, J.A. Pople, M. Ratner and T.L. Windus, J. Chem. Phys.
+# 109, 1223 (1998)
+# Note: He and Ne are unpublished basis sets taken from the Gaussian
+# program
+# 
+
+
+# Elements                             References
+# --------                             ----------
+# H-Ne: M.J. Frisch, J.A. Pople and J.S. Binkley, J. Chem. Phys. 80, 3265 (1984)
+#   
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+Li    D
+      0.8000000              1.0000000        
+Li    D
+      0.2000000              1.0000000        
+Li    D
+      0.0500000              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+Be    D
+      1.0200000              1.0000000        
+Be    D
+      0.2550000              1.0000000        
+Be    D
+      0.0637500              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+B    D
+      1.6040000              1.0000000        
+B    D
+      0.4010000              1.0000000        
+B    D
+      0.1002500              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+C    D
+      2.5040000              1.0000000        
+C    D
+      0.6260000              1.0000000        
+C    D
+      0.1565000              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+N    D
+      3.6520000              1.0000000        
+N    D
+      0.9130000              1.0000000        
+N    D
+      0.2282500              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+O    D
+      5.1600000              1.0000000        
+O    D
+      1.2920000              1.0000000        
+O    D
+      0.3225000              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+F    D
+      7.0000000              1.0000000        
+F    D
+      1.7500000              1.0000000        
+F    D
+      0.4375000              1.0000000        
+#BASIS SET: (10s,4p,3d,1f) -> [3s,2p,3d,1f]
+Ne    D
+      9.2160000              1.0000000        
+Ne    D
+      2.3040000              1.0000000        
+Ne    D
+      0.5760000              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Na    D
+      0.7000000              1.0000000        
+Na    D
+      0.1750000              1.0000000        
+Na    D
+      0.0437500              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Mg    D
+      0.7000000              1.0000000        
+Mg    D
+      0.1750000              1.0000000        
+Mg    D
+      0.0437500              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Al    D
+      1.3000000              1.0000000        
+Al    D
+      0.3250000              1.0000000        
+Al    D
+      0.0812500              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Si    D
+      1.8000000              1.0000000        
+Si    D
+      0.4500000              1.0000000        
+Si    D
+      0.1125000              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+P    D
+      2.2000000              1.0000000        
+P    D
+      0.5500000              1.0000000        
+P    D
+      0.1375000              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+S    D
+      2.6000000              1.0000000        
+S    D
+      0.6500000              1.0000000        
+S    D
+      0.1625000              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Cl    D
+      3.0000000              1.0000000        
+Cl    D
+      0.7500000              1.0000000        
+Cl    D
+      0.1875000              1.0000000        
+#BASIS SET: (16s,10p,3d,1f) -> [4s,3p,3d,1f]
+Ar    D
+      3.4000000              1.0000000        
+Ar    D
+      0.8500000              1.0000000        
+Ar    D
+      0.2125000              1.0000000        
+END
+
+

@@ -1,0 +1,23 @@
+# run this script in command to dump the orbital images
+#    jmol jmol_script.spt
+initialize;
+set background [xffffff];
+set frank off
+set autoBond true;
+set bondRadiusMilliAngstroms 66;
+set bondTolerance 0.5;
+set forceAutoBond false;
+load boys.molden
+rotate 45 x
+rotate 45 y
+zoom 60
+isoSurface MO 01 fill noMesh noDots;    write JPG 90 "boys-01.jpg"
+isoSurface MO 02 fill noMesh noDots;    write JPG 90 "boys-02.jpg"
+isoSurface MO 03 fill noMesh noDots;    write JPG 90 "boys-03.jpg"
+isoSurface MO 04 fill noMesh noDots;    write JPG 90 "boys-04.jpg"
+isoSurface MO 05 fill noMesh noDots;    write JPG 90 "boys-05.jpg"
+isoSurface MO 06 fill noMesh noDots;    write JPG 90 "boys-06.jpg"
+isoSurface MO 07 fill noMesh noDots;    write JPG 90 "boys-07.jpg"
+isoSurface MO 08 fill noMesh noDots;    write JPG 90 "boys-08.jpg"
+isoSurface MO 09 fill noMesh noDots;    write JPG 90 "boys-09.jpg"
+isoSurface MO 10 fill noMesh noDots;    write JPG 90 "boys-10.jpg"

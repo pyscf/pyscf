@@ -1,0 +1,13 @@
+diff --git a/src/functionals/common_parameters.cpp b/src/functionals/common_parameters.cpp
+index 4142b0d..210b4ab 100644
+--- a/src/functionals/common_parameters.cpp
++++ b/src/functionals/common_parameters.cpp
+@@ -3,7 +3,7 @@
+ PARAMETER(XC_RANGESEP_MU) = 
+ {
+   "Range separation inverse length [1/a0]",
+-  0.4
++  0.33
+ };
+ 
+ PARAMETER(XC_EXX) = 

@@ -1,0 +1,17 @@
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
+enable_language(Fortran)
+set(CMAKE_Fortran_FLAGS "-pedantic -O2 -Wall -ffree-line-length-0")
+
+set(HAVE_OPENMP 1)
+set(OpenMP_C_FLAGS " ")
+message("OpenMP_C_FLAGS ${OpenMP_C_FLAGS}")
+
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl -lgomp")
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl -lgomp")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
+

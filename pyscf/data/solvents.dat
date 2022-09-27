@@ -1,0 +1,24 @@
+# From http://pcmsolver.readthedocs.io/en/latest/users/input.html
+# Name                Formula     static permittivity   optical permittivity   probe radius
+#                                 \varepsilon_s         \varepsilon_\infity
+
+Water                 H2O         78.39                 1.776                  1.385
+Propylene Carbonate   C4H6O3      64.96                 2.019                  1.385
+Dimethylsulfoxide     DMSO        46.7                  2.179                  2.455
+Nitromethane          CH3NO2      38.20                 1.904                  2.155
+Acetonitrile          CH3CN       36.64                 1.806                  2.155
+Methanol              CH3OH       32.63                 1.758                  1.855
+Ethanol               CH3CH2OH    24.55                 1.847                  2.180
+Acetone               C2H6CO      20.7                  1.841                  2.38
+1,2-Dichloroethane    C2H4Cl2     10.36                 2.085                  2.505
+Methylenechloride     CH2Cl2      8.93                  2.020                  2.27
+Tetrahydrofurane      THF         7.58                  1.971                  2.9
+Aniline               C6H5NH2     6.89                  2.506                  2.80
+Chlorobenzene         C6H5Cl      5.621                 2.320                  2.805
+Chloroform            CHCl3       4.90                  2.085                  2.48
+Toluene               C6H5CH3     2.379                 2.232                  2.82
+1,4-Dioxane           C4H8O2      2.250                 2.023                  2.630
+Benzene               C6H6        2.247                 2.244                  2.630
+Carbon tetrachloride  CCl4        2.228                 2.129                  2.685
+Cyclohexane           C6H12       2.023                 2.028                  2.815
+N-heptane             C7H16       1.92                  1.918                  3.125

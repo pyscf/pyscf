@@ -1,0 +1,250 @@
+***************************
+  What's New in PySCF 1.5
+***************************
+
+This article lists new features in PySCF 1.5.
+
+
+Relase highlights
+=================
+
+New features:
+
+* ddCOSMO solvent model
+* ddCOSMO analytical nuclear gradients
+* VV10 NLC functional for molecule
+* range-separated hybrid molecular RKS and UKS, supporting
+  - Analytical nuclear gradients
+  - Second order SCF
+  - Hessian and frequency
+  - TDDFT
+  - TDDFT gradients
+  - NMR
+* IAO and IBO for molecular and PBC systems
+* UHF analytical nuclear Hessian
+* UKS analytical nuclear Hessian
+* FFT for low-dimension (2D) PBC systems
+* Generalized CCSD (GCCSD)
+* Generalized CCSD lambda solver
+* Generalized Hartree-Fock with PBC
+* PBC GCCSD and RCCSD with k-point sampling
+* PBC GCCSD(T) and RCCSD(T) with k-point sampling
+* RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
+* RCISD and UCISD analytical nuclear gradients
+* RCISD, UCISD analytical nuclear gradients for excited states
+* RMP2 and UMP2 analytical nuclear gradients
+* UCCSD analytical nuclear gradients
+* Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
+* SF-X2C-1E analytical nuclear gradients
+* SF-X2C-1E analytical nuclear hessian
+* Analytical nuclear gradients and hessian for ECP integrals
+* GIAO-ECP integrals for NMR shielding
+* Restricted MP2 with k-point sampling
+* RCCSD(T), UCCSD(T) and GCCSD(T) 1-particle and 2-particle density matrices
+* RCCSD(T), UCCSD(T) analytical nuclear gradients
+* CASCI/CASSCF analytical nuclear gradients
+* CASCI analytical nuclear gradients for excited states
+* Cartesian GTO (6d 10f) basis in PBC calculations
+* Natural transition orbital analysis
+* direct-RPA (no exchange, aka TDH)
+* direct-TDA (TDA without exchange)
+* TDA and TDDFT analytical nuclear gradients for UHF and UKS
+* CISD/GCISD/UCISD 1-particle transition density matrix
+* Fake PySCF method adapter for arbitrary energy/gradients function in
+  berny_solver wrapper
+* Function to restore DIIS object from DIIS file
+* Restart function to restore CCSD calculations
+* Function to set OpenMP threads
+
+
+Improvements:
+
+* CASSCF optimization step size
+* State-averaged CASSCF output message
+* RCCSD(T) and UCCSD(T) performance
+* Reduced DIIS memory footprint
+* Frozen orbitals for KRCCSD
+* PBC-TDDFT eigenvalue filter to keeps more eigenvalues which has small
+  imaginary part
+* Conversion between KRHF, KUHF, and KGHF
+* In the SOSCF solver, the diagonalization code to handle singularity in Hessian
+* In the Scanner function, to support an input of geometry (string or list)
+* SCF convergence hook
+* Density_fit hooks in mp2, cisd, and ccsd modules
+* Warning for gapless system in ccsd
+* Energy cutoff for PBC GDF method.
+* XC functional parser to support '-' in XC name and XC functional
+* More XC functional abbreviations (SVWN, BLYP, PBE, M05, etc.)
+* Orbital frozen in core and virtual space for KMP2 and KCCSD modules
+* Memory usage of KRHF-KCCSD and IP/EA-EOM-KCCSD
+* FCI convergence tolerance
+* Independent OpenMP threads in FCI solver
+* Supported even number of grids in pbc calculations
+* Performance and memory efficiency of UCCSD lambda solver
+* The function to get SCF initial guess from the chkfile of the molecule with
+  different geometry
+* The mcscf natural orbitals in the state-average calculation
+* Performance of ECP integrals
+* Prescreening for PBC 3-center integrals
+* Performance and memory efficiency of G0W0
+* KMP2 memory efficiency
+* Efficiency to evaluate the value of periodic AO on grids
+* libxc parser to support the customized Range-separated XC functionals
+
+
+Bugfix:
+
+* The ghost atom is now treated as a regular atom in berny_solver wrapper
+* QM/MM nuclear gradients
+* Updating 6-31+G* basis which is now equivalent to the EMSL published basis
+* Symmetry detection code to discover D2d, D4d, D6d group
+* xcfun O3LYP functional which is now the same to libxc definition (but
+  different to the equation in the original paper)
+* xcfun cam-b3lyp functional interface
+* HCI wrapper to handle the system without beta electrons
+* Dimension error for spinor integrals in general JK-build function
+* The orbital ordering of the returned orbitals of the UHF stability analysis
+* Filling up the upper triangular part for symmetry Hamiltonian in fcidump.read
+* The attributes kpts and kpt of PBC SCF class when SCF data are loaded from
+  chkfile
+* Nuclear Hessian in ECP and all-electron mixed systems
+* Natural orbitals of state-averaged CASSCF
+
+
+API changes
+===========
+
+* :attr:`cell.mesh` was introduced in PySCF 1.5 to replace the old parameter
+  :attr:`cell.gs`.  The three numbers of :attr:`cell.gs` give the numbers of
+  planewaves that sit in the positive direction of each axis in the reciprocal
+  space.  The total number of planewaves (or grids) equals :math:`(2*gs+1)^3`.
+  :attr:`cell.gs` can produce odd number of integration grids only.  To support
+  even number of grids, :attr:`cell.mesh` is created which stands for the number
+  of grids for each direction in real space. The total number of grids is
+  :math:`(mesh)^3`.  You can access both :attr:`cell.mesh` and :attr:`cell.gs`
+  in this release.  :attr:`cell.mesh` is the recommended parameter to access
+  integration mesh grids.  Accessing :attr:`cell.gs` will come with a warning
+  message on screen.
+
+* XC functional abbreviations are supported in this release.  When an
+  abbreviation of a XC functional (without "," in the key, such as "SVWN",
+  "PBE", "BLYP", "BP86") is specified in the KS object, the DFT functional
+  parser will treat it as a compound XC functional, regardless whether the key
+  matches any entries in the list of exchange functionals or correlation
+  functionals.  For example, ``mf.xc="PBE"`` is identical to ``"PBE,PBE"`` (PBE
+  exchange plus PBE correlation), even the key ``PBE`` itself is a valid name in
+  list of exchange functions.  If the abbreviation is not found in the list of
+  compound XC functionals, an error will be raised (even the key is valid for X
+  or C functionals) which is different to the older versions.  In the older
+  versions, DFT parser will turn to X or C functionals if the compound XC name
+  is not found (e.g. ``mf.xc="PBE"`` will produce PBE X functional).  If a
+  single PBE-X functional (without C part) is needed, the input should be
+  ``mf.xc="PBE,"`` (note the ",").  For a single PBE-C functional, the input is
+  ``mf.xc=",PBE"``.
+  
+  The complete list of abbreviations can be found in :file:`pyscf/dft/libxc.py`
+  under the key ``XC_ALIAS``.
+
+
+Features
+========
+
+Scanner
+-------
+
+Scanner is a function that takes an ``Mole`` (or ``Cell``) object as input and
+return the energy or nuclear gradients of the given ``Mole`` (or ``Cell``)
+object.  Scanner can be considered as a shortcut function for a sequence of
+statements which includes the initialization of a required calculation model
+with necessary precomputing, next updating the attributes based on the settings
+of the referred object, then calling kernel function and finally returning
+results.  For example::
+
+  cc_scanner = gto.M().apply(scf.RHF).apply(cc.CCSD).as_scanner()
+  for r in (1.0, 1.1, 1.2):
+    print(cc_scanner(gto.M(atom='H 0 0 0; H 0 0 %g'%r)))
+
+An equivalent but slightly complicated code is::
+
+  for r in (1.0, 1.1, 1.2):
+    mol = gto.M(atom='H 0 0 0; H 0 0 %g'%r)
+    mf = scf.RHF(mol).run()
+    mycc = cc.CCSD(mf).run()
+    print(mycc.e_tot)
+
+More details of scanner function can be found in the document
+http://sunqm.github.io/pyscf/overview.html#scanner.
+Relevant examples include ``examples/scf/30-scan_pes.py``,
+``examples/grad/16-scan_force.py``,
+``examples/grad/10-excited_state_cisd_grad.py``.
+
+
+Solvent model
+-------------
+domain decomposition COSMO (ddCOSMO) for solvent effects was implemented in
+PySCF 1.5 release.  It can be used to compute the solvent correction to single
+point (HF, DFT, MCSCF, post-HF) ground state and excited state energy and the
+analytical nuclear gradients. Relevant example can be found in
+``exampels/solvent/00-scf_with_ddcosmo.py``.
+
+
+Range-separated functionals
+---------------------------
+Range-separated hybrid functionals are supported in the computation of DFT
+energy, analytical nuclear gradients, analytical hessian, NMR, TDDFT and TDDFT
+nuclear gradients.  Relevant examples can be found in
+``examples/dft/10-camb3lyp.py``.
+
+
+Non-local functional VV10
+-------------------------
+The nonlocal functional VV10 can be used to compute weak interactions.
+Example ``examples/dft/33-nlc_functionals.py`` showed the usage of vv10
+functional.
+
+
+IAO and IBO with periodic boundary conditions
+---------------------------------------------
+IAO and IBO at Gamma point is available for a PBC system.  See the example
+``examples/local_orb/05-ibo_periodic_diamond_cubegen.py`` for more details.
+
+
+Analytical nuclear gradients for post-HF methods
+------------------------------------------------
+Ground state nuclear gradients of CASCI, CASSCF, RMP2/UMP2, RCISD/UCISD,
+RCCSD/UCCSD, RCCSD(T)/UCCSD(T) were implemented in PySCF 1.5 release.
+Excited state nuclear gradients were considered in CASCI and RCISD/UCISD and
+TDA, TDDFT methods.  The relevant examples are listed in the folder ``examples/grad``.
+
+
+Natural transition orbitals
+---------------------------
+Natural transition orbital analysis can be executed by calling the
+:func:`get_nto` method of TDDFT objects.  The relevant example is
+``examples/tddft/01-nto_analysis.py``.
+
+
+Transition density matrix
+-------------------------
+For CISD and CASCI, transition density matrix between ground state and excited
+state can be computed.  Method :func:`trans_rdm1` can compute the transition
+density matrix of any two input states. For example::
+
+    from pyscf import gto, scf, ci, mcscf
+    mol = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='ccpvdz')
+    mf = scf.RHF(mol).run()
+    ci_obj = ci.CISD(mf)
+    ci_obj.nroots = 4
+    ci_obj.kernel()
+    t_dm1 = ci_obj.trans_rdm1(ci_obj.ci[0], ci_obj.ci[3])
+
+    ncas = 5
+    ne = 8
+    mc_obj = mcscf.CASCI(mf, ncas, ne)
+    mc_obj.fcisolver.nroots = 4
+    mc_obj.kernel()
+    t_dm1 = mc_obj.fcisolver.trans_rdm1(mc_obj.ci[0], mc_obj.ci[3], ncas, ne)
+
+Relevant examples can be found in ``examples/mcscf/15-transition_dm.py`` and
+``examples/ci/01-density_matrix.py``
+

@@ -1,0 +1,101 @@
+***************************
+  What's New in PySCF 1.6
+***************************
+
+This article lists new features in PySCF 1.6.
+
+
+Relase highlights
+=================
+
+New features:
+
+* DFT-D3 interface
+* semi_incore ao2mo transformation
+* PBC k-point SCF stability analysis
+* PBC KUCCSD
+* PBC EOM-IP/EA-KRCCSD
+* PBC EOM-IP/EA-KUCCSD
+* X2C-UKS (LDA functional only)
+* PBC gamma point ROHF/ROKS and GKS
+* PBC KROHF/KROKS and KGKS for k-point sampling
+* DFT Coulomb and XC integrals with multigrid
+* Periodic UCCSD with k-point sampling
+* perturbative DMRG method
+* Interface to Cornell SHCI
+* PBC dipole memont and Makov-Payne correction
+* Overlap of two CISD wavefunctions
+* EFG and Mossbauer spectroscopy of crystal and molecule
+* Molecular magnetizability for HF and DFT
+* ddCOSMO and ddPCM for MCSCF, MP, CI and CC methods
+* Non-relativistic static and dynamic polarizability and hyper-polarizability tensor
+
+
+Improvements:
+
+* Linear dependency threshold of qr decomposition in davidson solver
+* Optimized KUCCSD, EOM-KUCCSD performance
+* numint performance (eval_rho, eval_mat)
+* Energy cutoff estimation
+* The treatment of HF exchange in PBC system when calling PBC MP2, CISD, CCSD code
+* Convergence performance of KCCSD iterations for low-dimension systems
+* CCSD convergency for 2D-PBC AFTDF, GDF and MDF methods
+* Integral transformation performance in GW
+* Molden parser to handel UHF orbitals
+* IO performance of pbc.GDF initialization
+* Default linear dependence treatment in GDF to improve accuracy
+* The memory usage for a large number of MM particles (issue #193)
+
+
+Bugfix:
+
+* hasattr issue for attributes with @property
+* DDCOSMO wrapper and kernel function
+* Num eletrons bug in PBC smearing function for custom systems
+* return value of NPTaggedArray ufunc (returning np array now)
+* PBC density fitting dimension error caused by numerical noise when handling linear dependency
+* Parsers for molpro basis and gaussian basis
+* Selected-CI returned data type
+* Complex density in pbc.get_j function
+* Get_fermi in KHF and KUHF
+* Execute call in dmrgci
+* Directories and paths in dmrgci
+* Read of 3-pdm and 4-pdm produced by block-1.5
+* Initialization wrapper in pbc.scf.__init__
+* Complex density in pbc.get_j function
+* Initial guess of KROHF method
+* PBC get_jk interface when calling molecular MCSCF with pbc scf object
+* keyword argument with_df of pbc.dft density_fit wrapper
+* OpenMP race condition in FCI solver
+* Undefined HDF5 dataset in PBC MDF initialization
+* TD-KRHF vind function
+* SCF hessian
+* interface between DMRG-CI and DMRG-NEVPT2. Making DMRG-NEVPT2 read Block code settings in DMRG-CI.
+* Dimension error in pbc.fftdf.get_jk for KUHF density matrix
+* pbc.mpicc for keyword frozen
+* Periodic pseudopotential calculations with ghost atoms
+* get_jk prescreen for non-hermitian density matrices.
+* Inaccurate estimation of memory usage in ccsd rdm.
+* Frozen orbital EA-EOM-KRCCSD
+* IOError due to 4GB chunk size limit in HDF5 library
+* Selected-ci 2-particle density matrices for two electron systems
+* Frozen orbitals in MCSCF canonicalization
+* Dimension error when initializing DF-CCSD integral tensor
+* EOM-EE-UCCSD initial guess and intermediates (issue #199)
+* mpi ip/eaccsd w/ frozen orbitals
+* the tdscf.get_nto function when mol.symmetry is enabled (issue #196)
+* the interface between QMMM wrapper and the gradients of post-HF methods
+
+
+
+API changes
+===========
+
+* The data structure of TDDFT X, Y response amplitudes were updated.  The old
+  data structure was viewed as the first-order orbital response coefficients
+  thus encoded as X[nvir,nocc], where column indices correspond to the orbital
+  indices. New data structure was in line with the data structure of CI/CC
+  single excitation amplitudes. Its shape is X[nocc,nvir]. For PBC systems, the
+  data structure of X(Y) amplitudes are X[nkpts,nocc,nvir].
+
+

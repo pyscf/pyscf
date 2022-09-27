@@ -1,0 +1,327 @@
+***************************
+  What's New in PySCF 1.3
+***************************
+
+This article explains new features in PySCF 1.3.
+
+
+Relase highlights
+=================
+
+New features:
+
+* Spin-free X2C Hamiltonian for PBC calculation
+* Overlap of two CI wavefunctions over different orbital bases
+* EOM-CCSD for user guess, Koopmans' excitations, etc
+* Approximate EOM-CCSD (MBPT2 ground state and partitioned EOM Hbar)
+* AVAS method for constructing CASSCF active space
+* Molpro XML file reader and interface to read Molpro orbitals
+* Supports for 1D, 2D PBC systems
+* Quantum chemistry ECP for crystalline system
+* AO-driven CCSD
+* UCCSD
+* CI coefficients transformation for one-particle basis rotation
+* CIAH second order SCF solver for PBC KRHF and KUHF methods
+* CISD and CISD 1, 2-particle density matrices
+* Selected-CI and Selected-CI 1, 2-particle density matrices
+* Smearing for PBC mean-field calculation
+* Density fitting (with Gaussian as auxiliary basis) for crystalline systems
+
+Improvements:
+
+* Performance of CCSD(T)
+* The default kpts mesh (to always include gamma point)
+* Treatment of auxiliary basis linear dependence in PBC DF/MDF module
+* Atomic grids in PBC DFT calculation
+* Cutoff radius in real space lattice summation for better accuracy
+* EOM-EE-RCCSD and EOM-EE-UCCSD performance
+* Memory usage of the non-symmetric Davidson solver in EOM-CCSD
+* Integral transformation for PBC 2-electron integrals
+* CASSCF state-average interface to handle sub-solvers of different spins
+* Numerical stability for Davidson diagonalization solver
+* Numerical stability of FCI contraction function under multi-threading environment
+* Performance of FCI 2-electron contraction function with point group symmetry
+
+
+API changes
+===========
+
+* In PySCF 1.2, :func:`Cell.make_kpts` generated k-points uniformly along each
+  direction.  Gamma point might be excluded in the so-generated k-points when
+  the number of k-points is even.  In PySCF 1.3, a shift is applied to the
+  k-points so that gamma point are always included.
+
+* :attr:`cell.h` was the array of lattice vectors defined in PySCF 1.2.  Each
+  column of :attr:`cell.h` represents one primitive vector.  This definition is
+  different to the row-based lattice-vector array used by ASE.  A row-based
+  array cell.a was added in PySCF 1.3 as the default input parameter,
+  ``cell.a = cell.h.T``
+
+* The images of lattice summation were controlled by :attr:`cell.nimgs` in PySCF
+  1.2 for the three directions of the repeated images.  The actual repeated
+  images of lattice summation are distributed in a sphere.  :attr:`cell.nimgs`
+  does not represent the real distribution of the repeated images.  In PySCF
+  1.3, we use :attr:`cell.rcut`, the radius of the sphere, to truncate the
+  lattice summation.  The value is estimated in the cell initialization based on
+  the required :attr:`cell.precision`.  A warning message will be raised if
+  :attr:`cell.nimgs` is set in the input.
+
+
+
+Features
+========
+
+Selected-CI
+-----------
+A flavour of Selected-CI method was implemented based on the direct-CI
+algorithm.  In this selected-CI implementation, the wavefunction coefficients
+are stored in a 2D array in which the row index is associated to alpha strings
+and the column index is associated to beta strings.  The selected-CI 2D
+wavefunction coefficients array is a sub-matrix of the full CI wavefunction
+array.  In many systems, this is an inefficient representation of the important
+determinants since many matrix elements of the wavefunction array are very
+small.  The advantage of the 2D coefficients array representation is that the
+H*c contraction code is very close to the direct-CI counterpart.  The
+contraction code can be easily vectorized thus has high efficiency.  The upper
+limit of this code is around 30 orbitals with 20000x20000 determinants.  Spin
+square function, point group symmetry, and 1-particle, 2-particle density
+matrices are all available in this implementation.  It can be applied to
+CASCI/CASSCF as a replacement to FCI solver::
+
+    from pyscf import gto, scf, mcscf, fci
+    mol = gto.M(atom='N 0 0 0; N 0 0 1.2', basis='cc-pvdz')
+    mf = scf.RHF(mol).run()
+    mc = mcscf.CASSCF(mf, 8, 6)
+    mc.fcisolver = fci.SCI(mol)
+    mc.kernel()
+
+
+EOM-CCSD
+--------
+EOM-IP-CCSD, EOM-EA-CCSD and EOM-EE-CCSD methods were implemented in the
+molecular CCSD module::
+
+    mol = gto.Mole(atom='O 0 0 0; O 0 0 1.2', basis='ccpvdz')
+    mf = scf.RHF(mol).run()
+    mycc = cc.RCCSD(mf).run()
+
+    eip,cip = mycc.ipccsd(nroots=3)
+    eea,cea = mycc.eaccsd(nroots=3)
+    eee,cee = mycc.eeccsd(nroots=3)
+    eS = mycc.eomee_ccsd_singlet(nroots=2)[0]
+    eT = mycc.eomee_ccsd_triplet(nroots=2)[0]
+
+Singlet to singlet excitation (:func:`eomee_ccsd_singlet`) and singlet to
+triplet excitation (:func:`eomee_ccsd_triplet`) are available in EOM-EE-RCCSD code.
+The AO-driven technique has been used in EOM-EE-RCCSD code.  This allows
+EOM-EE-RCCSD to handle the system rhoughly the same size as the ground state
+AO-driven RCCSD.  EOM-IP/EA-RCCSD and EOM-EE-UCCSD are formulated on the spatial
+part of MO integrals which are completely held on disk.  EOM-IP/EA-UCCSD are
+based on spin-orbital UCCSD formulas.
+
+
+AVAS for CASSCF active space
+----------------------------
+Atomic valence active space (AVAS) method was implemented to construct the
+atomic orbital character CASSCF active space.  This method is closely related to
+the :mod:`mcscf.dmet_cas` module.  In the limit of restricted closed shell HF
+reference, the complete DMET active space (all impurity orbitals and bath
+orbitals) and complete AVAS active space (with cutoff threshold = 0) are
+equivalent.  When truncated bath for DMET or finite cutoff threshold for AVAS
+are applied, small difference can be found in the two functions.  DMET active
+space has better AO character since the truncation is applied on bath only.  But
+its CASCI energy may break the variational requirement since the bath truncation
+causes an excitation from occupied space to external space.  AVAS has worse AO
+character in active space but maintains variational principle.
+
+
+Density fitting (with auxiliary Gaussian basis) for crystalline systems
+-----------------------------------------------------------------------
+Regular density fitting method (with Gaussian basis only) was implemented in
+PySCF 1.3.  Now the PBC density fitting module provides a full stack of Coulomb
+integral density fitting methods for different level of accuracy.  Given
+kinetic energy cutoff, the fastest implementation is the fast Fourier
+transformation method :mod:`pbc.df.FFTDF` based on real space sampling but it
+has the lowest accuracy when the steep AO functions are used.  The integration
+with analytic Fourier transformation :func:`pbc.df.AFTDF` has relatively better
+accuracy for steep AO functions but about 10 times more expensive than FFT code.
+:func:`pbc.df.DF` is the regular density fitting method (corresponding to
+molecular density fitting method) which uses only the Gaussian functions as the
+auxiliary basis.  Depending on the system and auxiliary basis, the regular
+density fitting method :func:`pbc.df.DF` can provide good integration accuracy
+for steep AO functions with moderated costs.  The regular density fitting method
+requires a demanding initialization step to generate the 3-index tensor.
+Once the required 3-index tensor is generated, the computational cost of regular
+density fitting can be fairly low because its 3-index tensor provides a very
+compact decomposition of the 4-index 2-electron integral tensor.
+:func:`pbc.df.MDF` the Gaussian and PW mixed density fitting technique
+provides the highest accuracy for integrals among the four but it is the most
+expensive methods.
+
+Another reason to develop the regular density fitting module is to provide a
+program layer which is consistent with the molecular density fitting module.
+With this program layer, one can easily access the 3-index tensor and manipulate
+the 3-index tensor the same way as one did in the molecular code.  For example,
+we can pass the 3-index tensor of PBC calculations to the molecular program to
+use the electron-correlation methods which were developed in the quantum
+chemistry framework.  This layer also allows us to feed the 2-electron
+Hamiltonian to the PBC program to study PBC model systems.
+
+
+Low-dimensional PBC systems
+---------------------------
+Periodic 2D (plane), 1D (wire) and 0D (molecule) systems are supported in the
+:mod:`pbc` module.  The low-dimensional systems are simulated by the 3D PBC
+program in which the infinite vacuum is inserted between periodic images.
+To enable the low-dimensional PBC calculation, some settings should be applied
+
+* :attr:`cell.dimension` should be set to 0, 1 or 2.  Eg, when 2 is assigned to
+  :attr:`cell.dimension`, a 2D system is initialized in :func:`cell.bulid()`
+  function.  The size of :attr:`cell.a[2]` is treated as an infinite value and
+  the value of :attr:`cell.a[2]` in the input is ignored.  Similarly,
+  :attr:`cell.a[1]` and :attr:`cell.a[2]` for :attr:`cell.dimension=1` are
+  treated as infinite value.  For :attr:`cell.dimension=0`, the entire
+  :attr:`cell.a` array is ignored.
+
+* The AFT-based (analytical Fourier transformation) Coulomb integral modules
+  :func:`pbc.df.AFTDF`, :func:`pbc.df.DF` or :func:`pbc.df.MDF` should be used.
+  The default :func:`pbc.df.FFTDF` method is not suitable for the
+  low-dimensional system because our implementation does not truncate the
+  Coulomb kernel in the direction of vacuum.  For :func:`pbc.df.FFTDF`, a huge
+  number of grids may be required in the vacuum.  In contrast, the AFT integral
+  module uses non-uniform (Gauss-Chebyshev) grids in the vacuum which only
+  require relatively small number of grids (controlled by :attr:`cell.gs`) to
+  converge the integrals.
+
+* :attr:`cell.ke_cutoff` has no effects in the vacuum dimension.  It is
+  recommended to directly assign the number of grids for each direction
+  (:attr:`cell.gs`) in the low-dimensional systems.  20 grids for vacuum
+  is a lower limit for most systems.
+
+In the following example, a carbon wire parallel to z-axis is initialized and
+modeled.  We put 10 k-points in the periodic dimension.  In each unit cell, 20
+grids are placed in the vacuum and 4 PWs in the periodic dimension::
+
+    from pyscf.pbc import gto, scf, df
+    cell = gto.M(a=numpy.eye(3)*3., atom='C 0 0 0; C 0 0 1.5',
+                 dimension=1, gs=[20,20,4], basis='ccpvdz')
+    kpts = cell.make_kpts([1,1,10])
+    mf = scf.KRHF(cell, kpts)
+    mf.with_df = df.DF(cell, kpts)
+    mf.with_df.auxbasis = 'weigend'
+    mf.kernel()
+
+
+Pseudo potential for crystalline system
+---------------------------------------
+Quantum chemistry effective core potential and Burkatzki-Filippi-Dolg potential
+were interfaced to PBC module.  The program allows one to mix the different
+pseudo potentials in the same calculation::
+
+    ...
+    cell.atom = 'Cl 0 0 0; Na 1 1 1'
+    cell.ecp = {'Cl': 'gth-bp'},
+    cell.pseudo = {'Na': 'lanl2dz'}
+    cell.basis = {'Na': 'lanl2dz', 'Cl': 'gth-dzv'}
+    cell.build()
+
+
+Spin-free X2C Hamiltonian for PBC calculation
+---------------------------------------------
+X2C method provides a simple transformation to fold relativistic effects into
+the 1-electron Hamiltonian of molecular systems.  In the periodic system,
+applying the X2C transformation directly to the PBC 1-electron Hamiltonian can
+introduce large picture change error due to the divergence of the Coulomb
+integrals.  A local approximation was applied in the PBC-X2C transformations to
+make the answer of 0D PBC system (equivalent to finite size system) is close to
+the molecular calculations.  PBC X2C correction can be applied in the same way
+as the molecular X2C method::
+
+    from pyscf.pbc import gto, scf, df
+    cell = gto.M(a=numpy.eye(3), gs=[25]*3, atom='Rn 0 0 0', dimension=0, basis='unc-ano')
+    mf = scf.sfx2c1e(scf.RHF(cell))
+    mf.with_df = df.MDF(cell)
+    ex2c = mf.kernel()
+    print('E(SFX2C1E) = %.12g' % ex2c)
+
+
+Overlap of two CI wavefunctions over different orbital bases
+------------------------------------------------------------
+How close are the two wavefunctions that are computed from different geometries?
+To answer this question, for single reference wavefunctions, we can measure it
+by evaluating the one particle overlap matrix between the two occupied space
+then computing the value of determinants.  For two CI wave functions on
+different one-particle basis, PySCF 1.3 provides a function in :mod:`fci` module
+to compute the overlap :math:`\langle Psi|Psi'\rangle`::
+
+    import numpy
+    from pyscf import gto, scf, fci
+    myhf1 = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='6-31g', verbose=0).apply(scf.RHF).run()
+    e1, ci1 = fci.FCI(myhf1.mol, myhf1.mo_coeff).kernel()
+
+    myhf2 = gto.M(atom='H 0 0 0; F 0 0 1.2', basis='6-31g', verbose=0).apply(scf.RHF).run()
+    e2, ci2 = fci.FCI(myhf2.mol, myhf2.mo_coeff).kernel()
+
+    s = gto.intor_cross('cint1e_ovlp_sph', myhf1.mol, myhf2.mol)
+    s = reduce(numpy.dot, (myhf1.mo_coeff.T, s, myhf2.mo_coeff))
+    norb = myhf2.mo_energy.size
+    nelec = myhf2.mol.nelectron
+    print('<FCI-mol1|FCI-mol2> = ', fci.addons.overlap(ci1, ci2, norb, nelec, s))
+
+
+CI coefficients transformation wrt one-particle basis rotation
+--------------------------------------------------------------
+A common task in the single reference calculation is to construct the initial
+guess by projecting the orbitals from another calculation.  For CI wavefunction,
+it is also a useful feature to build the initial guess from another system.
+This projection involves two steps.  First is to transform the one-particle
+basis.  Next is to transform CI wavefunction accordingly::
+
+    import numpy
+    from pyscf import gto, scf, fci
+    myhf1 = gto.M(atom='H 0 0 0; F 0 0 1.1', basis='6-31g', verbose=0).apply(scf.RHF).run()
+    e1, ci1 = fci.FCI(myhf1.mol, myhf1.mo_coeff).kernel()
+    myhf2 = gto.M(atom='H 0 0 0; F 0 0 1.2', basis='6-31g', verbose=0).apply(scf.RHF).run()
+
+    s = gto.intor_cross('cint1e_ovlp_sph', myhf1.mol, myhf2.mol)
+    s = reduce(numpy.dot, (myhf1.mo_coeff.T, s, myhf2.mo_coeff))
+    norb = myhf2.mo_energy.size
+    nelec = myhf2.mol.nelectron
+    ci2 = fci.addons.transform_ci_for_orbital_rotation(ci1, norb, nelec, s)
+
+
+Improvements
+============
+
+Atomic grids in PBC DFT calculation
+-----------------------------------
+In the pseudo-potential PBC calculations, the uniform integration mesh can
+provide a good description to the electron density since the density is
+generally smooth in the real space.  In the all-electron PBC calculations,
+the non-uniform spherical mesh grids around each atom (atomic grids) is
+preferred since it is able to provide better description to the core electrons.
+The atomic integration grids in the PBC program need to be periodic in the real
+space.  The periodicity is mimicked by the mesh grids of a super molecule.
+The cutoff radius to form the super molecule is improved in PySCF 1.3.  In the
+all-electron calculations for silicon crystal (2 atoms per cell, 28 electrons),
+small errors in the integration weights are observed.  The summation of
+integration weights is 0.2% larger than the unit cell volume.  The number of
+electrons produced by numerical integration is 28.002.
+
+
+Cutoff radius in real space lattice summation for better accuracy
+-----------------------------------------------------------------
+Cutoff radius for real space lattice summation is improved in PySCF 1.3.  In
+PySCF 1.2, the lattice summation images were controlled by the three integers
+in :attr:`cell.nimgs` for the repeated images to be truncated in the x,y,z
+directions.  In the non-orthogonal lattice, this parameter is not able to
+reflect the actual distance between two images in the lattice summation.
+With the universal truncations on x, y, z directions, some remote images on the
+long axis are included in the lattice summation while some near images sitting
+on the short axis are excluded.  As a result, the answer of super-cell
+gamma-point calculation and k-point calculations only agree to ~1e-4 Hartree.
+Applying the spherical cutoff radius in PySCF 1.3, more images on the short axis
+are included in the lattice summation.  The agreement between gamma-point and
+k-point can reach ~1e-5 Hartree.
+
+

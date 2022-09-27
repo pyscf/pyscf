@@ -1,0 +1,13 @@
+enable_language(Fortran)
+message("CMAKE_Fortran_COMPILER: ${CMAKE_Fortran_COMPILER}")
+message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+
+set(BLAS_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
+
+set(LAPACK_LIBRARIES "-L/opt/intel/intelpython2/pkgs/mkl-2017.0.3-intel_5/lib -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
+
