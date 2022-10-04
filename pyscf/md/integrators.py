@@ -57,10 +57,10 @@ class Frame:
 
 
 def _toframe(integrator):
-    '''Convert an Integrator to a Frame given current saved data.
+    '''Convert an _Integrator to a Frame given current saved data.
 
     Args:
-        integrator : md.integrator.Integrator object
+        integrator : md.integrator._Integrator object
 
     Returns:
         Frame with all data taken from the integrator.
@@ -119,8 +119,9 @@ def kernel(integrator, verbose=logger.NOTE):
     return integrator
 
 
-class Integrator(lib.StreamObject):
-    '''Integrator base class
+class _Integrator(lib.StreamObject):
+    '''Integrator abstract base class. Should never be directly constructed,
+    but inherited from.
 
     Args:
         method : lib.GradScanner, rhf.GradientsMixin instance, or
@@ -238,7 +239,7 @@ class Integrator(lib.StreamObject):
                 Print level
 
         Returns:
-            Integrator with final epot, ekin, mol, and veloc of the simulation.
+            _Integrator with final epot, ekin, mol, and veloc of the simulation.
         '''
 
         if veloc is not None:
@@ -418,7 +419,7 @@ class Integrator(lib.StreamObject):
         self.trajectory_output.flush()
 
 
-class VelocityVerlet(Integrator):
+class VelocityVerlet(_Integrator):
     '''Velocity Verlet algorithm
 
     Args:
