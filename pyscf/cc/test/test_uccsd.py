@@ -70,6 +70,12 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
 
+    def test_udcsd(self):
+        mf = scf.UHF(mol).run()
+        mycc = cc.UCCSD(mf)
+        mycc.kernel(dcsd=True)
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
+
     def test_with_df_s0(self):
         mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
         mycc = cc.UCCSD(mf).run()
@@ -395,6 +401,7 @@ class KnownValues(unittest.TestCase):
         mf.mo_occ[0,:6] = 1
         mf.mo_occ[1,:5] = 1
         mycc = uccsd.UCCSD(mf)
+        mycc.dcsd = False
         nocca, noccb = 6, 5
         nvira, nvirb = nmo-nocca, nmo-noccb
         nvira_pair = nvira*(nvira+1)//2
@@ -462,6 +469,7 @@ class KnownValues(unittest.TestCase):
         mol = mol_s2
         mf = mf_s2
         myucc = uccsd.UCCSD(mf)
+        myucc.dcsd = False
         nocca, noccb = 6,4
         nmo = mol.nao_nr()
         nvira,nvirb = nmo-nocca, nmo-noccb

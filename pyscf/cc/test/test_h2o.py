@@ -53,6 +53,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(mf)
+        mcc.dcsd = False
         mcc.conv_tol = 1e-9
         mcc.conv_tol_normt = 1e-7
         eris = mcc.ao2mo()

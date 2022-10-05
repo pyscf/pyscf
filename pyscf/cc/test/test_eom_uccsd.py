@@ -58,6 +58,7 @@ def setUpModule():
     orbspin = gmf.mo_coeff.orbspin
 
     ucc1 = cc.UCCSD(mf1)
+    ucc1.dcsd = False
 
     numpy.random.seed(11)
     no = nocca + noccb
