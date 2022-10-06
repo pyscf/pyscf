@@ -560,7 +560,7 @@ def _add_padding(mp, mo_coeff, mo_energy):
     return mo_coeff, mo_energy
 
 
-def make_rdm1(mp, t2=None, kind="compact"):
+def make_rdm1(mp, t2=None, kind="compact", ao_repr=False):
     r"""
     Spin-traced one-particle density matrix in the MO basis representation.
     The occupied-virtual orbital response is not included.
@@ -584,14 +584,16 @@ def make_rdm1(mp, t2=None, kind="compact"):
     d_imds = _gamma1_intermediates(mp, t2=t2)
     result = []
     padding_idxs = padding_k_idx(mp, kind="joint")
-    for (oo, vv), idxs in zip(zip(*d_imds), padding_idxs):
+    for k, ((oo, vv), idxs) in enumerate(zip(zip(*d_imds), padding_idxs)):
         oo += np.eye(*oo.shape)
         d = block_diag(oo, vv)
         d += d.conj().T
-        if kind == "padded":
-            result.append(d)
-        else:
-            result.append(d[np.ix_(idxs, idxs)])
+        if kind == "compact" or ao_repr:
+            d = d[np.ix_(idxs, idxs)]
+        if ao_repr:
+            mo = mp.mo_coeff[k]
+            d = np.linalg.multi_dot((mo, d, mo.T.conj()))
+        result.append(d)
     return result
 
 
