@@ -137,7 +137,22 @@ class KnownValues(unittest.TestCase):
         cell.build()
         mf = pbcdft.RKS(cell).density_fit()
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 7)
+        self.assertAlmostEqual(mf.e_tot, -4.717699891018736, 6)
+
+    def test_density_fit_2d(self):
+        L = 4.
+        cell = pbcgto.Cell()
+        cell.a = np.eye(3)*L
+        cell.a[2,2] = 12
+        cell.dimension = 2
+        cell.unit = 'B'
+        cell.atom = 'H 0 0 0; H .8 .8 0'
+        cell.basis = {'H': [[0, (4.0, 1.0)], [0, (1.0, 1.0)]]}
+        cell.build()
+        mf = pbcdft.RKS(cell).run()
+        self.assertAlmostEqual(mf.e_tot, -0.6252695697315944, 7)
+        mf = pbcdft.RKS(cell).density_fit().run()
+        self.assertAlmostEqual(mf.e_tot, -0.635069614773985, 5)
 
     def test_rsh_fft(self):
         mf = pbcdft.RKS(cell)
