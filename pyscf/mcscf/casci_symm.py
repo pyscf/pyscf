@@ -116,7 +116,9 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
         wfnsym = mc.fcisolver.wfnsym
         log.debug('Use fcisolver.wfnsym %s', wfnsym)
 
-    elif ci0 is None:
+    elif (ci0 is None and
+          # mc._scf may not be initialized
+          mc._scf.mo_coeff is not None):
         # Guess wfnsym based on HF determinant.  mo_coeff may not be HF
         # canonical orbitals.  Some checks are needed to ensure that mo_coeff
         # are derived from the symmetry adapted SCF calculations.

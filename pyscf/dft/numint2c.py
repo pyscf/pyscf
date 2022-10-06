@@ -594,7 +594,7 @@ class NumInt2C(numint._NumIntMixin):
                     in self.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho.append(self.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, xctype,
                                           with_lapl))
-            rho = np.hstack(rho)
+            rho = np.concatenate(rho,axis=-1)
             if self.collinear[0] == 'm':  # mcol
                 eval_xc = self.mcfun_eval_xc_adapter(xc_code)
             else:
@@ -615,7 +615,7 @@ class NumInt2C(numint._NumIntMixin):
                 # rhoa and rhob must be real
                 rhoa.append(ni.eval_rho(mol, ao, dm_a, mask, xctype, hermi, with_lapl))
                 rhob.append(ni.eval_rho(mol, ao, dm_b, mask, xctype, hermi, with_lapl))
-            rho = np.stack([np.hstack(rhoa), np.hstack(rhob)])
+            rho = np.stack([np.concatenate(rhoa,axis=-1), np.concatenate(rhob,axis=-1)])
             assert rho.dtype == np.double
             vxc, fxc = ni.eval_xc_eff(xc_code, rho, deriv=2, xctype=xctype)[1:3]
         return rho, vxc, fxc

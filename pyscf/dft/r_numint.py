@@ -668,7 +668,7 @@ def cache_xc_kernel(ni, mol, grids, xc_code, mo_coeff, mo_occ, spin=1,
             in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                              with_s=with_s):
         rho.append(make_rho(0, ao, mask, xctype))
-    rho = numpy.hstack(rho)
+    rho = numpy.concatenate(rho,axis=-1)
 
     if ni.collinear[0] == 'm':  # mcol
         eval_xc = ni.mcfun_eval_xc_adapter(xc_code)
