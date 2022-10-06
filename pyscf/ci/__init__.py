@@ -40,7 +40,7 @@ def RCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_rhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-RCISD')
+        return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
 RCISD.__doc__ = cisd.RCISD.__doc__
