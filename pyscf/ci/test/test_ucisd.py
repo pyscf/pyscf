@@ -23,7 +23,6 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import fci
 from pyscf import ci
-from pyscf import cc
 from pyscf.ci import ucisd
 from pyscf import ao2mo
 
