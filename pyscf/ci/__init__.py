@@ -52,7 +52,7 @@ def UCISD(mf, frozen=None, mo_coeff=None, mo_occ=None):
         mf = scf.addons.convert_to_uhf(mf)
 
     if getattr(mf, 'with_df', None):
-        raise NotImplementedError('DF-UCISD')
+        return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
     else:
         return ucisd.UCISD(mf, frozen, mo_coeff, mo_occ)
 UCISD.__doc__ = ucisd.UCISD.__doc__
