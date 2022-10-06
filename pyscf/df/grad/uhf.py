@@ -22,7 +22,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-
+import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import uhf as uhf_grad
@@ -49,7 +49,8 @@ class Gradients(uhf_grad.Gradients):
         vj, vk = self.get_jk(mol, dm)
         vhf = vj[0]+vj[1] - vk
         if self.auxbasis_response:
-            e1_aux = vj.aux - vk.aux
+            e1_aux = vj.aux.sum ((0,1))
+            e1_aux -= numpy.trace (vk.aux, axis1=0, axis2=1)
             logger.debug1(self, 'sum(auxbasis response) %s', e1_aux.sum(axis=0))
             vhf = lib.tag_array(vhf, aux=e1_aux)
         return vhf

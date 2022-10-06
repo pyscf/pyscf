@@ -190,6 +190,17 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    def test_finite_diff_df_rks_grad(self):
+        mf1 = mf.density_fit ().run ()
+        g = mf1.nuc_grad_method ().set (grid_response=True).kernel ()
+        self.assertAlmostEqual(lib.fp(g), -0.04990623577718451, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
     def test_rks_grad_lda(self):
         mol_hf = gto.Mole()
         mol_hf.atom = [

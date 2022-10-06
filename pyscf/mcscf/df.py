@@ -145,7 +145,16 @@ def density_fit(casscf, auxbasis=None, with_df=None):
                 return casscf_class._exact_paaa(self, mol, u, out)
 
         def nuc_grad_method(self):
-            raise NotImplementedError
+            if 'CASCI' in str (casscf_class):
+                raise NotImplementedError ("DFCASCI nuclear gradients")
+            from pyscf.df.grad import casscf
+            return casscf.Gradients (self)
+
+        def _state_average_nuc_grad_method (self, state=None):
+            if 'CASCI' in str (casscf_class):
+                raise NotImplementedError ("DFCASCI nuclear gradients")
+            from pyscf.df.grad import sacasscf
+            return sacasscf.Gradients (self, state=state)
 
     return DFCASSCF()
 
