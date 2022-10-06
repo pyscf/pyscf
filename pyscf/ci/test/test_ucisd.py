@@ -305,6 +305,38 @@ class KnownValues(unittest.TestCase):
         t2bb[:] = 1
         self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
+    def test_with_df_s0(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.basis = '631g'
+        mol.build()
+        rhf = scf.RHF(mol).density_fit(auxbasis='weigend')
+        rhf.conv_tol_grad = 1e-8
+        rhf.kernel()
+        mf = scf.addons.convert_to_uhf(rhf)
+        myci = ci.UCISD(mf)
+        myci.kernel()
+        self.assertAlmostEqual(myci.e_tot, -76.1131374309989, 8)
+
+    def test_with_df_s2(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.basis = '631g'
+        mol.spin = 2
+        mol.build()
+        mf = scf.UHF(mol).density_fit(auxbasis='weigend')
+        mf.conv_tol_grad = 1e-8
+        mf.kernel()
+        myci = ci.UCISD(mf)
+        myci.kernel()
+        self.assertAlmostEqual(myci.e_tot, -75.8307298990769, 8)
+
 
 if __name__ == "__main__":
     print("Full Tests for UCISD")
