@@ -82,8 +82,9 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     # vxc_spblk = (vxc_aa, vxc_bb), vxc_aa = (nkpts, nao, nao), vxc_bb = (nkpts, nao, nao)
+    max_memory = ks.max_memory - lib.current_memory()[0]
     n, exc, vxc_spblk = ks._numint.nr_uks(cell, ks.grids, ks.xc, (dm_a,dm_b), hermi,
-                                          kpts, kpts_band)
+                                          kpts, kpts_band, max_memory=max_memory)
     logger.debug(ks, 'nelec by numeric integration = %s', n)
     t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -98,10 +99,23 @@ def get_veff(ks, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
 
     weight = 1./len(kpts)
     if not hybrid:
+        ks.with_df._j_only = False
         vj = ks.get_j(cell, dm_kpts, hermi, kpts, kpts_band)
         vxc += vj
     else:
-        raise NotImplementedError
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            logger.warn(ks, 'df.j_only cannot be used with hybrid functional')
+            ks.with_df._j_only = False
+        vj, vk = ks.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vklr = ks.get_k(cell, dm_kpts, hermi, kpts, kpts_band, omega=omega)
+            vklr *= (alpha - hyb)
+            vk += vklr
+        vxc += vj - vk
+
+        if ground_state:
+            exc -= np.einsum('Kij,Kji', dm_kpts, vk).real * .5
 
     if ground_state:
         ecoul = np.einsum('Kij,Kji', dm_kpts, vj).real * .5 * weight

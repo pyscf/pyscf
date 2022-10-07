@@ -382,7 +382,11 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     fintor = getattr(moleintor.libcgto, intor)
     cintopt = lib.c_null_ptr()
 
-    Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
+    rcut = max(cell1.rcut, cell2.rcut)
+    if cell1.dimension < 2 or cell1.low_dim_ft_type == 'inf_vacuum':
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=cell1.dimension)
+    else:
+        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=3)
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
 
@@ -735,25 +739,26 @@ def get_ewald_params(cell, precision=None, mesh=None):
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     else:
-        if mesh is None:
-            mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
-        Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
-        log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
-        ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
+        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
+        log_precision = np.log(precision / (cell.atom_charges().sum()*16*np.pi**2))
+        ew_eta = np.sqrt(-ke_cutoff/(2*log_precision))
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     return ew_eta, ew_cut
 
+MESH_FOR_EWALD = np.array([15] * 3)
+
 def _cut_mesh_for_ewald(cell, mesh):
-    mesh = np.copy(mesh)
-    mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
-                          dtype=int)  # roughly 2 grids per bohr
+    if cell.dimension == 3:
+        return MESH_FOR_EWALD
+
+    mesh = MESH_FOR_EWALD.copy()
     if (cell.dimension < 2 or
         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        mesh_max[cell.dimension:] = mesh[cell.dimension:]
-
-    mesh_max[mesh_max<80] = 80
-    mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
+        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    else:  # dimension == 2
+        # roughly 2 grids per bohr
+        mesh[2] = int(np.linalg.norm(cell.lattice_vectors()[2])) * 2 + 1
     return mesh
 
 def ewald(cell, ew_eta=None, ew_cut=None):
@@ -776,9 +781,17 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if cell.natm == 0:
         return 0
 
-    if ew_eta is None: ew_eta = cell.get_ewald_params()[0]
-    if ew_cut is None: ew_cut = cell.get_ewald_params()[1]
     chargs = cell.atom_charges()
+
+    if ew_eta is None or ew_cut is None:
+        ew_eta, ew_cut = cell.get_ewald_params()
+        mesh = _cut_mesh_for_ewald(cell, cell.mesh)
+    else:
+        log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+        ke_cutoff = -2*ew_eta**2*log_precision
+        mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+        logger.debug1(cell, 'mesh for ewald %s', mesh)
+
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
 
@@ -802,10 +815,10 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     # where
     #   ZS_I(G) = \sum_a Z_a exp (i G.R_a)
 
-    mesh = _cut_mesh_for_ewald(cell, cell.mesh)
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
+
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
@@ -909,7 +922,7 @@ def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
         kpts = libkpts.make_kpts(cell, kpts, space_group_symmetry, time_reversal_symmetry, symmorphic)
     return kpts
 
-def get_uniform_grids(cell, mesh=None, **kwargs):
+def get_uniform_grids(cell, mesh=None, wrap_around=True):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -921,14 +934,18 @@ def get_uniform_grids(cell, mesh=None, **kwargs):
 
     '''
     if mesh is None: mesh = cell.mesh
-    if 'gs' in kwargs:
-        warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
-                      'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in kwargs['gs']]
-    mesh = np.asarray(mesh, dtype=np.double)
-    qv = lib.cartesian_prod([np.arange(x) for x in mesh])
-    a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
-    coords = np.dot(qv, a_frac)
+
+    if wrap_around:
+        # wrap the coordinates around the origin. If coordinates are generated
+        # inside the primitive cell without wrap-around, an extra layer would be
+        # needed in function get_lattice_Ls for 2D calculations.
+        qv = lib.cartesian_prod([np.fft.fftfreq(x) for x in mesh])
+        coords = np.dot(qv, cell.lattice_vectors())
+    else:
+        mesh = np.asarray(mesh, dtype=np.double)
+        qv = lib.cartesian_prod([np.arange(x) for x in mesh])
+        a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
+        coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
 
@@ -1207,9 +1224,10 @@ class Cell(mole.Mole):
             else:
                 mf = scf.HF(self)
 
-        method = getattr(mf, key, None)
-        if method is None:
-            raise AttributeError('Cell object has no attribute %s' % key)
+        if not hasattr(mf.__class__, key):
+            raise AttributeError('Cell object does not have method %s' % key)
+
+        method = getattr(mf, key)
 
         mf.run()
         return method

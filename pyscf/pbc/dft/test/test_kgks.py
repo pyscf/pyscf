@@ -36,6 +36,7 @@ def setUpModule():
     cell.basis = 'gth-dzvp'
     cell.pseudo = 'gth-pade'
     cell.verbose = 0
+    cell.mesh = [29] * 3
     cell.build()
     kmesh = [2, 1, 1]
     kpts = cell.make_kpts(kmesh, wrap_around=True)
@@ -90,7 +91,7 @@ class KnownValues(unittest.TestCase):
                 mf.conv_tol = 1e-10
                 e_kgks = mf.kernel()
                 print(e_kgks)
-            self.assertAlmostEqual(e_kgks, -75.67071562222077, 5)
+            self.assertAlmostEqual(e_kgks, -75.67071562222077, 4)
 
     def test_KGKS_x2c1e_high_cost(self):
         with lib.light_speed(10) as c:
@@ -101,7 +102,7 @@ class KnownValues(unittest.TestCase):
                 mf.conv_tol = 1e-10
                 e_kgks = mf.kernel()
                 print(e_kgks)
-            self.assertAlmostEqual(e_kgks, -75.66883793093882, 5)
+            self.assertAlmostEqual(e_kgks, -75.66883793093882, 4)
 
 
 if __name__ == '__main__':

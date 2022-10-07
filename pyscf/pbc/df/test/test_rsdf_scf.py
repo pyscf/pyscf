@@ -55,14 +55,14 @@ class KnownValues(unittest.TestCase):
         mf = pscf.KRKS(cell,kpts).rs_density_fit()
         mf.xc = "pbe"
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -1.0021023542499443, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.0021025295489245, 7)
 
     def test_h2_jonly_k211_shiftedcenter(self):
         kpts = cell.make_kpts([2,1,1],scaled_center=scaled_center)
         mf = pscf.KRKS(cell,kpts).rs_density_fit()
         mf.xc = "pbe"
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -1.0047041613565, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.004704372120814, 7)
 
     def test_h2_jk_k211(self):
         kpts = cell.make_kpts([2,1,1])

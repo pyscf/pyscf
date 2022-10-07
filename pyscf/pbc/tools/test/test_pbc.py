@@ -206,6 +206,27 @@ C  15.16687337 15.16687337 15.16687337
         v = tools.ifft(a, [8,n,8]).ravel()
         self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
 
+    def test_mesh_to_cutoff(self):
+        a = numpy.array([
+            [0.  , 3.37, 3.37],
+            [3.37, 0.  , 3.37],
+            [3.37, 3.37, 0.  ],])
+
+        ke = tools.mesh_to_cutoff(a, [15]*3)
+        self.assertAlmostEqual(ke.min(), 42.58297736648015, 9)
+        mesh = tools.cutoff_to_mesh(a, ke.min())
+        self.assertAlmostEqual(abs(mesh - [15]*3).max(), 0, 9)
+
+        a = numpy.array([
+            [0.  ,10.11, 10.11],
+            [3.37, 0.  , 3.37],
+            [3.37, 3.37, 0.  ],])
+        ke = tools.mesh_to_cutoff(a, [15]*3)
+        self.assertAlmostEqual(ke.min(), 4.7314419296089065, 9)
+        mesh = tools.cutoff_to_mesh(a, ke.min())
+        k1 = tools.mesh_to_cutoff(a, mesh)
+        self.assertAlmostEqual(ke.min(), k1.min(), 9)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.tools")

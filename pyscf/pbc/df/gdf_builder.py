@@ -599,7 +599,7 @@ def _guess_eta(cell, kpts=None, mesh=None):
     a = cell.lattice_vectors()
     eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
     ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
-    mesh_min = pbctools.cutoff_to_mesh(a, ke_min) + 1
+    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
 
     if mesh is None:
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
