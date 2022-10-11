@@ -153,7 +153,13 @@ def get_euler_angles(c1, c2):
         if numpy.cross(c1[1], yp).dot(c1[2]) < 0:
             alpha = -alpha
 
-        gamma = numpy.arccos(yp.dot(c2[1]))
+        tmp = yp.dot(c2[1])
+        if abs(tmp - 1.0) < 1e-12:
+            gamma = numpy.arccos(1.0)
+        elif abs(tmp + 1.0) < 1e-12:
+            gamma = numpy.arccos(-1.0)
+        else:
+            gamma = numpy.arccos(tmp)
         if numpy.cross(yp, c2[1]).dot(c2[2]) < 0:
             gamma = -gamma
 
