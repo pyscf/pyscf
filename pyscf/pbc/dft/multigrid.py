@@ -77,10 +77,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     naoi = ao_loc[i1] - ao_loc[i0]
     naoj = ao_loc[j1] - ao_loc[j0]
 
-    if cell.dimension > 0:
-        Ls = numpy.asarray(cell.get_lattice_Ls(), order='C')
-    else:
-        Ls = numpy.zeros((1,3))
+    Ls = cell.get_lattice_Ls()
     nimgs = len(Ls)
 
     if mesh is None:
@@ -203,10 +200,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     dm = numpy.asarray(dm, order='C')
     assert (dm.shape[-2:] == (naoi, naoj))
 
-    if cell.dimension > 0:
-        Ls = numpy.asarray(cell.get_lattice_Ls(), order='C')
-    else:
-        Ls = numpy.zeros((1,3))
+    Ls = cell.get_lattice_Ls()
 
     if cell.dimension == 0 or kpts is None or gamma_point(kpts):
         nkpts, nimgs = 1, Ls.shape[0]
@@ -1770,6 +1764,7 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
             break
     return tasks
 
+# FIXME: compare to _estimate_rcut in eval_gto
 def _primitive_gto_cutoff(cell, precision=None):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
@@ -1782,7 +1777,7 @@ def _primitive_gto_cutoff(cell, precision=None):
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
-        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+        cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         r = 5.
         r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
         r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
@@ -1790,7 +1785,7 @@ def _primitive_gto_cutoff(cell, precision=None):
 # Errors in total number of electrons were observed with the default
 # precision. The energy cutoff (or the integration mesh) is not enough to
 # produce the desired accuracy. Scale precision by 0.1 to decrease the error.
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision*0.1)
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
 
         rcut.append(r)
         ke_cutoff.append(ke_guess)

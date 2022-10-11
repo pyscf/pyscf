@@ -38,7 +38,6 @@ from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import incore
 from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.scf import ghf
 from pyscf.pbc.x2c import sfx2c1e
@@ -215,28 +214,20 @@ def get_pbc_pvxp(mydf, kpts=None):
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
 
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts)
+    dfbuilder.exclude_dd_block = False
+    dfbuilder.build()
     eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
     log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
-    nuccell = copy.copy(cell)
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    norm = half_sph_norm/mole.gaussian_int(2, eta)
-    chg_env = [eta, norm]
-    ptr_eta = cell._env.size
-    ptr_norm = ptr_eta + 1
-    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-    nuccell._atm = cell._atm
-    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-    nuccell._env = numpy.hstack((cell._env, chg_env))
 
-    soc_mat = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvxp1_sph',
-                                 aosym='s1', comp=3)
+    fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
+    soc_mat = dfbuilder._int_nuc_vloc(fakenuc, kpts_lst, 'int3c2e_pvxp1_sph',
+                                      aosym='s1', comp=3)
     soc_mat = soc_mat.reshape(nkpts,3,nao,nao)
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
-    dfbuilder = incore._IntNucBuilder(cell, kpts_lst).build()
-    supmol_ft = dfbuilder.supmol.strip_basis()
-    ft_kern = supmol_ft.gen_ft_kernel('s1', intor='GTO_ft_pxp_sph', comp=3,
-                                      return_complex=False, verbose=log)
+    ft_kern = dfbuilder.supmol_ft.gen_ft_kernel(
+        's1', intor='GTO_ft_pxp_sph', comp=3, return_complex=False, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])

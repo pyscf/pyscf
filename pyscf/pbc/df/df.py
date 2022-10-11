@@ -51,12 +51,12 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
-from pyscf.pbc.df.aft import estimate_eta, get_nuc
+from pyscf.pbc.df.aft import estimate_eta
 from pyscf.pbc.df.df_jk import zdotCN
 from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
                                        KPT_DIFF_TOL)
-from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _guess_eta
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
+from pyscf.pbc.df.gdf_builder import libpbc, _CCGDFBuilder, _CCNucBuilder
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _RSNucBuilder
 from pyscf import __config__
 
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
@@ -276,7 +276,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         else:
             kpts_union = unique(numpy.vstack([self.kpts, self.kpts_band]))[0]
 
-        if self._prefer_ccdf or cell.omega > 0:
+        if self._prefer_ccdf or cell.omega != 0:
             # For long-range integrals _CCGDFBuilder is the only option
             dfbuilder = _CCGDFBuilder(cell, auxcell, kpts_union)
             dfbuilder.eta = self.eta
@@ -366,9 +366,27 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                     yield LpqR, LpqI, -1
                     LpqR = LpqI = None
 
-    _int_nuc_vloc = aft._int_nuc_vloc
-    get_nuc = aft.get_nuc  # noqa: F811
-    get_pp = aft.get_pp
+    def get_pp(self, kpts=None):
+        '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+        '''
+        cell = self.cell
+        if self._prefer_ccdf or cell.omega != 0:
+            # For long-range integrals _CCGDFBuilder is the only option
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
+        else:
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
+        return dfbuilder.get_pp()
+
+    def get_nuc(self, kpts=None):
+        '''Get the periodic nuc-el AO matrix, with G=0 removed.
+        '''
+        cell = self.cell
+        if self._prefer_ccdf or cell.omega != 0:
+            # For long-range integrals _CCGDFBuilder is the only option
+            dfbuilder = _CCNucBuilder(cell, kpts).build()
+        else:
+            dfbuilder = _RSNucBuilder(cell, kpts).build()
+        return dfbuilder.get_nuc()
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular

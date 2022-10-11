@@ -482,52 +482,21 @@ def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
 def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
     '''Get the (Cartesian, unitful) lattice translation vectors for nearby images.
     The translation vectors can be used for the lattice summation.'''
-    a = cell.lattice_vectors()
-    b = cell.reciprocal_vectors(norm_to=1)
-    heights_inv = lib.norm(b, axis=1)
-
-    if nimgs is None:
-        if rcut is None:
-            rcut = cell.rcut
-        # For atoms outside the cell, distance between certain basis of nearby
-        # images may be smaller than rcut threshold even the corresponding Ls is
-        # larger than rcut. The boundary penalty ensures that Ls would be able to
-        # cover the basis that sitting out of the cell.
-        # See issue https://github.com/pyscf/pyscf/issues/1017
-        boundary_penalty = 0
-        scaled_atom_coords = cell.atom_coords().dot(b.T)
-        if len(scaled_atom_coords) > 0:
-            boundary_penalty = np.max([abs(scaled_atom_coords).max(axis=0),
-                                       abs(1 - scaled_atom_coords).max(axis=0)], axis=0)
-        nimgs = np.ceil(rcut * heights_inv + boundary_penalty).astype(int)
-    else:
-        rcut = max((np.asarray(nimgs))/heights_inv)
-
     if dimension is None:
-        dimension = cell.dimension
-    if dimension == 0:
-        nimgs = [0, 0, 0]
-    elif dimension == 1:
-        nimgs = [nimgs[0], 0, 0]
-    elif dimension == 2:
-        nimgs = [nimgs[0], nimgs[1], 0]
+        # For atoms near the boundary of the cell, it is necessary (even in low-
+        # dimensional systems) to include lattice translations in all 3 dimensions.
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            dimension = cell.dimension
+        else:
+            dimension = 3
+    if rcut is None:
+        rcut = cell.rcut
 
-    Ts = lib.cartesian_prod((np.arange(-nimgs[0], nimgs[0]+1),
-                             np.arange(-nimgs[1], nimgs[1]+1),
-                             np.arange(-nimgs[2], nimgs[2]+1)))
-    Ls = np.dot(Ts, a)
-    if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut, dimension)
-    return np.asarray(Ls, order='C')
-
-def _discard_edge_images(cell, Ls, rcut, dimension):
-    '''
-    Discard images if no basis in the image would contribute to lattice sum.
-    '''
-    if cell.dimension == 0 or rcut <= 0:
+    if dimension == 0 or rcut <= 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
+
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
     atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
     atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
@@ -536,28 +505,54 @@ def _discard_edge_images(cell, Ls, rcut, dimension):
                     'Atom coordinates may be error.')
         atom_boundary_max[atom_boundary_max > 1] = 1
         atom_boundary_min[atom_boundary_min <-1] = -1
-    # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
-    # images are converged.
     ovlp_penalty = atom_boundary_max - atom_boundary_min
-    # atom_boundary_min-1 ensures the values of basis at the grids on the edge
-    # of the primitive cell converged
-    boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
-    boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = penalty_y = penalty_z = [0]
-    if dimension == 1:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    elif dimension == 2:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    dR = ovlp_penalty.dot(a[:dimension])
+
+    # Search the minimal x,y,z requiring |x*a[0]+y*a[1]+z*a[2]+dR|^2 > rcut^2
+    def decompose(a):
+        aR = np.vstack([a, dR])
+        r = np.linalg.qr(aR.T)[1]
+        if r[2,2] > 0:
+            lb = (-rcut - r[2,3]) / r[2,2]
+        else:
+            lb = (-rcut + r[2,3]) / -r[2,2]
+        aR[3] *= -1
+        r = np.linalg.qr(aR.T)[1]
+        if r[2,2] > 0:
+            ub = (rcut - r[2,3]) / r[2,2]
+        else:
+            ub = (rcut + r[2,3]) / -r[2,2]
+        return lb, ub
+
+    low_x, up_x = decompose(a[[1,2,0]])
+    if dimension > 1:
+        low_y, up_y = decompose(a[[2,0,1]])
     else:
-        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-        penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
-    shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
-    Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
-    # cell0 (Ls == 0) should always be included.
-    Ls_mask[len(Ls)//2] = True
-    return Ls[Ls_mask]
+        low_y = up_y = 0
+    if dimension > 2:
+        low_z, up_z = decompose(a)
+    else:
+        low_z = up_z = 0
+    lb = np.floor([low_x, low_y, low_z]).astype(int)
+    ub = np.ceil([up_x, up_y, up_z]).astype(int) + 1
+
+    Ts = lib.cartesian_prod((np.arange(lb[0], ub[0]),
+                             np.arange(lb[1], ub[1]),
+                             np.arange(lb[2], ub[2])))
+    Ls = np.dot(Ts, a)
+
+    if discard:
+        penalty1 = lib.cartesian_prod(([atom_boundary_min[0]-1., 0.],
+                                       [atom_boundary_min[1]-1., 0.],
+                                       [atom_boundary_min[2]-1., 0.]))
+        penalty2 = lib.cartesian_prod(([0., atom_boundary_max[0]],
+                                       [0., atom_boundary_max[1]],
+                                       [0., atom_boundary_max[2]]))
+        shifts = np.vstack([penalty1[:,:dimension],
+                            penalty2[:,:dimension]]).dot(a[:dimension])
+        Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
+        Ls = Ls[Ls_mask]
+    return np.asarray(Ls, order='C')
 
 
 def super_cell(cell, ncopy, wrap_around=False):
@@ -673,18 +668,13 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
-    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
-    # Search largest mesh_x requiring E(mesh_x) <= 2*cutoff
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    c = b.dot(b.T)
-    # r is the ratio between G of each direction when E(mesh) reaches minimum
-    r = np.linalg.inv(c) / np.linalg.det(c)
-    r /= r.diagonal()[:,None]
-    Gmax = (2*cutoff / (np.linalg.norm(r.dot(b), axis=1)**2))**.5
-    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
-    # off-diagonal part
-    # e.g r[:,2] = [1, .5, 1.2], Gx = max(Gx, Gy*.5, Gz*1.2)
-    Gmax = (r * Gmax[:,None]).max(axis=0)
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
+    Gmax = (2*cutoff)**.5 / np.abs([rx, ry, rz])
     mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
@@ -692,19 +682,14 @@ def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
-    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
-    # Search min(E(mesh_x)/2) subject to mesh_x > mesh
+    # Search the minimal x,y,z requiring |x*b[0]+y*b[1]+z*b[2]|^2 > 2 * cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    c = b.dot(b.T)
-    # r is the ratio between G of each direction when E(mesh) reaches minimum
-    r = np.linalg.inv(c) / np.linalg.det(c)
-    r /= r.diagonal()[:,None]
+    rx = np.linalg.qr(b[[1,2,0]].T)[1][2,2]
+    ry = np.linalg.qr(b[[2,0,1]].T)[1][2,2]
+    rz = np.linalg.qr(b.T)[1][2,2]
+
     gs = (np.asarray(mesh) - 1) // 2
-    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
-    # off-diagonal part
-    # e.g r[2] = [1.2, 1.2, 1], ke_cutoff_z = min(Gx/1.2, Gy/1.2, Gz)
-    gs_eff = (gs / (r + 1e-100)).min(axis=1)
-    Gmax = gs_eff * np.linalg.norm(r.dot(b), axis=1)
+    Gmax = gs * np.array([rx, ry, rz])
     ke_cutoff = Gmax**2 / 2
     return ke_cutoff
 

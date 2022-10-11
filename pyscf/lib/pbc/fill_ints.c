@@ -1022,8 +1022,8 @@ void PBCnr3c_fuse_dd_s2(double *j3c, double *j3c_dd,
         int ip0 = orig_slice[0];
         int jp0 = orig_slice[2];
         int i0 = dd_slice[0];
-        int j0 = dd_slice[2];
         int i1 = dd_slice[1];
+        int j0 = dd_slice[2];
         int off_o = ip0 * (ip0 + 1) / 2 + jp0;
         int off_i = i0 * naod + j0;
         int i, j, ip, jp, n;

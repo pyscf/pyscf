@@ -35,7 +35,6 @@ from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import incore
 from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.scf import ghf
 from pyscf import __config__
@@ -254,8 +253,11 @@ def get_pnucp(mydf, kpts=None):
     eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
     log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
 
-    nuccell = incore._compensate_nuccell(cell, eta)
-    wj = mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1')
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts)
+    dfbuilder.exclude_dd_block = False
+    dfbuilder.build()
+    fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
+    wj = dfbuilder._int_nuc_vloc(fakenuc, kpts_lst, 'int3c2e_pvp1', 's2')
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
     charge = -cell.atom_charges() # Apply Koseki effective charge?
@@ -269,10 +271,8 @@ def get_pnucp(mydf, kpts=None):
             # *2 due to the factor 1/2 in T
             wj[k] -= nucbar*2 * s
 
-    dfbuilder = incore._IntNucBuilder(cell, kpts_lst).build()
-    supmol_ft = dfbuilder.supmol.strip_basis()
-    ft_kern = supmol_ft.gen_ft_kernel('s2', intor='GTO_ft_pdotp',
-                                      return_complex=False, verbose=log)
+    ft_kern = dfbuilder.supmol_ft.gen_ft_kernel(
+        's2', intor='GTO_ft_pdotp', return_complex=False, verbose=log)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])

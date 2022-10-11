@@ -395,10 +395,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     cintopt = lib.c_null_ptr()
 
     rcut = max(cell1.rcut, cell2.rcut)
-    if cell1.dimension < 2 or cell1.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=cell1.dimension)
-    else:
-        Ls = cell1.get_lattice_Ls(rcut=rcut, dimension=3)
+    Ls = cell1.get_lattice_Ls(rcut=rcut)
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
 
@@ -484,15 +481,14 @@ def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     '''rcut based on the overlap integrals. This estimation is too conservative
     in many cases. A possible replacement can be the value of the basis
     function at rcut ~ c*r^(l+2)*exp(-alpha*r^2) < precision'''
+    theta = alpha * .5
+    a1 = (alpha * 2)**-.5
+    norm_ang = (2*l+1)/(4*np.pi)
+    fac = 2*np.pi*c**2*norm_ang / theta / precision
     r0 = 20
-    # lattice_sum_penalty is the factor in terms of lattice sum in overlap
-    # integrals
-    lattice_sum_penalty = 4 * np.pi * r0 / alpha
-    C = c**2*(2*l+1)*alpha / precision * lattice_sum_penalty
-    # +1. to ensure np.log returning positive value
-    r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
-    rcut = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
-    return rcut
+    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l) + 1.) / theta)**.5
+    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l) + 1.) / theta)**.5
+    return r0
 
 def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     r'''Estimate the largest distance between the function and its image to
@@ -502,18 +498,25 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     '''
     l = cell.bas_angular(bas_id)
     es = cell.bas_exp(bas_id)
-    cs = abs(cell.bas_ctr_coeff(bas_id)).max(axis=1)
+    cs = abs(cell._libcint_ctr_coeff(bas_id)).max(axis=1)
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
 def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
     '''Lattice-sum cutoff for the entire system'''
-    rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
-    if rcut:
-        rcut_max = max(rcut)
-    else:
-        rcut_max = 0
-    return rcut_max
+    #rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
+    #if rcut:
+    #    rcut_max = max(rcut)
+    #else:
+    #    rcut_max = 0
+    #return rcut_max
+    exps = np.array([e.min() for e in cell.bas_exps()])
+    if exps.size == 0:
+        return 0.
+    ls = cell._bas[:,mole.ANG_OF]
+    cs = mole.gto_norm(ls, exps)
+    rcut = _estimate_rcut(exps, ls, cs, precision)
+    return rcut.max()
 
 def _rcut_penalty(cell):
     '''Basis near the boundary of a cell may be closed to basis near the
@@ -535,42 +538,30 @@ def _rcut_penalty(cell):
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation based on cubic lattice'''
-    # This function estimates the energy cutoff for (ii|ii) type of electron
-    # repulsion integrals. The energy cutoff for nuclear attraction is larger
-    # than the energy cutoff for ERIs.  The estimated error is roughly
-    #     error ~ 64 pi^3 c^2 /((2l+1)!!(4a)^l) (2Ecut)^{l+.5} e^{-Ecut/4a}
-    # log_k0 = 3 + np.log(alpha) / 2
-    # l2fac2 = factorial2(l*2+1)
-    # log_rest = np.log(precision*l2fac2*(4*alpha)**l / (16*np.pi**2*c**2))
-    # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
-    # Enuc_cut[Enuc_cut <= 0] = .5
-    # log_k0 = .5 * np.log(Ecut*2)
-    # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
-    # Enuc_cut[Enuc_cut <= 0] = .5
-    #
-    # However, nuclear attraction can be evaluated with the trick of Ewald
-    # summation which largely reduces the requirements to the energy cutoff.
-    # In practice, the cutoff estimation for ERIs as below should be enough.
-    log_k0 = 3 + np.log(alpha) / 2
-    l2fac2 = factorial2(l*2+1)
-    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (128*np.pi**4*c**4))
-    Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    Ecut[Ecut <= 0] = .5
-    log_k0 = .5 * np.log(Ecut*2)
-    Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    Ecut[Ecut <= 0] = .5
+    norm_ang = ((2*l+1)/(4*np.pi))**2
+    fac = 8*np.pi**5 * c**4*norm_ang / (2*alpha)**(4*l+2) / precision
+    Ecut = 20.
+    Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
+    Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
     '''Energy cutoff estimation for the entire system'''
-    Ecut_max = 0
-    for i in range(cell.nbas):
-        l = cell.bas_angular(i)
-        es = cell.bas_exp(i)
-        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = _estimate_ke_cutoff(es, l, cs, precision)
-        Ecut_max = max(Ecut_max, ke_guess.max())
-    return Ecut_max
+    #Ecut_max = 0
+    #for i in range(cell.nbas):
+    #    l = cell.bas_angular(i)
+    #    es = cell.bas_exp(i)
+    #    cs = abs(cell._libcint_ctr_coeff(i)).max(axis=1)
+    #    ke_guess = _estimate_ke_cutoff(es, l, cs, precision)
+    #    Ecut_max = max(Ecut_max, ke_guess.max())
+    #return Ecut_max
+    exps = np.array([e.min() for e in cell.bas_exps()])
+    if exps.size == 0:
+        return 0.
+    ls = cell._bas[:,mole.ANG_OF]
+    cs = mole.gto_norm(ls, exps)
+    Ecut = _estimate_ke_cutoff(exps, ls, cs, precision)
+    return Ecut.max()
 
 def error_for_ke_cutoff(cell, ke_cutoff):
     kmax = np.sqrt(ke_cutoff*2)
@@ -739,39 +730,29 @@ def get_ewald_params(cell, precision=None, mesh=None):
         ew_eta, ew_cut : float
             The Ewald 'eta' and 'cut' parameters.
     '''
-    if precision is None:
-        precision = cell.precision
     if cell.natm == 0:
         return 0, 0
-    elif (cell.dimension < 2 or
+
+    if precision is None:
+        precision = cell.precision
+
+    if (cell.dimension < 2 or
           (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
         # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
         # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
         # non-uniform grids.  Smooth model density is preferred.
         ew_cut = cell.rcut
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
-    else:
-        mesh = _cut_mesh_for_ewald(cell, mesh)
-        ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh).min()
+    elif cell.dimension == 2:
+        a = cell.lattice_vectors()
+        ew_cut = a[2,2] / 2
+        # ewovrl ~ erfc(eta*rcut) / rcut ~ e^{(-eta**2 rcut*2)} < precision
         log_precision = np.log(precision / (cell.atom_charges().sum()*16*np.pi**2))
-        ew_eta = np.sqrt(-ke_cutoff/(2*log_precision))
+        ew_eta = (-log_precision)**.5 / ew_cut
+    else:  # dimension == 3
+        ew_eta = 1./cell.vol**(1./6)
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     return ew_eta, ew_cut
-
-MESH_FOR_EWALD = np.array([15] * 3)
-
-def _cut_mesh_for_ewald(cell, mesh):
-    if cell.dimension == 3:
-        return MESH_FOR_EWALD
-
-    mesh = MESH_FOR_EWALD.copy()
-    if (cell.dimension < 2 or
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-    else:  # dimension == 2
-        # roughly 2 grids per bohr
-        mesh[2] = int(np.linalg.norm(cell.lattice_vectors()[2])) * 2 + 1
-    return mesh
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -797,12 +778,13 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
     if ew_eta is None or ew_cut is None:
         ew_eta, ew_cut = cell.get_ewald_params()
-        mesh = _cut_mesh_for_ewald(cell, cell.mesh)
-    else:
-        log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
-        ke_cutoff = -2*ew_eta**2*log_precision
-        mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-        logger.debug1(cell, 'mesh for ewald %s', mesh)
+    log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
+    ke_cutoff = -2*ew_eta**2*log_precision
+    mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+    if (cell.dimension < 2 or
+        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    logger.debug1(cell, 'mesh for ewald %s', mesh)
 
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)

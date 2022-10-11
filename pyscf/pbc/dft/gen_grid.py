@@ -44,12 +44,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
         shls_slice = (0, cell.nbas)
     assert (shls_slice == (0, cell.nbas))
 
-    # For atoms near the boundary of the cell, it is necessary (even in low-
-    # dimensional systems) to include lattice translations in all 3 dimensions.
-    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-    else:
-        Ls = cell.get_lattice_Ls(dimension=3)
+    Ls = cell.get_lattice_Ls()
     Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
 
     non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas), dtype=np.uint8)
@@ -158,7 +153,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         dimension = cell.dimension
     else:
         dimension = 3
-    Ls = cell.get_lattice_Ls(dimension=dimension)
+    Ls = cell.get_lattice_Ls()
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)

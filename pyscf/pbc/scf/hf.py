@@ -843,10 +843,6 @@ class SCF(mol_hf.SCF):
             self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
             self.rsjk.verbose = self.verbose
 
-        # For nuclear attraction
-        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
-            self.with_df = df.GDF(self.cell, self.kpt)
-
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)
         return self

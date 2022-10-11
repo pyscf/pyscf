@@ -53,7 +53,7 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_helper
 from pyscf.pbc.df import rsdf_builder
 from pyscf.pbc.df import gdf_builder
-from pyscf.pbc.df.incore import _Int3cBuilder
+from pyscf.pbc.df.incore import Int3cBuilder
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique,
@@ -323,8 +323,9 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
             self.omega = None
         self.ke_cutoff = None
         self.bvk_kmesh = None
+        self.supmol_ft = None
 
-        _Int3cBuilder.__init__(self, cell, auxcell, kpts)
+        Int3cBuilder.__init__(self, cell, auxcell, kpts)
 
         # set True to force calculating j2c^(-1/2) using eigenvalue
         # decomposition (ED); otherwise, Cholesky decomposition (CD) is used
@@ -340,8 +341,17 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        self.rs_cell = ft_ao._RangeSeparatedCell.from_cell(
+        self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
+
+        rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
+                                             exclude_dd_block=False)
+        supmol_ft = rsdf_builder.ExtendedMoleFT.from_cell(rs_cell, kmesh,
+                                                          rcut.max(), log)
+        supmol_ft.exclude_dd_block = False
+        self.supmol_ft = supmol_ft.strip_basis(rcut)
+        log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
+                  supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
         return self
 
     def get_2c2e(self, uniq_kpts):
@@ -526,9 +536,8 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
                                    kptij_lst, j_only, f'{dataname}-junk', shls_slice)
         cpu1 = log.timer_debug1('3c2e', *cpu1)
 
-        supmol_ft = ft_ao._ExtendedMole.from_cell(self.rs_cell, self.bvk_kmesh, verbose=log)
-        supmol_ft = supmol_ft.strip_basis()
-        ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=False, verbose=log)
+        ft_kern = self.supmol_ft.gen_ft_kernel(aosym, return_complex=False,
+                                               verbose=log)
 
         # recompute g0 and Gvectors for j3c
         mesh = self.mesh_compact

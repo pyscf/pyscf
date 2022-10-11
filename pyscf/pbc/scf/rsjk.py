@@ -141,60 +141,34 @@ class RangeSeparatedJKBuilder(object):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        # Estimate rcut to generate Ls. rcut (and the translation vectors Ls)
-        # here needs to cover all possible shells to converge int3c2e.
-        # cell.rcut only converge the GTOval on grids thus it cannot be used here.
-        smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
-        cell_exps = rs_cell.bas_exps()
-        exps_d = [cell_exps[ib] for ib in range(rs_cell.nbas) if smooth_bas_mask[ib]]
-        exps_c = [cell_exps[ib] for ib in range(rs_cell.nbas) if not smooth_bas_mask[ib]]
-        if not exps_c: # Only smooth functions
-            rcut_sr = cell.rcut
-        else:
-            if not exps_d:  # Only compact functions
-                exp_d_min = exp_c_min = np.hstack(exps_c).min()
-                aij = exp_d_min
-                eij = exp_d_min / 2
-            else:  # both smooth and compact functions exist
-                exp_d_min = np.hstack(exps_d).min()
-                exp_c_min = np.hstack(exps_c).min()
-                aij = exp_d_min + exp_c_min
-                eij = exp_d_min * exp_c_min / aij
-            theta = 1/(self.omega**-2 + 2./aij)
-            fac = 8*(exp_d_min*exp_c_min/aij**2)**1.5 / (theta * np.pi)**.5
-            x_ratio = 1 / (exp_d_min/theta + 2*exp_c_min/aij)
-            exp_fac = 2 * eij * x_ratio**2 + theta * (1 - 2*exp_c_min/aij*x_ratio)**2
-
-            rcut_sr = cell.rcut  # initial guess
-            rcut_sr = ((-np.log(direct_scf_tol
-                                * (1 - 2*exp_c_min/aij*x_ratio) * rcut_sr
-                                / (2*np.pi*fac)) / exp_fac)**.5)
-            log.debug1('exp_d_min = %g, exp_c_min = %g, rcut_sr = %g',
-                       exp_d_min, exp_c_min, rcut_sr)
+        rcut_sr = estimate_rcut(rs_cell, self.omega)
 
         if self.fully_uncontracted:
             log.debug('make supmol from fully uncontracted cell basis')
             pcell, contr_coeff = rs_cell.decontract_basis(to_cart=True)
             self.contr_coeff = scipy.linalg.block_diag(*contr_coeff)
-            self.supmol_sr = _ExtendedMoleSR.from_cell(
-                pcell, kmesh, self.omega, rcut_sr, log)
+            supmol_sr = ft_ao.ExtendedMole.from_cell(
+                pcell, kmesh, rcut_sr.max(), log)
         else:
             log.debug('make supmol from partially uncontracted cell basis')
-            self.supmol_sr = _ExtendedMoleSR.from_cell(
-                rs_cell, kmesh, self.omega, rcut_sr, log)
-        self.supmol_sr = self.supmol_sr.strip_basis()
+            supmol_sr = ft_ao.ExtendedMole.from_cell(
+                rs_cell, kmesh, rcut_sr.max(), log)
+        supmol_sr.omega = -self.omega
+        self.supmol_sr = supmol_sr.strip_basis(rcut_sr)
         # In _get_lr_k_kpts, fft for cell_d ft_aopair is less efficient than
         # analytical FT
         cell_d = rs_cell.smooth_basis_cell()
-        self.supmol_d = ft_ao._ExtendedMole.from_cell(cell_d, kmesh, verbose=log)
-        self.supmol_d = self.supmol_d.strip_basis()
+        rcut = ft_ao.estimate_rcut(cell_d)
+        supmol_d = ft_ao.ExtendedMole.from_cell(cell_d, kmesh, rcut.max(), log)
+        self.supmol_d = supmol_d.strip_basis(rcut)
 
         if self.has_long_range():
-            self.supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(
-                rs_cell, kmesh, rcut_sr, log)
-            self.supmol_ft = self.supmol_ft.strip_basis()
+            rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision, True)
+            supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(
+                rs_cell, kmesh, rcut.max(), log)
+            supmol_ft.exclude_dd_block = True
+            self.supmol_ft = supmol_ft.strip_basis(rcut)
 
-        supmol = self.supmol_sr
         log.debug('supmol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
         log.debug('supmol_d nbas = %d cGTO = %d',
@@ -807,80 +781,78 @@ class _PrimitiveCell(ft_ao._RangeSeparatedCell):
         log.debug3('%s.sh_loc %s', cls, rs_cell.sh_loc)
         return rs_cell
 
-class _ExtendedMoleSR(rsdf_builder._ExtendedMoleSR):
-    '''Extended Mole for short-range ERIs without dd-blocks'''
 
-    def strip_basis(self):
-        '''Remove redundant remote basis'''
-        rs_cell = self.rs_cell
-        bas_mask = self.bas_mask
-        compact_bas_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
-        omega = self.omega
-        bas_exps = rs_cell.bas_exps()
-        exps = np.array([e.min() for e in bas_exps])
-        exps_c = exps[compact_bas_mask]
-        if exps_c.size > 0:
-            exp_min = exps.min()
-            exp_c_min = exps_c.min()
-            aij = exp_min + exps_c
-            eij = exp_min * exps_c / aij
-            akl = exp_c_min + exp_min
-            ekl = exp_c_min * exp_min / akl
-            theta = 1./(omega**-2 + 1./aij + 1./akl)
-            LKs = self.Ls[:,None,:] + self.bvkmesh_Ls
+def estimate_rcut(rs_cell, omega, precision=None):
+    '''Estimate rcut for 2e SR-integrals'''
+    if precision is None:
+        precision = rs_cell.precision
 
-            # For basis on the boundary of a cell, boundary_penalty can adjust
-            # the LKs to get a proper distance estimation between basis
-            #boundary_penalty = pbcgto.cell._rcut_penalty(rs_cell) - 2
-            #rLK = np.linalg.norm(LKs, axis=2) - boundary_penalty
-            shifts = lib.cartesian_prod([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
-            a_off_bond = rs_cell.lattice_vectors() - 1.
-            boundary_penalty = np.einsum('te,ex->tx', shifts, a_off_bond)
-            rLK = np.linalg.norm(LKs + boundary_penalty[:,None,None], axis=-1).min(axis=0)
-            rLK[rLK < 1e-2] = 1e-2  # avoid singularity in upper_bounds
-            rr = rLK ** 2
+    rs_cell = self.rs_cell
+    exps = np.array([e.min() for e in rs_cell.bas_exps()])
+    ls = rs_cell._bas[:,gto.ANG_OF]
+    cs = gto.gto_norm(ls, exps)
+    exp_min_idx = exps.argmin()
+    ak_idx = exp_min_idx
+    compact_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
+    exps_c = exps[compact_mask]
+    if exps_c.size > 0:
+        ak_idx = exps_c.argmin()
+    ak = exps[ak_idx]
+    lk = rs_cell._bas[ak_idx,gto.ANG_OF]
+    ck = cs[ak_idx]
+    aj = exps
+    lj = ls
+    cj = cs
+    ai = al = exps[exp_min_idx]
+    li = ll = rs_cell._bas[exp_min_idx,gto.ANG_OF]
+    ci = cl = cs[exp_min_idx]
 
-            x_ratio = 1. / (exp_min**2/(exps_c*aij) + exp_c_min/akl + exp_min/theta)
-            y_ratio = 1. / (exp_c_min*exps_c/(exp_min*akl) + exp_min/aij + exps_c/theta)
-            exp_fac = (ekl * x_ratio**2 + eij * y_ratio**2 +
-                       theta * (1 - exp_c_min/akl*x_ratio - exp_min/aij*y_ratio)**2)
+    aij = ai + aj
+    akl = ak + al
+    lij = li + lj
+    lkl = lk + ll
+    a1 = aij + akl
+    l4 = lij + lkl
+    norm_ang = ((2*li+1)*(2*lj+1)*(2*lk+1)*(2*ll+1)/(4*np.pi)**4)**.5
+    c1 = ci * cj * ck * cl * norm_ang
+    theta = 1./(1./aij + 1./akl + self.omega**-2)
+    sfac = aij*akl*aj*al/(aij*aj*ak*theta + akl*ai*al*theta + aij*akl*aj*al)
+    s = sfac * theta * r**2
+    fl = 2
+    fac = 2**(li+lk+1)*np.pi**3.5*c1 * theta**(l4-1.5)
+    fac /= aij**(lij+1.5) / akl**(lkl+1.5)
+    fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / cutoff
 
-            fac = 8*(exp_min**2*exp_c_min*exps_c/(aij*akl)**2)**.75 / (theta*np.pi)**.5
-            upper_bounds = np.einsum('i,lk,ilk->kil', fac, 2*np.pi/rr,
-                                     np.exp(-exp_fac[:,None,None]*rr))
+    r0 = cell.rcut
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+    r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+    rcut = r0
 
-            # FIXME: test if needed. Seems errors are negligible
-            # cutoff = rs_cell.precision * ft_ao.LATTICE_SUM_PENALTY
-            cutoff = rs_cell.precision
-            bas_mask[:,compact_bas_mask] = upper_bounds > cutoff
+    if 0 < exps_c.size < rs_cell.nbas:
+        smooth_mask = ~compact_mask
+        ai, li, ci = ak, lk, ck
+        aj = exps[smooth_mask]
+        lj = ls[smooth_mask]
+        cj = cs[smooth_mask]
+        aij = ai + aj
+        lij = li + lj
+        a1 = aij + akl
+        l4 = lij + lkl
+        norm_ang = ((2*li+1)*(2*lj+1)*(2*lk+1)*(2*ll+1)/(4*np.pi)**4)**.5
+        c1 = ci * cj * ck * cl * norm_ang
+        theta = 1./(1./aij + 1./akl + self.omega**-2)
+        sfac = aij*akl*aj*al/(aij*aj*ak*theta + akl*ai*al*theta + aij*akl*aj*al)
+        s = sfac * theta * r**2
+        fl = 2
+        fac = 2**(li+lk+1)*np.pi**3.5*c1 * theta**(l4-1.5)
+        fac /= aij**(lij+1.5) / akl**(lkl+1.5)
+        fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / cutoff
 
-            # determine rcut boundary for diffused functions
-            exps_d = exps[~compact_bas_mask]
-            if exps_d.size > 0:
-                aij = exp_c_min + exps_d
-                eij = exp_c_min * exps_d / aij
-                akl = exp_c_min + exp_min
-                ekl = exp_c_min * exp_min / akl
-                theta = 1./(omega**-2 + 1./aij + 1./akl)
-                x_ratio = 1. / (exp_min*exp_c_min/(exps_d *aij) + exp_c_min/akl + exp_min/theta)
-                y_ratio = 1. / (exps_d *exp_c_min/(exp_min*akl) + exp_c_min/aij + exps_d /theta)
-                exp_fac = (ekl * x_ratio**2 + eij * y_ratio**2 +
-                           theta * (1 - exp_c_min/akl*x_ratio - exp_c_min/aij*y_ratio)**2)
-                fac = 8*(exp_min*exp_c_min**2*exps_d/(aij*akl)**2)**.75 / (theta*np.pi)**.5
-                upper_bounds = np.einsum('i,lk,ilk->ilk', fac, 2*np.pi/rLK,
-                                         np.exp(-exp_fac[:,None,None]*rr))
-                bas_mask[:,~compact_bas_mask] = upper_bounds.transpose(2,0,1) > cutoff
-
-            bas_mask[0,:,0] = True
-
-        nbas0 = self._bas.shape[0]
-        self._bas = np.asarray(self._bas[bas_mask.ravel()], dtype=np.int32, order='C')
-        nbas1 = self._bas.shape[0]
-        logger.debug1(self, 'strip_basis %d to %d ', nbas0, nbas1)
-        self.sh_loc = self.bas_mask_to_sh_loc(rs_cell, bas_mask)
-        self.bas_mask = bas_mask
-        return self
-
+        r0 = cell.rcut
+        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+        r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
+        rcut[smooth_mask] = r0
+    return rcut
 
 def _guess_omega(cell, kpts, mesh=None):
     a = cell.lattice_vectors()
@@ -912,8 +884,6 @@ def _guess_omega(cell, kpts, mesh=None):
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
     mesh = np.min([cell.mesh, mesh], axis=0)
     ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh[:cell.dimension]))
-    # FIXME: test if needed
-    # precision = cell.precision * ft_ao.LATTICE_SUM_PENALTY
     precision = cell.precision
     omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
     return omega, mesh, ke_cutoff
@@ -964,3 +934,41 @@ def _update_vk_(vk, Gpq, dms, coulG, weight, kpti_idx, kptj_idx, swap_2e):
                 zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                        iLkR.reshape(-1,nao), iLkI.reshape(-1,nao),
                        weight, vkR[i,kj], vkI[i,kj], 1)
+
+def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
+    '''Energy cutoff to converge attenuated Coulomb in moment space
+    '''
+    if precision is None:
+        precision = cell.precision
+    ai = numpy.hstack(cell.bas_exps).max()
+    theta = 1./(1./ai + omega**-2)
+    fac = 32*numpy.pi**2 * theta / precision
+    Ecut = 20.
+    Ecut = numpy.log(fac / (2*Ecut) + 1.) * 2*theta
+    Ecut = numpy.log(fac / (2*Ecut) + 1.) * 2*theta
+    return Ecut
+
+def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
+    '''The minimal omega in attenuated Coulombl given energy cutoff
+    '''
+    if precision is None:
+        precision = cell.precision
+#    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+#    # enough to converge the 2-electron integrals. A penalty term here is to
+#    # reduce the error in integrals
+#    precision *= 1e-2
+#    kmax = (ke_cutoff*2)**.5
+#    log_rest = numpy.log(precision / (16*numpy.pi**2 * kmax**lmax))
+#    omega = (-.5 * ke_cutoff / log_rest)**.5
+#    return omega
+
+    ai = numpy.hstack(cell.bas_exps).max()
+    fac = 32*numpy.pi**2 / precision
+    omega = 2.
+    theta = 1./(1./ai + omega**-2)
+    omega2 = 1./(numpy.log(fac * theta/ (2*Ecut) + 1.)*2/ke_cutoff - 1./aij)
+    if omega2 < 0:
+        omega = 2
+    else:
+        omega = min(omega2, 4.)**.5
+    return omega

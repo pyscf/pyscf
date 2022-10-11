@@ -129,13 +129,8 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)
     coords = numpy.asarray(coords, order='F')
 
-    # For atoms near the boundary of the cell, it is necessary (even in low-
-    # dimensional systems) to include lattice translations in all 3 dimensions.
     if Ls is None:
-        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-            Ls = cell.get_lattice_Ls(dimension=cell.dimension)
-        else:
-            Ls = cell.get_lattice_Ls(dimension=3)
+        Ls = cell.get_lattice_Ls()
         Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
     if rcut is None:
@@ -174,16 +169,28 @@ pbc_eval_gto = eval_gto
 def _estimate_rcut(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
-    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    precision = cell.precision
     rcut = []
+    #for ib in range(cell.nbas):
+    #    l = cell.bas_angular(ib)
+    #    es = cell.bas_exp(ib)
+    #    cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+    #    r = 5.
+    #    r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+    #    r[r < 1.] = 1.
+    #    r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+    #    rcut.append(r.max())
+    #return numpy.array(rcut)
+    # FIXME: compare to _primitive_gto_cutoff in multigrid
     for ib in range(cell.nbas):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
-        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+        cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
+        norm_ang = ((2*l+1)/(4*numpy.pi))**.5
+        fac = 2*numpy.pi*cs*norm_ang/es / precision
         r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
-        r[r < 1.] = 1.
-        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
         rcut.append(r.max())
     return numpy.array(rcut)
 
