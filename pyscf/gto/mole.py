@@ -1516,7 +1516,7 @@ def sph_labels(mol, fmt=True, base=BASE):
         if nelec_ecp == 0 or l > 3:
             shl_start = count[ia,l]+l+1
         else:
-            coreshl = core_configuration(nelec_ecp)
+            coreshl = core_configuration(nelec_ecp, atom_symbol=symb)
             shl_start = coreshl[l]+count[ia,l]+l+1
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
