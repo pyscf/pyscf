@@ -53,7 +53,7 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
                                       mo_coeff, tol=1e-5)
             except ValueError as e:
                 logger.warn(mol, str(e))
-    if ene is None:
+    if ene is None or len(ene) != nmo:
         ene = numpy.arange(nmo)
     assert (spin == 'Alpha' or spin == 'Beta')
     if occ is None:
