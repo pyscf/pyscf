@@ -52,7 +52,8 @@ def ecp_int(cell, kpts=None):
     # shls_slice of auxiliary index (0,1) corresponds to the fictitious s function
     shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 
-    dfbuilder = incore._Int3cBuilder(cell, ecpcell, kpts_lst)
+    dfbuilder = incore._Int3cBuilder(cell, ecpcell, kpts_lst).build()
+    print(dfbuilder.supmol.nbas)
     int3c = dfbuilder.gen_int3c_kernel('ECPscalar', aosym='s2', comp=1,
                                        j_only=True, return_complex=True)
     buf = int3c(shls_slice)

@@ -144,7 +144,8 @@ cell.dimension=3 with large vacuum.""")
         log.info('j2c_eig_always = %s', self.j2c_eig_always)
         log.info('omega = %s', self.omega)
         log.info('ke_cutoff = %s', self.ke_cutoff)
-        log.info('mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
+        if self.mesh is not None:
+            log.info('mesh = %s (%d PWs)', self.mesh, np.prod(self.mesh))
         log.info('mesh_compact = %s (%d PWs)', self.mesh_compact,
                  np.prod(self.mesh_compact))
         if self.auxcell is None:

@@ -48,8 +48,9 @@ def setUpModule():
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
-    #cell.verbose = 7
+    cell.verbose = 7
     cell.output = '/dev/null'
+    cell.mesh = [15] * 3
     cell.build()
 
     rand_kmf = make_rand_kmf()

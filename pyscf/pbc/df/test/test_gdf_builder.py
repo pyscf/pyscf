@@ -195,7 +195,7 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 2.4133985606622783, 7)
+            self.assertAlmostEqual(lib.fp(v2), 2.4119378731259946, 7)
 
         ref = cholesky_eri(cell, auxmol=auxcell)
         self.assertAlmostEqual(abs(v2-ref).max(), 0, 2)

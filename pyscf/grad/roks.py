@@ -38,6 +38,8 @@ class Gradients(rks_grad.Gradients):
 
     grad_elec = uhf_grad.grad_elec
 
+    _tag_rdm1 = rohf_grad._tag_rdm1
+
 Grad = Gradients
 
 from pyscf import dft

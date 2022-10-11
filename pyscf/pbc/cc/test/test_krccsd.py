@@ -50,6 +50,7 @@ def setUpModule():
     cell.unit = 'B'
     #cell.verbose = 7
     cell.output = '/dev/null'
+    cell.mesh = [15] * 3
     cell.build()
 
     rand_kmf = make_rand_kmf()

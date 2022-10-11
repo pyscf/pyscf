@@ -429,15 +429,7 @@ class KROHF(khf.KRHF, pbcrohf.ROHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
-                   **kwargs):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        rho = kwargs.pop('rho', None)
-        if rho is None:
-            rho = self.get_rho(dm)
-        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
+    dip_moment = khf.KSCF.dip_moment
 
     spin_square = pbcrohf.ROHF.spin_square
 
