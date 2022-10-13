@@ -162,7 +162,8 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
 
 def symmetrize_space(mol, mo, s=None,
                      check=getattr(__config__, 'symm_addons_symmetrize_space_check', True),
-                     tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-7)):
+                     tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-9),
+                     clean=getattr(__config__, 'symm_addons_symmetrize_space_clean', False)):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
@@ -196,8 +197,14 @@ def symmetrize_space(mol, mo, s=None,
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
     s_mo = numpy.dot(s, mo)
-    if check and abs(numpy.dot(mo.conj().T, s_mo) - numpy.eye(nmo)).max() > tol:
-        raise ValueError('Orbitals are not orthogonalized')
+    if check:
+        max_non_orth = abs(reduce(numpy.dot, (mo.conj().T, s, mo)) - numpy.eye(nmo)).max()
+        logger.debug(mol, 'Non-orthogonality of orbitals before symmetrization %s', max_non_orth)
+        if max_non_orth > tol:
+            raise ValueError('Input orbitals are not orthogonalized')
+    if clean:
+        SALC_ao = numpy.hstack(mol.symm_orb)
+        SALC_indices = numpy.hstack([[i]*SALC_i.shape[1] for (i, SALC_i) in enumerate(mol.symm_orb)])
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
@@ -211,22 +218,36 @@ def symmetrize_space(mol, mo, s=None,
             ovlpso[numpy.diag_indices(csym.shape[1])] += 1e-12
             diag = numpy.einsum('ki,ki->i', moso.conj(), lib.cho_solve(ovlpso, moso))
         idx = abs(1-diag) < 1e-8
-        orb_exclude = mo[:,idx]
+        orb_exclude = mo[:, idx]
+        if clean:
+            # rotate MO to symm-adapted AO, zero out non-symm part and rotate MO back to AO
+            SALC_mo = numpy.dot(SALC_ao.T, orb_exclude)
+            not_in_irrep = (SALC_indices != i)
+            # print(i, SALC_mo.shape, not_in_irrep, not_in_irrep.any(),
+            #       SALC_mo[not_in_irrep, :], SALC_mo[not_in_irrep, :].shape)
+            if not_in_irrep.any() and SALC_mo.shape[1] > 0:
+                logger.debug(mol, 'Largest non-symmetric contribution in irrep %d: %s',
+                             i,  SALC_mo[not_in_irrep, :].max())
+                SALC_mo[not_in_irrep, :] = 0
+                orb_exclude = numpy.dot(SALC_ao, SALC_mo)
         mo1.append(orb_exclude)
-        moso1 = moso[:,~idx]
+        moso1 = moso[:, ~idx]
         dm = numpy.dot(moso1, moso1.T.conj())
 
         if dm.trace() > 1e-8:
+            logger.debug(mol, 'Some orbitals were symmetrized')
             e, u = scipy.linalg.eigh(dm, ovlpso)
-            mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
+            mo1.append(numpy.dot(csym, u[:, abs(1-e) < 1e-6]))
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
         raise ValueError('mo1.shape[1] != nmo: %d != %d The input orbital space is not symmetrized.\n One '
                          'possible reason is that the input mol and orbitals '
                          'are of different orientation.' % (mo1.shape[1], nmo))
-    if (check and
-        abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max() > tol):
-        raise ValueError('Orbitals are not orthogonalized')
+    if check:
+        max_non_orth = abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max()
+        logger.debug(mol, 'Non-orthogonality of orbitals after symmetrization %s', max_non_orth)
+        if max_non_orth > tol:
+            raise ValueError('Output orbitals are not orthogonalized')
     idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T.conj(), s, mo1)))
     return mo1[:,idx]
 
