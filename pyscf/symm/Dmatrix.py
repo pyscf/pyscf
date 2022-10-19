@@ -141,6 +141,9 @@ def get_euler_angles(c1, c2):
     c2 = numpy.asarray(c2)
     if c1.ndim == 2 and c2.ndim == 2:
         zz = c1[2].dot(c2[2])
+        tol = 1e-12
+        assert (-1-tol < zz < 1+tol)
+        zz = numpy.clip(zz, -1, 1)
         beta = numpy.arccos(zz)
         if abs(zz) < 1 - 1e-12:
             yp = numpy.cross(c1[2], c2[2])
