@@ -287,17 +287,17 @@ def MakeAtomInfos():
     for At in "Li Be B C O N F Ne".split(): nCoreX[At] = 1
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
     for At in "Na Mg Al Si P S Cl Ar".split(): nCoreX[At] = 5
-    for At in "K Ca".split(): nCoreX[At] = 18/2
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18/2
-    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18/2+5 # [Ar] and the 5 d orbitals.
+    for At in "K Ca".split(): nCoreX[At] = 18//2
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nCoreX[At] = 18//2
+    for At in "Ga Ge As Se Br Kr".split(): nCoreX[At] = 18//2 + 5  # [Ar] and the 5d orbitals.
     nAoX = {"H": 1, "He": 1}
     for At in "Li Be".split(): nAoX[At] = 2
     for At in "B C O N F Ne".split(): nAoX[At] = 5
     for At in "Na Mg".split(): nAoX[At] = 3*1 + 1*3
     for At in "Al Si P S Cl Ar".split(): nAoX[At] = 3*1 + 2*3
-    for At in "K Ca".split(): nAoX[At] = 18/2+1
-    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18/2+1+5   # 4s, 3d
-    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18/2+1+5+3
+    for At in "K Ca".split(): nAoX[At] = 18//2 + 1
+    for At in "Sc Ti V Cr Mn Fe Co Ni Cu Zn".split(): nAoX[At] = 18//2 + 1 + 5  # 4s, 3d
+    for At in "Ga Ge As Se Br Kr".split(): nAoX[At] = 18//2 + 1 + 5 + 3
 
     AoLabels = {}
 
