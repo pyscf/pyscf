@@ -156,13 +156,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 for i, civec in enumerate(ci):
                     log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                     for c,ia,ib in res[i]:
-                        log.info('  %-20s %-30s %.12f', ia, ib, c)
+                        log.info('  %-20s %-30s % .12f', ia, ib, c)
             else:
                 log.info('  [alpha occ-orbitals] [beta occ-orbitals]            CI coefficient')
                 res = casscf.fcisolver.large_ci(ci, casscf.ncas, casscf.nelecas,
                                                 large_ci_tol, return_strs=False)
                 for c,ia,ib in res:
-                    log.info('  %-20s %-30s %.12f', ia, ib, c)
+                    log.info('  %-20s %-30s % .12f', ia, ib, c)
 
         if with_meta_lowdin:
             casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
@@ -387,7 +387,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                                    mc._scf.get_ovlp(), mc._scf.mo_coeff))
             idx = numpy.argwhere(abs(s)>.4)
             for i,j in idx:
-                log.info('<CAS-nat-orb|mo-hf>  %d  %d  %12.8f',
+                log.info('<CAS-nat-orb|mo-hf>  %-5d  %-5d  % 12.8f',
                          ncore+i+1, j+1, s[i,j])
     return mo_coeff1, fcivec, mo_occ
 
