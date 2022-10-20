@@ -54,26 +54,22 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
     nset = dms.shape[0]
     if include_grid_response and nset > 2:
         raise ValueError('Cannot handle multiple DMs for grid response')
-    elif include_grid_response:
-        nspin = nset
 
     if sgx.debug:
         batch_nuc = _gen_batch_nuc(mol)
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt, sgx.pjs, tot_grids=grids.weights.size)
+                                  sgx._opt, sgx.pjs)
 
     if include_grid_response:
         if sgx.debug:
             batch_nuc_grad = _gen_batch_nuc_grad(mol)
         else:
             batch_jk_grad = _gen_jk_direct(mol, 's1', with_j, with_k, direct_scf_tol,
-                                           None, sgx.pjs, tot_grids=grids.weights.size,
-                                           grad=True)
+                                           None, sgx.pjs, grad=True)
             if with_j:
                 batch_jonly = _gen_jk_direct(mol, 's1', True, False, direct_scf_tol,
-                                             None, sgx.pjs, tot_grids=grids.weights.size,
-                                             grad=True)
+                                             None, sgx.pjs, grad=True)
 
     dej = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions
     dek = numpy.zeros((mol.natm, 3)) # derivs wrt atom positions

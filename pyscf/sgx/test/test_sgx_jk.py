@@ -78,6 +78,9 @@ class KnownValues(unittest.TestCase):
         dm = dm + dm.T
 
         mf = sgx.sgx_fit(scf.RHF(mol), 'weigend')
+        mf.with_df.grids_level_i = 0
+        mf.with_df.grids_level_f = 1
+        mf.with_df.use_opt_grids = False
         mf.with_df.dfj = True
         mf.build()
         vj, vk = mf.get_jk(mol, dm)
@@ -105,11 +108,11 @@ class KnownValues(unittest.TestCase):
 
 class PJunctionScreening(unittest.TestCase):
 
-    @unittest.skip("computationally expensive test")
+    #@unittest.skip("computationally expensive test")
     def test_pjs(self):
         cwd = os.path.dirname(os.path.abspath(__file__))
         fname = os.path.join(cwd, 'a12.xyz')
-        mol = gto.M(atom=fname, basis='sto-3g')
+        mol = gto.M(atom=fname, basis='def2-svp')
 
         mf = dft.RKS(mol)
         mf.xc = 'PBE'
@@ -118,13 +121,16 @@ class PJunctionScreening(unittest.TestCase):
 
         mf = sgx.sgx_fit(scf.RHF(mol), pjs=False)
         mf.with_df.dfj = True
+        mf.with_df.grids_level_i = 1
+        mf.with_df.grids_level_f = 1
+        mf.with_df.use_opt_grids = True
         mf.build()
         en0 = mf.energy_tot(dm=dm)
         en0scf = mf.kernel()
 
         # Turn on P-junction screening. dfj must also be true.
         mf.with_df.pjs = True
-        mf.direct_scf_tol = 1e-10
+        #mf.direct_scf_tol = 1e-10
         mf.build()
         en1 = mf.energy_tot(dm=dm)
         en1scf = mf.kernel()

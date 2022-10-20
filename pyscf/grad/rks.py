@@ -388,7 +388,6 @@ def get_dw_partition(mol, ia, atom_grids_tab,
     else:
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = gto.inter_distance(mol)
     gen_grid_fn = gen_grid.libdft.VXCgen_grid_lko
     gen_deriv_fn = gen_grid.libdft.VXCgen_grid_lko_deriv
 
@@ -445,8 +444,6 @@ def grids_response_lko(grids):
     atom_grids_tab = grids.gen_atomic_grids(mol, grids.atom_grid,
                                             grids.radi_method,
                                             grids.level, grids.prune)
-    atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = gto.inter_distance(mol, atm_coords)
 
     for ia in range(mol.natm):
         coord, weight, weight1 = get_dw_partition(mol, ia, atom_grids_tab,

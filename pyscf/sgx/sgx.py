@@ -265,10 +265,11 @@ class SGX(lib.StreamObject):
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
         self.grids_thrd = 1e-10
-        self.grids_level_i = 1  # initial grids level
-        self.grids_level_f = 1  # final grids level
-        self.fit_ovlp = True # whether to numerically fit overlap matrix 
-                             # to improve numerical precision
+        self.grids_level_i = 1 # initial grids level
+        self.grids_level_f = 2 # final grids level
+        self.use_opt_grids = True # use optimized grids for SGX based on ORCA
+        # whether to numerically fit overlap matrix to improve numerical precision
+        self.fit_ovlp = True
         self.grids_switch_thrd = 0.03
         # compute J matrix using DF and K matrix using SGX. It's identical to
         # the RIJCOSX method in ORCA
@@ -321,7 +322,9 @@ class SGX(lib.StreamObject):
     def build(self, level=None):
         if level is None:
             level = self.grids_level_f
-        self.grids = sgx_jk.get_gridss(self.mol, level, self.grids_thrd)
+        self.grids = sgx_jk.get_gridss(
+            self.mol, level, self.grids_thrd, self.use_opt_grids
+        )
         self._opt = _make_opt(self.mol, pjs=self.pjs)
 
         # In the RSH-integral temporary treatment, recursively rebuild SGX

@@ -165,7 +165,7 @@ def get_jk_favorj(sgx, dm, hermi=1, with_j=True, with_k=True,
         batch_nuc = _gen_batch_nuc(mol)
     else:
         batch_jk = _gen_jk_direct(mol, 's2', with_j, with_k, direct_scf_tol,
-                                  sgx._opt, sgx.pjs, tot_grids=grids.weights.size)
+                                  sgx._opt, sgx.pjs)
 
     sn = numpy.zeros((nao,nao))
     ngrids = grids.coords.shape[0]
@@ -265,7 +265,7 @@ def _gen_batch_nuc_grad(mol):
     return batch_nuc
 
 def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
-                   sgxopt=None, pjs=False, grad=False, tot_grids=None):
+                   sgxopt=None, pjs=False, grad=False):
     '''Contraction between sgX Coulomb integrals and density matrices
     J: einsum('guv,xg->xuv', gbn, dms) if dms == rho at grid
        einsum('gij,xij->xg', gbn, dms) if dms are density matrices
@@ -292,11 +292,7 @@ def _gen_jk_direct(mol, aosym, with_j, with_k, direct_scf_tol,
         env[gto.NGRIDS] = ngrids
         env[gto.PTR_GRIDS] = mol._env.size
         if pjs:
-            if tot_grids is not None:
-                fac = numpy.sqrt(direct_scf_tol * tot_grids)
-            else:
-                fac = 1.0
-            sgxopt.set_dm(fac * fg / numpy.sqrt(numpy.abs(weights[None,:])),
+            sgxopt.set_dm(fg / numpy.sqrt(numpy.abs(weights[None,:])),
                           mol._atm, mol._bas, env)
 
         ao_loc = moleintor.make_loc(bas, sgxopt._intor)
@@ -370,21 +366,22 @@ SGX_RAD_GRIDS = numpy.array(SGX_RAD_GRIDS)
 
 # pre for get_k
 # Use default mesh grids and weights
-def get_gridss(mol, level=1, gthrd=1e-10):
+def get_gridss(mol, level=1, gthrd=1e-10, use_opt_grids=False):
     Ktime = (logger.process_clock(), logger.perf_counter())
     grids = gen_grid.Grids(mol)
     grids.level = level
-    grids.becke_scheme = becke_lko
-    grids.prune = sgx_prune
-    grids.atom_grid = {}
-    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-    for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
-        if symb not in grids.atom_grid:
-            chg = gto.charge(symb)
-            period = (chg > tab).sum()
-            grids.atom_grid[symb] = (SGX_RAD_GRIDS[level, period],
-                                     LEBEDEV_ORDER[SGX_ANG_MAPPING[level, 3]])
+    if use_opt_grids:
+        grids.becke_scheme = becke_lko
+        grids.prune = sgx_prune
+        grids.atom_grid = {}
+        tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+        for ia in range(mol.natm):
+            symb = mol.atom_symbol(ia)
+            if symb not in grids.atom_grid:
+                chg = gto.charge(symb)
+                period = (chg > tab).sum()
+                grids.atom_grid[symb] = (SGX_RAD_GRIDS[level, period],
+                                         LEBEDEV_ORDER[SGX_ANG_MAPPING[level, 3]])
     grids.build()
 
     ngrids = grids.weights.size
