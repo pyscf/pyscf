@@ -479,7 +479,6 @@ def get_monkhorst_pack_size(cell, kpts):
         skpts = cell.get_scaled_kpts(kpts)
         Nk = np.array([np.count_nonzero(abs(ski[1:]-ski[:-1]) > tol) + 1
                        for ski in np.sort(skpts.T)])
-    assert np.prod(Nk) == kpts.shape[0]
     return Nk
 
 
