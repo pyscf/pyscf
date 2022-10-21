@@ -149,8 +149,8 @@ XC = XC_CODES = {
 'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3C',
 'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5C',
 'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3C',
-# Note, use VWN5 for B3LYP. It is different to the libxc default B3LYP
-'B3LYP'         : 'B3LYP5',
+# Note, B3LYP uses VWN3 https://doi.org/10.1016/S0009-2614(97)00207-8.
+'B3LYP'         : 'B3LYP-G',
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
 #'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607

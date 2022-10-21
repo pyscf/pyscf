@@ -729,9 +729,8 @@ XC_CODES.update({
     'PBE0'          : 406,
     'PBE1PBE'       : 406,
     'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
-    'B3LYP'         : 'B3LYP5',  # VWN5 version
-    'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN',
-    'B3LYPG'        : 402,  # VWN3, used by Gaussian
+    'B3LYP'         : 402,  # B3LYP
+    'B3LYP5'        : 475,  # B3LYP5
     'B3P86'         : 'B3P865',  # VWN5 version
     'B3P865'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN',
     # FIXME: Check if Gaussian takes a different form for B3P86
