@@ -24,7 +24,7 @@ from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
-from pyscf.dft import numint, radi, gen_grid
+from pyscf.dft import numint, radi, gen_grid, xc_deriv
 from pyscf import __config__
 
 
@@ -45,17 +45,24 @@ def get_veff(ks_grad, mol=None, dm=None):
         grids = ks_grad.grids
     else:
         grids = mf.grids
+    if mf.nlc != '':
+        if ks_grad.nlcgrids is not None:
+            nlcgrids = ks_grad.nlcgrids
+        else:
+            nlcgrids = mf.nlcgrids
+        if nlcgrids.coords is None:
+            nlcgrids.build(with_non0tab=True)
     if grids.coords is None:
         grids.build(with_non0tab=True)
 
-    if mf.nlc != '':
-        raise NotImplementedError
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
+        if mf.nlc != '':
+            raise NotImplementedError
         exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
@@ -63,6 +70,12 @@ def get_veff(ks_grad, mol=None, dm=None):
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
+        if mf.nlc:
+            assert 'VV10' in mf.nlc.upper()
+            enlc, vnlc = get_vxc(ni, mol, nlcgrids, mf.xc+'__'+mf.nlc, dm,
+                                 max_memory=max_memory,
+                                 verbose=ks_grad.verbose)
+            vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
@@ -109,7 +122,28 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                 _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
 
     elif xctype == 'NLC':
-        raise NotImplementedError('NLC')
+        nlc_pars = ni.nlc_coeff(xc_code)
+        ao_deriv = 2
+        vvrho = []
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+            vvrho.append([make_rho(idm, ao, mask, 'GGA') for idm in range(nset)])
+
+        vv_vxc = []
+        for idm in range(nset):
+            rho = numpy.hstack([r[idm] for r in vvrho])
+            vxc = numint._vv10nlc(rho, grids.coords, rho, grids.weights,
+                                  grids.coords, nlc_pars)[1]
+            vv_vxc.append(xc_deriv.transform_vxc(rho, vxc, 'GGA', spin=0))
+
+        p1 = 0
+        for ao, mask, weight, coords \
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+            p0, p1 = p1, p1 + weight.size
+            for idm in range(nset):
+                wv = vv_vxc[idm][:,p0:p1] * weight
+                wv[0] *= .5  # *.5 because vmat + vmat.T at the end
+                _gga_grad_sum_(vmat[idm], mol, ao, wv, mask, ao_loc)
 
     elif xctype == 'MGGA':
         ao_deriv = 2
@@ -387,10 +421,11 @@ class Gradients(rhf_grad.Gradients):
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
+        self.nlcgrids = None
         # This parameter has no effects for HF gradients. Add this attribute so that
         # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids'])
+        self._keys = self._keys.union(['grid_response', 'grids', 'nlcgrids'])
 
     def dump_flags(self, verbose=None):
         rhf_grad.Gradients.dump_flags(self, verbose)
