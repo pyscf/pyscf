@@ -247,8 +247,14 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-3*lib.param.BOHR, 5)
 
     def test_finite_diff_rks_grad_nlc(self):
-        mf = mol.RKS().run(xc='b3lypg', nlc='VV10', conv_tol=1e-12)
+        mf = mol.RKS()
+        mf.set(xc='b3lypg', nlc='VV10', conv_tol=1e-12)
+        mf.nlcgrids.level = 0 # Error does not occur unless grid is very coarse
+        mf.kernel()
         g = mf.nuc_grad_method().set().kernel()
+        #self.assertAlmostEqual(lib.fp(g), 0, 6)
+
+        g = mf.nuc_grad_method().set(grid_response=True).kernel()
         #self.assertAlmostEqual(lib.fp(g), 0, 6)
 
         mol1 = mol.copy()
