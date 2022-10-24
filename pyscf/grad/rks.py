@@ -225,7 +225,7 @@ def _tau_grad_dot_(vmat, mol, ao, wv, mask, ao_loc, dR1_on_bra=True):
     aow = numint._scale_ao(ao[3], wv, aow)
     _d1_dot_(vmat, mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
 
-def _vv10nlc_deriv(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
+def _vv10nlc_grad(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
     thresh=1e-8
 
     #output
@@ -268,10 +268,7 @@ def _vv10nlc_deriv(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
     W0tmp=G/(R**2)
     W0tmp=Cvv*W0tmp*W0tmp
     W0=(W0tmp+Pi43*R)**0.5
-    dW0dR=(0.5*Pi43*R-2.*W0tmp)/W0
-    dW0dG=W0tmp*R/(G*W0)
     K=Kvv*(R**(1./6.))
-    dKdR=(1./6.)*K
 
     vvcoords = numpy.asarray(vvcoords, order='C')
     coords = numpy.asarray(coords, order='C')
@@ -289,7 +286,6 @@ def _vv10nlc_deriv(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
     #exc is multiplied by Rho later
     exc[threshind] = F
     return exc, Beta
-
 
 def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
                           max_memory=2000, verbose=None):
@@ -376,10 +372,13 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             _gga_grad_sum_(vtmp, mol, ao, wv, mask, ao_loc)
             vmat += vtmp
 
-            vvrho_sub = numpy.hstack([r for i, r in enumerate(vvrho) if i != atm_id])
-            vvcoords_sub = numpy.vstack([r for i, r in enumerate(vvcoords) if i != atm_id])
-            vvweights_sub = numpy.concatenate([r for i, r in enumerate(vvweights) if i != atm_id])
-            egrad, Beta = _vv10nlc_deriv(rho, coords, vvrho_sub,
+            vvrho_sub = numpy.hstack(
+                [r for i, r in enumerate(vvrho) if i != atm_id])
+            vvcoords_sub = numpy.vstack(
+                [r for i, r in enumerate(vvcoords) if i != atm_id])
+            vvweights_sub = numpy.concatenate(
+                [r for i, r in enumerate(vvweights) if i != atm_id])
+            egrad, Beta = _vv10nlc_grad(rho, coords, vvrho_sub,
                                         vvweights_sub, vvcoords_sub,
                                         nlc_pars)
             # account for factor of 2 in double integration
