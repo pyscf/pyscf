@@ -313,4 +313,3 @@ void VXC_vv10nlc_grad(double *Fvec, double *vvcoords, double *coords,
         }
 }
 }
-

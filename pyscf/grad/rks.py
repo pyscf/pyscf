@@ -135,8 +135,9 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         ao_deriv = 2
         vvrho = []
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
-            vvrho.append([make_rho(idm, ao[:4], mask, 'GGA') for idm in range(nset)])
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
+            vvrho.append([make_rho(idm, ao[:4], mask, 'GGA') \
+                          for idm in range(nset)])
 
         vv_vxc = []
         for idm in range(nset):
@@ -147,7 +148,7 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
         p1 = 0
         for ao, mask, weight, coords \
-                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory=max_memory):
+                in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             p0, p1 = p1, p1 + weight.size
             for idm in range(nset):
                 wv = vv_vxc[idm][:,p0:p1] * weight
