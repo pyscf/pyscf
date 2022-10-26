@@ -227,6 +227,8 @@ def _tau_grad_dot_(vmat, mol, ao, wv, mask, ao_loc, dR1_on_bra=True):
     _d1_dot_(vmat, mol, [ao[6], ao[8], ao[9]], aow, mask, ao_loc, True)
 
 def _vv10nlc_grad(rho, coords, vvrho, vvweight, vvcoords, nlc_pars):
+    # VV10 gradient term from Vydrov and Van Voorhis 2010 eq. 25-26
+    # https://doi.org/10.1063/1.3521275
     thresh=1e-8
 
     #output
