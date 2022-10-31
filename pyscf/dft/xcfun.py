@@ -822,14 +822,14 @@ XC_D0000012 = 118
 XC_D0000003 = 119
 
 def _eval_xc(hyb, fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
-    assert(deriv < 4)
+    assert (deriv < 4)
     if spin == 0:
         rho_u = rho_d = numpy.asarray(rho, order='C')
     else:
         rho_u = numpy.asarray(rho[0], order='C')
         rho_d = numpy.asarray(rho[1], order='C')
-    assert(rho_u.dtype == numpy.double)
-    assert(rho_d.dtype == numpy.double)
+    assert (rho_u.dtype == numpy.double)
+    assert (rho_d.dtype == numpy.double)
 
     if rho_u.ndim == 1:
         rho_u = rho_u.reshape(1,-1)

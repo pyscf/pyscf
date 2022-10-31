@@ -21,13 +21,16 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
+from pyscf import __config__
 
-BLKSIZE = 104  # must be equal to lib/gto/grid_ao_drv.h
+BLKSIZE = 56  # must be equal to lib/gto/grid_ao_drv.h
+NBINS = 100
+CUTOFF = getattr(__config__, 'eval_gto_cutoff', 1e-15)
 
 libcgto = lib.load_library('libcgto')
 
-def eval_gto(mol, eval_name, coords,
-             comp=None, shls_slice=None, non0tab=None, ao_loc=None, out=None):
+def eval_gto(mol, eval_name, coords, comp=None, shls_slice=None, non0tab=None,
+             ao_loc=None, cutoff=None, out=None):
     r'''Evaluate AO function value on the given grids,
 
     Args:
@@ -72,6 +75,9 @@ def eval_gto(mol, eval_name, coords,
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
             array can be obtained by calling :func:`dft.gen_grid.make_mask`
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
         out : ndarray
             If provided, results are written into this array.
 
@@ -108,13 +114,17 @@ def eval_gto(mol, eval_name, coords,
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0]
     if 'spinor' in eval_name:
-        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128, buffer=out)
+        ao = numpy.ndarray((2,comp,nao,ngrids), dtype=numpy.complex128,
+                           buffer=out).transpose(0,1,3,2)
     else:
-        ao = numpy.ndarray((comp,nao,ngrids), buffer=out)
+        ao = numpy.ndarray((comp,nao,ngrids), buffer=out).transpose(0,2,1)
 
     if non0tab is None:
-        non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
-                             dtype=numpy.uint8)
+        if cutoff is None:
+            non0tab = numpy.ones(((ngrids+BLKSIZE-1)//BLKSIZE,nbas),
+                                 dtype=numpy.uint8)
+        else:
+            non0tab = make_screen_index(mol, coords, shls_slice, cutoff)
 
     drv = getattr(libcgto, eval_name)
     drv(ctypes.c_int(ngrids),
@@ -126,13 +136,61 @@ def eval_gto(mol, eval_name, coords,
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
-    ao = numpy.swapaxes(ao, -1, -2)
     if comp == 1:
         if 'spinor' in eval_name:
             ao = ao[:,0]
         else:
             ao = ao[0]
     return ao
+
+def make_screen_index(mol, coords, shls_slice=None, cutoff=CUTOFF,
+                      blksize=BLKSIZE):
+    '''Screen index indicates how important a shell is on grid. The shell is
+    ignorable if its screen index is 0. Screen index ~= nbins + log(ao)
+
+    Args:
+        mol : an instance of :class:`Mole`
+
+        coords : 2D array, shape (N,3)
+            The coordinates of grids.
+
+    Kwargs:
+        relativity : bool
+            No effects.
+        shls_slice : 2-element list
+            (shl_start, shl_end).
+            If given, only part of AOs (shl_start <= shell_id < shl_end) are
+            evaluated.  By default, all shells defined in mol will be evaluated.
+        cutoff : float
+            AO values smaller than cutoff will be set to zero. The default
+            cutoff threshold is ~1e-22 (defined in gto/grid_ao_drv.h)
+        verbose : int or object of :class:`Logger`
+            No effects.
+
+    Returns:
+        2D array of shape (N,nbas), where N is the number of grids, nbas is the
+        number of shells.
+    '''
+    assert NBINS < 120
+
+    coords = numpy.asarray(coords, order='F')
+    ngrids = len(coords)
+    if shls_slice is None:
+        shls_slice = (0, mol.nbas)
+    sh0, sh1 = shls_slice
+    nbas = sh1 - sh0
+
+    s_index = numpy.empty(((ngrids+blksize-1)//blksize, nbas),
+                          dtype=numpy.uint8)
+    libcgto.GTO_screen_index(
+        s_index.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(NBINS), ctypes.c_double(cutoff),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_int(ngrids), ctypes.c_int(blksize),
+        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
+        mol._bas[sh0:].ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        mol._env.ctypes.data_as(ctypes.c_void_p))
+    return s_index
 
 def _get_intor_and_comp(mol, eval_name, comp=None):
     if not ('_sph' in eval_name or '_cart' in eval_name or

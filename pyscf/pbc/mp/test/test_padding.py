@@ -38,6 +38,7 @@ def setUpModule():
                        ke_cutoff=ke_cutoff)
     cell.verbose = 4
     cell.output = '/dev/null'
+    cell.mesh = [17] * 3
     cell.build()
 
 def tearDownModule():
@@ -55,9 +56,20 @@ def run_kcell(cell, nk):
     return ekpt, mp.e_corr
 
 class KnownValues(unittest.TestCase):
-    def test_221(self):
+    def test_211(self):
         cell1 = cell.copy()
         cell1.basis = 'gth-dzv'
+        cell1.mesh = [17] * 3
+        cell1.build()
+        nk = [2, 1, 1]
+        escf, emp = run_kcell(cell1, nk)
+        self.assertAlmostEqual(escf, -10.551651367521986, 7)
+        self.assertAlmostEqual(emp , -0.1514005714425273, 7)
+
+    def test_221_high_cost(self):
+        cell1 = cell.copy()
+        cell1.basis = 'gth-dzv'
+        cell1.mesh = [17] * 3
         cell1.build()
 
         nk = [2, 2, 1]
@@ -68,13 +80,13 @@ class KnownValues(unittest.TestCase):
         mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
 
         self.assertAlmostEqual(ekpt,      -10.835614361742607, 8)
-        self.assertAlmostEqual(mp.e_corr, -0.1522294774708119, 8)
+        self.assertAlmostEqual(mp.e_corr, -0.1522294774708119, 7)
 
     def test_222_high_cost(self):
         nk = (2, 2, 2)
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, -11.0152342492995, 9)
-        self.assertAlmostEqual(emp, -0.233433093787577, 9)
+        self.assertAlmostEqual(escf, -11.0152342492995, 8)
+        self.assertAlmostEqual(emp, -0.233433093787577, 7)
 
 
 if __name__ == '__main__':

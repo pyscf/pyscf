@@ -84,7 +84,7 @@ def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
         eri = ao2mo.restore(8, eri, nmo)
 
     if eri.ndim == 2: # 4-fold symmetry
-        assert(eri.size == npair**2)
+        assert (eri.size == npair**2)
         ij = 0
         for i in range(nmo):
             for j in range(0, i+1):
@@ -96,7 +96,7 @@ def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
                         kl += 1
                 ij += 1
     else:  # 8-fold symmetry
-        assert(eri.size == npair*(npair+1)//2)
+        assert (eri.size == npair*(npair+1)//2)
         ij = 0
         ijkl = 0
         for i in range(nmo):
@@ -212,7 +212,7 @@ def from_scf(mf, filename, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT,
                    tol, float_format)
 
 
-def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
+def read(filename, molpro_orbsym=MOLPRO_ORBSYM, verbose=True):
     '''Parse FCIDUMP.  Return a dictionary to hold the integrals and
     parameters with keys:  H1, H2, ECORE, NORB, NELEC, MS, ORBSYM, ISYM
 
@@ -221,8 +221,10 @@ def read(filename, molpro_orbsym=MOLPRO_ORBSYM):
             Molpro orbsym convention as documented in
             https://www.molpro.net/info/current/doc/manual/node36.html
             In return, orbsym is converted to pyscf symmetry convention
+        verbose (bool): Whether to print debugging information
     '''
-    print('Parsing %s' % filename)
+    if verbose:
+        print('Parsing %s' % filename)
     finp = open(filename, 'r')
 
     data = []

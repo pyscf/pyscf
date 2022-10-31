@@ -46,6 +46,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+    dm0 = mf_grad._tag_rdm1 (dm0, mo_coeff, mo_occ)
 
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
@@ -192,7 +193,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
 
 def symmetrize(mol, de, atmlst=None):
     '''Symmetrize the gradients wrt the point group symmetry of the molecule.'''
-    assert(mol.symmetry)
+    assert (mol.symmetry)
     pmol = mol.copy()
     # The symmetry of gradients should be the same to the p-type functions.
     # We use p-type AOs to generate the symmetry adaptation projector.
@@ -410,6 +411,10 @@ class GradientsMixin(lib.StreamObject):
 
     as_scanner = as_scanner
 
+    def _tag_rdm1 (self, dm, mo_coeff, mo_occ):
+        '''Tagging is necessary in DF subclass. Tagged arrays need
+        to be split into alpha,beta in DF-ROHF subclass'''
+        return lib.tag_array (dm, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
 class Gradients(GradientsMixin):
     '''Non-relativistic restricted Hartree-Fock gradients'''
@@ -432,44 +437,3 @@ Grad = Gradients
 from pyscf import scf
 # Inject to RHF class
 scf.hf.RHF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [['He', (0.,0.,0.)], ]
-    mol.basis = {'He': 'ccpvdz'}
-    mol.build()
-    method = scf.RHF(mol)
-    method.scf()
-    g = Gradients(method)
-    print(g.grad())
-
-    h2o = gto.Mole()
-    h2o.verbose = 0
-    h2o.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    h2o.basis = {'H': '631g',
-                 'O': '631g',}
-    h2o.symmetry = True
-    h2o.build()
-    mf = scf.RHF(h2o)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
-    print(g.grad())
-#[[ 0   0               -2.41134256e-02]
-# [ 0   4.39690522e-03   1.20567128e-02]
-# [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    mf = scf.RHF(h2o).x2c()
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = mf.Gradients()
-    print(g.grad())
-#[[ 0   0               -2.40286232e-02]
-# [ 0   4.27908498e-03   1.20143116e-02]
-# [ 0  -4.27908498e-03   1.20143116e-02]]

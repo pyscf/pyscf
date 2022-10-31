@@ -125,6 +125,7 @@ def test_cell_n3_diffuse():
     cell.pseudo = "gth-pade"
 
     cell.verbose = 7
+    cell.mesh = [5] * 3
     cell.output = '/dev/null'
     cell.build()
     return cell

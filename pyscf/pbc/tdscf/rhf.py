@@ -26,6 +26,26 @@ from pyscf.tdscf import rhf
 
 class TDA(rhf.TDA):
     def gen_vind(self, mf):
+        # gen_vind calls get_jk functions to compute the contraction between
+        # two-electron integrals and X,Y amplitudes. There are two choices for
+        # the treatment of exxdiv.
+        # 1. Removing exxdiv corrections in both orbital energies (in hdiag) and
+        #   get_jk functions (in vind function). This treatment can make TDA the
+        #   same to CIS method in which exxdiv was completely excluded when
+        #   constructing Hamiltonians.
+        # 2. Excluding exxdiv corrections from get_jk only. Keep its correction
+        #   to orbital energy. This treatment can make the TDDFT excitation
+        #   energies closed to the relevant DFT orbital energy gaps.
+        # DFT orbital energy gaps can be used as a good estimation for
+        # excitation energies. Current implementation takes the second choice so
+        # as to make the TDDFT excitation energies agree to DFT orbital energy gaps.
+        #
+        # There might be a third treatment: Taking treatment 1 first then adding
+        # certain types of corrections to the excitation energy at last.
+        # I'm not sure how to do this properly.
+        #
+        # See also issue https://github.com/pyscf/pyscf/issues/1187
+
         vind, hdiag = rhf.TDA.gen_vind(self, mf)
         def vindp(x):
             with lib.temporary_env(mf, exxdiv=None):

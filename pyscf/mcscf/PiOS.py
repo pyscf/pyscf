@@ -67,7 +67,7 @@ def Atoms_w_Coords(mol):
     """collect info about atoms' positions"""
     AtomCoords = mol.atom_coords()
 
-    assert(AtomCoords.shape == (mol.natm, 3))
+    assert (AtomCoords.shape == (mol.natm, 3))
     Elements = [mol.atom_pure_symbol(iAt) for iAt in range(mol.natm)]
     Elements =np.asarray(Elements)
 
@@ -91,7 +91,7 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
     Elements,Coords = Atoms_w_Coords(mol2)
     Shells = MakeShells(mol2,Elements)
     def AssignTag(iAt, Element, Tag):
-        assert(Elements[iAt-1] == Element)
+        assert (Elements[iAt-1] == Element)
         Elements[iAt-1] = Element + Tag
 
 
@@ -125,7 +125,7 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         print("    Number of singly occupied orbitals      {} ".format(n1))
 
     nVir = np.sum(Occ == 0)
-    assert(nOcc + nVir == nOrb)
+    assert (nOcc + nVir == nOrb)
     print("    Number of occupied orbitals      {} ".format(nOcc))
     print("    Number of unoccupied orbitals    {} ".format(nVir))
 
@@ -167,8 +167,8 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         print("    [{}]".format(', '.join('{:.4f}'.format(k) for k in sig)))
 
 
-        assert(np.abs(sig[nIbVir-1] - 1.0) < 1e-4)
-        assert(np.abs(sig[nIbVir] - 0.0) < 1e-4)
+        assert (np.abs(sig[nIbVir-1] - 1.0) < 1e-4)
+        assert (np.abs(sig[nIbVir] - 0.0) < 1e-4)
 
         # for pi systems: do it like here -^ for the virtuals, but
         # for COcc and CVir both. What we should do is:
@@ -237,8 +237,8 @@ def MakePiOS(mol,mf,PiAtomsList, nPiOcc=None,nPiVirt=None):
         if 0:
             for i in range(len(ew)):
                 print("{:4} {:15.6f}  {}".format(i,ew[i], i == nRest))
-        assert(np.abs(ew[nRest-1] - 0.0) < 1e-8)
-        assert(np.abs(ew[nRest] - 1.0) < 1e-8)
+        assert (np.abs(ew[nRest-1] - 0.0) < 1e-8)
+        assert (np.abs(ew[nRest] - 1.0) < 1e-8)
         CNewOrb1 = np.dot(COrb1, ev[:,:nRest])
         return SemiCanonicalize(CNewOrb1, Fock, S1, Name, Print=False)
 
@@ -268,7 +268,7 @@ def rmsd(a, b = None):
 
 def MakeSmh(S):
     ew,ev = np.linalg.eigh(S)
-    assert(np.all(ew > 1e-10))
+    assert (np.all(ew > 1e-10))
     v = ev * (ew**-0.25)[np.newaxis,:]
     return np.dot(v, v.T)
 
@@ -278,9 +278,9 @@ def MakeIaosRaw(COcc, S1, S2, S12):
     # calculate the molecule-intrinsic atomic orbital (IAO) basis
     # ref: [1] Knizia, J. Chem. Theory Comput., http://dx.doi.org/10.1021/ct400687b
     # This is the "Simple/2014" version from ibo-ref at sites.psu.edu/knizia/software
-    assert(S1.shape[0] == S1.shape[1] and S1.shape[0] == S12.shape[0])
-    assert(S2.shape[0] == S2.shape[1] and S2.shape[0] == S12.shape[1])
-    assert(COcc.shape[0] == S1.shape[0] and COcc.shape[1] <= S2.shape[0])
+    assert (S1.shape[0] == S1.shape[1] and S1.shape[0] == S12.shape[0])
+    assert (S2.shape[0] == S2.shape[1] and S2.shape[0] == S12.shape[1])
+    assert (COcc.shape[0] == S1.shape[0] and COcc.shape[1] <= S2.shape[0])
     P12 = la.solve(S1, S12)   # P12 = S1^{-1} S12
     COcc2 = mdot(S12.T, COcc)              # O(N m^2)
     CTil = la.solve(S2, COcc2)             # O(m^3)
@@ -296,7 +296,7 @@ def MakeIaosRaw(COcc, S1, S2, S12):
 
 def GetPzOrientation(iTargetAtoms, Coords_, Elements_):
     # make a xyz vector pointing out of the plane containing the target atoms.
-    assert(Coords_.shape[1] == 3)
+    assert (Coords_.shape[1] == 3)
     Coords = Coords_[iTargetAtoms,:].copy()
     Elements = Elements_[iTargetAtoms]
 
@@ -333,13 +333,13 @@ def FindValenceAoIndices(iAt, Shells, TargetL):
             if Atom == iAt:
                 if Shells[Atom][AtomL][0] == TargetL:
                     # this is a generally contracted p-shell on atom iAt.
-                    assert(ipxyz is None) # should be only one per atom, I think.
+                    assert (ipxyz is None) # should be only one per atom, I think.
                     nCGTO = Shells[Atom][AtomL][1]
                     nSphComp = 2*TargetL + 1
                     iFnHighestP = iFn0 + nSphComp*(nCGTO-1)
                     ipxyz = np.array([(iFnHighestP + o) for o in range(nSphComp)])
             iFn0 += Shells[Atom][AtomL][2]
-    assert(ipxyz is not None)
+    assert (ipxyz is not None)
     return ipxyz
 
 
@@ -411,7 +411,7 @@ _CovalentRadii = {1: 38.0, 2: 32.0, 3: 134.0, 4: 90.0, 5: 82.0,
 def GetCovalentRadius(At):
     # get covalent radius in pm
     rcov = _CovalentRadii[At.iElement]
-    assert(rcov is not None)
+    assert (rcov is not None)
     # convert to bohr radii
     ToAng = 0.52917721092
     return (0.01 * rcov)/ToAng

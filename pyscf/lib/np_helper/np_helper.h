@@ -51,6 +51,7 @@ void NPzunpack_tril_2d(int count, int n,
                        double complex *tril, double complex *mat, int hermi);
 void NPdpack_tril_2d(int count, int n, double *tril, double *mat);
 
+void NPomp_split(size_t *start, size_t *end, size_t n);
 void NPomp_dsum_reduce_inplace(double **vec, size_t count);
 void NPomp_dprod_reduce_inplace(double **vec, size_t count);
 void NPomp_zsum_reduce_inplace(double complex **vec, size_t count);

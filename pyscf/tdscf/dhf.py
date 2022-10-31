@@ -591,4 +591,4 @@ from pyscf import scf
 scf.dhf.DHF.TDA  = scf.dhf.RDHF.TDA  = lib.class_as_method(TDA)
 scf.dhf.DHF.TDHF = scf.dhf.RDHF.TDHF = lib.class_as_method(TDHF)
 
-del(OUTPUT_THRESHOLD)
+del (OUTPUT_THRESHOLD)

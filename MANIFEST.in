@@ -6,7 +6,7 @@ prune pyscf/lib/build
 
 recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so
-include pyscf/lib/*.so
+include pyscf/lib/*.so pyscf/lib/config.h.in
 
 # macos dynamic libraries
 include pyscf/lib/*.dylib

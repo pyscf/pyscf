@@ -44,7 +44,7 @@ class KnownValues(unittest.TestCase):
         with lib.light_speed(30):
             mf = scf.DHF(h2o).run(conv_tol=1e-12)
             g = mf.nuc_grad_method().kernel()
-            self.assertAlmostEqual(lib.finger(g), 0.0074947016737157545, 7)
+            self.assertAlmostEqual(lib.fp(g), 0.0074947016737157545, 6)
 
             ms = mf.as_scanner()
             pmol = h2o.copy()
@@ -60,7 +60,7 @@ class KnownValues(unittest.TestCase):
 #        with lib.light_speed(30):
 #            mf = scf.DHF(h2o).set(with_ssss=False).run()
 #            g = mf.nuc_grad_method().kernel()  # NotImplemented
-#            self.assertAlmostEqual(lib.finger(g), 0.035838032078025273, 7)
+#            self.assertAlmostEqual(lib.fp(g), 0.035838032078025273, 7)
 #
 #            ms = mf.as_scanner()
 #            pmol = h2o.copy()

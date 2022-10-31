@@ -37,7 +37,7 @@ kmf = scf.KRHF(cell, kpts).mix_density_fit()
 # The default mesh for PWs is a very dense-grid scheme which is automatically
 # generated based on the AO basis. It is often not necessary to use dense grid
 # for MDF method.
-kmf.with_df.mesh = [10,10,10]
+kmf.with_df.mesh = [11,11,11]
 kmf.kernel()
 
 #

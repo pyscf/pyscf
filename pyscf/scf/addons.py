@@ -170,7 +170,10 @@ def frac_occ_(mf, tol=1e-3):
 frac_occ = frac_occ_
 
 def dynamic_occ_(mf, tol=1e-3):
-    assert(isinstance(mf, hf.RHF))
+    '''
+    Dyanmically adjust the occupancy to avoid degeneracy between HOMO and LUMO
+    '''
+    assert (isinstance(mf, hf.RHF))
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
@@ -198,16 +201,18 @@ def dynamic_level_shift_(mf, factor=1.):
     value is set to (HF energy change * factor)
     '''
     old_get_fock = mf.get_fock
-    last_e = [None]
+    mf._last_e = None
     def get_fock(h1e, s1e, vhf, dm, cycle=-1, diis=None,
                  diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
-        if cycle >= 0 or diis is not None:
-            ehf =(numpy.einsum('ij,ji', h1e, dm) +
-                  numpy.einsum('ij,ji', vhf, dm) * .5)
-            if last_e[0] is not None:
-                level_shift_factor = abs(ehf-last_e[0]) * factor
+        if cycle > 0 or diis is not None:
+            if 'exc' in mf.scf_summary:  # DFT
+                e_tot = mf.scf_summary['e1'] + mf.scf_summary['coul'] + mf.scf_summary['exc']
+            else:
+                e_tot = mf.scf_summary['e1'] + mf.scf_summary['e2']
+            if mf._last_e is not None:
+                level_shift_factor = abs(e_tot-mf._last_e) * factor
                 logger.info(mf, 'Set level shift to %g', level_shift_factor)
-            last_e[0] = ehf
+            mf._last_e = e_tot
         return old_get_fock(h1e, s1e, vhf, dm, cycle, diis, diis_start_cycle,
                             level_shift_factor, damp_factor)
     mf.get_fock = get_fock
@@ -220,7 +225,7 @@ def float_occ_(mf):
     Determine occupation of alpha and beta electrons based on energy spectrum
     '''
     from pyscf.scf import uhf
-    assert(isinstance(mf, uhf.UHF))
+    assert (isinstance(mf, uhf.UHF))
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
         ee = numpy.sort(numpy.hstack(mo_energy))
@@ -341,7 +346,7 @@ def project_mo_nr2nr(mol1, mo1, mol2):
 
 @lib.with_doc(project_mo_nr2nr.__doc__)
 def project_mo_nr2r(mol1, mo1, mol2):
-    assert(not mol1.cart)
+    assert (not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
@@ -401,7 +406,7 @@ def project_dm_nr2nr(mol1, dm1, mol2):
 
 @lib.with_doc(project_dm_nr2nr.__doc__)
 def project_dm_nr2r(mol1, dm1, mol2):
-    assert(not mol1.cart)
+    assert (not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
@@ -502,7 +507,7 @@ def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
 
     logger.info(mf, 'Applying remove_linear_dep_ on SCF object.')
     logger.debug(mf, 'Overlap condition number %g', cond)
-    if(cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
+    if (cond < 1./numpy.finfo(s.dtype).eps and not force_pivoted_cholesky):
         logger.info(mf, 'Using canonical orthogonalization with threshold {}'.format(threshold))
         def eigh(h, s):
             x = canonical_orth_(s, threshold)
@@ -547,7 +552,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
 
@@ -579,7 +584,7 @@ def convert_to_uhf(mf, out=None, remove_df=False):
         raise NotImplementedError
 
     elif out is not None:
-        assert(isinstance(out, scf.uhf.UHF))
+        assert (isinstance(out, scf.uhf.UHF))
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.uhf.UHF):
@@ -686,7 +691,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
 
@@ -717,7 +722,7 @@ def convert_to_rhf(mf, out=None, remove_df=False):
         raise NotImplementedError
 
     elif out is not None:
-        assert(isinstance(out, scf.hf.RHF))
+        assert (isinstance(out, scf.hf.RHF))
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif (isinstance(mf, scf.hf.RHF) or
@@ -767,7 +772,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)
 
@@ -817,7 +822,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
         return mf1
 
     if out is not None:
-        assert(isinstance(out, scf.ghf.GHF))
+        assert (isinstance(out, scf.ghf.GHF))
         out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.ghf.GHF):
@@ -883,7 +888,7 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin
 
-del(LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER)
+del (LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
                 auxbasis=None, dual_basis=None, **newton_kwargs):
@@ -978,7 +983,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    def mf_kernel(*args, **kwargs):
 #        logger.warn(mf, "fast_newton is a wrap function to quickly setup and call Newton solver. "
 #                    "There's no need to call kernel function again for fast_newton.")
-#        del(mf.kernel)  # warn once and remove circular depdence
+#        del (mf.kernel)  # warn once and remove circular depdence
 #        return mf.e_tot
 #    mf.kernel = mf_kernel
     return mf

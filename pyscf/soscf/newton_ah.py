@@ -351,6 +351,7 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
             x0_guess = dxi
         g_orb = g_kf
         norm_gorb = norm_gkf
+        problem_size = g_orb.size
 
         ah_conv_tol = min(norm_gorb**2, mf.ah_conv_tol)
         # increase the AH accuracy when approach convergence
@@ -374,13 +375,13 @@ def _rotate_orb_cc(mf, h1e, s1e, conv_tol_grad=None, verbose=None):
                 (seig < mf.ah_lindep)):
                 imic += 1
                 dxmax = numpy.max(abs(dxi))
-                if dxmax > mf.max_stepsize:
+                if ihop == problem_size:
+                    log.debug1('... Hx=g fully converged for small systems')
+                elif dxmax > mf.max_stepsize:
                     scale = mf.max_stepsize / dxmax
                     log.debug1('... scale rotation size %g', scale)
                     dxi *= scale
                     hdxi *= scale
-                else:
-                    scale = None
 
                 dr = dr + dxi
                 g_orb = g_orb + hdxi
@@ -793,7 +794,7 @@ def newton(mf):
     if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    assert(isinstance(mf, hf.SCF))
+    assert (isinstance(mf, hf.SCF))
     if mf.__doc__ is None:
         mf_doc = ''
     else:
@@ -955,7 +956,7 @@ SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
 def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
-del(SVD_TOL)
+del (SVD_TOL)
 
 def _force_SO3_degeneracy_(dr, orbsym):
     '''Force orbitals of same angular momentum to use the same rotation matrix'''

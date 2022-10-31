@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@
 #define POS_E1   0
 #define TENSOR   1
 
-#define LMAX            7
+#define LMAX            ANG_MAX
 #define SIMDD           8
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
 #define NPRIMAX         40
-#define BLKSIZE         104
+#define BLKSIZE         56
 #define EXPCUTOFF       50  // 1e-22
 #define NOTZERO(e)      (fabs(e)>1e-18)
 

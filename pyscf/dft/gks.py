@@ -76,7 +76,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         n, exc, vxc = ni.get_vxc(mol, ks.grids, ks.xc, dm,
                                  hermi=hermi, max_memory=max_memory)
         if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
+            assert ('VV10' in ks.nlc.upper())
             _, enlc, vnlc = ni.get_vxc(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm,
                                        hermi=hermi, max_memory=max_memory)
             exc += enlc
@@ -120,6 +120,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
         if ground_state:
             exc -= numpy.einsum('ij,ji', dm, vk).real * .5
+
     if ground_state:
         ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
     else:

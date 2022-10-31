@@ -358,7 +358,7 @@ def get_sigma_diag(gw, orbs, kptlist, freqs, wts, iw_cutoff=None, max_memory=800
 
                     if gw.fc:
                         # apply head correction
-                        assert(kn == km)
+                        assert (kn == km)
                         sigma[0,k][:norbs_occ_a] += -Del_00 * g0_occ_a[kn][orbs][:norbs_occ_a] /np.pi
                         sigma[0,k][norbs_occ_a:] += -Del_00 * g0_vir_a[kn][orbs][norbs_occ_a:] /np.pi
                         sigma[1,k][:norbs_occ_b] += -Del_00 * g0_occ_b[kn][orbs][:norbs_occ_b] /np.pi
@@ -757,24 +757,24 @@ if __name__ == '__main__':
     nocca, noccb = gw.nocc
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocca+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][0][nocca-1]--0.28012813))<1e-5)
-    assert((abs(gw.mo_energy[0][0][nocca]-0.13748876))<1e-5)
-    assert((abs(gw.mo_energy[0][1][nocca-1]--0.29515851))<1e-5)
-    assert((abs(gw.mo_energy[0][1][nocca]-0.14128011))<1e-5)
-    assert((abs(gw.mo_energy[1][0][noccb-1]--0.33991721))<1e-5)
-    assert((abs(gw.mo_energy[1][0][noccb]-0.10578847))<1e-5)
-    assert((abs(gw.mo_energy[1][1][noccb-1]--0.33547973))<1e-5)
-    assert((abs(gw.mo_energy[1][1][noccb]-0.08053408))<1e-5)
+    assert ((abs(gw.mo_energy[0][0][nocca-1]--0.28012813))<1e-5)
+    assert ((abs(gw.mo_energy[0][0][nocca]-0.13748876))<1e-5)
+    assert ((abs(gw.mo_energy[0][1][nocca-1]--0.29515851))<1e-5)
+    assert ((abs(gw.mo_energy[0][1][nocca]-0.14128011))<1e-5)
+    assert ((abs(gw.mo_energy[1][0][noccb-1]--0.33991721))<1e-5)
+    assert ((abs(gw.mo_energy[1][0][noccb]-0.10578847))<1e-5)
+    assert ((abs(gw.mo_energy[1][1][noccb-1]--0.33547973))<1e-5)
+    assert ((abs(gw.mo_energy[1][1][noccb]-0.08053408))<1e-5)
 
     gw.fc = True
     nocca, noccb = gw.nocc
     gw.kernel(kptlist=[0,1,2],orbs=range(0,nocca+3))
     print(gw.mo_energy)
-    assert((abs(gw.mo_energy[0][0][nocca-1]--0.40244058))<1e-5)
-    assert((abs(gw.mo_energy[0][0][nocca]-0.13618348))<1e-5)
-    assert((abs(gw.mo_energy[0][1][nocca-1]--0.41743063))<1e-5)
-    assert((abs(gw.mo_energy[0][1][nocca]-0.13997427))<1e-5)
-    assert((abs(gw.mo_energy[1][0][noccb-1]--0.46133481))<1e-5)
-    assert((abs(gw.mo_energy[1][0][noccb]-0.1044926))<1e-5)
-    assert((abs(gw.mo_energy[1][1][noccb-1]--0.4568894))<1e-5)
-    assert((abs(gw.mo_energy[1][1][noccb]-0.07922511))<1e-5)
+    assert ((abs(gw.mo_energy[0][0][nocca-1]--0.40244058))<1e-5)
+    assert ((abs(gw.mo_energy[0][0][nocca]-0.13618348))<1e-5)
+    assert ((abs(gw.mo_energy[0][1][nocca-1]--0.41743063))<1e-5)
+    assert ((abs(gw.mo_energy[0][1][nocca]-0.13997427))<1e-5)
+    assert ((abs(gw.mo_energy[1][0][noccb-1]--0.46133481))<1e-5)
+    assert ((abs(gw.mo_energy[1][0][noccb]-0.1044926))<1e-5)
+    assert ((abs(gw.mo_energy[1][1][noccb-1]--0.4568894))<1e-5)
+    assert ((abs(gw.mo_energy[1][1][noccb]-0.07922511))<1e-5)

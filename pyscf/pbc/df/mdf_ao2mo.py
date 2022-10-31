@@ -20,7 +20,7 @@ import numpy
 from pyscf import lib
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos
-from pyscf.pbc.df.fft_ao2mo import _format_kpts
+from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df import aft_ao2mo
 from pyscf.pbc.lib import kpts_helper
@@ -76,7 +76,10 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     if out is None:
         out = numpy.empty(eri_shape, dtype=dtype)
     else:
-        assert(out.shape == eri_shape)
+        assert (out.shape == eri_shape)
+
+    if mydf._cderi is None:
+        mydf.build()
 
     kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
     kptis_lst = kptij_lst[:,0]
@@ -87,11 +90,11 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     nao = cell.nao_nr()
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6) * .5
 
-    fswap = lib.H5TmpFile()
     tao = []
     ao_loc = None
     kconserv = kpts_helper.get_kconserv(cell, kpts)
-    for uniq_id, kpt in enumerate(uniq_kpts):
+
+    def process(uniq_id, kpt, fswap):
         q = uniq_kpts[uniq_id]
         adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
 
@@ -163,8 +166,12 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
                 if dtype == numpy.double:
                     eri_mo = eri_mo.real
                 out[ki,kj,kk] = eri_mo.reshape(eri_shape[3:])
-        del(fswap['zij'])
-        del(fswap['zkl'])
+        del (fswap['zij'])
+        del (fswap['zkl'])
+
+    with lib.H5TmpFile() as fswap:
+        for uniq_id, kpt in enumerate(uniq_kpts):
+            process(uniq_id, kpt, fswap)
 
     return out
 

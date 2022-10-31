@@ -320,7 +320,7 @@ class DIIS(object):
             vecsize = dti.size
             for j in range(i+1):
                 dtj = self.get_err_vec(j)
-                assert(dtj.size == vecsize)
+                assert (dtj.size == vecsize)
                 tmp = 0
                 for p0, p1 in misc.prange(0, vecsize, BLOCK_SIZE):
                     tmp += numpy.dot(dti[p0:p1].conj(), dtj[p0:p1])

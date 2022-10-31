@@ -59,7 +59,7 @@ def tearDownModule():
 
 # note tests may fail due to initial guess problem
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_boys(self):
         idx = numpy.array([17,20,21,22,23,30,36,41,42,47,48,49])-1
         loc = boys.Boys(mol, mf.mo_coeff[:,idx])

@@ -38,7 +38,7 @@ def tearDownModule():
     global mol, mf
     del mol, mf
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_orth(self):
         numpy.random.seed(10)
         n = 100

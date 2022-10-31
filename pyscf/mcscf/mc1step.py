@@ -239,6 +239,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
     dr = 0
     ikf = 0
     g_op = lambda: g_orb
+    problem_size = g_orb.size
 
     for ah_end, ihop, w, dxi, hdxi, residual, seig \
             in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -251,13 +252,14 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
             (seig < casscf.ah_lindep)):
             imic += 1
             dxmax = numpy.max(abs(dxi))
-            if dxmax > max_stepsize:
+            if ihop == problem_size:
+                log.debug1('... Hx=g fully converged for small systems')
+                #max_stepsize = casscf.max_stepsize * 10
+            elif dxmax > max_stepsize:
                 scale = max_stepsize / dxmax
                 log.debug1('... scale rotation size %g', scale)
                 dxi *= scale
                 hdxi *= scale
-            else:
-                scale = None
 
             g_orb = g_orb + hdxi
             dr = dr + dxi
@@ -873,7 +875,10 @@ To enable the solvent model for CASSCF, the following code needs to be called
             log.debug('CAS space CI energy = %.15g', e_cas)
 
             if getattr(self.fcisolver, 'spin_square', None):
-                ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                try:
+                    ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
+                except NotImplementedError:
+                    ss = None
             else:
                 ss = None
 
@@ -1114,23 +1119,24 @@ To enable the solvent model for CASSCF, the following code needs to be called
         hc = contract_2e(ci0)
         g = hc - (e_cas-ecore) * ci0.ravel()
 
-        if self.ci_response_space > 7:
+        if self.ci_response_space > 7 or ci0.size <= self.fcisolver.pspace_size:
             logger.debug(self, 'CI step by full response')
             # full response
             max_memory = max(400, self.max_memory-lib.current_memory()[0])
             e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
                                            ci0=ci0, tol=tol, max_memory=max_memory)
         else:
-            nd = self.ci_response_space
+            nd = min(self.ci_response_space, ci0.size)
             xs = [ci0.ravel()]
             ax = [hc]
             heff = numpy.empty((nd,nd))
             seff = numpy.empty((nd,nd))
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
+            tol_residual = self.fcisolver.conv_tol ** .5
             for i in range(1, nd):
                 dx = ax[i-1] - xs[i-1] * e_cas
-                if numpy.linalg.norm(dx) < 1e-6:
+                if numpy.linalg.norm(dx) < tol_residual:
                     break
                 xs.append(dx)
                 ax.append(contract_2e(xs[i]))
@@ -1138,7 +1144,7 @@ To enable the solvent model for CASSCF, the following code needs to be called
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
             nd = len(xs)
-            e, v = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])[:2]
+            e, v, seig = lib.safe_eigh(heff[:nd,:nd], seff[:nd,:nd])
             ci1 = xs[0] * v[0,0]
             for i in range(1, nd):
                 ci1 += xs[i] * v[i,0]

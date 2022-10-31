@@ -46,9 +46,9 @@ def tearDownModule():
 class KnowValues(unittest.TestCase):
     def test_label_orb_symm(self):
         l = addons.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, mf.mo_coeff)
-        lab0 = ['A1', 'A1', 'B1', 'A1', 'B2', 'A1', 'B1', 'B1',
-                'A1', 'A1', 'B2', 'B1', 'A1', 'A2', 'B2', 'A1',
-                'B1', 'B1', 'A1', 'B2', 'A2', 'A1', 'A1', 'B1']
+        lab0 = ['A1', 'A1', 'B2', 'A1', 'B1', 'A1', 'B2', 'B2',
+                'A1', 'A1', 'B1', 'B2', 'A1', 'A2', 'B1', 'A1',
+                'B2', 'B2', 'A1', 'B1', 'A2', 'A1', 'A1', 'B2']
         self.assertEqual(list(l), lab0)
 
     def test_symmetrize_orb(self):

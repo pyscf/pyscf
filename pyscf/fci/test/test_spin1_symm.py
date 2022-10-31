@@ -62,11 +62,11 @@ class KnownValues(unittest.TestCase):
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=1)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=1)
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.295069645213317, 9)
-        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
-        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
-        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.256692620435118, 9)
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=3)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=3)
+        self.assertAlmostEqual(numpy.linalg.norm(ci1), 82.256692620435118, 9)
+        ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=2)
+        ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=2)
         self.assertAlmostEqual(numpy.linalg.norm(ci1), 81.343382883053323, 9)
 
     def test_kernel(self):
@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
 
     def test_guess_wfnsym(self):
         self.assertEqual(cis.guess_wfnsym(norb, nelec), 0)
-        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 2)
+        self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0), 3)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym=0), 0)
         self.assertEqual(cis.guess_wfnsym(norb, nelec, ci0, wfnsym='B2'), 3)
         self.assertRaises(RuntimeError, cis.guess_wfnsym, norb, nelec, numpy.zeros_like(ci0), wfnsym=1)

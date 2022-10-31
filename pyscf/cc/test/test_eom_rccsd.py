@@ -104,140 +104,140 @@ class KnownValues(unittest.TestCase):
         eom = mycc.eomip_method()
         e,v = eom.kernel(nroots=1, left=False, koopmans=False)
         e = eom.eip
-        self.assertAlmostEqual(e, 0.4335604332073799, 6)
+        self.assertAlmostEqual(e, 0.4335604332073799, 5)
 
         e,v = mycc.ipccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         myeom = eom_rccsd.EOMIP(mycc)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
         e = myeom.ipccsd_star_contract(e, v, lv)
-        self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
-        self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
-        self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
+        self.assertAlmostEqual(e[0], 0.43793202122290747, 5)
+        self.assertAlmostEqual(e[1], 0.52287073076243218, 5)
+        self.assertAlmostEqual(e[2], 0.67994597799835099, 5)
 
     def test_ipccsd_koopmans(self):
         e,v = mycc.ipccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         e,v = mycc.ipccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
     def test_ipccsd_partition(self):
         e,v = mycc.ipccsd(nroots=3, partition='mp')
-        self.assertAlmostEqual(e[0], 0.42728862799879663, 6)
-        self.assertAlmostEqual(e[1], 0.51359478811505332, 6)
-        self.assertAlmostEqual(e[2], 0.67382901297144682, 6)
+        self.assertAlmostEqual(e[0], 0.42728862799879663, 5)
+        self.assertAlmostEqual(e[1], 0.51359478811505332, 5)
+        self.assertAlmostEqual(e[2], 0.67382901297144682, 5)
 
         e,v = mycc.ipccsd(nroots=3, partition='full')
-        self.assertAlmostEqual(e[0], 0.42291981842588938, 6)
-        self.assertAlmostEqual(e[1], 0.50992428154417802, 6)
-        self.assertAlmostEqual(e[2], 0.67006510349161119, 6)
+        self.assertAlmostEqual(e[0], 0.42291981842588938, 5)
+        self.assertAlmostEqual(e[1], 0.50992428154417802, 5)
+        self.assertAlmostEqual(e[2], 0.67006510349161119, 5)
 
         e,v = mycc.ipccsd(nroots=3, partition='mp', left=True)
-        self.assertAlmostEqual(e[0], 0.42728862799879663, 6)
-        self.assertAlmostEqual(e[1], 0.51359478811505332, 6)
-        self.assertAlmostEqual(e[2], 0.67382901297144682, 6)
+        self.assertAlmostEqual(e[0], 0.42728862799879663, 5)
+        self.assertAlmostEqual(e[1], 0.51359478811505332, 5)
+        self.assertAlmostEqual(e[2], 0.67382901297144682, 5)
 
         e,v = mycc.ipccsd(nroots=3, partition='full', left=True)
-        self.assertAlmostEqual(e[0], 0.42291981842588938, 6)
-        self.assertAlmostEqual(e[1], 0.50992428154417802, 6)
-        self.assertAlmostEqual(e[2], 0.67006510349161119, 6)
+        self.assertAlmostEqual(e[0], 0.42291981842588938, 5)
+        self.assertAlmostEqual(e[1], 0.50992428154417802, 5)
+        self.assertAlmostEqual(e[2], 0.67006510349161119, 5)
 
 
     def test_eaccsd(self):
         eom = mycc.eomea_method()
         e,v = eom.kernel(nroots=1, left=False, koopmans=False)
         e = eom.eea
-        self.assertAlmostEqual(e, 0.16737886338859731, 6)
+        self.assertAlmostEqual(e, 0.16737886338859731, 5)
 
         e,v = mycc.eaccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.51006797826488071, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.51006797826488071, 5)
 
         myeom = eom_rccsd.EOMEA(mycc)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
         e = myeom.eaccsd_star_contract(e, v, lv)
-        self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
-        self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
-        self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
+        self.assertAlmostEqual(e[0], 0.16656250872624662, 5)
+        self.assertAlmostEqual(e[1], 0.2394414445283693 , 5)
+        self.assertAlmostEqual(e[2], 0.41399434356202935, 5)
 
     def test_eaccsd_koopmans(self):
         e,v = mycc.eaccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 
         e,v = mycc.eaccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 
     def test_eaccsd_partition(self):
         e,v = mycc.eaccsd(nroots=3, partition='mp')
-        self.assertAlmostEqual(e[0], 0.16947311575051136, 6)
-        self.assertAlmostEqual(e[1], 0.24234326468848749, 6)
-        self.assertAlmostEqual(e[2], 0.7434661346653969 , 6)
+        self.assertAlmostEqual(e[0], 0.16947311575051136, 5)
+        self.assertAlmostEqual(e[1], 0.24234326468848749, 5)
+        self.assertAlmostEqual(e[2], 0.7434661346653969 , 5)
 
         e,v = mycc.eaccsd(nroots=3, partition='full')
-        self.assertAlmostEqual(e[0], 0.16418276148493574, 6)
-        self.assertAlmostEqual(e[1], 0.23683978491376495, 6)
-        self.assertAlmostEqual(e[2], 0.55640091560545624, 6)
+        self.assertAlmostEqual(e[0], 0.16418276148493574, 5)
+        self.assertAlmostEqual(e[1], 0.23683978491376495, 5)
+        self.assertAlmostEqual(e[2], 0.55640091560545624, 5)
 
         e,v = mycc.eaccsd(nroots=3, partition='mp', left=True)
-        self.assertAlmostEqual(e[0], 0.16947311575051136, 6)
-        self.assertAlmostEqual(e[1], 0.24234326468848749, 6)
-        self.assertAlmostEqual(e[2], 0.7434661346653969 , 6)
+        self.assertAlmostEqual(e[0], 0.16947311575051136, 5)
+        self.assertAlmostEqual(e[1], 0.24234326468848749, 5)
+        self.assertAlmostEqual(e[2], 0.7434661346653969 , 5)
 
         e,v = mycc.eaccsd(nroots=3, partition='full', left=True)
-        self.assertAlmostEqual(e[0], 0.16418276148493574, 6)
-        self.assertAlmostEqual(e[1], 0.23683978491376495, 6)
-        self.assertAlmostEqual(e[2], 0.55640091560545624, 6)
+        self.assertAlmostEqual(e[0], 0.16418276148493574, 5)
+        self.assertAlmostEqual(e[1], 0.23683978491376495, 5)
+        self.assertAlmostEqual(e[2], 0.55640091560545624, 5)
 
 
     def test_eeccsd(self):
         eom = mycc.eomee_method()
         e,v = eom.kernel(nroots=1, koopmans=False)
         e = eom.eee
-        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+        self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
         e,v = mycc.eeccsd(nroots=4)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eeccsd_koopmans(self):
         e,v = mycc.eeccsd(nroots=4, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
         e,v = mycc.eeccsd(nroots=4, guess=v[:4])
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eomee_ccsd_singlet(self):
         e, v = mycc.eomee_ccsd_singlet(nroots=1)
-        self.assertAlmostEqual(e, 0.3005716731825082, 6)
+        self.assertAlmostEqual(e, 0.3005716731825082, 5)
 
     def test_eomee_ccsd_triplet(self):
         e, v = mycc.eomee_ccsd_triplet(nroots=1)
-        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+        self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
     def test_eomsf_ccsd(self):
         e, v = mycc.eomsf_ccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+        self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
     def test_vector_to_amplitudes(self):
         t1, t2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(mycc1.t1, mycc1.t2))
@@ -277,11 +277,21 @@ class KnownValues(unittest.TestCase):
         r2 = r2 + r2.transpose(1,0,3,2)
         myeom = eom_rccsd.EOMEESinglet(mycc1)
         vec = myeom.amplitudes_to_vector(r1,r2)
-        imds = myeom.make_imds(eris1)
-        vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1), -112883.3791497977, 8)
-        self.assertAlmostEqual(lib.finger(r2), -268199.3475813322, 8)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(lib.fp(v1), -145152.78511963107, 7)
+        self.assertAlmostEqual(lib.fp(v2), -268196.0471308574, 7)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEE()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 8)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 8)
 
     def test_eomee_ccsd_matvec_triplet(self):
         numpy.random.seed(10)
@@ -294,10 +304,24 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1, r2)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), 3550.5250670914056, 9)
-        self.assertAlmostEqual(lib.finger(r2[0]), -237433.03756895234,8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 127680.0182437716 , 8)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(lib.fp(v1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(v2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(v2[1]), 127682.76151592708, 7)
+
+        gcc1 = cc.addons.convert_to_uccsd(mycc1)
+        gee1 = gcc1.EOMEESpinKeep()
+        gr1 = (r1*.5**.5, -r1*.5**.5)
+        raa = r2[0]*.5**.5
+        rx = r2[1]*.5**.5
+        gr2 = (raa, rx, -raa)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1[0]*2**.5- v1).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2[0]*2**.5- v2[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2[1]*2**.5- v2[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(-gr2[2]*2**.5- v2[0]).max(), 0, 9)
 
     def test_eomsf_ccsd_matvec(self):
         numpy.random.seed(10)
@@ -307,38 +331,70 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1,r2)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), -19368.729268465482, 8)
-        self.assertAlmostEqual(lib.finger(r2[0]), 84325.863680611626 , 8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 6715.9574457836134 , 8)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+
+        self.assertAlmostEqual(lib.fp(v1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(v2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(v2[1]), 6719.930458652292 , 7)
+
+        numpy.random.seed(10)
+        vec = numpy.random.random(myeom.vector_size()) - .9
+        r1, r2 = myeom.vector_to_amplitudes(vec)
+        vec1 = myeom.matvec(vec, imds)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEE()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
 
     def test_eomee_diag(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc1).get_diag()
-        self.assertAlmostEqual(lib.finger(vec1S),-4714.9854130015719, 9)
-        self.assertAlmostEqual(lib.finger(vec1T), 2221.3155272953709, 9)
-        self.assertAlmostEqual(lib.finger(vec2) ,-5486.1611871545592, 9)
+        self.assertAlmostEqual(lib.fp(vec1S), -4714.969920334639, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2221.322839866705, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -5486.124838268124, 8)
 
     def test_ip_matvec(self):
         numpy.random.seed(12)
         r1 = numpy.random.random((no)) - .9
         r2 = numpy.random.random((no,no,nv)) - .9
-        myeom = eom_rccsd.EOMIP(mycc1)
+        myeom = mycc1.EOMIP()
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMIP()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
+
         myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
-        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
+        self.assertAlmostEqual(lib.fp(r1), 0.37404344676857076, 11)
+        self.assertAlmostEqual(lib.fp(r2), -1.1568913404570922, 11)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -14894.669606811192, 8)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 1182.3095479451745, 8)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris1)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -3795.9122245246967, 8)
+        self.assertAlmostEqual(lib.fp(diag), 1106.260154202434, 8)
 
     def test_ea_matvec(self):
         numpy.random.seed(12)
@@ -347,20 +403,34 @@ class KnownValues(unittest.TestCase):
         myeom = eom_rccsd.EOMEA(mycc1)
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
+
+        gcc1 = cc.addons.convert_to_gccsd(mycc1)
+        gee1 = gcc1.EOMEA()
+        orbspin = gcc1._scf.mo_coeff.orbspin
+        gr1 = myeom.spatial2spin(r1, orbspin)
+        gr2 = myeom.spatial2spin(r2, orbspin)
+        gvec = gee1.amplitudes_to_vector(gr1, gr2)
+        vecref = gee1.matvec(gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        vec1 = myeom.matvec(vec)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(abs(gr1-myeom.spatial2spin(v1, orbspin)).max(), 0, 9)
+        self.assertAlmostEqual(abs(gr2-myeom.spatial2spin(v2, orbspin)).max(), 0, 9)
+
         myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
-        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
+        self.assertAlmostEqual(lib.fp(r1), 1.4488291275539353, 11)
+        self.assertAlmostEqual(lib.fp(r2), 0.97080165032287469, 11)
         imds = myeom.make_imds(eris1)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -34426.363943760276, 8)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 2724.8239646679217, 8)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris1)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -17030.363405297598, 8)
+        self.assertAlmostEqual(lib.fp(diag), 4688.9122122011922, 8)
 
 
 ########################################
@@ -376,8 +446,8 @@ class KnownValues(unittest.TestCase):
         eris1
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), 25176.428829164193-4955.5351324520125j, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1106.2601542024306, 9)
+        self.assertAlmostEqual(lib.fp(vec1), 25176.428829164193-4955.5351324520125j, 7)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 1106.2601542024306, 8)
 
     def test_ea_matvec1(self):
         numpy.random.seed(12)
@@ -389,112 +459,112 @@ class KnownValues(unittest.TestCase):
         r1,r2 = myeom.vector_to_amplitudes(vec)
         imds = myeom.make_imds(erisi)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -105083.60825558871+25155.909195554908j, 8)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 4688.9122122011895, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -105083.60825558871+25155.909195554908j, 6)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 4688.9122122011895, 8)
 
 
 ########################################
 # With 4-fold symmetry in integrals
     def test_ipccsd2(self):
         e,v = mycc2.ipccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.4335604332073799, 6)
+        self.assertAlmostEqual(e, 0.4335604332073799, 5)
 
         e,v = mycc2.ipccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         myeom = eom_rccsd.EOMIP(mycc2)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
         e = myeom.ipccsd_star_contract(e, v, lv)
-        self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
-        self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
-        self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
+        self.assertAlmostEqual(e[0], 0.43793202122290747, 5)
+        self.assertAlmostEqual(e[1], 0.52287073076243218, 5)
+        self.assertAlmostEqual(e[2], 0.67994597799835099, 5)
 
     def test_ipccsd_koopmans2(self):
         e,v = mycc2.ipccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         e,v = mycc2.ipccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
     def test_ipccsd_partition2(self):
         e,v = mycc2.ipccsd(nroots=3, partition='mp')
-        self.assertAlmostEqual(e[0], 0.42728862799879663, 6)
-        self.assertAlmostEqual(e[1], 0.51359478811505332, 6)
-        self.assertAlmostEqual(e[2], 0.67382901297144682, 6)
+        self.assertAlmostEqual(e[0], 0.42728862799879663, 5)
+        self.assertAlmostEqual(e[1], 0.51359478811505332, 5)
+        self.assertAlmostEqual(e[2], 0.67382901297144682, 5)
 
         e,v = mycc2.ipccsd(nroots=3, partition='full')
-        self.assertAlmostEqual(e[0], 0.42291981842588938, 6)
-        self.assertAlmostEqual(e[1], 0.50992428154417802, 6)
-        self.assertAlmostEqual(e[2], 0.67006510349161119, 6)
+        self.assertAlmostEqual(e[0], 0.42291981842588938, 5)
+        self.assertAlmostEqual(e[1], 0.50992428154417802, 5)
+        self.assertAlmostEqual(e[2], 0.67006510349161119, 5)
 
 
     def test_eaccsd2(self):
         e,v = mycc2.eaccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.16737886338859731, 6)
+        self.assertAlmostEqual(e, 0.16737886338859731, 5)
 
         e,v = mycc2.eaccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.51006797826488071, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.51006797826488071, 5)
 
         myeom = eom_rccsd.EOMEA(mycc2)
         lv = myeom.eaccsd(nroots=3, left=True)[1]
         e = myeom.eaccsd_star_contract(e, v, lv)
-        self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
-        self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
-        self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
+        self.assertAlmostEqual(e[0], 0.16656250872624662, 5)
+        self.assertAlmostEqual(e[1], 0.2394414445283693, 5)
+        self.assertAlmostEqual(e[2], 0.41399434356202935, 5)
 
     def test_eaccsd_koopmans2(self):
         e,v = mycc2.eaccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 
         e,v = mycc2.eaccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 
     def test_eaccsd_partition2(self):
         e,v = mycc2.eaccsd(nroots=3, partition='mp')
-        self.assertAlmostEqual(e[0], 0.16947311575051136, 6)
-        self.assertAlmostEqual(e[1], 0.24234326468848749, 6)
-        self.assertAlmostEqual(e[2], 0.7434661346653969 , 6)
+        self.assertAlmostEqual(e[0], 0.16947311575051136, 5)
+        self.assertAlmostEqual(e[1], 0.24234326468848749, 5)
+        self.assertAlmostEqual(e[2], 0.7434661346653969 , 5)
 
         e,v = mycc2.eaccsd(nroots=3, partition='full')
-        self.assertAlmostEqual(e[0], 0.16418276148493574, 6)
-        self.assertAlmostEqual(e[1], 0.23683978491376495, 6)
-        self.assertAlmostEqual(e[2], 0.55640091560545624, 6)
+        self.assertAlmostEqual(e[0], 0.16418276148493574, 5)
+        self.assertAlmostEqual(e[1], 0.23683978491376495, 5)
+        self.assertAlmostEqual(e[2], 0.55640091560545624, 5)
 
 
     def test_eeccsd2(self):
         e,v = mycc2.eeccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+        self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
         e,v = mycc2.eeccsd(nroots=4)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eeccsd_koopmans2(self):
         e,v = mycc2.eeccsd(nroots=4, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
         e,v = mycc2.eeccsd(nroots=4, guess=v[:4])
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eomee_ccsd_matvec_singlet2(self):
         numpy.random.seed(10)
@@ -506,8 +576,8 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1), -112883.3791497977, 8)
-        self.assertAlmostEqual(lib.finger(r2), -268199.3475813322, 8)
+        self.assertAlmostEqual(lib.fp(r1), -145152.7851196310, 7)
+        self.assertAlmostEqual(lib.fp(r2), -268196.0471308578, 7)
 
     def test_eomee_ccsd_matvec_triplet2(self):
         numpy.random.seed(10)
@@ -521,9 +591,9 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), 3550.5250670914056, 9)
-        self.assertAlmostEqual(lib.finger(r2[0]), -237433.03756895234,8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 127680.0182437716 , 8)
+        self.assertAlmostEqual(lib.fp(r1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 127682.76151592708, 7)
 
     def test_eomsf_ccsd_matvec2(self):
         numpy.random.seed(10)
@@ -534,15 +604,15 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), -19368.729268465482, 8)
-        self.assertAlmostEqual(lib.finger(r2[0]), 84325.863680611626 , 8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 6715.9574457836134 , 8)
+        self.assertAlmostEqual(lib.fp(r1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(r2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 6719.930458652292 , 7)
 
     def test_eomee_diag2(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc21).get_diag()
-        self.assertAlmostEqual(lib.finger(vec1S),-4714.9854130015719, 9)
-        self.assertAlmostEqual(lib.finger(vec1T), 2221.3155272953709, 9)
-        self.assertAlmostEqual(lib.finger(vec2) ,-5486.1611871545592, 9)
+        self.assertAlmostEqual(lib.fp(vec1S), -4714.969920334639, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2221.322839866705, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -5486.124838268124, 8)
 
 
     def test_ip_matvec2(self):
@@ -553,19 +623,19 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
         myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
-        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
+        self.assertAlmostEqual(lib.fp(r1), 0.37404344676857076, 11)
+        self.assertAlmostEqual(lib.fp(r2), -1.1568913404570922, 11)
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -14894.669606811192, 8)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 1182.3095479451745, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris21)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -3795.9122245246967, 8)
+        self.assertAlmostEqual(lib.fp(diag), 1106.260154202434, 9)
 
     def test_ea_matvec2(self):
         numpy.random.seed(12)
@@ -575,19 +645,19 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
         myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
-        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
+        self.assertAlmostEqual(lib.fp(r1), 1.4488291275539353, 11)
+        self.assertAlmostEqual(lib.fp(r2), 0.97080165032287469, 11)
         imds = myeom.make_imds(eris21)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -34426.363943760276, 8)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 2724.8239646679217, 8)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris21)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
-        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -17030.363405297598, 8)
+        self.assertAlmostEqual(lib.fp(diag), 4688.9122122011922, 8)
 
 
 ########################################
@@ -596,104 +666,104 @@ class KnownValues(unittest.TestCase):
 # direct = True
     def test_ipccsd3(self):
         e,v = mycc3.ipccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.4335604332073799, 6)
+        self.assertAlmostEqual(e, 0.4335604332073799, 5)
 
         e,v = mycc3.ipccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         myeom = eom_rccsd.EOMIP(mycc3)
         lv = myeom.ipccsd(nroots=3, left=True)[1]
         e = myeom.ipccsd_star_contract(e, v, lv)
-        self.assertAlmostEqual(e[0], 0.43793202122290747, 6)
-        self.assertAlmostEqual(e[1], 0.52287073076243218, 6)
-        self.assertAlmostEqual(e[2], 0.67994597799835099, 6)
+        self.assertAlmostEqual(e[0], 0.43793202122290747, 5)
+        self.assertAlmostEqual(e[1], 0.52287073076243218, 5)
+        self.assertAlmostEqual(e[2], 0.67994597799835099, 5)
 
     def test_ipccsd_koopmans3(self):
         e,v = mycc3.ipccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
         e,v = mycc3.ipccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.4335604332073799, 6)
-        self.assertAlmostEqual(e[1], 0.5187659896045407, 6)
-        self.assertAlmostEqual(e[2], 0.6782876002229172, 6)
+        self.assertAlmostEqual(e[0], 0.4335604332073799, 5)
+        self.assertAlmostEqual(e[1], 0.5187659896045407, 5)
+        self.assertAlmostEqual(e[2], 0.6782876002229172, 5)
 
     def test_ipccsd_partition3(self):
         e,v = mycc3.ipccsd(nroots=3, partition='mp')
-        self.assertAlmostEqual(e[0], 0.42728862799879663, 6)
-        self.assertAlmostEqual(e[1], 0.51359478811505332, 6)
-        self.assertAlmostEqual(e[2], 0.67382901297144682, 6)
+        self.assertAlmostEqual(e[0], 0.42728862799879663, 5)
+        self.assertAlmostEqual(e[1], 0.51359478811505332, 5)
+        self.assertAlmostEqual(e[2], 0.67382901297144682, 5)
 
         e,v = mycc3.ipccsd(nroots=3, partition='full')
-        self.assertAlmostEqual(e[0], 0.42291981842588938, 6)
-        self.assertAlmostEqual(e[1], 0.50992428154417802, 6)
-        self.assertAlmostEqual(e[2], 0.67006510349161119, 6)
+        self.assertAlmostEqual(e[0], 0.42291981842588938, 5)
+        self.assertAlmostEqual(e[1], 0.50992428154417802, 5)
+        self.assertAlmostEqual(e[2], 0.67006510349161119, 5)
 
 
 #    def test_eaccsd3(self):
 #        e,v = mycc3.eaccsd(nroots=1)
-#        self.assertAlmostEqual(e, 0.16737886338859731, 6)
+#        self.assertAlmostEqual(e, 0.16737886338859731, 5)
 #
 #        e,v = mycc3.eaccsd(nroots=3)
-#        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-#        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-#        self.assertAlmostEqual(e[2], 0.51006797826488071, 6)
+#        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+#        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+#        self.assertAlmostEqual(e[2], 0.51006797826488071, 5)
 #
 #        myeom = eom_rccsd.EOMEA(mycc3)
 #        lv = myeom.eaccsd(nroots=3, left=True)[1]
 #        e = myeom.eaccsd_star_contract(e, v, lv)
-#        self.assertAlmostEqual(e[0], 0.16656250872624662, 6)
-#        self.assertAlmostEqual(e[1], 0.2394414445283693, 6)
-#        self.assertAlmostEqual(e[2], 0.41399434356202935, 6)
+#        self.assertAlmostEqual(e[0], 0.16656250872624662, 5)
+#        self.assertAlmostEqual(e[1], 0.2394414445283693, 5)
+#        self.assertAlmostEqual(e[2], 0.41399434356202935, 5)
 #
 #    def test_eaccsd_koopmans3(self):
 #        e,v = mycc3.eaccsd(nroots=3, koopmans=True)
-#        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-#        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-#        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+#        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+#        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+#        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 #
 #        e,v = mycc3.eaccsd(nroots=3, guess=v[:3])
-#        self.assertAlmostEqual(e[0], 0.16737886338859731, 6)
-#        self.assertAlmostEqual(e[1], 0.24027613852009164, 6)
-#        self.assertAlmostEqual(e[2], 0.73443352557582653, 6)
+#        self.assertAlmostEqual(e[0], 0.16737886338859731, 5)
+#        self.assertAlmostEqual(e[1], 0.24027613852009164, 5)
+#        self.assertAlmostEqual(e[2], 0.73443352557582653, 5)
 #
 #    def test_eaccsd_partition3(self):
 #        e,v = mycc3.eaccsd(nroots=3, partition='mp')
-#        self.assertAlmostEqual(e[0], 0.16947311575051136, 6)
-#        self.assertAlmostEqual(e[1], 0.24234326468848749, 6)
-#        self.assertAlmostEqual(e[2], 0.7434661346653969 , 6)
+#        self.assertAlmostEqual(e[0], 0.16947311575051136, 5)
+#        self.assertAlmostEqual(e[1], 0.24234326468848749, 5)
+#        self.assertAlmostEqual(e[2], 0.7434661346653969 , 5)
 #
 #        e,v = mycc3.eaccsd(nroots=3, partition='full')
-#        self.assertAlmostEqual(e[0], 0.16418276148493574, 6)
-#        self.assertAlmostEqual(e[1], 0.23683978491376495, 6)
-#        self.assertAlmostEqual(e[2], 0.55640091560545624, 6)
+#        self.assertAlmostEqual(e[0], 0.16418276148493574, 5)
+#        self.assertAlmostEqual(e[1], 0.23683978491376495, 5)
+#        self.assertAlmostEqual(e[2], 0.55640091560545624, 5)
 
 
     def test_eeccsd3(self):
         e,v = mycc3.eeccsd(nroots=1)
-        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+        self.assertAlmostEqual(e, 0.2757159395886167, 5)
 
         e,v = mycc3.eeccsd(nroots=4)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eeccsd_koopmans3(self):
         e,v = mycc3.eeccsd(nroots=4, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
         e,v = mycc3.eeccsd(nroots=4, guess=v[:4])
-        self.assertAlmostEqual(e[0], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[1], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
-        self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
+        self.assertAlmostEqual(e[0], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[1], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[2], 0.2757159395886167, 5)
+        self.assertAlmostEqual(e[3], 0.3005716731825082, 5)
 
     def test_eomee_ccsd_matvec_singlet3(self):
         numpy.random.seed(10)
@@ -705,8 +775,8 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1), -112883.3791497977, 8)
-        self.assertAlmostEqual(lib.finger(r2), -268199.3475813322, 8)
+        self.assertAlmostEqual(lib.fp(r1), -145152.7851196310, 7)
+        self.assertAlmostEqual(lib.fp(r2), -268196.0471308578, 7)
 
     def test_eomee_ccsd_matvec_triplet3(self):
         numpy.random.seed(10)
@@ -720,9 +790,9 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), 3550.5250670914056, 9)
-        self.assertAlmostEqual(lib.finger(r2[0]), -237433.03756895234,8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 127680.0182437716 , 8)
+        self.assertAlmostEqual(lib.fp(r1   ), -5616.12199728998, 8)
+        self.assertAlmostEqual(lib.fp(r2[0]), -237430.14342594685,7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 127682.76151592708, 7)
 
     def test_eomsf_ccsd_matvec3(self):
         numpy.random.seed(10)
@@ -733,15 +803,15 @@ class KnownValues(unittest.TestCase):
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
         r1, r2 = myeom.vector_to_amplitudes(vec1)
-        self.assertAlmostEqual(lib.finger(r1   ), -19368.729268465482, 8)
-        self.assertAlmostEqual(lib.finger(r2[0]), 84325.863680611626 , 8)
-        self.assertAlmostEqual(lib.finger(r2[1]), 6715.9574457836134 , 8)
+        self.assertAlmostEqual(lib.fp(r1   ), -6213.095578988824, 7)
+        self.assertAlmostEqual(lib.fp(r2[0]), 84329.40539995288 , 7)
+        self.assertAlmostEqual(lib.fp(r2[1]), 6719.930458652292 , 7)
 
     def test_eomee_diag3(self):
         vec1S, vec1T, vec2 = eom_rccsd.EOMEE(mycc31).get_diag()
-        self.assertAlmostEqual(lib.finger(vec1S),-2881.6804563818432, 9)
-        self.assertAlmostEqual(lib.finger(vec1T), 2039.7385969969259, 9)
-        self.assertAlmostEqual(lib.finger(vec2) ,-4271.6230465236358, 9)
+        self.assertAlmostEqual(lib.fp(vec1S), -2881.664963714903, 8)
+        self.assertAlmostEqual(lib.fp(vec1T),  2039.745909568253, 8)
+        self.assertAlmostEqual(lib.fp(vec2) , -4271.586697637197, 8)
 
 
     def test_ip_matvec3(self):
@@ -752,19 +822,19 @@ class KnownValues(unittest.TestCase):
         vec = myeom.amplitudes_to_vector(r1,r2)
         r1,r2 = myeom.vector_to_amplitudes(vec)
         myeom.partition = 'mp'
-        self.assertAlmostEqual(lib.finger(r1), 0.37404344676857076, 12)
-        self.assertAlmostEqual(lib.finger(r2), -1.1568913404570922, 12)
+        self.assertAlmostEqual(lib.fp(r1), 0.37404344676857076, 11)
+        self.assertAlmostEqual(lib.fp(r2), -1.1568913404570922, 11)
         imds = myeom.make_imds(eris31)
         vec1 = myeom.matvec(vec, imds)
-        self.assertAlmostEqual(lib.finger(vec1), -14894.669606811192, 9)
-        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 1182.3095479451745, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -14894.669606811192, 8)
+        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 1182.3095479451745, 9)
 
         myeom.partition = 'full'
         imds = myeom.make_imds(eris31)
         diag = myeom.get_diag(imds)
         vec1 = myeom.matvec(vec, imds, diag=diag)
-        self.assertAlmostEqual(lib.finger(vec1), -3795.9122245246967, 9)
-        self.assertAlmostEqual(lib.finger(diag), 1106.260154202434, 9)
+        self.assertAlmostEqual(lib.fp(vec1), -3795.9122245246967, 9)
+        self.assertAlmostEqual(lib.fp(diag), 1106.260154202434, 9)
 
     def test_sort_left_right_eigensystem(self):
         myeom = eom_rccsd.EOMIP(mycc)
@@ -805,19 +875,19 @@ class KnownValues(unittest.TestCase):
 #        vec = myeom.amplitudes_to_vector(r1,r2)
 #        r1,r2 = myeom.vector_to_amplitudes(vec)
 #        myeom.partition = 'mp'
-#        self.assertAlmostEqual(lib.finger(r1), 1.4488291275539353, 12)
-#        self.assertAlmostEqual(lib.finger(r2), 0.97080165032287469, 12)
+#        self.assertAlmostEqual(lib.fp(r1), 1.4488291275539353, 12)
+#        self.assertAlmostEqual(lib.fp(r2), 0.97080165032287469, 12)
 #        imds = myeom.make_imds(eris31)
 #        vec1 = myeom.matvec(vec, imds)
-#        self.assertAlmostEqual(lib.finger(vec1), -34426.363943760276, 9)
-#        self.assertAlmostEqual(lib.finger(myeom.get_diag()), 2724.8239646679217, 9)
+#        self.assertAlmostEqual(lib.fp(vec1), -34426.363943760276, 9)
+#        self.assertAlmostEqual(lib.fp(myeom.get_diag()), 2724.8239646679217, 9)
 #
 #        myeom.partition = 'full'
 #        imds = myeom.make_imds(eris31)
 #        diag = myeom.get_diag(imds)
 #        vec1 = myeom.matvec(vec, imds, diag=diag)
-#        self.assertAlmostEqual(lib.finger(vec1), -17030.363405297598, 9)
-#        self.assertAlmostEqual(lib.finger(diag), 4688.9122122011922, 9)
+#        self.assertAlmostEqual(lib.fp(vec1), -17030.363405297598, 9)
+#        self.assertAlmostEqual(lib.fp(diag), 4688.9122122011922, 9)
 
     def test_t3p2_intermediates_complex(self):
         '''Although this has not been tested strictly for complex values, it
@@ -827,22 +897,22 @@ class KnownValues(unittest.TestCase):
         myt2 = mycc1.t2 + 1j * numpy.sin(mycc1.t2) * mycc1.t2
         myt2 = myt2 + myt2.transpose(1,0,3,2)
         e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2, eris=erisi)
-        self.assertAlmostEqual(lib.finger(e), 23223.465490572264, 6)
-        self.assertAlmostEqual(lib.finger(pt1), (-5.2202836452466705-0.09570164571057749j), 6)
-        self.assertAlmostEqual(lib.finger(pt2), (46.188012063609506-1.303867687778909j), 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), (-18.438930654297778+1.5734161307568773j), 6)
-        self.assertAlmostEqual(lib.finger(Wacek), (-7.187576764072701+0.7399185332889747j), 6)
+        self.assertAlmostEqual(lib.fp(e), 23223.465490572264, 5)
+        self.assertAlmostEqual(lib.fp(pt1), (-5.2202836452466705-0.09570164571057749j), 5)
+        self.assertAlmostEqual(lib.fp(pt2), (46.188012063609506-1.303867687778909j), 5)
+        self.assertAlmostEqual(lib.fp(Wmcik), (-18.438930654297778+1.5734161307568773j), 5)
+        self.assertAlmostEqual(lib.fp(Wacek), (-7.187576764072701+0.7399185332889747j), 5)
 
     def test_t3p2_intermediates_real(self):
         myt1 = mycc1.t1.copy()
         myt2 = mycc1.t2.copy()
         myt2 = myt2 + myt2.transpose(1,0,3,2)
         e, pt1, pt2, Wmcik, Wacek = rintermediates.get_t3p2_imds_slow(mycc1, myt1, myt2)
-        self.assertAlmostEqual(lib.finger(e), 23230.479350851536, 6)
-        self.assertAlmostEqual(lib.finger(pt1), -5.218888542335442, 6)
-        self.assertAlmostEqual(lib.finger(pt2), 46.19512409958347, 6)
-        self.assertAlmostEqual(lib.finger(Wmcik), -18.47928005593598, 6)
-        self.assertAlmostEqual(lib.finger(Wacek), -7.101360230151883, 6)
+        self.assertAlmostEqual(lib.fp(e), 23230.479350851536, 5)
+        self.assertAlmostEqual(lib.fp(pt1), -5.218888542335442, 5)
+        self.assertAlmostEqual(lib.fp(pt2), 46.19512409958347, 5)
+        self.assertAlmostEqual(lib.fp(Wmcik), -18.47928005593598, 5)
+        self.assertAlmostEqual(lib.fp(Wacek), -7.101360230151883, 5)
 
     def test_t3p2_intermediates_against_so(self):
         from pyscf.cc.addons import convert_to_gccsd
@@ -854,10 +924,10 @@ class KnownValues(unittest.TestCase):
         mygt1 = mygcc.t1.copy()
         mygt2 = mygcc.t2.copy()
         ge, gpt1, gpt2, gWmcik, gWacek = gintermediates.get_t3p2_imds_slow(mygcc, mygt1, mygt2)
-        self.assertAlmostEqual(lib.finger(pt1), -2.6094405706617727, 6)
-        self.assertAlmostEqual(lib.finger(pt2), 23.097562049844235, 6)
-        self.assertAlmostEqual(lib.finger(pt1), lib.finger(gpt1[::2,::2]), 6)
-        self.assertAlmostEqual(lib.finger(pt2), lib.finger(gpt2[::2,1::2,::2,1::2]), 6)
+        self.assertAlmostEqual(lib.fp(pt1), -2.6094405706617727, 5)
+        self.assertAlmostEqual(lib.fp(pt2), 23.097562049844235, 5)
+        self.assertAlmostEqual(lib.fp(pt1), lib.fp(gpt1[::2,::2]), 5)
+        self.assertAlmostEqual(lib.fp(pt2), lib.fp(gpt2[::2,1::2,::2,1::2]), 5)
 
     def test_h2o_star(self):
         mol_h2o = gto.Mole()
@@ -885,19 +955,19 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_rccsd.EOMIP(mycc_h2o)
         e = myeom.ipccsd_star(nroots=3)
-        self.assertAlmostEqual(e[0], 0.410661965883, 6)
+        self.assertAlmostEqual(e[0], 0.410661965883, 5)
 
         myeom = eom_rccsd.EOMIP_Ta(mycc_h2o)
         e = myeom.ipccsd_star(nroots=3)
-        self.assertAlmostEqual(e[0], 0.411695647736, 6)
+        self.assertAlmostEqual(e[0], 0.411695647736, 5)
 
         myeom = eom_rccsd.EOMEA(mycc_h2o)
         e = myeom.eaccsd_star(nroots=3)
-        self.assertAlmostEqual(e[0], 0.250589854185, 6)
+        self.assertAlmostEqual(e[0], 0.250589854185, 5)
 
         myeom = eom_rccsd.EOMEA_Ta(mycc_h2o)
         e = myeom.eaccsd_star(nroots=3)
-        self.assertAlmostEqual(e[0], 0.250720295150, 6)
+        self.assertAlmostEqual(e[0], 0.250720295150, 5)
 
 if __name__ == "__main__":
     print("Tests for EOM RCCSD")

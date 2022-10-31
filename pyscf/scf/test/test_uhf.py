@@ -158,7 +158,7 @@ class KnownValues(unittest.TestCase):
             spin = -2,
         )
         mf = scf.UHF(mol).set(conv_tol=1e-10)
-        mf.irrep_nelec = {'B1': (1, 2), 'B2': (1, 0)}
+        mf.irrep_nelec = {'B2': (1, 2), 'B1': (1, 0)}
         mf.run()
         self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
         self.assertAlmostEqual(mf.e_tot, -75.224503772055755, 9)
@@ -194,7 +194,7 @@ class KnownValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.uhf_symm.UHF(pmol)
-        mf.irrep_nelec = {'B1':(2,1)}
+        mf.irrep_nelec = {'B2':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
     def test_n2_symm(self):

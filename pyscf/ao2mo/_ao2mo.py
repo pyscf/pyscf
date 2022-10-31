@@ -65,7 +65,7 @@ class AO2MOpt(object):
 # if out is not None, transform AO to MO in-place
 def nr_e1fill(intor, sh_range, atm, bas, env,
               aosym='s1', comp=1, ao2mopt=None, out=None):
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
+    assert (aosym in ('s4', 's2ij', 's2kl', 's1'))
     intor = ascint3(intor)
     c_atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     c_bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
@@ -106,11 +106,11 @@ def nr_e1fill(intor, sh_range, atm, bas, env,
     return out
 
 def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
-    assert(eri.flags.c_contiguous)
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1'))
-    assert(mosym in ('s2', 's1'))
+    assert (eri.flags.c_contiguous)
+    assert (aosym in ('s4', 's2ij', 's2kl', 's1'))
+    assert (mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
-    assert(mo_coeff.dtype == numpy.double)
+    assert (mo_coeff.dtype == numpy.double)
     nao = mo_coeff.shape[0]
     i0, i1, j0, j1 = orbs_slice
     icount = i1 - i0
@@ -120,7 +120,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
     if aosym in ('s4', 's2ij'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
-            assert(icount == jcount)
+            assert (icount == jcount)
             ij_count = icount * (icount+1) // 2
         elif icount <= jcount:
             fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
@@ -153,11 +153,11 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
 def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
            ao_loc=None):
-    assert(eri.flags.c_contiguous)
-    assert(aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
-    assert(mosym in ('s2', 's1'))
+    assert (eri.flags.c_contiguous)
+    assert (aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
+    assert (mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
-    assert(mo_coeff.dtype == numpy.double)
+    assert (mo_coeff.dtype == numpy.double)
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
@@ -167,7 +167,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     if aosym in ('s4', 's2', 's2kl'):
         if mosym == 's2':
             fmmm = _fpointer('AO2MOmmm_nr_s2_s2')
-            assert(kc == lc)
+            assert (kc == lc)
             kl_count = kc * (kc+1) // 2
         elif kc <= lc:
             fmmm = _fpointer('AO2MOmmm_nr_s2_iltj')
@@ -207,7 +207,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
 # if out is not None, transform AO to MO in-place
 def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
          tao, aosym='s1', comp=1, ao2mopt=None, out=None):
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
+    assert (aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     intor = ascint3(intor)
     mo_coeff = numpy.asfortranarray(mo_coeff)
@@ -263,8 +263,8 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
 # if out is not None, transform AO to MO in-place
 # ao_loc has nbas+1 elements, last element in ao_loc == nao
 def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
-    assert(eri.flags.c_contiguous)
-    assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
+    assert (eri.flags.c_contiguous)
+    assert (aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
     mo_coeff = numpy.asarray(mo_coeff, dtype=numpy.complex128, order='F')
     nao = mo_coeff.shape[0]

@@ -445,7 +445,7 @@ H     0    0.757    0.587'''
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.hf_symm.RHF(pmol)
-        mf.irrep_nelec = {'B1':4}
+        mf.irrep_nelec = {'B2':4}
         self.assertAlmostEqual(mf.scf(), -75.074736446470723, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.9779576643902912, 6)
@@ -468,7 +468,7 @@ H     0    0.757    0.587'''
         pmol.spin = 1
         pmol.build(False, False)
         mf = scf.hf_symm.ROHF(pmol)
-        mf.irrep_nelec = {'B1':(2,1)}
+        mf.irrep_nelec = {'B2':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.008317646307404, 9)
         (pop, chg), dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(pop), 3.7873920690764575, 6)

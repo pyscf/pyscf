@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 10)
+        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 8)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
         mf = mol1.GKS()
@@ -86,6 +86,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         mf.collinear = 'col'
         eks4 = mf.kernel()
+        #FIXME: Why does mo_energy have small difference to ncol_gks_lda?
         self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 5)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
@@ -205,7 +206,7 @@ class KnownValues(unittest.TestCase):
         v1 = numint2c._ncol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
         v1 = v1 + v1.conj().T
         ref = v0
-        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 13)
         self.assertAlmostEqual(lib.fp(v0), 0.19683067215390423, 12)
 
         ni.collinear = 'mcol'
@@ -217,7 +218,7 @@ class KnownValues(unittest.TestCase):
         v1 = numint2c._mcol_lda_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
         v1 = v1 + v1.conj().T
         self.assertAlmostEqual(abs(v0 - ref).max(), 0, 3)
-        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 13)
 
     def test_mcol_gga_vxc_mat(self):
         nao = mol.nao
@@ -239,7 +240,7 @@ class KnownValues(unittest.TestCase):
         v0 = numint2c._mcol_gga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
         v1 = numint2c._mcol_gga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
         v1 = v1 + v1.conj().T
-        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 13)
         self.assertAlmostEqual(lib.fp(v0), -0.889763561992794-0.013552640219244905j, 12)
 
     def test_mcol_mgga_vxc_mat(self):
@@ -262,7 +263,7 @@ class KnownValues(unittest.TestCase):
         v0 = numint2c._mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 0)
         v1 = numint2c._mcol_mgga_vxc_mat(mol, ao, weight, rho, vxc.copy(), mask, shls_slice, ao_loc, 1)
         v1 = v1 + v1.conj().T
-        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 14)
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 13)
         self.assertAlmostEqual(lib.fp(v0), 0.45641500123185696-0.11533144122332428j, 12)
 
 if __name__ == "__main__":

@@ -214,7 +214,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_mf=True):
     r'''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -226,9 +226,9 @@ def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
+    return _make_rdm1(mycc, d1, with_frozen=with_frozen, ao_repr=ao_repr, with_mf=with_mf)
 
-def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
+def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False, with_frozen=True, with_dm1=True):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -240,10 +240,10 @@ def make_rdm2(mycc, t1, t2, l1, l2, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
-    return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True,
+    return _make_rdm2(mycc, d1, d2, with_dm1=with_dm1, with_frozen=with_frozen,
                       ao_repr=ao_repr)
 
-def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
+def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False, with_mf=True):
     r'''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
@@ -258,13 +258,15 @@ def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     dm1[:nocc,nocc:] = dov + dvo.conj().T
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].conj().T
     dm1[nocc:,nocc:] = dvv + dvv.conj().T
-    dm1[numpy.diag_indices(nocc)] += 2
+    if with_mf:
+        dm1[numpy.diag_indices(nocc)] += 2
 
     if with_frozen and mycc.frozen is not None:
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
-        rdm1[numpy.diag_indices(nocc)] = 2
+        if with_mf:
+            rdm1[numpy.diag_indices(nocc)] = 2
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1

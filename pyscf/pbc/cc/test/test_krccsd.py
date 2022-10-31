@@ -50,6 +50,7 @@ def setUpModule():
     cell.unit = 'B'
     #cell.verbose = 7
     cell.output = '/dev/null'
+    cell.mesh = [15] * 3
     cell.build()
 
     rand_kmf = make_rand_kmf()
@@ -174,7 +175,7 @@ class KnownValues(unittest.TestCase):
         hf_311 = -0.92687629918229486
         cc_311 = -0.042702177586414237
         escf, ecc = run_kcell(cell,n,nk)
-        self.assertAlmostEqual(escf,hf_311, 9)
+        self.assertAlmostEqual(escf,hf_311, 8)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
     def test_single_kpt(self):
@@ -220,8 +221,8 @@ class KnownValues(unittest.TestCase):
         cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
-        self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 7)
+        self.assertAlmostEqual(ehf, ehf_bench, 8)
+        self.assertAlmostEqual(ecc, ecc_bench, 6)
 
     def test_ao2mo(self):
         kmf = make_rand_kmf()

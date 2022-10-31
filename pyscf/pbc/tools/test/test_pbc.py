@@ -101,7 +101,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
-        self.assertEqual(Ls.shape, (2099,3))
+        self.assertEqual(Ls.shape, (2335,3))
 
         Ls = tools.get_lattice_Ls(cl1, rcut=0)
         self.assertEqual(Ls.shape, (1,3))
@@ -154,7 +154,7 @@ C  15.16687337 15.16687337 15.16687337
                        mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
-        self.assertTrue(numpy.all(cl1.nimgs == numpy.array([8, 15, 11])))
+        self.assertEqual(list(cl1.nimgs), [8, 16, 12])
         cl2 = tools.cell_plus_imgs(cl1, [3,4,5])
         self.assertAlmostEqual(lib.fp(cl2.atom_coords()), 4.791699273649499, 9)
         self.assertAlmostEqual(lib.fp(cl2._bas[:,gto.ATOM_OF]), -681.993543446207, 9)
@@ -205,6 +205,27 @@ C  15.16687337 15.16687337 15.16687337
         ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
         v = tools.ifft(a, [8,n,8]).ravel()
         self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+    def test_mesh_to_cutoff(self):
+        a = numpy.array([
+            [0.  , 3.37, 3.37],
+            [3.37, 0.  , 3.37],
+            [3.37, 3.37, 0.  ],])
+
+        ke = tools.mesh_to_cutoff(a, [15]*3)
+        self.assertAlmostEqual(ke.min(), 42.58297736648015, 9)
+        mesh = tools.cutoff_to_mesh(a, ke.min())
+        self.assertAlmostEqual(abs(mesh - [15]*3).max(), 0, 9)
+
+        a = numpy.array([
+            [0.  ,10.11, 10.11],
+            [3.37, 0.  , 3.37],
+            [3.37, 3.37, 0.  ],])
+        ke = tools.mesh_to_cutoff(a, [15]*3)
+        self.assertAlmostEqual(ke.min(), 4.7314419296089065, 9)
+        mesh = tools.cutoff_to_mesh(a, ke.min())
+        k1 = tools.mesh_to_cutoff(a, mesh)
+        self.assertAlmostEqual(ke.min(), k1.min(), 9)
 
 
 if __name__ == '__main__':

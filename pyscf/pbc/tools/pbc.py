@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2020 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ def fft(f, mesh):
         return np.zeros_like(f)
 
     f3d = f.reshape(-1, *mesh)
-    assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
+    assert (f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = _fftn_wrapper(f3d)
     ngrids = np.prod(mesh)
     if f.ndim == 1 or (f.ndim == 3 and f.size == ngrids):
@@ -164,7 +164,7 @@ def ifft(g, mesh):
         return np.zeros_like(g)
 
     g3d = g.reshape(-1, *mesh)
-    assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
+    assert (g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = _ifftn_wrapper(g3d)
     ngrids = np.prod(mesh)
     if g.ndim == 1 or (g.ndim == 3 and g.size == ngrids):
@@ -210,11 +210,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             and erfc(|omega|*r12)/r12 if omega < 0.
             Note this parameter is slightly different to setting cell.omega
             for the treatment of exxdiv (at G0).  cell.omega affects Ewald
-            probe charge at G0. It is used mostly with RSH functional for
+            probe charge at G0. It is used mostly by RSH functionals for
             the long-range part of HF exchange. This parameter is used by
-            real-space JK builder which requires Ewald probe charge to be
-            computed with regular Coulomb interaction (1/r12) while the rest
-            coulG is scaled as long-range Coulomb kernel.
+            range-separated JK builder and range-separated DF (and other
+            range-separated integral methods) which require Ewald probe charge
+            to be computed with regular Coulomb interaction (1/r12).
     '''
     exxdiv = exx
     if isinstance(exx, str):
@@ -243,7 +243,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         # answers to agree
         b = cell.reciprocal_vectors()
         box_edge = np.einsum('i,ij->ij', np.asarray(mesh)//2+0.5, b)
-        assert(all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
+        assert (all(np.linalg.solve(box_edge.T, k).round(9).astype(int)==0))
         reduced_coords = np.linalg.solve(box_edge.T, kG.T).T.round(9)
         on_edge = reduced_coords.astype(int)
         if cell.dimension >= 1:
@@ -280,7 +280,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             raise NotImplementedError
 
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
-        assert(cell.dimension == 3)
+        assert (cell.dimension == 3)
         if not getattr(mf, '_ws_exx', None):
             mf._ws_exx = precompute_exx(cell, kpts)
         exx_alpha = mf._ws_exx['alpha']
@@ -361,17 +361,21 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     coulG[equal2boundary] = 0
 
     # Scale the coulG kernel for attenuated Coulomb integrals.
-    # * omega is used by RealSpaceJKBuilder which requires ewald probe charge
+    # * omega is used by RangeSeparatedJKBuilder which requires ewald probe charge
     # being evaluated with regular Coulomb interaction (1/r12).
     # * cell.omega, which affects the ewald probe charge, is often set by
     # DFT-RSH functionals to build long-range HF-exchange for erf(omega*r12)/r12
     if omega is not None:
         if omega > 0:
+            # long range part
             coulG *= np.exp(-.25/omega**2 * absG2)
-        else:
+        elif omega < 0:
+            # short range part
             coulG *= (1 - np.exp(-.25/omega**2 * absG2))
-    elif cell.omega != 0:
+    elif cell.omega > 0:
         coulG *= np.exp(-.25/cell.omega**2 * absG2)
+    elif cell.omega < 0:
+        raise NotImplementedError
 
     return coulG
 
@@ -401,7 +405,7 @@ def precompute_exx(cell, kpts):
     #alpha = 3./Rin * np.sqrt(0.5)
     #kcell.mesh = (4*alpha*np.linalg.norm(kcell.a,axis=1)).astype(int)
     log.debug("# kcell.mesh FFT = %s", kcell.mesh)
-    rs = gen_grid.gen_uniform_grids(kcell)
+    rs = kcell.get_uniform_grids(wrap_around=False)
     kngs = len(rs)
     log.debug("# kcell kngs = %d", kngs)
     corners_coord = lib.cartesian_prod(([0, 1], [0, 1], [0, 1]))
@@ -447,10 +451,7 @@ def madelung(cell, kpts):
     ecell.mesh = np.asarray(cell.mesh) * Nk
 
     if cell.omega == 0:
-        ew_eta, ew_cut = ecell.get_ewald_params(cell.precision, ecell.mesh)
-        lib.logger.debug1(cell, 'Monkhorst pack size %s ew_eta %s ew_cut %s',
-                          Nk, ew_eta, ew_cut)
-        return -2*ecell.ewald(ew_eta, ew_cut)
+        return -2*ecell.ewald()
 
     else:
         # cell.ewald function does not use the Coulomb kernel function
@@ -508,20 +509,25 @@ def get_lattice_Ls(cell, nimgs=None, rcut=None, dimension=None, discard=True):
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
     if discard:
-        Ls = _discard_edge_images(cell, Ls, rcut)
+        Ls = _discard_edge_images(cell, Ls, rcut, dimension)
     return np.asarray(Ls, order='C')
 
-def _discard_edge_images(cell, Ls, rcut):
+def _discard_edge_images(cell, Ls, rcut, dimension):
     '''
     Discard images if no basis in the image would contribute to lattice sum.
     '''
-    if rcut <= 0:
+    if cell.dimension == 0 or rcut <= 0:
         return np.zeros((1, 3))
 
     a = cell.lattice_vectors()
     scaled_atom_coords = np.linalg.solve(a.T, cell.atom_coords().T).T
-    atom_boundary_max = scaled_atom_coords.max(axis=0)
-    atom_boundary_min = scaled_atom_coords.min(axis=0)
+    atom_boundary_max = scaled_atom_coords[:,:dimension].max(axis=0)
+    atom_boundary_min = scaled_atom_coords[:,:dimension].min(axis=0)
+    if (np.any(atom_boundary_max > 1) or np.any(atom_boundary_min < -1)):
+        logger.warn(cell, 'Atoms found very far from the primitive cell. '
+                    'Atom coordinates may be error.')
+        atom_boundary_max[atom_boundary_max > 1] = 1
+        atom_boundary_min[atom_boundary_min <-1] = -1
     # ovlp_penalty ensures the overlap integrals for atoms in the adjcent
     # images are converged.
     ovlp_penalty = atom_boundary_max - atom_boundary_min
@@ -529,9 +535,16 @@ def _discard_edge_images(cell, Ls, rcut):
     # of the primitive cell converged
     boundary_max = np.ceil(np.max([atom_boundary_max  ,  ovlp_penalty], axis=0)).astype(int)
     boundary_min = np.floor(np.min([atom_boundary_min-1, -ovlp_penalty], axis=0)).astype(int)
-    penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
-    penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
-    penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
+    penalty_x = penalty_y = penalty_z = [0]
+    if dimension == 1:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+    elif dimension == 2:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+    else:
+        penalty_x = np.arange(boundary_min[0], boundary_max[0]+1)
+        penalty_y = np.arange(boundary_min[1], boundary_max[1]+1)
+        penalty_z = np.arange(boundary_min[2], boundary_max[2]+1)
     shifts = lib.cartesian_prod([penalty_x, penalty_y, penalty_z]).dot(a)
     Ls_mask = (np.linalg.norm(Ls + shifts[:,None,:], axis=2) < rcut).any(axis=0)
     # cell0 (Ls == 0) should always be included.
@@ -539,7 +552,7 @@ def _discard_edge_images(cell, Ls, rcut):
     return Ls[Ls_mask]
 
 
-def super_cell(cell, ncopy):
+def super_cell(cell, ncopy, wrap_around=False):
     '''Create an ncopy[0] x ncopy[1] x ncopy[2] supercell of the input cell
     Note this function differs from :fun:`cell_plus_imgs` that cell_plus_imgs
     creates images in both +/- direction.
@@ -547,6 +560,10 @@ def super_cell(cell, ncopy):
     Args:
         cell : instance of :class:`Cell`
         ncopy : (3,) array
+        wrap_around : bool
+            Put the original cell centered on the super cell. It has the
+            effects corresponding to the parameter wrap_around of
+            cell.make_kpts.
 
     Returns:
         supcell : instance of :class:`Cell`
@@ -560,15 +577,18 @@ def super_cell(cell, ncopy):
     #:            for atom, coord in cell._atom:
     #:                L = np.dot([Lx, Ly, Lz], a)
     #:                supcell.atom.append([atom, coord + L])
-    Ts = lib.cartesian_prod((np.arange(ncopy[0]),
-                             np.arange(ncopy[1]),
-                             np.arange(ncopy[2])))
+    xs = np.arange(ncopy[0])
+    ys = np.arange(ncopy[1])
+    zs = np.arange(ncopy[2])
+    if wrap_around:
+        xs[(ncopy[0]+1)//2:] -= ncopy[0]
+        ys[(ncopy[1]+1)//2:] -= ncopy[1]
+        zs[(ncopy[2]+1)//2:] -= ncopy[2]
+    Ts = lib.cartesian_prod((xs, ys, zs))
     Ls = np.dot(Ts, a)
-    supcell = cell.copy()
+    supcell = copy.copy(cell)
     supcell.a = np.einsum('i,ij->ij', ncopy, a)
-    supcell.mesh = np.array([ncopy[0]*cell.mesh[0],
-                             ncopy[1]*cell.mesh[1],
-                             ncopy[2]*cell.mesh[2]])
+    supcell.mesh = np.asarray(ncopy) * np.asarray(cell.mesh)
     return _build_supcell_(supcell, cell, Ls)
 
 
@@ -589,7 +609,7 @@ def cell_plus_imgs(cell, nimgs):
                              np.arange(-nimgs[1], nimgs[1]+1),
                              np.arange(-nimgs[2], nimgs[2]+1)))
     Ls = np.dot(Ts, a)
-    supcell = cell.copy()
+    supcell = copy.copy(cell)
     supcell.a = np.einsum('i,ij->ij', nimgs, a)
     supcell.mesh = np.array([(nimgs[0]*2+1)*cell.mesh[0],
                              (nimgs[1]*2+1)*cell.mesh[1],
@@ -607,8 +627,10 @@ def _build_supcell_(supcell, cell, Ls):
     supcell.atom = supcell._atom = list(zip(symbs, coords.reshape(-1,3).tolist()))
     supcell.unit = 'B'
 
-    # Do not call supcell.build() since it may normalize the basis contraction
-    # coefficients
+    # Do not call supcell.build() to initialize supcell since it may normalize
+    # the basis contraction coefficients
+
+    # preserves environments defined in cell._env (e.g. omega, gauge origin)
     _env = np.append(cell._env, coords.ravel())
     _atm = np.repeat(cell._atm[None,:,:], nimgs, axis=0)
     _atm = _atm.reshape(-1, ATM_SLOTS)
@@ -633,7 +655,7 @@ def cutoff_to_mesh(a, cutoff):
 
     Args:
         a : (3,3) ndarray
-            The real-space unit cell lattice vectors. Each row represents a
+            The real-space cell lattice vectors. Each row represents a
             lattice vector.
         cutoff : float
             KE energy cutoff in a.u.
@@ -641,34 +663,40 @@ def cutoff_to_mesh(a, cutoff):
     Returns:
         mesh : (3,) array
     '''
+    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
+    # Search largest mesh_x requiring E(mesh_x) <= 2*cutoff
     b = 2 * np.pi * np.linalg.inv(a.T)
-    cutoff = cutoff * _cubic2nonorth_factor(a)
-    mesh = np.ceil(np.sqrt(2*cutoff)/lib.norm(b, axis=1) * 2).astype(int)
+    c = b.dot(b.T)
+    # r is the ratio between G of each direction when E(mesh) reaches minimum
+    r = np.linalg.inv(c) / np.linalg.det(c)
+    r /= r.diagonal()[:,None]
+    Gmax = (2*cutoff / (np.linalg.norm(r.dot(b), axis=1)**2))**.5
+    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
+    # off-diagonal part
+    # e.g r[:,2] = [1, .5, 1.2], Gx = max(Gx, Gy*.5, Gz*1.2)
+    Gmax = (r * Gmax[:,None]).max(axis=0)
+    mesh = np.ceil(Gmax).astype(int) * 2 + 1
     return mesh
 
 def mesh_to_cutoff(a, mesh):
     '''
     Convert #grid points to KE cutoff
     '''
+    # Let E(mesh_x) = min_{y, z}(|mesh_x*b[0]+y*b[1]+z*b[2]|^2)
+    # Search min(E(mesh_x)/2) subject to mesh_x > mesh
     b = 2 * np.pi * np.linalg.inv(a.T)
-    Gmax = lib.norm(b, axis=1) * np.asarray(mesh) * .5
-    ke_cutoff = Gmax**2/2
-    # scale down Gmax to get the real energy cutoff for non-orthogonal lattice
-    return ke_cutoff / _cubic2nonorth_factor(a)
-
-def _cubic2nonorth_factor(a):
-    '''The factors to transform the energy cutoff from cubic lattice to
-    non-orthogonal lattice. Energy cutoff is estimated based on cubic lattice.
-    It needs to be rescaled for the non-orthogonal lattice to ensure that the
-    minimal Gv vector in the reciprocal space is larger than the required
-    energy cutoff.
-    '''
-    # Using ke_cutoff to set up a sphere, the sphere needs to be completely
-    # inside the box defined by Gv vectors
-    abase = a / np.linalg.norm(a, axis=1)[:,None]
-    bbase = np.linalg.inv(abase.T)
-    overlap = np.einsum('ix,ix->i', abase, bbase)
-    return 1./overlap**2
+    c = b.dot(b.T)
+    # r is the ratio between G of each direction when E(mesh) reaches minimum
+    r = np.linalg.inv(c) / np.linalg.det(c)
+    r /= r.diagonal()[:,None]
+    gs = (np.asarray(mesh) - 1) // 2
+    # off-diagonal r may be > 1, means that the ke_cutoff is limited by the
+    # off-diagonal part
+    # e.g r[2] = [1.2, 1.2, 1], ke_cutoff_z = min(Gx/1.2, Gy/1.2, Gz)
+    gs_eff = (gs / (r + 1e-100)).min(axis=1)
+    Gmax = gs_eff * np.linalg.norm(r.dot(b), axis=1)
+    ke_cutoff = Gmax**2 / 2
+    return ke_cutoff
 
 def cutoff_to_gs(a, cutoff):
     '''Deprecated.  Replaced by function cutoff_to_mesh.'''

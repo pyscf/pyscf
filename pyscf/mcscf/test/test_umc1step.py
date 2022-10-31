@@ -87,30 +87,46 @@ class KnownValues(unittest.TestCase):
         mc.kernel()
         self.assertAlmostEqual(mc.e_tot, -75.755924721041396, 7)
 
-    # TODO:
-    #def test_state_average_mix_fci_dmrg(self):
-    #    fcisolver1 = fci.direct_uhf.FCISolver(mol)
-    #    class FCI_as_DMRG(fci.direct_uhf.FCISolver):
-    #        def __getattribute__(self, attr):
-    #            """Prevent 'private' attribute access"""
-    #            if attr in ('make_rdm1s', 'spin_square', 'contract_2e',
-    #                        'absorb_h1e'):
-    #                raise AttributeError
-    #            else:
-    #                return object.__getattribute__(self, attr)
-    #        def kernel(self, *args, **kwargs):
-    #            return fcisolver1.kernel(*args, **kwargs)
-    #        def approx_kernel(self, *args, **kwargs):
-    #            return fcisolver1.kernel(*args, **kwargs)
+    def test_state_average(self):
+        mc = mcscf.UCASSCF(m, 5, (4, 2)).state_average_((0.5, 0.5))
+        mc.natorb = True
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_states[0], -75.745603861816, 5)
+        self.assertAlmostEqual(mc.e_states[1], -75.6539185381917, 5)
 
-    #    solver1 = FCI_as_DMRG(mol)
-    #    solver1.spin = 0
-    #    solver2 = fci.direct_uhf.FCI(mol)
-    #    solver2.spin = 2
-    #    mc = mcscf.UCASSCF(m, 5, (4,2))
-    #    mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2])
-    #    e = mc.kernel()[0]
-    #    self.assertAlmostEqual(e, 0, 7)
+    def test_state_average_mix(self):
+        mc = mcscf.UCASSCF(m, 5, (4, 2))
+        cis1 = copy.copy(mc.fcisolver)
+        cis1.spin = 0
+        mc = mcscf.addons.state_average_mix(mc, [cis1, mc.fcisolver], [0.5, 0.5])
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_states[0], -76.0207219040825, 4)
+        self.assertAlmostEqual(mc.e_states[1], -75.75071008513498, 4)
+
+    def test_state_average_mix_external_fcisolver(self):
+        fcisolver1 = fci.direct_uhf.FCISolver(mol)
+        class FCI_as_DMRG(fci.direct_uhf.FCISolver):
+            def __getattribute__(self, attr):
+                """Prevent 'private' attribute access"""
+                if attr in ('make_rdm1s', 'spin_square', 'contract_2e',
+                            'absorb_h1e'):
+                    raise AttributeError
+                else:
+                    return object.__getattribute__(self, attr)
+            def kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+            def approx_kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+
+        solver1 = FCI_as_DMRG(mol)
+        solver1.spin = 0
+        solver2 = fci.direct_uhf.FCI(mol)
+        solver2.spin = 2
+        mc = mcscf.UCASSCF(m, 5, (4, 2))
+        mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2])
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_states[0], -76.02072193565274, 4)
+        self.assertAlmostEqual(mc.e_states[1], -75.75071005397444, 4)
 
     def test_frozen(self):
         mc = mcscf.UCASSCF(m, 5, (4,2))

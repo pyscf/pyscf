@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2019 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,28 +28,34 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import ft_ao
-from pyscf.pbc.df import incore
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
+from pyscf.pbc.df.incore import _IntNucBuilder, _compensate_nuccell
+from pyscf.pbc.tools import k2gamma
+from pyscf.pbc.tools import pbc as pbctools
 from pyscf import __config__
 
 
 CUTOFF = getattr(__config__, 'pbc_df_aft_estimate_eta_cutoff', 1e-12)
 ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.2)
+OMEGA_MIN = getattr(__config__, 'pbc_df_aft_estimate_omega_min', 0.3)
 PRECISION = getattr(__config__, 'pbc_df_aft_estimate_eta_precision', 1e-8)
 KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
-def estimate_eta(cell, cutoff=CUTOFF):
-    '''The exponent of the smooth gaussian model density, requiring that at
-    boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
+def estimate_eta_min(cell, cutoff=CUTOFF):
+    '''Given rcut the boundary of repeated images of the cell, estimates the
+    minimal exponent of the smooth compensated gaussian model charge, requiring
+    that at boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) < cutoff
     '''
     lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 4)
     # If lmax=3 (r^5 for radial part), this expression guarantees at least up
     # to f shell the convergence at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**(lmax+2)/cutoff)/cell.rcut**2*2,
-              ETA_MIN)
+    rcut = cell.rcut
+    eta = max(numpy.log(4*numpy.pi*rcut**(lmax+2)/cutoff)/rcut**2, ETA_MIN)
     return eta
+
+estimate_eta = estimate_eta_min
 
 def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     '''Given ke_cutoff, the upper bound of eta to produce the required
@@ -65,7 +71,7 @@ def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     # The interaction between two s-type density distributions should be
     # enough for the error estimation.  Put lmax here to increate Ecut for
     # slightly better accuracy
-    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax-1)))
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**max(0, lmax-1)))
     log_eta = -1
     eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
@@ -82,16 +88,32 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     # = (4*pi)^2 *2*eta/kmax^{n-1} e^{-kmax^2/4eta} + ... < precision
 
     # The magic number 0.2 comes from AFTDF.__init__ and GDF.__init__
-    eta = max(eta, 0.2)
+    # eta = max(eta, ETA_MIN)
+
     log_k0 = 3 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
     # The interaction between two s-type density distributions should be
     # enough for the error estimation.  Put lmax here to increate Ecut for
     # slightly better accuracy
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
-    Ecut = 2*eta * (log_k0*(lmax-1) - log_rest)
+    Ecut = 2*eta * (log_k0*max(0, lmax-1) - log_rest)
     Ecut = max(Ecut, .5)
     return Ecut
+
+def estimate_omega_min(cell, cutoff=CUTOFF):
+    '''Given cell.rcut the boundary of repeated images of the cell, estimates
+    the minimal omega for the attenuated Coulomb interactions, requiring that at
+    boundary the Coulomb potential of a point charge < cutoff
+    '''
+    # erfc(z) = 2/\sqrt(pi) int_z^infty exp(-t^2) dt < exp(-z^2)/(z\sqrt(pi))
+    # erfc(omega*rcut)/rcut < cutoff
+    # ~ exp(-(omega*rcut)**2) / (omega*rcut**2*pi**.5) < cutoff
+    rcut = cell.rcut
+    omega = OMEGA_MIN
+    omega = max((-numpy.log(cutoff * rcut**2 * omega))**.5 / rcut, OMEGA_MIN)
+    return omega
+
+estimate_omega = estimate_omega_min
 
 # \sum_{k^2/2 > ke_cutoff} weight*4*pi/k^2 exp(-k^2/(4 omega^2)) rho(k) < precision
 # ~ 16 pi^2 int_cutoff^infty exp(-k^2/(4*omega^2)) dk
@@ -102,7 +124,10 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    ke_cutoff = -2*omega**2 * numpy.log(precision / (32*omega**2*numpy.pi**2))
+    precision *= 1e-2
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2))
+    ke_cutoff = -2*omega**2 * numpy.log(precision / (16*numpy.pi**2*(ke_cutoff*2)**(.5*lmax)))
     return ke_cutoff
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
@@ -110,74 +135,56 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    omega = (-.5 * ke_cutoff / numpy.log(precision / (32*numpy.pi**2)))**.5
+    # esitimation based on \int dk 4pi/k^2 exp(-k^2/4omega) sometimes is not
+    # enough to converge the 2-electron integrals. A penalty term here is to
+    # reduce the error in integrals
+    precision *= 1e-2
+    # Consider l>0 basis here to increate Ecut for slightly better accuracy
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = numpy.log(precision / (16*numpy.pi**2 * kmax**lmax))
+    omega = (-.5 * ke_cutoff / log_rest)**.5
     return omega
 
-def get_nuc(mydf, kpts=None):
-    # Pseudopotential is ignored when computing just the nuclear attraction
-    t0 = (logger.process_clock(), logger.perf_counter())
-    with lib.temporary_env(mydf.cell, _pseudo={}):
-        nuc = get_pp_loc_part1(mydf, kpts)
-    logger.timer(mydf, 'get_nuc', *t0)
-    return nuc
-
 def get_pp_loc_part1(mydf, kpts=None):
-    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    if mydf.eta != 0:
+        dfbuilder = _IntNucBuilder(mydf.cell, kpts_lst)
+        vj = dfbuilder.get_pp_loc_part1()
+        if kpts is None or numpy.shape(kpts) == (3,):
+            vj = vj[0]
+        return numpy.asarray(vj)
+
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t0 = t1 = (logger.process_clock(), logger.perf_counter())
 
+    cell = mydf.cell
     mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
-    charges = cell.atom_charges()
 
     kpt_allow = numpy.zeros(3)
-    if mydf.eta == 0:
-        if cell.dimension > 0:
-            ke_guess = estimate_ke_cutoff(cell, cell.precision)
-            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if numpy.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
-                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
-                            'to get integral accuracy %g.\nRecommended mesh is %s.',
-                            mesh, cell.precision, mesh_guess)
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    if cell.dimension > 0:
+        ke_guess = estimate_ke_cutoff(cell, cell.precision)
+        mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+        if numpy.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
+            logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
+                        'to get integral accuracy %g.\nRecommended mesh is %s.',
+                        mesh, cell.precision, mesh_guess)
+    log.debug1('aft.get_pp_loc_part1 mesh = %s', mesh)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
-        vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
-        vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
+    vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
+    vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
 
-        vpplocG *= kws
-        vG = vpplocG
-        vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-
-    else:
-        if cell.dimension > 0:
-            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
-            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if numpy.any(mesh < mesh_guess*.8):
-                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
-                            'to get integral accuracy %g.\nRecommended mesh is %s.',
-                            mesh, cell.precision, mesh_guess)
-            mesh_min = numpy.min((mesh_guess, mesh), axis=0)
-            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-                mesh[:cell.dimension] = mesh_min[:cell.dimension]
-            else:
-                mesh = mesh_min
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-
-        nuccell = _compensate_nuccell(mydf)
-        # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
-        vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
-        t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
-
-        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
-        aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
+    vpplocG *= kws
+    vG = vpplocG
+    vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
@@ -196,7 +203,7 @@ def get_pp_loc_part1(mydf, kpts=None):
     vj_kpts = []
     for k, kpt in enumerate(kpts_lst):
         if gamma_point(kpt):
-            vj_kpts.append(lib.unpack_tril(vj[k].real.copy()))
+            vj_kpts.append(lib.unpack_tril(vj[k].real))
         else:
             vj_kpts.append(lib.unpack_tril(vj[k]))
 
@@ -206,88 +213,167 @@ def get_pp_loc_part1(mydf, kpts=None):
 
 def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     '''Vnuc - Vloc'''
-    cell = mydf.cell
-    nkpts = len(kpts)
-
-    # Use the 3c2e code with steep s gaussians to mimic nuclear density
-    fakenuc = _fake_nuc(cell)
-    fakenuc._atm, fakenuc._bas, fakenuc._env = \
-            gto.conc_env(nuccell._atm, nuccell._bas, nuccell._env,
-                         fakenuc._atm, fakenuc._bas, fakenuc._env)
-
-    kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
-    buf = incore.aux_e2(cell, fakenuc, intor, aosym=aosym, comp=comp,
-                        kptij_lst=kptij_lst)
-
-    charge = cell.atom_charges()
-    charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
-    nao = cell.nao_nr()
-    nchg = len(charge)
-    if aosym == 's1':
-        nao_pair = nao**2
-    else:
-        nao_pair = nao*(nao+1)//2
-    if comp == 1:
-        buf = buf.reshape(nkpts,nao_pair,nchg)
-        mat = numpy.einsum('kxz,z->kx', buf, charge)
-    else:
-        buf = buf.reshape(nkpts,comp,nao_pair,nchg)
-        mat = numpy.einsum('kcxz,z->kcx', buf, charge)
-
-    # vbar is the interaction between the background charge
-    # and the compensating function.  0D, 1D, 2D do not have vbar.
-    if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
-                                         'int3c2e_cart'):
-        assert(comp == 1)
-        charge = -cell.atom_charges()
-
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol
-
-        ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
-        for k in range(nkpts):
-            if aosym == 's1':
-                mat[k] -= nucbar * ovlp[k].reshape(nao_pair)
-            else:
-                mat[k] -= nucbar * lib.pack_tril(ovlp[k])
-    return mat
+    dfbuilder = _IntNucBuilder(mydf.cell, kpts)
+    return dfbuilder._int_nuc_vloc(nuccell, intor, aosym)
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
-    cell = mydf.cell
-    if kpts is None:
-        kpts_lst = numpy.zeros((1,3))
-    else:
-        kpts_lst = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts_lst)
-
-    vloc1 = get_pp_loc_part1(mydf, kpts_lst)
-    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part1', *t0)
-    vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
-    t1 = logger.timer_debug1(mydf, 'get_pp_loc_part2', *t1)
-    vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
-    for k in range(nkpts):
-        vpp[k] += vloc1[k] + vloc2[k]
-    t1 = logger.timer_debug1(mydf, 'get_pp_nl', *t1)
-
+    dfbuilder = _IntNucBuilder(mydf.cell, kpts)
+    vpp = dfbuilder.get_pp(mydf.mesh)
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
     logger.timer(mydf, 'get_pp', *t0)
     return vpp
 
-def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
+def get_nuc(mydf, kpts=None):
+    t0 = (logger.process_clock(), logger.perf_counter())
+    dfbuilder = _IntNucBuilder(mydf.cell, kpts)
+    vj = dfbuilder.get_nuc(mydf.mesh)
+    if kpts is None or numpy.shape(kpts) == (3,):
+        vj = vj[0]
+    logger.timer(mydf, 'get_nuc', *t0)
+    return vj
+
+def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None, omega=None):
+    '''Weighted regular Coulomb kernel, applying cell.omega by default'''
     cell = mydf.cell
     if mesh is None:
         mesh = mydf.mesh
+    if omega is None:
+        omega = cell.omega
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv, omega=omega)
     coulG *= kws
     return coulG
 
 
-class AFTDF(lib.StreamObject):
+class AFTDFMixin:
+
+    weighted_coulG = weighted_coulG
+    _int_nuc_vloc = _int_nuc_vloc
+    get_nuc = get_nuc
+    get_pp = get_pp
+
+    def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
+                max_memory=2000, aosym='s1', blksize=None,
+                intor='GTO_ft_ovlp', comp=1, bvk_kmesh=None):
+        '''
+        Fourier transform iterator for AO pair
+        '''
+        cell = self.cell
+        if mesh is None:
+            mesh = self.mesh
+        if kpti_kptj is None:
+            kpti = kptj = numpy.zeros(3)
+        else:
+            kpti, kptj = kpti_kptj
+        if q is None:
+            q = kptj - kpti
+
+        ao_loc = cell.ao_loc_nr()
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+        ngrids = gxyz.shape[0]
+
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas)
+        if aosym == 's2':
+            assert (shls_slice[2] == 0)
+            i0 = ao_loc[shls_slice[0]]
+            i1 = ao_loc[shls_slice[1]]
+            nij = i1*(i1+1)//2 - i0*(i0+1)//2
+        else:
+            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            nij = ni*nj
+
+        if blksize is None:
+            blksize = min(max(64, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
+            sublk = int(blksize//4)
+        else:
+            sublk = blksize
+        buf = numpy.empty(nij*blksize*comp, dtype=numpy.complex128)
+        pqkRbuf = numpy.empty(nij*sublk*comp)
+        pqkIbuf = numpy.empty(nij*sublk*comp)
+
+        if bvk_kmesh is None:
+            bvk_kmesh = k2gamma.kpts_to_kmesh(cell, [kpti, kptj])
+        supmol_ft = ft_ao._ExtendedMole.from_cell(cell, bvk_kmesh).strip_basis()
+        ft_kern = supmol_ft.gen_ft_kernel(aosym, intor=intor, comp=comp)
+
+        for p0, p1 in self.prange(0, ngrids, blksize):
+            aoaoR, aoaoI = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, q,
+                                   kptj.reshape(1, 3), shls_slice, out=buf)
+            aoaoR = aoaoR.reshape(comp,p1-p0,nij)
+            aoaoI = aoaoI.reshape(comp,p1-p0,nij)
+
+            for i0, i1 in lib.prange(0, p1-p0, sublk):
+                nG = i1 - i0
+                if comp == 1:
+                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoaoR[0,i0:i1].T
+                    pqkI[:] = aoaoI[0,i0:i1].T
+                else:
+                    pqkR = numpy.ndarray((comp,nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((comp,nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoaoR[:,i0:i1].transpose(0,2,1)
+                    pqkI[:] = aoaoI[:,i0:i1].transpose(0,2,1)
+                yield (pqkR, pqkI, p0+i0, p0+i1)
+
+    def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1,
+                bvk_kmesh=None):
+        '''
+        Fourier transform iterator for all kpti which satisfy
+            2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
+        '''
+        cell = self.cell
+        if mesh is None:
+            mesh = self.mesh
+        if kpts is None:
+            assert (is_zero(q))
+            kpts = self.kpts
+        kpts = numpy.asarray(kpts)
+        nkpts = len(kpts)
+
+        ao_loc = cell.ao_loc_nr()
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
+        ngrids = gxyz.shape[0]
+
+        if shls_slice is None:
+            shls_slice = (0, cell.nbas, 0, cell.nbas)
+        if aosym == 's2':
+            assert (shls_slice[2] == 0)
+            i0 = ao_loc[shls_slice[0]]
+            i1 = ao_loc[shls_slice[1]]
+            nij = i1*(i1+1)//2 - i0*(i0+1)//2
+        else:
+            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
+            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+            nij = ni*nj
+
+        if bvk_kmesh is None:
+            bvk_kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
+        # ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), mesh)
+        # rs_cell = ft_ao._RangeSeparatedCell.from_cell(cell, ke_cutoff, ft_ao.RCUT_THRESHOLD)
+        supmol_ft = ft_ao._ExtendedMole.from_cell(cell, bvk_kmesh).strip_basis()
+        ft_kern = supmol_ft.gen_ft_kernel(aosym, intor=intor, comp=comp,
+                                          return_complex=True)
+
+        blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
+        blksize = min(blksize, ngrids, 16384)
+        buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
+
+        for p0, p1 in self.prange(0, ngrids, blksize):
+            dat = ft_kern(Gv[p0:p1], gxyz[p0:p1], Gvbase, q, kpts, shls_slice, out=buf)
+            yield dat, p0, p1
+
+
+class AFTDF(lib.StreamObject, AFTDFMixin):
     '''Density expansion on plane waves
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
@@ -379,121 +465,8 @@ class AFTDF(lib.StreamObject):
                             cell.dimension, mesh_guess[cell.dimension:])
         return self
 
-# TODO: Put Gv vector in the arguments
-    def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
-                max_memory=2000, aosym='s1', blksize=None,
-                intor='GTO_ft_ovlp', comp=1, bvk_kmesh=None):
-        '''
-        Fourier transform iterator for AO pair
-        '''
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        if kpti_kptj is None:
-            kpti = kptj = numpy.zeros(3)
-        else:
-            kpti, kptj = kpti_kptj
-        if q is None:
-            q = kptj - kpti
-
-        ao_loc = cell.ao_loc_nr()
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        b = cell.reciprocal_vectors()
-        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngrids = gxyz.shape[0]
-
-        if shls_slice is None:
-            shls_slice = (0, cell.nbas, 0, cell.nbas)
-        if aosym == 's2':
-            assert(shls_slice[2] == 0)
-            i0 = ao_loc[shls_slice[0]]
-            i1 = ao_loc[shls_slice[1]]
-            nij = i1*(i1+1)//2 - i0*(i0+1)//2
-        else:
-            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-            nij = ni*nj
-
-        if blksize is None:
-            blksize = min(max(64, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
-            sublk = int(blksize//4)
-        else:
-            sublk = blksize
-        buf = numpy.empty(nij*blksize*comp, dtype=numpy.complex128)
-        pqkRbuf = numpy.empty(nij*sublk*comp)
-        pqkIbuf = numpy.empty(nij*sublk*comp)
-
-        for p0, p1 in self.prange(0, ngrids, blksize):
-            #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
-            #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
-            aoao = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                        b, gxyz[p0:p1], Gvbase, q,
-                                        kptj.reshape(1,3), intor, comp,
-                                        bvk_kmesh=bvk_kmesh, out=buf)[0]
-            aoao = aoao.reshape(p1-p0,nij)
-
-            for i0, i1 in lib.prange(0, p1-p0, sublk):
-                nG = i1 - i0
-                if comp == 1:
-                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao[i0:i1].real.T
-                    pqkI[:] = aoao[i0:i1].imag.T
-                else:
-                    pqkR = numpy.ndarray((comp,nij,nG), buffer=pqkRbuf)
-                    pqkI = numpy.ndarray((comp,nij,nG), buffer=pqkIbuf)
-                    pqkR[:] = aoao[i0:i1].real.transpose(0,2,1)
-                    pqkI[:] = aoao[i0:i1].imag.transpose(0,2,1)
-                yield (pqkR, pqkI, p0+i0, p0+i1)
-
-    def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1,
-                bvk_kmesh=None):
-        '''
-        Fourier transform iterator for all kpti which satisfy
-            2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
-        '''
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        if kpts is None:
-            assert(is_zero(q))
-            kpts = self.kpts
-        kpts = numpy.asarray(kpts)
-        nkpts = len(kpts)
-
-        ao_loc = cell.ao_loc_nr()
-        b = cell.reciprocal_vectors()
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngrids = gxyz.shape[0]
-
-        if shls_slice is None:
-            shls_slice = (0, cell.nbas, 0, cell.nbas)
-        if aosym == 's2':
-            assert(shls_slice[2] == 0)
-            i0 = ao_loc[shls_slice[0]]
-            i1 = ao_loc[shls_slice[1]]
-            nij = i1*(i1+1)//2 - i0*(i0+1)//2
-        else:
-            ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-            nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
-            nij = ni*nj
-
-        blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
-        blksize = min(blksize, ngrids, 16384)
-        buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
-
-        for p0, p1 in self.prange(0, ngrids, blksize):
-            dat = ft_ao.ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                       b, gxyz[p0:p1], Gvbase, q, kpts,
-                                       intor, comp, bvk_kmesh=bvk_kmesh, out=buf)
-            yield dat, p0, p1
-
-    weighted_coulG = weighted_coulG
-    _int_nuc_vloc = _int_nuc_vloc
-    get_nuc = get_nuc
-    get_pp = get_pp
+    def build(self):
+        return self.check_sanity()
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -571,50 +544,6 @@ class AFTDF(lib.StreamObject):
         ngrids = numpy.prod(mesh)
         return ngrids * 2
 
-
-# Since the real-space lattice-sum for nuclear attraction is not implemented,
-# use the 3c2e code with steep gaussians to mimic nuclear density
-def _fake_nuc(cell):
-    fakenuc = copy.copy(cell)
-    fakenuc._atm = cell._atm.copy()
-    fakenuc._atm[:,gto.PTR_COORD] = numpy.arange(gto.PTR_ENV_START,
-                                                 gto.PTR_ENV_START+cell.natm*3,3)
-    _bas = []
-    _env = [0]*gto.PTR_ENV_START + [cell.atom_coords().ravel()]
-    ptr = gto.PTR_ENV_START + cell.natm * 3
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    for ia in range(cell.natm):
-        symb = cell.atom_symbol(ia)
-        if symb in cell._pseudo:
-            pp = cell._pseudo[symb]
-            rloc, nexp, cexp = pp[1:3+1]
-            eta = .5 / rloc**2
-        else:
-            eta = 1e16
-        norm = half_sph_norm/gto.gaussian_int(2, eta)
-        _env.extend([eta, norm])
-        _bas.append([ia, 0, 1, 1, 0, ptr, ptr+1, 0])
-        ptr += 2
-    fakenuc._bas = numpy.asarray(_bas, dtype=numpy.int32)
-    fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
-    fakenuc.rcut = cell.rcut
-    return fakenuc
-
-def _compensate_nuccell(mydf):
-    '''A cell of the compensated Gaussian charges for nucleus'''
-    cell = mydf.cell
-    nuccell = copy.copy(cell)
-    half_sph_norm = .5/numpy.sqrt(numpy.pi)
-    norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
-    chg_env = [mydf.eta, norm]
-    ptr_eta = cell._env.size
-    ptr_norm = ptr_eta + 1
-    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-    nuccell._atm = cell._atm
-    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-    nuccell._env = numpy.hstack((cell._env, chg_env))
-    return nuccell
-
 def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
                 with_j=True, with_k=True, omega=None, exxdiv=None):
     key = '%.6f' % omega
@@ -629,17 +558,3 @@ def _sub_df_jk_(dfobj, dm, hermi=1, kpts=None, kpts_band=None,
                              omega=None, exxdiv=exxdiv)
 
 del(CUTOFF, PRECISION)
-
-
-if __name__ == '__main__':
-    cell = pbcgto.Cell()
-    cell.verbose = 0
-    cell.atom = 'C 0 0 0; C 1 1 1'
-    cell.a = numpy.diag([4, 4, 4])
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [20]*3
-    cell.build()
-    k = numpy.ones(3)*.25
-    v1 = AFTDF(cell).get_pp(k)
-    print(abs(v1).sum(), 21.7504294462)

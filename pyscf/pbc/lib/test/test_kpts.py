@@ -56,7 +56,23 @@ class KnownValues(unittest.TestCase):
         check = (kpts+kpts[idx]).dot(cell.lattice_vectors().T/(2*np.pi)) + 1e-14
         self.assertAlmostEqual(np.modf(check)[0].max(), 0, 12)
 
+    def test_symmetrize(self):
+        pass
+
+    def test_group_by_conj_paris(self):
+        kpts = cell.make_kpts([3,4,1])
+        nkpts = len(kpts)
+        ukpts, _, uniq_inv = kpts_helper.unique_with_wrap_around(
+            cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
+        pairs = kpts_helper.group_by_conj_pairs(cell, ukpts)[0]
+        self.assertEqual(
+            pairs, [(0, 0), (2, 2), (1, 3), (4, 8), (5, 11), (6, 10), (7, 9)])
+        for i, j in pairs:
+            if j is not None:
+                idx = np.where(uniq_inv == i)[0] // nkpts
+                idy = np.where(uniq_inv == i)[0] % nkpts
+                self.assertTrue(np.array_equiv(np.sort(idy*nkpts+idx), np.where(uniq_inv == j)[0]))
+
 if __name__ == "__main__":
     print("Tests for kpts_helper")
     unittest.main()
-

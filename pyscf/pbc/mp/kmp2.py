@@ -15,6 +15,7 @@
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #         James McClain <jdmcclain47@gmail.com>
+#         Xing Zhang <zhangxing.nju@gmail.com>
 #
 
 
@@ -33,8 +34,9 @@ import h5py
 from pyscf import lib
 from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
-from pyscf.pbc import df
+from pyscf.pbc.df import df
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib import kpts as libkpts
 from pyscf.lib.parameters import LARGE_DENOM
 from pyscf import __config__
 
@@ -159,7 +161,6 @@ def _init_mp_df_eris(mp):
     Returns:
         Lov (numpy.ndarray) -- 3-center DF ints, with shape (nkpts, nkpts, naux, nocc, nvir)
     """
-    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     from pyscf.pbc.lib.kpts_helper import gamma_point
 
@@ -197,14 +198,12 @@ def _init_mp_df_eris(mp):
     bra_end = nocc
     ket_start = nmo+nocc
     ket_end = ket_start + nvir
-    with h5py.File(mp._scf.with_df._cderi, 'r') as f:
-        kptij_lst = f['j3c-kptij'][:]
+    with df.CDERIArray(mp._scf.with_df._cderi) as cderi_array:
         tao = []
         ao_loc = None
-        for ki, kpti in enumerate(kpts):
-            for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti, kptj))
-                Lpq_ao = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
+        for ki in range(nkpts):
+            for kj in range(nkpts):
+                Lpq_ao = cderi_array[ki,kj]
 
                 mo = np.hstack((mo_coeff[ki], mo_coeff[kj]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
@@ -707,15 +706,23 @@ class KMP2(mp2.MP2):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.kpts = mf.kpts
-        self.mo_energy = mf.mo_energy
-        self.nkpts = len(self.kpts)
-        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.mo_coeff = mo_coeff
-        self.mo_occ = mo_occ
+        if isinstance(self.kpts, libkpts.KPoints):
+            self.nkpts = self.kpts.nkpts
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts.kpts)
+            #padding has to be after transformation
+            self.mo_energy = self.kpts.transform_mo_energy(mf.mo_energy)
+            self.mo_coeff = self.kpts.transform_mo_coeff(mo_coeff)
+            self.mo_occ = self.kpts.transform_mo_occ(mo_occ)
+        else:
+            self.nkpts = len(self.kpts)
+            self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
+            self.mo_energy = mf.mo_energy
+            self.mo_coeff = mo_coeff
+            self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.e_corr = None
         self.e_hf = None
+        self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
@@ -754,15 +761,15 @@ class KMP2(mp2.MP2):
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 
-        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
+        self.e_hf = self.get_e_hf(mo_coeff=mo_coeff)
 
-        # TODO: compute e_hf for non-canonical SCF
-        self.e_hf = self._scf.e_tot
+        mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 
         self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
+
 KRMP2 = KMP2
 
 

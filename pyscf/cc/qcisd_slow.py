@@ -166,19 +166,17 @@ class QCISD(rccsd.RCCSD):
     def kernel(self, t1=None, t2=None, eris=None):
         return self.qcisd(t1, t2, eris)
     def qcisd(self, t1=None, t2=None, eris=None):
-        assert(self.mo_coeff is not None)
-        assert(self.mo_occ is not None)
+        assert (self.mo_coeff is not None)
+        assert (self.mo_occ is not None)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
 
+        self.e_hf = self.get_e_hf()
+
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-
-        self.e_hf = getattr(eris, 'e_hf', None)
-        if self.e_hf is None:
-            self.e_hf = self._scf.e_tot
 
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,

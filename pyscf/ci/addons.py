@@ -26,8 +26,8 @@ def convert_to_gcisd(myci):
 
     mf = scf.addons.convert_to_ghf(myci._scf)
     gci = gcisd.GCISD(mf)
-    assert(myci._nocc is None)
-    assert(myci._nmo is None)
+    assert (myci._nocc is None)
+    assert (myci._nmo is None)
     gci.__dict__.update(myci.__dict__)
     gci._scf = mf
     gci.mo_coeff = mf.mo_coeff

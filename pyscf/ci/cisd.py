@@ -311,7 +311,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-        assert(neleca == nelecb)
+        assert (neleca == nelecb)
 
     frozen_mask = numpy.zeros(norb, dtype=bool)
     if frozen is None:
@@ -348,7 +348,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=None):
     if nfroz == 0:
         return fcivec
 
-    assert(norb < 63)
+    assert (norb < 63)
 
     strs = cistring.gen_strings4orblist(range(norb), neleca)
     na = len(strs)
@@ -885,6 +885,7 @@ class CISD(lib.StreamObject):
         self.converged = False
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
+        self.e_hf = None
         self.e_corr = None
         self.emp2 = None
         self.ci = None
@@ -915,7 +916,7 @@ class CISD(lib.StreamObject):
 
     @property
     def e_tot(self):
-        return numpy.asarray(self.e_corr) + self._scf.e_tot
+        return numpy.asarray(self.e_corr) + self.e_hf
 
     @property
     def nstates(self):
@@ -955,10 +956,12 @@ class CISD(lib.StreamObject):
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
     get_frozen_mask = ccsd.get_frozen_mask
+    get_e_hf = ccsd.get_e_hf
 
     def kernel(self, ci0=None, eris=None):
         return self.cisd(ci0, eris)
     def cisd(self, ci0=None, eris=None):
+        self.e_hf = self.get_e_hf()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
         if self.verbose >= logger.WARN:

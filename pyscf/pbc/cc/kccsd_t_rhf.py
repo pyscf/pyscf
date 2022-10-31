@@ -391,11 +391,11 @@ def transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=None):
 def create_eris_vvop(vovv, oovv, nkpts, nocc, nvir, kconserv, out=None):
     '''Creates vvop from vovv and oovv array (physicist notation).'''
     nmo = nocc + nvir
-    assert(vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
+    assert (vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=vovv.dtype)
     else:
-        assert(out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
+        assert (out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
 
     for ki, kj, ka in product(range(nkpts), repeat=3):
         kb = kconserv[ki,ka,kj]
@@ -411,7 +411,7 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     This is not exactly chemist's notation, but close.  Here a chemist notation vooo
     is created from physicist ooov, and then the last two indices of vooo are swapped.
     '''
-    assert(ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
+    assert (ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
 
@@ -579,7 +579,7 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     r0,r1,kr,mo_e_r,nonzero_r = rindices
