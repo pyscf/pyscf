@@ -10,7 +10,9 @@ import sys
 From Bayly, Cieplak, Cornell, and Kollman, J. Phys. Chem. 1993, 97, 10269.
 Section: Methods
 
-"The charge fitting process begins with having the QM ESP Vi evaluated for each point i of a set of points (grid) fixed in space in the solvent-accessible region around the molecule. The points must lie outside the van der Waals radius of the molecule ..."
+"The charge fitting process begins with having the QM ESP Vi evaluated
+for each point i of a set of points (grid) fixed in space in the solvent-accessible region around the molecule.
+The points must lie outside the van der Waals radius of the molecule ..."
 
 Procedure:
 1) esp_grid : grid points are genrated.
@@ -78,7 +80,7 @@ def get_esp_radii (probe):
     '''
 
     ESP_RADII = ang2bohr * np.array (
-        (0, # Ghost atom
+        [0, # Ghost atom
          0.30,                                     1.22, # 1s
          1.23, 0.89, 0.88, 0.77, 0.70, 0.66, 0.58, 1.60, # 2s2p
          1.40, 1.36, 1.25, 1.17, 1.10, 1.04, 0.99, 1.91, # 3s3p
@@ -88,8 +90,7 @@ def get_esp_radii (probe):
          2.22, 1.92,                                     # 5s (Rb, Sr)
          1.62, 1.45, 1.34, 1.29, 1.27, 1.24, 1.25, 1.28, 1.34, 1.41, # 4d (Y,..,Cd)
          1.50, 1.40, 1.41, 1.37, 1.33, 2.09, # 5p (In,.., Xe)
-         2.35, 1.98                                      # 6s
-        ))
+         2.35, 1.98])                                     # 6s
 
 
     prob_radius = probe*ang2bohr
@@ -188,28 +189,28 @@ def esp_esp (mol, dm, grids):
     g_vals + z_vals : np.array : the ESP value at each grid
     '''
 
-    nsize      = grids.shape[0]
+    #nsize      = grids.shape[0]
     qm_xyz     = mol.atom_coords()
     qm_charges = mol.atom_charges()
-    natom      = qm_charges.shape[0]
+    #natom      = qm_charges.shape[0]
 
     drg = qm_xyz[:, None, :] - grids # (Natom, Ngrid, 3)
     dr  = np.linalg.norm (drg, axis=2) # (Natom, Ngrid)
 
     '''
-     *** The electrostatic potential at the atomic center
-      z_val = \sum_i \frac{Z_i}{|R_i - r|}
+    *** The electrostatic potential at the atomic center
+    z_val = sum_i frac{Z_i}{|R_i - r|}
     '''
 
     z_val = np.einsum ('ig, i->g', 1.0/dr, qm_charges)
 
     '''
     *** The electrostatic potential at a grid point (g)
-     g_val(g) = -\sum_{ij} D_{ij} V_{ij} (g),
-     where V_{ij} (g) = \int \frac{\psi_i (r) \psi_j (r)}{|r - g|} dr
+     g_val(g) = -sum_{ij} D_{ij} V_{ij} (g),
+     where V_{ij} (g) = \\iint frac{ psi_i (r) psi_j (r)}{|r - g|} dr
      g is the grid point
      r is the position of the one-electron
-     \psi is a basis of (Gaussian) atomic orbitals.
+     psi is a basis of (Gaussian) atomic orbitals.
     '''
 
     g_val = []
@@ -221,7 +222,7 @@ def esp_esp (mol, dm, grids):
 
         g_val.append (gval)
 
-    return  np.array (g_val) + z_val
+    return np.array (g_val) + z_val
 
 
 
@@ -229,7 +230,7 @@ def esp_fit (mol, grids, grids_val,
              restraint, hfree, resp_a, resp_b, maxiter, tolerance, verbose):
     ''' Fitting procedure for (R)ESP atomic charges
         In case of RESP, a penalty function is a hyperbolic form:
-        penalty funciton = resp_a \sum_i (q_i*q_i - resp_b*resp_b)**0.5 - resp_b)
+        penalty funciton = resp_a sum_i (q_i*q_i - resp_b*resp_b)**0.5 - resp_b)
 
     Parameters:
     ----------
@@ -411,15 +412,15 @@ def make_rdm1_with_orbital_response(mp):
     doo, dvv = d1
     time1 = log.timer_debug1('rdm1 intermediates', *time0)
 
-    with_frozen = not (mp.frozen is None or mp.frozen is 0)
+    with_frozen = not (mp.frozen is None or mp.frozen == 0)
     OA, VA, OF, VF = _index_frozen_active(mp.get_frozen_mask(), mp.mo_occ)
     orbo = mp.mo_coeff[:,OA]
     orbv = mp.mo_coeff[:,VA]
     nao, nocc = orbo.shape
     nvir = orbv.shape[1]
 
-# Partially transform MP2 density matrix and hold it in memory
-# The rest transformation are applied during the contraction to ERI integrals
+    # Partially transform MP2 density matrix and hold it in memory
+    # The rest transformation are applied during the contraction to ERI integrals
     part_dm2 = _ao2mo.nr_e2(mp.t2.reshape(nocc**2,nvir**2),
                             np.asarray(orbv.T, order='F'), (0,nao,0,nao),
                             's1', 's1').reshape(nocc,nocc,nao,nao)
@@ -431,7 +432,7 @@ def make_rdm1_with_orbital_response(mp):
     diagidx = diagidx*(diagidx+1)//2 + diagidx
     Imat = np.zeros((nao,nao))
 
-# 2e AO integrals dot 2pdm
+    # 2e AO integrals dot 2pdm
     max_memory = max(0, mp.max_memory - lib.current_memory()[0])
     blksize = max(1, int(max_memory*.9e6/8/(nao**3*2.5)))
 
@@ -454,8 +455,8 @@ def make_rdm1_with_orbital_response(mp):
             dm2buf = None
         time1 = log.timer_debug1('2e-part grad of atom %d'%ia, *time1)
 
-# Recompute nocc, nvir to include the frozen orbitals and make contraction for
-# the 1-particle quantities, see also the kernel function in ccsd_grad module.
+    # Recompute nocc, nvir to include the frozen orbitals and make contraction for
+    # the 1-particle quantities, see also the kernel function in ccsd_grad module.
     mo_coeff = mp.mo_coeff
     mo_energy = mp._scf.mo_energy
     nao, nmo = mo_coeff.shape
