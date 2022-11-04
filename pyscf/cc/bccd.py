@@ -56,7 +56,7 @@ def transform_t1_to_bo(t1, umat):
     if isinstance(t1, numpy.ndarray) and t1.ndim == 2:
         nocc, nvir = t1.shape
         umat_occ = umat[:nocc, :nocc]
-        umat_vir = umat[nocc:, nocc:] 
+        umat_vir = umat[nocc:, nocc:]
         return reduce(numpy.dot, (umat_occ.conj().T, t1, umat_vir))
     else: # UHF
         spin = len(t1)
@@ -128,7 +128,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
                  verbose=4):
     """
     Brueckner coupled-cluster wrapper, using an outer-loop algorithm.
-    
+
     Args:
         mycc: a converged CCSD object.
         u: initial transformation matrix.
@@ -139,10 +139,10 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
 
     Returns:
         mycc: a modified CC object with t1 vanished.
-    """ 
+    """
     log = lib.logger.new_logger(mycc, verbose)
     log.info("BCCD loop starts.")
-    
+
     def trans_mo(mo_coeff, u):
         mo_coeff = numpy.asarray(mo_coeff)
         if mo_coeff.ndim == 2:
@@ -153,7 +153,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             for s in range(spin):
                 res[s] = numpy.dot(mo_coeff[s], u[s])
         return res
-    
+
     def u2A(u):
         if u.ndim == 2:
             if la.det(u) < 0:
@@ -168,7 +168,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             A_b = logm(u[1])
             A = numpy.asarray((A_a, A_b))
         return A
-    
+
     def A2u(A):
         if A.ndim == 2:
             u = la.expm(A)
@@ -177,13 +177,13 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             u_b = la.expm(A[1])
             u = numpy.asarray((u_a, u_b))
         return u
-    
+
     mf = mycc._scf
     ovlp = mf.get_ovlp()
     adiis = lib.diis.DIIS()
     frozen = mycc.frozen
     level_shift = mycc.level_shift
-    
+
     if u is None:
         u = get_umat_from_t1(mycc.t1)
     mo_coeff_ref = numpy.array(mf.mo_coeff, copy=True)
@@ -228,7 +228,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
                 t1_ravel = numpy.hstack((mycc.t1[0].ravel(), mycc.t1[1].ravel()))
                 t1_norm = la.norm(t1_ravel)
 
-            log.info("BCC iter: %4d  E: %20.12f  dE: %12.3e  |t1|: %12.3e", 
+            log.info("BCC iter: %4d  E: %20.12f  dE: %12.3e  |t1|: %12.3e",
                      i, mycc.e_tot, dE, t1_norm)
             if t1_norm < conv_tol_normu:
                 break
@@ -240,7 +240,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
 if __name__ == "__main__":
     import pyscf
     from pyscf import cc
-    
+
     numpy.set_printoptions(3, linewidth=1000, suppress=True)
     mol = pyscf.M(
         atom = 'H 0 0 0; F 0 0 1.1',
@@ -253,10 +253,10 @@ if __name__ == "__main__":
     myhf.kernel()
     E_ref = myhf.e_tot
     rdm1_mf = myhf.make_rdm1()
-    
+
     mycc = cc.CCSD(myhf)
     mycc.kernel()
-    
+
     mycc = bccd_kernel_(mycc, diis=True, verbose=4)
 
     print (la.norm(mycc.t1))
