@@ -125,7 +125,7 @@ def logm(mrot):
     return rv @ ld @ rv.T
 
 def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
-              verbose=4):
+                 verbose=4):
     """
     Brueckner coupled-cluster wrapper, using an outer-loop algorithm.
     
