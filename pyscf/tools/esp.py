@@ -396,7 +396,6 @@ def esp_atomic_charges (mol, dm, options_dict={}, verbose=0):
 
 # Based on the grad_elec function in pyscf.grad.mp2
 def make_rdm1_with_orbital_response(mp):
-    import time
     from pyscf import lib
     from pyscf.grad.mp2 import _response_dm1, _index_frozen_active, _shell_prange
     from pyscf.mp import mp2
@@ -404,13 +403,11 @@ def make_rdm1_with_orbital_response(mp):
     from functools import reduce
 
     log = lib.logger.new_logger(mp)
-    time0 = time.clock(), time.time()
     mol = mp.mol
 
     log.debug('Build mp2 rdm1 intermediates')
     d1 = mp2._gamma1_intermediates(mp, mp.t2)
     doo, dvv = d1
-    time1 = log.timer_debug1('rdm1 intermediates', *time0)
 
     with_frozen = not (mp.frozen is None or mp.frozen == 0)
     OA, VA, OF, VF = _index_frozen_active(mp.get_frozen_mask(), mp.mo_occ)
@@ -453,7 +450,6 @@ def make_rdm1_with_orbital_response(mp):
             Imat += lib.einsum('ipx,iqx->pq', eri0.reshape(nf,nao,-1), dm2buf)
             eri0 = None
             dm2buf = None
-        time1 = log.timer_debug1('2e-part grad of atom %d'%ia, *time1)
 
     # Recompute nocc, nvir to include the frozen orbitals and make contraction for
     # the 1-particle quantities, see also the kernel function in ccsd_grad module.
