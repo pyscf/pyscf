@@ -114,6 +114,17 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                                              cache_row_b,cache_col_b))
     cpu1 = log.timer_debug1('contract_bbb', *cpu1)
 
+    # Premature termination for fully spin-polarized systems
+    if nocca*noccb == 0:
+        et_sum *= .25
+        if abs(et_sum[0].imag) > 1e-4:
+            logger.warn(mycc, 'Non-zero imaginary part of UCCSD(T) energy was found %s',
+                        et_sum[0])
+        et = et_sum[0].real
+        log.timer('UCCSD(T)', *cpu0)
+        log.note('UCCSD(T) correction = %.15g', et)
+        return et
+
     # Cache t2abT in t2ab to reduce memory footprint
     assert (t2ab.flags.c_contiguous)
     t2abT = lib.transpose(t2ab.copy().reshape(nocca*noccb,nvira*nvirb), out=t2ab)
@@ -179,7 +190,10 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
     o_sym = orbsym[:nocc]
     oo_sym = (o_sym[:,None] ^ o_sym).ravel()
     oo_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(oo_sym, minlength=8)))
-    nirrep = max(oo_sym) + 1
+    if len(oo_sym) == 0:
+        nirrep = 0
+    else:
+        nirrep = max(oo_sym) + 1
 
     orbsym   = orbsym.astype(numpy.int32)
     o_ir_loc = o_ir_loc.astype(numpy.int32)
