@@ -49,11 +49,15 @@ class KnownValues(unittest.TestCase):
         pt = mp.MP2(mf)
         emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
+        self.assertAlmostEqual(pt.e_corr_ss, -0.042627186675330754, 8)
+        self.assertAlmostEqual(pt.e_corr_os, -0.12312431898078077, 8)
 
         pt.max_memory = 1
         pt.frozen = None
         emp2, t2 = pt.kernel()
         self.assertAlmostEqual(emp2, -0.16575150552336643, 8)
+        self.assertAlmostEqual(pt.e_corr_ss, -0.042627186675330754, 8)
+        self.assertAlmostEqual(pt.e_corr_os, -0.12312431898078077, 8)
 
     def test_ump2_dm(self):
         pt = mp.MP2(mf)
@@ -232,7 +236,7 @@ class KnownValues(unittest.TestCase):
         vjb+= numpy.einsum('klij,lk->ij', eri_ab, dm[0])
         vka = numpy.einsum('ijkl,jk->il', eri_aa, dm[0])
         vkb = numpy.einsum('ijkl,jk->il', eri_bb, dm[1])
-        mf.get_veff = lambda *args: (vja - vka, vjb - vkb) 
+        mf.get_veff = lambda *args: (vja - vka, vjb - vkb)
         vhf = mf.get_veff()
         hcore = (numpy.diag(mo_energy[0]) - vhf[0],
                  numpy.diag(mo_energy[1]) - vhf[1])
