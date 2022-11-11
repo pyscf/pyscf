@@ -22,7 +22,7 @@ Brueckner coupled-cluster doubles (BCCD).
 
 from functools import reduce
 
-import numpy
+import numpy as np
 from scipy import linalg as la
 
 from pyscf import lib
@@ -31,19 +31,19 @@ def get_umat_from_t1(t1):
     """
     Get rotation matrix from t1.
     """
-    if isinstance(t1, numpy.ndarray) and t1.ndim == 2:
+    if isinstance(t1, np.ndarray) and t1.ndim == 2:
         nocc, nvir = t1.shape
-        amat = numpy.zeros((nocc+nvir, nocc+nvir), dtype=t1.dtype)
+        amat = np.zeros((nocc+nvir, nocc+nvir), dtype=t1.dtype)
         amat[:nocc, -nvir:] = -t1
         amat[-nvir:, :nocc] = t1.conj().T
         umat = la.expm(amat)
     else: # UHF
         spin = len(t1)
-        nmo = numpy.sum(t1[0].shape)
-        umat = numpy.zeros((spin, nmo, nmo), dtype=numpy.result_type(*t1))
+        nmo = np.sum(t1[0].shape)
+        umat = np.zeros((spin, nmo, nmo), dtype=np.result_type(*t1))
         for s in range(spin):
             nocc, nvir = t1[s].shape
-            amat = numpy.zeros((nmo, nmo), dtype=t1[s].dtype)
+            amat = np.zeros((nmo, nmo), dtype=t1[s].dtype)
             amat[:nocc, -nvir:] = -t1[s]
             amat[-nvir:, :nocc] = t1[s].conj().T
             umat[s] = la.expm(amat)
@@ -53,11 +53,11 @@ def transform_t1_to_bo(t1, umat):
     """
     Transform t1 to brueckner orbital basis.
     """
-    if isinstance(t1, numpy.ndarray) and t1.ndim == 2:
+    if isinstance(t1, np.ndarray) and t1.ndim == 2:
         nocc, nvir = t1.shape
         umat_occ = umat[:nocc, :nocc]
         umat_vir = umat[nocc:, nocc:]
-        return reduce(numpy.dot, (umat_occ.conj().T, t1, umat_vir))
+        return reduce(np.dot, (umat_occ.conj().T, t1, umat_vir))
     else: # UHF
         spin = len(t1)
         return [transform_t1_to_bo(t1[s], umat[s]) for s in range(spin)]
@@ -66,7 +66,7 @@ def transform_t2_to_bo(t2, umat, umat_b=None):
     """
     Transform t2 to brueckner orbital basis.
     """
-    if isinstance(t2, numpy.ndarray) and t2.ndim == 4:
+    if isinstance(t2, np.ndarray) and t2.ndim == 4:
         umat_a = umat
         if umat_b is None:
             umat_b = umat_a
@@ -76,8 +76,8 @@ def transform_t2_to_bo(t2, umat, umat_b=None):
         umat_occ_b = umat_b[:nocc_b, :nocc_b]
         umat_vir_a = umat_a[nocc_a:, nocc_a:]
         umat_vir_b = umat_b[nocc_b:, nocc_b:]
-        t2_bo = numpy.einsum("ijab, iI, jJ, aA, bB -> IJAB", t2, umat_occ_a,
-                             umat_occ_b, umat_vir_a, umat_vir_b, optimize=True)
+        t2_bo = np.einsum("ijab, iI, jJ, aA, bB -> IJAB", t2, umat_occ_a,
+                          umat_occ_b, umat_vir_a, umat_vir_b, optimize=True)
     else: # UHF
         t2_bo = [None, None, None]
         t2_bo[0] = transform_t2_to_bo(t2[0], umat[0])
@@ -92,37 +92,40 @@ def get_mo_ovlp(mo1, mo2, ovlp):
     """
     Get MO overlap, C_1.conj().T ovlp C_2.
     """
-    ovlp = numpy.asarray(ovlp)
-    mo1 = numpy.asarray(mo1)
-    mo2 = numpy.asarray(mo2)
+    ovlp = np.asarray(ovlp)
+    mo1 = np.asarray(mo1)
+    mo2 = np.asarray(mo2)
     if mo1.ndim == 2:
-        res = reduce(numpy.dot, (mo1.conj().T, ovlp, mo2))
+        res = reduce(np.dot, (mo1.conj().T, ovlp, mo2))
     else:
         assert mo1.shape[0] == mo2.shape[0]
         spin, nao, nmo1 = mo1.shape
         nmo2 = mo2.shape[-1]
-        res = numpy.zeros((spin, nmo1, nmo2), dtype=numpy.result_type(mo1, mo2))
+        res = np.zeros((spin, nmo1, nmo2), dtype=np.result_type(mo1, mo2))
         for s in range(spin):
-            res[s] = reduce(numpy.dot, (mo1[s].conj().T, ovlp, mo2[s]))
+            res[s] = reduce(np.dot, (mo1[s].conj().T, ovlp, mo2[s]))
     return res
 
 def logm(mrot):
-    rs = mrot + mrot.T
-    rl, rv = la.eigh(rs)
-    rd = rv.T @ mrot @ rv
-    ra, rdet = 1, rd[0, 0]
-    for i in range(1, len(rd)):
-        ra, rdet = rdet, rd[i, i] * rdet - \
-            rd[i - 1, i] * rd[i, i - 1] * ra
-    assert rdet > 0
-    ld = numpy.zeros_like(rd)
-    for i in range(0, len(rd) // 2 * 2, 2):
-        xcos = (rd[i, i] + rd[i + 1, i + 1]) * 0.5
-        xsin = (rd[i, i + 1] - rd[i + 1, i]) * 0.5
-        theta = numpy.arctan2(xsin, xcos)
-        ld[i, i + 1] = theta
-        ld[i + 1, i] = -theta
-    return rv @ ld @ rv.T
+    if np.iscomplexobj(mrot):
+        return la.logm(mrot)
+    else:
+        rs = mrot + mrot.T
+        rl, rv = la.eigh(rs)
+        rd = rv.T @ mrot @ rv
+        ra, rdet = 1, rd[0, 0]
+        for i in range(1, len(rd)):
+            ra, rdet = rdet, rd[i, i] * rdet - \
+                rd[i - 1, i] * rd[i, i - 1] * ra
+        assert rdet > 0
+        ld = np.zeros_like(rd)
+        for i in range(0, len(rd) // 2 * 2, 2):
+            xcos = (rd[i, i] + rd[i + 1, i + 1]) * 0.5
+            xsin = (rd[i, i + 1] - rd[i + 1, i]) * 0.5
+            theta = np.arctan2(xsin, xcos)
+            ld[i, i + 1] = theta
+            ld[i + 1, i] = -theta
+        return rv @ ld @ rv.T
 
 def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
                  verbose=4):
@@ -144,14 +147,14 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
     log.info("BCCD loop starts.")
 
     def trans_mo(mo_coeff, u):
-        mo_coeff = numpy.asarray(mo_coeff)
+        mo_coeff = np.asarray(mo_coeff)
         if mo_coeff.ndim == 2:
-            res = numpy.dot(mo_coeff, u)
+            res = np.dot(mo_coeff, u)
         else:
             spin, nao, nmo = mo_coeff.shape
-            res = numpy.zeros((spin, nao, nmo), dtype=mo_coeff.dtype)
+            res = np.zeros((spin, nao, nmo), dtype=mo_coeff.dtype)
             for s in range(spin):
-                res[s] = numpy.dot(mo_coeff[s], u[s])
+                res[s] = np.dot(mo_coeff[s], u[s])
         return res
 
     def u2A(u):
@@ -166,7 +169,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             if la.det(u[1]) < 0:
                 u[1][:, 0] *= -1
             A_b = logm(u[1])
-            A = numpy.asarray((A_a, A_b))
+            A = np.asarray((A_a, A_b))
         return A
 
     def A2u(A):
@@ -175,7 +178,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
         else:
             u_a = la.expm(A[0])
             u_b = la.expm(A[1])
-            u = numpy.asarray((u_a, u_b))
+            u = np.asarray((u_a, u_b))
         return u
 
     mf = mycc._scf
@@ -183,14 +186,22 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
     adiis = lib.diis.DIIS()
     frozen = mycc.frozen
     level_shift = mycc.level_shift
+    frozen_mask = mycc.get_frozen_mask()
 
     if u is None:
         u = get_umat_from_t1(mycc.t1)
-    mo_coeff_ref = numpy.array(mf.mo_coeff, copy=True)
+
+    mo_coeff_new = np.array(mycc.mo_coeff, copy=True)
+
     if u.ndim == 2:
-        u_tot = numpy.eye(u.shape[-1])
+        mo_coeff_ref = np.array(mycc.mo_coeff[:, frozen_mask], copy=True)
+        u_tot = np.eye(u.shape[-1], dtype=mo_coeff_ref.dtype)
     else:
-        u_tot = numpy.asarray((numpy.eye(u.shape[-1]), numpy.eye(u.shape[-1])))
+        mo_coeff_ref = np.array((mycc.mo_coeff[0][:, frozen_mask[0]],
+                                 mycc.mo_coeff[1][:, frozen_mask[1]]),
+                                 copy=True)
+        u_tot = np.asarray((np.eye(u.shape[-1]), np.eye(u.shape[-1])),
+                           dtype=mo_coeff_ref.dtype)
 
     with lib.temporary_env(mf, verbose=verbose):
         e_tot_last = mycc.e_tot
@@ -199,13 +210,21 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             if diis:
                 A = u2A(u_tot)
                 if u_tot.ndim == 2:
-                    A_new = adiis.update(A, xerr=mycc.t1)
+                    A = adiis.update(A, xerr=mycc.t1)
+                    u_tot = A2u(A)
+                    mo_xcore = trans_mo(mo_coeff_ref, u_tot)
+                    u = get_mo_ovlp(mf.mo_coeff[:, frozen_mask], mo_xcore, ovlp)
+                    mo_coeff_new[:, frozen_mask] = mo_xcore
                 else:
-                    t1_ravel = numpy.hstack((mycc.t1[0].ravel(), mycc.t1[1].ravel()))
-                    A_new = adiis.update(A, xerr=t1_ravel)
-                u_tot = A2u(A_new)
-                mo_coeff_new = trans_mo(mo_coeff_ref, u_tot)
-                u = get_mo_ovlp(mf.mo_coeff, mo_coeff_new, ovlp)
+                    t1_ravel = np.hstack((mycc.t1[0].ravel(), mycc.t1[1].ravel()))
+                    A = adiis.update(A, xerr=t1_ravel)
+                    u_tot = A2u(A)
+                    u = []
+                    for s in range(2):
+                        mo_xcore = trans_mo(mo_coeff_ref[s], u_tot[s])
+                        u.append(get_mo_ovlp(mf.mo_coeff[s][:, frozen_mask[s]], mo_xcore, ovlp))
+                        mo_coeff_new[s][:, frozen_mask[s]] = mo_xcore
+                    u = np.asarray(u)
             else:
                 mo_coeff_new = trans_mo(mo_coeff_ref, u_tot)
             mf.mo_coeff = mo_coeff_new
@@ -213,10 +232,12 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             mf.e_tot = mf.energy_tot()
             t1 = transform_t1_to_bo(mycc.t1, u)
             t2 = transform_t2_to_bo(mycc.t2, u)
+
             mycc.__init__(mf)
             mycc.frozen = frozen
             mycc.level_shift = level_shift
             mycc.verbose = verbose
+
             mycc.kernel(t1=t1, t2=t2)
             dE = mycc.e_tot - e_tot_last
             e_tot_last = mycc.e_tot
@@ -225,7 +246,7 @@ def bccd_kernel_(mycc, u=None, conv_tol_normu=1e-5, max_cycle=20, diis=True,
             if u_tot.ndim == 2:
                 t1_norm = la.norm(mycc.t1)
             else:
-                t1_ravel = numpy.hstack((mycc.t1[0].ravel(), mycc.t1[1].ravel()))
+                t1_ravel = np.hstack((mycc.t1[0].ravel(), mycc.t1[1].ravel()))
                 t1_norm = la.norm(t1_ravel)
 
             log.info("BCC iter: %4d  E: %20.12f  dE: %12.3e  |t1|: %12.3e",
@@ -241,7 +262,7 @@ if __name__ == "__main__":
     import pyscf
     from pyscf import cc
 
-    numpy.set_printoptions(3, linewidth=1000, suppress=True)
+    np.set_printoptions(3, linewidth=1000, suppress=True)
     mol = pyscf.M(
         atom = 'H 0 0 0; F 0 0 1.1',
         basis = 'ccpvdz',
@@ -254,10 +275,27 @@ if __name__ == "__main__":
     E_ref = myhf.e_tot
     rdm1_mf = myhf.make_rdm1()
 
-    mycc = cc.CCSD(myhf)
+    mycc = cc.CCSD(myhf, frozen=None)
     mycc.kernel()
+    mycc.conv_tol = 1e-3
 
     mycc = bccd_kernel_(mycc, diis=True, verbose=4)
+    e_r = mycc.e_tot
 
     print (la.norm(mycc.t1))
     assert la.norm(mycc.t1) < 1e-5
+
+    myhf = mol.UHF()
+    myhf.kernel()
+    myucc = cc.CCSD(myhf, frozen=None)
+    myucc.frozen = [0]
+    myucc.kernel()
+
+    mybcc = bccd_kernel_(myucc)
+    e_u = mybcc.e_tot
+
+    mygcc = cc.addons.convert_to_gccsd(mycc)
+    mybcc = bccd_kernel_(mygcc)
+    e_g = mybcc.e_tot
+    print (abs(e_g - e_r))
+    assert abs(e_g - e_r) < 1e-6
