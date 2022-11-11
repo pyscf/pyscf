@@ -23,16 +23,16 @@ from pyscf.mp import ump2
 from pyscf.mp import gmp2
 from pyscf.mp import dfgmp2
 
-def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
+def MP2(mf, frozen=None, mo_coeff=None, mo_occ=None, scs=False):
     if isinstance(mf, scf.uhf.UHF):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.ghf.GHF):
         return GMP2(mf, frozen, mo_coeff, mo_occ)
     else:
-        return RMP2(mf, frozen, mo_coeff, mo_occ)
+        return RMP2(mf, frozen, mo_coeff, mo_occ, scs)
 MP2.__doc__ = mp2.MP2.__doc__
 
-def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
+def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None, scs=False):
     from pyscf import lib
     from pyscf.soscf import newton_ah
 
@@ -49,7 +49,7 @@ def RMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if getattr(mf, 'with_df', None):
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
     else:
-        return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
+        return mp2.RMP2(mf, frozen, mo_coeff, mo_occ, scs)
 RMP2.__doc__ = mp2.RMP2.__doc__
 
 def UMP2(mf, frozen=None, mo_coeff=None, mo_occ=None):

@@ -59,8 +59,8 @@ def grad_elec(mp_grad, t2, atmlst=None, verbose=logger.INFO):
     part_dm2 = _ao2mo.nr_e2(t2.reshape(nocc**2,nvir**2),
                             numpy.asarray(orbv.T, order='F'), (0,nao,0,nao),
                             's1', 's1').reshape(nocc,nocc,nao,nao)
-    part_dm2 = (part_dm2.transpose(0,2,3,1) * 4 -
-                part_dm2.transpose(0,3,2,1) * 2)
+    part_dm2 = (part_dm2.transpose(0,2,3,1) * (mp.pt+mp.ps) -
+                part_dm2.transpose(0,3,2,1) * mp.pt)*2
 
     hf_dm1 = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
 

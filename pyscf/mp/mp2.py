@@ -63,8 +63,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2, verbos
 
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
         t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
-        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
-        emp2 -= numpy.einsum('jab,jba', t2i, gi)
+        emp2 += numpy.einsum('jab,jab', t2i, gi) * (mp.pt+mp.ps)
+        emp2 -= numpy.einsum('jab,jba', t2i, gi) * mp.pt
         if with_t2:
             t2[i] = t2i
 
@@ -113,8 +113,8 @@ def energy(mp, t2, eris):
     '''MP2 energy'''
     nocc, nvir = t2.shape[1:3]
     eris_ovov = numpy.asarray(eris.ovov).reshape(nocc,nvir,nocc,nvir)
-    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * 2
-    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov)
+    emp2  = numpy.einsum('ijab,iajb', t2, eris_ovov) * (mp.pt+mp.ps)
+    emp2 -= numpy.einsum('ijab,ibja', t2, eris_ovov) * mp.pt
     return emp2.real
 
 def update_amps(mp, t2, eris):
@@ -188,10 +188,10 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         else:
             t2i = t2[i]
         l2i = t2i.conj()
-        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * 2 \
-                - lib.einsum('jca,jbc->ba', l2i, t2i)
-        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * 2 \
-                - lib.einsum('iab,jba->ij', l2i, t2i)
+        dm1vir += lib.einsum('jca,jcb->ba', l2i, t2i) * (mp.pt+mp.ps) \
+                - lib.einsum('jca,jbc->ba', l2i, t2i) * mp.pt
+        dm1occ += lib.einsum('iab,jab->ij', l2i, t2i) * (mp.pt+mp.ps) \
+                - lib.einsum('iab,jba->ij', l2i, t2i) * mp.pt
     return -dm1occ, dm1vir
 
 
@@ -285,7 +285,7 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
         # above. Transposing it so that it be contracted with ERIs (in Chemist's
         # notation):
         #   E = einsum('pqrs,pqrs', eri, rdm2)
-        dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
+        dovov = t2i.transpose(1,0,2)*(mp.pt+mp.ps) - t2i.transpose(2,0,1)*mp.pt
         dovov *= 2
         if moidx is None:
             dm2[i,nocc:,:nocc,nocc:] = dovov
@@ -475,7 +475,7 @@ class MP2(lib.StreamObject):
     conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
-    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=None, mo_coeff=None, mo_occ=None, scs=False):
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ is None: mo_occ = mf.mo_occ
@@ -488,6 +488,16 @@ class MP2(lib.StreamObject):
 
         self.frozen = frozen
 
+        # Spin component scaling factors
+        '''
+        ps : opposite-spin (singlet) scaling factor
+        pt : same-spin (triplet) scaling factor
+        '''
+        self.ps = 1.0
+        self.pt = 1.0
+        if scs:
+            self.ps = 6.0/5
+            self.pt = 1.0/3
 # For iterative MP2
         self.level_shift = 0
 
