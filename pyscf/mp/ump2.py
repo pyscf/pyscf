@@ -542,7 +542,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         if nocca*nvira*noccb*nvirb > 0:
             eris.ovOV = eris.feri['ovOV']
         else:
-            eris.ovOV =	numpy.zeros((nocca*nvira,noccb*nvirb))
+            eris.ovOV = numpy.zeros((nocca*nvira,noccb*nvirb))
         if noccb*nvirb > 0:
             eris.OVOV = eris.feri['OVOV']
         else:
