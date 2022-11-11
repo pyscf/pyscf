@@ -354,7 +354,7 @@ ALIAS = {
     'dyallaae2z' : 'dyall-basis.dyall_aae2z',
     'dyallaae3z' : 'dyall-basis.dyall_aae3z',
     'dyallaae4z' : 'dyall-basis.dyall_aae4z',
-    'dyallacv2z' : 'dyall-basis.dyall_acv3z',
+    'dyallacv2z' : 'dyall-basis.dyall_acv2z',
     'dyallacv3z' : 'dyall-basis.dyall_acv3z',
     'dyallacv4z' : 'dyall-basis.dyall_acv4z',
     'dyallae2z' : 'dyall-basis.dyall_ae2z',
