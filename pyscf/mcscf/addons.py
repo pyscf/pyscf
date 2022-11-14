@@ -712,6 +712,22 @@ def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''
     return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
+def get_spin_square(casdm1, casdm2):
+    # DOI:10.1021/acs.jctc.1c00589 Eq (49)
+    spin_square = (0.75*numpy.einsum("ii", casdm1)
+                   - 0.5*numpy.einsum("ijji", casdm2)
+                   - 0.25*numpy.einsum("iijj", casdm2))
+    return spin_square
+
+def make_spin_casdm1(casdm1, casdm2, spin=None, nelec=None):
+    # DOI: 10.1002/qua.22320 Eq (3)
+    if spin is None:
+        spin = numpy.sqrt(get_spin_square(casdm1, casdm2) + 0.25) - 0.5
+    if nelec is None:
+        nelec = numpy.einsum("ii", casdm1)
+    spin_casdm1 = ((2. - nelec/2.)*casdm1 - numpy.einsum('ikkj->ij', casdm2))/(spin + 1)
+    return spin_casdm1
+
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)
 
