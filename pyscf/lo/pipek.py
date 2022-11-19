@@ -189,6 +189,8 @@ class PipekMezey(boys.Boys):
     def __init__(self, mol, mo_coeff=None, mf=None, pop_method=None):
         boys.Boys.__init__(self, mol, mo_coeff)
         self._scf = mf
+        if pop_method is not None:
+            self.pop_method = pop_method
         self._keys = self._keys.union(['pop_method', 'exponent', '_scf'])
 
     def dump_flags(self, verbose=None):
