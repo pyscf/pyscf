@@ -468,9 +468,9 @@ def madelung(cell, kpts):
         return 2*cell.omega/np.pi**0.5-np.einsum('i,i,i->', ZSI.conj(), ZSI, coulG*weights).real
 
 
-def get_monkhorst_pack_size(cell, kpts):
+def get_monkhorst_pack_size(cell, kpts, tol=1e-5):
     kpts = np.reshape(kpts, (-1,3))
-    min_tol = 1e-5
+    min_tol = tol
     assert kpts.shape[0] < 1/min_tol
     if kpts.shape[0] == 1:
         Nk = np.array([1,1,1])
