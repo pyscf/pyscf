@@ -40,6 +40,8 @@ def dump_mcscf(mc, chkfile=None, key='mcscf',
     if e_tot is None: e_tot = mc.e_tot
     if e_cas is None: e_cas = mc.e_cas
     if mo_coeff is None: mo_coeff = mc.mo_coeff
+    if mo_occ is None: mo_occ = mc.mo_occ
+    if mo_energy is None: mo_energy = mc.mo_energy
     #if ci_vector is None: ci_vector = mc.ci
 
     if h5py.is_hdf5(chkfile):
