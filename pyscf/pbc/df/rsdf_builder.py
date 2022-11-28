@@ -45,6 +45,7 @@ from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.df.aft import estimate_ke_cutoff_for_omega
 from pyscf.pbc.df.incore import libpbc, Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import (is_zero, member, unique_with_wrap_around,
                                        group_by_conj_pairs)
@@ -137,9 +138,10 @@ class _RSGDFBuilder(Int3cBuilder):
             # integrals
             self.omega, self.mesh, self.ke_cutoff = _guess_omega(auxcell, kpts, self.mesh)
         elif self.mesh is None:
-            self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
-            mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-            self.mesh = _round_off_to_odd_mesh(mesh)
+            self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
+            self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
         elif self.ke_cutoff is None:
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff[:cell.dimension].min()
@@ -345,7 +347,7 @@ class _RSGDFBuilder(Int3cBuilder):
         # 2c2e integrals the metric can easily cause errors in cderi tensor.
         # self.mesh may not be enough to produce required accuracy.
         # mesh = self.mesh
-        ke = aft.estimate_ke_cutoff_for_omega(auxcell, omega, precision)
+        ke = estimate_ke_cutoff_for_omega(auxcell, omega, precision)
         mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
         if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
             mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
@@ -1055,20 +1057,22 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
     if intor not in ('int3c2e', 'int3c2e_sph', 'int3c2e_cart'):
         raise NotImplementedError
 
+    t0 = (logger.process_clock(), logger.perf_counter())
     cell = dfbuilder.cell
     cell_d = dfbuilder.rs_cell.smooth_basis_cell()
     nao = cell_d.nao
     kpts = dfbuilder.kpts
     nkpts = kpts.shape[0]
-    if nao == 0 or cell.natm == 0:
-        return np.zeros((nao,nao,1))
+    if nao == 0 or fakenuc.natm == 0:
+        if is_zero(kpts):
+            return np.zeros((nao,nao,1))
+        else:
+            return np.zeros((2,nkpts,nao,nao,1))
 
     mesh = cell_d.mesh
-    logger.debug2(dfbuilder, 'FFT for smooth basis. cell_d.mesh %s', mesh)
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     b = cell_d.reciprocal_vectors()
     gxyz = lib.cartesian_prod([np.arange(len(x)) for x in Gvbase])
-    ngrids = Gv.shape[0]
 
     # FIXME: Is it correct for 2d pp-loc part2?
     kpt_allow = np.zeros(3)
@@ -1078,15 +1082,13 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
     aoaux = ft_ao.ft_ao(fakenuc, Gv, None, b, gxyz, Gvbase)
     rhoG = np.einsum('i,xi->x', charges, aoaux)
     coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
-    #coulG[0] += np.pi / dfbuilder.omega**2
     vG = rhoG * coulG
     vR = pbctools.ifft(vG, mesh).real
 
     coords = cell_d.get_uniform_grids(mesh)
     if is_zero(kpts):
         ao_ks = cell_d.pbc_eval_gto('GTOval', coords)
-        j3c = lib.dot(ao_ks.T * vR, ao_ks)
-        return j3c.reshape(nao,nao,1)
+        j3c = lib.dot(ao_ks.T * vR, ao_ks).reshape(nao,nao,1)
 
     else:
         ao_ks = cell_d.pbc_eval_gto('GTOval', coords, kpts=kpts)
@@ -1096,7 +1098,9 @@ def _int_dd_block(dfbuilder, fakenuc, intor='int3c2e', comp=None):
             v = lib.dot(ao_ks[k].T * vR, ao_ks[k])
             j3cR[k] = v.real
             j3cI[k] = v.imag
-        return j3cR.reshape(nkpts,nao,nao,1), j3cI.reshape(nkpts,nao,nao,1)
+        j3c = j3cR.reshape(nkpts,nao,nao,1), j3cI.reshape(nkpts,nao,nao,1)
+    t0 = logger.timer_debug1(dfbuilder, 'FFT smooth basis', *t0)
+    return j3c
 
 
 class _RSNucBuilder(_RSGDFBuilder):
@@ -1125,9 +1129,10 @@ class _RSNucBuilder(_RSGDFBuilder):
         else:
             nkpts = len(kpts)
             self.omega = 2*(-.5*nkpts**(-1./3) / np.log(cell.precision))**.5
-        self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
-        mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-        self.mesh = _round_off_to_odd_mesh(mesh)
+        self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
+        self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         self.dump_flags()
 
@@ -1135,6 +1140,7 @@ class _RSNucBuilder(_RSGDFBuilder):
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
         rcut_sr = estimate_rcut(rs_cell, fakenuc, self.omega,
                                 rs_cell.precision, self.exclude_dd_block)
+
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_sr.max(), log)
         supmol.omega = -self.omega
         self.supmol = supmol.strip_basis(rcut_sr)
@@ -1185,6 +1191,7 @@ class _RSNucBuilder(_RSGDFBuilder):
                 ovlp = [recontract_2d(s) for s in ovlp]
             else:
                 ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
+
             for k in range(nkpts):
                 if aosym == 's1':
                     mat[k] -= nucbar * ovlp[k].ravel()
@@ -1210,18 +1217,20 @@ class _RSNucBuilder(_RSGDFBuilder):
         fakenuc = aft._fake_nuc(cell, with_pseudo=with_pseudo)
         vj = self._int_nuc_vloc(fakenuc)
         if self.exclude_dd_block:
-            merge_dd = self.rs_cell.merge_diffused_block(aosym)
-            if is_zero(kpts):
-                vj_dd = self._int_dd_block(fakenuc)
-                merge_dd(vj, vj_dd)
-            else:
-                vj_ddR, vj_ddI = self._int_dd_block(fakenuc)
-                for k in range(nkpts):
-                    outR = vj[k].real.copy()
-                    outI = vj[k].imag.copy()
-                    merge_dd(outR, vj_ddR[k])
-                    merge_dd(outI, vj_ddI[k])
-                    vj[k] = outR + outI * 1j
+            cell_d = self.rs_cell.smooth_basis_cell()
+            if cell_d.nao > 0 and fakenuc.natm > 0:
+                merge_dd = self.rs_cell.merge_diffused_block(aosym)
+                if is_zero(kpts):
+                    vj_dd = self._int_dd_block(fakenuc)
+                    merge_dd(vj, vj_dd)
+                else:
+                    vj_ddR, vj_ddI = self._int_dd_block(fakenuc)
+                    for k in range(nkpts):
+                        outR = vj[k].real.copy()
+                        outI = vj[k].imag.copy()
+                        merge_dd(outR, vj_ddR[k])
+                        merge_dd(outI, vj_ddI[k])
+                        vj[k] = outR + outI * 1j
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
         kpt_allow = np.zeros(3)
@@ -1308,8 +1317,8 @@ def _guess_omega(cell, kpts, mesh=None):
     # requiring Coulomb potential < cell.precision at rcut is often not
     # enough to truncate the interaction.
     omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
-    ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
-    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
+    ke_min = estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
+    mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
 
     if mesh is None:
         nao = cell.npgto_nr()
@@ -1319,22 +1328,20 @@ def _guess_omega(cell, kpts, mesh=None):
         # ft_ao integrals ~ nkpts*nao*(cell.rcut**3/cell.vol*nao)*mesh**3
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
-        mesh = int(min((1e8/nao)**(1./3), mesh))
+        mesh = _round_off_to_odd_mesh(int(min((1e8/nao)**(1./3), mesh)))
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]
         elif cell.dimension == 2:
             mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
-        mesh = _round_off_to_odd_mesh(mesh)
     else:
         if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
             logger.warn(cell, 'mesh %s is not enough to converge to the required '
                         'integral precision %g.\nRecommended mesh is %s.',
                         mesh, cell.precision, mesh_min)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, np.asarray(mesh)-1)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
+        ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
     omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     return omega, mesh, ke_cutoff
 
@@ -1372,7 +1379,10 @@ def _round_off_to_odd_mesh(mesh):
     # between k and -k is used (function conj_j2c) to overcome the error
     # caused by auxiliary basis linear dependency. More detalis of this
     # problem can be found in function _make_j3c.
-    return (np.asarray(mesh) // 2) * 2 + 1
+    if isinstance(mesh, (int, np.integer)):
+        return (mesh // 2) * 2 + 1
+    else:
+        return (np.asarray(mesh) // 2) * 2 + 1
 
 def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
                   exclude_dd_block=False, exclude_d_aux=False):
@@ -1381,6 +1391,9 @@ def estimate_rcut(rs_cell, rs_auxcell, omega, precision=None,
         precision = rs_cell.precision
 
     cell_exps = np.array([e.min() for e in rs_cell.bas_exps()])
+    if cell_exps.size == 0:
+        return np.zeros(1)
+
     ls = rs_cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, cell_exps)
     aux_exps = np.array([e.min() for e in rs_auxcell.bas_exps()])

@@ -262,7 +262,8 @@ def get_pnucp(mydf, kpts=None):
 
     charge = -cell.atom_charges() # Apply Koseki effective charge?
     if cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        mod_cell = dfbuilder.modchg_cell
+        nucbar = (charge / np.hstack(mod_cell.bas_exps())).sum()
         nucbar *= numpy.pi/cell.vol
 
         ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
@@ -280,7 +281,7 @@ def get_pnucp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
     coulG *= kws
-    aoaux = ft_ao.ft_ao(nuccell, Gv)
+    aoaux = ft_ao.ft_ao(dfbuilder.modchg_cell, Gv)
     vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
     vGR = vG.real
     vGI = vG.imag

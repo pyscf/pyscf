@@ -87,7 +87,7 @@ class KnownValues(unittest.TestCase):
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.4190632006601662, 9)
+        self.assertAlmostEqual(e1, -3.4190632006601662, 8)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
     @unittest.skip('mesh not enough for density')

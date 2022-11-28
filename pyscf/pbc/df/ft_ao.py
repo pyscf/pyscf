@@ -385,15 +385,13 @@ class _RangeSeparatedCell(pbcgto.Cell):
         if cell_d.nbas == 0:
             return cell_d
 
-        cell_d.rcut = pbcgto.estimate_rcut(cell_d, precision=self.precision)
-        # Update mesh
-        ke_cutoff = pbcgto.estimate_ke_cutoff(cell_d, self.precision)
+        cell_d.ke_cutoff = ke_cutoff = pbcgto.estimate_ke_cutoff(cell_d)
         mesh = pbctools.cutoff_to_mesh(cell_d.lattice_vectors(), ke_cutoff)
         if (cell_d.dimension < 2 or
             (cell_d.dimension == 2 and cell_d.low_dim_ft_type == 'inf_vacuum')):
             mesh[cell_d.dimension:] = pbcgto.cell._mesh_inf_vaccum(cell_d)
         logger.debug1(self, 'cell_d rcut %g ke_cutoff %g, mesh %s',
-                      cell_d.rcut, ke_cutoff, mesh)
+                      cell_d.rcut, self.ke_cutoff, mesh)
         cell_d.mesh = mesh
         return cell_d
 
@@ -695,8 +693,12 @@ def estimate_rcut(cell, precision=None):
     '''
     if precision is None:
         precision = cell.precision
+
     # consider only the most diffused component of a basis
     exps = np.array([e.min() for e in cell.bas_exps()])
+    if exps.size == 0:
+        return np.zeros(1)
+
     ls = cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, exps)
     ai_idx = exps.argmin()

@@ -1764,13 +1764,11 @@ def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
             break
     return tasks
 
-# FIXME: compare to _estimate_rcut in eval_gto
 def _primitive_gto_cutoff(cell, precision=None):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
     if precision is None:
-        precision = cell.precision * EXTRA_PREC
-    log_prec = min(numpy.log(precision), 0)
+        precision = cell.precision / cell.vol
 
     rcut = []
     ke_cutoff = []
@@ -1778,13 +1776,12 @@ def _primitive_gto_cutoff(cell, precision=None):
         l = cell.bas_angular(ib)
         es = cell.bas_exp(ib)
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
-        r = 5.
-        r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
-        r = (((l+2)*numpy.log(r)+numpy.log(4*numpy.pi*cs) - log_prec) / es)**.5
+        norm_ang = ((2*l+1)/(4*numpy.pi))**.5
+        fac = 2*numpy.pi*cs*norm_ang/es / precision
+        r = 10.
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
+        r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
 
-# Errors in total number of electrons were observed with the default
-# precision. The energy cutoff (or the integration mesh) is not enough to
-# produce the desired accuracy. Scale precision by 0.1 to decrease the error.
         ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
 
         rcut.append(r)

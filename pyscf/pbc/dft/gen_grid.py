@@ -20,6 +20,7 @@ import ctypes
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.pbc.gto import eval_gto as pbc_eval_gto
 from pyscf import dft
 from pyscf.pbc.gto.cell import get_uniform_grids, gen_uniform_grids
 from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
@@ -44,8 +45,9 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, cutoff=None,
         shls_slice = (0, cell.nbas)
     assert (shls_slice == (0, cell.nbas))
 
-    Ls = cell.get_lattice_Ls()
-    Ls = Ls[np.argsort(lib.norm(Ls, axis=1))]
+    rcut = pbc_eval_gto._estimate_rcut(cell)
+    Ls = pbc_eval_gto.get_lattice_Ls(cell, rcut=rcut.max())
+    Ls = Ls[np.argsort(lib.norm(Ls, axis=1), kind='stable')]
 
     non0tab = np.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas), dtype=np.uint8)
     libpbc.PBCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
@@ -153,7 +155,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         dimension = cell.dimension
     else:
         dimension = 3
-    Ls = cell.get_lattice_Ls()
+    Ls = pbc_eval_gto.get_lattice_Ls(cell)
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)

@@ -235,7 +235,7 @@ def get_pbc_pvxp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
     coulG *= kws
-    aoaux = ft_ao.ft_ao(nuccell, Gv)
+    aoaux = ft_ao.ft_ao(dfbuilder.modchg_cell, Gv)
     charge = -cell.atom_charges() # Apply Koseki effective charge?
     vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
     vGR = vG.real

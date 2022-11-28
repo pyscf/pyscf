@@ -21,12 +21,15 @@
 import copy
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
+from pyscf.pbc import gto as pbcgto
+from pyscf.pbc.gto import pseudo, error_for_ke_cutoff, estimate_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.df import aft
+from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -34,6 +37,7 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
+    from pyscf.pbc.dft import gen_grid
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -43,7 +47,7 @@ def get_nuc(mydf, kpts=None):
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
-    SI = cell.get_SI(Gv)
+    SI = cell.get_SI(mesh=mesh)
     rhoG = numpy.dot(charge, SI)
 
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
@@ -64,7 +68,7 @@ def get_nuc(mydf, kpts=None):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
-    from pyscf import gto
+    from pyscf.pbc.dft import gen_grid
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -73,7 +77,7 @@ def get_pp(mydf, kpts=None):
 
     mesh = mydf.mesh
     Gv = cell.get_Gv(mesh)
-    SI = cell.get_SI(Gv)
+    SI = cell.get_SI(mesh=mesh)
     vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     ngrids = len(vpplocG)
@@ -168,7 +172,15 @@ class FFTDF(lib.StreamObject):
         self.max_memory = cell.max_memory
 
         self.kpts = kpts
+
         self.grids = gen_grid.UniformGrids(cell)
+        # FFT from real space density distributes error to every rho_ij(G) than
+        # the one with largest Gaussian exponent. Therefore the error for FFT-ERI
+        # ~ Nele * error[rho(Ecut)] while in AFT the error is ~ error[rho(Ecut)]^2.
+        # This is a first order error, same to the error estimation for nuclear
+        # attraction.
+        ke_cutoff = cell.ke_cutoff
+        self.mesh = cell.mesh
 
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
@@ -380,21 +392,3 @@ class FFTDF(lib.StreamObject):
         return ngrids * 2
 
     range_coulomb = aft.AFTDF.range_coulomb
-
-
-if __name__ == '__main__':
-    from pyscf.pbc import gto as pbcgto
-    cell = pbcgto.Cell()
-    cell.verbose = 0
-    cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-    cell.a = numpy.diag([4, 4, 4])
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [20]*3
-    cell.build()
-    k = numpy.ones(3)*.25
-    df = FFTDF(cell)
-    v1 = get_pp(df, k)
-    print(lib.finger(v1) - (1.8428463642697195-0.10478381725330854j))
-    v1 = get_nuc(df, k)
-    print(lib.finger(v1) - (2.3454744614944714-0.12528407127454744j))

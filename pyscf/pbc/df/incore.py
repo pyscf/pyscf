@@ -451,6 +451,9 @@ def estimate_rcut(cell, auxcell, precision=None):
 
     cell_exps = np.array([e.min() for e in cell.bas_exps()])
     aux_exps = np.array([e.min() for e in auxcell.bas_exps()])
+    if cell_exps.size == 0 or aux_exps.size == 0:
+        return np.zeros(1)
+
     ls = cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, cell_exps)
 

@@ -29,7 +29,7 @@ from pyscf.gto import AS_ECPBAS_OFFSET, AS_NECPBAS
 
 
 def ecp_int(cell, kpts=None):
-    from pyscf.pbc.df import incore
+    from pyscf.pbc.df import gdf_builder
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -52,8 +52,9 @@ def ecp_int(cell, kpts=None):
     # shls_slice of auxiliary index (0,1) corresponds to the fictitious s function
     shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 
-    dfbuilder = incore._Int3cBuilder(cell, ecpcell, kpts_lst).build()
-    print(dfbuilder.supmol.nbas)
+    dfbuilder = gdf_builder._CCGDFBuilder(cell, ecpcell, kpts_lst)
+    dfbuilder.exclude_dd_block = False
+    dfbuilder.build()
     int3c = dfbuilder.gen_int3c_kernel('ECPscalar', aosym='s2', comp=1,
                                        j_only=True, return_complex=True)
     buf = int3c(shls_slice)

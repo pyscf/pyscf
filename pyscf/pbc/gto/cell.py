@@ -486,24 +486,33 @@ def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     norm_ang = (2*l+1)/(4*np.pi)
     fac = 2*np.pi*c**2*norm_ang / theta / precision
     r0 = 20
-    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l) + 1.) / theta)**.5
-    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l) + 1.) / theta)**.5
+    # The estimation is enough for overlap. Errors are slightly larger for
+    # kinetic operator. The error in kinetic integrals may be dominant.
+    # For kinetic operator, basis becomes 2*a*r*|orig-basis>.
+    # A penalty term 4*a^2*r^2 is included in the estimation.
+    fac *= 4*alpha**2
+    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l+2) + 1.) / theta)**.5
+    r0 = (np.log(fac * r0 * (r0*.5+a1)**(2*l+2) + 1.) / theta)**.5
     return r0
 
-def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
+def bas_rcut(cell, bas_id, precision=None):
     r'''Estimate the largest distance between the function and its image to
     reach the precision in overlap
 
     precision ~ \int g(r-0) g(r-Rcut)
     '''
+    if precision is None:
+        precision = cell.precision
     l = cell.bas_angular(bas_id)
     es = cell.bas_exp(bas_id)
     cs = abs(cell._libcint_ctr_coeff(bas_id)).max(axis=1)
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
-def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
+def estimate_rcut(cell, precision=None):
     '''Lattice-sum cutoff for the entire system'''
+    if precision is None:
+        precision = cell.precision
     #rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
     #if rcut:
     #    rcut_max = max(rcut)
@@ -518,70 +527,37 @@ def estimate_rcut(cell, precision=INTEGRAL_PRECISION):
     rcut = _estimate_rcut(exps, ls, cs, precision)
     return rcut.max()
 
-def _rcut_penalty(cell):
-    '''Basis near the boundary of a cell may be closed to basis near the
-    boundary of the neighbour image. Use a penalty for this when calling
-    estimate_rcut
-    '''
-    a = cell.lattice_vectors()
-    if cell.dimension == 3:
-        vol = np.linalg.det(a)
-        penalty = vol ** (1./3) * 3**.5
-    elif cell.dimension == 2:
-        area = np.linalg.norm(np.cross(a[0], a[1]))
-        penalty = area ** .5 * 2**.5
-    elif cell.dimension == 1:
-        penalty = np.linalg.norm(a[0])
-    else:
-        penalty = 0
-    return penalty
-
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
-    '''Energy cutoff estimation based on cubic lattice'''
-    norm_ang = ((2*l+1)/(4*np.pi))**2
-    fac = 8*np.pi**5 * c**4*norm_ang / (2*alpha)**(4*l+2) / precision
+    '''Energy cutoff estimation for nuclear attraction integrals'''
+    norm_ang = (2*l+1)/(4*np.pi)
+    fac = 32*np.pi**2*(2*np.pi)**1.5 * c**2*norm_ang / (2*alpha)**(2*l+.5) / precision
     Ecut = 20.
-    Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
-    Ecut = np.log(fac * (Ecut*.5)**(2*l-.5) + 1.) * 2*alpha
+    Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
+    Ecut = np.log(fac * (Ecut*2)**(l-.5) + 1.) * 4*alpha
     return Ecut
 
-def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
-    '''Energy cutoff estimation for the entire system'''
-    #Ecut_max = 0
-    #for i in range(cell.nbas):
-    #    l = cell.bas_angular(i)
-    #    es = cell.bas_exp(i)
-    #    cs = abs(cell._libcint_ctr_coeff(i)).max(axis=1)
-    #    ke_guess = _estimate_ke_cutoff(es, l, cs, precision)
-    #    Ecut_max = max(Ecut_max, ke_guess.max())
-    #return Ecut_max
+def estimate_ke_cutoff(cell, precision=None):
+    '''Energy cutoff estimation for nuclear attraction integrals'''
+    if precision is None:
+        precision = cell.precision
     exps = np.array([e.min() for e in cell.bas_exps()])
     if exps.size == 0:
         return 0.
     ls = cell._bas[:,mole.ANG_OF]
     cs = mole.gto_norm(ls, exps)
     Ecut = _estimate_ke_cutoff(exps, ls, cs, precision)
-    return Ecut.max()
+    charges = cell.atom_charges()
+    return Ecut.max() * charges.max()
 
 def error_for_ke_cutoff(cell, ke_cutoff):
-    kmax = np.sqrt(ke_cutoff*2)
-    errmax = 0
-    for i in range(cell.nbas):
-        l = cell.bas_angular(i)
-        es = cell.bas_exp(i)
-        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = (256*np.pi**4*cs**4 * factorial2(l*4+3)
-               / factorial2(l*2+1)**2)
-        efac = np.exp(-ke_cutoff/(2*es))
-        err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
-        errmax = max(errmax, err1.max())
-        if np.any(ke_cutoff < 5*es):
-            err2 = (1.41*efac+2.51)*fac/(4*es)**(2*l+2) * kmax**(4*l+5)
-            errmax = max(errmax, err2[ke_cutoff<5*es].max())
-        if np.any(ke_cutoff < es):
-            err2 = (1.41*efac+2.51)*fac/2**(2*l+2) * np.sqrt(2*es)
-            errmax = max(errmax, err2[ke_cutoff<es].max())
-    return errmax
+    '''Error estimation based on nuclear attraction integrals'''
+    exps = np.array([e.min() for e in cell.bas_exps()])
+    ls = cell._bas[:,mole.ANG_OF]
+    cs = mole.gto_norm(ls, exps)
+    norm_ang = (2*ls+1)/(4*np.pi)
+    fac = 32*np.pi**2*(2*np.pi)**1.5 * cs**2*norm_ang / (2*exps)**(2*ls+.5)
+    err = fac * (2*ke_cutoff)**(ls-.5) * np.exp(-ke_cutoff/(4*exps))
+    return err.max()
 
 def get_bounding_sphere(cell, rcut):
     '''Finds all the lattice points within a sphere of radius rcut.
@@ -682,7 +658,7 @@ def _non_uniform_Gv_base(n):
     #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
     return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
-def get_SI(cell, Gv=None):
+def get_SI(cell, Gv=None, mesh=None):
     '''Calculate the structure factor (0D, 1D, 2D, 3D) for all atoms; see MH (3.34).
 
     Args:
@@ -696,16 +672,18 @@ def get_SI(cell, Gv=None):
             The structure factor for each atom at each G-vector.
     '''
     coords = cell.atom_coords()
-    ngrids = np.prod(cell.mesh)
-    if Gv is None or Gv.shape[0] == ngrids:
-        basex, basey, basez = cell.get_Gv_weights(cell.mesh)[1]
+    if Gv is None:
+        if mesh is None:
+            mesh = cell.mesh
+        basex, basey, basez = cell.get_Gv_weights(mesh)[1]
         b = cell.reciprocal_vectors()
         rb = np.dot(coords, b.T)
         SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
         SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
         SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
         SI = SIx[:,:,None,None] * SIy[:,None,:,None] * SIz[:,None,None,:]
-        SI = SI.reshape(-1,ngrids)
+        natm = coords.shape[0]
+        SI = SI.reshape(natm, -1)
     else:
         SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
@@ -1483,11 +1461,6 @@ class Cell(mole.Mole):
                 (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
                 self._mesh[self.dimension:] = _mesh_inf_vaccum(self)
             self._mesh_from_build = True
-
-            # Set minimal mesh grids to handle the case mesh==0. since Madelung
-            # constant may be computed even if the unit cell has 0 atoms. In this
-            # system, cell.mesh was initialized to 0.
-            self._mesh[self._mesh == 0] = 30
 
         if self.space_group_symmetry:
             from pyscf.pbc.symm import Symmetry

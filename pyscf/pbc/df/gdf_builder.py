@@ -40,7 +40,7 @@ from pyscf.pbc.gto.cell import _estimate_rcut
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import rsdf_builder
-from pyscf.pbc.df.rsdf_builder import _round_off_to_odd_mesh
+from pyscf.pbc.df.aft import estimate_ke_cutoff_for_eta
 from pyscf.pbc.df.incore import libpbc, Int3cBuilder
 from pyscf.pbc.lib.kpts_helper import (is_zero, unique_with_wrap_around,
                                        group_by_conj_pairs)
@@ -90,9 +90,10 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         if self.eta is None:
             self.eta, self.mesh, self.ke_cutoff = _guess_eta(auxcell, kpts, self.mesh)
         elif self.mesh is None:
-            self.ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta)
-            mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-            self.mesh = _round_off_to_odd_mesh(mesh)
+            self.ke_cutoff = estimate_ke_cutoff_for_eta(cell, self.eta)
+            self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
         elif self.ke_cutoff is None:
             ke_cutoff = pbctools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             self.ke_cutoff = ke_cutoff.min()
@@ -102,7 +103,6 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         self.dump_flags()
 
         self.fused_cell, self.fuse = fuse_auxcell(auxcell, self.eta)
-
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, rsdf_builder.RCUT_THRESHOLD, verbose=log)
 
@@ -147,7 +147,7 @@ class _CCGDFBuilder(rsdf_builder._RSGDFBuilder):
         # self.mesh may not be enough to produce required accuracy.
         # mesh = self.mesh
         precision = auxcell.precision**2
-        ke = aft.estimate_ke_cutoff_for_eta(auxcell, self.eta, precision)
+        ke = estimate_ke_cutoff_for_eta(auxcell, self.eta, precision)
         mesh = pbctools.cutoff_to_mesh(auxcell.lattice_vectors(), ke)
         if auxcell.dimension < 2 or auxcell.low_dim_ft_type == 'inf_vacuum':
             mesh[auxcell.dimension:] = self.mesh[auxcell.dimension:]
@@ -484,9 +484,10 @@ class _CCNucBuilder(_CCGDFBuilder):
         else:
             nkpts = len(kpts)
             self.eta = eta = -2.*nkpts**(-1./3) / np.log(cell.precision)
-        self.ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, eta)
-        mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-        self.mesh = _round_off_to_odd_mesh(mesh)
+        self.ke_cutoff = estimate_ke_cutoff_for_eta(cell, self.eta)
+        self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         self.dump_flags()
 
@@ -549,7 +550,6 @@ class _CCNucBuilder(_CCGDFBuilder):
             charge = -cell.atom_charges()
             nucbar = (charge / np.hstack(mod_cell.bas_exps())).sum()
             nucbar *= np.pi/cell.vol
-
             if self.exclude_dd_block:
                 rs_cell = self.rs_cell
                 ovlp = rs_cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
@@ -560,6 +560,7 @@ class _CCNucBuilder(_CCGDFBuilder):
                 ovlp = [recontract_2d(s) for s in ovlp]
             else:
                 ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
+
             for k in range(nkpts):
                 if aosym == 's1':
                     mat[k] -= nucbar * ovlp[k].ravel()
@@ -585,18 +586,20 @@ class _CCNucBuilder(_CCGDFBuilder):
         fakenuc = aft._fake_nuc(cell, with_pseudo=with_pseudo)
         vj = self._int_nuc_vloc(fakenuc, with_pseudo=with_pseudo)
         if self.exclude_dd_block:
-            merge_dd = self.rs_cell.merge_diffused_block(aosym)
-            if is_zero(kpts):
-                vj_dd = self._int_dd_block(fakenuc)
-                merge_dd(vj, vj_dd)
-            else:
-                vj_ddR, vj_ddI = self._int_dd_block(fakenuc)
-                for k in range(nkpts):
-                    outR = vj[k].real.copy()
-                    outI = vj[k].imag.copy()
-                    merge_dd(outR, vj_ddR[k])
-                    merge_dd(outI, vj_ddI[k])
-                    vj[k] = outR + outI * 1j
+            cell_d = self.rs_cell.smooth_basis_cell()
+            if cell_d.nao > 0 and fakenuc.natm > 0:
+                merge_dd = self.rs_cell.merge_diffused_block(aosym)
+                if is_zero(kpts):
+                    vj_dd = self._int_dd_block(fakenuc)
+                    merge_dd(vj, vj_dd)
+                else:
+                    vj_ddR, vj_ddI = self._int_dd_block(fakenuc)
+                    for k in range(nkpts):
+                        outR = vj[k].real.copy()
+                        outI = vj[k].imag.copy()
+                        merge_dd(outR, vj_ddR[k])
+                        merge_dd(outI, vj_ddI[k])
+                        vj[k] = outR + outI * 1j
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
         kpt_allow = np.zeros(3)
@@ -604,8 +607,8 @@ class _CCNucBuilder(_CCGDFBuilder):
         # FIXME: Is it correct for 2d pp-loc part2?
         coulG = pbctools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(self.modchg_cell, Gv)
-        charges = cell.atom_charges()
-        vG = np.einsum('i,xi,x->x', -charges, aoaux, coulG)
+        charges = -cell.atom_charges()
+        vG = np.einsum('i,xi,x->x', charges, aoaux, coulG)
 
         supmol_ft = self.supmol_ft
         ft_kern = supmol_ft.gen_ft_kernel(aosym, return_complex=False,
@@ -817,23 +820,22 @@ def _guess_eta(cell, kpts=None, mesh=None):
 
     a = cell.lattice_vectors()
     eta_min = aft.estimate_eta(cell, cell.precision*1e-2)
-    ke_min = aft.estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
-    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
+    ke_min = estimate_ke_cutoff_for_eta(cell, eta_min, cell.precision)
+    mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
 
     if mesh is None:
         nimgs = (8 * cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
         nkpts = len(kpts)
         nao = cell.nao
         mesh = (nimgs**2*nao / (nkpts**.5*nimgs**.5 * 1e2 + nkpts**2*nao))**(1./3) + 2
-        mesh = int(min((1e8/nao)**(1./3), mesh))
+        mesh = rsdf_builder._round_off_to_odd_mesh(int(min((1e8/nao)**(1./3), mesh)))
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh-1)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
         ke_cutoff = ke_cutoff[:cell.dimension].min()
         if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
             mesh[cell.dimension:] = cell.mesh[cell.dimension:]
         elif cell.dimension == 2:
             mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
-        mesh = _round_off_to_odd_mesh(mesh)
     else:
         if np.any(mesh[:cell.dimension] < mesh_min[:cell.dimension]):
             logger.warn(cell, 'mesh %s is not enough to converge to the required '
@@ -865,6 +867,9 @@ def estimate_rcut(rs_cell, auxcell, precision=None, exclude_dd_block=False):
 
     cell_exps = np.array([e.min() for e in rs_cell.bas_exps()])
     aux_exps = np.array([e.min() for e in auxcell.bas_exps()])
+    if cell_exps.size == 0 or aux_exps.size == 0:
+        return np.zeros(1)
+
     ls = rs_cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, cell_exps)
 

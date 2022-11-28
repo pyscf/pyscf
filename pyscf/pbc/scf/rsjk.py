@@ -34,7 +34,7 @@ from pyscf.scf import _vhf
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.tools import k2gamma
-from pyscf.pbc.df import aft, aft_jk, rsdf_builder
+from pyscf.pbc.df import aft, rsdf_builder
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df.df_jk import (zdotNN, zdotCN, zdotNC, _ewald_exxdiv_for_G0,
                                 _format_dms, _format_kpts_band, _format_jks)
@@ -71,6 +71,7 @@ class RangeSeparatedJKBuilder(object):
         self.bvk_kmesh = None
         self.supmol_sr = None
         self.supmol_ft = None
+        self.supmol_d = None
         # For shells in bvkcell, use overlap mask to remove d-d block
         self.ovlp_mask = None
         # which shells are located in the first primitive cell
@@ -121,18 +122,20 @@ class RangeSeparatedJKBuilder(object):
             # integrals
             self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
         else:
-            self.ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, self.omega)
+            self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
             self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
+            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
                  self.omega, self.ke_cutoff, self.mesh)
 
         if direct_scf_tol is None:
-            nimgs = cell.rcut**3 / cell.vol
-            direct_scf_tol = cell.precision / (nimgs * cell.npgto_nr())
+            cell_exp = np.hstack(cell.bas_exps()).min()
+            theta = 1./(1./cell_exp + self.omega**-2)
+            lattice_sum_factor = 2*np.pi*cell.rcut / theta
+            direct_scf_tol = cell.precision / lattice_sum_factor
         log.debug('Set direct_scf_tol %g', direct_scf_tol)
-        direct_scf_tol = cell.precision**1.5
-        direct_scf_tol = 1e-12
 
         rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
@@ -141,7 +144,10 @@ class RangeSeparatedJKBuilder(object):
         self.bvk_kmesh = kmesh = k2gamma.kpts_to_kmesh(cell, kpts)
         log.debug('kmesh for bvk-cell = %s', kmesh)
 
-        rcut_sr = estimate_rcut(rs_cell, self.omega)
+        # FIXME: tests the extra requirements on precision is caused by the
+        # triple lattice sum
+        precision = cell.precision * 1e-1
+        rcut_sr = estimate_rcut(rs_cell, self.omega, precision)
 
         if self.fully_uncontracted:
             log.debug('make supmol from fully uncontracted cell basis')
@@ -155,29 +161,23 @@ class RangeSeparatedJKBuilder(object):
                 rs_cell, kmesh, rcut_sr.max(), log)
         supmol_sr.omega = -self.omega
         self.supmol_sr = supmol_sr.strip_basis(rcut_sr)
-        # In _get_lr_k_kpts, fft for cell_d ft_aopair is less efficient than
-        # analytical FT
-        cell_d = rs_cell.smooth_basis_cell()
-        rcut = ft_ao.estimate_rcut(cell_d)
-        supmol_d = ft_ao.ExtendedMole.from_cell(cell_d, kmesh, rcut.max(), log)
-        self.supmol_d = supmol_d.strip_basis(rcut)
+        log.debug('supmol nbas = %d cGTO = %d pGTO = %d',
+                  supmol_sr.nbas, supmol_sr.nao, supmol_sr.npgto_nr())
 
         if self.has_long_range():
-            rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision, True)
+            rcut = rsdf_builder.estimate_ft_rcut(rs_cell, exclude_dd_block=True)
             supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(
                 rs_cell, kmesh, rcut.max(), log)
             supmol_ft.exclude_dd_block = True
             self.supmol_ft = supmol_ft.strip_basis(rcut)
+            log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
+                      supmol_ft.nbas, supmol_ft.nao, supmol_ft.npgto_nr())
 
-        log.debug('supmol nbas = %d cGTO = %d pGTO = %d',
-                  supmol.nbas, supmol.nao, supmol.npgto_nr())
-        log.debug('supmol_d nbas = %d cGTO = %d',
-                  self.supmol_d.nbas, self.supmol_d.nao)
         log.timer_debug1('initializing supmol', *cpu0)
 
         # Intialize vhfopt
-        with supmol.with_integral_screen(direct_scf_tol**2):
-            vhfopt = _vhf.VHFOpt(supmol, cell._add_suffix(intor),
+        with supmol_sr.with_integral_screen(direct_scf_tol**2):
+            vhfopt = _vhf.VHFOpt(supmol_sr, cell._add_suffix(intor),
                                  qcondname=libpbc.PBCVHFsetnr_direct_scf)
         self.vhfopt = vhfopt
         vhfopt.direct_scf_tol = direct_scf_tol
@@ -186,10 +186,10 @@ class RangeSeparatedJKBuilder(object):
         # Remove the smooth-smooth basis block.
         # Modify the contents of vhfopt.q_cond inplace
         q_cond = self.get_q_cond()
-        smooth_idx = supmol.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
+        smooth_idx = supmol_sr.bas_type_to_indices(ft_ao.SMOOTH_BASIS)
         q_cond[smooth_idx[:,None], smooth_idx] = 1e-200
 
-        sh_loc = supmol.sh_loc
+        sh_loc = supmol_sr.sh_loc
         bvk_q_cond = lib.condense('NP_absmax', q_cond, sh_loc, sh_loc)
         self.ovlp_mask = (bvk_q_cond > direct_scf_tol).astype(np.int8)
         return self
@@ -339,7 +339,7 @@ class RangeSeparatedJKBuilder(object):
             if omega > 0:  # Long-range part only, call AFTDF
                 cell = self.cell
                 dfobj = aft.AFTDF(cell, self.kpts)
-                ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
+                ke_cutoff = estimate_ke_cutoff_for_omega(cell, omega)
                 dfobj.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
                 return dfobj.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                     with_j, with_k, omega, exxdiv)
@@ -430,12 +430,15 @@ class RangeSeparatedJKBuilder(object):
         cell = self.cell
         rs_cell = self.rs_cell
         cell_d = rs_cell.smooth_basis_cell()
-        mesh = self.mesh
-        ngrids = np.prod(mesh)
         kpts = np.asarray(kpts.reshape(-1, 3), order='C')
         dms = _format_dms(dm_kpts, kpts)
         n_dm, nkpts, nao = dms.shape[:3]
         naod = cell_d.nao
+        if naod > 0:
+            mesh = cell_d.mesh
+        else:
+            mesh = self.mesh
+        ngrids = np.prod(mesh)
 
         vj_kpts = np.zeros((n_dm,nkpts,nao,nao), dtype=np.complex128)
 
@@ -576,7 +579,7 @@ class RangeSeparatedJKBuilder(object):
 
         uniq_kpts, uniq_index, uniq_inverse = unique_with_wrap_around(
             cell, (kpts[None,:,:] - kpts[:,None,:]).reshape(-1, 3))
-        scaled_uniq_kpts = cell_d.get_scaled_kpts(uniq_kpts).round(5)
+        scaled_uniq_kpts = cell.get_scaled_kpts(uniq_kpts).round(5)
         log.debug('Num uniq kpts %d', len(uniq_kpts))
         log.debug2('Scaled unique kpts %s', scaled_uniq_kpts)
 
@@ -588,6 +591,8 @@ class RangeSeparatedJKBuilder(object):
         log.debug1('naod = %d cache_size = %d', naod, cache_size)
 
         if naod > 0:
+            # TODO: less number of planewaves are needed with AFT(cell_d).
+            # Test if the dd_block should be computed with FFTDF
             ao_loc = cell.ao_loc
             smooth_bas_mask = rs_cell.bas_type == ft_ao.SMOOTH_BASIS
             smooth_bas_idx = rs_cell.bas_map[smooth_bas_mask]
@@ -648,6 +653,12 @@ class RangeSeparatedJKBuilder(object):
             else:
                 log.debug1('merge_dd with aft_aopair_dd')
 
+                if self.supmol_d is None:
+                    rcut = ft_ao.estimate_rcut(cell_d)
+                    supmol_d = ft_ao.ExtendedMole.from_cell(cell_d, kmesh, rcut.max(), log)
+                    self.supmol_d = supmol_d.strip_basis(rcut)
+                    log.debug('supmol_d nbas = %d cGTO = %d',
+                              self.supmol_d.nbas, self.supmol_d.nao)
                 aft_aopair_dd = self.supmol_d.gen_ft_kernel(
                     aosym, return_complex=False, verbose=log)
 
@@ -744,50 +755,13 @@ def _purify(mat_kpts, phase):
     mat_bvk = lib.einsum('k,Sk,nkuv->nSuv', phase[0], phase.conj(), mat_kpts)
     return lib.einsum('S,Sk,nSuv->nkuv', nkpts*phase[:,0].conj(), phase, mat_bvk.real)
 
-class _PrimitiveCell(ft_ao._RangeSeparatedCell):
-    '''Cell with partially de-contracted basis'''
-    def __init__(self):
-        self.ref_cell = None
-        self.bas_map = None
-        self.bas_type = None
-        self.sh_loc = None
-        self.contr_coeff = None
-
-    @classmethod
-    def from_cell(cls, cell, ke_cut_threshold=KECUT_THRESHOLD,
-                  rcut_threshold=None, precision=None, verbose=None):
-        log = logger.new_logger(cell, verbose)
-        if precision is None:
-            precision = cell.precision
-
-        pcell, contr_coeff = cell.decontract_basis(to_cart=True)
-        rs_cell = pcell.view(cls)
-        rs_cell.ref_cell = pcell
-
-        rs_cell.contr_coeff = scipy.linalg.block_diag(*contr_coeff)
-        exps = rs_cell._env[rs_cell._bas[:,gto.PTR_EXP]]
-        l = rs_cell._bas[:,gto.ANG_OF]
-        ke_cut = pbcgto.cell._estimate_ke_cutoff(exps, l, 1, precision)
-
-        rs_cell.bas_type = np.empty(rs_cell.nbas, dtype=np.int32)
-        rs_cell.bas_type[ke_cut < ke_cut_threshold] = ft_ao.SMOOTH_BASIS
-        rs_cell.bas_type[ke_cut >= ke_cut_threshold] = ft_ao.LOCAL_BASIS
-        # For each basis of rs_cell, bas_map gives the basis in cell
-        rs_cell.bas_map = np.arange(rs_cell.nbas, dtype=np.int32)
-        rs_cell.sh_loc = np.append(np.arange(rs_cell.nbas), rs_cell.nbas).astype(np.int32)
-        rs_cell.ke_cutoff = ke_cut_threshold
-        rs_cell.precision = precision
-        log.debug3('%s.bas_type %s', cls, rs_cell.bas_type)
-        log.debug3('%s.sh_loc %s', cls, rs_cell.sh_loc)
-        return rs_cell
-
 
 def estimate_rcut(rs_cell, omega, precision=None):
     '''Estimate rcut for 2e SR-integrals'''
     if precision is None:
         precision = rs_cell.precision
 
-    rs_cell = self.rs_cell
+    rs_cell = rs_cell
     exps = np.array([e.min() for e in rs_cell.bas_exps()])
     ls = rs_cell._bas[:,gto.ANG_OF]
     cs = gto.gto_norm(ls, exps)
@@ -811,19 +785,17 @@ def estimate_rcut(rs_cell, omega, precision=None):
     akl = ak + al
     lij = li + lj
     lkl = lk + ll
-    a1 = aij + akl
     l4 = lij + lkl
     norm_ang = ((2*li+1)*(2*lj+1)*(2*lk+1)*(2*ll+1)/(4*np.pi)**4)**.5
     c1 = ci * cj * ck * cl * norm_ang
-    theta = 1./(1./aij + 1./akl + self.omega**-2)
+    theta = 1./(1./aij + 1./akl + omega**-2)
     sfac = aij*akl*aj*al/(aij*aj*ak*theta + akl*ai*al*theta + aij*akl*aj*al)
-    s = sfac * theta * r**2
     fl = 2
     fac = 2**(li+lk+1)*np.pi**3.5*c1 * theta**(l4-1.5)
     fac /= aij**(lij+1.5) / akl**(lkl+1.5)
-    fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / cutoff
+    fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / precision
 
-    r0 = cell.rcut
+    r0 = rs_cell.rcut
     r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
     r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
     rcut = r0
@@ -836,25 +808,24 @@ def estimate_rcut(rs_cell, omega, precision=None):
         cj = cs[smooth_mask]
         aij = ai + aj
         lij = li + lj
-        a1 = aij + akl
         l4 = lij + lkl
         norm_ang = ((2*li+1)*(2*lj+1)*(2*lk+1)*(2*ll+1)/(4*np.pi)**4)**.5
         c1 = ci * cj * ck * cl * norm_ang
-        theta = 1./(1./aij + 1./akl + self.omega**-2)
+        theta = 1./(1./aij + 1./akl + omega**-2)
         sfac = aij*akl*aj*al/(aij*aj*ak*theta + akl*ai*al*theta + aij*akl*aj*al)
-        s = sfac * theta * r**2
         fl = 2
         fac = 2**(li+lk+1)*np.pi**3.5*c1 * theta**(l4-1.5)
         fac /= aij**(lij+1.5) / akl**(lkl+1.5)
-        fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / cutoff
+        fac *= (1 + ai/aj)**lj * (1 + ak/al)**ll * fl / precision
 
-        r0 = cell.rcut
+        r0 = rs_cell.rcut
         r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
         r0 = (np.log(fac * r0 * (sfac*r0)**(l4-2) + 1.) / (sfac*theta))**.5
         rcut[smooth_mask] = r0
     return rcut
 
 def _guess_omega(cell, kpts, mesh=None):
+    precision = cell.precision
     a = cell.lattice_vectors()
     naop = cell.npgto_nr()
     nao = cell.nao
@@ -862,8 +833,8 @@ def _guess_omega(cell, kpts, mesh=None):
     if mesh is None:
         rcut = cell.rcut
         omega_min = 0.25
-        omega_min = 0.75 * (-np.log(cell.precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
-        ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min)
+        omega_min = 0.75 * (-np.log(precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
+        ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
         mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
         # FIXME: balance the two workloads
         # int2e integrals ~ naop*(cell.rcut**3/cell.vol*naop)**3
@@ -881,11 +852,17 @@ def _guess_omega(cell, kpts, mesh=None):
         mesh = (nimgs**2*naop**2 / (nkpts**.5 * naop * nimgs * 2e3 +
                                     nkpts**2*nao**2))**(1./3) * 8 + 1
         mesh = int(min((cell.max_memory*1e6/32/(.7*nao)**2)**(1./3), mesh))
+        mesh = rsdf_builder._round_off_to_odd_mesh(mesh)
         mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-    mesh = np.min([cell.mesh, mesh], axis=0)
-    ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh[:cell.dimension]))
-    precision = cell.precision
-    omega = aft.estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
+        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
+        ke_cutoff = ke_cutoff[:cell.dimension].min()
+        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+        elif cell.dimension == 2:
+            mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
+    else:
+        ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
+    omega = estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
     return omega, mesh, ke_cutoff
 
 def _update_vk_(vk, Gpq, dms, coulG, weight, kpti_idx, kptj_idx, swap_2e):
@@ -936,16 +913,16 @@ def _update_vk_(vk, Gpq, dms, coulG, weight, kpti_idx, kptj_idx, swap_2e):
                        weight, vkR[i,kj], vkI[i,kj], 1)
 
 def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
-    '''Energy cutoff to converge attenuated Coulomb in moment space
+    '''Energy cutoff for FFTDF to converge attenuated Coulomb in moment space
     '''
     if precision is None:
         precision = cell.precision
-    ai = numpy.hstack(cell.bas_exps).max()
+    ai = np.hstack(cell.bas_exps()).max()
     theta = 1./(1./ai + omega**-2)
-    fac = 32*numpy.pi**2 * theta / precision
+    fac = 32*np.pi**2 * theta / precision
     Ecut = 20.
-    Ecut = numpy.log(fac / (2*Ecut) + 1.) * 2*theta
-    Ecut = numpy.log(fac / (2*Ecut) + 1.) * 2*theta
+    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
+    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
     return Ecut
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
@@ -958,15 +935,16 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
 #    # reduce the error in integrals
 #    precision *= 1e-2
 #    kmax = (ke_cutoff*2)**.5
-#    log_rest = numpy.log(precision / (16*numpy.pi**2 * kmax**lmax))
+#    log_rest = np.log(precision / (16*np.pi**2 * kmax**lmax))
 #    omega = (-.5 * ke_cutoff / log_rest)**.5
 #    return omega
 
-    ai = numpy.hstack(cell.bas_exps).max()
-    fac = 32*numpy.pi**2 / precision
+    ai = np.hstack(cell.bas_exps()).max()
+    aij = ai * 2
+    fac = 32*np.pi**2 / precision
     omega = 2.
     theta = 1./(1./ai + omega**-2)
-    omega2 = 1./(numpy.log(fac * theta/ (2*Ecut) + 1.)*2/ke_cutoff - 1./aij)
+    omega2 = 1./(np.log(fac * theta/ (2*ke_cutoff) + 1.)*2/ke_cutoff - 1./aij)
     if omega2 < 0:
         omega = 2
     else:

@@ -140,7 +140,7 @@ class KnownValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,30,30],
+                   mesh = [25,30,30],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -156,14 +156,14 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5113107, 4)
+        self.assertAlmostEqual(e1, -3.5113107, 6)
 
     def test_krhf_2d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [10,10,40],
+                   mesh = [25,25,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    low_dim_ft_type = 'inf_vacuum',
@@ -186,7 +186,7 @@ class KnownValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,30,30],
+                   mesh = [25,40,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -202,14 +202,14 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5113107, 4)
+        self.assertAlmostEqual(e1, -3.5113107, 6)
 
     def test_kghf_1d(self):
         L = 4
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = np.eye(3) * 4,
-                   mesh = [8,30,30],
+                   mesh = [25,40,40],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    low_dim_ft_type = 'inf_vacuum',
@@ -225,7 +225,7 @@ class KnownValues(unittest.TestCase):
         mf.init_guess = 'hcore'
         mf.kpts = cell.make_kpts([2,1,1])
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.5113107, 4)
+        self.assertAlmostEqual(e1, -3.5113107, 6)
 
     def test_get_fermi(self):
         self.assertAlmostEqual(kmf.get_fermi(), 0.33154831914017424, 6)
@@ -293,7 +293,7 @@ class KnownValues(unittest.TestCase):
         d = (d + d.transpose(0,2,1)) * 2
         vhf = 0
         f = khf.get_fock(kmf, kmf.get_hcore(), s, vhf, d, cycle=0,
-                             diis_start_cycle=2, damp_factor=0.5)
+                         diis_start_cycle=2, damp_factor=0.5)
         self.assertAlmostEqual(np.linalg.norm(f[0]), 95.32749551722966, 9)
         self.assertAlmostEqual(np.linalg.norm(f[1]), 73.9231303798864, 9)
         self.assertAlmostEqual(np.linalg.norm(f[2]), 58.973290554565196, 9)

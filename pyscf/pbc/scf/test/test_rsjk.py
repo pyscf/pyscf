@@ -20,29 +20,14 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.tools import k2gamma
 from pyscf.pbc.scf import rsjk
 
-def setUpModule():
-    global cell, cell1
-    cell = Cell().build(
-         a = np.eye(3)*1.8,
-         atom = '''He     0.      0.      0.
-                   He     0.4917  0.4917  0.4917''',
-         basis = {'He': [[0, [2.5, 1]]]})
-
-    cell1 = Cell().build(
-          a = np.eye(3)*2.6,
-          atom = '''He     0.4917  0.4917  0.4917''',
-          basis = {'He': [[0, [4.8, 1, -.1],
-                              [1.1, .3, .5],
-                              [0.15, .2, .8]],
-                          [1, [0.8, 1]],]})
-
-
-def tearDownModule():
-    global cell, cell1
-    del cell, cell1
-
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_get_jk(self):
+        cell = Cell().build(
+             a = np.eye(3)*1.8,
+             atom = '''He     0.      0.      0.
+                       He     0.4917  0.4917  0.4917''',
+             basis = {'He': [[0, [2.5, 1]]]})
+
         kpts = cell.make_kpts([3,1,1])
         np.random.seed(1)
         dm = (np.random.rand(len(kpts), cell.nao, cell.nao) +
@@ -59,7 +44,6 @@ class KnowValues(unittest.TestCase):
         ek = np.einsum('kij,kji->', kref, dm) * .5
 
         jk_builder = rsjk.RangeSeparatedJKBuilder(cell, kpts)
-        jk_builder.omega = 0.5
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
@@ -114,7 +98,14 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(vj - jref).max(), 0, 6)
         self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
 
-    def test_get_jk_high_cost(self):
+    def test_get_jk_fft_dd_block(self):
+        cell1 = Cell().build(
+              a = np.eye(3)*2.6,
+              atom = '''He     0.4917  0.4917  0.4917''',
+              basis = {'He': [[0, [4.8, 1, -.1],
+                                  [1.1, .3, .5],
+                                  [0.1, .2, .8]],
+                              [1, [0.8, 1]],]})
         kpts = cell1.make_kpts([3,1,1])
         np.random.seed(1)
         dm = (np.random.rand(len(kpts), cell1.nao, cell1.nao) +
@@ -131,27 +122,26 @@ class KnowValues(unittest.TestCase):
         ek = np.einsum('kij,kji->', kref, dm) * .5
 
         jk_builder = rsjk.RangeSeparatedJKBuilder(cell1, kpts)
-        jk_builder.omega = 0.5
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv)
-        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
-        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 6)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 6)
 
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv, with_k=False)
-        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 6)
 
         vj, vk = jk_builder.get_jk(dm, kpts=kpts, exxdiv=mf.exxdiv, with_j=False)
-        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 6)
 
         vj, vk = jk_builder.get_jk(dm, hermi=0, kpts=kpts, exxdiv=mf.exxdiv)
-        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
-        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 6)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 6)
 
         vj, vk = jk_builder.get_jk(dm, hermi=0, kpts=kpts, exxdiv=mf.exxdiv, with_k=False)
-        self.assertAlmostEqual(abs(vj - jref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vj - jref).max(), 0, 6)
 
         jk_builder.max_memory = 0
         vj, vk = jk_builder.get_jk(dm, hermi=0, kpts=kpts, exxdiv=mf.exxdiv, with_j=False)
-        self.assertAlmostEqual(abs(vk - kref).max(), 0, 7)
+        self.assertAlmostEqual(abs(vk - kref).max(), 0, 6)
 
 if __name__ == '__main__':
     print("Full Tests for rsjk")

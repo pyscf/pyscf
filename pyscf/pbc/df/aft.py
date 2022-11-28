@@ -26,7 +26,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
+from pyscf.pbc.gto import pseudo, error_for_ke_cutoff
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.gto.pseudo import pp_int
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
@@ -156,11 +156,13 @@ def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''
     if precision is None:
         precision = cell.precision
-    precision *= 1e-2
-    lmax = np.max(cell._bas[:,gto.ANG_OF])
-    ke_cutoff = -2*omega**2 * np.log(precision / (16*np.pi**2))
-    ke_cutoff = -2*omega**2 * np.log(precision / (16*np.pi**2*(ke_cutoff*2)**(.5*lmax)))
-    return ke_cutoff
+    ai = np.hstack(cell.bas_exps()).max()
+    theta = 1./(1./ai + omega**-2)
+    fac = 32*np.pi**2 * theta / precision
+    Ecut = 20.
+    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
+    Ecut = np.log(fac / (2*Ecut) + 1.) * 2*theta
+    return Ecut
 
 def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     '''The minimal omega in attenuated Coulombl given energy cutoff
@@ -179,7 +181,7 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     return omega
 
 
-def get_pp_loc_part1(mydf, with_pseudo=True, kpts=None):
+def get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
     if kpts is None:
         kpts_lst = np.zeros((1,3))
     else:
@@ -328,6 +330,25 @@ def _fake_nuc(cell, with_pseudo=True):
     return fakenuc
 
 
+def estimate_ke_cutoff(cell, precision=None):
+    '''Energy cutoff estimation for 4-center Coulomb repulsion integrals'''
+    exps = np.array([e.min() for e in cell.bas_exps()])
+    if exps.size == 0:
+        return 0.
+    if precision is None:
+        precision = cell.precision
+    ls = cell._bas[:,gto.ANG_OF]
+    cs = gto.gto_norm(ls, exps)
+    norm_ang = ((2*ls+1)/(4*np.pi))**2
+    fac = 8*np.pi**5 * cs**4*norm_ang / (2*exps)**(4*ls+2) / precision
+
+    Ecut = 20.
+    Ecut = np.log(fac * (Ecut*.5)**(2*ls-.5) + 1.) * 2*exps
+    Ecut = np.log(fac * (Ecut*.5)**(2*ls-.5) + 1.) * 2*exps
+    return Ecut.max()
+
+
+
 class _IntPPBuilder(Int3cBuilder):
     '''3-center integral builder for pp loc part2 only
     '''
@@ -377,8 +398,15 @@ class _IntPPBuilder(Int3cBuilder):
             vpploc = [0] * nkpts
             return vpploc
 
-        rcut = self.estimate_rcut_3c1e(rs_cell, fake_cells)
-        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
+        rcut_max = 0.
+        rcut = None
+        for cn, fake_cell in fake_cells.items():
+            rc = self.estimate_rcut_3c1e(rs_cell, fake_cell)
+            rc_max = rc.max()
+            if rc_max > rcut_max:
+                rcut = rc
+                rcut_max = rc_max
+        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_max, log)
         self.supmol = supmol.strip_basis(rcut)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -407,6 +435,9 @@ class _IntPPBuilder(Int3cBuilder):
         '''
         precision = cell.precision
         exps = np.array([e.min() for e in cell.bas_exps()])
+        if exps.size == 0:
+            return np.zeros(1)
+
         ls = cell._bas[:,gto.ANG_OF]
         cs = gto.gto_norm(ls, exps)
         ai_idx = exps.argmin()

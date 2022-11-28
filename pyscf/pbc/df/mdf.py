@@ -38,7 +38,7 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.gdf_builder import _CCGDFBuilder
-from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder, _round_off_to_odd_mesh
+from pyscf.pbc.df.rsdf_builder import _RSGDFBuilder
 from pyscf.pbc.df.incore import libpbc, make_auxcell
 from pyscf.pbc.lib.kpts_helper import is_zero, member, unique
 from pyscf.pbc.df import mdf_jk
@@ -129,6 +129,9 @@ class MDF(df.GDF):
 
         # mdf.mesh must be the same to the mesh used in generating cderi
         self.mesh = dfbuilder.mesh
+
+    get_pp = df.GDF.get_pp
+    get_nuc = df.GDF.get_nuc
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular

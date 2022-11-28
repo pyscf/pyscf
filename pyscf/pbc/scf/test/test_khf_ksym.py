@@ -43,7 +43,7 @@ def make_primitive_cell(mesh, spin=0):
 
 def setUpModule():
     global cell, He, nk, kmf0, kumf0, kmf_ksymm, kumf_ksymm
-    cell = make_primitive_cell([16]*3)
+    cell = make_primitive_cell([17]*3)
     nk = [1,2,2]
     kmf0  = pscf.KRHF(cell, cell.make_kpts(nk)).run()
     kumf0 = pscf.KUHF(cell, cell.make_kpts(nk)).run()
@@ -275,14 +275,14 @@ class KnownValues(unittest.TestCase):
         mf0 = mf.to_khf()
         mf0.max_cycle=1
         mf0.kernel(mf0.make_rdm1())
-        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 9)
+        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 8)
 
         mf = pscf.KRHF(cell, kpts).density_fit()
         mf.kernel()
         mf0 = mf.to_khf()
         mf0.max_cycle=1
         mf0.kernel(mf0.make_rdm1())
-        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 9)
+        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 8)
 
         mf = pscf.KUHF(cell, kpts).density_fit()
         mf.kernel()
@@ -296,7 +296,7 @@ class KnownValues(unittest.TestCase):
         mf0 = mf.to_khf()
         mf0.max_cycle=1
         mf0.kernel(mf0.make_rdm1())
-        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 9)
+        self.assertAlmostEqual(mf0.e_tot, mf.e_tot, 8)
 
         mf = pscf.KUKS(cell, kpts).density_fit()
         mf.kernel()

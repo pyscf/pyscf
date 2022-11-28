@@ -346,8 +346,8 @@ class _RSGDFBuilder(rsdf_builder._RSGDFBuilder):
 
         rcut = rsdf_builder.estimate_ft_rcut(rs_cell, cell.precision,
                                              exclude_dd_block=False)
-        supmol_ft = rsdf_builder.ExtendedMoleFT.from_cell(rs_cell, kmesh,
-                                                          rcut.max(), log)
+        supmol_ft = rsdf_builder._ExtendedMoleFT.from_cell(rs_cell, kmesh,
+                                                           rcut.max(), log)
         supmol_ft.exclude_dd_block = False
         self.supmol_ft = supmol_ft.strip_basis(rcut)
         log.debug('sup-mol-ft nbas = %d cGTO = %d pGTO = %d',
