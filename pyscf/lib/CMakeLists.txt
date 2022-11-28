@@ -115,7 +115,7 @@ link_directories(${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/lib64)
 
 configure_file(
   "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h")
+  "${PROJECT_SOURCE_DIR}/config.h")
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
