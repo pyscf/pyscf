@@ -259,7 +259,7 @@ static void _sort_kks2(double *outR, double *outI, double *bufkkR, double *bufkk
         int ip1 = ao_loc[ish1];
         int kp0 = ao_loc[ksh0];
         int kp1 = ao_loc[ksh1];
-        assert(ip1 == jp1 && jp0 == 0);
+        assert(ip1 == ao_loc[shls_slice[3]] && ao_loc[shls_slice[2]] == 0);
         int i0 = ao_loc[ish];
         int j0 = ao_loc[jsh];
         int k0 = ao_loc[ksh] - kp0;
@@ -503,7 +503,7 @@ static void _sort_ks2(double *outR, double *outI, double *bufkR, double *bufkI,
         int ip1 = ao_loc[ish1];
         int kp0 = ao_loc[ksh0];
         int kp1 = ao_loc[ksh1];
-        assert(ip1 == jp1 && jp0 == 0);
+        assert(ip1 == ao_loc[shls_slice[3]] && ao_loc[shls_slice[2]] == 0);
         int i0 = ao_loc[ish];
         int j0 = ao_loc[jsh];
         int k0 = ao_loc[ksh] - kp0;
@@ -730,7 +730,7 @@ static void _sort_gs2(double *outR, double *outI, double *bufR, double *bufI,
         int ip1 = ao_loc[ish1];
         int kp0 = ao_loc[ksh0];
         int kp1 = ao_loc[ksh1];
-        assert(ip1 == jp1 && jp0 == 0);
+        assert(ip1 == ao_loc[shls_slice[3]] && ao_loc[shls_slice[2]] == 0);
         int i0 = ao_loc[ish];
         int j0 = ao_loc[jsh];
         int k0 = ao_loc[ksh] - kp0;
