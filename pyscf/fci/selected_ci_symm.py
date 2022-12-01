@@ -215,6 +215,9 @@ class SelectedCI(selected_ci.SelectedCI):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
+        if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
+            raise NotImplementedError
+
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = selected_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
                                                   tol, lindep, max_cycle, max_space,

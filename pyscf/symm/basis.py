@@ -464,30 +464,31 @@ def linearmole_irrep_id2symb(gpname, irrep_id):
         if irrep_id < 10:
             return DOOH_IRREP_SYMBS[irrep_id]
         else:
+            l = abs(linearmole_irrep2momentum(irrep_id))
             n = irrep_id % 10
-            m = irrep_id // 10
-            if n in (0, 1, 5, 4):
-                rn = m*2
-            else:
-                rn = m*2+1
-            return 'E%d%s' % (rn, DOOH_IRREP_SYMBS_EXT[n])
+            return 'E%d%s' % (l, DOOH_IRREP_SYMBS_EXT[n])
     elif gpname == 'Coov':
         if irrep_id < 10:
             return COOV_IRREP_SYMBS[irrep_id]
         else:
+            l = abs(linearmole_irrep2momentum(irrep_id))
             n = irrep_id % 10
-            m = irrep_id // 10
-            if n < 2:
-                rn = m*2
-            else:
-                rn = m*2+1
             if n % 2:
                 xy = 'y'
             else:
                 xy = 'x'
-            return 'E%d%s' % (rn, xy)
+            return 'E%d%s' % (l, xy)
     else:
         raise PointGroupSymmetryError('%s is not proper for linear molecule.' % gpname)
+
+def linearmole_irrep2momentum(irrep_id):
+    if irrep_id % 10 in (0, 1, 5, 4):
+        l = irrep_id // 10 * 2
+    else:
+        l = irrep_id // 10 * 2 + 1
+    if irrep_id % 10 in (1, 3, 4, 6):  # Ey
+        l *= -1
+    return l
 
 def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
     assert (gpname in ('Dooh', 'Coov'))
