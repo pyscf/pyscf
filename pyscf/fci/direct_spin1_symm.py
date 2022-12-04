@@ -207,13 +207,18 @@ def _gen_strs_irrep(strs, orbsym):
             irreps[numpy.bitwise_and(strs, 1 << i) > 0] ^= ir
     return irreps
 
-def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
+def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
+    neleca, nelecb = _unpack_nelec(nelec)
     na = len(airreps)
     nb = len(birreps)
     hdiag = hdiag.reshape(na,nb)
     ci0 = []
     iroot = 0
-    idx_a, idx_b = numpy.where((airreps[:,None] ^ birreps) == wfnsym)
+    sym_allowed = airreps[:,None] == wfnsym ^ birreps
+    if neleca == nelecb and na == nb:
+        idx = numpy.arange(na)
+        sym_allowed[idx[:,None] < idx] = False
+    idx_a, idx_b = numpy.where(sym_allowed)
     for k in hdiag[idx_a,idx_b].argsort():
         addra, addrb = idx_a[k], idx_b[k]
         x = numpy.zeros((na, nb))
@@ -234,7 +239,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     if neleca != nelecb:
         strsb = cistring.gen_strings4orblist(range(norb), nelecb)
         birreps = _gen_strs_irrep(strsb, orbsym)
-    return _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym)
+    return _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym)
 
 def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
@@ -260,6 +265,9 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
     sym_allowed = a_ungerade[:,None] == b_ungerade ^ wfn_ungerade
     # total angular momentum == wfn_momentum
     sym_allowed &= a_ls[:,None] == wfn_momentum - b_ls
+    if neleca == nelecb and na == nb:
+        idx = numpy.arange(na)
+        sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = numpy.where(sym_allowed)
     for k in hdiag[idx_a,idx_b].argsort():
         addra, addrb = idx_a[k], idx_b[k]

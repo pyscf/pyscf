@@ -428,15 +428,16 @@ def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, inplace=True)
     return dm1, dm2
 
-def _get_init_guess(na, nb, nroots, hdiag):
-    '''Initial guess is the single Slater determinant
-    '''
+def _get_init_guess(na, nb, nroots, hdiag, nelec):
     # The "nroots" lowest determinats based on energy expectation value.
     ci0 = []
-    try:
+    neleca, nelecb = _unpack_nelec(nelec)
+    if neleca == nelecb and na == nb:
+        hdiag = hdiag.reshape(na, nb)
+        idx = numpy.arange(na)
+        addrs = numpy.argpartition(hdiag[idx[:,None] >= idx], nroots-1)[:nroots]
+    else:
         addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
-    except AttributeError:
-        addrs = numpy.argsort(hdiag)[:nroots]
     for addr in addrs:
         x = numpy.zeros((na*nb))
         x[addr] = 1
@@ -453,7 +454,7 @@ def get_init_guess(norb, nelec, nroots, hdiag):
     neleca, nelecb = _unpack_nelec(nelec)
     na = cistring.num_strings(norb, neleca)
     nb = cistring.num_strings(norb, nelecb)
-    return _get_init_guess(na, nb, nroots, hdiag)
+    return _get_init_guess(na, nb, nroots, hdiag, nelec)
 
 
 ###############################################################

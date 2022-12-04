@@ -159,8 +159,8 @@ class SelectedCI(selected_ci.SelectedCI):
                                               self.wfnsym)
         airreps = direct_spin1_symm._gen_strs_irrep(ci_strs[0], self.orbsym)
         birreps = direct_spin1_symm._gen_strs_irrep(ci_strs[1], self.orbsym)
-        ci0 = direct_spin1_symm._get_init_guess(airreps, birreps,
-                                                nroots, hdiag, self.orbsym, wfnsym)
+        ci0 = direct_spin1_symm._get_init_guess(
+            airreps, birreps, nroots, hdiag, nelec, self.orbsym, wfnsym)
         return [selected_ci._as_SCIvector(x, ci_strs) for x in ci0]
 
     def guess_wfnsym(self, norb, nelec, fcivec=None, orbsym=None, wfnsym=None,
