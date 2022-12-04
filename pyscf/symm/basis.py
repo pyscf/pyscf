@@ -24,9 +24,11 @@ from functools import reduce
 import numpy
 from pyscf.data.elements import _symbol, _rm_digit
 from pyscf import gto
+from pyscf import lib
 from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf.symm import geom
 from pyscf.symm import param
+from pyscf.symm.Dmatrix import Dmatrix, get_euler_angles
 
 __all__ = ['tot_parity_odd',
            'symm_adapted_basis',
@@ -37,7 +39,7 @@ __all__ = ['tot_parity_odd',
            'linearmole_irrep_id2symb',
            'linearmole_symm_adapted_basis',
            'so3_irrep_symb2id',
-           'so3_irrep_id2symb',]
+           'so3_irrep_id2symb']
 
 OP_PARITY_ODD = {
     'E'  : (0, 0, 0),
@@ -132,7 +134,7 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
         if idx:
             l_idx[l] = numpy.hstack(idx)
 
-    Ds = _ao_rotation_matrices(mol, coordinates)
+    Ds = _momentum_rotation_matrices(mol, coordinates)
     so = []
     irrep_ids = []
     for ir, c in enumerate(sodic):
@@ -148,10 +150,8 @@ def symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
 
     return so, irrep_ids
 
-def _ao_rotation_matrices(mol, axes):
-    '''Cache the rotation matrices'''
-    from pyscf import lib
-    from pyscf.symm.Dmatrix import Dmatrix, get_euler_angles
+def _momentum_rotation_matrices(mol, axes):
+    '''Cache the rotation matrices for each angular momentum'''
     alpha, beta, gamma = get_euler_angles(numpy.eye(3), axes)
     ANG_OF = 1
     l_max = mol._bas[:,ANG_OF].max()
@@ -669,7 +669,7 @@ def linearmole_symm_adapted_basis(mol, gpname, orig=0, coordinates=None):
         if idx:
             l_idx[l] = numpy.hstack(idx)
 
-    Ds = _ao_rotation_matrices(mol, coordinates)
+    Ds = _momentum_rotation_matrices(mol, coordinates)
     so = []
     for i in irrep_idx:
         c_ir = numpy.vstack(sodic[irrep_names[i]]).T

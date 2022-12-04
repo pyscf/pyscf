@@ -183,8 +183,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
             break
 
     if len(ci0) == 0:
-        raise RuntimeError('No determinant matches the target symmetry %s' %
-                           wfnsym)
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
@@ -194,6 +193,7 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
     a_ls = direct_spin1_symm._strs_angular_momentum(strsa, orbsym)
 
     wfnsym_in_d2h = wfnsym % 10
+    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     na = nb = len(strsa)
     hdiag = hdiag.reshape(na,nb)
     degen = orbsym.degen_mapping
@@ -204,7 +204,6 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         sym_allowed &= a_ls[:,None] + a_ls == 0
     else:
         wfn_ungerade = wfnsym_in_d2h >= 4
-        wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
         a_ungerade = a_ungerade = airreps_d2h >= 4
         sym_allowed = a_ungerade[:,None] ^ a_ungerade == wfn_ungerade
         sym_allowed &= a_ls[:,None] + a_ls == wfn_momentum
@@ -234,6 +233,9 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         iroot += 1
         if iroot >= nroots:
             break
+
+    if len(ci0) == 0:
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 

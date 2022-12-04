@@ -178,10 +178,23 @@ Li    P
         )
         mf = mol.RHF().run()
         mci = fci.FCI(mol, mf.mo_coeff, singlet=False)
-        ex, civec = mci.kernel(wfnsym='E2ux')
-        ey, civec = mci.kernel(wfnsym='E2uy')
+        ex, ci_x = mci.kernel(wfnsym='E2ux')
+        ey, ci_y = mci.kernel(wfnsym='E2uy')
         self.assertAlmostEqual(ex - ey, 0, 7)
         self.assertAlmostEqual(ex - -14.70061197088, 0, 7)
+
+        swap_xy = numpy.array([
+            [0, 1, 0],
+            [1, 0, 0],
+            [0, 0, 1],
+        ])
+        mo_swapxy = mol.ao_rotation_matrix(swap_xy).dot(mf.mo_coeff)
+        u = mf.mo_coeff.T.dot(mf.get_ovlp()).dot(mo_swapxy)
+        ci1 = fci.addons.transform_ci(ci_x, (3,3), u.T)
+        self.assertAlmostEqual(ci_x.ravel().dot(ci_y.ravel()), 0, 9)
+        self.assertAlmostEqual(abs(ci1.ravel().dot(ci_x.ravel())), 1, 9)
+        ci1 = fci.addons.transform_ci(ci_y, (3,3), u.T)
+        self.assertAlmostEqual(abs(ci1.ravel().dot(ci_y.ravel())), 1, 9)
 
 
 if __name__ == "__main__":

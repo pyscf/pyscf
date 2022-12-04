@@ -222,7 +222,11 @@ def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
         iroot += 1
         if iroot >= nroots:
             break
+
+    if len(ci0) == 0:
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
+
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
@@ -243,6 +247,7 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         b_ls = _strs_angular_momentum(strsb, orbsym)
 
     wfnsym_in_d2h = wfnsym % 10
+    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
     na = len(strsa)
     nb = len(strsb)
     hdiag = hdiag.reshape(na,nb)
@@ -254,7 +259,6 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         sym_allowed &= a_ls[:,None] + b_ls == 0
     else:
         wfn_ungerade = wfnsym_in_d2h >= 4
-        wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
         a_ungerade = airreps_d2h >= 4
         b_ungerade = birreps_d2h >= 4
         sym_allowed = a_ungerade[:,None] ^ b_ungerade == wfn_ungerade
@@ -275,6 +279,9 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         iroot += 1
         if iroot >= nroots:
             break
+
+    if len(ci0) == 0:
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
 def _linearmole_csf2civec(strs, addr, orbsym, degen_mapping):
