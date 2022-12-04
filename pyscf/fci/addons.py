@@ -781,7 +781,7 @@ def transform_ci(ci, nelec, u):
     if neleca == 0:
         trans_ci_a = numpy.ones((1, 1))
     else:
-        trans_ci_a = numpy.zeros((na_old, na_new), dtype=u.dtype)
+        trans_ci_a = numpy.zeros((na_old, na_new), dtype=ua.dtype)
         strs_old = numpy.asarray(cistring.make_strings(range(norb_old), neleca))
 
         # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
@@ -808,7 +808,7 @@ def transform_ci(ci, nelec, u):
     elif nelecb == 0:
         trans_ci_b = numpy.ones((1, 1))
     else:
-        trans_ci_b = numpy.zeros((nb_old, nb_new), dtype=u.dtype)
+        trans_ci_b = numpy.zeros((nb_old, nb_new), dtype=ub.dtype)
         strs_old = numpy.asarray(cistring.make_strings(range(norb_old), nelecb))
 
         occ_masks_old = (strs_old[:,None] & one_particle_strs_old) != 0

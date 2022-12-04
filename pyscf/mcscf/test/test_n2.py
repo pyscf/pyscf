@@ -157,7 +157,7 @@ class KnownValues(unittest.TestCase):
 
     def test_wfnsym(self):
         mc = mcscf.CASSCF(msym, 4, (3,1))
-        mc.fcisolver.wfnsym = 4
+        mc.fcisolver.wfnsym = 14
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
 

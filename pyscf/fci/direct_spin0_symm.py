@@ -199,14 +199,11 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
     degen = orbsym.degen_mapping
     ci0 = []
     iroot = 0
-    if wfnsym in (0, 1, 5, 4):
-        sym_allowed = airreps_d2h[:,None] ^ airreps_d2h == wfnsym_in_d2h
-        sym_allowed &= a_ls[:,None] + a_ls == 0
-    else:
-        wfn_ungerade = wfnsym_in_d2h >= 4
-        a_ungerade = a_ungerade = airreps_d2h >= 4
-        sym_allowed = a_ungerade[:,None] ^ a_ungerade == wfn_ungerade
-        sym_allowed &= a_ls[:,None] + a_ls == wfn_momentum
+    wfn_ungerade = wfnsym_in_d2h >= 4
+    a_ungerade = airreps_d2h >= 4
+    sym_allowed = a_ungerade[:,None] == a_ungerade ^ wfn_ungerade
+    # total angular momentum == wfn_momentum
+    sym_allowed &= a_ls[:,None] == wfn_momentum - a_ls
     idx = numpy.arange(na)
     sym_allowed[idx[:,None] < idx] = False
 
@@ -215,7 +212,7 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         addra, addrb = idx_a[k], idx_b[k]
         ca = direct_spin1_symm._linearmole_csf2civec(strsa, addra, orbsym, degen)
         cb = direct_spin1_symm._linearmole_csf2civec(strsa, addrb, orbsym, degen)
-        if wfn_momentum >= 0:
+        if wfn_momentum > 0 or wfnsym in (0, 5):
             x = ca.real[:,None] * cb.real
             x-= ca.imag[:,None] * cb.imag
         else:

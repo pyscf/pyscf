@@ -131,7 +131,7 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
             lib.takebak_2d(ci1new, lib.transpose(ci1[ir]),
-                           aidx[wfnsym_in_d2h^ir], bidx[ir])
+                           aidx[wfnsym_in_d2h ^ ir], bidx[ir])
     return ci1new.reshape(fcivec_shape).view(direct_spin1.FCIvector)
 
 
@@ -254,21 +254,18 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
     degen_mapping = orbsym.degen_mapping
     ci0 = []
     iroot = 0
-    if wfnsym in (0, 1, 5, 4):
-        sym_allowed = airreps_d2h[:,None] ^ birreps_d2h == wfnsym_in_d2h
-        sym_allowed &= a_ls[:,None] + b_ls == 0
-    else:
-        wfn_ungerade = wfnsym_in_d2h >= 4
-        a_ungerade = airreps_d2h >= 4
-        b_ungerade = birreps_d2h >= 4
-        sym_allowed = a_ungerade[:,None] ^ b_ungerade == wfn_ungerade
-        sym_allowed &= a_ls[:,None] + b_ls == wfn_momentum
+    wfn_ungerade = wfnsym_in_d2h >= 4
+    a_ungerade = airreps_d2h >= 4
+    b_ungerade = birreps_d2h >= 4
+    sym_allowed = a_ungerade[:,None] == b_ungerade ^ wfn_ungerade
+    # total angular momentum == wfn_momentum
+    sym_allowed &= a_ls[:,None] == wfn_momentum - b_ls
     idx_a, idx_b = numpy.where(sym_allowed)
     for k in hdiag[idx_a,idx_b].argsort():
         addra, addrb = idx_a[k], idx_b[k]
         ca = _linearmole_csf2civec(strsa, addra, orbsym, degen_mapping)
         cb = _linearmole_csf2civec(strsb, addrb, orbsym, degen_mapping)
-        if wfn_momentum >= 0:
+        if wfn_momentum > 0 or wfnsym in (0, 5):
             x = ca.real[:,None] * cb.real
             x-= ca.imag[:,None] * cb.imag
         else:
@@ -323,7 +320,7 @@ def _map_linearmole_degeneracy(h1e, orbsym):
     norb = orbsym.size
     mo_e = h1e.diagonal()
     assert norb == mo_e.size
-    ex_mask = numpy.isin(orbsym % 10, (0, 2, 5, 7)) 
+    ex_mask = numpy.isin(orbsym % 10, (0, 2, 5, 7))
 
     degen_mapping = numpy.arange(norb)
     for ir_ex in set(orbsym[ex_mask]):
@@ -351,7 +348,7 @@ def _strs_angular_momentum(strs, orbsym):
     orb_l = (orbsym // 10) * 2
     e1_mask = numpy.isin(orbsym % 10, (2, 3, 6, 7))
     orb_l[e1_mask] += 1
-    ey_mask = numpy.isin(orbsym % 10, (1, 3, 4, 6)) 
+    ey_mask = numpy.isin(orbsym % 10, (1, 3, 4, 6))
     orb_l[ey_mask] *= -1
 
     # total angular for each determinant (CSF)
@@ -412,6 +409,7 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     link_index = [link_index.take(aidx[ir], axis=0) for ir in range(TOTIRREPS)]
     return aidx, link_index
 
+
 def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **kwargs):
     '''
     Guess point group symmetry of the FCI wavefunction.  If fcivec is
@@ -425,6 +423,13 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
     log = logger.new_logger(solver, verbose)
 
     nelec = _unpack_nelec(nelec, solver.spin)
+    groupname = getattr(solver.mol, 'groupname', None)
+    if groupname in ('Dooh', 'Coov'):
+        if not isinstance(wfnsym, int): # ensure wfnsym is an irrep_id
+            wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
+            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+        return wfnsym
+
     if fcivec is None:
         # guess wfnsym if initial guess is not given
         wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
@@ -448,9 +453,9 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
             airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
             birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
 
-        # TODO: handle Dooh
         wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
-        mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym % 10
+        groupname = getattr(solver.mol, 'groupname', None)
+        mask = airreps[:,None] == (wfnsym % 10) ^ birreps
 
         if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
             fcivec = [fcivec]
