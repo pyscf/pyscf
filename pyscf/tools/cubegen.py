@@ -327,6 +327,7 @@ class Cube(object):
             natm = int(data[0])
             self.boxorig = numpy.array([float(x) for x in data[1:]])
             def parse_nx(data, x):
+                from pyscf.pbc.gto import Cell
                 d = data.split()
                 nx = int(d[0])
                 x_vec = numpy.array([float(x) for x in d[1:]])
@@ -338,7 +339,7 @@ class Cube(object):
                     # Use endpoint=True to get a symmetric mesh
                     # see also the discussion https://github.com/sunqm/pyscf/issues/154
                     xs = numpy.linspace(0, 1, nx, endpoint=True)
-                return xs, nx
+                return nx, xs
             self.nx, self.xs = parse_nx(f.readline(), 0)
             self.ny, self.ys = parse_nx(f.readline(), 1)
             self.nz, self.zs = parse_nx(f.readline(), 2)
