@@ -433,15 +433,21 @@ def _get_init_guess(na, nb, nroots, hdiag, nelec):
     ci0 = []
     neleca, nelecb = _unpack_nelec(nelec)
     if neleca == nelecb and na == nb:
-        hdiag = hdiag.reshape(na, nb)
+        hdiag = hdiag.reshape(na, na)
         idx = numpy.arange(na)
-        addrs = numpy.argpartition(hdiag[idx[:,None] >= idx], nroots-1)[:nroots]
+        addrs = numpy.argpartition(hdiag[idx[:,None]>=idx], nroots-1)[:nroots]
+        for addr in addrs:
+            addra = (int)((2*addr+.25)**.5 - .5 + 1e-7)
+            addrb = addr - addra*(addra+1)//2
+            x = numpy.zeros((na, na))
+            x[addra,addrb] = 1
+            ci0.append(x.ravel().view(FCIvector))
     else:
         addrs = numpy.argpartition(hdiag, nroots-1)[:nroots]
-    for addr in addrs:
-        x = numpy.zeros((na*nb))
-        x[addr] = 1
-        ci0.append(x.ravel().view(FCIvector))
+        for addr in addrs:
+            x = numpy.zeros((na*nb))
+            x[addr] = 1
+            ci0.append(x.view(FCIvector))
 
     # Add noise
     ci0[0][0 ] += 1e-5
