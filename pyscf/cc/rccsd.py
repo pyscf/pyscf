@@ -176,18 +176,16 @@ class RCCSD(ccsd.CCSD):
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
     '''
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
-        return self.ccsd(t1, t2, eris, mbpt2, dcsd)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state CCSD.
 
         Kwargs:
             mbpt2 : bool
                 Use one-shot MBPT2 approximation to CCSD.
-            dcsd : bool
-                Do DCSD instead of CCSD.
         '''
-        if mbpt2 and dcsd:
+        if mbpt2 and self.dcsd:
             raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
         if mbpt2:
             pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
@@ -198,7 +196,7 @@ class RCCSD(ccsd.CCSD):
 
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        return ccsd.CCSD.ccsd(self, t1, t2, eris, dcsd)
+        return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo

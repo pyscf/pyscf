@@ -179,9 +179,9 @@ class RCCSD(ccsd.CCSD):
         return self.emp2, t1, t2
 
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False, dcsd=False):
-        return self.ccsd(t1, t2, eris, mbpt2, cc2, dcsd)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False, dcsd=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
+        return self.ccsd(t1, t2, eris, mbpt2, cc2)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, cc2=False):
         '''Ground-state CCSD.
 
         Kwargs:
@@ -189,14 +189,12 @@ class RCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
             cc2 : bool
                 Use CC2 approximation to CCSD.
-            dcsd : bool
-                Do DCSD instead of CCSD.
         '''
         if mbpt2 and cc2:
             raise RuntimeError('MBPT2 and CC2 are mutually exclusive approximations to the CCSD ground state.')
-        if mbpt2 and dcsd:
+        if mbpt2 and self.dcsd:
             raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
-        if cc2 and dcsd:
+        if cc2 and self.dcsd:
             raise RuntimeError('MBPT2 and DCSD are mutually exclusive approximations.')
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.e_hf = self.get_e_hf()
@@ -208,15 +206,12 @@ class RCCSD(ccsd.CCSD):
         else:
             if cc2:
                 cctyp = 'CC2'
-                self.dcsd = False
                 self.cc2 = True
-            elif dcsd:
+            elif self.dcsd:
                 cctyp = 'DCSD'
-                self.dcsd = True
                 self.cc2 = False
             else:
                 cctyp = 'CCSD'
-                self.dcsd = False
                 self.cc2 = False
             self.converged, self.e_corr, self.t1, self.t2 = \
                     ccsd.kernel(self, eris, t1, t2, max_cycle=self.max_cycle,

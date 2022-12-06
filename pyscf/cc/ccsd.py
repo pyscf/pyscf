@@ -1026,6 +1026,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self.e_hf + self.e_corr
 
     @property
+    def dcsd(self):
+        return self.__class__.__name__[-4:] == "DCSD"
+
+    @property
     def nocc(self):
         return self.get_nocc()
     @nocc.setter
@@ -1116,9 +1120,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     _add_vvvv = _add_vvvv
     update_amps = update_amps
 
-    def kernel(self, t1=None, t2=None, eris=None, dcsd=False):
-        return self.ccsd(t1, t2, eris, dcsd)
-    def ccsd(self, t1=None, t2=None, eris=None, dcsd=False):
+    def kernel(self, t1=None, t2=None, eris=None):
+        return self.ccsd(t1, t2, eris)
+    def ccsd(self, t1=None, t2=None, eris=None):
         assert (self.mo_coeff is not None)
         assert (self.mo_occ is not None)
 
@@ -1131,7 +1135,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
 
-        self.dcsd = dcsd
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,

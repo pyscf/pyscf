@@ -24,7 +24,7 @@ from pyscf import scf, dft
 from pyscf import mp
 from pyscf import cc
 from pyscf import ao2mo
-from pyscf.cc import uccsd
+from pyscf.cc import uccsd, udcsd
 from pyscf.cc import gccsd
 from pyscf.cc import addons
 from pyscf.cc import uccsd_rdm
@@ -72,8 +72,8 @@ class KnownValues(unittest.TestCase):
 
     def test_udcsd(self):
         mf = scf.UHF(mol).run()
-        mycc = cc.UCCSD(mf)
-        mycc.kernel(dcsd=True)
+        mycc = udcsd.UDCSD(mf)
+        mycc.kernel()
         self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
 
     def test_with_df_s0(self):
@@ -401,7 +401,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_occ[0,:6] = 1
         mf.mo_occ[1,:5] = 1
         mycc = uccsd.UCCSD(mf)
-        mycc.dcsd = False
         nocca, noccb = 6, 5
         nvira, nvirb = nmo-nocca, nmo-noccb
         nvira_pair = nvira*(nvira+1)//2
@@ -469,7 +468,6 @@ class KnownValues(unittest.TestCase):
         mol = mol_s2
         mf = mf_s2
         myucc = uccsd.UCCSD(mf)
-        myucc.dcsd = False
         nocca, noccb = 6,4
         nmo = mol.nao_nr()
         nvira,nvirb = nmo-nocca, nmo-noccb

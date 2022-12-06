@@ -656,9 +656,9 @@ class UCCSD(ccsd.CCSD):
     _add_vvvv = _add_vvvv
     _add_vvVV = _add_vvVV
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
-        return self.ccsd(t1, t2, eris, mbpt2, dcsd=dcsd)
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2)
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state unrestricted (U)CCSD.
 
         Kwargs:
@@ -673,7 +673,7 @@ class UCCSD(ccsd.CCSD):
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
-        return ccsd.CCSD.ccsd(self, t1, t2, eris, dcsd=dcsd)
+        return ccsd.CCSD.ccsd(self, t1, t2, eris)
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):

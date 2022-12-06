@@ -27,8 +27,8 @@ from pyscf import df
 from pyscf import cc
 from pyscf import ao2mo
 from pyscf import mp
-from pyscf.cc import ccsd
-from pyscf.cc import rccsd
+from pyscf.cc import ccsd, dcsd
+from pyscf.cc import rccsd, rdcsd
 
 def setUpModule():
     global mol, mf, eris, mycc
@@ -59,10 +59,16 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
+    def test_dcsd(self):
+        mf = scf.RHF(mol).run()
+        mycc = dcsd.DCSD(mf)
+        mycc.kernel()
+        self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
+
     def test_rdcsd(self):
         mf = scf.RHF(mol).run()
-        mycc = ccsd.CCSD(mf)
-        mycc.kernel(dcsd=True)
+        mycc = rdcsd.RDCSD(mf)
+        mycc.kernel()
         self.assertAlmostEqual(mycc.e_tot, -76.12243069638626, 7)
     
     def test_roccsd(self):
@@ -267,7 +273,6 @@ class KnownValues(unittest.TestCase):
         mycc1 = rccsd.RCCSD(mf)
         eris1 = mycc1.ao2mo()
         mycc2 = ccsd.CCSD(mf)
-        mycc2.dcsd = False
         eris2 = mycc2.ao2mo()
         a = np.random.random((nmo,nmo)) * .1
         eris1.fock += a + a.T.conj()
@@ -292,7 +297,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(Ht2), 760.50164232208408, 9)
 
         mycc1.cc2 = False
-        mycc1.dcsd = False
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
         self.assertAlmostEqual(lib.fp(t1a), -106360.5276951083, 7)
         self.assertAlmostEqual(lib.fp(t2a), 66540.100267798145, 6)
