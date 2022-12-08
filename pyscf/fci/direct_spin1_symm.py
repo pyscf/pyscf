@@ -33,7 +33,6 @@ direct_nosym        No            No             No**               Yes
 
 import sys
 import ctypes
-import itertools
 import numpy
 from pyscf import ao2mo
 from pyscf import lib
@@ -269,17 +268,52 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
         idx = numpy.arange(na)
         sym_allowed[idx[:,None] < idx] = False
     idx_a, idx_b = numpy.where(sym_allowed)
+
     for k in hdiag[idx_a,idx_b].argsort():
         addra, addrb = idx_a[k], idx_b[k]
         ca = _linearmole_csf2civec(strsa, addra, orbsym, degen_mapping)
         cb = _linearmole_csf2civec(strsb, addrb, orbsym, degen_mapping)
-        if wfn_momentum > 0 or wfnsym in (0, 5):
+        if wfnsym in (0, 1, 4, 5):
+            addra1 = _sv_associated_det(strsa[addra], degen_mapping)
+            addrb1 = _sv_associated_det(strsb[addrb], degen_mapping)
+            if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                continue
+
+            # If (E+) and (E-) are associated determinants
+            # (E+)(E-') + (E-)(E+') => A1
+            # (E+)(E-') - (E-)(E+') => A2
+            if addra == addra1:
+                ca1 = ca
+            else:
+                ca1 = _linearmole_csf2civec(strsa, addra1, orbsym, degen_mapping)
+            if addrb == addrb1:
+                cb1 = cb
+            else:
+                cb1 = _linearmole_csf2civec(strsb, addrb1, orbsym, degen_mapping)
+            if wfnsym in (0, 5):  # A1g, A1u
+                # real part of transformed coefficients ca[:,None]*cb
+                x  = ca.real[:,None] * cb.real
+                x -= ca.imag[:,None] * cb.imag
+                x += ca1.real[:,None] * cb1.real
+                x -= ca1.imag[:,None] * cb1.imag
+            elif wfnsym in (1, 4):  # A2g, A2u
+                # imaginary part of transformed coefficients ca[:,None]*cb
+                x  = ca.imag[:,None] * cb.real
+                x += ca.real[:,None] * cb.imag
+                x -= ca1.imag[:,None] * cb1.real
+                x -= ca1.real[:,None] * cb1.imag
+
+        elif wfn_momentum > 0:
             x = ca.real[:,None] * cb.real
             x-= ca.imag[:,None] * cb.imag
         else:
             x = ca.imag[:,None] * cb.real
             x+= ca.real[:,None] * cb.imag
-        x *= 1./numpy.linalg.norm(x)
+
+        norm = numpy.linalg.norm(x)
+        if norm < 1e-3:
+            continue
+        x *= 1./norm
         ci0.append(x.ravel().view(direct_spin1.FCIvector))
         iroot += 1
         if iroot >= nroots:
@@ -291,7 +325,7 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
 
 def _linearmole_csf2civec(strs, addr, orbsym, degen_mapping):
     '''For orbital basis rotation from E(+/-) basis to Ex/Ey basis, mimic the CI
-    transformation  addons.transform_ci([1,0,...]), (0, nelec), u)
+    transformation  addons.transform_ci(civec, (0, nelec), u)
     '''
     norb = orbsym.size
     one_particle_strs = numpy.asarray([1 << i for i in range(norb)])
@@ -315,7 +349,10 @@ def _linearmole_orbital_rotation(orbsym, degen_mapping):
     sqrthi = sqrth * 1j
     for i, j in enumerate(degen_mapping):
         if i == j:  # 1d irrep
-            u[i,j] = 1
+            if orbsym[i] in (1, 4):  # A2g, A2u
+                u[i,i] = 1j
+            else:
+                u[i,i] = 1
         elif orbsym[i] % 10 in (0, 2, 5, 7):  # Ex, E(+)
             u[j,j] = sqrthi
             u[i,j] = sqrthi
@@ -350,6 +387,16 @@ def _map_linearmole_degeneracy(h1e, orbsym):
         degen_mapping[ey_idx] = ex_idx[mapping.argsort()]
 
     return degen_mapping
+
+def _sv_associated_det(ci_str, degen_mapping):
+    '''Associated determinant for the sigma_v operation'''
+    ci_str1 = 0
+    nelec = 0
+    for i, j in enumerate(degen_mapping):
+        if ci_str & (1 << i) > 0:
+            ci_str1 |= 1 << j
+            nelec += 1
+    return cistring.str2addr(degen_mapping.size, nelec, ci_str1)
 
 def _strs_angular_momentum(strs, orbsym):
     # angular momentum for each orbitals
@@ -422,22 +469,19 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
     '''
     Guess point group symmetry of the FCI wavefunction.  If fcivec is
     given, the symmetry of fcivec is used.  Otherwise the symmetry is
-    based on the HF determinant.
+    same to the HF determinant.
     '''
+    groupname = getattr(solver.mol, 'groupname', None)
+    if groupname in ('Dooh', 'Coov'):
+        from pyscf.fci.direct_spin1_cyl_sym import guess_wfnsym
+        return guess_wfnsym(solver, norb, nelec, fcivec, orbsym, wfnsym, **kwargs)
+
     if orbsym is None:
         orbsym = solver.orbsym
 
     verbose = kwargs.get('verbose', None)
     log = logger.new_logger(solver, verbose)
-
     nelec = _unpack_nelec(nelec, solver.spin)
-    groupname = getattr(solver.mol, 'groupname', None)
-    if groupname in ('Dooh', 'Coov'):
-        if not isinstance(wfnsym, int): # ensure wfnsym is an irrep_id
-            wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
-            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
-        return wfnsym
-
     if fcivec is None:
         # guess wfnsym if initial guess is not given
         wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
@@ -550,19 +594,20 @@ class FCISolver(direct_spin1.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
-
         if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
             degen_mapping = _map_linearmole_degeneracy(h1e, orbsym)
             orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
-            if wfnsym > 7:
-                # Symmetry broken for Dooh and Coov groups is often observed.
-                # A larger max_space is helpful to reduce the error. Also it is
-                # hard to converge to high precision.
-                if max_space is None and self.max_space == FCISolver.max_space:
-                    max_space = 20 + 7 * nroots
-                if tol is None and self.conv_tol == FCISolver.conv_tol:
-                    tol = 1e-7
+
+        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+
+        if wfnsym > 7:
+            # Symmetry broken for Dooh and Coov groups is often observed.
+            # A larger max_space is helpful to reduce the error. Also it is
+            # hard to converge to high precision.
+            if max_space is None and self.max_space == FCISolver.max_space:
+                max_space = 20 + 7 * nroots
+            if tol is None and self.conv_tol == FCISolver.conv_tol:
+                tol = 1e-7
 
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,

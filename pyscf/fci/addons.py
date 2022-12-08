@@ -417,8 +417,9 @@ def guess_wfnsym(ci, norb, nelec, orbsym):
         Irrep ID
     '''
     neleca, nelecb = _unpack_nelec(nelec)
-    strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
-    strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
+    strsa = strsb = numpy.asarray(cistring.make_strings(range(norb), neleca))
+    if neleca != nelecb:
+        strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
     if isinstance(ci, numpy.ndarray) and ci.ndim <= 2:
         wfnsym = _guess_wfnsym(ci, strsa, strsb, orbsym)
     else:

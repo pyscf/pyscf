@@ -20,6 +20,7 @@ from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf.fci import cistring, direct_spin1, direct_spin1_symm
+from pyscf.fci import direct_spin1_cyl_sym
 import pyscf.symm
 from pyscf import mcscf
 
@@ -196,6 +197,68 @@ Li    P
         ci1 = fci.addons.transform_ci(ci_y, (3,3), u.T)
         self.assertAlmostEqual(abs(ci1.ravel().dot(ci_y.ravel())), 1, 9)
 
+    def test_spin1_cyl_sym(self):
+        mol = gto.M(
+            atom = 'N 0 0 0; N 0 0 1.5',
+            basis = 'cc-pVDZ',
+            spin = 0,
+            symmetry = True,
+        )
+        mc = mol.RHF().run().CASCI(12, 6)
+        mc.fcisolver.wfnsym = 'E1ux'
+        mc.run()
+        e1 = mc.e_tot
+        ci1 = mc.ci
+        self.assertAlmostEqual(e1, -108.683383569227, 8)
+
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'E1ux'
+        mc.run()
+        e2 = mc.e_tot
+        ci2 = mc.ci
+        self.assertAlmostEqual(e2, -108.683383569227, 8)
+        self.assertAlmostEqual(abs(ci1.ravel().dot(ci2.ravel())), 1, 6)
+
+    def test_wrong_initial_guess(self):
+        mol = gto.M(
+            atom = 'H 0 0 0; H 0 0 1.2',
+            basis = [[0, [3, 1]], [1, [1, 1]]],
+            spin = 1,
+            charge = 1,
+            symmetry = True)
+        mf = mol.RHF().run()
+        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
+        mc.fcisolver.wfnsym = 'A2g'
+        self.assertRaises(RuntimeError, mc.run)
+
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2g'
+        self.assertRaises(RuntimeError, mc.run)
+
+    def test_linearmole_a2(self):
+        mol = gto.M(
+            atom = 'H 0 0 0; H 0 0 1.2',
+            basis = [[0, [3, 1]], [1, [1, 1]]],
+            symmetry = True)
+        mf = mol.RHF().run()
+
+        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
+        mc.fcisolver.wfnsym = 'A2g'
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, 2.6561956585409616, 8)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2g'
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, 2.6561956585409616, 8)
+
+        mc = mcscf.CASCI(mf, mf.mo_energy.size, mol.nelec)
+        mc.fcisolver.wfnsym = 'A2u'
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, 2.8999951068356475, 8)
+        mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
+        mc.fcisolver.wfnsym = 'A2u'
+        mc.run()
+        self.assertAlmostEqual(mc.e_tot, 2.8999951068356475, 8)
 
 if __name__ == "__main__":
     print("Full Tests for spin1-symm")
