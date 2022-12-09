@@ -43,7 +43,7 @@ def setUpModule():
     nelec = mol.nelectron
     h1e = m.mo_coeff.T.dot(scf.hf.get_hcore(mol)).dot(m.mo_coeff)
     g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    orbsym = m.orbsym
     cis = fci.direct_spin1_symm.FCISolver(mol)
     cis.orbsym = orbsym
 
@@ -123,9 +123,9 @@ class KnownValues(unittest.TestCase):
             nelec = bin(ci_str).count('1')
             strs = numpy.asarray(cistring.make_strings(range(norb), nelec))
             addr = numpy.where(strs == ci_str)[0][0]
-            ci1 = direct_spin1_symm._linearmole_csf2civec(strs, addr, orbsym, degen_mapping)
+            ci1 = direct_spin1_symm._cyl_sym_csf2civec(strs, addr, orbsym, degen_mapping)
 
-            u = direct_spin1_symm._linearmole_orbital_rotation(orbsym, degen_mapping)
+            u = direct_spin1_symm._cyl_sym_orbital_rotation(orbsym, degen_mapping)
             ref = numpy.zeros((1, strs.size))
             ref[0, addr] = 1.
             ref = fci.addons.transform_ci(ref, (0, nelec), u).ravel()
@@ -215,8 +215,12 @@ Li    P
         mc.fcisolver.wfnsym = 'E1ux'
         mc.run()
         e2 = mc.e_tot
-        ci2 = mc.ci
         self.assertAlmostEqual(e2, -108.683383569227, 8)
+        orbsym = mc.fcisolver.orbsym
+        degen_mapping = orbsym.degen_mapping
+        u = direct_spin1_symm._cyl_sym_orbital_rotation(orbsym, degen_mapping)
+        ci2 = fci.addons.transform_ci(mc.ci, (3,3), u)
+        ci2 = ci2.real / numpy.linalg.norm(ci2.real)
         self.assertAlmostEqual(abs(ci1.ravel().dot(ci2.ravel())), 1, 6)
 
     def test_wrong_initial_guess(self):

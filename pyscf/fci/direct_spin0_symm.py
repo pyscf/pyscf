@@ -38,6 +38,7 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf import symm
+from pyscf.scf.hf_symm import map_degeneracy
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin0
 from pyscf.fci import direct_spin1
@@ -186,7 +187,7 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
 
-def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
+def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = direct_spin1._unpack_nelec(nelec)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
     airreps_d2h = direct_spin1_symm._gen_strs_irrep(strsa, orbsym)
@@ -210,8 +211,8 @@ def get_init_guess_linearmole_symm(norb, nelec, nroots, hdiag, orbsym, wfnsym=0)
     idx_a, idx_b = numpy.where(sym_allowed)
     for k in hdiag[idx_a,idx_b].argsort():
         addra, addrb = idx_a[k], idx_b[k]
-        ca = direct_spin1_symm._linearmole_csf2civec(strsa, addra, orbsym, degen)
-        cb = direct_spin1_symm._linearmole_csf2civec(strsa, addrb, orbsym, degen)
+        ca = direct_spin1_symm._cyl_sym_csf2civec(strsa, addra, orbsym, degen)
+        cb = direct_spin1_symm._cyl_sym_csf2civec(strsa, addrb, orbsym, degen)
         if wfn_momentum > 0 or wfnsym in (0, 5):
             x = ca.real[:,None] * cb.real
             x-= ca.imag[:,None] * cb.imag
@@ -282,7 +283,7 @@ class FCISolver(direct_spin0.FCISolver):
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.orbsym,
                                               self.wfnsym)
         if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
-            return get_init_guess_linearmole_symm(
+            return get_init_guess_cyl_sym(
                 norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
         else:
             return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
@@ -301,19 +302,21 @@ class FCISolver(direct_spin0.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
+        if (not hasattr(orbsym, 'degen_mapping') and
+            getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov')):
+            degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
+            orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
 
-        if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
-            degen_mapping = direct_spin1_symm._map_linearmole_degeneracy(h1e, orbsym)
-            orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
-            if wfnsym > 7:
-                # Symmetry broken for Dooh and Coov groups is often observed.
-                # A larger max_space is helpful to reduce the error. Also it is
-                # hard to converge to high precision.
-                if max_space is None and self.max_space == FCISolver.max_space:
-                    max_space = 20 + 7 * nroots
-                if tol is None and self.conv_tol == FCISolver.conv_tol:
-                    tol = 1e-7
+        if wfnsym > 7:
+            # Symmetry broken for Dooh and Coov groups is often observed.
+            # A larger max_space is helpful to reduce the error. Also it is
+            # hard to converge to high precision.
+            if max_space is None and self.max_space == FCISolver.max_space:
+                max_space = 20 + 7 * nroots
+            if tol is None and self.conv_tol == FCISolver.conv_tol:
+                tol = 1e-7
 
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,

@@ -1100,21 +1100,9 @@ To enable the solvent model for CASSCF, the following code needs to be called
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
 
-        # Be careful with the symmetry adapted contract_2e function. When the
-        # symmetry adapted FCI solver is used, the symmetry of ci0 may be
-        # different to fcisolver.wfnsym. This function may output 0.
-        if getattr(self.fcisolver, 'guess_wfnsym', None):
-            orbsym = self.fcisolver.orbsym
-            wfnsym = self.fcisolver.guess_wfnsym(
-                self.ncas, self.nelecas, ci0, orbsym, self.fcisolver.wfnsym)
-            def contract_2e(c):
-                with lib.temporary_env(self.fcisolver, wfnsym=wfnsym):
-                    hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
-                return hc.ravel()
-        else:
-            def contract_2e(c):
-                hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
-                return hc.ravel()
+        def contract_2e(c):
+            hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            return hc.ravel()
 
         hc = contract_2e(ci0)
         g = hc - (e_cas-ecore) * ci0.ravel()

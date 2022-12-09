@@ -43,7 +43,7 @@ def setUpModule():
     nelec = mol.nelectron
     h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
     g2e = ao2mo.incore.full(m._eri, m.mo_coeff)
-    orbsym = pyscf.symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
+    orbsym = m.orbsym
     cis = fci.direct_spin0_symm.FCISolver(mol)
     cis.orbsym = orbsym
 

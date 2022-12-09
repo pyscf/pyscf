@@ -19,12 +19,15 @@
 '''
 Cylindrical symmetry
 
-This version is much slower than direct_spin1_symm.
+This module is much slower than direct_spin1_symm.
 
 In this implementation, complex orbitals is used to construct the Hamiltonian.
-FCI wavefunction is solved using the complex Hamiltonian. Any observables from
-this FCI wavefunction should have an indentical one from the FCI wavefunction
-obtained with direct_spin1_symm.
+FCI wavefunction (called complex wavefunction here) is solved using the complex
+Hamiltonian. For 2D irreps, the real part and the imaginary part of the complex
+FCI wavefunction are identical to the Ex and Ey wavefunction obtained from
+direct_spin1_symm module. However, any observables from the complex FCI
+wavefunction should have an indentical one from either Ex or Ey wavefunction
+of direct_spin1_symm.
 '''
 
 import numpy
@@ -32,13 +35,13 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf import symm
+from pyscf.scf.hf_symm import map_degeneracy
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci.direct_spin1_symm import (_sv_associated_det,
                                          _strs_angular_momentum,
-                                         _linearmole_orbital_rotation,
-                                         _linearmole_csf2civec)
+                                         _cyl_sym_orbital_rotation)
 from pyscf.fci import direct_nosym
 from pyscf.fci import addons
 from pyscf import __config__
@@ -77,17 +80,17 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
         x = numpy.zeros((na, nb))
         x[addra, addrb] = 1.
         if wfnsym in (0, 1, 4, 5):
-            addra1 = _sv_associated_det(strsa[addra], degen)
-            addrb1 = _sv_associated_det(strsb[addrb], degen)
+            addra1, sign_a = _sv_associated_det(strsa[addra], degen)
+            addrb1, sign_b = _sv_associated_det(strsb[addrb], degen)
             # If (E+) and (E-) are associated determinants
             # (E+)(E-') + (E-)(E+') => A1
             # (E+)(E-') - (E-)(E+') => A2
             if wfnsym in (0, 5):  # A1g, A1u
-                x[addra1,addrb1] += 1
+                # ensure <|sigma_v|> = 1
+                x[addra1,addrb1] += sign_a * sign_b
             elif wfnsym in (1, 4):  # A2g, A2u
-                if addra == addra1 and addrb == addrb1:
-                    continue
-                x[addra1,addrb1] -= 1
+                # ensure <|sigma_v|> = -1
+                x[addra1,addrb1] -= sign_a * sign_b
 
         norm = numpy.linalg.norm(x)
         if norm < 1e-3:
@@ -108,38 +111,25 @@ def _guess_wfnsym(civec, strsa, strsb, orbsym):
     idx = abs(civec).argmax()
     na = strsa.size
     nb = strsb.size
+    civec = civec.reshape(na,nb)
     addra = idx // nb
     addrb = idx % nb
-    addra1 = _sv_associated_det(strsa[addra], degen_mapping)
-    addrb1 = _sv_associated_det(strsb[addrb], degen_mapping)
-    ca = ca1 = _linearmole_csf2civec(strsa, addra, orbsym, degen_mapping)
-    cb = cb1 = _linearmole_csf2civec(strsb, addrb, orbsym, degen_mapping)
-    if addra != addra1:
-        ca1 = _linearmole_csf2civec(strsa, addra1, orbsym, degen_mapping)
-    if addrb != addrb1:
-        cb1 = _linearmole_csf2civec(strsb, addrb1, orbsym, degen_mapping)
-    ua = numpy.stack([ca, ca1])
-    ub = numpy.stack([cb, cb1])
-    # civec is in the Ex/Ey basis. Transform the largest coefficient to
-    # (E+)/(E-) basis.
-    c_max = ua.conj().dot(civec.reshape(na,nb)).dot(ub.conj().T)
+    addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
+    addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
 
-    airreps_d2h = direct_spin1_symm._gen_strs_irrep(strsa[[addra,addra1]], orbsym)
-    birreps_d2h = direct_spin1_symm._gen_strs_irrep(strsb[[addrb,addrb1]], orbsym)
-    a_ls = _strs_angular_momentum(strsa[[addra,addra1]], orbsym)
-    b_ls = _strs_angular_momentum(strsb[[addrb,addrb1]], orbsym)
+    airreps_d2h = direct_spin1_symm._gen_strs_irrep(strsa[[addra]], orbsym)
+    birreps_d2h = direct_spin1_symm._gen_strs_irrep(strsb[[addrb]], orbsym)
+    a_ls = _strs_angular_momentum(strsa[[addra]], orbsym)
+    b_ls = _strs_angular_momentum(strsb[[addrb]], orbsym)
     a_ungerade = airreps_d2h >= 4
     b_ungerade = birreps_d2h >= 4
-    idx = abs(c_max).argmax()
-    idx_a, idx_b = idx // 2, idx % 2
-    wfn_ungerade = a_ungerade[idx_a] ^ b_ungerade[idx_b]
-    wfn_momentum = a_ls[idx_a] + b_ls[idx_b]
+    wfn_ungerade = a_ungerade[0] ^ b_ungerade[0]
+    wfn_momentum = a_ls[0] + b_ls[0]
 
     if wfn_momentum == 0:
         # For A1g and A1u, CI coefficient and its sigma_v associated one have
         # the same sign
-        if (c_max[0,0].real * c_max[1,1].real > 1e-8 or
-            c_max[0,0].imag * c_max[1,1].imag > 1e-8):  # A1
+        if sign_a*sign_b * civec[addra,addrb] * civec[addra1,addrb1] > 1e-6: # A1
             if wfn_ungerade:
                 wfnsym = 5
             else:
@@ -174,6 +164,7 @@ def _guess_wfnsym(civec, strsa, strsb, orbsym):
                 wfnsym = 4
             else:
                 wfnsym = 1
+
     wfnsym += (abs(wfn_momentum) // 2) * 10
     return wfnsym
 
@@ -200,18 +191,15 @@ def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **k
         if neleca != nelecb:
             strsb = cistring.gen_strings4orblist(range(norb), nelecb)
 
-        if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
-            wfnsym1 = _guess_wfnsym(fcivec, strsa, strsb, orbsym)
-        else:
-            wfnsym1 = _guess_wfnsym(fcivec[0], strsa, strsb, orbsym)
+        if not isinstance(fcivec, numpy.ndarray) or fcivec.ndim > 2:
+            fcivec = fcivec[0]
+        wfnsym1 = _guess_wfnsym(fcivec, strsa, strsb, orbsym)
 
-        if wfnsym is None:
-            wfnsym = wfnsym1
-        else:
-            wfnsym = direct_spin1_symm._id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
-            if wfnsym != wfnsym1:
-                raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
-                                   f'fcivec symmetry {wfnsym1}')
+        if (wfnsym is not None and
+            wfnsym1 != direct_spin1_symm._id_wfnsym(solver, norb, nelec, orbsym, wfnsym)):
+            raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
+                               f'fcivec symmetry {wfnsym1}')
+        wfnsym = wfnsym1
     return wfnsym
 
 
@@ -233,6 +221,16 @@ class FCISolver(direct_spin1_symm.FCISolver):
     pspace = direct_spin1.FCISolver.pspace
     guess_wfnsym = guess_wfnsym
 
+    def make_rdm12(self, fcivec, norb, nelec, link_index=None, reorder=True):
+        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
+        dm1, dm2 = direct_spin1.make_rdm12(fcivec, norb, nelec, link_index, reorder)
+        orbsym = self.orbsym
+        degen_mapping = self.orbsym.degen_mapping
+        u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
+        dm1 = u.conj().T.dot(dm1).dot(u)
+        dm2 = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', dm2, u.conj(), u, u.conj(), u)
+        return dm1.real.copy(), dm2.real.copy()
+
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
                nroots=None, davidson_only=None, pspace_size=None,
@@ -245,12 +243,13 @@ class FCISolver(direct_spin1_symm.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
-        degen_mapping = direct_spin1_symm._map_linearmole_degeneracy(h1e, orbsym)
-        orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+        if not hasattr(orbsym, 'degen_mapping'):
+            degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
+            orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+        self.orbsym = orbsym
+        u = _cyl_sym_orbital_rotation(orbsym, orbsym.degen_mapping)
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
-        wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
 
-        u = _linearmole_orbital_rotation(orbsym, degen_mapping)
         h1e = u.dot(h1e).dot(u.conj().T)
         eri = ao2mo.restore(1, eri, norb)
         eri = lib.einsum('pqrs,ip,jq,kr,ls->ijkl', eri, u, u.conj(), u, u.conj())
@@ -272,18 +271,6 @@ class FCISolver(direct_spin1_symm.FCISolver):
                                            nroots, davidson_only, pspace_size,
                                            ecore=ecore, **kwargs)
 
-        def transform(civec):
-            if wfn_momentum > 0 or wfnsym in (0, 5):
-                civec = addons.transform_ci(civec, nelec, u).real.copy()
-            else:
-                civec = addons.transform_ci(civec, nelec, u).imag.copy()
-            civec /= numpy.linalg.norm(civec)
-            return civec
-
-        if nroots > 1:
-            c = [transform(x) for x in c]
-        else:
-            c = transform(c)
         self.eci, self.ci = e, c
         return e, c
 
