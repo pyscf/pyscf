@@ -14,8 +14,9 @@
 # limitations under the License.
 
 from pyscf.pbc import scf
-from pyscf.pbc.cc import ccsd
+from pyscf.pbc.cc import ccsd, dcsd
 from pyscf.pbc.cc import kccsd_rhf as krccsd
+from pyscf.pbc.cc import kdcsd_rhf
 from pyscf.pbc.cc import kccsd_uhf as kuccsd
 from pyscf.pbc.cc import kccsd     as kgccsd
 from pyscf.pbc.cc import eom_kccsd_rhf
@@ -37,6 +38,17 @@ def GCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
     return ccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
+def RDCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    mf = scf.addons.convert_to_rhf(mf)
+    return dcsd.RDCSD(mf, frozen, mo_coeff, mo_occ)
+
+DCSD = RDCSD
+
+def UDCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    mf = scf.addons.convert_to_uhf(mf)
+    return dcsd.UDCSD(mf, frozen, mo_coeff, mo_occ)
+
+
 def KGCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.cc import kccsd
     mf = scf.addons.convert_to_ghf(mf)
@@ -55,3 +67,11 @@ def KUCCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
     if not isinstance(mf, scf.kuhf.KUHF):
         mf = scf.addons.convert_to_uhf(mf)
     return kccsd_uhf.UCCSD(mf, frozen, mo_coeff, mo_occ)
+
+def KRDCSD(mf, frozen=None, mo_coeff=None, mo_occ=None):
+    from pyscf.pbc.cc import kdcsd_rhf
+    if not isinstance(mf, scf.khf.KRHF):
+        mf = scf.addons.convert_to_rhf(mf)
+    return kdcsd_rhf.RDCSD(mf, frozen, mo_coeff, mo_occ)
+
+KDCSD = KRDCSD

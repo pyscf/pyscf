@@ -618,10 +618,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     energy = energy
     update_amps = update_amps
 
-    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
-        return self.ccsd(t1, t2, eris, mbpt2=mbpt2, dcsd=dcsd)
+    def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
+        return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
 
-    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False, dcsd=False):
+    def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
         '''Ground-state CCSD.
 
         Kwargs:
@@ -640,7 +640,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
             return self.e_corr, self.t1, self.t2
 
-        self.dcsd = dcsd
         self.converged, self.e_corr, self.t1, self.t2 = \
             kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                    tol=self.conv_tol, tolnormt=self.conv_tol_normt,

@@ -754,7 +754,6 @@ class KnownValues(unittest.TestCase):
         kmf.get_hcore = lambda *x: mat_hcore
 
         rand_cc = pbcc.KRCCSD(kmf)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
@@ -787,7 +786,6 @@ class KnownValues(unittest.TestCase):
         kmf.get_hcore = lambda *x: mat_hcore
 
         rand_cc = pbcc.KRCCSD(kmf, frozen=1)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
 
@@ -798,7 +796,6 @@ class KnownValues(unittest.TestCase):
 
         frozen = [[0,],[0,],[0,]]
         rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
@@ -831,7 +828,6 @@ class KnownValues(unittest.TestCase):
 
         frozen = [[0,],[],[]]
         rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
@@ -875,7 +871,6 @@ class KnownValues(unittest.TestCase):
 
         frozen = [[],[0,1],[]]
         rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
@@ -921,7 +916,6 @@ class KnownValues(unittest.TestCase):
 
         frozen = [[],[],[3]]  # freezing one virtual
         rand_cc = pbcc.KRCCSD(kmf, frozen=frozen)
-        rand_cc.dcsd = False
         eris = rand_cc.ao2mo(kmf.mo_coeff)
         eris.mo_energy = [eris.fock[k].diagonal().real for k in range(rand_cc.nkpts)]
         t1, t2 = rand_t1_t2(kmf, rand_cc)
