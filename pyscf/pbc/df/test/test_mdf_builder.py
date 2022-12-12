@@ -26,56 +26,57 @@ from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools
 pyscf.pbc.DEBUG = False
 
-basis = '''
-He    S
-     38.00    0.05
-      5.00    0.25
-      0.20    0.60
-He    S
-      0.25    1.00
-He    P
-      1.27    1.00
-   '''
-auxbasis = '''
-He    S
-     50.60   0.06
-     12.60   0.21
-      3.80   0.37
-He    S
-      1.40   0.29
-He    S
-      0.30   0.06
-He    P
-      4.00   1.00
-      1.00   1.00
-He    D
-      4.00   1.00
-'''
-cell = pgto.M(
-    a = np.eye(3) * 3.5,
-    mesh = [11] * 3,
-    atom = '''He    3.    2.       3.
-              He    1.    1.       1.''',
-    basis = basis,
-    verbose = 7,
-    output = '/dev/null',
-    max_memory = 1000,
-)
+def setUpModule():
+    global cell, auxcell, cell_lr, auxcell_lr, cell_sr, auxcell_sr, kpts, nkpts, mesh
+    basis = '''
+    He    S
+         38.00    0.05
+          5.00    0.25
+          0.20    0.60
+    He    S
+          0.25    1.00
+    He    P
+          1.27    1.00
+       '''
+    auxbasis = '''
+    He    S
+         50.60   0.06
+         12.60   0.21
+          3.80   0.37
+    He    S
+          1.40   0.29
+    He    S
+          0.30   0.06
+    He    P
+          4.00   1.00
+          1.00   1.00
+    He    D
+          4.00   1.00
+    '''
+    cell = pgto.M(
+        a = np.eye(3) * 3.5,
+        atom = '''He    3.    2.       3.
+                  He    1.    1.       1.''',
+        basis = basis,
+        verbose = 7,
+        output = '/dev/null',
+        max_memory = 1000,
+    )
 
-kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
-kpts[3] = kpts[0]-kpts[1]+kpts[2]
-nkpts = len(kpts)
-mesh = [11] * 3
+    kpts = cell.make_kpts([3,5,6])[[0, 2, 3, 4, 6, 12, 20]]
+    kpts[3] = kpts[0]-kpts[1]+kpts[2]
+    nkpts = len(kpts)
+    mesh = [11] * 3
 
-auxcell = df.make_auxcell(cell, auxbasis)
+    auxcell = df.make_auxcell(cell, auxbasis)
 
-cell_lr = cell.copy()
-cell_lr.omega = 1.2
-auxcell_lr = df.make_auxcell(cell_lr, auxbasis)
+    cell_lr = cell.copy()
+    cell_lr.omega = 1.2
+    auxcell_lr = df.make_auxcell(cell_lr, auxbasis)
 
-cell_sr = cell.copy()
-cell_sr.omega = -1.2
-auxcell_sr = df.make_auxcell(cell_sr, auxbasis)
+    cell_sr = cell.copy()
+    cell_sr.omega = -1.2
+    auxcell_sr = df.make_auxcell(cell_sr, auxbasis)
 
 def load(filename, kptij):
     with df._load3c(filename, 'j3c', kptij) as cderi:
@@ -312,7 +313,7 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 9)
+            self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             v1 = load(tmpf.name, kpts[[0, 0]])
@@ -322,7 +323,7 @@ class KnownValues(unittest.TestCase):
             dfbuilder.fft_dd_block = False
             dfbuilder.make_j3c(tmpf.name, aosym='s2')
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 9)
+            self.assertAlmostEqual(lib.fp(v2), 1.0439710349332878e-05, 8)
 
     def test_ccmdf_make_j3c_lr(self):
         dfbuilder = mdf._CCMDFBuilder(cell_lr, auxcell_lr, kpts).set(mesh=mesh).build()
@@ -353,8 +354,8 @@ class KnownValues(unittest.TestCase):
             v_s2 = []
             for ki in range(nkpts):
                 v_s2.append(load(tmpf.name, kpts[[ki, ki]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0439710349332878e-05, 9)
-            self.assertAlmostEqual(lib.fp(v_s2[2]), 1.062711221387176e-05+0j, 9)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0439710349332878e-05, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2]), 1.062711221387176e-05+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1', j_only=True)
             idx, idy = np.tril_indices(cell_lr.nao)

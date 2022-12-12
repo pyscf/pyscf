@@ -549,7 +549,13 @@ class SCF(mol_hf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpt):
                 self.rsjk = self.rsjk.__class__(cell, self.kpt.reshape(1,3))
-            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+            self.rsjk.direct_scf_tol = self.direct_scf_tol
+            self.rsjk.build()
+
+        # Let df.build() be called by get_jk function later on needs.
+        # DFT objects may need to initiailze df with different paramters.
+        #if self.with_df:
+        #    self.with_df.build()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
@@ -586,7 +592,6 @@ class SCF(mol_hf.SCF):
 
     def check_sanity(self):
         mol_hf.SCF.check_sanity(self)
-        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -833,15 +838,15 @@ class SCF(mol_hf.SCF):
                 df_method = J if 'DF' in J else K
                 self.with_df = getattr(df, df_method)(self.cell, self.kpt)
 
-        # For nuclear attraction
-        if ('RS' in J or 'RS' in K) and not self.with_df:
-            self.with_df = df.GDF(self.cell, self.kpt)
-
-        if J == 'RS' or K == 'RS':
+        if 'RS' in J or 'RS' in K:
             if not gamma_point(self.kpt):
                 raise NotImplementedError('Single k-point must be gamma point')
             self.rsjk = RangeSeparatedJKBuilder(self.cell, self.kpt)
             self.rsjk.verbose = self.verbose
+
+        # For nuclear attraction
+        if J == 'RS' and K == 'RS' and not isinstance(self.with_df, df.GDF):
+            self.with_df = df.GDF(self.cell, self.kpt)
 
         nuc = self.with_df.__class__.__name__
         logger.debug1(self, 'Apply %s for J, %s for K, %s for nuc', J, K, nuc)

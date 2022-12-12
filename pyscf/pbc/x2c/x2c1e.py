@@ -214,14 +214,14 @@ def get_pbc_pvxp(mydf, kpts=None):
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
 
-    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts)
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts_lst)
     dfbuilder.exclude_dd_block = False
     dfbuilder.build()
     eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
     log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
 
     fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
-    soc_mat = dfbuilder._int_nuc_vloc(fakenuc, kpts_lst, 'int3c2e_pvxp1_sph',
+    soc_mat = dfbuilder._int_nuc_vloc(fakenuc, 'int3c2e_pvxp1_sph',
                                       aosym='s1', comp=3)
     soc_mat = soc_mat.reshape(nkpts,3,nao,nao)
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)

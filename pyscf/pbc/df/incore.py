@@ -116,11 +116,6 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
         nkpts = len(kpts)
         kptij_idx = wherei * nkpts + wherej
     dfbuilder = Int3cBuilder(cell, auxcell, kpts).build()
-    # Reduce the size of supmol based on the 3-center overlaps. Otherwise the
-    # dfbuilder.supmol oftens two large for the calculations.
-    # TODO: strip supmol basis based on the intor type.
-    eta = np.hstack(auxcell.bas_exps()).min()
-    dfbuilder.supmol = dfbuilder.supmol.strip_basis(eta)
     int3c = dfbuilder.gen_int3c_kernel(intor, aosym, comp, j_only,
                                        kptij_idx, return_complex=True)
     return int3c
@@ -181,6 +176,7 @@ class Int3cBuilder(lib.StreamObject):
         self.rs_cell = rs_cell = ft_ao._RangeSeparatedCell.from_cell(
             cell, self.ke_cutoff, RCUT_THRESHOLD, verbose=log)
 
+        # TODO: strip supmol basis based on the intor type.
         rcut = estimate_rcut(cell, self.auxcell)
         supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
         self.supmol = supmol.strip_basis(rcut)
@@ -218,7 +214,7 @@ class Int3cBuilder(lib.StreamObject):
 
         # Instead to use precision, cutoff encounts the effects of lattice-sum
         omega = supmol.omega
-        aux_exp = np.hstack(auxcell.bas_exps()).min()
+        aux_exp = min(np.hstack(auxcell.bas_exps()).min(), 1.)
         if omega == 0:
             lattice_sum_factor = 2*np.pi*cell.rcut / aux_exp
         else:

@@ -23,6 +23,7 @@ from pyscf.pbc.df import df, aug_etb, FFTDF
 from pyscf.pbc.df import gdf_builder
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.tools import pbc as pbctools
+from pyscf.df.incore import cholesky_eri
 pyscf.pbc.DEBUG = False
 
 def setUpModule():
@@ -115,7 +116,7 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(v1 - lib.unpack_tril(v2).reshape(v1.shape)).max(), 0, 9)
 
-            dfbuilder.fft_dd_block = False
+            dfbuilder.exclude_dd_block = False
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.5094843470069796, 8)
@@ -192,13 +193,40 @@ class KnownValues(unittest.TestCase):
                       dimension=0)
         auxcell = df.make_auxcell(cell, auxbasis)
         dfbuilder = gdf_builder._CCGDFBuilder(cell, auxcell).build()
+        ref = cholesky_eri(cell, auxmol=auxcell)
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 2.4119378731259946, 7)
+            self.assertAlmostEqual(abs(v2 - ref).max(), 0, 9)
+            self.assertAlmostEqual(lib.fp(v2), 2.4119378731259946, 2)
 
         ref = cholesky_eri(cell, auxmol=auxcell)
         self.assertAlmostEqual(abs(v2-ref).max(), 0, 2)
+
+    def test_get_nuc(self):
+        dfbuilder = gdf_builder._CCNucBuilder(cell).build()
+        v1 = dfbuilder.get_nuc()
+        self.assertAlmostEqual(lib.fp(v1), -2.9338697931882134, 9)
+
+    def test_get_nuc_0d(self):
+        cell = pgto.M(atom='He 0 0 0; He 0.9 0 0',
+                      basis=basis,
+                      a=np.eye(3) * 2.8,
+                      dimension=0)
+        ref = cell.to_mol().intor('int1e_nuc')
+        dfbuilder = gdf_builder._CCNucBuilder(cell).build()
+        v1 = dfbuilder.get_nuc()
+        self.assertAlmostEqual(abs(v1-ref).max(), 0, 9)
+
+    def test_get_pp(self):
+        L = 7
+        a = np.eye(3) * L
+        a[1,0] = 5.0
+        cell = pgto.M(atom=[['Be', (L/2.,  L/2., L/2.)]],
+                      a=a, basis='gth-szv', pseudo='gth-pade-q2')
+        dfbuilder = gdf_builder._CCNucBuilder(cell).build()
+        vpp = dfbuilder.get_pp()
+        self.assertAlmostEqual(lib.fp(vpp), -0.34980233064594995, 8)
 
     def test_vs_fft(self):
         cell = pgto.M(
@@ -268,7 +296,7 @@ class KnownValues(unittest.TestCase):
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(v1 - lib.unpack_tril(v2).reshape(v1.shape)).max(), 0, 9)
 
-            dfbuilder.fft_dd_block = False
+            dfbuilder.exclude_dd_block = False
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(lib.fp(v2), 1.0942903795950072, 7)
@@ -281,8 +309,8 @@ class KnownValues(unittest.TestCase):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 2.701808485558761+0.09199879527908592j, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 1.0942903795950072, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), (2.701808484279018+0.09199879476151751j), 8)
             self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8939154964856898+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
@@ -375,16 +403,16 @@ class KnownValues(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as tmpf:
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.9647178286189275, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.9647178630555139, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             v1 = load(tmpf.name, kpts[[0, 0]])
             self.assertAlmostEqual(abs(v1 - lib.unpack_tril(v2).reshape(v1.shape)).max(), 0, 9)
 
-            dfbuilder.fft_dd_block = False
+            dfbuilder.exclude_dd_block = False
             dfbuilder.make_j3c(tmpf.name)
             v2 = load(tmpf.name, kpts[[0, 0]])
-            self.assertAlmostEqual(lib.fp(v2), 0.9647178286189275, 7)
+            self.assertAlmostEqual(lib.fp(v2), 0.9647178630555139, 8)
 
     def test_make_j3c_sr(self):
         dfbuilder = gdf_builder._CCGDFBuilder(cell_sr, auxcell_sr, kpts).build()
@@ -394,9 +422,9 @@ class KnownValues(unittest.TestCase):
             for ki in range(nkpts):
                 for kj in range(nkpts):
                     v_s2.append(load(tmpf.name, kpts[[ki, kj]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.9647178286189275, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), 2.5461640476845053-0.003116947463200118j, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8297008206216369+0j, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.9647178630555139, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+4]), (2.5461640768180303-0.0031169483145069028j), 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2*nkpts+2]), 0.8297008398488194+0j, 8)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1')
             with df.CDERIArray(tmpf.name) as cderi_array:
@@ -417,8 +445,8 @@ class KnownValues(unittest.TestCase):
             v_s2 = []
             for ki in range(nkpts):
                 v_s2.append(load(tmpf.name, kpts[[ki, ki]]))
-            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.9647178286189275, 7)
-            self.assertAlmostEqual(lib.fp(v_s2[2]), 0.8297008206216369+0j, 7)
+            self.assertAlmostEqual(lib.fp(v_s2[0]), 0.9647178630555139, 8)
+            self.assertAlmostEqual(lib.fp(v_s2[2]), 0.8297008398488194+0j, 7)
 
             dfbuilder.make_j3c(tmpf.name, aosym='s1', j_only=True)
             for ki in range(nkpts):

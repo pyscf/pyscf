@@ -327,9 +327,9 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds_slow(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.fp(e),47165803.39384298, 2)
+        self.assertAlmostEqual(lib.fp(e),47165803.39384298, delta=0.05)
         self.assertAlmostEqual(lib.fp(pt1),10444.351837617747+20016.35108560657j, 4)
-        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 2)
+        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, delta=0.05)
         self.assertAlmostEqual(lib.fp(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
         self.assertAlmostEqual(lib.fp(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
@@ -349,9 +349,9 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.fp(e), 47165803.393840045, 2)
+        self.assertAlmostEqual(lib.fp(e), 47165803.393840045, delta=0.05)
         self.assertAlmostEqual(lib.fp(pt1),10444.3518376177471509+20016.3510856065695407j, 4)
-        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, 2)
+        self.assertAlmostEqual(lib.fp(pt2),5481819.3905677245929837+-8012159.8432002812623978j, delta=0.05)
         self.assertAlmostEqual(lib.fp(Wmcik),-4401.1631306775143457+-10002.8851650238902948j, 4)
         self.assertAlmostEqual(lib.fp(Wacek),2057.9135114790879015+1970.9887693509299424j, 4)
 
@@ -372,7 +372,7 @@ class KnownValues(unittest.TestCase):
         rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
 
         e, pt1, pt2, Wmcik, Wacek = kintermediates_rhf.get_t3p2_imds(rand_cc, t1, t2)
-        self.assertAlmostEqual(lib.fp(e), 3867.812511518491, 6)
+        self.assertAlmostEqual(lib.fp(e), 3867.812511518491, 5)
         self.assertAlmostEqual(lib.fp(pt1),(179.0050003787795+521.7529255474592j), 6)
         self.assertAlmostEqual(lib.fp(pt2),(361.4902731606503+1079.5387279755082j), 6)
         self.assertAlmostEqual(lib.fp(Wmcik),(34.9811459194098-86.93467379996585j), 6)

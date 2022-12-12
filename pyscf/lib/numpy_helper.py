@@ -1046,6 +1046,7 @@ def condense(opname, a, loc_x, loc_y=None):
                 j1 = loc_y[j+1]
                 out[i,j] = op(a[i0:i1, j0:j1])
     '''
+    assert a.ndim == 2
     if loc_y is None:
         loc_y = loc_x
     loc_x = numpy.asarray(loc_x, numpy.int32)

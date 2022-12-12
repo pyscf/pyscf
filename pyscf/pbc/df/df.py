@@ -224,6 +224,11 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         return self
 
     def check_sanity(self):
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            logger.warn(self, 'Coulombe interaction truncation for '
+                        'cell.dimension=2 is not available for GDF. '
+                        'Results may be different to FFT/AFT results.')
         return lib.StreamObject.check_sanity(self)
 
     def build(self, j_only=None, with_j3c=True, kpts_band=None):
@@ -370,23 +375,41 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
         '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
+        if kpts is None:
+            kpts = self.kpts
+        if kpts is None:
+            kpts_lst = numpy.zeros((1,3))
+        else:
+            kpts_lst = numpy.reshape(kpts, (-1,3))
         if self._prefer_ccdf or cell.omega != 0:
             # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCNucBuilder(cell, kpts).build()
+            dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
         else:
-            dfbuilder = _RSNucBuilder(cell, kpts).build()
-        return dfbuilder.get_pp()
+            dfbuilder = _RSNucBuilder(cell, kpts_lst).build()
+        vpp = dfbuilder.get_pp()
+        if kpts is None or numpy.shape(kpts) == (3,):
+            vpp = vpp[0]
+        return vpp
 
     def get_nuc(self, kpts=None):
         '''Get the periodic nuc-el AO matrix, with G=0 removed.
         '''
         cell = self.cell
+        if kpts is None:
+            kpts = self.kpts
+        if kpts is None:
+            kpts_lst = numpy.zeros((1,3))
+        else:
+            kpts_lst = numpy.reshape(kpts, (-1,3))
         if self._prefer_ccdf or cell.omega != 0:
             # For long-range integrals _CCGDFBuilder is the only option
-            dfbuilder = _CCNucBuilder(cell, kpts).build()
+            dfbuilder = _CCNucBuilder(cell, kpts_lst).build()
         else:
-            dfbuilder = _RSNucBuilder(cell, kpts).build()
-        return dfbuilder.get_nuc()
+            dfbuilder = _RSNucBuilder(cell, kpts_lst).build()
+        nuc = dfbuilder.get_nuc()
+        if kpts is None or numpy.shape(kpts) == (3,):
+            nuc = nuc[0]
+        return nuc
 
     # Note: Special exxdiv by default should not be used for an arbitrary
     # input density matrix. When the df object was used with the molecular
@@ -410,7 +433,7 @@ class GDF(lib.StreamObject, aft.AFTDFMixin):
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)
             else:
                 mydf = self
             with mydf.range_coulomb(omega) as rsh_df:

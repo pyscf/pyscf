@@ -78,6 +78,7 @@ class RangeSeparatedJKBuilder(object):
         self.cell0_basis_mask = None
         self.ke_cutoff = None
         self.vhfopt = None
+        self.direct_scf_tol = None
         # Use fully uncontracted basis for jk_sr part
         self.fully_uncontracted = False
 
@@ -107,7 +108,15 @@ class RangeSeparatedJKBuilder(object):
         self.supmol_ft = None
         return self
 
-    def build(self, omega=None, direct_scf_tol=None, intor='int2e'):
+    def check_sanity(self):
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            logger.warn(self, 'Coulombe interaction truncation for '
+                        'cell.dimension=2 is not available for RSJK. '
+                        'Results may be different to FFT/AFT results.')
+        return lib.StreamObject.check_sanity(self)
+
+    def build(self, omega=None, intor='int2e'):
         cpu0 = logger.process_clock(), logger.perf_counter()
         log = logger.new_logger(self)
         cell = self.cell
@@ -123,13 +132,14 @@ class RangeSeparatedJKBuilder(object):
             self.omega, self.mesh, self.ke_cutoff = _guess_omega(cell, kpts, self.mesh)
         else:
             self.ke_cutoff = estimate_ke_cutoff_for_omega(cell, self.omega)
-            self.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), self.ke_cutoff)
-            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            self.mesh = cell.cutoff_to_mesh(self.ke_cutoff)
+
+        self.check_sanity()
 
         log.info('omega = %.15g  ke_cutoff = %s  mesh = %s',
                  self.omega, self.ke_cutoff, self.mesh)
 
+        direct_scf_tol = self.direct_scf_tol
         if direct_scf_tol is None:
             cell_exp = np.hstack(cell.bas_exps()).min()
             theta = 1./(1./cell_exp + self.omega**-2)
@@ -263,7 +273,7 @@ class RangeSeparatedJKBuilder(object):
         sparse_ao_loc = nao * np.arange(bvk_ncells)[:,None] + cell0_ao_loc[:-1]
         sparse_ao_loc = np.append(sparse_ao_loc.ravel(), nao * bvk_ncells)
         dm_cond = [lib.condense('NP_absmax', d, sparse_ao_loc, cell0_ao_loc)
-                   for d in sc_dm]
+                   for d in sc_dm.reshape(n_sc_dm, bvk_ncells*nao, nao)]
         dm_cond = np.asarray(np.max(dm_cond, axis=0), order='C')
         libpbc.CVHFset_dm_cond(vhfopt._this,
                                dm_cond.ctypes.data_as(ctypes.c_void_p), dm_cond.size)
@@ -340,7 +350,7 @@ class RangeSeparatedJKBuilder(object):
                 cell = self.cell
                 dfobj = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = estimate_ke_cutoff_for_omega(cell, omega)
-                dfobj.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                dfobj.mesh = cell.cutoff_to_mesh(ke_cutoff)
                 return dfobj.get_jk(dm_kpts, hermi, kpts, kpts_band,
                                     with_j, with_k, omega, exxdiv)
             elif omega < 0:  # Short-range part only
@@ -655,7 +665,7 @@ class RangeSeparatedJKBuilder(object):
 
                 if self.supmol_d is None:
                     rcut = ft_ao.estimate_rcut(cell_d)
-                    supmol_d = ft_ao.ExtendedMole.from_cell(cell_d, kmesh, rcut.max(), log)
+                    supmol_d = ft_ao.ExtendedMole.from_cell(cell_d, self.bvk_kmesh, rcut.max(), log)
                     self.supmol_d = supmol_d.strip_basis(rcut)
                     log.debug('supmol_d nbas = %d cGTO = %d',
                               self.supmol_d.nbas, self.supmol_d.nao)
@@ -762,9 +772,9 @@ def estimate_rcut(rs_cell, omega, precision=None):
         precision = rs_cell.precision
 
     rs_cell = rs_cell
-    exps = np.array([e.min() for e in rs_cell.bas_exps()])
+    exps, cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
     ls = rs_cell._bas[:,gto.ANG_OF]
-    cs = gto.gto_norm(ls, exps)
+
     exp_min_idx = exps.argmin()
     ak_idx = exp_min_idx
     compact_mask = rs_cell.bas_type != ft_ao.SMOOTH_BASIS
@@ -826,41 +836,16 @@ def estimate_rcut(rs_cell, omega, precision=None):
 
 def _guess_omega(cell, kpts, mesh=None):
     precision = cell.precision
-    a = cell.lattice_vectors()
-    naop = cell.npgto_nr()
-    nao = cell.nao
     nkpts = len(kpts)
     if mesh is None:
-        rcut = cell.rcut
         omega_min = 0.25
-        omega_min = 0.75 * (-np.log(precision * np.pi**.5 * rcut**2 * omega_min))**.5 / rcut
         ke_min = estimate_ke_cutoff_for_omega(cell, omega_min)
-        mesh_min = pbctools.cutoff_to_mesh(a, ke_min)
-        # FIXME: balance the two workloads
-        # int2e integrals ~ naop*(cell.rcut**3/cell.vol*naop)**3
-        # ft_ao integrals ~ nkpts*naop*(cell.rcut**3/cell.vol*naop)*mesh**3
-        #                   nkpts**2*naop**3*mesh**3
-        nimgs = (cell.rcut**3 / cell.vol) ** (cell.dimension / 3)
-        # mesh = [max(4, int((nimgs * naop**2 / nkpts**.5) ** (1./3) * 0.5))] * 3
-        # mesh = [max(4, int((nimgs**1.5 * naop**2 / nkpts**.5) ** (1./3) * 0.2))] * 3
-        # mesh = [max(4, int((nimgs**2 * naop**2 / nkpts**.5) ** (1./3) * 0.125))] * 3
-        # mesh = [max(4, int((nimgs**1.5 * naop**1.5 / nkpts**.5) ** (1./3) * 0.5))] * 3
-        # mesh = [max(4, int((nimgs * naop / nkpts**.5) ** (1./3) * 1.5))] * 3
-        # mesh = [max(4, int((nimgs * naop / nkpts**.5) ** (1./3) * 1.5))] * 3
-        # mesh = [max(4, int((nimgs * naop / nkpts**(1./3)) ** (1./3) * 1.5))] * 3
-        nimgs = 8 * nimgs
-        mesh = (nimgs**2*naop**2 / (nkpts**.5 * naop * nimgs * 2e3 +
-                                    nkpts**2*nao**2))**(1./3) * 8 + 1
-        mesh = int(min((cell.max_memory*1e6/32/(.7*nao)**2)**(1./3), mesh))
-        mesh = rsdf_builder._round_off_to_odd_mesh(mesh)
-        mesh = np.max([mesh_min, [mesh] * 3], axis=0)
-        ke_cutoff = pbctools.mesh_to_cutoff(a, mesh)
-        ke_cutoff = ke_cutoff[:cell.dimension].min()
-        if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
-            mesh[cell.dimension:] = cell.mesh[cell.dimension:]
-        elif cell.dimension == 2:
-            mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
+        nkpts = len(kpts)
+        ke_cutoff = (-np.log(precision))**(4./3) * nkpts**(-1./3)
+        ke_cutoff = max(ke_cutoff, ke_min)
+        mesh = cell.cutoff_to_mesh(ke_cutoff)
     else:
+        a = cell.lattice_vectors()
         ke_cutoff = min(pbctools.mesh_to_cutoff(a, mesh)[:cell.dimension])
     omega = estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision)
     return omega, mesh, ke_cutoff

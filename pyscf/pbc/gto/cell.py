@@ -511,19 +511,12 @@ def bas_rcut(cell, bas_id, precision=None):
 
 def estimate_rcut(cell, precision=None):
     '''Lattice-sum cutoff for the entire system'''
+    if cell.nbas == 0:
+        return 0.01
     if precision is None:
         precision = cell.precision
-    #rcut = [cell.bas_rcut(ib, precision) for ib in range(cell.nbas)]
-    #if rcut:
-    #    rcut_max = max(rcut)
-    #else:
-    #    rcut_max = 0
-    #return rcut_max
-    exps = np.array([e.min() for e in cell.bas_exps()])
-    if exps.size == 0:
-        return 0.
+    exps, cs = _extract_pgto_params(cell, 'min')
     ls = cell._bas[:,mole.ANG_OF]
-    cs = mole.gto_norm(ls, exps)
     rcut = _estimate_rcut(exps, ls, cs, precision)
     return rcut.max()
 
@@ -538,22 +531,40 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
 
 def estimate_ke_cutoff(cell, precision=None):
     '''Energy cutoff estimation for nuclear attraction integrals'''
+    if cell.nbas == 0:
+        return 0.
     if precision is None:
         precision = cell.precision
-    exps = np.array([e.min() for e in cell.bas_exps()])
-    if exps.size == 0:
-        return 0.
+    #precision /= cell.atom_charges().sum()
+    exps, cs = _extract_pgto_params(cell, 'max')
     ls = cell._bas[:,mole.ANG_OF]
-    cs = mole.gto_norm(ls, exps)
     Ecut = _estimate_ke_cutoff(exps, ls, cs, precision)
-    charges = cell.atom_charges()
-    return Ecut.max() * charges.max()
+    return Ecut.max()
+
+def _extract_pgto_params(cell, op='min'):
+    '''A helper function for estimate_xxx function'''
+    es = []
+    cs = []
+    if op == 'min':
+        for i in range(cell.nbas):
+            e = cell.bas_exp(i)
+            c = cell._libcint_ctr_coeff(i)
+            idx = e.argmin()
+            es.append(e[idx])
+            cs.append(abs(c[idx]).max())
+    else:
+        for i in range(cell.nbas):
+            e = cell.bas_exp(i)
+            c = cell._libcint_ctr_coeff(i)
+            idx = e.argmax()
+            es.append(e[idx])
+            cs.append(abs(c[idx]).max())
+    return np.array(es), np.array(cs)
 
 def error_for_ke_cutoff(cell, ke_cutoff):
     '''Error estimation based on nuclear attraction integrals'''
-    exps = np.array([e.min() for e in cell.bas_exps()])
+    exps, cs = _extract_pgto_params(cell, 'max')
     ls = cell._bas[:,mole.ANG_OF]
-    cs = mole.gto_norm(ls, exps)
     norm_ang = (2*ls+1)/(4*np.pi)
     fac = 32*np.pi**2*(2*np.pi)**1.5 * cs**2*norm_ang / (2*exps)**(2*ls+.5)
     err = fac * (2*ke_cutoff)**(ls-.5) * np.exp(-ke_cutoff/(4*exps))
@@ -758,10 +769,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ew_eta, ew_cut = cell.get_ewald_params()
     log_precision = np.log(cell.precision / (chargs.sum()*16*np.pi**2))
     ke_cutoff = -2*ew_eta**2*log_precision
-    mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-    if (cell.dimension < 2 or
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    mesh = cell.cutoff_to_mesh(ke_cutoff)
     logger.debug1(cell, 'mesh for ewald %s', mesh)
 
     coords = cell.atom_coords()
@@ -792,6 +800,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     absG2[absG2==0] = 1e200
 
     if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        # TODO: truncated Coulomb for 0D. The non-uniform grids for inf-vacuum
+        # have relatively large error
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
@@ -1349,7 +1359,7 @@ class Cell(mole.Mole):
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
+        exp_min = np.array([self.bas_exp(ib).max() for ib in range(self.nbas)])
         if self.exp_to_discard is None:
             if np.any(exp_min < 0.1):
                 sys.stderr.write('''WARNING!
@@ -1662,6 +1672,23 @@ class Cell(mole.Mole):
             else:
                 return abs_kpts.kpts_scaled
         return 1./(2*np.pi)*np.dot(abs_kpts, self.lattice_vectors().T)
+
+    def cutoff_to_mesh(self, ke_cutoff):
+        '''Convert KE cutoff to FFT-mesh
+
+        Args:
+            ke_cutoff : float
+                KE energy cutoff in a.u.
+
+        Returns:
+            mesh : (3,) array
+        '''
+        a = self.lattice_vectors()
+        dim = self.dimension
+        mesh = pbctools.cutoff_to_mesh(a, ke_cutoff)
+        if dim < 2 or (dim == 2 and self.low_dim_ft_type == 'inf_vacuum'):
+            mesh[dim:] = self.mesh[dim:]
+        return mesh
 
     make_kpts = get_kpts = make_kpts
 

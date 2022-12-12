@@ -539,7 +539,6 @@ class KSCF(pbchf.SCF):
 
     def check_sanity(self):
         mol_hf.SCF.check_sanity(self)
-        self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
             logger.warn(self, 'exxdiv %s is not supported in DF or MDF',
@@ -559,7 +558,13 @@ class KSCF(pbchf.SCF):
         if self.rsjk:
             if not np.all(self.rsjk.kpts == self.kpts):
                 self.rsjk = self.rsjk.__class__(cell, self.kpts)
-            self.rsjk.build(direct_scf_tol=self.direct_scf_tol)
+            self.rsjk.direct_scf_tol = self.direct_scf_tol
+            self.rsjk.build()
+
+        # Let df.build() be called by get_jk function later on needs.
+        # DFT objects may need to initiailze df with different paramters.
+        #if self.with_df:
+        #    self.with_df.build()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

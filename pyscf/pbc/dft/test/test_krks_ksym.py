@@ -21,7 +21,7 @@ import numpy as np
 
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.dft import krks,kuks,multigrid
+from pyscf.pbc.dft import krks, kuks, multigrid
 
 def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
@@ -43,7 +43,7 @@ def make_primitive_cell(mesh):
 
 def setUpModule():
     global cell, He, nk
-    cell = make_primitive_cell([16]*3)
+    cell = make_primitive_cell([17]*3)
     nk = [1,2,2]
 
     L = 2.
@@ -138,7 +138,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRKS(He, kpts=kpts).density_fit()
         kmf.xc = 'lda'
         kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
 
     def test_gga_df(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)
@@ -150,7 +150,7 @@ class KnownValues(unittest.TestCase):
         kmf = pscf.KRKS(He, kpts=kpts).density_fit()
         kmf.xc = 'pbe'
         kmf.kernel()
-        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 9)
+        self.assertAlmostEqual(kmf.e_tot, kmf0.e_tot, 8)
 
     def test_gga_df_newton(self):
         kpts0 = He.make_kpts(nk, with_gamma_point=False)

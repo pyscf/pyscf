@@ -386,13 +386,9 @@ class _RangeSeparatedCell(pbcgto.Cell):
             return cell_d
 
         cell_d.ke_cutoff = ke_cutoff = pbcgto.estimate_ke_cutoff(cell_d)
-        mesh = pbctools.cutoff_to_mesh(cell_d.lattice_vectors(), ke_cutoff)
-        if (cell_d.dimension < 2 or
-            (cell_d.dimension == 2 and cell_d.low_dim_ft_type == 'inf_vacuum')):
-            mesh[cell_d.dimension:] = pbcgto.cell._mesh_inf_vaccum(cell_d)
+        cell_d.mesh = cell_d.cutoff_to_mesh(ke_cutoff)
         logger.debug1(self, 'cell_d rcut %g ke_cutoff %g, mesh %s',
-                      cell_d.rcut, self.ke_cutoff, mesh)
-        cell_d.mesh = mesh
+                      cell_d.rcut, ke_cutoff, cell_d.mesh)
         return cell_d
 
     def compact_basis_cell(self):
@@ -588,6 +584,8 @@ class ExtendedMole(gto.Mole):
     def strip_basis(self, rcut):
         rs_cell = self.rs_cell
         dim = rs_cell.dimension
+        if dim == 0:
+            return self
         supmol_bas_coords = self.atom_coords()[self._bas[:,gto.ATOM_OF]]
         rb = np.linalg.norm(supmol_bas_coords[:,:dim], axis=1)
         a = rs_cell.lattice_vectors()
@@ -616,7 +614,7 @@ class ExtendedMole(gto.Mole):
         rs_cell = self.rs_cell
         supmol = self
         # consider only the most diffused component of a basis
-        cell_exps = np.array([e.min() for e in rs_cell.bas_exps()])
+        cell_exps, cell_cs = pbcgto.cell._extract_pgto_params(rs_cell, 'min')
         cell_l = rs_cell._bas[:,gto.ANG_OF]
         cell_bas_coords = rs_cell.atom_coords()[rs_cell._bas[:,gto.ATOM_OF]]
 
@@ -624,7 +622,7 @@ class ExtendedMole(gto.Mole):
             lattice_sum_factor = 2*np.pi*rs_cell.rcut / (cell_exps.min()*2)
             cutoff = self.precision / lattice_sum_factor
 
-        supmol_exps = np.array([e.min() for e in supmol.bas_exps()])
+        supmol_exps, supmol_cs = pbcgto.cell._extract_pgto_params(supmol, 'min')
         supmol_bas_coords = supmol.atom_coords()[supmol._bas[:,gto.ATOM_OF]]
         supmol_l = supmol._bas[:,gto.ANG_OF]
 
@@ -636,8 +634,8 @@ class ExtendedMole(gto.Mole):
         dri = supmol_exps*aij1 * dr + 1.
         drj = cell_exps[:,None]*aij1 * dr + 1.
         lij = cell_l[:,None] + supmol_l
-        norm_i = gto.gto_norm(cell_l, cell_exps) * ((2*cell_l+1)/(4*np.pi))**.5
-        norm_j = gto.gto_norm(supmol_l, supmol_exps) * ((2*supmol_l+1)/(4*np.pi))**.5
+        norm_i = cell_cs * ((2*cell_l+1)/(4*np.pi))**.5
+        norm_j = supmol_cs * ((2*supmol_l+1)/(4*np.pi))**.5
         fl = 2*np.pi*dr/theta + 1.
         ovlp = (np.pi**1.5 * norm_i[:,None]*norm_j * np.exp(-theta*dr**2) *
                 dri**cell_l[:,None] * drj**supmol_l * aij1**(lij+3) * fl)
@@ -694,13 +692,13 @@ def estimate_rcut(cell, precision=None):
     if precision is None:
         precision = cell.precision
 
-    # consider only the most diffused component of a basis
-    exps = np.array([e.min() for e in cell.bas_exps()])
-    if exps.size == 0:
+    if cell.nbas == 0:
         return np.zeros(1)
 
+    # consider only the most diffused component of a basis
+    exps, cs = pbcgto.cell._extract_pgto_params(cell, 'min')
     ls = cell._bas[:,gto.ANG_OF]
-    cs = gto.gto_norm(ls, exps)
+
     ai_idx = exps.argmin()
     ai = exps[ai_idx]
     li = ls[ai_idx]

@@ -30,7 +30,7 @@ def setUpModule():
                       unit='B',
                       mesh=[7,6,5],
                       a=numpy.eye(3)*8,
-                      precision=1e-8)
+                      precision=1e-9)
 
     mol_orth = cell_orth.copy()
     mol_orth.dimension = 0
@@ -43,7 +43,7 @@ def setUpModule():
                        unit='B',
                        mesh=[7,6,5],
                        a=numpy.eye(3)*8+numpy.random.rand(3,3),
-                       precision=1e-8)
+                       precision=1e-9)
 
     mol_north = cell_north.copy()
     mol_north.dimension = 0

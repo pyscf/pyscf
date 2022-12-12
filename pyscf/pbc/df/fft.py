@@ -29,7 +29,6 @@ from pyscf.pbc.gto import pseudo, error_for_ke_cutoff, estimate_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.df import aft
-from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.lib.kpts_helper import gamma_point
 from pyscf import __config__
 
@@ -38,6 +37,8 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 def get_nuc(mydf, kpts=None):
     from pyscf.pbc.dft import gen_grid
+    if kpts is None:
+        kpts = mydf.kpts
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -70,6 +71,8 @@ def get_pp(mydf, kpts=None):
     '''
     from pyscf.pbc.dft import gen_grid
     cell = mydf.cell
+    if kpts is None:
+        kpts = mydf.kpts
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
@@ -179,7 +182,6 @@ class FFTDF(lib.StreamObject):
         # ~ Nele * error[rho(Ecut)] while in AFT the error is ~ error[rho(Ecut)]^2.
         # This is a first order error, same to the error estimation for nuclear
         # attraction.
-        ke_cutoff = cell.ke_cutoff
         self.mesh = cell.mesh
 
         # to mimic molecular DF object
@@ -237,7 +239,7 @@ class FFTDF(lib.StreamObject):
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
         if ke_cutoff < ke_guess * KE_SCALING:
-            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            mesh_guess = cell.cutoff_to_mesh(ke_guess)
             logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for FFTDF '
                         'to get integral accuracy %g.\nCoulomb integral error '
                         'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',

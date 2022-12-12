@@ -1778,7 +1778,7 @@ def _primitive_gto_cutoff(cell, precision=None):
         cs = abs(cell._libcint_ctr_coeff(ib)).max(axis=1)
         norm_ang = ((2*l+1)/(4*numpy.pi))**.5
         fac = 2*numpy.pi*cs*norm_ang/es / precision
-        r = 10.
+        r = cell.rcut
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
         r = (numpy.log(fac * r**(l+1) + 1.) / es)**.5
 

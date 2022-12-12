@@ -154,6 +154,9 @@ estimate_omega = estimate_omega_min
 def estimate_ke_cutoff_for_omega(cell, omega, precision=None):
     '''Energy cutoff to converge attenuated Coulomb in moment space
     '''
+    if omega == 0:
+        return pbcgto.estimate_ke_cutoff(cell, precision)
+
     if precision is None:
         precision = cell.precision
     ai = np.hstack(cell.bas_exps()).max()
@@ -181,7 +184,7 @@ def estimate_omega_for_ke_cutoff(cell, ke_cutoff, precision=None):
     return omega
 
 
-def get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
+def _get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
     if kpts is None:
         kpts_lst = np.zeros((1,3))
     else:
@@ -197,22 +200,16 @@ def get_pp_loc_part1(mydf, kpts=None, with_pseudo=True):
     kpt_allow = np.zeros(3)
     if cell.dimension > 0:
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
-        mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-        if np.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
+        mesh_guess = cell.cutoff_to_mesh(ke_guess)
+        if np.any(mesh < mesh_guess*KE_SCALING):
             logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                         'to get integral accuracy %g.\nRecommended mesh is %s.',
                         mesh, cell.precision, mesh_guess)
     log.debug1('aft.get_pp_loc_part1 mesh = %s', mesh)
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
-    #FIXME: why a different coulG for FFT is used for 2d
-    #fakenuc = _fake_nuc(cell, with_pseudo=with_pseudo)
-    #aoaux = ft_ao.ft_ao(fakenuc, Gv)
-    #charges = cell.atom_charges()
-    #vG = np.einsum('i,xi->x', -charges, aoaux) * coulG
-
     if with_pseudo:
-        vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
+        vpplocG = pp_int.get_gth_vlocG_part1(cell, Gv)
         vpplocG = -np.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
     else:
         fakenuc = _fake_nuc(cell, with_pseudo=with_pseudo)
@@ -263,12 +260,17 @@ def get_pp(mydf, kpts=None):
         mesh: custom mesh grids. By default mesh is determined by the
         function _guess_eta from module pbc.df.gdf_builder.
     '''
-    cell = mydf.cell
     t0 = (logger.process_clock(), logger.perf_counter())
-    vpp = get_pp_loc_part1(mydf, kpts)
+    if kpts is None:
+        kpts = mydf.kpts
+    cell = mydf.cell
+    vpp = _get_pp_loc_part1(mydf, kpts, with_pseudo=True)
     t1 = logger.timer_debug1(mydf, 'get_pp_loc_part1', *t0)
     pp2builder = _IntPPBuilder(cell, kpts)
-    vpp += pp2builder.get_pp_loc_part2()
+    if kpts is None or np.shape(kpts) == (3,):
+        vpp += pp2builder.get_pp_loc_part2()[0]
+    else:
+        vpp += pp2builder.get_pp_loc_part2()
     t1 = logger.timer_debug1(mydf, 'get_pp_loc_part2', *t1)
     vpp += pp_int.get_pp_nl(cell, kpts)
     t1 = logger.timer_debug1(mydf, 'get_pp_nl', *t1)
@@ -283,7 +285,9 @@ def get_nuc(mydf, kpts=None):
         function _guess_eta from module pbc.df.gdf_builder.
     '''
     t0 = (logger.process_clock(), logger.perf_counter())
-    nuc = get_pp_loc_part1(mydf, kpts, with_pseudo=False)
+    if kpts is None:
+        kpts = mydf.kpts
+    nuc = _get_pp_loc_part1(mydf, kpts, with_pseudo=False)
     logger.timer(mydf, 'get_nuc', *t0)
     return nuc
 
@@ -398,15 +402,8 @@ class _IntPPBuilder(Int3cBuilder):
             vpploc = [0] * nkpts
             return vpploc
 
-        rcut_max = 0.
-        rcut = None
-        for cn, fake_cell in fake_cells.items():
-            rc = self.estimate_rcut_3c1e(rs_cell, fake_cell)
-            rc_max = rc.max()
-            if rc_max > rcut_max:
-                rcut = rc
-                rcut_max = rc_max
-        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut_max, log)
+        rcut = self._estimate_rcut_3c1e(rs_cell, fake_cells)
+        supmol = ft_ao.ExtendedMole.from_cell(rs_cell, kmesh, rcut.max(), log)
         self.supmol = supmol.strip_basis(rcut)
         log.debug('sup-mol nbas = %d cGTO = %d pGTO = %d',
                   supmol.nbas, supmol.nao, supmol.npgto_nr())
@@ -430,7 +427,7 @@ class _IntPPBuilder(Int3cBuilder):
             vpploc.append(v)
         return vpploc
 
-    def estimate_rcut_3c1e(self, cell, fake_cells):
+    def _estimate_rcut_3c1e(self, cell, fake_cells):
         '''Estimate rcut for pp-loc part2 based on 3-center overlap integrals.
         '''
         precision = cell.precision
@@ -448,10 +445,10 @@ class _IntPPBuilder(Int3cBuilder):
         r0 = cell.rcut  # initial guess
         rcut = []
         for lk, fake_cell in fake_cells.items():
-            nuc_exps = np.hstack(fake_cells.bas_exps())
+            nuc_exps = np.hstack(fake_cell.bas_exps())
             ak_idx = nuc_exps.argmin()
             ak = nuc_exps[ak_idx]
-            ck = fake_cells._env[fake_cells._bas[ak_idx,gto.PTR_COEFF]]
+            ck = abs(fake_cell._env[fake_cell._bas[ak_idx,gto.PTR_COEFF]])
 
             aij = ai + exps
             ajk = exps + ak
@@ -683,7 +680,7 @@ class AFTDF(lib.StreamObject, AFTDFMixin):
             else:
                 ke_cutoff = np.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
-            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            mesh_guess = cell.cutoff_to_mesh(ke_guess)
             if ke_cutoff < ke_guess * KE_SCALING:
                 logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '

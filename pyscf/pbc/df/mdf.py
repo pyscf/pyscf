@@ -32,7 +32,6 @@ from pyscf import lib
 from pyscf.lib import logger, zdotCN
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc import gto
-from pyscf.pbc.tools import pbc as pbctools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
@@ -155,7 +154,7 @@ class MDF(df.GDF):
                 cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum'):
                 mydf = aft.AFTDF(cell, self.kpts)
                 ke_cutoff = aft.estimate_ke_cutoff_for_omega(cell, omega)
-                mydf.mesh = pbctools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                mydf.mesh = cell.cutoff_to_mesh(ke_cutoff)
             else:
                 mydf = self
             with mydf.range_coulomb(omega) as rsh_df:
@@ -273,9 +272,9 @@ class _RSMDFBuilder(_RSGDFBuilder):
                 for p0, p1 in lib.prange(0, ngrids, blksize):
                     auxG_sr = ft_ao.ft_ao(auxcell_c, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
                     if is_zero(kpt):
-                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T).real
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr[p0:p1], auxG_sr.T).real
                     else:
-                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr, auxG_sr.T)
+                        sr_j2c[k] -= lib.dot(auxG_sr.conj() * coulG_sr[p0:p1], auxG_sr.T)
                     auxG_sr = None
 
                 j2c_k = recontract_2d(j2c_k, sr_j2c[k])

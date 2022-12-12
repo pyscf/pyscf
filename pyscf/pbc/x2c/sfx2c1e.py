@@ -253,17 +253,17 @@ def get_pnucp(mydf, kpts=None):
     eta, mesh, ke_cutoff = gdf_builder._guess_eta(cell, kpts_lst)
     log.debug1('get_pnucp eta = %s mesh = %s', eta, mesh)
 
-    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts)
+    dfbuilder = gdf_builder._CCNucBuilder(cell, kpts_lst)
     dfbuilder.exclude_dd_block = False
     dfbuilder.build()
     fakenuc = aft._fake_nuc(cell, with_pseudo=cell._pseudo)
-    wj = dfbuilder._int_nuc_vloc(fakenuc, kpts_lst, 'int3c2e_pvp1', 's2')
+    wj = dfbuilder._int_nuc_vloc(fakenuc, 'int3c2e_pvp1', aosym='s2')
     t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
     charge = -cell.atom_charges() # Apply Koseki effective charge?
     if cell.dimension == 3:
         mod_cell = dfbuilder.modchg_cell
-        nucbar = (charge / np.hstack(mod_cell.bas_exps())).sum()
+        nucbar = (charge / numpy.hstack(mod_cell.bas_exps())).sum()
         nucbar *= numpy.pi/cell.vol
 
         ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
