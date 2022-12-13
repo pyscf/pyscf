@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <complex.h>
 #include <assert.h>
 #include <string.h>
