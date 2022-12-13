@@ -53,6 +53,7 @@ def setUpModule():
     solver1.spin = 0
     solver1.nroots = 2
     solver2 = fci.FCI(mol_N2, singlet=False)
+    solver2.wfnsym = 'A1u'
     solver2.spin = 2
     mc_N2 = CASSCF(mf_N2, 4, 4)
     mc_N2 = addons.state_average_mix_(mc_N2, [solver1, solver2],
@@ -131,5 +132,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for mcscf.addons")
     unittest.main()
-
-

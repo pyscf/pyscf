@@ -425,10 +425,13 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     log.warn('Check to see if `pick` function %s is providing '
                              'linear dependent vectors', pick.__name__)
                 if len(xt) == 0:
-                    msg = ('No more linearly independent basis were found. '
-                           'Unless loosen the lindep tolerance (current value '
-                           f'{lindep}), the diagonalization solver is not able '
-                           'to find eigenvectors.')
+                    if icyc == 0:
+                        msg = 'Initial guess is empty or zero'
+                    else:
+                        msg = ('No more linearly independent basis were found. '
+                               'Unless loosen the lindep tolerance (current value '
+                               f'{lindep}), the diagonalization solver is not able '
+                               'to find eigenvectors.')
                     raise LinearDependenceError(msg)
             x0 = None
             max_dx_last = 1e9

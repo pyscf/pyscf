@@ -154,15 +154,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(veff1-veff2).max(), 0, 12)
 
     def test_with_ci_init_guess(self):
-        mc1 = mcscf.CASCI(msym, 4, 4)
-        ci0 = numpy.zeros((6,6))
-        ci0[0,1] = 1
-        mc1.kernel(ci0=ci0)
-
         mc2 = mcscf.CASCI(msym, 4, 4)
         mc2.wfnsym = 'A1u'
         mc2.kernel()
-        self.assertAlmostEqual(mc1.e_tot, mc2.e_tot, 9)
+        self.assertAlmostEqual(mc2.e_tot, -108.7252219413561, 9)
+
+        mc2 = mcscf.CASCI(msym, 4, (3, 1))
+        mc2.wfnsym = 4
+        mc2.kernel()
+        self.assertAlmostEqual(mc2.e_tot, -108.62009625745821, 9)
 
     def test_slight_symmetry_broken(self):
         mf = copy.copy(msym)
