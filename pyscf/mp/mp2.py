@@ -240,7 +240,7 @@ def make_fno(mp, thresh=1e-6, pct_occ=None, nvir_act=None, t2=None):
     return numpy.arange(nocc+nvir_act,nmo), no_coeff
 
 
-def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
+def make_rdm2(mp, t2=None, eris=None, ao_repr=False, with_dm1=True):
     r'''
     Spin-traced two-particle density matrix in MO basis
 
@@ -299,16 +299,17 @@ def make_rdm2(mp, t2=None, eris=None, ao_repr=False):
     #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
     #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
     # When adding dm1 contribution, dm1 subscripts need to be flipped
-    for i in range(nocc0):
-        dm2[i,i,:,:] += dm1.T * 2
-        dm2[:,:,i,i] += dm1.T * 2
-        dm2[:,i,i,:] -= dm1.T
-        dm2[i,:,:,i] -= dm1
+    if with_dm1:
+        for i in range(nocc0):
+            dm2[i,i,:,:] += dm1.T * 2
+            dm2[:,:,i,i] += dm1.T * 2
+            dm2[:,i,i,:] -= dm1.T
+            dm2[i,:,:,i] -= dm1
 
-    for i in range(nocc0):
-        for j in range(nocc0):
-            dm2[i,i,j,j] += 4
-            dm2[i,j,j,i] -= 2
+        for i in range(nocc0):
+            for j in range(nocc0):
+                dm2[i,i,j,j] += 4
+                dm2[i,j,j,i] -= 2
 
     if ao_repr:
         from pyscf.cc import ccsd_rdm
