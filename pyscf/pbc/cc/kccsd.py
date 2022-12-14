@@ -497,9 +497,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     for k in range(nkpts):
         kpt_nocc = nocc_per_kpt[k]
         kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
-                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
-                                              numpy.ones(kpt_nvir, dtype=numpy.bool)))
+        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=bool),
+                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=bool),
+                                              numpy.ones(kpt_nvir, dtype=bool)))
         padded_moidx.append(kpt_padded_moidx)
 
     eris.mo_coeff = []
@@ -542,7 +542,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     fockao = cc._scf.get_hcore() + vhf
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
-    eris.e_hf = cc._scf.energy_tot(dm=dm, vhf=vhf)
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in

@@ -33,8 +33,10 @@ from pyscf import lib
 from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf.scf import uhf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
+from pyscf.lib.exceptions import PointGroupSymmetryError
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
@@ -218,7 +220,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
         idx = numpy.argsort(es, kind='mergesort')
-        assert(numpy.allclose(es[idx], esub.round(7)))
+        assert (numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
 
@@ -310,11 +312,30 @@ def eig(mf, h, s):
     cs = []
     es = []
     orbsym = []
-    for ir in range(nirrep):
-        e, c = mf._eigh(h[ir], s[ir])
-        cs.append(c)
-        es.append(e)
-        orbsym.append([mol.irrep_id[ir]] * e.size)
+    if mol.groupname in ('Dooh', 'Coov'):
+        for ir in range(nirrep):
+            irrep_id = mol.irrep_id[ir]
+            irrep_1d = irrep_id in (0, 1, 4, 5)
+            irrep_2dx = irrep_id % 2 == 0
+            if irrep_1d or irrep_2dx:
+                e, c = mf._eigh(h[ir], s[ir])
+                cs.append(c)
+                es.append(e)
+                orbsym.append([mol.irrep_id[ir]] * e.size)
+
+            if not irrep_1d and irrep_2dx:
+                # force 2D irreps using the same coefficients
+                irrep_conj = irrep_id ^ 1
+                assert mol.irrep_id[ir+1] == irrep_conj
+                cs.append(c)
+                es.append(e)
+                orbsym.append([irrep_conj] * e.size)
+    else:
+        for ir in range(nirrep):
+            e, c = mf._eigh(h[ir], s[ir])
+            cs.append(c)
+            es.append(e)
+            orbsym.append([mol.irrep_id[ir]] * e.size)
     e = numpy.hstack(es)
     c = so2ao_mo_coeff(mol.symm_orb, cs)
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
@@ -329,22 +350,63 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
     else:
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                      mo_coeff, s, check)
-    return numpy.asarray(orbsym)
+    return orbsym
 
-def get_wfnsym(mf, mo_coeff=None, mo_occ=None):
-    orbsym = mf.get_orbsym(mo_coeff)
-    if mf.mol.groupname in ('SO3', 'Dooh', 'Coov'):
+def map_degeneracy(mo_energy, orbsym):
+    '''Find degeneracy correspondence for cylindrical symmetry'''
+    norb = orbsym.size
+    ex_mask = numpy.isin(orbsym % 10, (0, 2, 5, 7))
+
+    degen_mapping = numpy.arange(norb)
+    for ir_ex in set(orbsym[ex_mask]):
+        if ir_ex in (0, 1, 5, 4):
+            continue
+
+        if ir_ex % 2 == 0:
+            ir_ey = ir_ex + 1
+        else:
+            ir_ey = ir_ex - 1
+        ex_idx = numpy.where(orbsym == ir_ex)[0]
+        ey_idx = numpy.where(orbsym == ir_ey)[0]
+        if ex_idx.size != ey_idx.size:
+            raise PointGroupSymmetryError('Degenerated orbitals required')
+        mo_ex = mo_energy[ex_idx].round(7)
+        mo_ey = mo_energy[ey_idx].round(7)
+        mapping = numpy.where(abs(mo_ex[:,None] - mo_ey) < 1e-6)[1]
+        if mapping.size != ex_idx.size:
+            raise PointGroupSymmetryError('Degenerated orbitals required')
+        degen_mapping[ex_idx] = ey_idx[mapping]
+        degen_mapping[ey_idx] = ex_idx[mapping.argsort()]
+
+    return degen_mapping
+
+def get_wfnsym(mf, mo_coeff=None, mo_occ=None, orbsym=None):
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    if orbsym is None:
+        orbsym = mf.get_orbsym(mo_coeff)
+
+    if mf.mol.groupname == 'SO3':
         if numpy.any(orbsym > 7):
             logger.warn(mf, 'Wave-function symmetry for %s not supported. '
                         'Wfn symmetry is mapped to D2h/C2v group.',
                         mf.mol.groupname)
-            orbsym = orbsym % 10
 
-    if mo_occ is None:
-        mo_occ = mf.mo_occ
     wfnsym = 0
-    for ir in orbsym[mo_occ == 1]:
+    for ir in orbsym[mo_occ == 1] % 10:
         wfnsym ^= ir
+
+    if mf.mol.groupname in ('Dooh', 'Coov'):
+        orb_l = (orbsym // 10) * 2
+        e1_mask = numpy.isin(orbsym % 10, (2, 3, 6, 7))
+        orb_l[e1_mask] += 1
+        ey_mask = numpy.isin(orbsym % 10, (1, 3, 4, 6))
+        orb_l[ey_mask] *= -1
+        a_l = orb_l[mo_occ != 0]
+        b_l = orb_l[mo_occ == 2]
+        wfn_momentum = a_l.sum() + b_l.sum()
+        wfnsym += (abs(wfn_momentum) // 2) * 10
+
     return wfnsym
 
 
@@ -419,7 +481,7 @@ class SymAdaptedRHF(hf.RHF):
                 nelec_fix += n
                 rest_idx[ir_idx] = False
         nelec_float = mol.nelectron - nelec_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
             occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
@@ -460,9 +522,20 @@ class SymAdaptedRHF(hf.RHF):
         idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
                             idx[self.mo_occ==0][v_sort]))
         self.mo_energy = self.mo_energy[idx]
-        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
-        self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
         self.mo_occ = self.mo_occ[idx]
+        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
+        orbsym = orbsym[idx]
+        degen_mapping = None
+        if self.mol.groupname in ('Dooh', 'Coov'):
+            try:
+                degen_mapping = map_degeneracy(self.mo_energy, orbsym)
+            except PointGroupSymmetryError:
+                logger.warn(self, 'Orbital degeneracy broken')
+        if degen_mapping is None:
+            self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym)
+        else:
+            self.mo_coeff = lib.tag_array(
+                self.mo_coeff[:,idx], orbsym=orbsym, degen_mapping=degen_mapping)
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
@@ -582,7 +655,7 @@ class SymAdaptedROHF(rohf.ROHF):
     def get_occ(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = self.mo_energy
         mol = self.mol
-        if not self.mol.symmetry:
+        if not mol.symmetry:
             return rohf.ROHF.get_occ(self, mo_energy, mo_coeff)
 
         if getattr(mo_energy, 'mo_ea', None) is not None:
@@ -619,7 +692,7 @@ class SymAdaptedROHF(rohf.ROHF):
                 rest_idx[ir_idx] = False
 
         nelec_float = mol.nelectron - neleca_fix - nelecb_fix
-        assert(nelec_float >= 0)
+        assert (nelec_float >= 0)
         if len(rest_idx) > 0:
             rest_idx = numpy.where(rest_idx)[0]
             nopen = abs(mol.spin - (neleca_fix - nelecb_fix))
@@ -711,9 +784,20 @@ class SymAdaptedROHF(rohf.ROHF):
                                            mo_ea=mo_ea, mo_eb=mo_eb)
         else:
             self.mo_energy = self.mo_energy[idx]
-        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
-        self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym[idx])
         self.mo_occ = self.mo_occ[idx]
+        orbsym = self.get_orbsym(self.mo_coeff, self.get_ovlp())
+        orbsym = orbsym[idx]
+        degen_mapping = None
+        if self.mol.groupname in ('Dooh', 'Coov'):
+            try:
+                degen_mapping = map_degeneracy(self.mo_energy, orbsym)
+            except PointGroupSymmetryError:
+                logger.warn(self, 'Orbital degeneracy broken')
+        if degen_mapping is None:
+            self.mo_coeff = lib.tag_array(self.mo_coeff[:,idx], orbsym=orbsym)
+        else:
+            self.mo_coeff = lib.tag_array(
+                self.mo_coeff[:,idx], orbsym=orbsym, degen_mapping=degen_mapping)
         if self.chkfile:
             chkfile.dump_scf(self.mol, self.chkfile, self.e_tot, self.mo_energy,
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
@@ -878,37 +962,7 @@ def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
 
 
 class HF1e(ROHF):
-    def scf(self, *args):
-        logger.info(self, '\n')
-        logger.info(self, '******** 1 electron system ********')
-        self.converged = True
-        h1e = self.get_hcore(self.mol)
-        s1e = self.get_ovlp(self.mol)
-        self.mo_energy, self.mo_coeff = self.eig(h1e, s1e)
-        self.mo_occ = self.get_occ(self.mo_energy, self.mo_coeff)
-        self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
-        self._finalize()
-        return self.e_tot
+    scf = hf._hf1e_scf
 
 
-del(WITH_META_LOWDIN)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    mol = gto.Mole()
-    mol.build(
-        verbose = 1,
-        output = None,
-        atom = [['H', (0.,0.,0.)],
-                ['H', (0.,0.,1.)], ],
-        basis = {'H': 'ccpvdz'},
-        symmetry = True
-    )
-
-    method = RHF(mol)
-    method.verbose = 5
-    method.irrep_nelec['A1u'] = 2
-    energy = method.kernel()
-    print(energy)
-    method.analyze()
+del (WITH_META_LOWDIN)

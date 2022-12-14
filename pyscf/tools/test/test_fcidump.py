@@ -22,19 +22,21 @@ from pyscf import gto, scf, ao2mo
 from pyscf.tools import fcidump
 import tempfile
 
-mol = gto.Mole()
-mol.atom = '''
-N  0.0000000000   0.0000000000   0.0000000000
-N  0.0000000000   0.0000000000   1.0977000000
-           '''
-mol.basis = 'sto-3g'
-mol.symmetry = 'D2h'
-mol.charge = 0
-mol.spin = 0 #2*S; multiplicity-1
-mol.verbose = 0
-mol.build(0, 0)
+def setUpModule():
+    global mol, mf
+    mol = gto.Mole()
+    mol.atom = '''
+    N  0.0000000000   0.0000000000   0.0000000000
+    N  0.0000000000   0.0000000000   1.0977000000
+               '''
+    mol.basis = 'sto-3g'
+    mol.symmetry = 'D2h'
+    mol.charge = 0
+    mol.spin = 0 #2*S; multiplicity-1
+    mol.verbose = 0
+    mol.build(0, 0)
 
-mf = scf.RHF(mol).run()
+    mf = mol.RHF(chkfile=tempfile.NamedTemporaryFile().name).run()
 
 def tearDownModule():
     global mol, mf
@@ -96,6 +98,3 @@ ORBSYM=1,2,3,4,
 if __name__ == "__main__":
     print("Full Tests for fcidump")
     unittest.main()
-
-
-

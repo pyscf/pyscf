@@ -38,6 +38,7 @@ from pyscf import ao2mo
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import symm
+from pyscf.scf.hf_symm import map_degeneracy
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
@@ -93,30 +94,31 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     # aa, ab
     ci0 = []
     ci1 = []
+    wfnsym_in_d2h = wfnsym % 10
     for ir in range(TOTIRREPS):
-        ma, mb = aidx[ir].size, bidx[wfnsym ^ ir].size
+        ma, mb = aidx[ir].size, bidx[wfnsym_in_d2h ^ ir].size
         ci0.append(numpy.zeros((ma,mb)))
         ci1.append(numpy.zeros((ma,mb)))
         if ma > 0 and mb > 0:
-            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym ^ ir], out=ci0[ir])
+            lib.take_2d(fcivec, aidx[ir], bidx[wfnsym_in_d2h ^ ir], out=ci0[ir])
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
     ci1_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci1])
     libfci.FCIcontract_2e_symm1(eri_ptrs, ci0_ptrs, ci1_ptrs,
                                 ctypes.c_int(norb), nas, nbs,
                                 ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
                                 linka_ptr, linkb_ptr, dimirrep,
-                                ctypes.c_int(wfnsym))
+                                ctypes.c_int(wfnsym_in_d2h))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym ^ ir])
+            lib.takebak_2d(ci1new, ci1[ir], aidx[ir], bidx[wfnsym_in_d2h ^ ir])
 
     # bb, ba
     ci0T = []
     for ir in range(TOTIRREPS):
-        mb, ma = bidx[ir].size, aidx[wfnsym ^ ir].size
+        mb, ma = bidx[ir].size, aidx[wfnsym_in_d2h ^ ir].size
         ci0T.append(numpy.zeros((mb,ma)))
         if ma > 0 and mb > 0:
-            lib.transpose(ci0[wfnsym ^ ir], out=ci0T[ir])
+            lib.transpose(ci0[wfnsym_in_d2h ^ ir], out=ci0T[ir])
     ci0, ci0T = ci0T, None
     ci1 = [numpy.zeros_like(x) for x in ci0]
     ci0_ptrs = Tirrep(*[x.ctypes.data_as(ctypes.c_void_p) for x in ci0])
@@ -125,18 +127,19 @@ def contract_2e(eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
                                 ctypes.c_int(norb), nbs, nas,
                                 ctypes.c_int(nlinkb), ctypes.c_int(nlinka),
                                 linkb_ptr, linka_ptr, dimirrep,
-                                ctypes.c_int(wfnsym))
+                                ctypes.c_int(wfnsym_in_d2h))
     for ir in range(TOTIRREPS):
         if ci0[ir].size > 0:
-            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]), aidx[wfnsym ^ ir], bidx[ir])
-    return ci1new.reshape(fcivec_shape)
+            lib.takebak_2d(ci1new, lib.transpose(ci1[ir]),
+                           aidx[wfnsym_in_d2h ^ ir], bidx[ir])
+    return ci1new.reshape(fcivec_shape).view(direct_spin1.FCIvector)
 
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
            davidson_only=False, pspace_size=400, orbsym=None, wfnsym=None,
            ecore=0, **kwargs):
-    assert(len(orbsym) == norb)
+    assert (len(orbsym) == norb)
     cis = FCISolver(None)
     cis.level_shift = level_shift
     cis.conv_tol = tol
@@ -176,15 +179,20 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
 
 def _id_wfnsym(cisolver, norb, nelec, orbsym, wfnsym):
     '''Guess wfnsym or convert wfnsym to symmetry ID if it's a symmetry label'''
+    gpname = getattr(cisolver.mol, 'groupname', None)
     if wfnsym is None:
         neleca, nelecb = _unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
         for i in orbsym[nelecb:neleca]:
             wfnsym ^= i % 10
+        if gpname in ('Dooh', 'Coov'):
+            l = 0
+            for i in orbsym[nelecb:neleca]:
+                l += symm.basis.linearmole_irrep2momentum(i)
+            wfnsym += (l//2) * 10
     elif isinstance(wfnsym, str):
-        wfnsym = symm.irrep_name2id(cisolver.mol.groupname, wfnsym)
-    # % 10 to convert irrep_ids to irrep of D2h
-    return wfnsym % 10
+        wfnsym = symm.irrep_name2id(gpname, wfnsym)
+    return wfnsym
 
 def _gen_strs_irrep(strs, orbsym):
     # % 10 to convert irrep_ids to irrep of D2h
@@ -199,28 +207,31 @@ def _gen_strs_irrep(strs, orbsym):
             irreps[numpy.bitwise_and(strs, 1 << i) > 0] ^= ir
     return irreps
 
-def _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym=0):
+def _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym=0):
+    neleca, nelecb = _unpack_nelec(nelec)
     na = len(airreps)
     nb = len(birreps)
+    hdiag = hdiag.reshape(na,nb)
     ci0 = []
     iroot = 0
-    for addr in numpy.argsort(hdiag):
-        x = numpy.zeros((na*nb))
-        addra = addr // nb
-        addrb = addr % nb
-        if airreps[addra] ^ birreps[addrb] == wfnsym:
-            x[addr] = 1
-            ci0.append(x)
-            iroot += 1
-            if iroot >= nroots:
-                break
-    try:
-        # Add noise
-        ci0[0][0 ] += 1e-5
-        ci0[0][-1] -= 1e-5
-    except IndexError:
-        raise IndexError('Configuration of required symmetry (wfnsym=%d) not found' % wfnsym)
+    sym_allowed = airreps[:,None] == wfnsym ^ birreps
+    if neleca == nelecb and na == nb:
+        idx = numpy.arange(na)
+        sym_allowed[idx[:,None] < idx] = False
+    idx_a, idx_b = numpy.where(sym_allowed)
+    for k in hdiag[idx_a,idx_b].argsort():
+        addra, addrb = idx_a[k], idx_b[k]
+        x = numpy.zeros((na, nb))
+        x[addra,addrb] = 1
+        ci0.append(x.ravel().view(direct_spin1.FCIvector))
+        iroot += 1
+        if iroot >= nroots:
+            break
+
+    if len(ci0) == 0:
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
     return ci0
+
 def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     neleca, nelecb = _unpack_nelec(nelec)
     strsa = cistring.gen_strings4orblist(range(norb), neleca)
@@ -228,8 +239,155 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
     if neleca != nelecb:
         strsb = cistring.gen_strings4orblist(range(norb), nelecb)
         birreps = _gen_strs_irrep(strsb, orbsym)
-    return _get_init_guess(airreps, birreps, nroots, hdiag, orbsym, wfnsym)
+    return _get_init_guess(airreps, birreps, nroots, hdiag, nelec, orbsym, wfnsym)
 
+def get_init_guess_cyl_sym(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
+    neleca, nelecb = _unpack_nelec(nelec)
+    strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
+    airreps_d2h = birreps_d2h = _gen_strs_irrep(strsa, orbsym)
+    a_ls = b_ls = _strs_angular_momentum(strsa, orbsym)
+    if neleca != nelecb:
+        strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+        birreps_d2h = _gen_strs_irrep(strsb, orbsym)
+        b_ls = _strs_angular_momentum(strsb, orbsym)
+
+    wfnsym_in_d2h = wfnsym % 10
+    wfn_momentum = symm.basis.linearmole_irrep2momentum(wfnsym)
+    na = len(strsa)
+    nb = len(strsb)
+    hdiag = hdiag.reshape(na,nb)
+    degen_mapping = orbsym.degen_mapping
+    ci0 = []
+    iroot = 0
+    wfn_ungerade = wfnsym_in_d2h >= 4
+    a_ungerade = airreps_d2h >= 4
+    b_ungerade = birreps_d2h >= 4
+    sym_allowed = a_ungerade[:,None] == b_ungerade ^ wfn_ungerade
+    # total angular momentum == wfn_momentum
+    sym_allowed &= a_ls[:,None] == wfn_momentum - b_ls
+    if neleca == nelecb and na == nb:
+        idx = numpy.arange(na)
+        sym_allowed[idx[:,None] < idx] = False
+    idx_a, idx_b = numpy.where(sym_allowed)
+
+    for k in hdiag[idx_a,idx_b].argsort():
+        addra, addrb = idx_a[k], idx_b[k]
+        ca = _cyl_sym_csf2civec(strsa, addra, orbsym, degen_mapping)
+        cb = _cyl_sym_csf2civec(strsb, addrb, orbsym, degen_mapping)
+        if wfnsym in (0, 1, 4, 5):
+            addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
+            addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
+            if wfnsym in (1, 4) and addra == addra1 and addrb == addrb1:
+                continue
+            x = ca[:,None] * cb
+
+            # If (E+) and (E-) are associated determinants
+            # (E+)(E-') + (E-)(E+') => A1
+            # (E+)(E-') - (E-)(E+') => A2
+            if addra != addra1:
+                ca = _cyl_sym_csf2civec(strsa, addra1, orbsym, degen_mapping)
+            if addrb != addrb1:
+                cb = _cyl_sym_csf2civec(strsb, addrb1, orbsym, degen_mapping)
+            if wfnsym in (0, 5):  # A1g, A1u
+                x += sign_a * sign_b * ca[:,None] * cb
+                #assert (sign_a*sign_b==1 and x.imag==0) or (sign_a*sign_b==-1 and x.real==0)
+            elif wfnsym in (1, 4):  # A2g, A2u
+                x -= sign_a * sign_b * ca[:,None] * cb
+                #assert (sign_a*sign_b==1 and x.real==0) or (sign_a*sign_b==-1 and x.imag==0)
+            if numpy.linalg.norm(x.real) > 1e-6:
+                x = x.real.copy()
+            else:
+                x = x.imag.copy()
+
+        elif wfn_momentum > 0:
+            x = ca.real[:,None] * cb.real
+            x-= ca.imag[:,None] * cb.imag
+        else:
+            x = ca.imag[:,None] * cb.real
+            x+= ca.real[:,None] * cb.imag
+
+        norm = numpy.linalg.norm(x)
+        if norm < 1e-3:
+            continue
+        x *= 1./norm
+        ci0.append(x.ravel().view(direct_spin1.FCIvector))
+        iroot += 1
+        if iroot >= nroots:
+            break
+
+    if len(ci0) == 0:
+        raise RuntimeError(f'Initial guess for symmetry {wfnsym} not found')
+    return ci0
+
+def _cyl_sym_csf2civec(strs, addr, orbsym, degen_mapping):
+    '''For orbital basis rotation from E(+/-) basis to Ex/Ey basis, mimic the CI
+    transformation  addons.transform_ci(civec, (0, nelec), u)
+    '''
+    norb = orbsym.size
+    one_particle_strs = numpy.asarray([1 << i for i in range(norb)])
+    occ_masks = (strs[:,None] & one_particle_strs) != 0
+    na = strs.size
+    occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(na,-1)
+
+    u = _cyl_sym_orbital_rotation(orbsym, degen_mapping)
+    ui = u[occ_masks[addr]].T.copy()
+    minors = ui[occ_idx_all_strs]
+    civec = numpy.linalg.det(minors)
+    return civec
+
+def _cyl_sym_orbital_rotation(orbsym, degen_mapping):
+    '''Rotation to transform (E+)/(E-) basis to Ex/Ey basis
+    |Ex/Ey> = |E(+/-)> * u
+    '''
+    norb = orbsym.size
+    u = numpy.zeros((norb, norb), dtype=numpy.complex128)
+    sqrth = .5**.5
+    sqrthi = sqrth * 1j
+    for i, j in enumerate(degen_mapping):
+        if i == j:  # 1d irrep
+            if orbsym[i] in (1, 4):  # A2g, A2u
+                u[i,i] = 1j
+            else:
+                u[i,i] = 1
+        elif orbsym[i] % 10 in (0, 2, 5, 7):  # Ex, E(+)
+            u[j,j] = sqrthi
+            u[i,j] = sqrthi
+            u[j,i] = sqrth
+            u[i,i] = -sqrth
+    return u
+
+def _sv_associated_det(ci_str, degen_mapping):
+    '''Associated determinant for the sigma_v operation'''
+    ci_str1 = 0
+    nelec = 0
+    sign = 1
+    for i, j in enumerate(degen_mapping):
+        if ci_str & (1 << i) > 0:
+            if i > j and ci_str & (1 << j) > 0:
+                # Ex, Ey orbitals swapped
+                sign = -sign
+            ci_str1 |= 1 << j
+            nelec += 1
+    return cistring.str2addr(degen_mapping.size, nelec, ci_str1), sign
+
+def _strs_angular_momentum(strs, orbsym):
+    # angular momentum for each orbitals
+    orb_l = (orbsym // 10) * 2
+    e1_mask = numpy.isin(orbsym % 10, (2, 3, 6, 7))
+    orb_l[e1_mask] += 1
+    ey_mask = numpy.isin(orbsym % 10, (1, 3, 4, 6))
+    orb_l[ey_mask] *= -1
+
+    # total angular for each determinant (CSF)
+    ls = numpy.zeros(len(strs), dtype=int)
+    if isinstance(strs, cistring.OIndexList):
+        nocc = strs.shape[1]
+        for i in range(nocc):
+            ls += orb_l[strs[:,i]]
+    else:
+        for i, l in enumerate(orb_l):
+            ls[numpy.bitwise_and(strs, 1 << i) > 0] += l
+    return ls
 
 def reorder_eri(eri, norb, orbsym):
     if orbsym is None:
@@ -254,7 +412,10 @@ def reorder_eri(eri, norb, orbsym):
     for ir, nnorb in enumerate(dimirrep):
         idx = numpy.asarray(numpy.where(trilirrep == ir)[0], dtype=numpy.int32)
         rank_in_irrep[idx] = numpy.arange(nnorb, dtype=numpy.int32)
-        eri_irs[ir] = lib.take_2d(eri, idx, idx)
+        eri_ir = lib.take_2d(eri, idx, idx)
+        # Drop small integrals which may break symmetry?
+        #eri_ir[abs(eri_ir) < 1e-13] = 0
+        eri_irs[ir] = eri_ir
         p0 += nnorb
     return eri_irs, rank_in_irrep, old_eri_irrep
 
@@ -275,6 +436,149 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
     link_index = [link_index.take(aidx[ir], axis=0) for ir in range(TOTIRREPS)]
     return aidx, link_index
 
+def _guess_wfnsym_cyl_sym(civec, strsa, strsb, orbsym):
+    degen_mapping = orbsym.degen_mapping
+    idx = abs(civec).argmax()
+    na = strsa.size
+    nb = strsb.size
+    addra = idx // nb
+    addrb = idx % nb
+    addra1, sign_a = _sv_associated_det(strsa[addra], degen_mapping)
+    addrb1, sign_b = _sv_associated_det(strsb[addrb], degen_mapping)
+    addra, addra1 = min(addra,addra1), max(addra,addra1)
+    addrb, addrb1 = min(addrb,addrb1), max(addrb,addrb1)
+    ca = ca1 = _cyl_sym_csf2civec(strsa, addra, orbsym, degen_mapping)
+    cb = cb1 = _cyl_sym_csf2civec(strsb, addrb, orbsym, degen_mapping)
+    if addra != addra1:
+        ca1 = _cyl_sym_csf2civec(strsa, addra1, orbsym, degen_mapping)
+    if addrb != addrb1:
+        cb1 = _cyl_sym_csf2civec(strsb, addrb1, orbsym, degen_mapping)
+    ua = numpy.stack([ca, ca1])
+    ub = numpy.stack([cb, cb1])
+    # civec is in the Ex/Ey basis. Transform the largest coefficient to
+    # (E+)/(E-) basis.
+    c_max = ua.conj().dot(civec.reshape(na,nb)).dot(ub.conj().T)
+
+    airreps_d2h = _gen_strs_irrep(strsa[[addra,addra1]], orbsym)
+    birreps_d2h = _gen_strs_irrep(strsb[[addrb,addrb1]], orbsym)
+    a_ls = _strs_angular_momentum(strsa[[addra,addra1]], orbsym)
+    b_ls = _strs_angular_momentum(strsb[[addrb,addrb1]], orbsym)
+    a_ungerade = airreps_d2h >= 4
+    b_ungerade = birreps_d2h >= 4
+    idx = abs(c_max).argmax()
+    idx_a, idx_b = idx // 2, idx % 2
+    wfn_ungerade = a_ungerade[idx_a] ^ b_ungerade[idx_b]
+    wfn_momentum = a_ls[idx_a] + b_ls[idx_b]
+
+    if wfn_momentum == 0:
+        # For A1g and A1u, CI coefficient and its sigma_v associated one have
+        # the same sign
+        if (sign_a*sign_b * c_max[0,0].real * c_max[1,1].real > 1e-6 or
+            sign_a*sign_b * c_max[0,0].imag * c_max[1,1].imag > 1e-6):  # A1
+            if wfn_ungerade:
+                wfnsym = 5
+            else:
+                wfnsym = 0
+        else:
+            # For A2g and A2u, CI coefficient and its sigma_v associated one
+            # have opposite signs
+            if wfn_ungerade:
+                wfnsym = 4
+            else:
+                wfnsym = 1
+
+    elif wfn_momentum % 2 == 1:
+        if abs(c_max[idx_a,idx_b].real) > 1e-6:  # Ex
+            if wfn_ungerade:
+                wfnsym = 7
+            else:
+                wfnsym = 2
+        else:  # Ey
+            if wfn_ungerade:
+                wfnsym = 6
+            else:
+                wfnsym = 3
+    else:
+        if abs(c_max[idx_a,idx_b].real) > 1e-6:  # Ex
+            if wfn_ungerade:
+                wfnsym = 5
+            else:
+                wfnsym = 0
+        else:  # Ey
+            if wfn_ungerade:
+                wfnsym = 4
+            else:
+                wfnsym = 1
+
+    wfnsym += (abs(wfn_momentum) // 2) * 10
+    return wfnsym
+
+def guess_wfnsym(solver, norb, nelec, fcivec=None, orbsym=None, wfnsym=None, **kwargs):
+    '''
+    Guess point group symmetry of the FCI wavefunction.  If fcivec is
+    given, the symmetry of fcivec is used.  Otherwise the symmetry is
+    same to the HF determinant.
+    '''
+    if orbsym is None:
+        orbsym = solver.orbsym
+
+    verbose = kwargs.get('verbose', None)
+    log = logger.new_logger(solver, verbose)
+    neleca, nelecb = nelec = _unpack_nelec(nelec, solver.spin)
+
+    groupname = getattr(solver.mol, 'groupname', None)
+    if fcivec is None:
+        # guess wfnsym if initial guess is not given
+        wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
+        log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+    elif wfnsym is None:
+        if groupname in ('Dooh', 'Coov'):
+            strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
+            if neleca != nelecb:
+                strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+            if not isinstance(fcivec, numpy.ndarray) or fcivec.ndim > 2:
+                fcivec = fcivec[0]
+            wfnsym = _guess_wfnsym_cyl_sym(fcivec, strsa, strsb, orbsym)
+        else:
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+        log.debug('Guessing CI wfn symmetry = %s', wfnsym)
+
+    else:
+        # verify if the input wfnsym is consistent with the symmetry of fcivec
+        strsa = strsb = cistring.gen_strings4orblist(range(norb), neleca)
+        if neleca != nelecb:
+            strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+
+        if groupname in ('Dooh', 'Coov'):
+            if not isinstance(fcivec, numpy.ndarray) or fcivec.ndim > 2:
+                fcivec = fcivec[0]
+            wfnsym1 = _guess_wfnsym_cyl_sym(fcivec, strsa, strsb, orbsym)
+            if wfnsym1 != _id_wfnsym(solver, norb, nelec, orbsym, wfnsym):
+                raise RuntimeError(f'Input wfnsym {wfnsym} is not consistent with '
+                                   f'fcivec symmetry {wfnsym1}')
+            wfnsym = wfnsym1
+        else:
+            na, nb = strsa.size, strsb.size
+            orbsym_in_d2h = numpy.asarray(orbsym) % 10
+            airreps = numpy.zeros(na, dtype=numpy.int32)
+            birreps = numpy.zeros(nb, dtype=numpy.int32)
+            for i, ir in enumerate(orbsym_in_d2h):
+                airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
+                birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
+
+            wfnsym = _id_wfnsym(solver, norb, nelec, orbsym, wfnsym)
+            groupname = getattr(solver.mol, 'groupname', None)
+            mask = airreps[:,None] == (wfnsym % 10) ^ birreps
+
+            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
+                fcivec = [fcivec]
+            if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
+                raise RuntimeError('Input wfnsym {wfnsym} is not consistent with '
+                                   'fcivec coefficients')
+
+    return wfnsym
+
 
 class FCISolver(direct_spin1.FCISolver):
 
@@ -293,14 +597,16 @@ class FCISolver(direct_spin1.FCISolver):
         if isinstance(self.wfnsym, str):
             log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
-            try:
-                log.info('Input CI wfn symmetry = %s',
-                         symm.irrep_id2name(self.mol.groupname, self.wfnsym))
-            except KeyError:
-                raise RuntimeError('FCISolver cannot find mwfnsym Id %s in group %s. '
-                                   'This might be caused by the projection from '
-                                   'high-symmetry group to D2h symmetry.' %
-                                   (self.wfnsym, self.mol.groupname))
+            groupname = getattr(self.mol, 'groupname', None)
+            if groupname is not None:
+                try:
+                    log.info('Input CI wfn symmetry = %s',
+                             symm.irrep_id2name(groupname, self.wfnsym))
+                except KeyError:
+                    raise RuntimeError('FCISolver cannot find mwfnsym Id %s in group %s. '
+                                       'This might be caused by the projection from '
+                                       'high-symmetry group to D2h symmetry.' %
+                                       (self.wfnsym, groupname))
         else:
             log.info('CI wfn symmetry = %s', self.wfnsym)
         return self
@@ -331,55 +637,13 @@ class FCISolver(direct_spin1.FCISolver):
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
         wfnsym = _id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
-        nelec = _unpack_nelec(nelec, self.spin)
-        return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
-
-    def guess_wfnsym(self, norb, nelec, fcivec=None, orbsym=None, wfnsym=None,
-                     **kwargs):
-        '''
-        Guess point group symmetry of the FCI wavefunction.  If fcivec is
-        given, the symmetry of fcivec is used.  Otherwise the symmetry is
-        based on the HF determinant.
-        '''
-        if orbsym is None:
-            orbsym = self.orbsym
-
-        verbose = kwargs.get('verbose', None)
-        log = logger.new_logger(self, verbose)
-
-        nelec = _unpack_nelec(nelec, self.spin)
-        if fcivec is None:
-            # guess wfnsym if initial guess is not given
-            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
-            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
-
-        elif wfnsym is None:
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
-            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
-
+        if getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov'):
+            return get_init_guess_cyl_sym(
+                norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
         else:
-            # verify if the input wfnsym is consistent with the symmetry of fcivec
-            neleca, nelecb = nelec
-            strsa = numpy.asarray(cistring.make_strings(range(norb), neleca))
-            strsb = numpy.asarray(cistring.make_strings(range(norb), nelecb))
-            na, nb = strsa.size, strsb.size
+            return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
-            orbsym_in_d2h = numpy.asarray(orbsym) % 10
-            airreps = numpy.zeros(na, dtype=numpy.int32)
-            birreps = numpy.zeros(nb, dtype=numpy.int32)
-            for i, ir in enumerate(orbsym_in_d2h):
-                airreps[numpy.bitwise_and(strsa, 1 << i) > 0] ^= ir
-                birreps[numpy.bitwise_and(strsb, 1 << i) > 0] ^= ir
-
-            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
-            mask = (airreps.reshape(-1,1) ^ birreps) == wfnsym
-
-            if isinstance(fcivec, numpy.ndarray) and fcivec.ndim <= 2:
-                fcivec = [fcivec]
-            if all(abs(c.reshape(na, nb)[mask]).max() < 1e-5 for c in fcivec):
-                raise RuntimeError('Input wfnsym is not consistent with fcivec coefficients')
-
-        return wfnsym
+    guess_wfnsym = guess_wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
                tol=None, lindep=None, max_cycle=None, max_space=None,
@@ -393,7 +657,21 @@ class FCISolver(direct_spin1.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
+        if (not hasattr(orbsym, 'degen_mapping') and
+            getattr(self.mol, 'groupname', None) in ('Dooh', 'Coov')):
+            degen_mapping = map_degeneracy(h1e.diagonal(), orbsym)
+            orbsym = lib.tag_array(orbsym, degen_mapping=degen_mapping)
+
         wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
+
+        if wfnsym > 7:
+            # Symmetry broken for Dooh and Coov groups is often observed.
+            # A larger max_space is helpful to reduce the error. Also it is
+            # hard to converge to high precision.
+            if max_space is None and self.max_space == FCISolver.max_space:
+                max_space = 20 + 7 * nroots
+            if tol is None and self.conv_tol == FCISolver.conv_tol:
+                tol = 1e-7
 
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
@@ -404,71 +682,3 @@ class FCISolver(direct_spin1.FCISolver):
         return e, c
 
 FCI = FCISolver
-
-
-if __name__ == '__main__':
-    from functools import reduce
-    from pyscf import gto
-    from pyscf import scf
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
-    mol.atom = [
-        ['O', ( 0., 0.    , 0.   )],
-        ['H', ( 0., -0.757, 0.587)],
-        ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'sto-3g',
-                 'O': 'sto-3g',}
-    mol.symmetry = 1
-    mol.build()
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron-1
-    h1e = reduce(numpy.dot, (m.mo_coeff.T, scf.hf.get_hcore(mol), m.mo_coeff))
-    eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    numpy.random.seed(1)
-    na = cistring.num_strings(norb, nelec//2+1)
-    nb = cistring.num_strings(norb, nelec//2)
-    fcivec = numpy.random.random((na,nb))
-
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
-    cis = FCISolver(mol)
-    cis.orbsym = orbsym
-    fcivec = addons.symmetrize_wfn(fcivec, norb, nelec, cis.orbsym, wfnsym=0)
-
-    ci1 = cis.contract_2e(eri, fcivec, norb, nelec, orbsym=cis.orbsym, wfnsym=0)
-    ci1ref = direct_spin1.contract_2e(eri, fcivec, norb, nelec)
-    print(numpy.allclose(ci1ref, ci1))
-
-    ci1 = contract_2e(eri, fcivec, norb, nelec, orbsym=orbsym)
-    ci1ref = direct_spin1.contract_2e(eri, fcivec, norb, nelec)
-    print(numpy.allclose(ci1ref, ci1))
-    cis.wfnsym = 3
-    e = cis.kernel(h1e, eri, norb, nelec, ecore=m.energy_nuc(), davidson_only=True)[0]
-    print(e, e - -74.695029029452357)
-
-    mol.atom = [['H', (0, 0, i)] for i in range(8)]
-    mol.basis = {'H': 'sto-3g'}
-    mol.symmetry = True
-    mol.build()
-    m = scf.RHF(mol)
-    ehf = m.scf()
-
-    norb = m.mo_coeff.shape[1]
-    nelec = mol.nelectron + 1
-    eri = ao2mo.incore.full(m._eri, m.mo_coeff)
-    na = cistring.num_strings(norb, nelec//2+1)
-    nb = cistring.num_strings(norb, nelec//2)
-    fcivec = numpy.random.random((na,nb))
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
-    orbsym = orbsym % 10
-    fcivec = addons.symmetrize_wfn(fcivec, norb, nelec, orbsym, wfnsym=5)
-    cis = FCISolver(mol)
-    cis.orbsym = orbsym
-    cis.wfnsym = 5
-    ci1 = cis.contract_2e(eri, fcivec, norb, nelec)
-    ci1ref = direct_spin1.contract_2e(eri, fcivec, norb, nelec)
-    print(numpy.allclose(ci1ref, ci1))

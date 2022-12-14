@@ -63,7 +63,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     # aaa
-    bufsize = max(8, int((max_memory*.5e6/8-nocca**3*3*lib.num_threads())*.4/(nocca*nmoa)))
+    bufsize = max(8, int((max_memory*.5e6/8-nocca**3*3*lib.num_threads())*.4/max(1,nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(nocca, dtype=int)
     contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka,
@@ -89,7 +89,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = log.timer_debug1('contract_aaa', *cpu1)
 
     # bbb
-    bufsize = max(8, int((max_memory*.5e6/8-noccb**3*3*lib.num_threads())*.4/(noccb*nmob)))
+    bufsize = max(8, int((max_memory*.5e6/8-noccb**3*3*lib.num_threads())*.4/max(1,noccb*nmob)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(noccb, dtype=int)
     contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb,
@@ -114,12 +114,23 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                                              cache_row_b,cache_col_b))
     cpu1 = log.timer_debug1('contract_bbb', *cpu1)
 
+    # Premature termination for fully spin-polarized systems
+    if nocca*noccb == 0:
+        et_sum *= .25
+        if abs(et_sum[0].imag) > 1e-4:
+            logger.warn(mycc, 'Non-zero imaginary part of UCCSD(T) energy was found %s',
+                        et_sum[0])
+        et = et_sum[0].real
+        log.timer('UCCSD(T)', *cpu0)
+        log.note('UCCSD(T) correction = %.15g', et)
+        return et
+
     # Cache t2abT in t2ab to reduce memory footprint
-    assert(t2ab.flags.c_contiguous)
+    assert (t2ab.flags.c_contiguous)
     t2abT = lib.transpose(t2ab.copy().reshape(nocca*noccb,nvira*nvirb), out=t2ab)
     t2abT = t2abT.reshape(nvira,nvirb,nocca,noccb)
     # baa
-    bufsize = int(max(12, (max_memory*.5e6/8-noccb*nocca**2*5)*.7/(nocca*nmob)))
+    bufsize = int(max(12, (max_memory*.5e6/8-noccb*nocca**2*5)*.7/max(1,nocca*nmob)))
     ts = t1aT, t1bT, t2aaT, t2abT
     fock = (eris.focka, eris.fockb)
     vooo = (eris_vooo, eris_vOoO, eris_VoOo)
@@ -179,7 +190,10 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, mo_energy, orbsym, log):
     o_sym = orbsym[:nocc]
     oo_sym = (o_sym[:,None] ^ o_sym).ravel()
     oo_ir_loc = numpy.append(0, numpy.cumsum(numpy.bincount(oo_sym, minlength=8)))
-    nirrep = max(oo_sym) + 1
+    if len(oo_sym) == 0:
+        nirrep = 0
+    else:
+        nirrep = max(oo_sym) + 1
 
     orbsym   = orbsym.astype(numpy.int32)
     o_ir_loc = o_ir_loc.astype(numpy.int32)
@@ -282,7 +296,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
     max_memory = min(8000, max_memory*.9)
 
-    blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvira*nocca*nmoa))))
+    blksize = min(nvira, max(16, int(max_memory*1e6/8/max(1,nvira*nocca*nmoa))))
     with lib.call_in_background(eris_vvop.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocca,nmoa,nvira), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
@@ -297,7 +311,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
             ovov = ovvv = None
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
-    blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvirb*noccb*nmob))))
+    blksize = min(nvirb, max(16, int(max_memory*1e6/8/max(1,nvirb*noccb*nmob))))
     with lib.call_in_background(eris_VVOP.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((noccb,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
@@ -312,7 +326,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
             ovov = ovvv = None
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
-    blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvirb*nocca*nmob))))
+    blksize = min(nvira, max(16, int(max_memory*1e6/8/max(1,nvirb*nocca*nmob))))
     with lib.call_in_background(eris_vVoP.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocca,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
@@ -327,7 +341,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
             ovov = ovvv = None
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
-    blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvira*noccb*nmoa))))
+    blksize = min(nvirb, max(16, int(max_memory*1e6/8/max(1,nvira*noccb*nmoa))))
     OVov = numpy.asarray(eris.ovOV).transpose(2,3,0,1)
     with lib.call_in_background(eris_VvOp.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((noccb,nmoa,nvira), dtype=dtype)

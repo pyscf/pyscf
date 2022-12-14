@@ -19,31 +19,33 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 
-b = 1.4
-mol = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-)
-m = scf.RHF(mol)
-m.conv_tol = 1e-9
-m.scf()
+def setUpModule():
+    global mol, molsym, m, msym
+    b = 1.4
+    mol = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    )
+    m = scf.RHF(mol)
+    m.conv_tol = 1e-9
+    m.scf()
 
-molsym = gto.M(
-verbose = 5,
-output = '/dev/null',
-atom = [
-    ['N',(  0.000000,  0.000000, -b/2)],
-    ['N',(  0.000000,  0.000000,  b/2)], ],
-basis = {'N': 'ccpvdz', },
-symmetry = True
-)
-msym = scf.RHF(molsym)
-msym.conv_tol = 1e-9
-msym.scf()
+    molsym = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+        ['N',(  0.000000,  0.000000, -b/2)],
+        ['N',(  0.000000,  0.000000,  b/2)], ],
+    basis = {'N': 'ccpvdz', },
+    symmetry = True
+    )
+    msym = scf.RHF(molsym)
+    msym.conv_tol = 1e-9
+    msym.scf()
 
 def tearDownModule():
     global mol, molsym, m, msym
@@ -123,6 +125,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.6910275883606078, 4)
 
+        mc.wfnsym = 'A2u'
+        # raised by mc.fcisolver.guess_wfnsym
+        self.assertRaises(RuntimeError, mc.kernel)
+
     def test_casci_from_uhf(self):
         mf = scf.UHF(mol)
         mf.scf()
@@ -155,9 +161,13 @@ class KnownValues(unittest.TestCase):
 
     def test_wfnsym(self):
         mc = mcscf.CASSCF(msym, 4, (3,1))
-        mc.fcisolver.wfnsym = 4
+        mc.fcisolver.wfnsym = 14
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
+
+        mc.wfnsym = 'A2u'
+        emc = mc.mc1step()[0]
+        self.assertAlmostEqual(emc, -108.69019443475308, 7)
 
     def test_ucasci(self):
         mc = mcscf.UCASCI(msym, 4, (3,1))
@@ -180,4 +190,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for N2")
     unittest.main()
-

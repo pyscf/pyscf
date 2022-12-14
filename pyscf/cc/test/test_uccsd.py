@@ -30,35 +30,37 @@ from pyscf.cc import addons
 from pyscf.cc import uccsd_rdm
 from pyscf.fci import direct_uhf
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
+def setUpModule():
+    global mol, rhf, mf, myucc, mol_s2, mf_s2, eris
+    mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
 
-mol.basis = '631g'
-mol.build()
-rhf = scf.RHF(mol)
-rhf.conv_tol_grad = 1e-8
-rhf.kernel()
-mf = scf.addons.convert_to_uhf(rhf)
+    mol.basis = '631g'
+    mol.build()
+    rhf = scf.RHF(mol)
+    rhf.conv_tol_grad = 1e-8
+    rhf.kernel()
+    mf = scf.addons.convert_to_uhf(rhf)
 
-myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
+    myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
-mol_s2 = gto.Mole()
-mol_s2.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol_s2.basis = '631g'
-mol_s2.spin = 2
-mol_s2.verbose = 5
-mol_s2.output = '/dev/null'
-mol_s2.build()
-mf_s2 = scf.UHF(mol_s2).run()
-eris = uccsd.UCCSD(mf_s2).ao2mo()
+    mol_s2 = gto.Mole()
+    mol_s2.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol_s2.basis = '631g'
+    mol_s2.spin = 2
+    mol_s2.verbose = 5
+    mol_s2.output = '/dev/null'
+    mol_s2.build()
+    mf_s2 = scf.UHF(mol_s2).run()
+    eris = uccsd.UCCSD(mf_s2).ao2mo()
 
 def tearDownModule():
     global mol, rhf, mf, myucc, mol_s2, mf_s2, eris
@@ -71,12 +73,12 @@ class KnownValues(unittest.TestCase):
     def test_with_df_s0(self):
         mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
         mycc = cc.UCCSD(mf).run()
-        self.assertAlmostEqual(mycc.e_tot, -76.118403942938741, 7)
+        self.assertAlmostEqual(mycc.e_tot, -76.118403942938741, 6)
 
     def test_with_df_s2(self):
         mf = scf.UHF(mol_s2).density_fit(auxbasis='weigend').run()
         mycc = cc.UCCSD(mf).run()
-        self.assertAlmostEqual(mycc.e_tot, -75.83360033370676, 7)
+        self.assertAlmostEqual(mycc.e_tot, -75.83360033370676, 6)
 
     def test_ERIS(self):
         ucc1 = cc.UCCSD(mf)
@@ -178,15 +180,18 @@ class KnownValues(unittest.TestCase):
     def test_amplitudes_from_rccsd(self):
         e, t1, t2 = cc.RCCSD(rhf).set(conv_tol=1e-10).kernel()
         t1, t2 = myucc.amplitudes_from_rccsd(t1, t2)
-        self.assertAlmostEqual(abs(t1[0]-myucc.t1[0]).max(), 0, 6)
-        self.assertAlmostEqual(abs(t1[1]-myucc.t1[1]).max(), 0, 6)
-        self.assertAlmostEqual(abs(t2[0]-myucc.t2[0]).max(), 0, 6)
-        self.assertAlmostEqual(abs(t2[1]-myucc.t2[1]).max(), 0, 6)
-        self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 6)
+        self.assertAlmostEqual(abs(t1[0]-myucc.t1[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(t1[1]-myucc.t1[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(t2[0]-myucc.t2[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(t2[1]-myucc.t2[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 5)
 
     def test_uccsd_frozen(self):
         ucc1 = copy.copy(myucc)
         ucc1.frozen = 1
+        self.assertEqual(ucc1.nmo, (12,12))
+        self.assertEqual(ucc1.nocc, (4,4))
+        ucc1.set_frozen()
         self.assertEqual(ucc1.nmo, (12,12))
         self.assertEqual(ucc1.nocc, (4,4))
         ucc1.frozen = [0,1]
@@ -295,7 +300,7 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
         e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+        self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
         d1 = uccsd_rdm._gamma1_intermediates(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
         mycc.max_memory = 0
@@ -307,7 +312,7 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,ijkl', eriab, dm2[1])
         e1+= numpy.einsum('ijkl,ijkl', eribb, dm2[2]) * .5
         e1+= mol.energy_nuc()
-        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+        self.assertAlmostEqual(e1, mycc.e_tot, 6)
 
     def test_h4_rdm(self):
         mol = gto.Mole()
@@ -339,11 +344,11 @@ class KnownValues(unittest.TestCase):
         l1, l2 = mycc.l1, mycc.l2
         rdm1 = mycc.make_rdm1(t1, t2, l1, l2)
         rdm2 = mycc.make_rdm2(t1, t2, l1, l2)
-        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[0]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[1]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[0]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 6)
-        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 6)
+        self.assertAlmostEqual(abs(dm1ref[0] - rdm1[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm1ref[1] - rdm1[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[0] - rdm2[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 5)
 
     def test_eris_contract_vvvv_t2(self):
         mol = gto.Mole()
@@ -415,12 +420,12 @@ class KnownValues(unittest.TestCase):
               numpy.random.random((noccb,noccb,nvirb,nvirb)))
         t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.fp(t1[0]),  49.912690337392938, 10)
-        self.assertAlmostEqual(lib.fp(t1[1]),  74.596097348134776, 10)
-        self.assertAlmostEqual(lib.fp(t2[0]), -41.784696524955393, 10)
-        self.assertAlmostEqual(lib.fp(t2[1]), -9675.767769478574, 6)
-        self.assertAlmostEqual(lib.fp(t2[2]),  270.75447826471577, 7)
-        self.assertAlmostEqual(lib.fp(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 6)
+        self.assertAlmostEqual(lib.fp(t1[0]),  49.912690337392938, 7)
+        self.assertAlmostEqual(lib.fp(t1[1]),  74.596097348134776, 7)
+        self.assertAlmostEqual(lib.fp(t2[0]), -41.784696524955393, 5)
+        self.assertAlmostEqual(lib.fp(t2[1]), -9675.767769478574, 5)
+        self.assertAlmostEqual(lib.fp(t2[2]),  270.75447826471577, 5)
+        self.assertAlmostEqual(lib.fp(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 5)
 
     def test_vector_to_amplitudes(self):
         t1, t2 = myucc.vector_to_amplitudes(myucc.amplitudes_to_vector(myucc.t1, myucc.t2))
@@ -429,6 +434,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2[0]-myucc.t2[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(t2[1]-myucc.t2[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 12)
+
+    def test_vector_to_amplitudes_overwritten(self):
+        mol = gto.M()
+        mycc = scf.UHF(mol).apply(cc.UCCSD)
+        nelec = (3, 3)
+        nocc = nelec
+        nmo = (5, 5)
+        mycc.nocc = nocc
+        mycc.nmo = nmo
+        vec = numpy.zeros(mycc.vector_size())
+        vec_orig = vec.copy()
+        t1, t2 = mycc.vector_to_amplitudes(vec)
+        t1a, t1b = t1
+        t2aa, t2ab, t2bb = t2
+        t1a[:] = 1
+        t1b[:] = 1
+        t2aa[:] = 1
+        t2ab[:] = 1
+        t2bb[:] = 1
+        self.assertAlmostEqual(abs(vec - vec_orig).max(), 0, 15)
 
     def test_vector_size(self):
         self.assertEqual(myucc.vector_size(), 2240)
@@ -706,4 +731,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for UCCSD")
     unittest.main()
-

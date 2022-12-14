@@ -18,12 +18,12 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*2];
-double fy0[SIMDD*16*2];
-double fz0[SIMDD*16*2];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+2)*2];
+double fy0[SIMDD*(ANG_MAX+2)*2];
+double fz0[SIMDD*(ANG_MAX+2)*2];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+2);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+2);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+2);
 double buf[SIMDD*nc*3];
 double s[SIMDD*3];
 double *gto0 = cgto;
@@ -71,6 +71,7 @@ buf[1*SIMDD+n] = + (-1*c[2]*s[0*SIMDD+n]) + c[0]*s[2*SIMDD+n];
 buf[2*SIMDD+n] = + (-1*c[0]*s[1*SIMDD+n]) + c[1]*s[0*SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -114,7 +115,7 @@ gto2[j1*ngrids+i+n] += buf[2*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_ig_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
@@ -123,7 +124,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ig_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
@@ -132,7 +133,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ig_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 3};
@@ -153,18 +154,18 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*4];
-double fy0[SIMDD*16*4];
-double fz0[SIMDD*16*4];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
-double *fx2 = fx1 + SIMDD*16;
-double *fy2 = fy1 + SIMDD*16;
-double *fz2 = fz1 + SIMDD*16;
-double *fx3 = fx2 + SIMDD*16;
-double *fy3 = fy2 + SIMDD*16;
-double *fz3 = fz2 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+3)*4];
+double fy0[SIMDD*(ANG_MAX+3)*4];
+double fz0[SIMDD*(ANG_MAX+3)*4];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+3);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+3);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+3);
+double *fx2 = fx1 + SIMDD*(ANG_MAX+3);
+double *fy2 = fy1 + SIMDD*(ANG_MAX+3);
+double *fz2 = fz1 + SIMDD*(ANG_MAX+3);
+double *fx3 = fx2 + SIMDD*(ANG_MAX+3);
+double *fy3 = fy2 + SIMDD*(ANG_MAX+3);
+double *fz3 = fz2 + SIMDD*(ANG_MAX+3);
 double buf[SIMDD*nc*9];
 double s[SIMDD*9];
 double *gto0 = cgto;
@@ -232,6 +233,7 @@ buf[7*SIMDD+n] = + (-1*c[2]*s[6*SIMDD+n]) + c[0]*s[8*SIMDD+n];
 buf[8*SIMDD+n] = + (-1*c[0]*s[7*SIMDD+n]) + c[1]*s[6*SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -301,7 +303,7 @@ gto8[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_ipig_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -310,7 +312,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipig_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -319,7 +321,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipig_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -340,12 +342,12 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*2];
-double fy0[SIMDD*16*2];
-double fz0[SIMDD*16*2];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+2)*2];
+double fy0[SIMDD*(ANG_MAX+2)*2];
+double fz0[SIMDD*(ANG_MAX+2)*2];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+2);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+2);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+2);
 double buf[SIMDD*nc*4];
 double s[SIMDD*3];
 double *gto0 = cgto;
@@ -391,6 +393,7 @@ buf[2*SIMDD+n] = + (-1*s[2*SIMDD+n]);
 buf[3*SIMDD+n] = 0;
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -437,7 +440,7 @@ gto3[j1*ngrids+i+n] += buf[3*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_sp_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 1};
@@ -446,7 +449,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_sp_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 1};
@@ -455,7 +458,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_sp_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 1};
@@ -476,18 +479,18 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*4];
-double fy0[SIMDD*16*4];
-double fz0[SIMDD*16*4];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
-double *fx2 = fx1 + SIMDD*16;
-double *fy2 = fy1 + SIMDD*16;
-double *fz2 = fz1 + SIMDD*16;
-double *fx3 = fx2 + SIMDD*16;
-double *fy3 = fy2 + SIMDD*16;
-double *fz3 = fz2 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+3)*4];
+double fy0[SIMDD*(ANG_MAX+3)*4];
+double fz0[SIMDD*(ANG_MAX+3)*4];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+3);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+3);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+3);
+double *fx2 = fx1 + SIMDD*(ANG_MAX+3);
+double *fy2 = fy1 + SIMDD*(ANG_MAX+3);
+double *fz2 = fz1 + SIMDD*(ANG_MAX+3);
+double *fx3 = fx2 + SIMDD*(ANG_MAX+3);
+double *fy3 = fy2 + SIMDD*(ANG_MAX+3);
+double *fz3 = fz2 + SIMDD*(ANG_MAX+3);
 double buf[SIMDD*nc*12];
 double s[SIMDD*9];
 double *gto0 = cgto;
@@ -557,6 +560,7 @@ buf[10*SIMDD+n] = + (-1*s[8*SIMDD+n]);
 buf[11*SIMDD+n] = 0;
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -635,7 +639,7 @@ gto11[j1*ngrids+i+n] += buf[11*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_ipsp_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 3};
@@ -644,7 +648,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipsp_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 3};
@@ -653,7 +657,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipsp_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 3};
@@ -674,30 +678,30 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*8];
-double fy0[SIMDD*16*8];
-double fz0[SIMDD*16*8];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
-double *fx2 = fx1 + SIMDD*16;
-double *fy2 = fy1 + SIMDD*16;
-double *fz2 = fz1 + SIMDD*16;
-double *fx3 = fx2 + SIMDD*16;
-double *fy3 = fy2 + SIMDD*16;
-double *fz3 = fz2 + SIMDD*16;
-double *fx4 = fx3 + SIMDD*16;
-double *fy4 = fy3 + SIMDD*16;
-double *fz4 = fz3 + SIMDD*16;
-double *fx5 = fx4 + SIMDD*16;
-double *fy5 = fy4 + SIMDD*16;
-double *fz5 = fz4 + SIMDD*16;
-double *fx6 = fx5 + SIMDD*16;
-double *fy6 = fy5 + SIMDD*16;
-double *fz6 = fz5 + SIMDD*16;
-double *fx7 = fx6 + SIMDD*16;
-double *fy7 = fy6 + SIMDD*16;
-double *fz7 = fz6 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+4)*8];
+double fy0[SIMDD*(ANG_MAX+4)*8];
+double fz0[SIMDD*(ANG_MAX+4)*8];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+4);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+4);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+4);
+double *fx2 = fx1 + SIMDD*(ANG_MAX+4);
+double *fy2 = fy1 + SIMDD*(ANG_MAX+4);
+double *fz2 = fz1 + SIMDD*(ANG_MAX+4);
+double *fx3 = fx2 + SIMDD*(ANG_MAX+4);
+double *fy3 = fy2 + SIMDD*(ANG_MAX+4);
+double *fz3 = fz2 + SIMDD*(ANG_MAX+4);
+double *fx4 = fx3 + SIMDD*(ANG_MAX+4);
+double *fy4 = fy3 + SIMDD*(ANG_MAX+4);
+double *fz4 = fz3 + SIMDD*(ANG_MAX+4);
+double *fx5 = fx4 + SIMDD*(ANG_MAX+4);
+double *fy5 = fy4 + SIMDD*(ANG_MAX+4);
+double *fz5 = fz4 + SIMDD*(ANG_MAX+4);
+double *fx6 = fx5 + SIMDD*(ANG_MAX+4);
+double *fy6 = fy5 + SIMDD*(ANG_MAX+4);
+double *fz6 = fz5 + SIMDD*(ANG_MAX+4);
+double *fx7 = fx6 + SIMDD*(ANG_MAX+4);
+double *fy7 = fy6 + SIMDD*(ANG_MAX+4);
+double *fz7 = fz6 + SIMDD*(ANG_MAX+4);
 double buf[SIMDD*nc*36];
 double s[SIMDD*27];
 double *gto0 = cgto;
@@ -837,6 +841,7 @@ buf[34*SIMDD+n] = + (-1*s[26*SIMDD+n]);
 buf[35*SIMDD+n] = 0;
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -1009,7 +1014,7 @@ gto35[j1*ngrids+i+n] += buf[35*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_ipipsp_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 9};
@@ -1018,7 +1023,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipipsp_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 9};
@@ -1027,7 +1032,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipipsp_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {4, 9};
@@ -1048,18 +1053,18 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*4];
-double fy0[SIMDD*16*4];
-double fz0[SIMDD*16*4];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
-double *fx2 = fx1 + SIMDD*16;
-double *fy2 = fy1 + SIMDD*16;
-double *fz2 = fz1 + SIMDD*16;
-double *fx3 = fx2 + SIMDD*16;
-double *fy3 = fy2 + SIMDD*16;
-double *fz3 = fz2 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+3)*4];
+double fy0[SIMDD*(ANG_MAX+3)*4];
+double fz0[SIMDD*(ANG_MAX+3)*4];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+3);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+3);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+3);
+double *fx2 = fx1 + SIMDD*(ANG_MAX+3);
+double *fy2 = fy1 + SIMDD*(ANG_MAX+3);
+double *fz2 = fz1 + SIMDD*(ANG_MAX+3);
+double *fx3 = fx2 + SIMDD*(ANG_MAX+3);
+double *fy3 = fy2 + SIMDD*(ANG_MAX+3);
+double *fz3 = fz2 + SIMDD*(ANG_MAX+3);
 double buf[SIMDD*nc*9];
 double s[SIMDD*9];
 double *gto0 = cgto;
@@ -1127,6 +1132,7 @@ buf[7*SIMDD+n] = + s[7*SIMDD+n];
 buf[8*SIMDD+n] = + s[8*SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -1196,7 +1202,7 @@ gto8[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_iprc_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -1205,7 +1211,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_iprc_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -1214,7 +1220,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_iprc_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -1235,18 +1241,18 @@ double *pgto;
 double *gridx = coord;
 double *gridy = coord+BLKSIZE;
 double *gridz = coord+BLKSIZE*2;
-double fx0[SIMDD*16*4];
-double fy0[SIMDD*16*4];
-double fz0[SIMDD*16*4];
-double *fx1 = fx0 + SIMDD*16;
-double *fy1 = fy0 + SIMDD*16;
-double *fz1 = fz0 + SIMDD*16;
-double *fx2 = fx1 + SIMDD*16;
-double *fy2 = fy1 + SIMDD*16;
-double *fz2 = fz1 + SIMDD*16;
-double *fx3 = fx2 + SIMDD*16;
-double *fy3 = fy2 + SIMDD*16;
-double *fz3 = fz2 + SIMDD*16;
+double fx0[SIMDD*(ANG_MAX+3)*4];
+double fy0[SIMDD*(ANG_MAX+3)*4];
+double fz0[SIMDD*(ANG_MAX+3)*4];
+double *fx1 = fx0 + SIMDD*(ANG_MAX+3);
+double *fy1 = fy0 + SIMDD*(ANG_MAX+3);
+double *fz1 = fz0 + SIMDD*(ANG_MAX+3);
+double *fx2 = fx1 + SIMDD*(ANG_MAX+3);
+double *fy2 = fy1 + SIMDD*(ANG_MAX+3);
+double *fz2 = fz1 + SIMDD*(ANG_MAX+3);
+double *fx3 = fx2 + SIMDD*(ANG_MAX+3);
+double *fy3 = fy2 + SIMDD*(ANG_MAX+3);
+double *fz3 = fz2 + SIMDD*(ANG_MAX+3);
 double buf[SIMDD*nc*9];
 double s[SIMDD*9];
 double *gto0 = cgto;
@@ -1310,6 +1316,7 @@ buf[7*SIMDD+n] = + s[7*SIMDD+n];
 buf[8*SIMDD+n] = + s[8*SIMDD+n];
                 }
                 for (j = 0, j1 = l1; j < nc; j++, j1+=degen) {
+#pragma GCC ivdep
                 for (n = 0; n < SIMDD; n++) {
 gto0[j1*ngrids+i+n] += buf[0*SIMDD+n] * coeff[j*np+k];
 gto1[j1*ngrids+i+n] += buf[1*SIMDD+n] * coeff[j*np+k];
@@ -1379,7 +1386,7 @@ gto8[j1*ngrids+i+n] += buf[8*SIMDD+n] * coeff[j*np+k];
 } } } } } } }
 }
 void GTOval_ipr_cart(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -1388,7 +1395,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipr_sph(int ngrids, int *shls_slice, int *ao_loc,
-double *ao, double *coord, char *non0table,
+double *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};
@@ -1397,7 +1404,7 @@ ngrids, param, shls_slice, ao_loc, ao, coord, non0table,
 atm, natm, bas, nbas, env);
 }
 void GTOval_ipr_spinor(int ngrids, int *shls_slice, int *ao_loc,
-double complex *ao, double *coord, char *non0table,
+double complex *ao, double *coord, uint8_t *non0table,
 int *atm, int natm, int *bas, int nbas, double *env)
 {
 int param[] = {1, 9};

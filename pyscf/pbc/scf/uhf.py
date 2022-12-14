@@ -89,7 +89,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpt=np.zeros(3)):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the cell.
 
     Args:
          cell : an instance of :class:`Cell`
@@ -138,7 +138,7 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
 
     def dump_flags(self, verbose=None):
         pbchf.SCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
@@ -212,8 +212,10 @@ class UHF(pbchf.SCF, mol_uhf.UHF):
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
+        if cell is None:
+            cell = self.cell
+        if dm is None:
+            dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)

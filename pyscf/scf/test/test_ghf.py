@@ -18,6 +18,7 @@
 
 import copy
 import unittest
+import tempfile
 import numpy
 import scipy.linalg
 from functools import reduce
@@ -25,36 +26,40 @@ from functools import reduce
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
+scf.hf.MUTE_CHKFILE = True
 from pyscf import ao2mo
 
-mol = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
-mf = scf.GHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
+def setUpModule():
+    global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
+    mol = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
+    mf = scf.GHF(mol)
+    mf.conv_tol = 1e-12
+    mf.chkfile = tempfile.NamedTemporaryFile().name
+    mf.kernel()
 
-molsym = gto.M(
-    verbose = 5,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-    symmetry = 'c2v'
-)
-mfsym = scf.GHF(molsym).run()
+    molsym = gto.M(
+        verbose = 5,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+        symmetry = 'c2v'
+    )
+    mfsym = scf.GHF(molsym).run()
 
-mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
-mf_r = scf.RHF(mol1).run()
-mf_u = scf.RHF(mol1).run()
+    mol1 = gto.M(atom=mol.atom, basis='631g', spin=2, verbose=0)
+    mf_r = scf.RHF(mol1).run(chkfile=tempfile.NamedTemporaryFile().name)
+    mf_u = scf.RHF(mol1).run(chkfile=tempfile.NamedTemporaryFile().name)
 
 def tearDownModule():
     global mol, mf, molsym, mfsym, mol1, mf_r, mf_u
@@ -106,7 +111,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm[24:,24:])*2, 2.7821827416174094, 9)
 
     def test_init_guess_chk(self):
-        dm = scf.ghf.GHF(mol).get_init_guess(mol, key='chkfile')
+        dm = mol.GHF(chkfile=tempfile.NamedTemporaryFile().name).get_init_guess(mol, key='chkfile')
         self.assertEqual(dm.shape, (48,48))
         self.assertAlmostEqual(lib.fp(dm), 1.8117584283411752, 9)
 
@@ -243,7 +248,7 @@ class KnownValues(unittest.TestCase):
     def test_get_occ(self):
         mf1 = copy.copy(mfsym)
         mf1.irrep_nelec = {}
-        mf1.irrep_nelec['B2'] = 1
+        mf1.irrep_nelec['B1'] = 1
         occ = mf1.get_occ(mf.mo_energy, mf.mo_coeff+0j)
         self.assertAlmostEqual(lib.fp(occ), 0.49368251542877073, 9)
         mf1.irrep_nelec['A2'] = 5
@@ -312,10 +317,12 @@ H     0    0.757    0.587'''
         self.assertEqual(vhf3.ndim, 3)
         self.assertAlmostEqual(abs(vhf3[0]-vhf2).max(), 0, 12)
 
+        vhf4 = mf1.get_veff(pmol, dm, hermi=1)
+        self.assertEqual(vhf4.ndim, 4)
+        self.assertAlmostEqual(lib.fp(vhf4), 17.264430281812047-5.533144783448073j, 12)
         vhf4 = mf1.get_veff(pmol, dm, hermi=0)
         self.assertEqual(vhf4.ndim, 4)
-        self.assertAlmostEqual(lib.fp(vhf4),
-                               17.264430281812047-5.533144783448073j, 12)
+        self.assertAlmostEqual(lib.fp(vhf4), 4.95789766380037-5.2816995816903045j, 12)
         self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
 
         vj = mf1.get_j(pmol, dm[0,0], hermi=0)
@@ -395,4 +402,3 @@ I F
 if __name__ == "__main__":
     print("Full Tests for GHF")
     unittest.main()
-

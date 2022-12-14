@@ -27,6 +27,7 @@ from pyscf.mcscf import mc1step, mc1step_symm, newton_casscf
 from pyscf.grad import casscf as casscf_grad
 from pyscf.grad import rhf as rhf_grad
 from pyscf.fci.direct_spin1 import _unpack_nelec
+from pyscf.fci.addons import fix_spin_, SpinPenaltyFCISolver
 from pyscf.fci.spin_op import spin_square
 from pyscf.fci import cistring
 from pyscf.lib import logger
@@ -466,6 +467,11 @@ class Gradients (lagrange.Gradients):
             fcasscf.fcisolver = solver_class (self.base.mol)
             fcasscf.fcisolver.__dict__.update (solver_obj.__dict__)
             fcasscf.fcisolver.nroots = 1
+        # Spin penalty method is inapplicable to response calc'ns
+        # It must be deactivated for Lagrange multipliers to converge
+        if isinstance (fcasscf.fcisolver, SpinPenaltyFCISolver):
+            fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
+            fcasscf.fcisolver.ss_penalty = 0
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         fcasscf.verbose, fcasscf.stdout = self.verbose, self.stdout
@@ -478,10 +484,22 @@ class Gradients (lagrange.Gradients):
         fcasscf.__dict__.update (self.base.__dict__)
         if isinstance (self.base, StateAverageMCSCFSolver):
             if isinstance (self.base.fcisolver, StateAverageMixFCISolver):
-                fcasscf = state_average_mix_(
-                    fcasscf, self.base.fcisolver.fcisolvers, self.base.weights)
+                fcisolvers = [copy.copy (f) for f in
+                              self.base.fcisolver.fcisolvers]
+                # Spin penalty method is inapplicable to response calc'ns
+                # It must be deactivated for Lagrange multipliers to converge
+                for i in range (len (fcisolvers)):
+                    if isinstance (fcisolvers[i], SpinPenaltyFCISolver):
+                        fcisolvers[i].ss_penalty = 0
+                fcasscf = state_average_mix_(fcasscf, fcisolvers,
+                                             self.base.weights)
             else:
                 fcasscf.state_average_(self.base.weights)
+        # Spin penalty method is inapplicable to response calc'ns
+        # It must be deactivated for Lagrange multipliers to converge
+        if isinstance (fcasscf.fcisolver, SpinPenaltyFCISolver):
+            fcasscf.fcisolver = copy.copy (fcasscf.fcisolver)
+            fcasscf.fcisolver.ss_penalty = 0
         fcasscf.__dict__.update (casscf_attr)
         fcasscf.fcisolver.__dict__.update (fcisolver_attr)
         return fcasscf

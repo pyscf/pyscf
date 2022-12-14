@@ -20,12 +20,14 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 
-mol = gto.M(atom='Be 0 0 0; H -1.1 0 .23; H 1.1 0 .23',
-            symmetry='C2v', verbose=0)
-m = scf.RHF(mol)
-m.kernel()
-norb = m.mo_energy.size
-nelec = mol.nelectron
+def setUpModule():
+    global mol, m, norb, nelec
+    mol = gto.M(atom='Be 0 0 0; H -1.1 0 .23; H 1.1 0 .23',
+                symmetry='C2v', verbose=0)
+    m = scf.RHF(mol)
+    m.kernel()
+    norb = m.mo_energy.size
+    nelec = mol.nelectron
 
 def tearDownModule():
     global mol, m
@@ -34,7 +36,7 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_symm_spin0(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=True)
-        fs.wfnsym = 'B1'
+        fs.wfnsym = 'B2'
         fs.nroots = 3
         e, c = fs.kernel()
         self.assertAlmostEqual(e[0], -19.286003160337+mol.energy_nuc(), 9)
@@ -46,7 +48,7 @@ class KnownValues(unittest.TestCase):
 
     def test_symm_spin1(self):
         fs = fci.FCI(mol, m.mo_coeff, singlet=False)
-        fs.wfnsym = 'B1'
+        fs.wfnsym = 'B2'
         fs.nroots = 2
         e, c = fs.kernel()
         self.assertAlmostEqual(e[0], -19.303845373762+mol.energy_nuc(), 9)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 python -m pip install --upgrade pip
-pip install numpy "scipy==1.1" h5py nose nose-exclude nose-timer nose-cov codecov
+pip install "numpy!=1.16,!=1.17" "scipy<=1.1" h5py pytest pytest-cov pytest-timer
 pip install pyberny geometric
 
 #cppe

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+# Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -279,6 +279,7 @@ _INTOR_FUNCTIONS = {
     'int1e_zz'                  : (1, 1),
     'int1e_r'                   : (3, 3),
     'int1e_r2'                  : (1, 1),
+    'int1e_r4'                  : (1, 1),
     'int1e_rr'                  : (9, 9),
     'int1e_rrr'                 : (27, 27),
     'int1e_rrrr'                : (81, 81),
@@ -455,7 +456,7 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     if shls_slice is None:
         shls_slice = (0, nbas, 0, nbas)
     else:
-        assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas)
+        assert (shls_slice[1] <= nbas and shls_slice[3] <= nbas)
     if ao_loc is None:
         ao_loc = make_loc(bas, intor_name)
 
@@ -476,7 +477,7 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     else:
         dtype = numpy.complex128
         if '2c2e' in intor_name:
-            assert(hermi != lib.HERMITIAN and
+            assert (hermi != lib.HERMITIAN and
                    hermi != lib.ANTIHERMI)
         drv_name = prefix + 'int2c_spinor'
 
@@ -514,7 +515,7 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
             shls_slice = (0, nbas, 0, nbas, nbas, nbas*2)
             nbas = bas.shape[0]
     else:
-        assert(shls_slice[1] <= nbas and
+        assert (shls_slice[1] <= nbas and
                shls_slice[3] <= nbas and
                shls_slice[5] <= nbas)
 
@@ -587,10 +588,10 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     ao_loc = make_loc(bas, intor_name)
 
     if '_spinor' in intor_name:
-        assert(aosym == 's1')
+        assert (aosym == 's1')
 
     if aosym == 's8':
-        assert(shls_slice is None)
+        assert (shls_slice is None)
         from pyscf.scf import _vhf
         nao = ao_loc[-1]
         nao_pair = nao*(nao+1)//2
@@ -613,7 +614,7 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         elif len(shls_slice) == 4:
             shls_slice = shls_slice + (0, nbas, 0, nbas)
         else:
-            assert(shls_slice[1] <= nbas and shls_slice[3] <= nbas and
+            assert (shls_slice[1] <= nbas and shls_slice[3] <= nbas and
                    shls_slice[5] <= nbas and shls_slice[7] <= nbas)
         i0, i1, j0, j1, k0, k1, l0, l1 = shls_slice
         naoi = ao_loc[i1] - ao_loc[i0]
@@ -622,12 +623,12 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         naol = ao_loc[l1] - ao_loc[l0]
         if aosym in ('s4', 's2ij'):
             nij = [naoi * (naoi + 1) // 2]
-            assert(numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
+            assert (numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
         else:
             nij = [naoi, naoj]
         if aosym in ('s4', 's2kl'):
             nkl = [naok * (naok + 1) // 2]
-            assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
+            assert (numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
             nkl = [naok, naol]
         shape = [comp] + nij + nkl
@@ -716,7 +717,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     null = lib.c_null_ptr()
     if intor_name.startswith('int3c'):
-        assert(len(shls) == 3)
+        assert (len(shls) == 3)
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
         l = bas[shls[2],ANG_OF]
@@ -737,7 +738,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
             return buf.transpose(3,0,1,2)
 
     elif intor_name.startswith('int2e') or intor_name.startswith('int4c'):
-        assert(len(shls) == 4)
+        assert (len(shls) == 4)
         di, dj, dk, dl = [num_cgto_of(x) for x in shls]
         buf = numpy.empty((di,dj,dk,dl,comp), dtype, order='F')
         fintor = getattr(libcgto, intor_name)
@@ -753,7 +754,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
 
     elif (intor_name.startswith('int2c') or '1e' in intor_name or
           'ECP' in intor_name):
-        assert(len(shls) == 2)
+        assert (len(shls) == 2)
         di = num_cgto_of(shls[0])
         dj = num_cgto_of(shls[1])
         buf = numpy.empty((di,dj,comp), dtype, order='F')
@@ -797,32 +798,30 @@ def make_cintopt(atm, bas, env, intor):
     c_env = numpy.asarray(env, dtype=numpy.double, order='C')
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
-    cintopt = lib.c_null_ptr()
+    cintopt = ctypes.cast(lib.c_null_ptr(), _cintoptHandler)
+    cintopt.intor = intor
+
     # TODO: call specific ECP optimizers for each intor.
     if intor[:3] == 'ECP':
+        AS_ECPBAS_OFFSET = 18  # from gto/mole.py
+        if env[AS_ECPBAS_OFFSET] == 0:
+            raise RuntimeError('ecpbas or env is not properly initialized')
         foptinit = libcgto.ECPscalar_optimizer
-        foptinit(ctypes.byref(cintopt),
-                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-                 c_env.ctypes.data_as(ctypes.c_void_p))
-        return ctypes.cast(cintopt, _ecpoptHandler)
     else:
         foptinit = getattr(libcgto, intor+'_optimizer')
-        foptinit(ctypes.byref(cintopt),
-                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-                 c_env.ctypes.data_as(ctypes.c_void_p))
-        return ctypes.cast(cintopt, _cintoptHandler)
+    foptinit(ctypes.byref(cintopt),
+             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+             c_env.ctypes.data_as(ctypes.c_void_p))
+    return cintopt
+
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
         try:
-            libcgto.CINTdel_optimizer(ctypes.byref(self))
-        except AttributeError:
-            pass
-class _ecpoptHandler(ctypes.c_void_p):
-    def __del__(self):
-        try:
-            libcgto.ECPdel_optimizer(ctypes.byref(self))
+            if self.intor[:3] == 'ECP':
+                libcgto.ECPdel_optimizer(ctypes.byref(self))
+            else:
+                libcgto.CINTdel_optimizer(ctypes.byref(self))
         except AttributeError:
             pass
 

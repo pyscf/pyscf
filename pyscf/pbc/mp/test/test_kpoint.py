@@ -22,19 +22,26 @@ import pyscf.pbc.mp
 import pyscf.pbc.mp.kmp2
 
 
-cell = pbcgto.Cell()
-cell.unit = 'B'
-L = 7
-cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
-cell.a = 7 * np.identity(3)
-cell.a[1,0] = 5.0
+def setUpModule():
+    global cell
+    cell = pbcgto.Cell()
+    cell.unit = 'B'
+    L = 7
+    cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
+    cell.a = 7 * np.identity(3)
+    cell.a[1,0] = 5.0
 
-cell.basis = 'gth-szv'
-cell.pseudo = 'gth-pade-q2'
-cell.mesh = [12]*3
-cell.verbose = 5
-cell.output = '/dev/null'
-cell.build()
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade-q2'
+    cell.mesh = [12]*3
+    cell.verbose = 5
+    cell.output = '/dev/null'
+    cell.build()
+
+def tearDownModule():
+    global cell
+    cell.stdout.close()
+    del cell
 
 def build_h_cell():
     # Returns FCC H cell.
@@ -78,7 +85,7 @@ class KnownValues(unittest.TestCase):
     def test_111(self):
         nk = (1, 1, 1)
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, -1.2061049658473704, 9)
+        self.assertAlmostEqual(escf, -1.2061049658473704, 7)
         self.assertAlmostEqual(emp, -5.44597932944397e-06, 9)
         escf, emp = run_kcell_complex(cell,nk)
         self.assertAlmostEqual(emp, -5.44597932944397e-06, 9)
@@ -86,10 +93,10 @@ class KnownValues(unittest.TestCase):
     def test_311_high_cost(self):
         nk = (3, 1, 1)
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, -1.0585001200928885, 9)
+        self.assertAlmostEqual(escf, -1.0585001200928885, 7)
         self.assertAlmostEqual(emp, -7.9832274354253814e-06, 9)
 
-    def test_h4_fcc_k2_frozen(self):
+    def test_h4_fcc_k2_frozen_high_cost(self):
         '''Metallic hydrogen fcc lattice with frozen lowest lying occupied
         and highest lying virtual orbitals.  Checks versus a corresponding
         supercell calculation.
@@ -178,13 +185,12 @@ class KnownValues(unittest.TestCase):
         kmf2.conv_tol = 1e-12
         kmf2.with_df._cderi = kmf.with_df._cderi
         ekpt2 = kmf2.scf()
-        mp = pyscf.pbc.mp.kmp2.KMP2(kmf2).run()        
+        mp = pyscf.pbc.mp.kmp2.KMP2(kmf2).run()
 
-        self.assertAlmostEqual(ekpt2, -1.2053666821021261, 9)
+        self.assertAlmostEqual(ekpt2, -1.2053666821021261, 7)
         self.assertAlmostEqual(mp.e_corr, -6.9881475423322723e-06, 9)
 
 
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
-

@@ -71,7 +71,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
 
     def dump_flags(self, verbose=None):
         pbchf.SCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
@@ -120,15 +120,7 @@ class ROHF(pbchf.RHF, mol_rohf.ROHF):
         '''
         raise NotImplementedError
 
-    @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
-                   **kwargs):
-        if cell is None: cell = self.cell
-        if dm is None: dm = self.make_rdm1()
-        rho = kwargs.pop('rho', None)
-        if rho is None:
-            rho = self.get_rho(dm)
-        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
+    dip_moment = pbchf.SCF.dip_moment
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

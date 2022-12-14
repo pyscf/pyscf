@@ -21,15 +21,17 @@ from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.df import rsdf
 
-cell = pgto.Cell(
-    atom="H 0 0 0; H 0.75 0 0",
-    a = numpy.eye(3)*3,
-    basis={"H": [[0,(0.5,1.)],[1,(0.3,1.)]]},
-)
-cell.verbose = 0
-cell.max_memory = 1000
-cell.build()
-scaled_center = numpy.array([0.392, 0.105, 0.872])
+def setUpModule():
+    global cell, scaled_center
+    cell = pgto.Cell(
+        atom="H 0 0 0; H 0.75 0 0",
+        a = numpy.eye(3)*3,
+        basis={"H": [[0,(0.5,1.)],[1,(0.3,1.)]]},
+    )
+    cell.verbose = 0
+    cell.max_memory = 1000
+    cell.build()
+    scaled_center = numpy.array([0.392, 0.105, 0.872])
 
 
 def tearDownModule():
@@ -53,14 +55,14 @@ class KnownValues(unittest.TestCase):
         mf = pscf.KRKS(cell,kpts).rs_density_fit()
         mf.xc = "pbe"
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -1.0021023542499443, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.0021025295489245, 7)
 
     def test_h2_jonly_k211_shiftedcenter(self):
         kpts = cell.make_kpts([2,1,1],scaled_center=scaled_center)
         mf = pscf.KRKS(cell,kpts).rs_density_fit()
         mf.xc = "pbe"
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -1.0047041613565, 7)
+        self.assertAlmostEqual(mf.e_tot, -1.004704372120814, 7)
 
     def test_h2_jk_k211(self):
         kpts = cell.make_kpts([2,1,1])

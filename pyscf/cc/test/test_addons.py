@@ -22,19 +22,21 @@ from pyscf import cc
 from pyscf.cc import ccsd
 from pyscf.cc import addons
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.basis = '631g'
-mol.spin = 0
-mol.build()
-mf1 = scf.RHF(mol).run(conv_tol=1e-12)
-gmf = scf.addons.convert_to_ghf(mf1)
-myrcc = ccsd.CCSD(mf1).run()
+def setUpModule():
+    global mol, mf1, gmf, myrcc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.verbose = 5
+    mol.output = '/dev/null'
+    mol.basis = '631g'
+    mol.spin = 0
+    mol.build()
+    mf1 = scf.RHF(mol).run(conv_tol=1e-12)
+    gmf = scf.addons.convert_to_ghf(mf1)
+    myrcc = ccsd.CCSD(mf1).run()
 
 def tearDownModule():
     global mol, mf1, gmf, myrcc
@@ -77,6 +79,20 @@ class KnownValues(unittest.TestCase):
         mygcc = addons.convert_to_gccsd(cc.GCCSD(gmf))
         self.assertTrue(isinstance(mygcc, cc.gccsd.GCCSD))
 
+    def test_bccd_kernel_(self):
+        mybcc = addons.bccd_kernel_(myrcc)
+        self.assertAlmostEqual(abs(mybcc.t1).max(), 0, 4)
+        e_r = mybcc.e_tot
+
+        myucc = addons.convert_to_uccsd(myrcc)
+        mybcc = addons.bccd_kernel_(myucc)
+        e_u = mybcc.e_tot
+        self.assertAlmostEqual(abs(e_u - e_r), 0, 6)
+
+        mygcc = addons.convert_to_gccsd(myrcc)
+        mybcc = addons.bccd_kernel_(mygcc)
+        e_g = mybcc.e_tot
+        self.assertAlmostEqual(abs(e_g - e_r), 0, 6)
 
 if __name__ == "__main__":
     print("Tests for addons")

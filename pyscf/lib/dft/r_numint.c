@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <complex.h>
 #include "config.h"
 #include "gto/grid_ao_drv.h"
@@ -27,15 +28,15 @@
 
 #define BOXSIZE         56
 
-int VXCao_empty_blocks(char *empty, unsigned char *non0table, int *shls_slice,
+int VXCao_empty_blocks(int8_t *empty, uint8_t *non0table, int *shls_slice,
                        int *ao_loc);
 
 static void dot_ao_dm(double complex *vm, double complex *ao, double complex *dm,
                       int nao, int nocc, int ngrids, int bgrids,
-                      unsigned char *non0table, int *shls_slice, int *ao_loc)
+                      uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         int nbox = (nao+BOXSIZE-1) / BOXSIZE;
-        char empty[nbox];
+        int8_t empty[nbox];
         int has0 = VXCao_empty_blocks(empty, non0table, shls_slice, ao_loc);
 
         const char TRANS_T = 'T';
@@ -73,7 +74,7 @@ static void dot_ao_dm(double complex *vm, double complex *ao, double complex *dm
 /* vm[nocc,ngrids] = ao[i,ngrids] * dm[i,nocc] */
 void VXCzdot_ao_dm(double complex *vm, double complex *ao, double complex *dm,
                    int nao, int nocc, int ngrids, int nbas,
-                   unsigned char *non0table, int *shls_slice, int *ao_loc)
+                   uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
 
@@ -95,10 +96,10 @@ void VXCzdot_ao_dm(double complex *vm, double complex *ao, double complex *dm,
 /* conj(vv[n,m]) = ao1[n,ngrids] * conj(ao2[m,ngrids]) */
 static void dot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
                       int nao, int ngrids, int bgrids, int hermi,
-                      unsigned char *non0table, int *shls_slice, int *ao_loc)
+                      uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         int nbox = (nao+BOXSIZE-1) / BOXSIZE;
-        char empty[nbox];
+        int8_t empty[nbox];
         int has0 = VXCao_empty_blocks(empty, non0table, shls_slice, ao_loc);
 
         const char TRANS_C = 'C';
@@ -135,7 +136,7 @@ static void dot_ao_ao(double complex *vv, double complex *ao1, double complex *a
 /* vv[nao,nao] = conj(ao1[i,nao]) * ao2[i,nao] */
 void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
                    int nao, int ngrids, int nbas, int hermi,
-                   unsigned char *non0table, int *shls_slice, int *ao_loc)
+                   uint8_t *non0table, int *shls_slice, int *ao_loc)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         size_t Nao = nao;
@@ -166,7 +167,53 @@ void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
 }
 
 void VXC_zscale_ao(double complex *aow, double complex *ao, double *wv,
-                   int comp, int nao, int ngrids)
+                    int comp, int nao, int ngrids)
+{
+#pragma omp parallel
+{
+        size_t Ngrids = ngrids;
+        size_t ao_size = nao * Ngrids;
+        int i, j, ic;
+        double complex *pao = ao;
+#pragma omp for schedule(static)
+        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
+                for (ic = 1; ic < comp; ic++) {
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                } }
+        }
+}
+}
+
+void VXC_dzscale_ao(double complex *aow, double *ao, double complex *wv,
+                    int comp, int nao, int ngrids)
+{
+#pragma omp parallel
+{
+        size_t Ngrids = ngrids;
+        size_t ao_size = nao * Ngrids;
+        int i, j, ic;
+        double *pao = ao;
+#pragma omp for schedule(static)
+        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
+                for (ic = 1; ic < comp; ic++) {
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                } }
+        }
+}
+}
+
+void VXC_zzscale_ao(double complex *aow, double complex *ao, double complex *wv,
+                    int comp, int nao, int ngrids)
 {
 #pragma omp parallel
 {

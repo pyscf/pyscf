@@ -89,7 +89,8 @@ def kernel(mycc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
 
     mo_energy_occ = [eris.mo_energy[ki][:nocc] for ki in range(nkpts)]
     mo_energy_vir = [eris.mo_energy[ki][nocc:] for ki in range(nkpts)]
-    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)], dtype=np.float, order='C')
+    mo_energy = np.asarray([eris.mo_energy[ki] for ki in range(nkpts)],
+                           dtype=np.double, order='C')
     fov = eris.fock[:, :nocc, nocc:]
 
     mo_e = mo_energy
@@ -390,11 +391,11 @@ def transpose_t2(t2, nkpts, nocc, nvir, kconserv, out=None):
 def create_eris_vvop(vovv, oovv, nkpts, nocc, nvir, kconserv, out=None):
     '''Creates vvop from vovv and oovv array (physicist notation).'''
     nmo = nocc + nvir
-    assert(vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
+    assert (vovv.shape == (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo), dtype=vovv.dtype)
     else:
-        assert(out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
+        assert (out.shape == (nkpts,nkpts,nkpts,nvir,nvir,nocc,nmo))
 
     for ki, kj, ka in product(range(nkpts), repeat=3):
         kb = kconserv[ki,ka,kj]
@@ -410,7 +411,7 @@ def create_eris_vooo(ooov, nkpts, nocc, nvir, kconserv, out=None):
     This is not exactly chemist's notation, but close.  Here a chemist notation vooo
     is created from physicist ooov, and then the last two indices of vooo are swapped.
     '''
-    assert(ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
+    assert (ooov.shape == (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir))
     if out is None:
         out = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nocc), dtype=ooov.dtype)
 
@@ -469,7 +470,7 @@ def _convert_to_int(kpt_indices):
     '''Convert all kpoint indices for 3-particle operator to integers.'''
     out_indices = [0]*6
     for ix, x in enumerate(kpt_indices):
-        assert isinstance(x, (int, np.int, np.ndarray, list))
+        assert isinstance(x, (int, np.integer, np.ndarray, list))
         if isinstance(x, (np.ndarray)) and (x.ndim == 0):
             out_indices[ix] = int(x)
         else:
@@ -490,7 +491,7 @@ def _tile_list(kpt_indices):
         return kpt_indices
     else:
         for ix, x in enumerate(kpt_indices):
-            if isinstance(x, (int, np.int)):
+            if isinstance(x, (int, np.integer)):
                 out_indices[ix] = [x] * max_length
             else:
                 out_indices[ix] = x
@@ -508,8 +509,8 @@ def zip_kpoints(kpt_indices):
 
 def get_data_slices(kpt_indices, orb_indices, kconserv):
     kpt_indices = zip_kpoints(kpt_indices)
-    if isinstance(kpt_indices[0], (int, np.int)):  # Ensure we are working
-        kpt_indices = [kpt_indices]                # with a list of lists
+    if isinstance(kpt_indices[0], (int, np.integer)):  # Ensure we are working
+        kpt_indices = [kpt_indices]                    # with a list of lists
 
     a0,a1,b0,b1,c0,c1 = orb_indices
     length = len(kpt_indices)*6
@@ -578,7 +579,7 @@ def _get_epqr(pindices,qindices,rindices,fac=[1.0,1.0,1.0],large_num=LARGE_DENOM
     def get_idx(x0,x1,kx,n0_p):
         return np.logical_and(n0_p[kx] >= x0, n0_p[kx] < x1)
 
-    assert(all([len(x) == 5 for x in [pindices,qindices]]))
+    assert (all([len(x) == 5 for x in [pindices,qindices]]))
     p0,p1,kp,mo_e_p,nonzero_p = pindices
     q0,q1,kq,mo_e_q,nonzero_q = qindices
     r0,r1,kr,mo_e_r,nonzero_r = rindices

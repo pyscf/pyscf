@@ -26,7 +26,6 @@ from pyscf.pbc.df.incore import wrap_int3c, make_auxcell
 
 libpbc = lib.load_library('libpbc')
 
-
 def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
@@ -53,9 +52,9 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -101,24 +100,17 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
         return erifile
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
-
-    if gamma_point(kptij_lst):
-        dtype = numpy.double
-    else:
-        dtype = numpy.complex128
 
     buflen = max(8, int(max_memory*1e6/16/(nkptij*ni*nj*comp)))
     auxdims = aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]]
     auxranges = balance_segs(auxdims, buflen)
     buflen = max([x[2] for x in auxranges])
-    buf = numpy.empty(nkptij*comp*ni*nj*buflen, dtype=dtype)
-    buf1 = numpy.empty(ni*nj*buflen, dtype=dtype)
 
-    int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst)
+    int3c = wrap_int3c(cell, auxcell, intor, 's1', comp, kptij_lst)
 
     naux0 = 0
     for istep, auxrange in enumerate(auxranges):
@@ -126,20 +118,24 @@ def aux_e1(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', co
         sub_slice = (shls_slice[0], shls_slice[1],
                      shls_slice[2], shls_slice[3],
                      shls_slice[4]+sh0, shls_slice[4]+sh1)
-        mat = numpy.ndarray((nkptij,comp,nao_pair,nrow), dtype=dtype, buffer=buf)
-        mat = int3c(sub_slice, mat)
+        mat = int3c(sub_slice)
 
         for k, kptij in enumerate(kptij_lst):
             h5dat = feri['%s/%d'%(dataname,k)]
-            for icomp, v in enumerate(mat[k]):
-                v = lib.transpose(v, out=buf1)
+            if comp == 1:
+                v = lib.transpose(mat[k])
                 if gamma_point(kptij):
                     v = v.real
                 if aosym_ks2[k] and v.shape[1] == ni**2:
                     v = lib.pack_tril(v.reshape(-1,ni,ni))
-                if comp == 1:
-                    h5dat[naux0:naux0+nrow] = v
-                else:
+                h5dat[naux0:naux0+nrow] = v
+            else:
+                for icomp, v in enumerate(mat[k]):
+                    v = lib.transpose(v)
+                    if gamma_point(kptij):
+                        v = v.real
+                    if aosym_ks2[k] and v.shape[1] == ni**2:
+                        v = lib.pack_tril(v.reshape(-1,ni,ni))
                     h5dat[icomp,naux0:naux0+nrow] = v
         naux0 += nrow
 
@@ -177,9 +173,9 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     else:
         feri = h5py.File(erifile, 'w')
     if dataname in feri:
-        del(feri[dataname])
+        del (feri[dataname])
     if dataname+'-kptij' in feri:
-        del(feri[dataname+'-kptij'])
+        del (feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -206,32 +202,23 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     aosym_ks2 &= aosym[:2] == 's2'
 
     if j_only and aosym[:2] == 's2':
-        assert(shls_slice[2] == 0)
+        assert (shls_slice[2] == 0)
         nao_pair = nii
     else:
         nao_pair = nij
-
-    if gamma_point(kptij_lst):
-        dtype = numpy.double
-    else:
-        dtype = numpy.complex128
 
     buflen = max(8, int(max_memory*.47e6/16/(nkptij*ni*nj*comp)))
     auxdims = aux_loc[shls_slice[4]+1:shls_slice[5]+1] - aux_loc[shls_slice[4]:shls_slice[5]]
     auxranges = balance_segs(auxdims, buflen)
     buflen = max([x[2] for x in auxranges])
-    buf = numpy.empty(nkptij*comp*ni*nj*buflen, dtype=dtype)
-    bufs = [buf, numpy.empty_like(buf)]
-    int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst)
+    int3c = wrap_int3c(cell, auxcell, intor, 's1', comp, kptij_lst)
 
     def process(aux_range):
         sh0, sh1, nrow = aux_range
         sub_slice = (shls_slice[0], shls_slice[1],
                      shls_slice[2], shls_slice[3],
                      shls_slice[4]+sh0, shls_slice[4]+sh1)
-        mat = numpy.ndarray((nkptij,comp,nao_pair,nrow), dtype=dtype, buffer=bufs[0])
-        bufs[:] = bufs[1], bufs[0]
-        int3c(sub_slice, mat)
+        mat = int3c(sub_slice)
         return mat
 
     kptis = kptij_lst[:,0]
@@ -261,5 +248,3 @@ def _aux_e2(cell, auxcell_or_auxbasis, erifile, intor='int3c2e', aosym='s2ij', c
     if not isinstance(erifile, h5py.Group):
         feri.close()
     return erifile
-
-

@@ -108,8 +108,8 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
 
     # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
-    assert(mo_energy_kpts[0][0].ndim == 1)
-    assert(mo_occ_kpts[0][0].ndim == 1)
+    assert (mo_energy_kpts[0][0].ndim == 1)
+    assert (mo_occ_kpts[0][0].ndim == 1)
 
     nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
     noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
@@ -328,8 +328,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
         def makedm(mos, occs):
             moa, mob = mos
-            mos =([fproj(mo, None) for mo in moa],
-                  [fproj(mo, None) for mo in mob])
+            mos = (fproj(moa, kpts), fproj(mob, kpts))
             return make_rdm1(mos, occs)
     else:
         def makedm(mos, occs):
@@ -357,7 +356,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
                grids=None, rho=None, kpts=np.zeros((1,3))):
-    ''' Dipole moment in the unit cell.
+    ''' Dipole moment in the cell.
 
     Args:
          cell : an instance of :class:`Cell`
@@ -408,7 +407,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
 
     def dump_flags(self, verbose=None):
         khf.KSCF.dump_flags(self, verbose)
-        logger.info(self, 'number of electrons per unit cell  '
+        logger.info(self, 'number of electrons per cell  '
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
@@ -496,7 +495,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
             g = reduce(np.dot, (mo[:,viridx].T.conj(), fock, mo[:,occidx]))
             return g.ravel()
 
-        nkpts = len(self.kpts)
+        nkpts = len(mo_occ_kpts[0])
         grad_kpts = [grad(mo_coeff_kpts[0][k], mo_occ_kpts[0][k], fock[0][k])
                      for k in range(nkpts)]
         grad_kpts+= [grad(mo_coeff_kpts[1][k], mo_occ_kpts[1][k], fock[1][k])
@@ -616,7 +615,7 @@ class KUHF(khf.KSCF, pbcuhf.UHF):
         from pyscf.pbc.grad import kuhf
         return kuhf.Gradients(self)
 
-del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
+del (WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

@@ -67,12 +67,12 @@ def get_veff(ks_grad, mol=None, dm=None):
         vj = ks_grad.get_j(mol, dm)
         vxc += vj
         if ks_grad.auxbasis_response:
-            e1_aux = vj.aux
+            e1_aux = vj.aux.sum ((0,1))
     else:
         vj, vk = ks_grad.get_jk(mol, dm)
         if ks_grad.auxbasis_response:
             vk_aux = vk.aux * hyb
-        vk *= hyb
+        vk[:] *= hyb # Don't erase the .aux tags!
         if abs(omega) > 1e-10:  # For range separated Coulomb operator
             raise NotImplementedError
             vk_lr = ks_grad.get_k(mol, dm, omega=omega)
@@ -81,7 +81,7 @@ def get_veff(ks_grad, mol=None, dm=None):
                 vk_aux += vk_lr.aux * (alpha - hyb)
         vxc += vj - vk * .5
         if ks_grad.auxbasis_response:
-            e1_aux = vj.aux - vk_aux * .5
+            e1_aux = (vj.aux - vk.aux * .5).sum ((0,1))
 
     if ks_grad.auxbasis_response:
         logger.debug1(ks_grad, 'sum(auxbasis response) %s', e1_aux.sum(axis=0))

@@ -232,7 +232,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     if out is None:
         out = numpy.empty(eri_shape, dtype=dtype)
     else:
-        assert(out.shape == eri_shape)
+        assert (out.shape == eri_shape)
 
     kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
     kptis_lst = kptij_lst[:,0]

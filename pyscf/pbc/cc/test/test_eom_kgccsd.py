@@ -6,18 +6,20 @@ from pyscf.pbc.cc.eom_kccsd_ghf import EOMIP_Ta, EOMEA_Ta
 from pyscf.cc import eom_gccsd
 import unittest
 
-cell = make_test_cell.test_cell_n3_diffuse()
-kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None)
-kmf.conv_tol = 1e-10
-kmf.conv_tol_grad = 1e-6
-kmf.scf()
+def setUpModule():
+    global cell, kmf, mycc, eris
+    cell = make_test_cell.test_cell_n3_diffuse()
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2], with_gamma_point=True), exxdiv=None)
+    kmf.conv_tol = 1e-10
+    kmf.conv_tol_grad = 1e-6
+    kmf.scf()
 
-mycc = cc.KGCCSD(kmf)
-mycc.conv_tol = 1e-7
-mycc.conv_tol_normt = 1e-7
-mycc.run()
-eris = mycc.ao2mo()
-eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc.nkpts)]
+    mycc = cc.KGCCSD(kmf)
+    mycc.conv_tol = 1e-7
+    mycc.conv_tol_normt = 1e-7
+    mycc.run()
+    eris = mycc.ao2mo()
+    eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc.nkpts)]
 
 def tearDownModule():
     global cell, kmf, mycc, eris
@@ -29,24 +31,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        eom = eom_gccsd.EOMIP(gcc)
-        e1, v = eom.ipccsd(nroots=6)
-        eom = eom_gccsd.EOMEA(gcc)
-        e2, v = eom.eaccsd(nroots=6, left=True, koopmans=True)
-        '''
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
@@ -114,7 +98,7 @@ class KnownValues(unittest.TestCase):
         mycc_frozen.conv_tol = 1e-7
         mycc_frozen.conv_tol_normt = 1e-7
         eris = mycc_frozen.ao2mo()
-        eris.mo_energy = [eris.fock[ikpt].diagonal() for ikpt in range(mycc_frozen.nkpts)]
+        eris.mo_energy = [eris.fock[ikpt].diagonal().real for ikpt in range(mycc_frozen.nkpts)]
         ecc2, t1, t2 = mycc_frozen.kernel(eris=eris)
         self.assertAlmostEqual(ecc2, -0.0442506265840587, 6)
 
@@ -148,24 +132,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        #eom = eom_gccsd.EOMIP(gcc)
-        #e1, v = eom.ipccsd_star(nroots=6, koopmans=True)
-        eom = eom_gccsd.EOMEA(gcc)
-        e2, v = eom.eaccsd_star(nroots=9, koopmans=True)
-        '''
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
 
@@ -190,26 +156,6 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_n3_diffuse()
 
         nmp = [1,1,2]
-        '''
-        # treating 1*1*2 supercell at gamma point
-        supcell = super_cell(cell,nmp)
-        gmf  = scf.GHF(supcell,exxdiv=None)
-        gmf.conv_tol = 1e-10
-        gmf.conv_tol_grad = gmf.conv_tol * 10**2
-        ehf  = gmf.kernel()
-        gcc  = cc.GCCSD(gmf)
-        gcc.conv_tol=1e-12
-        gcc.conv_tol_normt=1e-10
-        gcc.max_cycle=250
-        ecc, t1, t2 = gcc.kernel()
-        print('GHF energy (supercell) %.7f \n' % (float(ehf)/2.))
-        print('GCCSD correlation energy (supercell) %.7f \n' % (float(ecc)/2.))
-
-        eom = eom_gccsd.EOMIP_Ta(gcc)
-        e1 = eom.ipccsd_star(nroots=6, koopmans=True)
-        eom = eom_gccsd.EOMEA_Ta(gcc)
-        e2 = eom.eaccsd_star(nroots=6, koopmans=True)
-        '''
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         ehf2 = kmf.e_tot
         self.assertAlmostEqual(ehf2, -6.1870676561725695, 6)
@@ -246,3 +192,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e2_obt[0][1], 1.2229050426609025, 6)
         self.assertAlmostEqual(e2_obt[0][2], 1.374851059956632, 6)
 
+if __name__ == '__main__':
+    print("eom_kccsd_rhf tests")
+    unittest.main()

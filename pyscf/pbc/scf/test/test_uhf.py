@@ -15,28 +15,31 @@
 #
 
 import unittest
+import tempfile
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
 from pyscf.pbc.scf import kuhf
 
-cell = pgto.Cell()
-cell.atom = '''
-He 0 0 1
-He 1 0 1
-'''
-cell.basis = '321g'
-cell.a = np.eye(3) * 3
-cell.mesh = [8] * 3
-cell.verbose = 7
-cell.output = '/dev/null'
-cell.spin = 2
-cell.build()
-nk = [2, 2, 1]
-kpts = cell.make_kpts(nk, wrap_around=True)
-kmf = pscf.KUHF(cell, kpts).run()
-mf = pscf.UHF(cell).run()
+def setUpModule():
+    global cell, mf, kmf, kpts
+    cell = pgto.Cell()
+    cell.atom = '''
+    He 0 0 1
+    He 1 0 1
+    '''
+    cell.basis = '321g'
+    cell.a = np.eye(3) * 3
+    cell.mesh = [8] * 3
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.spin = 2
+    cell.build()
+    nk = [2, 2, 1]
+    kpts = cell.make_kpts(nk, wrap_around=True)
+    kmf = pscf.KUHF(cell, kpts).run()
+    mf = pscf.UHF(cell).run()
 
 def tearDownModule():
     global cell, kmf, mf
@@ -72,6 +75,7 @@ class KnownValues(unittest.TestCase):
         np.random.seed(1)
         k = np.random.random(3)
         mf = pscf.KUHF(cell, [k], exxdiv='vcut_sph')
+        mf.chkfile = tempfile.NamedTemporaryFile().name
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
@@ -86,12 +90,13 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -3.4272925247351256, 9)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
+    @unittest.skip('mesh not enough for density')
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.fp(dip), 1.644379056097664, 7)
+        self.assertAlmostEqual(abs(dip).max(), 0, 2)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.fp(dip), 0.6934317735537686, 6)
+        self.assertAlmostEqual(abs(dip).max(), 0, 2)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]

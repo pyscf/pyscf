@@ -23,49 +23,51 @@ from pyscf import scf
 from pyscf import lib
 
 
-cu1_basis = gto.basis.parse('''
- H    S
-       1.8000000              1.0000000
- H    S
-       2.8000000              0.0210870             -0.0045400              0.0000000
-       1.3190000              0.3461290             -0.1703520              0.0000000
-       0.9059000              0.0393780              0.1403820              1.0000000
- H    P
-       2.1330000              0.0868660              0.0000000
-       1.2000000              0.0000000              0.5000000
-       0.3827000              0.5010080              1.0000000
- H    D
-       0.3827000              1.0000000
- H    F
-       2.1330000              0.1868660              0.0000000
-       0.3827000              0.2010080              1.0000000
-                               ''')
+def setUpModule():
+    global mol, mol1, mol2, cu1_basis
+    cu1_basis = gto.basis.parse('''
+     H    S
+           1.8000000              1.0000000
+     H    S
+           2.8000000              0.0210870             -0.0045400              0.0000000
+           1.3190000              0.3461290             -0.1703520              0.0000000
+           0.9059000              0.0393780              0.1403820              1.0000000
+     H    P
+           2.1330000              0.0868660              0.0000000
+           1.2000000              0.0000000              0.5000000
+           0.3827000              0.5010080              1.0000000
+     H    D
+           0.3827000              1.0000000
+     H    F
+           2.1330000              0.1868660              0.0000000
+           0.3827000              0.2010080              1.0000000
+                                   ''')
 
-mol = gto.M(atom='''
-Cu1 0. 0. 0.
-Cu 0. 1. 0.
-He 1. 0. 0.
-''',
-            basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
-            ecp = {'cu':'lanl2dz'})
+    mol = gto.M(atom='''
+    Cu1 0. 0. 0.
+    Cu 0. 1. 0.
+    He 1. 0. 0.
+    ''',
+                basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+                ecp = {'cu':'lanl2dz'})
 
-mol1 = gto.M(atom='''
-Cu1 0.  0.  0.
-Cu 0. 1. 0.
-He 1. 0. 0.
-Ghost-Cu1 0.  0.  0.0001
-''',
-             basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
-             ecp = {'cu':'lanl2dz'})
+    mol1 = gto.M(atom='''
+    Cu1 0.  0.  0.
+    Cu 0. 1. 0.
+    He 1. 0. 0.
+    Ghost-Cu1 0.  0.  0.0001
+    ''',
+                 basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+                 ecp = {'cu':'lanl2dz'})
 
-mol2 = gto.M(atom='''
-Cu1 0.  0.  0.
-Cu 0. 1. 0.
-He 1. 0. 0.
-Ghost-Cu1 0.  0. -0.0001
-''',
-             basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
-             ecp = {'cu':'lanl2dz'})
+    mol2 = gto.M(atom='''
+    Cu1 0.  0.  0.
+    Cu 0. 1. 0.
+    He 1. 0. 0.
+    Ghost-Cu1 0.  0. -0.0001
+    ''',
+                 basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
+                 ecp = {'cu':'lanl2dz'})
 
 def tearDownModule():
     global mol, mol1, mol2, cu1_basis
@@ -224,6 +226,7 @@ class KnownValues(unittest.TestCase):
         hcore = scf.RHF(mol).get_hcore()
         mydf = df.AFTDF(cell)
         ref = mydf.get_pp() + mol.intor('int1e_kin')
+        #FIXME: error seems big
         self.assertAlmostEqual(abs(hcore-ref).max(), 0, 2)
 
         mf = pbcscf.RHF(cell)
@@ -232,7 +235,7 @@ class KnownValues(unittest.TestCase):
         e_ref = mf.e_tot
 
         e_tot = scf.RHF(mol).run().e_tot
-        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 6)
+        self.assertAlmostEqual(abs(e_ref-e_tot).max(), 0, 5)
 
     def test_scalar_vs_int1e_rinv(self):
         mol = gto.M(atom='''
@@ -299,7 +302,7 @@ Na F
 
         mat1 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.049').intor('ECPscalar')
         mat2 = mol.set_geom_('Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.051').intor('ECPscalar')
-        self.assertAlmostEqual(abs(mat0[2] - (mat2 - mat1) / 0.002).max(), 0, 6)
+        self.assertAlmostEqual(abs(mat0[2] - (mat2 - mat1) / 0.002).max(), 0, 5)
 
     def test_ecp_hessian1(self):
         mol = gto.M(atom='Na, 0.00, 0.00, 0.00; Cl, 0.00, 0.00, 2.050',
@@ -326,4 +329,3 @@ Na F
 if __name__ == '__main__':
     print("Full Tests for ECP")
     unittest.main()
-

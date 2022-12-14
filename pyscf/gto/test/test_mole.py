@@ -24,27 +24,29 @@ from pyscf import lib
 import pyscf.lib.parameters as param
 from pyscf.lib.exceptions import BasisNotFoundError, PointGroupSymmetryError
 
-mol0 = gto.Mole()
-mol0.atom = [
-    [1  , (0.,1.,1.)],
-    ["O1", (0.,0.,0.)],
-    [1  , (1.,1.,0.)], ]
-mol0.nucmod = { "O":'gaussian', 3:'g' }
-mol0.unit = 'ang'
-mol0.basis = {
-    "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
-                                         (1, 3, 2, 1.8),
-                                         (2, 2, 1, 1.8),)),
-    "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
-          (1, -2, (1, 1)), ]}
-mol0.symmetry = 1
-mol0.charge = 1
-mol0.spin = 1
-mol0.verbose = 7
-mol0.ecp = {'O1': 'lanl2dz'}
-ftmp = tempfile.NamedTemporaryFile()
-mol0.output = ftmp.name
-mol0.build()
+def setUpModule():
+    global mol0, ftmp
+    mol0 = gto.Mole()
+    mol0.atom = [
+        [1  , (0.,1.,1.)],
+        ["O1", (0.,0.,0.)],
+        [1  , (1.,1.,0.)], ]
+    mol0.nucmod = { "O":'gaussian', 3:'g' }
+    mol0.unit = 'ang'
+    mol0.basis = {
+        "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
+                                             (1, 3, 2, 1.8),
+                                             (2, 2, 1, 1.8),)),
+        "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
+              (1, -2, (1, 1)), ]}
+    mol0.symmetry = 1
+    mol0.charge = 1
+    mol0.spin = 1
+    mol0.verbose = 7
+    mol0.ecp = {'O1': 'lanl2dz'}
+    ftmp = tempfile.NamedTemporaryFile()
+    mol0.output = ftmp.name
+    mol0.build()
 
 def tearDownModule():
     global mol0, ftmp
@@ -914,12 +916,11 @@ O    SP
         s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
         self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
-        mol0.cart = True
-        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
-        c = scipy.linalg.block_diag(*ctr_coeff)
-        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
-        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
-        mol0.cart = False
+        with lib.temporary_env(mol0, cart=True):
+            pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+            c = scipy.linalg.block_diag(*ctr_coeff)
+            s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+            self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
 
     def test_getattr(self):
         from pyscf import scf, dft, ci, tdscf
@@ -1025,6 +1026,24 @@ H    P
         #basis = [[1, [0.9, .7], [0.5, .7]], [1, -2, [0.5, .8], [0.3, .6]], [1, [0.3, 1]]]
         #serl.assertEqual(gto.uncontract(basis),
         #                 [[1, [0.9, 1]], [1, [0.5, 1]], [1, [0.3, 1]]])
+
+    def test_decontract_basis(self):
+        mol = gto.M(atom='N 0 0 0; N 0 0 01', basis='ccpvdz')
+        pmol, ctr_coeff = mol.decontract_basis(atoms=[1], to_cart=True)
+        ctr_coeff = scipy.linalg.block_diag(*ctr_coeff)
+        s = ctr_coeff.T.dot(pmol.intor('int1e_ovlp')).dot(ctr_coeff)
+        self.assertAlmostEqual(abs(s - mol.intor('int1e_ovlp')).max(), 0, 12)
+
+    def test_ao_rotation_matrix(self):
+        mol = gto.M(atom='O 0 0 0.2; H1 0 -.8 -.5; H2 0 .8 -.5', basis='ccpvdz')
+        numpy.random.seed(1)
+        axes = numpy.linalg.svd(numpy.random.rand(3,3))[0]
+        mol1 = gto.M(atom=list(zip(['O', 'H', 'H'], mol.atom_coords().dot(axes.T))),
+                     basis='ccpvdz', unit='Bohr')
+        u = mol.ao_rotation_matrix(axes)
+        v0 = u.T.dot(mol.intor('int1e_nuc')).dot(u)
+        v1 = mol1.intor('int1e_nuc')
+        self.assertAlmostEqual(abs(v0 - v1).max(), 0, 12)
 
 if __name__ == "__main__":
     print("test mole.py")

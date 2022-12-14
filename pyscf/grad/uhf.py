@@ -44,6 +44,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+    dm0 = mf_grad._tag_rdm1 (dm0, mo_coeff=mo_coeff, mo_occ=mo_occ)
 
     t0 = (logger.process_clock(), logger.perf_counter())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
@@ -109,50 +110,3 @@ Grad = Gradients
 
 from pyscf import scf
 scf.uhf.UHF.Gradients = lib.class_as_method(Gradients)
-
-
-if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.atom = [['He', (0.,0.,0.)], ]
-    mol.basis = {'He': 'ccpvdz'}
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.scf()
-    g = mf.Gradients()
-    print(g.grad())
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
-    print(g.grad())
-#[[ 0   0               -2.41134256e-02]
-# [ 0   4.39690522e-03   1.20567128e-02]
-# [ 0  -4.39690522e-03   1.20567128e-02]]
-
-    mol = gto.Mole()
-    mol.atom = [
-        ['O' , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    mol.basis = '631g'
-    mol.charge = 1
-    mol.spin = 1
-    mol.build()
-    mf = scf.UHF(mol)
-    mf.conv_tol = 1e-14
-    e0 = mf.scf()
-    g = Gradients(mf)
-    print(g.grad())
-#[[ 0   0                3.27774948e-03]
-# [ 0   4.31591309e-02  -1.63887474e-03]
-# [ 0  -4.31591309e-02  -1.63887474e-03]]

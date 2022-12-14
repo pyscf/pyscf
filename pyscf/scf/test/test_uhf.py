@@ -18,51 +18,52 @@
 
 import copy
 import numpy
+import scipy.linalg
 import unittest
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 
-scf.uhf.BREAKSYM = True
+def setUpModule():
+    global mol, mf, n2sym, n2mf, mol2, mf2, bak
+    mol = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+    )
 
-mol = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-)
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-14
+    mf.scf()
 
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-14
-mf.scf()
+    mol2 = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+    O     0    0        0
+    H     0    -0.757   0.587
+    H     0    0.757    0.587''',
+        basis = 'cc-pvdz',
+        spin = 2,
+    )
+    mf2 = scf.UHF(mol2).run(conv_tol=1e-10)
 
-mol2 = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-O     0    0        0
-H     0    -0.757   0.587
-H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
-    spin = 2,
-)
-mf2 = scf.UHF(mol2).run(conv_tol=1e-10)
-
-n2sym = gto.M(
-    verbose = 7,
-    output = '/dev/null',
-    atom = '''
-        N     0    0    0
-        N     0    0    1''',
-    symmetry = 1,
-    basis = 'cc-pvdz')
-n2mf = scf.UHF(n2sym).set(conv_tol=1e-10).run()
+    n2sym = gto.M(
+        verbose = 7,
+        output = '/dev/null',
+        atom = '''
+            N     0    0    0
+            N     0    0    1''',
+        symmetry = 1,
+        basis = 'cc-pvdz')
+    n2mf = scf.UHF(n2sym).set(conv_tol=1e-10).run()
 
 def tearDownModule():
-    global mol, mf, n2sym, n2mf, mol2, mf2
+    global mol, mf, n2sym, n2mf, mol2, mf2, bak
     mol.stdout.close()
     mol2.stdout.close()
     n2sym.stdout.close()
@@ -96,6 +97,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(dm2), 0.6174062069308063, 9)
 
     def test_1e(self):
+        mf = scf.uhf.HF1e(mol)
+        self.assertAlmostEqual(mf.scf(), -23.867818585778764, 9)
+
         mf = scf.UHF(gto.M(atom='H', spin=-1))
         self.assertAlmostEqual(mf.kernel(), -0.46658184955727555, 9)
         mf = scf.UHF(gto.M(atom='H', spin=1, symmetry=1))
@@ -154,7 +158,7 @@ class KnownValues(unittest.TestCase):
             spin = -2,
         )
         mf = scf.UHF(mol).set(conv_tol=1e-10)
-        mf.irrep_nelec = {'B1': (1, 2), 'B2': (1, 0)}
+        mf.irrep_nelec = {'B2': (1, 2), 'B1': (1, 0)}
         mf.run()
         self.assertAlmostEqual(mf.mo_occ[1].sum(), 6, 14)
         self.assertAlmostEqual(mf.e_tot, -75.224503772055755, 9)
@@ -190,7 +194,7 @@ class KnownValues(unittest.TestCase):
         pmol.symmetry = 1
         pmol.build(False, False)
         mf = scf.uhf_symm.UHF(pmol)
-        mf.irrep_nelec = {'B1':(2,1)}
+        mf.irrep_nelec = {'B2':(2,1)}
         self.assertAlmostEqual(mf.scf(), -75.010623169610966, 9)
 
     def test_n2_symm(self):
@@ -446,6 +450,20 @@ H     0    0.757    0.587'''
         dm = mf.make_rdm1()
         mf.kernel(dm)
         self.assertAlmostEqual(mf.e_tot, -75.983602246415373, 9)
+
+    def test_custom_h1e(self):
+        h1 = scf.hf.get_hcore(n2sym)
+        s1 = scf.hf.get_ovlp(n2sym)
+        mf = scf.UHF(n2sym)
+        mf.get_hcore = lambda *args: (h1, h1)
+        e = mf.kernel()
+        self.assertAlmostEqual(e, -108.9298383856092, 9)
+
+        mf = scf.uhf.HF1e(n2sym)
+        mf.get_hcore = lambda *args: (h1, h1)
+        eref = scipy.linalg.eigh(h1, s1)[0][0] + n2sym.energy_nuc()
+        e = mf.kernel()
+        self.assertAlmostEqual(e, eref, 9)
 
 
 if __name__ == "__main__":

@@ -118,8 +118,8 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     '''
     if isinstance(mols, (tuple, list)):
         intor, comp = gto.moleintor._get_intor_and_comp(mols[0]._add_suffix(intor), comp)
-        assert(len(mols) == 4)
-        assert(mols[0].cart == mols[1].cart == mols[2].cart == mols[3].cart)
+        assert (len(mols) == 4)
+        assert (mols[0].cart == mols[1].cart == mols[2].cart == mols[3].cart)
         if shls_slice is None:
             shls_slice = numpy.array([(0, mol.nbas) for mol in mols])
         else:
@@ -161,7 +161,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = [dms]
-    assert(len(scripts) == len(dms))
+    assert (len(scripts) == len(dms))
 
     #format scripts
     descript = []

@@ -1,4 +1,4 @@
-/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+/* Copyright 2014-2018,2021 The PySCF Developers. All Rights Reserved.
   
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@
 #define POS_E1   0
 #define TENSOR   1
 
-#define LMAX            7
+#define LMAX            ANG_MAX
 #define SIMDD           8
 // 128s42p21d12f8g6h4i3j
 #define NCTR_CART       128
 #define NPRIMAX         40
-#define BLKSIZE         104
+#define BLKSIZE         56
 #define EXPCUTOFF       50  // 1e-22
 #define NOTZERO(e)      (fabs(e)>1e-18)
 
@@ -70,17 +70,17 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
 
 void GTOeval_sph_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
-                     double *ao, double *coord, char *non0table,
+                     double *ao, double *coord, uint8_t *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env);
 
 void GTOeval_cart_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
-                      double *ao, double *coord, char *non0table,
+                      double *ao, double *coord, uint8_t *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
 void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fac,
                         int ngrids, int param[], int *shls_slice, int *ao_loc,
-                        double complex *ao, double *coord, char *non0table,
+                        double complex *ao, double *coord, uint8_t *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env);
 
 #define GTO_D_I(o, i, l) \

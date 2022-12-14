@@ -27,16 +27,18 @@ from pyscf.cc import addons
 from pyscf.cc import uccsd_lambda
 from pyscf.cc import gccsd, gccsd_lambda
 
-mol = gto.Mole()
-mol.atom = [
-    [8 , (0. , 0.     , 0.)],
-    [1 , (0. , -0.757 , 0.587)],
-    [1 , (0. , 0.757  , 0.587)]]
-mol.basis = '631g'
-mol.spin = 2
-mol.build()
-mf = scf.UHF(mol).run()
-mycc = uccsd.UCCSD(mf)
+def setUpModule():
+    global mol, mf, mycc
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf = scf.UHF(mol).run()
+    mycc = uccsd.UCCSD(mf)
 
 def tearDownModule():
     global mol, mf, mycc
@@ -116,11 +118,11 @@ class KnownValues(unittest.TestCase):
 #        eris = mycc.ao2mo()
 #        imds = make_intermediates(mycc, t1, t2, eris)
 #        l1new, l2new = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-#        print(lib.finger(l1new[0]) --104.55975252585894)
-#        print(lib.finger(l1new[1]) --241.12677819375281)
-#        print(lib.finger(l2new[0]) --0.4957533529669417)
-#        print(lib.finger(l2new[1]) - 15.46423057451851 )
-#        print(lib.finger(l2new[2]) - 5.8430776663704407)
+#        print(lib.fp(l1new[0]) --104.55975252585894)
+#        print(lib.fp(l1new[1]) --241.12677819375281)
+#        print(lib.fp(l2new[0]) --0.4957533529669417)
+#        print(lib.fp(l2new[1]) - 15.46423057451851 )
+#        print(lib.fp(l2new[2]) - 5.8430776663704407)
 
         nocca, noccb = mol.nelec
         mo_a = mf.mo_coeff[0] + numpy.sin(mf.mo_coeff[0]) * .01j

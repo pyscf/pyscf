@@ -22,30 +22,32 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import adc
 
-r = 0.969286393
-mol = gto.Mole()
-mol.atom = [
-    ['O', ( 0., 0.    , -r/2   )],
-    ['H', ( 0., 0.    ,  r/2)],]
-mol.basis = {'O':'aug-cc-pvdz',
-             'H':'aug-cc-pvdz'}
-mol.verbose = 0
-mol.symmetry = False
-mol.spin  = 1
-mol.build()
-mf = scf.UHF(mol)
-mf.conv_tol = 1e-12
-mf.kernel()
-myadc = adc.ADC(mf)
+def setUpModule():
+    global mol, mf, myadc
+    r = 0.969286393
+    mol = gto.Mole()
+    mol.atom = [
+        ['O', (0., 0.    , -r/2   )],
+        ['H', (0., 0.    ,  r/2)],]
+    mol.basis = {'O':'aug-cc-pvdz',
+                 'H':'aug-cc-pvdz'}
+    mol.verbose = 0
+    mol.symmetry = False
+    mol.spin  = 1
+    mol.build()
+    mf = scf.UHF(mol)
+    mf.conv_tol = 1e-12
+    mf.kernel()
+    myadc = adc.ADC(mf)
 
 def tearDownModule():
-    global mol, mf
-    del mol, mf
+    global mol, mf, myadc
+    del mol, mf, myadc
 
 class KnownValues(unittest.TestCase):
 
     def test_ea_adc2(self):
-  
+
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=3)
         e_corr = myadc.e_corr
@@ -61,7 +63,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[2], 0.9956169835481459, 6)
 
     def test_ea_adc2_oneroot(self):
-  
+
         myadc.method_type = "ea"
         e,v,p,x = myadc.kernel(nroots=1)
 
@@ -70,7 +72,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.9953781149964537, 6)
 
     def test_ea_adc2x(self):
-  
+
         myadc.method = "adc(2)-x"
         myadc.method_type = "ea"
 
@@ -84,8 +86,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[1], 0.9918705979602267, 6)
         self.assertAlmostEqual(p[2], 0.9772855298541363, 6)
 
+
     def test_ea_adc3(self):
-  
+
         myadc.method = "adc(3)"
         e, t_amp1, t_amp2 = myadc.kernel_gs()
         self.assertAlmostEqual(e, -0.17616203329072136, 6)
@@ -101,7 +104,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(p[0], 0.8722483551941809, 6)
         self.assertAlmostEqual(p[1], 0.9927117650068699, 6)
         self.assertAlmostEqual(p[2], 0.9766456031927034, 6)
-      
+
 if __name__ == "__main__":
     print("EA calculations for different ADC methods for open-shell molecule")
     unittest.main()

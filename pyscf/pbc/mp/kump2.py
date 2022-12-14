@@ -213,7 +213,7 @@ def get_nocc(mp, per_kpoint=False):
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
         nocc = [0]*2
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             nocc_spin = []
@@ -225,7 +225,7 @@ def get_nocc(mp, per_kpoint=False):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
@@ -293,14 +293,14 @@ def get_nmo(mp, per_kpoint=False):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             nmo[spin] = [len(mp.mo_occ[spin][ikpt]) - len(mp.frozen[spin]) for ikpt in range(mp.nkpts)]
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
@@ -341,10 +341,10 @@ def get_frozen_mask(mp):
         mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
 
     Returns:
-        moidx (list of :obj:`ndarray` of `np.bool`): Boolean mask of orbitals to include.
+        moidx (list of :obj:`ndarray` of `bool`): Boolean mask of orbitals to include.
 
     '''
-    moidx = [[np.ones(x.size, dtype=np.bool) for x in mp.mo_occ[s]] for s in [0,1]]
+    moidx = [[np.ones(x.size, dtype=bool) for x in mp.mo_occ[s]] for s in [0,1]]
 
     if mp.frozen is None:
         pass
@@ -356,7 +356,7 @@ def get_frozen_mask(mp):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (int, np.integer))):  # case example: ([0, 4], [0, 5, 6])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             [_frozen_sanity_check(mp.frozen[spin], mp.mo_occ[spin][ikpt], ikpt) for ikpt in range(mp.nkpts)]
             for ikpt, kpt_occ in enumerate(moidx[spin]):
@@ -364,7 +364,7 @@ def get_frozen_mask(mp):
 
     elif (_is_arraylike(mp.frozen[0]) and
           isinstance(mp.frozen[0][0], (list, np.ndarray))):  # case example: ([[0,],[]], [[0,1],[4]])
-        assert(len(mp.frozen) == 2)
+        assert (len(mp.frozen) == 2)
         for spin in [0,1]:
             nkpts = len(mp.frozen[spin])
             if nkpts != mp.nkpts:
