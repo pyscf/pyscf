@@ -109,6 +109,65 @@ H              0.99207379    1.16253558   -0.88226569
 H             -0.43459905    0.65805058   -0.00861418''')
         self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
 
+    def test_finite_diff_df_rohf_grad(self):
+        mf = scf.ROHF(mol).density_fit ()
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        mf_grad = mf.nuc_grad_method ()
+        g = mf_grad.kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.758   0.587
+                        H    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.756   0.587
+                        H    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+
+        e1 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.7571  0.587
+                        H    0.   0.757    0.587''')
+        e2 = mf_scanner('''O    0.   0.       0.
+                        H     0.8  0.3      0.2
+                        H    0.   -0.7569 0.587
+                        H    0.   0.757    0.587''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
+
+        mf = scf.ROHF(mol1).density_fit ()
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        mf_grad = mf.nuc_grad_method ()
+        g = mf_grad.kernel()
+        mf_scanner = mf.as_scanner()
+
+        e1 = mf_scanner('''
+C              0.63540095    0.65803739   -0.00861418
+H              0.99205538   -0.35077261   -0.00861418
+H              0.99207379    1.16143558   -0.88226569
+H             -0.43459905    0.65805058   -0.00861418''')
+        e2 = mf_scanner('''
+C              0.63540095    0.65803739   -0.00861418
+H              0.99205538   -0.35077261   -0.00861418
+H              0.99207379    1.16343558   -0.88226569
+H             -0.43459905    0.65805058   -0.00861418''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-3*lib.param.BOHR, 5)
+
+        e1 = mf_scanner('''
+C              0.63540095    0.65803739   -0.00861418
+H              0.99205538   -0.35077261   -0.00861418
+H              0.99207379    1.16233558   -0.88226569
+H             -0.43459905    0.65805058   -0.00861418''')
+        e2 = mf_scanner('''
+C              0.63540095    0.65803739   -0.00861418
+H              0.99205538   -0.35077261   -0.00861418
+H              0.99207379    1.16253558   -0.88226569
+H             -0.43459905    0.65805058   -0.00861418''')
+        self.assertAlmostEqual(g[2,1], (e2-e1)/2e-4*lib.param.BOHR, 7)
+
     def test_rohf_grad_same_to_rhf_grad(self):
         mol = gto.Mole()
         mol.atom = [

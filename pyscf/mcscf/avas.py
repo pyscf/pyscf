@@ -119,7 +119,7 @@ def _kernel(avas_obj):
     pmol.build(False, False)
 
     baslst = pmol.search_ao_label(avas_obj.aolabels)
-    log.info('reference AO indices for %s %s: %s',
+    log.info('reference AO indices for %s %s:\n %s',
              avas_obj.minao, avas_obj.aolabels, baslst)
 
     if avas_obj.with_iao:

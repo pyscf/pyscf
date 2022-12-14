@@ -2847,7 +2847,7 @@ class NumInt(_NumIntMixin):
         if hermi != 1 and dms[0].dtype == numpy.double:
             # (D + D.T)/2 because eval_rho computes 2*(|\nabla i> D_ij <j|) instead of
             # |\nabla i> D_ij <j| + |i> D_ij <\nabla j| for efficiency when dm is real
-            dms = lib.hermi_sum(dms, axes=(0,2,1)) * .5
+            dms = lib.hermi_sum(numpy.asarray(dms, order='C'), axes=(0,2,1)) * .5
             hermi = 1
 
         nao = dms[0].shape[0]

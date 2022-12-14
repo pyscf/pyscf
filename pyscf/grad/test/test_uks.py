@@ -63,6 +63,17 @@ class KnownValues(unittest.TestCase):
         e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
         self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
 
+    def test_finite_diff_df_uks_grad(self):
+        mf1 = mf.density_fit ().run ()
+        g = mf1.nuc_grad_method().set(grid_response=True).kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.12093220501429122, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf1.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
     def test_uks_grad_lda(self):
         mol = gto.Mole()
         mol.atom = [
@@ -104,6 +115,27 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.fp(g), -0.11509739136150157, 6)
         g = mf.Gradients().set(grid_response=True).kernel()
         self.assertAlmostEqual(lib.fp(g), -0.11507986316077731, 6)
+
+        mol1 = mol.copy()
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol1.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol1.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 6)
+
+    def test_finite_diff_uks_grad_nlc(self):
+#[[ 3.19690405e-16 -9.39540337e-16  5.09520937e-02]
+# [-5.47247224e-17  6.32050882e-02 -2.54793086e-02]
+# [ 6.75779981e-17 -6.32050882e-02 -2.54793086e-02]]
+        mf = mol.UKS()
+        mf.set(xc='VV10', conv_tol=1e-12, nlc='VV10')
+        mf.nlcgrids.level = 1
+        mf.kernel()
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.fp(g), -0.11368788988328639, 6)
+
+        mf.nlcgrids.level = 0
+        mf.kernel()
+        g = mf.Gradients().set(grid_response=True).kernel()
 
         mol1 = mol.copy()
         mf_scanner = mf.as_scanner()

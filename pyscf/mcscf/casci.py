@@ -100,6 +100,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
         dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.conj().T))
         dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.conj().T))
         dm1 = dm1a + dm1b
+        spin_dm1 = dm1a - dm1b
         if log.verbose >= logger.DEBUG2:
             log.info('alpha density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1a, label, **kwargs)
@@ -111,6 +112,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 reduce(numpy.dot, (mocas, casdm1, mocas.conj().T)))
         dm1b = None
         dm1 = dm1a
+        spin_dm1 = None
 
     if log.verbose >= logger.INFO:
         ovlp_ao = casscf._scf.get_ovlp()
@@ -168,6 +170,20 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
             casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
         else:
             casscf._scf.mulliken_pop(casscf.mol, dm1, s=ovlp_ao, verbose=log)
+        if spin_dm1 is not None:
+            if with_meta_lowdin:
+                log.info('Mulliken spin population analysis on meta-Lowdin AOs:')
+                spin_pop, spin_chg = casscf._scf.mulliken_meta(casscf.mol, spin_dm1, s=ovlp_ao, verbose=log)
+            else:
+                log.info('Mulliken spin population analysis on AOs:')
+                spin_pop, spin_chg = casscf._scf.mulliken_pop(casscf.mol, spin_dm1, s=ovlp_ao, verbose=log)
+            for i, s in enumerate(label):
+                log.info('spop of %-12s %10.5f', s, spin_pop[i])
+            spin_chg = casscf.mol.atom_charges() - spin_chg
+            log.note('Mulliken atomic spins:')
+            for ia in range(casscf.mol.natm):
+                symb = casscf.mol.atom_symbol(ia)
+                log.note('spin of  %d%s =   %10.5f', ia, symb, spin_chg[ia])
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
@@ -902,7 +918,7 @@ To enable the solvent model for CASCI, the following code needs to be called
         elif mo_coeff.shape[1] != ncas:
             mo_coeff = mo_coeff[:,ncore:nocc]
 
-        if self._scf._eri is not None:
+        if hasattr(self._scf, '_eri') and self._scf._eri is not None:
             eri = ao2mo.full(self._scf._eri, mo_coeff,
                              max_memory=self.max_memory)
         else:

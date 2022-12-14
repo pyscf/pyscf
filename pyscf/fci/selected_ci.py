@@ -762,7 +762,7 @@ class SelectedCI(direct_spin1.FCISolver):
         '''
         na = len(ci_strs[0])
         nb = len(ci_strs[1])
-        ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag)
+        ci0 = direct_spin1._get_init_guess(na, nb, nroots, hdiag, nelec)
         return [_as_SCIvector(x, ci_strs) for x in ci0]
 
     def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):

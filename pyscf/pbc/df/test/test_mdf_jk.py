@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 25.81378242361819, 6)
-        self.assertAlmostEqual(ek1, 72.6092971275962 , 6)
+        self.assertAlmostEqual(ek1, 72.6092971275962 , 5)
 
     def test_jk_single_kpt_high_cost(self):
         mf = mdf_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         ej1 = numpy.einsum('ij,ji->', vj1, dm)
         ek1 = numpy.einsum('ij,ji->', vk1, dm)
         self.assertAlmostEqual(ej1, 242.19379703364774, 6)
-        self.assertAlmostEqual(ek1, 280.28450527230103, 6)
+        self.assertAlmostEqual(ek1, 280.28450527230103, 5)
 
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
@@ -116,7 +116,7 @@ class KnownValues(unittest.TestCase):
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         self.assertAlmostEqual(ej1, 241.29955504573206+0j, 6)
-        self.assertAlmostEqual(ek1, 691.76854602384913+0j, 6)
+        self.assertAlmostEqual(ek1, 691.76854602384913+0j, 5)
 
     def test_jk_hermi0(self):
         numpy.random.seed(12)
@@ -148,7 +148,7 @@ class KnownValues(unittest.TestCase):
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
         self.assertAlmostEqual(ej0, 242.18855706416096, 6)
-        self.assertAlmostEqual(ek0, 280.70982164657647, 6)
+        self.assertAlmostEqual(ek0, 280.70982164657647, 5)
 
     def test_j_kpts(self):
         numpy.random.seed(1)

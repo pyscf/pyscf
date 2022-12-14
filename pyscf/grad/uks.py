@@ -45,11 +45,16 @@ def get_veff(ks_grad, mol=None, dm=None):
         grids = ks_grad.grids
     else:
         grids = mf.grids
+    if mf.nlc != '':
+        if ks_grad.nlcgrids is not None:
+            nlcgrids = ks_grad.nlcgrids
+        else:
+            nlcgrids = mf.nlcgrids
+        if nlcgrids.coords is None:
+            nlcgrids.build(with_non0tab=True)
     if grids.coords is None:
         grids.build(with_non0tab=True)
 
-    if mf.nlc != '':
-        raise NotImplementedError
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
@@ -60,9 +65,22 @@ def get_veff(ks_grad, mol=None, dm=None):
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
         logger.debug1(ks_grad, 'sum(grids response) %s', exc.sum(axis=0))
+        if mf.nlc:
+            assert 'VV10' in mf.nlc.upper()
+            enlc, vnlc = rks_grad.get_vxc_full_response(
+                ni, mol, nlcgrids, mf.xc+'__'+mf.nlc, dm[0]+dm[1],
+                max_memory=max_memory, verbose=ks_grad.verbose)
+            exc += enlc
+            vxc += vnlc
     else:
         exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
+        if mf.nlc:
+            assert 'VV10' in mf.nlc.upper()
+            enlc, vnlc = rks_grad.get_vxc(ni, mol, nlcgrids, mf.xc+'__'+mf.nlc,
+                                          dm[0]+dm[1], max_memory=max_memory,
+                                          verbose=ks_grad.verbose)
+            vxc += vnlc
     t0 = logger.timer(ks_grad, 'vxc', *t0)
 
     if abs(hyb) < 1e-10:
@@ -237,8 +255,9 @@ class Gradients(uhf_grad.Gradients):
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None
+        self.nlcgrids = None
         self.grid_response = False
-        self._keys = self._keys.union(['grid_response', 'grids'])
+        self._keys = self._keys.union(['grid_response', 'grids', 'nlcgrids'])
 
     def dump_flags(self, verbose=None):
         uhf_grad.Gradients.dump_flags(self, verbose)

@@ -421,6 +421,7 @@ void CCsd_t_contract(double *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 void QCIsd_t_contract(double *e_tot,
@@ -470,6 +471,7 @@ void QCIsd_t_contract(double *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 
@@ -645,6 +647,7 @@ void CCsd_t_zcontract(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 void QCIsd_t_zcontract(double complex *e_tot,
@@ -697,6 +700,7 @@ void QCIsd_t_zcontract(double complex *e_tot,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 
@@ -876,6 +880,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
         *e_tot += e;
 }
         free(permute_idx);
+        free(jobs);
 }
 
 /*****************************************************************************

@@ -57,6 +57,16 @@ class KnownValues(unittest.TestCase):
         e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
         self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
 
+    def test_df_rhf_grad(self):
+        g_scan = scf.RHF(mol).density_fit ().nuc_grad_method().as_scanner()
+        g = g_scan(mol)[1]
+        self.assertAlmostEqual(lib.fp(g), 0.005516638190188906, 7)
+
+        mfs = g_scan.base.as_scanner()
+        e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 5)
+
     def test_x2c_rhf_grad(self):
         h2o = gto.Mole()
         h2o.verbose = 0
@@ -108,6 +118,31 @@ class KnownValues(unittest.TestCase):
         e0 = mf.kernel()
         g = grad.RHF(mf).kernel(atmlst=range(mol.natm))
         self.assertAlmostEqual(lib.fp(g), 0.0055115512502467556, 6)
+
+        mf_scanner = mf.as_scanner()
+        pmol = mol.copy()
+        e1 = mf_scanner(pmol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(pmol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+        #e1 = mf_scanner(pmol.set_geom_('O  0.  1e-5 0.; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        #e2 = mf_scanner(pmol.set_geom_('O  0. -1e-5 0.; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        #self.assertAlmostEqual(g[0,1], (e1-e2)/2e-5*lib.param.BOHR, 5)
+
+        #e1 = mf_scanner(pmol.set_geom_('O  0. 0. 0.; 1  0. -0.7571 0.587; 1  0. 0.757 0.587'))
+        #e2 = mf_scanner(pmol.set_geom_('O  0. 0. 0.; 1  0. -0.7569 0.587; 1  0. 0.757 0.587'))
+        #self.assertAlmostEqual(g[1,1], (e2-e1)/2e-4*lib.param.BOHR, 5)
+
+        #e1 = mf_scanner(pmol.set_geom_('O  0. 0. 0.; 1  0. -0.757 0.5871; 1  0. 0.757 0.587'))
+        #e2 = mf_scanner(pmol.set_geom_('O  0. 0. 0.; 1  0. -0.757 0.5869; 1  0. 0.757 0.587'))
+        #self.assertAlmostEqual(g[1,2], (e1-e2)/2e-4*lib.param.BOHR, 5)
+
+    def test_finite_diff_df_rhf_grad(self):
+        mf = scf.RHF(mol).density_fit ()
+        mf.conv_tol = 1e-14
+        e0 = mf.kernel()
+        g = mf.nuc_grad_method ().kernel(atmlst=range(mol.natm))
+        self.assertAlmostEqual(lib.fp(g), 0.005516675903099752, 6)
 
         mf_scanner = mf.as_scanner()
         pmol = mol.copy()

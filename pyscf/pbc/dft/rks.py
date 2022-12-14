@@ -91,8 +91,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
+        max_memory = ks.max_memory - lib.current_memory()[0]
         n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, hermi,
-                                        kpt, kpts_band)
+                                        kpt, kpts_band, max_memory=max_memory)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
@@ -100,8 +101,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
-        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
-            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vk *= hyb
         if abs(omega) > 1e-10:

@@ -347,9 +347,7 @@ class _RSGDFBuilder(_Int3cBuilder):
         rs_auxcell = self.rs_auxcell
         auxcell_c = rs_auxcell.compact_basis_cell()
         if auxcell_c.nbas > 0:
-            rcut_sr = auxcell_c.rcut
-            rcut_sr = (-2*np.log(
-                .225*precision * omega**4 * rcut_sr**2))**.5 / omega
+            rcut_sr = (-np.log(precision * auxcell_c.rcut**2 * omega))**.5 / omega
             auxcell_c.rcut = rcut_sr
             logger.debug1(self, 'auxcell_c  rcut_sr = %g', rcut_sr)
             with auxcell_c.with_short_range_coulomb(omega):
@@ -1159,7 +1157,7 @@ def _guess_omega(cell, kpts, mesh=None):
     # enough to truncate the interaction.
     omega_min = aft.estimate_omega(cell, cell.precision*1e-2)
     ke_min = aft.estimate_ke_cutoff_for_omega(cell, omega_min, cell.precision)
-    mesh_min = pbctools.cutoff_to_mesh(a, ke_min) + 1
+    mesh_min = _round_off_to_odd_mesh(pbctools.cutoff_to_mesh(a, ke_min))
 
     if mesh is None:
         nao = cell.npgto_nr()
