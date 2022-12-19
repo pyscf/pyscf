@@ -788,6 +788,9 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
             self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
+            self.eri = np.empty(
+                (nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=dtype)
+
             for (ikp,ikq,ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
@@ -803,6 +806,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     self.voov[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
                     self.vovv[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, nocc:, nocc:] / nkpts
                     #self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
+                    self.eri[kp, kr, kq] = eri_kpt_symm/nkpts
 
             self.dtype = dtype
         else:
