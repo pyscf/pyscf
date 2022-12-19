@@ -1441,8 +1441,7 @@ class SCF(lib.StreamObject):
     # need > 0 if initial DM is numpy.zeros array
     diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
     diis_file = None
-    # Give diis_space_rollback=True a trial if all other methods do not converge
-    diis_space_rollback = False
+    diis_space_rollback = 0
 
     damp = getattr(__config__, 'scf_hf_SCF_damp', 0)
     level_shift = getattr(__config__, 'scf_hf_SCF_level_shift', 0)

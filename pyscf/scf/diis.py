@@ -40,7 +40,7 @@ DEBUG = False
 class CDIIS(lib.diis.DIIS):
     def __init__(self, mf=None, filename=None, Corth=None):
         lib.diis.DIIS.__init__(self, mf, filename)
-        self.rollback = False
+        self.rollback = 0
         self.space = 8
         self.Corth = Corth
 

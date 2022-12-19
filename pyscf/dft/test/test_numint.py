@@ -549,14 +549,14 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(numint, _sparse_enough=_not_sparse):
             rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
-        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
-        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
+        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 5)
+        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 5)
 
         with lib.temporary_env(numint, _sparse_enough=_sparse):
             rho, vxc, fxc = mf._numint.cache_xc_kernel(mf.mol, mf.grids, mf.xc, mf.mo_coeff, mf.mo_occ)
         self.assertAlmostEqual(rho[0].dot(mf.grids.weights), 10, 4)
-        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 8)
-        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 8)
+        self.assertAlmostEqual(numpy.einsum('g,g,ig->', mf.grids.weights, rho[0], rho), 81.04275692925363, 5)
+        self.assertAlmostEqual(numpy.einsum('g,xg,xyg->', mf.grids.weights, rho, fxc), -6.194969637088992, 5)
 
         if hasattr(dft, 'xcfun'):
             mf.xc = 'camb3lyp'

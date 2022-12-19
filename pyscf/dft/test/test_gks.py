@@ -71,7 +71,7 @@ class KnownValues(unittest.TestCase):
         mf.xc = 'lda,vwn'
         mf.collinear = 'ncol'
         eks4 = mf.kernel()
-        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 8)
+        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 5)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
         mf = mol1.GKS()
@@ -104,7 +104,7 @@ class KnownValues(unittest.TestCase):
         mf.collinear = 'mcol'
         mf._numint.spin_samples = 6
         eks4 = mf.kernel()
-        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 8)
+        self.assertAlmostEqual(lib.fp(mf.mo_energy), -26.54785447210512, 5)
         self.assertAlmostEqual(eks4, -74.73210527989738, 8)
 
         mf = mol1.GKS()
