@@ -331,7 +331,6 @@ class Cube(object):
                 d = data.split()
                 nx = int(d[0])
                 x_vec = numpy.array([float(x) for x in d[1:]])
-                assert (numpy.delete(x_vec, x) == 0).all()
                 if isinstance(self.mol, Cell):
                     # Use an asymmetric mesh for tiling unit cells
                     xs = numpy.linspace(0, 1, nx, endpoint=False)
@@ -339,10 +338,11 @@ class Cube(object):
                     # Use endpoint=True to get a symmetric mesh
                     # see also the discussion https://github.com/sunqm/pyscf/issues/154
                     xs = numpy.linspace(0, 1, nx, endpoint=True)
-                return nx, xs
-            self.nx, self.xs = parse_nx(f.readline(), 0)
-            self.ny, self.ys = parse_nx(f.readline(), 1)
-            self.nz, self.zs = parse_nx(f.readline(), 2)
+                return x_vec, nx, xs
+            self.box = numpy.zeros((3,3))
+            self.box[0], self.nx, self.xs = parse_nx(f.readline(), 0)
+            self.box[1], self.ny, self.ys = parse_nx(f.readline(), 1)
+            self.box[2], self.nz, self.zs = parse_nx(f.readline(), 2)            
             atoms = []
             for ia in range(natm):
                 d = f.readline().split()
