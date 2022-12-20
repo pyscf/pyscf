@@ -60,11 +60,11 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = scf.dhf.get_init_guess(mol, key='minao')
-        self.assertAlmostEqual(abs(dm).sum(), 14.859714177083553, 9)
+        self.assertAlmostEqual(abs(dm).sum(), 14.859714177083553, 8)
 
     def test_init_guess_huckel(self):
         dm = scf.dhf.DHF(mol).get_init_guess(mol, key='huckel')
-        self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 9)
+        self.assertAlmostEqual(lib.fp(dm), (-0.6090467376579871-0.08968155321478456j), 8)
 
     def test_get_hcore(self):
         h = mf.get_hcore()

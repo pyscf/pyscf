@@ -209,13 +209,13 @@ Li    P
         mc.run()
         e1 = mc.e_tot
         ci1 = mc.ci
-        self.assertAlmostEqual(e1, -108.683383569227, 8)
+        self.assertAlmostEqual(e1, -108.683383569227, 7)
 
         mc.fcisolver = direct_spin1_cyl_sym.FCI(mol)
         mc.fcisolver.wfnsym = 'E1ux'
         mc.run()
         e2 = mc.e_tot
-        self.assertAlmostEqual(e2, -108.683383569227, 8)
+        self.assertAlmostEqual(e2, -108.683383569227, 7)
         orbsym = mc.fcisolver.orbsym
         degen_mapping = orbsym.degen_mapping
         u = direct_spin1_symm._cyl_sym_orbital_rotation(orbsym, degen_mapping)

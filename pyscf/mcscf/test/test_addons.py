@@ -494,7 +494,7 @@ class KnownValues(unittest.TestCase):
         mc.state_average_([.8, .2])
         mscan = mc.as_scanner()
         e = mscan(mol)
-        self.assertAlmostEqual(e, -108.84390277715984, 9)
+        self.assertAlmostEqual(e, -108.84390277715984, 8)
 
 
 if __name__ == "__main__":

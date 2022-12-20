@@ -26,7 +26,7 @@ def setUpModule():
         ['F' , (0. , 0. , 0.)], ]
     mol.basis = '631g'
     mol.build()
-    mf = scf.UHF(mol).run()
+    mf = scf.UHF(mol).run(conv_tol=1e-10)
 
     mol1 = gto.Mole()
     mol1.verbose = 7
@@ -37,7 +37,7 @@ def setUpModule():
     mol1.basis = '631g'
     mol1.spin = 2
     mol1.build()
-    mf1 = scf.UHF(mol1).run()
+    mf1 = scf.UHF(mol1).run(conv_tol=1e-10)
 
 def tearDownModule():
     global mol, mol1, mf, mf1
@@ -50,7 +50,7 @@ class KnownValues(unittest.TestCase):
         td.nstates = 5
         e = td.kernel()[0]
         ref = [11.01748568, 11.01748568, 11.90277134, 11.90277134, 13.16955369]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
 
     def test_tdhf(self):
         td = mf.TDHF()
@@ -58,21 +58,21 @@ class KnownValues(unittest.TestCase):
         td.singlet = False
         e = td.kernel()[0]
         ref = [10.89192986, 10.89192986, 11.83487865, 11.83487865, 12.6344099]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
 
     def test_tda_triplet(self):
         td = mf1.TDA()
         td.nstates = 5
         e = td.kernel()[0]
         ref = [3.32113736, 18.55977052, 21.01474222, 21.61501962, 25.0938973]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
 
     def test_tdhf_triplet(self):
         td = mf1.TDHF()
         td.nstates = 4
         e = td.kernel()[0]
         ref = [3.31267103, 18.4954748, 20.84935404, 21.54808392]
-        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 5)
+        self.assertAlmostEqual(abs(e * 27.2114 - ref).max(), 0, 4)
 
 
 if __name__ == "__main__":
