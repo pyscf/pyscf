@@ -241,7 +241,7 @@ class KnownValues(unittest.TestCase):
     def test_casci_in_casscf(self):
         mc1 = mcscf.CASSCF(m, 4, 4)
         e_tot, e_ci, fcivec = mc1.casci(mc1.mo_coeff)
-        self.assertAlmostEqual(e_tot, -108.83741684447352, 9)
+        self.assertAlmostEqual(e_tot, -108.83741684447352, 7)
 
     def test_scanner(self):
         mc_scan = mcscf.CASSCF(scf.RHF(mol), 4, 4).as_scanner().as_scanner()

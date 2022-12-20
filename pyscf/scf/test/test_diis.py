@@ -66,10 +66,10 @@ class KnownValues(unittest.TestCase):
         )
         mf1 = scf.RHF(mol)
         mf1.diis_space = 4
-        mf1.diis_space_rollback = True
+        mf1.diis_space_rollback = 1
         mf1.max_cycle = 10
         e = mf1.kernel()
-        self.assertAlmostEqual(e, -75.446749864901321, 9)
+        self.assertAlmostEqual(e, -75.44751684382042, 9)
         mol.stdout.close()
 
     def test_diis_restart(self):
@@ -98,4 +98,3 @@ class KnownValues(unittest.TestCase):
 if __name__ == "__main__":
     print("Full Tests for DIIS")
     unittest.main()
-
