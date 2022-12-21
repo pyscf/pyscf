@@ -25,7 +25,7 @@ from pyscf import symm
 from pyscf import fci
 from pyscf.mcscf import casci
 from pyscf.mcscf import addons
-
+from pyscf.scf.hf_symm import map_degeneracy
 
 class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
@@ -107,10 +107,14 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
 
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
     if (not getattr(active_orbsym, '__len__', None)) or len(active_orbsym) == 0:
-        if getattr(mo_coeff, 'degen_mapping', None) is not None:
-            degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
+        if getattr(mc.mol, 'groupname', None) in ('Dooh', 'Coov'):
             # Attach to degen_mapping to orbsym, this is a temporary solution
             # for fci.direct_spin1_symm
+            if getattr(mo_coeff, 'degen_mapping', None) is not None:
+                degen_mapping = mo_coeff.degen_mapping[ncore:nocc] - ncore
+            else:
+                h1e = mc.h1e_for_cas (mo_coeff=mo_coeff)[0][ncore:nocc]
+                degen_mapping = map_degeneracy (h1e, orbsym[ncore:nocc])
             mc.fcisolver.orbsym = lib.tag_array(
                 orbsym[ncore:nocc], degen_mapping=degen_mapping)
         else:
